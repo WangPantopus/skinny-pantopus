@@ -50,7 +50,7 @@ data class VerifyLandlordApprovalResult(
     val headline: String
         get() =
             when (kind) {
-                Kind.Submitted -> "Request sent"
+                Kind.Submitted -> "Request submitted"
                 Kind.AlreadyPending -> "Waiting for approval"
                 Kind.AlreadyActive -> "You're already a verified tenant"
             }
@@ -59,11 +59,20 @@ data class VerifyLandlordApprovalResult(
         get() =
             when (kind) {
                 Kind.Submitted ->
-                    "Your request has been sent to the landlord. They'll review and approve your tenancy."
+                    "Your request is saved and is waiting for the property owner's review."
                 Kind.AlreadyPending ->
                     serverMessage ?: "You already have a pending request for this home."
                 Kind.AlreadyActive ->
                     serverMessage ?: "You already have an active lease at this home."
+            }
+
+    val statusNote: String
+        get() =
+            when (kind) {
+                Kind.Submitted, Kind.AlreadyPending ->
+                    "The property owner can approve or deny your saved request."
+                Kind.AlreadyActive ->
+                    "Your lease is active. Home access follows the approved lease dates."
             }
 }
 

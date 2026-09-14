@@ -1021,3 +1021,56 @@ checkpoint is saved to draft PR#38 and needs its own CI before integration. R05
 stays open and the inventory remains8 locally closed /72 partial or open /80.
 Resume with installed native acceptance, followed by the documented placeholder
 repairs; no new work item was started after the pause request.
+
+
+### Resumed native foreground and confirmation display verification
+
+The user resumed verification on September14 from clean/pushed9d344bcf0. PR38
+remained open/draft against the same Home branch. Its CI34820697178 had13 successful
+jobs and one unchanged Seeder skip at the latest check; Android quality and the
+aggregate result were still outstanding. Do not infer final success from earlier CI.
+
+The saved installed iOS product passes actual Home-button/app-icon lifecycle
+transitions against the existing tenant routes/Joi/service/isolated SQL: an
+unfinished Details draft survives a no-request reread; a pending request saved by
+another synthetic HTTP client appears on foreground; and the same lease refreshes
+to active after the existing authority service/SQL approval. Only the intentional
+external client sent POST; foreground actions added GETs only. One held status
+response timed out and the existing idempotent GET retry recovered active status.
+Synthetic login/shell and intercepted notices remain explicit limits.
+
+That installed journey exposed a stored September1 midnight-UTC lease date shown
+as August31 on the Los Angeles device, plus active confirmation still promising
+notification and approval. Both existing native confirmation formatters now follow
+the existing web caller's UTC calendar-date rule for lease dates, while submission
+timestamps retain local date formatting. The existing status note distinguishes
+pending from active and no longer promises notification delivery. Submission copy
+states that the request is saved for review. No layout, screen, table, endpoint or
+migration was added. An obsolete comment claiming the status endpoint did not
+exist was corrected in the same existing iOS view.
+
+All50 selected iOS checks pass with SwiftFormat0.61.1 and SwiftLint0.63.3. All49
+Android checks pass (44 model/session/date +5 unchanged Start/Details snapshots),
+with detekt/ktlint and debug APK assembly. Each platform adds one regression in an
+existing test file covering lease date preservation and local submission dates in
+Los Angeles, Honolulu and Auckland, plus absent/malformed dates. Installed iOS
+visibly confirms September1 and the active-lease note using the same saved lease.
+The first Android invocation misplaced the test filter after assembleDebug and
+ran no tests; the corrected command passed. The failed command is preserved.
+
+The owned Android AVD is now visible in Android Studio Running Devices after
+registering its existing private definition; no second emulator or SDK was added.
+The current tested APK installed successfully. Computer control nevertheless
+repeatedly switched from the rendered device to the IDE window, so **installed
+Android recovery/foreground remains unaccepted**. The IDE's automatic sync also
+encountered the previously recorded missing project-cache metadata; the passing
+CLI checks used the preserved fresh project cache. These are tool/runtime limits,
+not evidence of an app-flow failure. No owner or accepted device was modified.
+
+Private source/product bindings, result bundles/XML, HTTP/SQL state and installed
+iOS observations are retained outside `/private/tmp` in `native-resume-r1` and
+`native-display-r1`. A broken dependency link to an older temporary checkout was
+repointed to intact existing owner packages without modifying those packages.
+R05 stays open; the inventory remains8 locally closed/72 partial or open/80. The
+fake attachment/upload/parse behavior, sample Home/unit and remaining provider
+claims still need repair in their existing paths.

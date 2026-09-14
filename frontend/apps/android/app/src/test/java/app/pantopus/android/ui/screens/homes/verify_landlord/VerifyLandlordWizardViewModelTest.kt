@@ -42,6 +42,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.IOException
+import java.util.TimeZone
 
 @OptIn(ExperimentalCoroutinesApi::class)
 abstract class VerifyLandlordWizardTestFixture {
@@ -701,6 +702,26 @@ class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class VerifyLandlordSessionRetirementTest : VerifyLandlordWizardTestFixture() {
+    @Test fun lease_calendar_day_is_preserved_while_submission_uses_local_time() {
+        val previous = TimeZone.getDefault()
+        try {
+            for (zone in listOf("America/Los_Angeles", "Pacific/Honolulu", "Pacific/Auckland")) {
+                TimeZone.setDefault(TimeZone.getTimeZone(zone))
+                assertEquals(zone, "Sep 1, 2026", formatSentDate("2026-09-01T00:00:00.000Z", calendarDate = true))
+                assertEquals(zone, "Sep 1, 2026", formatSentDate("2026-09-01T23:00:00Z", calendarDate = true))
+                assertEquals(
+                    zone,
+                    if (zone == "Pacific/Auckland") "Sep 1, 2026" else "Aug 31, 2026",
+                    formatSentDate("2026-09-01T00:00:00.000Z"),
+                )
+            }
+            assertNull(formatSentDate(null, calendarDate = true))
+            assertNull(formatSentDate("unavailable", calendarDate = true))
+        } finally {
+            TimeZone.setDefault(previous)
+        }
+    }
+
     private fun activeRequest() =
         savedRequest().copy(
             requestContext = savedRequest().requestContext.copy(leaseState = "active"),

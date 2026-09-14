@@ -1,6 +1,6 @@
 # Pantopus project handoff
 
-Updated September 14, 2026 at the user-requested pause after existing landlord-flow verification. This is the
+Updated September 14, 2026 after the user resumed existing landlord-flow verification. This is the
 current entry point. The [80-row inventory](REMAINING_WORK_2026-09-11.md) remains
 the ordered backlog; dated reports preserve source-specific evidence.
 
@@ -11,10 +11,11 @@ the ordered backlog; dated reports preserve source-specific evidence.
 Trace the existing screen, caller, route, service and SQL before changes. An open
 acceptance row does not authorize a rebuild. Reuse unchanged accepted evidence.
 
-**Paused at the user’s request.** The checks already running finished and the tested
-source/evidence are saved. Resume only when requested; do not start another work
-item while paused. Latest local foreground checks pass **49 iOS / 48 Android**;
-installed foreground acceptance remains open on both platforms.
+**Resumed at the user’s request.** Continue verifying existing implementations,
+repairing demonstrated functional/security defects, then the uncovered inventory.
+Installed iOS foreground recovery now passes the bounded journeys below. Latest
+local display checks pass **50 iOS /49 Android**; installed Android acceptance
+remains open. Existing layouts and working implementations are preserved.
 
 **Worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/lease-approval-dates`, draft [PR #38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
@@ -124,9 +125,24 @@ preserved. The installed iOS candidate was launched, then the user requested a
 pause after normal logout; no installed foreground transition was accepted.
 See [foreground evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-foreground-checkpoint-and-user-requested-pause).
 
-**Next when resumed:** finish installed native foreground and Android recovery
-acceptance, then repair the demonstrated attachment/Home-label/provider-copy
-defects through existing upload and status paths. The temporary worktree's missing
+**Installed iOS foreground and display follow-up:** actual Home-button background
+and app-icon foreground preserve an unfinished Details draft, recover one request
+saved by another synthetic client, and refresh that same pending lease to active
+after the existing approval transaction. A held read times out and the existing
+idempotent GET retry recovers; these foreground actions create no POST. The journey
+exposed September1 rendering as August31 in the device time zone and active status
+still describing approval as pending. Existing native confirmations now preserve
+lease calendar dates using the web caller's UTC rule and describe saved status
+without promising notice delivery. All50 iOS/49 Android checks and relevant static
+checks pass. The installed iOS candidate displays September1 and the correct active
+note in the existing layout. See [resumed evidence](VERIFICATION_FIRST_2026-09-13.md#resumed-native-foreground-and-confirmation-display-verification).
+
+**Next:** finish installed Android recovery/foreground acceptance when computer
+control is reliable, and repair the confirmed native attachment/Home-label and
+remaining provider-copy defects through existing implementations. The current APK
+is installed in the existing owned AVD through Android Studio Running Devices,
+but control repeatedly selects the IDE window instead of the device; no installed
+Android app flow is accepted from that attempt. The temporary worktree's missing
 Git link and8,536 older tracked files were restored from the verified head without
 replacing existing edits. A fresh private Gradle project cache replaces missing
 local cache metadata; precise repair/source evidence is preserved privately.
@@ -167,11 +183,12 @@ auth/shell and actual tenant routes/SQL. Android installed lease acceptance, nat
 installed foreground refresh and provider identity/delivery remain open.
 Accepted native Leave Home source is unchanged and its evidence is reused. Actual
 provider delivery, combined populated adoption and hosted rollout remain open.
-The owned native API18109 and private Next18110 are stopped, and both owned native
-test devices are stopped. The native fixture server confirmed exact synthetic-row
-cleanup. Source, compiled products and result bundles are copied outside the
+The owned native API18109 and native test devices were resumed under the existing
+private lease; Next18110 remains stopped. The previous pause completed exact
+synthetic-row cleanup; the current native fixture is active and needs exact cleanup
+after its journeys. Source, compiled products and result bundles are copied outside the
 temporary worktree. The schema-only lease DB and REST18089 remain reserved to
-`/private/tmp/pantopus-lease-transaction-r1` for resume; inspect its paused private
+`/private/tmp/pantopus-lease-transaction-r1` for resume; inspect its current private
 runtime lease before reuse. Docker control calls currently stall, but the owned REST18089 and direct database64522 respond. The private direct-SQL helper verifies the exact database before use; avoid repeated stalled Docker exec calls or a global restart. Synthetic fixtures are cleaned after checks. No provider/production
 activation occurred. Owner checkout edits and unrelated worktrees are preserved.
 

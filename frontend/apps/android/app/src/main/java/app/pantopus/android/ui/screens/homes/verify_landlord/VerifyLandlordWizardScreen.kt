@@ -792,7 +792,7 @@ internal fun SentStep(
             )
         }
         Text(
-            text = "Your landlord will be notified and can approve or deny your request.",
+            text = result.statusNote,
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextMuted,
         )
@@ -802,7 +802,7 @@ internal fun SentStep(
 @Composable
 private fun SentDetailCard(result: VerifyLandlordApprovalResult) {
     val submitted = formatSentDate(result.submittedAt)
-    val start = formatSentDate(result.requestedStartAt)
+    val start = formatSentDate(result.requestedStartAt, calendarDate = true)
     val message = result.message?.takeIf { it.isNotBlank() }
     if (submitted == null && start == null && message == null) return
     Column(
@@ -866,12 +866,16 @@ private fun SentDetailRow(
 }
 
 /** ISO-8601 -> "Mar 4, 2026". Null when absent or unparsable. */
-internal fun formatSentDate(iso: String?): String? {
+internal fun formatSentDate(
+    iso: String?,
+    calendarDate: Boolean = false,
+): String? {
     if (iso.isNullOrBlank()) return null
     return runCatching {
         DateTimeFormatter
             .ofPattern("MMM d, yyyy", Locale.US)
-            .withZone(ZoneId.systemDefault())
+            // Lease forms store calendar dates at midnight UTC, like the web caller.
+            .withZone(if (calendarDate) ZoneId.of("UTC") else ZoneId.systemDefault())
             .format(Instant.parse(iso))
     }.getOrNull()
 }

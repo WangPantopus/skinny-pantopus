@@ -15,6 +15,24 @@ import XCTest
 
 @MainActor
 final class VerifyLandlordSnapshotTests: XCTestCase {
+    func test_lease_calendar_day_is_preserved_while_submission_uses_local_time() {
+        let previous = NSTimeZone.default
+        defer { NSTimeZone.default = previous }
+        for zone in ["America/Los_Angeles", "Pacific/Honolulu", "Pacific/Auckland"] {
+            guard let timeZone = TimeZone(identifier: zone) else { return XCTFail("Missing test time zone") }
+            NSTimeZone.default = timeZone
+            XCTAssertEqual(VerifySentStep.formatted("2026-09-01T00:00:00.000Z", calendarDate: true), "Sep 1, 2026", zone)
+            XCTAssertEqual(VerifySentStep.formatted("2026-09-01T23:00:00Z", calendarDate: true), "Sep 1, 2026", zone)
+            XCTAssertEqual(
+                VerifySentStep.formatted("2026-09-01T00:00:00.000Z"),
+                zone == "Pacific/Auckland" ? "Sep 1, 2026" : "Aug 31, 2026",
+                zone
+            )
+        }
+        XCTAssertNil(VerifySentStep.formatted(nil, calendarDate: true))
+        XCTAssertNil(VerifySentStep.formatted("unavailable", calendarDate: true))
+    }
+
     // MARK: - A12.5 Start
 
     func test_verify_landlord_start_canonical_renders() {

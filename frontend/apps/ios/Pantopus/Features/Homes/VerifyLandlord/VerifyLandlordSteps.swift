@@ -79,7 +79,7 @@ public struct VerifyLandlordApprovalResult: Sendable, Equatable {
 
     public var headline: String {
         switch kind {
-        case .submitted: "Request sent"
+        case .submitted: "Request submitted"
         case .alreadyPending: "Waiting for approval"
         case .alreadyActive: "You're already a verified tenant"
         }
@@ -88,11 +88,20 @@ public struct VerifyLandlordApprovalResult: Sendable, Equatable {
     public var body: String {
         switch kind {
         case .submitted:
-            "Your request has been sent to the landlord. They'll review and approve your tenancy."
+            "Your request is saved and is waiting for the property owner's review."
         case .alreadyPending:
             serverMessage ?? "You already have a pending request for this home."
         case .alreadyActive:
             serverMessage ?? "You already have an active lease at this home."
+        }
+    }
+
+    public var statusNote: String {
+        switch kind {
+        case .submitted, .alreadyPending:
+            "The property owner can approve or deny your saved request."
+        case .alreadyActive:
+            "Your lease is active. Home access follows the approved lease dates."
         }
     }
 }
