@@ -20,6 +20,30 @@ import retrofit2.converter.moshi.MoshiConverterFactory
 class GigStopApiTest {
     private val moshi = NetworkModule.provideMoshi()
 
+    @Test fun retryCarriesTheOriginalExplanationFingerprintWithoutFreeText() =
+        runTest {
+            MockWebServer().use { server ->
+                server.enqueue(MockResponse().setResponseCode(503))
+                val hash = "a".repeat(64)
+                repository(server).submit(
+                    "gig",
+                    GigStopCommand(
+                        "request",
+                        "cancel",
+                        "actor",
+                        "session",
+                        GigStopTerms("gig", "actor", null, null, 0, "usd", "open", null, null, "standard", 0),
+                        "other",
+                        null,
+                        hash,
+                    ),
+                )
+                val body = server.takeRequest().body.readUtf8()
+                assertTrue(body.contains("\"reasonNoteHash\":\"$hash\""))
+                assertFalse(body.contains("\"reasonNote\":"))
+            }
+        }
+
     private fun repository(server: MockWebServer) =
         GigStopRepository(
             Retrofit.Builder().baseUrl(server.url("/"))

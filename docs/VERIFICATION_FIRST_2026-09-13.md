@@ -2035,3 +2035,78 @@ explanations or put free text into native enum fields. Inspect existing reason
 storage and protected recovery before extending the contract; no new schema is
 justified yet. Nonzero-fee/started/provider and tip/durable-recovery gates remain
 open; original PR34 stays draft. This milestone does not authorize paid launch.
+
+
+## Existing cancellation Other explanation and private recovery
+
+September14 follow-up in the preserved paid integration candidate. The original
+CancellationModal already contained an Other text field, but its CompletionFlow
+caller did not pass the input onward. Restore that existing field and its styles
+in GigStopDialog, retaining the existing same-request/session recovery path.
+No replacement screen or cancellation table is added.
+
+The existing GigStopRequest.reason text stores `other: <original explanation>`
+and already binds it under the begin_gig_stop lock. The service presents only the
+Other category and SHA-256 fingerprint in request/status receipts. Web sends the
+text on first submission and retains it using the existing ProtectedRecoverySlot
+AES-GCM/IndexedDB implementation; its ordinary receipt storage contains only the
+fingerprint. Native request DTOs/stores retain that fingerprint so the original
+actor can retry a server-admitted request without storing or fetching free text.
+Existing enum-only native requests remain compatible.
+
+Review found that finish_gig_stop copied reason into Gig.cancellation_reason,
+which the unauthenticated task timeline exposes. The new SQL regression fails
+against the old function with “Private explanation exposed in public task
+timeline.” Forward migration20260914030000 replaces that existing function with
+one assignment change: packed Other explanations project to `other` on Gig,
+while the exact private request stays immutable. It creates no table, adds no
+column or permission, and preserves all release/refund proof and notification
+logic. Published migration20260910160000 remains byte-for-byte unchanged.
+
+Verification:
+
+- Backend65 tests and web57 rendered recovery tests pass; web types and scoped
+  lint pass. Cases include bounded/hashed input, exact retry, lost reply/reopen,
+  failed protected write preventing POST, session retirement during encryption,
+  and retired completion preserving the original recovery record.
+- Chrome uses the existing dialog/hook with real IndexedDB/WebCrypto and a
+  synthetic Axios API. First submission loses its reply; reload preserves an
+  encrypted envelope and fingerprint-only receipt. Explicit retry sends the
+  same UUID/hash/text; confirmed completion clears both records. Two synthetic
+  POSTs occur, with no actual HTTP/provider operation. The owned tab/server and
+  temporary harness are removed after source binding and result capture.
+- Android38 unit tests plus ktlint/detekt pass. Two earlier formatting failures
+  remain recorded; only argument wrapping changed. All22 focused iOS tests, SwiftLint
+  and SwiftFormat pass after one existing 401 test was found using
+  AuthManager.shared and a simulator's retained login. Its test factory now uses an existing in-memory
+  AuthManager/APIClient pair; the denial assertions and production auth behavior
+  are unchanged. The original failed run remains recorded; the new fingerprint recovery case
+  passed on both runs.
+- Real local SQL contract and generated pgTAP pass; the existing production
+  stop/refund service runner passes238 connections with a synthetic provider.
+  This covers exact private reason persistence, read projection, wrong-fingerprint
+  denial, fingerprint-only same-ID recovery, public category-only cancellation,
+  financial identity, lost acknowledgements, concurrency and reconciliation.
+- The isolated paid database copies the owned Home rehearsal, then applies the
+  nine existing paid migrations and this one forward function update. All64 SQL
+  contracts pass across recorded runs. Initial reference-defaults failure was a
+  setup gap: the old Home rehearsal contained only HomeRolePermission references.
+  Five empty reference tables were populated with the unchanged canonical
+  baseline statements, then the unchanged check passed. Application function lint
+  passes349 functions/106 trigger bindings, zero errors/eight existing warnings.
+  The source Home database is unchanged. Eight inspected synthetic fixture tables
+  contain zero aac7/aac8 rows after service cleanup and contract rollbacks.
+
+Private evidence: `paid-cancellation-explanation-r1` in the existing local audit
+root/mirror, including baseline failures, final logs, combined DB provenance and
+browser binding. DB restore first failed on auth schema ownership; the retry used
+existing local supabase_admin credentials without altering roles or privileges.
+No archive, token, private explanation or operator log is committed.
+
+Limits: no hosted migration/adoption, real Stripe operation, installed native
+explanation journey or release acceptance. The fresh combined baseline CI and
+remaining durable tip/fee/started-task/provider gates still apply to draft PR34.
+Encrypted data written just before a lost local receipt write, or superseded by a
+verified competing request, can remain as an inaccessible encrypted orphan; no
+provider request is issued before the ordinary receipt is retained. Generic
+protected-storage expiry/garbage collection remains a separate lifecycle check.

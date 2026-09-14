@@ -106,10 +106,36 @@ struct GigStopRequest: Codable, Equatable {
     let reason: GigStopReason?
     let rollbackMode: String?
     let financialAction: GigStopFinancialAction
+    let reasonNoteHash: String?
+
+    init(
+        requestId: String,
+        gigId: String,
+        actorId: String,
+        action: GigStopAction,
+        terms: GigStopTerms,
+        reason: GigStopReason?,
+        rollbackMode: String?,
+        financialAction: GigStopFinancialAction,
+        reasonNoteHash: String? = nil
+    ) {
+        self.requestId = requestId
+        self.gigId = gigId
+        self.actorId = actorId
+        self.action = action
+        self.terms = terms
+        self.reason = reason
+        self.rollbackMode = rollbackMode
+        self.financialAction = financialAction
+        self.reasonNoteHash = reasonNoteHash
+    }
 
     func isValid(gig: String) -> Bool {
         UUID(uuidString: requestId) != nil && UUID(uuidString: actorId) != nil && gigId == gig
             && terms.isValid(gig: gig) && financialAction != .review
+            &&
+            (reasonNoteHash == nil ||
+                (reason == .other && reasonNoteHash?.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil))
             && (rollbackMode == nil || (rollbackMode == "payment_setup_aborted" && action == .reopenBidding))
     }
 }
@@ -198,6 +224,7 @@ struct GigStopCommand: Encodable {
     let expectedTerms: GigStopTerms
     let reason: GigStopReason?
     let rollbackMode: String?
+    let reasonNoteHash: String?
 
     init(request: GigStopRequest, session: String) {
         requestId = request.requestId
@@ -207,5 +234,6 @@ struct GigStopCommand: Encodable {
         expectedTerms = request.terms
         reason = request.reason
         rollbackMode = request.rollbackMode
+        reasonNoteHash = request.reasonNoteHash
     }
 }

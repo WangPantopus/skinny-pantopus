@@ -56,6 +56,8 @@ const stopCommandSchema = Joi.object({
   expectedTerms: Joi.object().min(1).required(),
   reason: Joi.string().valid('changed_plans', 'found_someone_else', 'too_expensive', 'emergency', 'other',
     'schedule_conflict', 'unable_to_complete', 'safety_concern').allow(null).default(null),
+  reasonNote: Joi.when('reason', { is: 'other', then: Joi.string().min(1).max(1000).allow(null), otherwise: Joi.valid(null) }),
+  reasonNoteHash: Joi.when('reason', { is: 'other', then: Joi.string().pattern(/^[a-f0-9]{64}$/).allow(null), otherwise: Joi.valid(null) }),
   rollbackMode: Joi.string().valid('payment_setup_aborted').allow(null).default(null),
 });
 function stopError(res, error) {

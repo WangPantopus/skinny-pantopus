@@ -33,6 +33,7 @@ final class StopIdentity {
 
 @MainActor
 class GigStopTestCase: XCTestCase {
+    private var testAuthManagers: [AuthManager] = []
     let gig = "aabb0000-0000-4000-8000-000000000101"
     let actor = "aabb0000-0000-4000-8000-000000000001"
     let worker = "aabb0000-0000-4000-8000-000000000002"
@@ -54,6 +55,15 @@ class GigStopTestCase: XCTestCase {
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
+        testAuthManagers.removeAll()
+    }
+
+    func makeTestAPI() -> APIClient {
+        let client = APIClient(environment: .current, session: SequencedURLProtocol.makeSession(), retryPolicy: .none)
+        // Keep the weakly referenced provider alive without reading the
+        // simulator's real Keychain or refreshing a previously installed login.
+        testAuthManagers.append(AuthManager(store: InMemorySecureStore(), apiClient: client, allowSecureEnclave: false))
+        return client
     }
 
     func terms(action: GigStopAction = .cancel) -> GigStopTerms {
@@ -158,7 +168,7 @@ class GigStopTestCase: XCTestCase {
             gig: gig,
             actor: actor,
             action: action,
-            api: APIClient(environment: .current, session: SequencedURLProtocol.makeSession(), retryPolicy: .none),
+            api: makeTestAPI(),
             store: store
         ) { identity.value }
     }

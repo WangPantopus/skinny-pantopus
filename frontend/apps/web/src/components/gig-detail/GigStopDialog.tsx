@@ -19,6 +19,7 @@ const reasonIcons = { changed_plans: RefreshCw, found_someone_else: Hand, too_ex
 export default function GigStopDialog(props: Props) {
   const state = useGigStopRequest(props);
   const [reason, setReason] = useState<GigStopReason | ''>('');
+  const [customReason, setCustomReason] = useState('');
   const action = state.attempt?.action ?? props.action;
   const title = stopActionLabel(action);
   const requiresReason = action === 'cancel';
@@ -36,7 +37,7 @@ export default function GigStopDialog(props: Props) {
     const keyboard = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.preventDefault(); close.current(); return; }
       if (event.key !== 'Tab' || !dialog.current) return;
-      const controls = Array.from(dialog.current.querySelectorAll<HTMLElement>('button:not([disabled]), select:not([disabled])'));
+      const controls = Array.from(dialog.current.querySelectorAll<HTMLElement>('button:not([disabled]), textarea:not([disabled])'));
       const first = controls[0]; const last = controls[controls.length - 1];
       if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog.current)) {
         event.preventDefault(); last?.focus();
@@ -106,6 +107,13 @@ export default function GigStopDialog(props: Props) {
               </button>;
             })}
           </div>
+          {reason === 'other' && <div className="mt-3">
+            <label htmlFor="gig-stop-explanation" className="block text-sm font-medium text-app-text-strong mb-1.5">Please describe</label>
+            <textarea id="gig-stop-explanation" value={customReason} onChange={event => setCustomReason(event.target.value)}
+              placeholder="Why are you cancelling?" maxLength={1000} disabled={state.busy} rows={3}
+              className="w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-red-400 disabled:opacity-50 resize-none" />
+            <p className="text-xs text-app-text-muted mt-1 text-right">{customReason.length}/1000</p>
+          </div>}
         </div>}
         {!completed && <button type="button" disabled={state.busy} onClick={() => void state.check()}
           className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50">{state.busy ? 'Checking…' : 'Check status'}</button>}
@@ -118,7 +126,8 @@ export default function GigStopDialog(props: Props) {
           <button type="button" onClick={props.onClose}
             className="px-4 py-2 text-app-text-strong hover:bg-app-hover rounded-lg font-medium text-sm">{requiresReason && !state.attempt && !state.retired ? 'Keep Gig' : 'Close'}</button>
           {!state.retired && !state.attempt && state.preview?.eligible && !state.preview.activeRequestId && <button type="button"
-            disabled={state.busy || (requiresReason && !reason)} onClick={() => void state.submit(reason || null)}
+            disabled={state.busy || (requiresReason && (!reason || (reason === 'other' && !customReason.trim())))}
+            onClick={() => void state.submit(reason || null, reason === 'other' ? customReason : undefined)}
             className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed">{title}</button>}
         </div>
         {state.attempt && !completed && !state.retired && <p className="mt-2 text-xs text-app-text-secondary">

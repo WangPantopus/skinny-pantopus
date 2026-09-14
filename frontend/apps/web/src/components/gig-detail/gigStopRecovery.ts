@@ -1,6 +1,7 @@
 import type {
   GigStopAction, GigStopPreview, GigStopProgress, GigStopRequest, GigStopTerms,
 } from '@pantopus/api';
+import { ProtectedRecoverySlot } from '../home/tasks/TaskRecoveryStorage';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const actions = ['cancel', 'reopen_bidding', 'worker_release', 'close'];
@@ -12,6 +13,7 @@ const object = (value: unknown): value is Record<string, unknown> => value !== n
 export const stopId = (value: unknown): value is string => typeof value === 'string' && uuid.test(value);
 const optionalId = (value: unknown) => value === null || stopId(value);
 const cents = (value: unknown) => Number.isSafeInteger(value) && (value as number) >= 0;
+const fingerprint = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 
 export function validStopTerms(value: unknown, gigId: string): value is GigStopTerms {
   if (!object(value)) return false;
@@ -32,6 +34,7 @@ export function validStopRequest(value: unknown, gigId: string): value is GigSto
   return stopId(value.requestId) && value.gigId === gigId && stopId(value.actorId)
     && actions.includes(value.action as string) && validStopTerms(value.terms, gigId)
     && (value.reason === null || reasons.includes(value.reason as string))
+    && (value.reasonNoteHash == null || (value.reason === 'other' && fingerprint(value.reasonNoteHash)))
     && (value.rollbackMode === null || (value.rollbackMode === 'payment_setup_aborted' && value.action === 'reopen_bidding'))
     && ['none', 'release', 'refund'].includes(value.financialAction as string);
 }
@@ -39,6 +42,7 @@ export function validStopRequest(value: unknown, gigId: string): value is GigSto
 export function sameStopRequest(a: GigStopRequest, b: GigStopRequest): boolean {
   return a.requestId === b.requestId && a.gigId === b.gigId && a.actorId === b.actorId
     && a.action === b.action && a.reason === b.reason && a.rollbackMode === b.rollbackMode
+    && (a.reasonNoteHash ?? null) === (b.reasonNoteHash ?? null)
     && a.financialAction === b.financialAction && sameStopTerms(a.terms, b.terms);
 }
 
@@ -111,6 +115,7 @@ export function retainStopRequest(key: string, request: GigStopRequest): void {
   const terms = Object.fromEntries(termsKeys.map((field) => [field, request.terms[field]]));
   localStorage.setItem(key, JSON.stringify({ requestId: request.requestId, gigId: request.gigId,
     actorId: request.actorId, action: request.action, terms, reason: request.reason,
+    ...(request.reasonNoteHash ? { reasonNoteHash: request.reasonNoteHash } : {}),
     rollbackMode: request.rollbackMode, financialAction: request.financialAction }));
   notifyRecoveryChange(key);
 }
@@ -123,6 +128,53 @@ export function readStopRequest(key: string, actorId: string, gigId: string): Gi
     throw new Error('Saved task recovery could not be verified. Contact support before starting another request.');
   }
   return value;
+}
+
+interface StopExplanation { text: string; hash: string }
+const validExplanation = (value: unknown): value is StopExplanation => object(value)
+  && typeof value.text === 'string' && value.text.trim().length > 0 && value.text.length <= 1000 && fingerprint(value.hash);
+const explanationSlot = (key: string, requestId: string) => new ProtectedRecoverySlot<StopExplanation>(
+  ['gig-stop-explanation-v1', key, requestId], validExplanation,
+);
+
+export async function hashStopExplanation(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/** Free text reuses the existing encrypted database; receipt storage keeps only its fingerprint. */
+export async function retainStopExplanation(key: string, request: GigStopRequest, text: string, isCurrent: () => boolean): Promise<void> {
+  if (!request.reasonNoteHash || await hashStopExplanation(text) !== request.reasonNoteHash) {
+    throw new Error('The original cancellation explanation changed. Reopen this request.');
+  }
+  const slot = explanationSlot(key, request.requestId);
+  const saved = await slot.load();
+  if (saved) {
+    if (saved.value.text !== text || saved.value.hash !== request.reasonNoteHash) {
+      throw new Error('A different cancellation explanation is already saved. Reopen this request.');
+    }
+    return;
+  }
+  await slot.retain({ text, hash: request.reasonNoteHash }, isCurrent);
+}
+
+export async function readStopExplanation(key: string, request: GigStopRequest): Promise<string | null> {
+  if (!request.reasonNoteHash) return null;
+  const saved = await explanationSlot(key, request.requestId).load();
+  if (!saved) return null;
+  if (saved.value.hash !== request.reasonNoteHash || await hashStopExplanation(saved.value.text) !== request.reasonNoteHash) {
+    throw new Error('The saved cancellation explanation does not match this request.');
+  }
+  return saved.value.text;
+}
+
+export async function clearStopExplanation(key: string, request: GigStopRequest, isCurrent: () => boolean): Promise<void> {
+  if (!request.reasonNoteHash) return;
+  const slot = explanationSlot(key, request.requestId);
+  const saved = await slot.load();
+  if (!saved) return;
+  if (saved.value.hash !== request.reasonNoteHash) throw new Error('A different cancellation explanation is saved.');
+  await slot.clear(saved, isCurrent);
 }
 
 export const stopActionLabel = (action: GigStopAction) => ({ cancel: 'Cancel task',

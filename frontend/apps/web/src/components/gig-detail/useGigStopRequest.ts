@@ -5,7 +5,7 @@ import * as api from '@pantopus/api';
 import type { GigStopAction, GigStopPreview, GigStopProgress, GigStopReason, GigStopRequest } from '@pantopus/api';
 import {
   clearStopRequest, readStopRequest, retainStopRequest, sameStopRequest, sameStopTerms, stopId, stopRecoveryKey,
-  verifyStopPreview, verifyStopProgress,
+  verifyStopPreview, verifyStopProgress, hashStopExplanation, retainStopExplanation, readStopExplanation, clearStopExplanation,
 } from './gigStopRecovery';
 
 export interface GigStopOptions {
@@ -57,7 +57,7 @@ export function useGigStopRequest({ gigId, actorId, action, onCompleted, recover
     setAttempt(request);
   }
 
-  function accept(value: GigStopProgress, requestId: string, expected?: GigStopRequest | null) {
+  async function accept(value: GigStopProgress, requestId: string, expected?: GigStopRequest | null) {
     const verified = verifyStopProgress(value, gigId, actorId, requestId, serverSession.current, expected);
     serverSession.current = verified.sessionScope;
     const saved = readStopRequest(key, actorId, gigId);
@@ -66,7 +66,13 @@ export function useGigStopRequest({ gigId, actorId, action, onCompleted, recover
     }
     if (verified.status === 'completed') {
       // Clear only the exact local operation that this receipt completes.
-      if (saved) clearStopRequest(key);
+      await clearStopExplanation(key, verified.request, current);
+      if (!current()) return;
+      const latestSaved = readStopRequest(key, actorId, gigId);
+      if (latestSaved && !sameStopRequest(latestSaved, verified.request)) {
+        throw new Error('Another task action is saved. Reopen its status before continuing.');
+      }
+      if (latestSaved) clearStopRequest(key);
     } else if (verified.request.actorId === actorId) retainStopRequest(key, verified.request);
     remember(verified.request);
     setProgress(verified);
@@ -99,7 +105,7 @@ export function useGigStopRequest({ gigId, actorId, action, onCompleted, recover
         remember(saved);
         try {
           const result = await api.gigs.getGigStopRequest(gigId, saved.requestId);
-          if (current()) accept(result, saved.requestId, saved);
+          if (current()) await accept(result, saved.requestId, saved);
           return;
         } catch (cause) {
           if ((cause as { statusCode?: number })?.statusCode !== 404) throw cause;
@@ -118,7 +124,7 @@ export function useGigStopRequest({ gigId, actorId, action, onCompleted, recover
       const next = await fetchPreview(action);
       if (!next || !current() || !next.activeRequestId) return;
       const result = await api.gigs.getGigStopRequest(gigId, next.activeRequestId);
-      if (current()) accept(result, next.activeRequestId);
+      if (current()) await accept(result, next.activeRequestId);
     } catch (cause) {
       if (current()) setError(cause instanceof Error ? cause.message : 'Could not confirm task action details. Check again before continuing.');
     } finally {
@@ -143,43 +149,56 @@ export function useGigStopRequest({ gigId, actorId, action, onCompleted, recover
       retainStopRequest(key, result.request);
     } else if (saved) clearStopRequest(key);
     if (openingRecovery.current) openingRecovery.current = result.request;
-    accept(result, conflict.data.activeRequestId);
+    await accept(result, conflict.data.activeRequestId);
     return true;
   }
 
-  async function submit(reason: GigStopReason | null = null) {
+  async function submit(reason: GigStopReason | null = null, explanation?: string) {
     if (!current()) { if (mounted.current) setRetired(true); return; }
     if (working.current || !serverSession.current) return;
+    working.current = true; setBusy(true); setError('');
     let request = currentAttempt.current;
-    if (request) {
-      if (!canRetry || request.actorId !== actorId || progress?.status === 'completed') return;
-    } else {
-      if (!preview?.eligible || preview.activeRequestId || preview.financialAction === 'review') return;
-      if (typeof crypto.randomUUID !== 'function') { setError('Use a secure connection before continuing.'); return; }
-      request = { requestId: crypto.randomUUID(), gigId, actorId, action: preview.action,
-        terms: preview.terms, reason, rollbackMode: null, financialAction: preview.financialAction };
-    }
+    let sent = false;
     try {
+      let note: string | null = null;
+      if (request) {
+        if (!canRetry || request.actorId !== actorId || progress?.status === 'completed') return;
+        note = await readStopExplanation(key, request);
+      } else {
+        if (!preview?.eligible || preview.activeRequestId || preview.financialAction === 'review') return;
+        if (typeof crypto.randomUUID !== 'function') throw new Error('Use a secure connection before continuing.');
+        note = reason === 'other' ? explanation?.trim() || null : null;
+        if (reason === 'other' && (!note || note.length > 1000)) throw new Error('Describe why you are cancelling, using at most 1000 characters.');
+        const reasonNoteHash = note ? await hashStopExplanation(note) : null;
+        request = { requestId: crypto.randomUUID(), gigId, actorId, action: preview.action,
+          terms: preview.terms, reason, rollbackMode: null, financialAction: preview.financialAction,
+          ...(reasonNoteHash ? { reasonNoteHash } : {}) };
+        if (!current()) return;
+        // No provider request can start before the explanation is protected.
+        if (note) await retainStopExplanation(key, request, note, current);
+      }
+      if (!current()) return;
       const saved = readStopRequest(key, actorId, gigId);
       if (saved && !sameStopRequest(saved, request)) throw new Error('Another task action is already saved. Reopen task actions to recover it.');
       retainStopRequest(key, request);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Allow local storage so this request can recover after an interruption.');
-      return;
-    }
-    // Set the immutable request before any network call, including a lost response.
-    remember(request);
-    working.current = true; setBusy(true); setCanRetry(false); setError('');
-    try {
+      remember(request);
+      setCanRetry(false);
       if (!current()) return;
+      sent = true;
       const result = await api.gigs.submitGigStopRequest(gigId, { requestId: request.requestId, action: request.action,
         expectedActorId: actorId, expectedSessionScope: serverSession.current, expectedTerms: request.terms,
-        reason: request.reason, rollbackMode: request.rollbackMode });
-      if (current()) accept(result, request.requestId, request);
+        reason: request.reason, rollbackMode: request.rollbackMode,
+        ...(request.reasonNoteHash ? { reasonNoteHash: request.reasonNoteHash } : {}),
+        ...(note ? { reasonNote: note } : {}) });
+      if (current()) await accept(result, request.requestId, request);
     } catch (cause) {
       if (!current()) return;
-      try { if (await recoverConflict(cause, request)) return; } catch { /* Keep original recovery until the active receipt is verified. */ }
-      if (current()) setError('The result is not confirmed. Check status to recover this request before trying another action.');
+      if (sent && request) {
+        try { if (await recoverConflict(cause, request)) return; } catch { /* Keep original recovery until the active receipt is verified. */ }
+      }
+      if (current()) setError(sent
+        ? 'The result is not confirmed. Check status to recover this request before trying another action.'
+        : cause instanceof Error ? cause.message : 'The original request could not be saved. Reopen recovery before sending.');
     } finally {
       working.current = false;
       if (mounted.current) setBusy(false);

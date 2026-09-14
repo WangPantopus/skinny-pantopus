@@ -28,6 +28,7 @@ data class GigStopRequest(
     val reason: String?,
     val rollbackMode: String?,
     val financialAction: String,
+    val reasonNoteHash: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -39,6 +40,7 @@ data class GigStopCommand(
     val expectedTerms: GigStopTerms,
     val reason: String?,
     val rollbackMode: String?,
+    val reasonNoteHash: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

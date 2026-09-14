@@ -8,6 +8,8 @@ const notifications = require('./__mocks__/notificationService');
 const payment = { id: 'payment', gig_id: 'gig', payer_id: 'payer', payee_id: 'worker', amount_total: 1000,
   currency: 'USD', stripe_customer_id: 'cus_stop', stripe_payment_intent_id: 'pi_stop', metadata: {} };
 const command = { gigId: 'gig', actorId: 'payer', sessionScope: 'a'.repeat(64), requestId: 'operation', action: 'cancel', expectedTerms: { amountCents: 1000 } };
+const note = 'A synthetic change of plans — no personal information.';
+const noteHash = require('node:crypto').createHash('sha256').update(note).digest('hex');
 let data, intent, charge, handler;
 const rpc = jest.fn(async (name, args) => handler(name, args));
 beforeEach(() => {
@@ -98,6 +100,39 @@ test('captured zero-fee stop uses the exact reserved policy refund and awaits it
 test('read status never calls provider or retries a pending refund', async () => {
   data.request.financial_action = 'refund'; expect(await stop.readRequest(command)).toMatchObject({ status: 'pending' });
   expect(mockStripe.paymentIntents.retrieve).not.toHaveBeenCalled(); expect(refunds.create).not.toHaveBeenCalled();
+});
+test('Other explanation binds the existing reason text while the receipt exposes only its fingerprint', async () => {
+  data.request.state = 'completed'; data.request.reason = `other: ${note}`;
+  data.request.receipt = { requestId: 'operation', financialStatus: 'released' };
+  const result = await stop.execute({ ...command, reason: 'other', reasonNote: note, reasonNoteHash: noteHash });
+  expect(rpc).toHaveBeenCalledWith('begin_gig_stop', expect.objectContaining({ p_reason: `other: ${note}` }));
+  expect(result.request).toMatchObject({ reason: 'other', reasonNoteHash: noteHash });
+  expect(JSON.stringify(result)).not.toContain(note);
+  expect(mockStripe.paymentIntents.retrieve).not.toHaveBeenCalled();
+});
+test('same-ID retry recovers the original explanation from the existing server record', async () => {
+  data.request.state = 'completed'; data.request.reason = `other: ${note}`;
+  data.request.receipt = { requestId: 'operation', financialStatus: 'released' };
+  const result = await stop.execute({ ...command, reason: 'other', reasonNoteHash: noteHash });
+  expect(rpc).toHaveBeenCalledWith('read_gig_stop_request', { p_gig_id: 'gig', p_actor_id: 'payer', p_request_id: 'operation' });
+  expect(rpc).toHaveBeenCalledWith('begin_gig_stop', expect.objectContaining({ p_reason: `other: ${note}` }));
+  expect(result.request.reasonNoteHash).toBe(noteHash);
+});
+test('a changed explanation fingerprint cannot resume or charge the original request', async () => {
+  data.request.reason = `other: ${note}`;
+  await expect(stop.execute({ ...command, reason: 'other', reasonNoteHash: 'b'.repeat(64) }))
+    .rejects.toMatchObject({ code: 'STOP_REASON_CHANGED' });
+  expect(rpc).not.toHaveBeenCalledWith('begin_gig_stop', expect.anything());
+  expect(mockStripe.paymentIntents.retrieve).not.toHaveBeenCalled();
+});
+test.each([
+  { reason: 'changed_plans', reasonNote: note, reasonNoteHash: noteHash },
+  { reason: 'other', reasonNote: note, reasonNoteHash: 'b'.repeat(64) },
+  { reason: 'other', reasonNote: '', reasonNoteHash: noteHash },
+  { reason: 'other', reasonNote: 'x'.repeat(1001), reasonNoteHash: noteHash },
+])('invalid explanation is rejected before reservation: %j', async details => {
+  await expect(stop.execute({ ...command, ...details })).rejects.toMatchObject({ code: 'STOP_REASON_INVALID' });
+  expect(rpc).not.toHaveBeenCalled(); expect(mockStripe.paymentIntents.retrieve).not.toHaveBeenCalled();
 });
 test('different active request is disclosed only as STOP_ACTIVE', async () => {
   handler = async () => ({ data: { error: 'STOP_ACTIVE', requestId: 'other' } });

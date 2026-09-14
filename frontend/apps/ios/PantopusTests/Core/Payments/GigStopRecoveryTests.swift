@@ -3,6 +3,40 @@ import XCTest
 
 @MainActor
 final class GigStopRecoveryTests: GigStopTestCase {
+    func testOtherExplanationFingerprintSurvivesRecoveryWithoutFreeText() async throws {
+        let base = request()
+        let hash = String(repeating: "a", count: 64)
+        let original = GigStopRequest(
+            requestId: base.requestId,
+            gigId: base.gigId,
+            actorId: base.actorId,
+            action: base.action,
+            terms: base.terms,
+            reason: .other,
+            rollbackMode: base.rollbackMode,
+            financialAction: base.financialAction,
+            reasonNoteHash: hash
+        )
+        let decoded = try JSONDecoder().decode(GigStopRequest.self, from: JSONEncoder().encode(original))
+        XCTAssertEqual(decoded, original)
+        XCTAssertTrue(decoded.isValid(gig: gig))
+        let store = StopMemoryStore()
+        store.request = decoded
+        let model = make(store)
+        SequencedURLProtocol.routeResponses = try [
+            submitPath + "/" + original.requestId: [.status(200, body: json(progress(original)))],
+            submitPath: [.status(200, body: json(progress(original, completed: true)))]
+        ]
+        await model.checkStatus()
+        await model.retry()
+        XCTAssertTrue(model.completed)
+        let command = try body(XCTUnwrap(posts.first))
+        XCTAssertEqual(command["reason"] as? String, "other")
+        XCTAssertEqual(command["reasonNoteHash"] as? String, hash)
+        XCTAssertNil(command["reasonNote"])
+        XCTAssertNil(store.request)
+    }
+
     func testLostResponseSurvivesReopenAndRetriesOriginalCommandAfter404() async throws {
         let store = StopMemoryStore()
         let first = make(store)

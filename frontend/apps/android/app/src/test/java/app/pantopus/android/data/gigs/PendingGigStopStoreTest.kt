@@ -35,6 +35,19 @@ class PendingGigStopStoreTest {
 
     private fun store() = PersistentPendingGigStopStore(File(directory.root, "pending"), moshi)
 
+    @Test fun otherExplanationFingerprintSurvivesRecreationAndCannotCompleteAnotherExplanation() =
+        runTest {
+            val original = request.copy(reason = "other", reasonNoteHash = "a".repeat(64))
+            store().retain("explanation", original)
+            assertEquals(original, store().read("explanation"))
+            val changed = original.copy(reasonNoteHash = "b".repeat(64))
+            assertTrue(runCatching { store().complete("explanation", changed) }.exceptionOrNull() is GigStopRecoveryChanged)
+            assertFalse(GigStopValidation.request(original.copy(reason = "changed_plans"), original.gigId))
+            assertFalse(GigStopValidation.request(original.copy(reasonNoteHash = "invalid"), original.gigId))
+            store().complete("explanation", original)
+            assertNull(store().read("explanation"))
+        }
+
     @Test fun originalNullableTermsSurviveRecreationAndActorApiGigScopesRemainSeparate() =
         runTest {
             val keys = listOf("api|actor|gig", "other|actor|gig", "api|other|gig", "api|actor|other")

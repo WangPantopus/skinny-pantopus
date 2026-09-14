@@ -5,6 +5,7 @@ const { promisify } = require('node:util');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const Module = require('node:module');
+const { createHash } = require('node:crypto');
 const [container, database] = process.argv.slice(2);
 if (!container?.startsWith('supabase_db_') || !/^[a-z0-9_]+_contract$/.test(database || '')) throw new Error('Use local disposable DATABASE_contract');
 const root = path.resolve(__dirname, '../..');
@@ -111,6 +112,26 @@ async function overlap(update,following,afterWait='') {
  assert.equal(await sql(`SELECT public.gig_stop_payment_snapshot(p) FROM public."Payment" p WHERE id='${payment}';`),financial);
  assert.equal((await stop.execute(cmd)).status,'completed');assert.equal(cancels,2);
  loseDelivery=true;await assert.rejects(stop.deliverPending(),e=>e.code==='STOP_RECEIPT_UNKNOWN');await stop.deliverPending();assert.equal(new Set(delivered).size,1);
+
+ // An Other explanation stays in the private immutable request. Native or
+ // reloaded clients can retry with only its fingerprint after server admission.
+ await reset();cmd=await command();
+ const reasonNote='Synthetic private scheduling detail';
+ const reasonNoteHash=createHash('sha256').update(reasonNote).digest('hex');
+ cmd={...cmd,reason:'other',reasonNoteHash};
+ onCancel=async()=>{throw new Error('Synthetic unavailable provider');};
+ assert.equal((await stop.execute({...cmd,reasonNote})).status,'pending');
+ let recovered=await stop.readRequest(cmd);
+ assert.equal(recovered.request.reason,'other');assert.equal(recovered.request.reasonNoteHash,reasonNoteHash);
+ assert.ok(!JSON.stringify(recovered).includes(reasonNote));
+ assert.equal(await sql(`SELECT reason FROM public."GigStopRequest" WHERE id='${operation}';`),`other: ${reasonNote}`);
+ await assert.rejects(stop.execute({...cmd,reasonNoteHash:'b'.repeat(64)}),e=>e.code==='STOP_REASON_CHANGED');
+ assert.equal(cancels,1);
+ onCancel=null;recovered=await stop.execute(cmd);
+ assert.equal(recovered.status,'completed');assert.equal(cancels,2);
+ assert.ok(!JSON.stringify(recovered).includes(reasonNote));
+ assert.equal(await sql(`SELECT cancellation_reason FROM public."Gig" WHERE id='${gig}';`),'other');
+ assert.equal((await stop.execute(cmd)).status,'completed');assert.equal(cancels,2);
 
  await reset();cmd=await command();onCancel=async()=>{intent.status='canceled';intent.amount_capturable=0;throw new Error('Lost response');};
  assert.equal((await stop.execute(cmd)).status,'completed');assert.equal(cancels,1);

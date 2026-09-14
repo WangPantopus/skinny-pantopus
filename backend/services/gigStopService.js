@@ -1,6 +1,7 @@
 // One saved stop command owns the assignment and any release/refund. Read APIs
 // expose receipts only; provider mutations require an explicit same-ID command.
 const db = require('../config/supabaseAdmin');
+const { createHash } = require('node:crypto');
 const { getStripeClient } = require('../stripe/getStripeClient');
 const { assertIntentBinding, providerId } = require('../stripe/gigPaymentProof');
 const refunds = require('./paymentRefundService');
@@ -19,6 +20,35 @@ async function rpc(name, args, allowNull = false) {
   }
   return data;
 }
+const noteFingerprint = note => createHash('sha256').update(note, 'utf8').digest('hex');
+function reasonDetails(value) {
+  if (typeof value === 'string' && value.startsWith('other: ')) {
+    return { reason: 'other', reasonNoteHash: noteFingerprint(value.slice(7)) };
+  }
+  return { reason: value || null };
+}
+async function originalReason({ gigId, actorId, requestId, reason, reasonNote, reasonNoteHash }) {
+  if (reasonNote == null && reasonNoteHash == null) return reason;
+  if (reason !== 'other' || typeof reasonNoteHash !== 'string' || !/^[a-f0-9]{64}$/.test(reasonNoteHash)) {
+    throw fail('STOP_REASON_INVALID', 'The cancellation explanation could not be verified.', 400);
+  }
+  if (reasonNote != null) {
+    if (typeof reasonNote !== 'string' || !reasonNote.trim() || reasonNote.trim().length > 1000
+        || noteFingerprint(reasonNote.trim()) !== reasonNoteHash) {
+      throw fail('STOP_REASON_INVALID', 'The cancellation explanation could not be verified.', 400);
+    }
+    // The existing text column already binds immutable retry identity under
+    // begin_gig_stop's lock. finish_gig_stop publishes only the Other category.
+    return `other: ${reasonNote.trim()}`;
+  }
+  // A client can recover a saved request using its nonsecret fingerprint;
+  // free text is never required in native or browser receipt-identity storage.
+  const saved = await rpc('read_gig_stop_request', { p_gig_id: gigId, p_actor_id: actorId, p_request_id: requestId });
+  if (reasonDetails(saved.request?.reason).reasonNoteHash !== reasonNoteHash) {
+    throw fail('STOP_REASON_CHANGED', 'The original cancellation explanation changed. Reopen this request.');
+  }
+  return saved.request.reason;
+}
 function project(data) {
   const r = data.request;
   if (!r?.id || !r.terms) throw fail('STOP_RECEIPT_UNKNOWN', 'The saved stop request is unavailable.', 503);
@@ -28,7 +58,7 @@ function project(data) {
   return { requestId: r.id, action: r.action, status: r.state, financialStatus,
     canRetry: data.canRetry === true && r.state === 'pending',
     request: { requestId: r.id, gigId: r.gig_id, actorId: r.actor_id, action: r.action,
-      terms: r.terms, reason: r.reason || null, rollbackMode: r.rollback_mode || null, financialAction: r.financial_action },
+      terms: r.terms, ...reasonDetails(r.reason), rollbackMode: r.rollback_mode || null, financialAction: r.financial_action },
     receipt: r.state === 'completed' ? r.receipt : null };
 }
 async function preview({ gigId, actorId, action }) {
@@ -69,9 +99,11 @@ async function readReleaseProof(payment) {
     payee_id: intent.metadata.payee_id, gig_id: intent.metadata.gig_id,
     acceptance_attempt_id: intent.metadata.acceptance_attempt_id || null };
 }
-async function execute({ gigId, actorId, sessionScope, requestId, action, expectedTerms, reason = null, rollbackMode = null }) {
+async function execute({ gigId, actorId, sessionScope, requestId, action, expectedTerms, reason = null,
+  reasonNote = null, reasonNoteHash = null, rollbackMode = null }) {
+  const original = await originalReason({ gigId, actorId, requestId, reason, reasonNote, reasonNoteHash });
   let data = await rpc('begin_gig_stop', { p_gig_id: gigId, p_actor_id: actorId, p_session_scope: sessionScope,
-    p_request_id: requestId, p_action: action, p_expected: expectedTerms, p_reason: reason, p_rollback_mode: rollbackMode });
+    p_request_id: requestId, p_action: action, p_expected: expectedTerms, p_reason: original, p_rollback_mode: rollbackMode });
   if (data.request.state !== 'pending' || data.canRetry !== true) return project(data);
   const args = { p_request_id: requestId, p_actor_id: actorId };
   let leaseId;

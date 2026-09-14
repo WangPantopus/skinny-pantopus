@@ -49,6 +49,19 @@ test('STOP_ACTIVE preserves its code and exact active request UUID', async () =>
   stop.execute.mockRejectedValue(Object.assign(new Error('Active request'), { code: 'STOP_ACTIVE', statusCode: 409, activeRequestId: operation }));
   expect((await post('stop-requests')).body).toMatchObject({ code: 'STOP_ACTIVE', activeRequestId: operation });
 });
+test('a bounded Other explanation and fingerprint reach the same stop service', async () => {
+  const result = await post('stop-requests', { ...body, reason: 'other', reasonNote: 'Synthetic schedule change', reasonNoteHash: 'a'.repeat(64) });
+  expect(result.status).toBe(202);
+  expect(stop.execute).toHaveBeenCalledWith(expect.objectContaining({ reason: 'other', reasonNote: 'Synthetic schedule change', reasonNoteHash: 'a'.repeat(64) }));
+});
+test.each([
+  { reason: 'changed_plans', reasonNote: 'Note', reasonNoteHash: 'a'.repeat(64) },
+  { reason: 'other', reasonNote: 'x'.repeat(1001), reasonNoteHash: 'a'.repeat(64) },
+  { reason: 'other', reasonNote: 'Note', reasonNoteHash: 'not-a-fingerprint' },
+])('malformed Other details stay before the service: %j', async details => {
+  expect((await post('stop-requests', { ...body, ...details })).status).toBe(409);
+  expect(stop.execute).not.toHaveBeenCalled();
+});
 test('read-only preview/status return current server scope without executing a command', async () => {
   stop.preview.mockResolvedValue({ eligible: true, terms: body.expectedTerms }); stop.readRequest.mockResolvedValue({ status: 'pending', requestId: operation });
   const preview = await request(app).get(`/gigs/${gig}/stop-preview?action=cancel`).set('x-test-user-id', payer);

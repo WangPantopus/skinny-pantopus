@@ -45,6 +45,7 @@ object GigStopValidation {
     ): Boolean =
         id(value.requestId) && value.gigId == gigId && id(value.actorId) && value.action in actions && terms(value.terms, gigId) &&
             (value.reason == null || value.reason in reasons) &&
+            (value.reasonNoteHash == null || (value.reason == "other" && Regex("^[a-f0-9]{64}$").matches(value.reasonNoteHash))) &&
             (value.rollbackMode == null || (value.action == "reopen_bidding" && value.rollbackMode == "payment_setup_aborted")) &&
             value.financialAction in setOf("none", "release", "refund")
 

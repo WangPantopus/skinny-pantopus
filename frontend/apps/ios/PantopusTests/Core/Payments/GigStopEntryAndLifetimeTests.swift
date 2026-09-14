@@ -7,7 +7,7 @@ final class GigStopEntryAndLifetimeTests: GigStopTestCase {
         let resolve = { identity.value }
         return GigDetailViewModel(
             gigId: gig,
-            api: APIClient(environment: .current, session: SequencedURLProtocol.makeSession(), retryPolicy: .none),
+            api: makeTestAPI(),
             currentUserId: actor,
             stopStore: store,
             stopIdentity: resolve

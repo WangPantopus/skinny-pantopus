@@ -252,7 +252,16 @@ class GigStopCoordinator(
             val response =
                 repository.submit(
                     current.gigId,
-                    GigStopCommand(request.requestId, request.action, actor(), proof, request.terms, request.reason, request.rollbackMode),
+                    GigStopCommand(
+                        request.requestId,
+                        request.action,
+                        actor(),
+                        proof,
+                        request.terms,
+                        request.reason,
+                        request.rollbackMode,
+                        request.reasonNoteHash,
+                    ),
                 )
             if (!owns(ticket)) return@operation
             when (response) {

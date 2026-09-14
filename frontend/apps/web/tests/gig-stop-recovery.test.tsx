@@ -1,10 +1,31 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { createHash, webcrypto } from 'node:crypto';
+import { TextEncoder as NodeTextEncoder } from 'node:util';
 import * as api from '@pantopus/api';
 import type { GigStopPreview, GigStopProgress, GigStopRequest } from '@pantopus/api';
 import GigStopDialog from '../src/components/gig-detail/GigStopDialog';
 import { retainStopRequest, stopRecoveryKey, verifyStopProgress } from '../src/components/gig-detail/gigStopRecovery';
 
 const listeners = new Set<() => void>();
+const mockStopExplanations = new Map<string, { value: unknown; revision: string }>();
+let mockBeforeProtect: (() => Promise<void>) | undefined;
+jest.mock('../src/components/home/tasks/TaskRecoveryStorage', () => ({
+  ProtectedRecoverySlot: class {
+    private key: string;
+    constructor(scope: string[]) { this.key = JSON.stringify(scope); }
+    async load() { return mockStopExplanations.get(this.key) ?? null; }
+    async retain(value: unknown, isCurrent: () => boolean) {
+      await mockBeforeProtect?.();
+      if (!isCurrent() || mockStopExplanations.has(this.key)) throw new Error('Protected original changed');
+      const saved = { value, revision: 'protected-revision' };
+      mockStopExplanations.set(this.key, saved); return saved;
+    }
+    async clear(expected: { revision: string }, isCurrent: () => boolean) {
+      if (!isCurrent() || mockStopExplanations.get(this.key)?.revision !== expected.revision) throw new Error('Protected original changed');
+      mockStopExplanations.delete(this.key);
+    }
+  },
+}));
 let token: string | null = '__session__';
 jest.mock('@pantopus/api', () => ({
   getAuthToken: () => token, getApiBaseUrl: () => 'https://app.test', AUTH_SESSION_CHANGE_KEY: 'session-change',
@@ -37,11 +58,86 @@ async function submitNew() {
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cancel task' })); });
 }
 beforeEach(() => {
-  jest.clearAllMocks(); listeners.clear(); localStorage.clear(); token = '__session__';
+  jest.clearAllMocks(); listeners.clear(); localStorage.clear(); mockStopExplanations.clear(); token = '__session__';
+  mockBeforeProtect = undefined;
+  Object.defineProperty(crypto, 'subtle', { configurable: true, value: webcrypto.subtle });
+  Object.defineProperty(globalThis, 'TextEncoder', { configurable: true, value: NodeTextEncoder });
   Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: jest.fn(() => requestId) });
   jest.mocked(api.gigs.getGigStopPreview).mockResolvedValue(preview);
   jest.mocked(api.gigs.getGigStopRequest).mockResolvedValue(pending);
   jest.mocked(api.gigs.submitGigStopRequest).mockResolvedValue(pending);
+});
+
+test('Other keeps the original explanation field and requires text before cancellation', async () => {
+  show(); fireEvent.click(await screen.findByRole('button', { name: 'Other' }));
+  const explanation = screen.getByPlaceholderText('Why are you cancelling?');
+  expect(explanation).toHaveAttribute('maxLength', '1000');
+  expect(screen.getByRole('button', { name: 'Cancel task' })).toBeDisabled();
+  fireEvent.change(explanation, { target: { value: 'Synthetic change of plans' } });
+  expect(screen.getByRole('button', { name: 'Cancel task' })).toBeEnabled();
+});
+
+test('Other explanation survives loss and reopen in protected storage, with only its fingerprint in receipt storage', async () => {
+  const text = 'Synthetic schedule change — no private information.';
+  const hash = createHash('sha256').update(text).digest('hex');
+  const original: GigStopRequest = { ...request, reason: 'other', reasonNoteHash: hash };
+  const first = show(); fireEvent.click(await screen.findByRole('button', { name: 'Other' }));
+  fireEvent.change(screen.getByPlaceholderText('Why are you cancelling?'), { target: { value: text } });
+  jest.mocked(api.gigs.submitGigStopRequest).mockRejectedValueOnce(new Error('Lost reply'));
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cancel task' })); });
+  await waitFor(() => expect(api.gigs.submitGigStopRequest).toHaveBeenCalledTimes(1));
+  expect(api.gigs.submitGigStopRequest).toHaveBeenLastCalledWith(gig, expect.objectContaining({ reason: 'other', reasonNote: text, reasonNoteHash: hash }));
+  expect(JSON.parse(localStorage.getItem(key)!)).toEqual(original);
+  expect(localStorage.getItem(key)).not.toContain(text);
+  expect(mockStopExplanations.size).toBe(1);
+  first.unmount();
+  jest.mocked(api.gigs.getGigStopRequest).mockRejectedValueOnce({ statusCode: 404 });
+  jest.mocked(api.gigs.submitGigStopRequest).mockResolvedValue({ ...done, request: original });
+  show(); await screen.findByRole('button', { name: 'Retry this request' });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Retry this request' })); });
+  await waitFor(() => expect(api.gigs.submitGigStopRequest).toHaveBeenCalledTimes(2));
+  const calls = jest.mocked(api.gigs.submitGigStopRequest).mock.calls;
+  expect(calls[1][1]).toEqual(calls[0][1]);
+  expect(mockStopExplanations.size).toBe(0);
+  expect(localStorage.getItem(key)).toBeNull();
+});
+
+test('a failed protected write prevents an Other command from reaching the server', async () => {
+  mockBeforeProtect = async () => { throw new Error('Protected storage unavailable'); };
+  show(); fireEvent.click(await screen.findByRole('button', { name: 'Other' }));
+  fireEvent.change(screen.getByPlaceholderText('Why are you cancelling?'), { target: { value: 'Synthetic detail' } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cancel task' })); });
+  expect(await screen.findByRole('alert')).toHaveTextContent('Protected storage unavailable');
+  expect(api.gigs.submitGigStopRequest).not.toHaveBeenCalled();
+  expect(localStorage.getItem(key)).toBeNull(); expect(mockStopExplanations.size).toBe(0);
+});
+
+test('session replacement during protection prevents both saving and sending an Other explanation', async () => {
+  let release!: () => void;
+  mockBeforeProtect = jest.fn(() => new Promise<void>(resolve => { release = resolve; }));
+  show(); fireEvent.click(await screen.findByRole('button', { name: 'Other' }));
+  fireEvent.change(screen.getByPlaceholderText('Why are you cancelling?'), { target: { value: 'Synthetic detail' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel task' }));
+  await waitFor(() => expect(mockBeforeProtect).toHaveBeenCalledTimes(1));
+  act(() => listeners.forEach(listener => listener()));
+  await act(async () => release());
+  expect(api.gigs.submitGigStopRequest).not.toHaveBeenCalled();
+  expect(localStorage.getItem(key)).toBeNull(); expect(mockStopExplanations.size).toBe(0);
+  expect(onCompleted).not.toHaveBeenCalled();
+});
+
+test('a retired Other completion preserves protected recovery for the original actor', async () => {
+  let complete!: (value: GigStopProgress) => void;
+  jest.mocked(api.gigs.submitGigStopRequest).mockReturnValue(new Promise(resolve => { complete = resolve; }));
+  show(); fireEvent.click(await screen.findByRole('button', { name: 'Other' }));
+  fireEvent.change(screen.getByPlaceholderText('Why are you cancelling?'), { target: { value: 'Synthetic detail' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel task' }));
+  await waitFor(() => expect(api.gigs.submitGigStopRequest).toHaveBeenCalledTimes(1));
+  const saved = JSON.parse(localStorage.getItem(key)!) as GigStopRequest;
+  act(() => listeners.forEach(listener => listener()));
+  await act(async () => complete({ ...done, request: saved }));
+  expect(JSON.parse(localStorage.getItem(key)!)).toEqual(saved); expect(mockStopExplanations.size).toBe(1);
+  expect(onCompleted).not.toHaveBeenCalled();
 });
 
 test('opening reads current terms; explicit submission saves exact identity before POST and retains a pending outcome', async () => {

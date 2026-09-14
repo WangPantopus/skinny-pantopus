@@ -38,6 +38,8 @@ export interface GigStopRequest {
   action: GigStopAction;
   terms: GigStopTerms;
   reason: GigStopReason | null;
+  /** Binds an optional explanation without retaining its free text in receipts. */
+  reasonNoteHash?: string | null;
   rollbackMode: 'payment_setup_aborted' | null;
   financialAction: GigStopFinancialAction;
 }
@@ -74,6 +76,9 @@ export interface GigStopCommand {
   expectedSessionScope: string;
   expectedTerms: GigStopTerms;
   reason: GigStopReason | null;
+  reasonNoteHash?: string | null;
+  /** Required only when the original explanation has not reached the server. */
+  reasonNote?: string | null;
   rollbackMode: 'payment_setup_aborted' | null;
 }
 

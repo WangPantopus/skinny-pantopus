@@ -179,10 +179,30 @@ DO $$ DECLARE e jsonb; d jsonb; note uuid; BEGIN
  IF EXISTS(SELECT FROM public."Notification" WHERE id=note) THEN RAISE EXCEPTION 'Deleted notice recreated'; END IF;
  IF NOT public.finish_gig_stop_delivery((e->>'id')::uuid,(e->>'lease_id')::uuid,'suppressed') THEN RAISE EXCEPTION 'Delivery lease could not finish'; END IF;
 END $$;
+DO $$ DECLARE d jsonb; terms jsonb; explanation text:='other: Private scheduling detail'; BEGIN
+ INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status)
+ VALUES(pg_temp.stop_id(111),pg_temp.stop_id(1),pg_temp.stop_id(1),'Private explanation','Synthetic',0,'open');
+ d:=pg_temp.stop_begin(11,'close',1,NULL,explanation);
+ IF d ? 'error' THEN RAISE EXCEPTION 'Private explanation not reserved %',d; END IF;
+ terms:=d->'request'->'terms';
+ d:=public.begin_gig_stop(pg_temp.stop_id(111),pg_temp.stop_id(1),repeat('b',64),pg_temp.stop_id(811),'close',terms,explanation);
+ IF d ? 'error' OR d->'request'->>'reason' IS DISTINCT FROM explanation THEN RAISE EXCEPTION 'Exact explanation not recovered'; END IF;
+ IF public.begin_gig_stop(pg_temp.stop_id(111),pg_temp.stop_id(1),repeat('b',64),pg_temp.stop_id(811),'close',terms,'other: Changed detail')->>'error'
+  IS DISTINCT FROM 'REQUEST_CONFLICT' THEN RAISE EXCEPTION 'Retry replaced the original explanation'; END IF;
+ d:=public.finish_gig_stop(pg_temp.stop_id(811),pg_temp.stop_id(1));
+ IF d->'request'->>'state' IS DISTINCT FROM 'completed' THEN RAISE EXCEPTION 'Private explanation stop not completed %',d; END IF;
+ IF (SELECT cancellation_reason FROM public."Gig" WHERE id=pg_temp.stop_id(111)) IS DISTINCT FROM 'other'
+  THEN RAISE EXCEPTION 'Private explanation exposed in public task timeline'; END IF;
+ IF (SELECT reason FROM public."GigStopRequest" WHERE id=pg_temp.stop_id(811)) IS DISTINCT FROM explanation
+  THEN RAISE EXCEPTION 'Private explanation lost from original request'; END IF;
+ d:=public.finish_gig_stop(pg_temp.stop_id(811),pg_temp.stop_id(1));
+ IF d->'request'->>'reason' IS DISTINCT FROM explanation THEN RAISE EXCEPTION 'Completed replay lost original explanation'; END IF;
+END $$;
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
  BEGIN PERFORM public.begin_gig_stop(NULL,NULL,repeat('a',64),NULL,'close','{}'); RAISE EXCEPTION 'Client could reserve task stop'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN UPDATE public."GigStopRequest" SET state='completed'; RAISE EXCEPTION 'Client could manufacture receipt'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN PERFORM reason FROM public."GigStopRequest"; RAISE EXCEPTION 'Client could read private explanation'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.claim_gig_stop_delivery(); RAISE EXCEPTION 'Client controlled notice delivery'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;

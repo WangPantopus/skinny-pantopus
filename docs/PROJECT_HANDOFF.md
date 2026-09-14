@@ -7,99 +7,76 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
-## Paid integration work in progress — September14
+## Current state — September14
 
-User authorizes checking and merging ready PRs, then continued verification and
-repairs. Active paid worktree: `/private/tmp/pantopus-paid-gig-integration`, branch
-`codex/paid-gig-integration`. Local274bbe8cb integrates original PR34 e9ef2decb
-with Home557a556db. All nine conflicts are resolved while preserving both durable
-notification paths, current Home/session guards and every branch's source.
-Combined checks pass5808 backend tests/16 existing skips,59 focused web tests,
-web TypeScript and scoped lint (seven pre-existing CompletionFlow warnings).
-There are62 distinct migration versions, zero collisions and64 synchronized SQL
-wrappers. This is not combined populated adoption, native acceptance or hosted
-readiness. PR34 remains draft. The Home chain merged through PR43 at
-0cb4f3c600 after all16 checks passed on d18120a8c in CI34879088468.
-This candidate includes that actual master, preserving the three inspected
-Android screenshot references and both evidence reports. No product or schema
-conflict occurred; the sole conflict was two independently appended report sections.
+**Master:** `e775af9ae393c1e961df8f0043e3aed734326196` after authorized
+[PR45](https://github.com/WangPantopus/skinny-pantopus/pull/45). All15 applicable
+checks pass/one Seeder path skip in [CI34886464860](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34886464860).
+The master tree exactly matches tested `a25b5df61`. This repairs existing expired
+residency-letter projections and labels across web/iOS/Android. Historical PDFs
+and screen layouts are preserved. R06 remains open; see the [expiry evidence](VERIFICATION_FIRST_2026-09-13.md#existing-residency-letter-expiry-projection-and-labels).
 
-The existing TipModal now distinguishes PaymentIntent creation from paid status.
-It reuses refreshTipPaymentStatus, keeps the same payment/amount for further status
-checks, blocks another creation in the same modal after an unknown result, and
-retires stale task/session responses. Ten focused regressions, standalone web
-TypeScript and scoped lint pass. Existing layouts/styles are preserved. Payment
-confirmation UI, durable recovery across closing/reload, current backend provider
-proof and installed/provider acceptance remain open. This is a bounded UI-status
-repair, not completion of tips or PR34. See [tip-status evidence](VERIFICATION_FIRST_2026-09-13.md#existing-web-tip-status-repair).
+The Home chain merged through [PR43](https://github.com/WangPantopus/skinny-pantopus/pull/43)
+at `0cb4f3c600` (all16 CI checks passed). PR32 is also marked merged; PR38–42
+were closed as incorporated, preserving source branches. Existing file-picker
+repair [PR44](https://github.com/WangPantopus/skinny-pantopus/pull/44) merged at
+`f6dbbe2eb` (six applicable checks/five path skips). Their reviewed trees exactly
+matched master. No hosted deployment, migration adoption or provider activation ran.
 
-File-picker PR44 also merged atf6dbbe2eb after all6 applicable checks/five skips,
-and this candidate now incorporates that exact master. Its application repair and
-component evidence remain intact. Expiry PR45 is independently under CI at
-a25b5df61; do not pull its unmerged work into this candidate.
+**Remaining open PR:** original [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
+is draft at `e9ef2decbb`. Its preserved integration worktree is
+`/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`,
+committed/pushed at `f0736645c`. It incorporates actual PR43/44 master; PR45 is
+merged remotely but not yet incorporated here. No unrelated owner checkout or
+worktree was changed. This is continued verification and repair of existing work.
 
-The cancellation presentation follow-up restores the original icon/reason buttons,
-policy/fee card and header/footer styles in the existing GigStopDialog. All52
-recovery/dialog regressions, web types and scoped lint pass; Chrome confirms
-selection and Keep Gig with a synthetic preview only. No task/provider command
-ran. See [presentation evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-cancellation-presentation-restoration-in-the-paid-candidate).
-The Other explanation remains a separate contract gap: old CompletionFlow never
-wired its input, and current durable/native reasons are enums. Do not claim the
-whole modal/flow complete or silently discard a typed explanation.
+The nine prior integration conflicts are resolved, preserving both notification
+paths, current Home/session guards and payment proof. Prior combined evidence
+passes5808 backend tests/16 existing skips,59 selected web tests and types/lint.
+Existing TipModal repairs pass10 regressions: created PaymentIntent is not reported
+as paid, same-modal status checks retain original payment/amount, already
+reconciled success survives, and retired sessions cannot publish completion.
+Durable tip creation/recovery across restart and actual confirmation/provider
+acceptance remain open. The tip contract/helper is a proposed unwired draft;
+inspect existing Payment and tip service before changing schema.
 
-**Next:** finish the existing cancellation
-presentation/custom-reason and durable tip contracts before marking PR34 ready.
-Its tip proof helper remains an unwired draft. Keep paid services/provider
-activation in the final launch bundle. Preserve the [prior paid handoff](https://github.com/WangPantopus/skinny-pantopus/blob/e9ef2decbb7ec435589bb3b92639041cfc4618a6/docs/PROJECT_HANDOFF.md)
-and linked reports. Other worktrees and owner checkout are untouched. No hosted
-migration, deployment or provider operation ran. The Home sections below retain pre-merge evidence history; their pending-merge
-wording is historical. PR32 and43 are merged, and PR38–42 are closed as incorporated.
-The separate file-picker repair and residency-letter expiry checks continue in
-their isolated worktrees. Fresh remote state takes precedence over old history.
+**Current cancellation explanation follow-up:** the existing Other textarea is
+restored with its original design. The existing private GigStopRequest.reason
+retains its immutable explanation; the API/native receipts carry only a hash,
+and web recovery reuses existing encrypted IndexedDB storage. One forward update
+to finish_gig_stop keeps free text out of the public task timeline; no new table.
+Baseline SQL reproduced that leak before the forward function update. Candidate
+SQL and generated pgTAP pass;65 backend and57 web tests, web types/scoped lint,
+and38 Android unit tests plus ktlint/detekt pass. Existing production service
+checks pass against real local SQL with a synthetic provider (238 connections).
+Chrome verifies real encryption, lost-response reload, same-request retry and
+cleanup after completion using a synthetic API; this is not provider acceptance.
+All22 focused iOS tests, SwiftLint and SwiftFormat now pass after isolating the
+existing test factory from the simulator Keychain. The new explanation, native
+compatibility and SQL privacy repair are ready for this bounded source checkpoint.
 
-## Current state and next action
+The combined isolated paid database copies only the owned Home rehearsal and
+applies the nine existing paid migrations plus the private-explanation function.
+All64 SQL contracts now pass across recorded runs; the first reference-default
+attempt correctly failed because the old Home rehearsal omitted static reference
+rows. Only its five empty reference tables were filled from the canonical existing
+baseline, then that unchanged check passed. Application-function lint passes349
+functions/106 trigger bindings, zero errors/eight existing warnings. This is local
+combined-schema verification; fresh baseline CI, populated hosted adoption and
+provider/native end-to-end acceptance remain distinct gates.
 
-**Master:** `0cb4f3c600228dab0d09ca8d660741c93028e3f4` after the authorized
-[PR43 merge](https://github.com/WangPantopus/skinny-pantopus/pull/43) on September14.
-All16 checks passed in [CI34879088468](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34879088468).
-The master tree exactly matches tested candidate `d18120a8c`; all seven Home heads
-are ancestors. PR32 is also marked merged. PR38–42 were closed as already
-incorporated through PR43, with their source branches retained. No deployment or
-migration activation was performed; production/staging activation flags remain disabled.
-The three inspected Android screenshot references fix the earlier CI failure;
-assertions, tolerances, layout and application source were preserved.
+**Next:** incorporate actual PR45 master, update the preserved draft PR34 with
+this verified integration candidate, then continue existing durable tip/provider work
+and final combined CI before marking PR34 ready. Keep all original screen designs.
+R05/R06, paid release gates and the app remain incomplete; the80-row inventory is
+not a completion or duplicated-effort percentage. Private logs/archive/recovery
+proof are retained under `paid-cancellation-explanation-r1`; do not commit them.
 
-**Current file-picker integration:** `/private/tmp/pantopus-file-picker-integration`,
-branch `codex/existing-file-picker-fixes`, includes the actual merged master and
-source repair `604307d38`. Its existing FileUpload component now accepts single-file
-replacement and releases local image preview URLs on replacement/removal/unmount.
-Current production Home/gig callers use multi-file mode; single-file mode is an
-existing component API with no current production caller. All8 focused tests,
-standalone web types and scoped lint pass. Bounded Chrome checks confirm image
-decoding and real object-URL cleanup, using synthetic files injected into the
-existing component. Actual native chooser selection and provider upload remain
-unaccepted. See [evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-shared-file-picker-replacement-and-preview-lifetime).
+## Earlier Home verification context
 
-**Other active verification:** `/private/tmp/pantopus-home-permission-boundaries`,
-branch `codex/residency-letter-expiry`, has an uncommitted repair to the existing
-issuer-list projection and web/iOS/Android expired-status labels. Baselines
-reproduced expired letters appearing active. It reuses the existing table and
-expiry column, preserves frozen PDFs and existing layouts, and adds no migration.
-Backend12 and web20 tests plus Android unit/static checks pass; iOS and actual
-HTTP/SQL checks remain pending. R06 remains open. A web type-check attempt found
-stale generated references to the already removed private file-picker harness;
-regenerate owned route types before the final check.
-
-The separate `/private/tmp/pantopus-paid-gig-integration`, branch
-`codex/paid-gig-integration`, is preserved remotely at `0334ffeca`. It resolves
-PR34's nine conflicts and keeps both notification paths and current Home/session
-boundaries. Combined backend5808 and selected web59 tests pass. Its existing
-TipModal now checks the existing payment status, preserves already reconciled
-success, and retires old task/account completions; all10 regressions, types and
-scoped lint pass. Actual new master integration and combined CI remain pending.
-Cancellation presentation, durable tip creation/recovery and real provider gates
-remain open. Original PR34 stays draft at `e9ef2decbb`. Owner checkout edits,
-unrelated worktrees and the paused renewal/two-table draft are preserved.
+The details below retain accepted evidence and historical next-action wording.
+The current state above takes precedence; do not repeat already accepted work
+solely because an older paragraph says next.
 
 **Current repairs reuse existing implementations.** The one existing unmerged
 service-only lease transaction uses existing leases, invitations, residents,
