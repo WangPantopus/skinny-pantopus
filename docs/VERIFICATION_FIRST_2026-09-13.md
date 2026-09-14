@@ -1923,3 +1923,15 @@ acceptance and the rest of the inventory remain open. Private baseline/candidate
 types and lint results are retained under integration-review-r1/file-picker-*.
 This repair is isolated above Home integration source d18120a8c while PR43 CI runs;
 it does not alter the source currently awaiting the Home merge.
+
+A subsequent Chrome check loads the real component in an owned temporary Next
+fixture with actual browser File objects. Image decode succeeds; unrelated
+renders allocate no further URL, replacement retires the old URL, and the
+existing multi-file remove button plus unmount leave zero live URLs (seven
+created/seven revoked across the exercise). The Chrome extension disallowed
+chooser file injection; no permission was changed. Files for these browser
+lifetime checks were supplied by the synthetic fixture, so actual chooser
+selection is not accepted browser evidence. The focused React tests cover input
+selection/replacement separately. The temporary route is removed, the owned tab
+is closed and Next18119 is stopped. Source binding and counters are in the private
+file-picker-browser-r1/binding.json; no browser harness is committed.
