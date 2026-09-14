@@ -1,4 +1,12 @@
-# Durable Gig tip contract
+# Durable Gig tip contract — proposed, not implemented
+
+**Status checked September14,2026:** this document describes a proposed extension.
+The current tip POST/refresh routes and Payment model already exist; the preview,
+request command, receipt migration and matching clients described below do not.
+The current POST does not return TIP_TERMS_REQUIRED. gigTipProof.js is an unwired
+draft. Inspect and extend the existing paths before implementing any new contract.
+The TipModal status repair reuses the current refresh API and does not implement
+this proposal. Keep provider activation and hosted rollout gated.
 
 Matching clients and backend must deploy together. The previous tip POST without an
 original request UUID, current opening session proof and exact displayed terms returns
@@ -145,6 +153,6 @@ New request creation requires a nonnull current owner confirmation. Unverified o
 multiple historical pending payments block an ambiguous new tip until individually
 reconciled. Existing successful tips and financial records are preserved.
 
-This is the source contract for migration `20260910190000_paid_gig_tip_receipts.sql`.
+The proposed migration name is `20260910190000_paid_gig_tip_receipts.sql`; that migration does not exist in this candidate. Compare existing Payment storage and other branches before choosing a migration or adding schema.
 Hosted application, new provider acceptance and client completion remain separate
 verification gates until the corresponding source and receipt tests pass.

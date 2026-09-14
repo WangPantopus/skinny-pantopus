@@ -1867,8 +1867,8 @@ pays.js tip/refresh routes, stripeService.createTipPayment/syncTipPaymentStatus
 and Payment table. The route's success flag means a PaymentIntent was created;
 the modal treated that or a client secret as paid success. Six initial React
 regressions fail on the unchanged component. Current source uses the existing
-refresh endpoint and requires both succeeded provider status and a confirmed
-local paid state before calling onSuccess. Unconfirmed status keeps the same
+refresh endpoint and requires a paid state from the existing service before
+calling onSuccess; any supplied provider status must also be succeeded. Unconfirmed status keeps the same
 payment ID/amount for explicit checks; it never creates another payment for a
 status retry. An unknown creation reply blocks a second creation inside this
 modal. Amount controls freeze once an attempt starts. Layout/styles are retained.
@@ -1877,7 +1877,7 @@ A follow-up test reproduces an old paid response being applied after the task
 changes. Two more reproduce submission after cookie-session replacement and an
 old paid response being shown to a replaced session. Existing token-change events,
 origin/token/session-marker comparison and task/mount lifetime now retire those
-responses. All nine final tests pass, with standalone TypeScript and zero-warning
+responses. The initial nine tests pass, with standalone TypeScript and zero-warning
 scoped ESLint. The first typecheck failed because the test used Playwright's exact
 option with Testing Library; removing that unsupported test option repairs it.
 Earlier failures remain in private integration-review-r1/paid-tip-modal-* logs.
@@ -1892,3 +1892,14 @@ checks. The unwired gigTipProof draft remains explicitly unaccepted. PR34 stays
 draft, including the cancellation presentation/custom-reason review and combined
 native/DB gates. Full backend and unchanged web evidence from local274bbe8cb is
 reused only for unaffected source.
+
+Tracing the existing syncTipPaymentStatus short circuit caught a compatibility
+gap in the first UI candidate: already-paid records intentionally return null
+provider status without another provider read. The candidate would have left
+those successful tips pending. That regression is reproduced, and the existing
+recorded-paid response remains accepted; supplied non-success provider status
+still cannot report success. All ten final focused tests pass. This is not a
+claim of new exact provider/charge proof—the current service's guarantees remain
+the stated limit. The proposed tip-contract document now explicitly says its
+routes/migration are unimplemented, preventing a plan from being mistaken for
+existing source or completed acceptance.

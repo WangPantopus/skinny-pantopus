@@ -24,7 +24,7 @@ Android CI on PR43 d18120a8c, run34879088468, before a normal master merge.
 The existing TipModal now distinguishes PaymentIntent creation from paid status.
 It reuses refreshTipPaymentStatus, keeps the same payment/amount for further status
 checks, blocks another creation in the same modal after an unknown result, and
-retires stale task/session responses. Nine focused regressions, standalone web
+retires stale task/session responses. Ten focused regressions, standalone web
 TypeScript and scoped lint pass. Existing layouts/styles are preserved. Payment
 confirmation UI, durable recovery across closing/reload, current backend provider
 proof and installed/provider acceptance remain open. This is a bounded UI-status

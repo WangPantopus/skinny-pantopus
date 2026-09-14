@@ -51,6 +51,12 @@ test('a provider success without a confirmed local paid state cannot report succ
   expect(onSuccess).not.toHaveBeenCalled();
 });
 
+test('an already reconciled paid tip remains successful when the existing service skips another provider read', async () => {
+  refresh.mockResolvedValue({ paymentStatus: 'captured_hold', previousPaymentStatus: 'captured_hold', changed: false, stripeStatus: null });
+  show();
+  await waitFor(() => expect(onSuccess).toHaveBeenCalledWith(500));
+});
+
 test('a lost status response retains the payment and selected amount for checking', async () => {
   refresh.mockRejectedValueOnce(new Error('Response interrupted'));
   show();

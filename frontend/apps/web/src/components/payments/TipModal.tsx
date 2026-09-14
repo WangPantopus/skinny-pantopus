@@ -115,8 +115,10 @@ export default function TipModal({
       // the existing reconciliation endpoint, retaining this payment for checks.
       const status = await refreshTipPaymentStatus(tip.paymentId);
       if (!isCurrent()) return;
-      if (status.stripeStatus === 'succeeded'
-        && ['captured_hold', 'transfer_pending', 'transferred'].includes(status.paymentStatus)) {
+      // Already reconciled payments intentionally skip a second provider read
+      // and return null provider status. Their recorded paid state still counts.
+      if ((status.stripeStatus === 'succeeded' || status.stripeStatus === null)
+        && ['captured_hold', 'transfer_scheduled', 'transfer_pending', 'transferred'].includes(status.paymentStatus)) {
         confirmed.current = true;
         onSuccess(tip.amount);
       } else {
