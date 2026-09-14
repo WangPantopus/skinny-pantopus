@@ -1,7 +1,7 @@
 'use client';
 
-import Image from 'next/image';
-import { useState, useRef, useCallback, type ReactNode } from 'react';
+import Image, { type ImageProps } from 'next/image';
+import { useState, useRef, useCallback, useEffect, type ReactNode } from 'react';
 import { Image as ImageIcon, Film, FileText, Paperclip, Camera } from 'lucide-react';
 
 const ACCEPTED_TYPES: Record<string, string[]> = {
@@ -28,6 +28,18 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function LocalFileImage({ file, alt, ...props }: Omit<ImageProps, 'src'> & { file: File }) {
+  const [preview, setPreview] = useState<{ file: File; url: string } | null>(null);
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setPreview({ file, url });
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  // A replaced file must never render the previous file's URL before its effect runs.
+  return preview?.file === file ? <Image {...props} alt={alt} src={preview.url} /> : null;
 }
 
 interface FileUploadProps {
@@ -79,7 +91,7 @@ export default function FileUpload({
     (newFiles: FileList | File[]) => {
       setError('');
       const arr = Array.from(newFiles);
-      const totalCount = files.length + existingMedia.length + arr.length;
+      const totalCount = maxFiles === 1 ? arr.length : files.length + existingMedia.length + arr.length;
 
       if (totalCount > maxFiles) {
         setError(`Maximum ${maxFiles} file${maxFiles > 1 ? 's' : ''} allowed`);
@@ -129,7 +141,7 @@ export default function FileUpload({
   };
 
   const isSingle = maxFiles === 1;
-  const singlePreview = isSingle && files.length > 0 ? URL.createObjectURL(files[0]) : null;
+  const singleFile = isSingle ? files[0] : undefined;
   const existingSingleUrl = isSingle && existingMedia.length > 0 ? existingMedia[0].url : null;
 
   return (
@@ -149,17 +161,29 @@ export default function FileUpload({
         `}
       >
         {/* Single file preview (profile picture mode) */}
-        {isSingle && (singlePreview || existingSingleUrl) ? (
+        {isSingle && (singleFile || existingSingleUrl) ? (
           <div className="flex items-center gap-4">
-            <Image
-              src={singlePreview || existingSingleUrl!}
-              alt="Preview"
-              className="w-20 h-20 rounded-full object-cover border-2 border-app-border"
-              width={80}
-              height={80}
-              sizes="80px"
-              quality={75}
-            />
+            {singleFile ? (
+              <LocalFileImage
+                file={singleFile}
+                alt="Preview"
+                className="w-20 h-20 rounded-full object-cover border-2 border-app-border"
+                width={80}
+                height={80}
+                sizes="80px"
+                quality={75}
+              />
+            ) : (
+              <Image
+                src={existingSingleUrl!}
+                alt="Preview"
+                className="w-20 h-20 rounded-full object-cover border-2 border-app-border"
+                width={80}
+                height={80}
+                sizes="80px"
+                quality={75}
+              />
+            )}
             <div>
               <p className="text-sm text-app-text-strong font-medium">
                 {files.length > 0 ? files[0].name : 'Current picture'}
@@ -240,7 +264,7 @@ export default function FileUpload({
               <div key={i} className="flex items-center gap-3 bg-app-surface border border-app-border rounded-lg px-3 py-2">
                 {isImage ? (
                   /* unoptimized: local blob URL */
-                  <Image src={URL.createObjectURL(f)} alt={f.name} className="w-10 h-10 rounded object-cover" width={40} height={40} unoptimized />
+                  <LocalFileImage file={f} alt={f.name} className="w-10 h-10 rounded object-cover" width={40} height={40} unoptimized />
                 ) : (
                   <span className="flex-shrink-0">{FILE_ICONS[cat]}</span>
                 )}

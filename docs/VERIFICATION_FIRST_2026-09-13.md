@@ -1894,3 +1894,32 @@ the unimplemented durable-tip draft remain unresolved; these local checks alone
 do not qualify PR34 for merge. No provider operation or hosted migration ran.
 Detailed private merge/source evidence is in integration-review-r1 alongside the
 existing lease-transaction archive. Owner checkout and unrelated work are intact.
+
+
+### Existing shared file-picker replacement and preview lifetime
+
+On September14, the existing FileUpload component was traced through its Home
+bill/package/issue and gig creation/completion/Q&A callers, with existing upload
+SDK/routes retained. All present callers use multi-file mode. The existing
+single-file API has a Click to change control and an explicit replacement branch,
+but its preceding count check rejects a second selection. Image previews in both
+modes allocate a fresh object URL on every render and never release one. This
+source dates to the initial import; it is not evidence that these screens need
+rebuilding. No backend, storage, migration or caller contract changes are needed.
+
+The unchanged component fails five of eight focused regressions: two replacement
+cases, preview stability in both modes and StrictMode/unmount cleanup. The repair
+keeps the existing markup/styles and uses a file-scoped effect for local image
+URLs, releasing them on replacement/removal/unmount and preventing a replaced
+file from rendering the old URL. Multi-file append/count and document-icon
+behavior remain intact. All eight cases now pass; standalone web TypeScript and
+scoped ESLint pass with zero warnings. The initial lint warning was resolved by
+passing the existing required alt prop explicitly. The test file is the only new
+source file; the existing product component is extended in place.
+
+These checks use the real React/Next component in jsdom with a controlled URL
+allocator, not an installed browser/upload-provider journey. Full caller upload
+acceptance and the rest of the inventory remain open. Private baseline/candidate,
+types and lint results are retained under integration-review-r1/file-picker-*.
+This repair is isolated above Home integration source d18120a8c while PR43 CI runs;
+it does not alter the source currently awaiting the Home merge.

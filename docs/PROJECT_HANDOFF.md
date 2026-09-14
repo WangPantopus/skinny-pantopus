@@ -10,13 +10,32 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 ## Current state and next action
 
 **Active worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
-`codex/private-lease-evidence`, based on request-controls checkpoint
-`e16c0c499` on draft [PR42](https://github.com/WangPantopus/skinny-pantopus/pull/42). The private lease backend, existing iOS attachment controls and existing web landlord reader are locally verified and pushed at481c45b81 in draft [PR43](https://github.com/WangPantopus/skinny-pantopus/pull/43). CI34870041822 passes13 jobs/two skips. The Android attachment follow-up is pushed at557a556db on the same PR; CI34875176418 passed every nonaggregate job except three Details screenshot comparisons. Their availability-text references are now visually reviewed and refreshed; corrected-source CI is required; see [Android evidence](VERIFICATION_FIRST_2026-09-13.md#existing-android-lease-attachment-controls). Web tenant entry and remaining native readers are next. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
-73 backend/90 rendered tests and actual browser/HTTP/SQL recovery checks pass.
-See [the unit evidence](VERIFICATION_FIRST_2026-09-13.md#existing-unit-import-and-range-generation). The preserved
-`codex/lease-approval-dates` branch backs draft [PR38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
-against `codex/home-permission-boundaries`. Owner checkout edits and all unrelated
-worktrees are preserved. The separate renewal/two-table draft remains paused.
+`codex/existing-file-picker-fixes`, based on Home integration candidate
+`d18120a8c`. [PR43](https://github.com/WangPantopus/skinny-pantopus/pull/43) now
+targets master and is ready under the user's September14 merge authorization.
+Its seven preserved Home PR heads form one ancestor chain; the merge with current
+master6a1013784 has exactly the candidate tree. Required
+[CI34879088468](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34879088468)
+is running; merge only after its final CI OK passes. Auto-merge is disabled by the
+repository, so use a normal merge commit with the verified head, preserving branches.
+The earlier Android screenshot failure is fixed by three inspected reference
+updates; all three explicit local golden comparisons pass. No application change
+was required for that correction. Reuse unchanged accepted source evidence.
+
+The file-picker child branch repairs two reproduced defects in the existing
+FileUpload component: single-file replacement was rejected by the total-count
+check, and image object URLs leaked on renders/removal/unmount. Existing Home and
+gig callers use its multi-file list; the single-file API exists but has no current
+production caller in this tree. All eight focused regressions and standalone web
+types pass; scoped lint passes without warnings. This is a component repair, not
+full upload-flow or browser acceptance. See [file-picker evidence](VERIFICATION_FIRST_2026-09-13.md#existing-shared-file-picker-replacement-and-preview-lifetime).
+
+The separate `/private/tmp/pantopus-paid-gig-integration` candidate is committed
+locally at274bbe8cb. It resolves PR34's nine conflicts and retains both notification
+paths and current Home/session boundaries. It is not pushed or merge-ready; merge
+the actual new master before combined CI. Its cancellation presentation and
+unfinished tip/provider gates remain. Owner checkout edits, all unrelated
+worktrees and the paused renewal/two-table draft are preserved.
 
 **Current repairs reuse existing implementations.** The one existing unmerged
 service-only lease transaction uses existing leases, invitations, residents,
@@ -54,7 +73,7 @@ had a stale generated SQL wrapper; CI34843214305 caught an immutable migration
 edit. Existing generator synchronization and the forward function update fix those
 issues. Before migration changes check the actual PR base; all54 wrappers synchronize.
 
-**Next:** finish corrected-source CI and merge the reviewed Home chain through PR43 into master under the user’s September14 merge authorization. Master6a1013784 is an ancestor of all seven heads; its merge tree is exactly the accepted tip. PR43 now targets master and is ready for review; retain every commit/branch. PR34 remains a separate draft with its nine conflicts resolved only in /private/tmp/pantopus-paid-gig-integration, uncommitted and under integration review. Its cancellation presentation/custom reason and unfinished tip/provider gates remain. Then trace existing/archived web tenant attachment entry and native landlord readers before making changes; both web request forms already exist, while the existing web “Upload your lease” links use the separate residency-claim flow. Do not merge those contracts or add screens based solely on an open inventory row. The existing iOS controls and web landlord reader are now locally verified within the [client evidence limits](VERIFICATION_FIRST_2026-09-13.md#existing-ios-lease-attachment-and-web-landlord-reader). Inspect each existing caller before editing; preserve screen design.
+**Next:** finish corrected-source CI and merge the reviewed Home chain through PR43 into master, preserving every commit and branch. Verify all seven PR dispositions and the resulting master ancestry. Then integrate the isolated file-picker repair and advance PR34's preserved integration candidate through its remaining presentation/contract/combined-CI work. PR34 stays draft and paid provider activation remains part of the final launch bundle. Then trace existing/archived web tenant attachment entry and native landlord readers before making changes; both web request forms already exist, while the existing web “Upload your lease” links use the separate residency-claim flow. Do not merge those contracts or add screens based solely on an open inventory row. The existing iOS controls and web landlord reader are now locally verified within the [client evidence limits](VERIFICATION_FIRST_2026-09-13.md#existing-ios-lease-attachment-and-web-landlord-reader). Inspect each existing caller before editing; preserve screen design.
 See [attachment evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-lease-file-storage-and-request-binding).
 The request-controls follow-up is verified on draft PR42. The previously open installed Android request journey is now verified
 within the [recorded limits](VERIFICATION_FIRST_2026-09-13.md#existing-native-lease-request-controls-and-calendar-validation).
