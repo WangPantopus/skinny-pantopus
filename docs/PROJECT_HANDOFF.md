@@ -24,7 +24,8 @@ repair [PR44](https://github.com/WangPantopus/skinny-pantopus/pull/44) merged at
 matched master. No hosted deployment, migration adoption or provider activation ran.
 
 **Remaining open PR:** original [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
-is draft at `e9ef2decbb`. Its preserved integration worktree is
+now contains the verified integration candidate through `ea5a87226` and remains
+draft. Its preserved integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`,
 explanation checkpoint `1c468e01a`. The current merge incorporates actual
 PR43/44/45 master, including all existing residency-expiry source and evidence. No unrelated owner checkout or
@@ -65,12 +66,15 @@ functions/106 trigger bindings, zero errors/eight existing warnings. This is loc
 combined-schema verification; fresh baseline CI, populated hosted adoption and
 provider/native end-to-end acceptance remain distinct gates.
 
-**Next:** update the preserved draft PR34 with this verified integration
-candidate, inspect combined CI, then continue existing durable tip/provider work
+**Next:** inspect the updated draft PR34 combined CI, then continue existing
+durable tip/provider work
 and final combined CI before marking PR34 ready. Keep all original screen designs.
 R05/R06, paid release gates and the app remain incomplete; the80-row inventory is
 not a completion or duplicated-effort percentage. Private logs/archive/recovery
 proof are retained under `paid-cancellation-explanation-r1`; do not commit them.
+The draft head was fast-forwarded from e9ef2decbb without deleting or replacing
+source history. Its first combined CI is34891928750; always inspect current-head
+CI after later commits. No owned browser/server/simulator remains running.
 
 ## Earlier Home verification context
 
