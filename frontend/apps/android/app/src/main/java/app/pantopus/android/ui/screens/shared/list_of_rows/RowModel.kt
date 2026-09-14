@@ -528,6 +528,8 @@ data class RowModel(
      * shell; iOS mirrors it with swipe + context menu.
      */
     val destructiveAction: RowDestructiveAction? = null,
+    /** Pending invitation identity must remain complete; existing rows keep two-line titles. */
+    val titleMaxLines: Int = 2,
 )
 
 // MARK: - Section

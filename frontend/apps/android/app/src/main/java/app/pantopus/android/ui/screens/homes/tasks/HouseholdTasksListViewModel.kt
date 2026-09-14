@@ -5,11 +5,10 @@ package app.pantopus.android.ui.screens.homes.tasks
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
-import app.pantopus.android.data.api.models.homes.UpdateHomeTaskRequest
-import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.displayMessage
-import app.pantopus.android.data.homes.HomeTasksRepository
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.screens.shared.list_of_rows.BannerConfig
@@ -31,6 +30,8 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -132,7 +133,7 @@ const val HOUSEHOLD_TASKS_HOME_ID_KEY = "homeId"
  *  - Three tabs with live counts:
  *      - Active    = status in {open, in_progress}
  *      - Done      = status == 'done' (rolling 30-day window)
- *      - Recurring = recurrence_rule != null
+ *      - Recurring = automatic schedule or saved repeat preference
  *  - Active rows render a home-tinted summary banner (`N due today`
  *    + overdue count) above the list when there's anything to say.
  *  - 52dp `SecondaryCreate` FAB tinted [FabTint.Home] per the brief.
@@ -146,30 +147,33 @@ const val HOUSEHOLD_TASKS_HOME_ID_KEY = "homeId"
  *  - Recurring trailing = kebab; recurrence cadence surfaces in the
  *    inline chip.
  *
- * Backend deviation from prompt: the prompt specifies
- * `template_id != null` for the Recurring filter, but the live
- * `HomeTask` schema (`backend/database/schema.sql:6833`) has no
- * `template_id` column — recurrence is captured in the
- * `recurrence_rule` RRULE text field. The Recurring filter therefore
- * uses `recurrence_rule != null`, which is the canonical signal today.
+ * The Recurring filter includes current automatic schedules and saved legacy
+ * preferences. Their chips distinguish active/paused/review from saved-only.
  */
 @HiltViewModel
 class HouseholdTasksListViewModel
     internal constructor(
-        private val repo: HomeTasksRepository,
+        accessFactory: HomeTaskAccessFactory,
         savedStateHandle: SavedStateHandle,
         private val clock: () -> Instant = Instant::now,
     ) : ViewModel() {
         @Inject
         constructor(
-            repo: HomeTasksRepository,
+            accessFactory: HomeTaskAccessFactory,
             savedStateHandle: SavedStateHandle,
-        ) : this(repo, savedStateHandle, Instant::now)
+        ) : this(accessFactory, savedStateHandle, Instant::now)
 
         private val homeId: String =
             checkNotNull(savedStateHandle.get<String>(HOUSEHOLD_TASKS_HOME_ID_KEY)) {
                 "HouseholdTasksListViewModel requires a $HOUSEHOLD_TASKS_HOME_ID_KEY nav argument"
             }
+
+        private val access = accessFactory.create(homeId, viewModelScope)
+        private var generation = 0
+        private var acting = false
+        private var canCreate = false
+        private var active = true
+        private var work: Job? = null
 
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
@@ -199,6 +203,12 @@ class HouseholdTasksListViewModel
         private var onAddTask: () -> Unit = {}
         private var onEditRecurring: (String) -> Unit = {}
 
+        init {
+            viewModelScope.launch {
+                access.invalidated.collect { if (it) fail(TASK_SESSION_CHANGED) }
+            }
+        }
+
         fun configureNavigation(
             onOpenTask: (String) -> Unit = {},
             onAddTask: () -> Unit = {},
@@ -213,18 +223,37 @@ class HouseholdTasksListViewModel
             refresh()
         }
 
-        fun refresh() {
+        fun resume() {
+            active = true
+            refresh()
+        }
+
+        fun pause() {
+            active = false
+            generation++
+            work?.cancel()
+            work = null
+            acting = false
+            clearContent()
+            _actionError.value = null
             _state.value = ListOfRowsUiState.Loading
-            viewModelScope.launch {
-                when (val result = repo.getHomeTasks(homeId)) {
-                    is NetworkResult.Success -> applySuccess(result.data.tasks)
-                    is NetworkResult.Failure -> {
-                        tasks = null
-                        _banner.value = null
-                        _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
+        }
+
+        fun refresh() {
+            if (acting || !active) return
+            val revision = ++generation
+            clearContent()
+            _state.value = ListOfRowsUiState.Loading
+            work?.cancel()
+            work =
+                viewModelScope.launch {
+                    taskAttempt(revision) {
+                        val result = access.list()
+                        if (!current(revision)) return@taskAttempt
+                        canCreate = result.collectionCapabilities?.canCreate == true
+                        applySuccess(result.tasks)
                     }
                 }
-            }
         }
 
         fun selectTab(id: String) {
@@ -232,14 +261,36 @@ class HouseholdTasksListViewModel
             tasks?.let(::renderForCurrentTab)
         }
 
-        fun fab(): FabAction =
-            FabAction(
-                icon = PantopusIcon.Plus,
-                contentDescription = "Add a task",
-                variant = FabVariant.SecondaryCreate,
-                tint = FabTint.Home,
-                onClick = { onAddTask() },
-            )
+        fun fab(): FabAction? =
+            if (active && canCreate && access.isCurrent) {
+                FabAction(
+                    icon = PantopusIcon.Plus,
+                    contentDescription = "Add a task",
+                    variant = FabVariant.SecondaryCreate,
+                    tint = FabTint.Home,
+                    onClick = ::requestCreate,
+                )
+            } else {
+                null
+            }
+
+        private fun requestCreate() {
+            if (!readyToAct || !canCreate) return
+            val revision = ++generation
+            acting = true
+            work?.cancel()
+            work =
+                viewModelScope.launch {
+                    taskAttempt(revision) {
+                        val result = access.list()
+                        if (!current(revision)) return@taskAttempt
+                        canCreate = result.collectionCapabilities?.canCreate == true
+                        applySuccess(result.tasks)
+                        if (canCreate) onAddTask()
+                    }
+                    if (current(revision)) acting = false
+                }
+        }
 
         /**
          * T6.3c: top-bar action is `null` by design. The design's
@@ -258,100 +309,89 @@ class HouseholdTasksListViewModel
             return summarize(loaded, clock())
         }
 
-        /**
-         * Optimistic Active-tab "toggle done" — flips the row locally,
-         * fires the PUT, rolls back on failure.
-         */
         fun toggleDone(taskId: String) {
-            val loaded = tasks ?: return
-            val idx = loaded.indexOfFirst { it.id == taskId }
-            if (idx < 0) return
-            val original = loaded[idx]
-            val newStatus = if (original.status == "done") "open" else "done"
-            val completedAt = if (newStatus == "done") clock().toString() else null
-            val updated =
-                loaded
-                    .toMutableList()
-                    .apply {
-                        this[idx] = original.copy(status = newStatus, completedAt = completedAt)
-                    }
-            tasks = updated
-            _tabs.value = tabsWithCounts(updated)
-            renderForCurrentTab(updated)
-            viewModelScope.launch {
-                val result =
-                    repo.updateHomeTask(
-                        homeId = homeId,
-                        taskId = taskId,
-                        request = UpdateHomeTaskRequest(status = newStatus, completedAt = completedAt),
-                    )
-                if (result is NetworkResult.Failure) {
-                    // Roll back.
-                    val rolled =
-                        tasks
-                            ?.toMutableList()
-                            ?.apply {
-                                val i = indexOfFirst { it.id == taskId }
-                                if (i >= 0) this[i] = original
-                            }
-                    if (rolled != null) {
-                        tasks = rolled
-                        _tabs.value = tabsWithCounts(rolled)
-                        renderForCurrentTab(rolled)
-                    }
-                }
+            val original = tasks?.firstOrNull { it.id == taskId } ?: return
+            if (!readyToAct || original.capabilities?.canComplete != true) return
+            mutate {
+                access.complete(taskId, original.status != "done")
+                access.list()
             }
         }
 
-        /**
-         * Row trash tapped — hand the confirm to the screen. RN raises
-         * the same confirm from the row's trash glyph
-         * (`src/app/homes/[id]/tasks.tsx:76-84`).
-         */
         fun requestDelete(taskId: String) {
             val task = tasks?.firstOrNull { it.id == taskId } ?: return
+            if (!readyToAct || task.capabilities?.canDelete != true) return
             _pendingEvent.value = HouseholdTasksListEvent.ConfirmDelete(taskId, task.title)
         }
 
-        /** Clears [pendingEvent] once the screen has opened its dialog. */
         fun acknowledgeEvent() {
             _pendingEvent.value = null
         }
 
-        /** Clears the delete-failure alert. */
         fun clearActionError() {
             _actionError.value = null
         }
 
-        /**
-         * `DELETE /api/homes/:id/tasks/:taskId` — route
-         * `backend/routes/home.js:4354`. Optimistically drops the row,
-         * then restores it (and surfaces [actionError]) if the server
-         * refuses.
-         */
         fun deleteTask(taskId: String) {
-            val loaded = tasks ?: return
-            val idx = loaded.indexOfFirst { it.id == taskId }
-            if (idx < 0) return
-            val original = loaded[idx]
-            val pruned = loaded.toMutableList().apply { removeAt(idx) }
-            tasks = pruned
-            _tabs.value = tabsWithCounts(pruned)
-            renderForCurrentTab(pruned)
-            viewModelScope.launch {
-                val result = repo.deleteHomeTask(homeId = homeId, taskId = taskId)
-                if (result is NetworkResult.Failure) {
-                    val rolled =
-                        (tasks ?: emptyList())
-                            .toMutableList()
-                            .apply { add(idx.coerceAtMost(size), original) }
-                    tasks = rolled
-                    _tabs.value = tabsWithCounts(rolled)
-                    renderForCurrentTab(rolled)
-                    _actionError.value =
-                        result.error.displayMessage("Couldn't delete that task. Try again.")
-                }
+            val task = tasks?.firstOrNull { it.id == taskId } ?: return
+            if (!readyToAct || task.capabilities?.canDelete != true) return
+            mutate {
+                access.delete(taskId)
+                access.list()
             }
+        }
+
+        private fun mutate(operation: suspend () -> GetHomeTasksResponse) {
+            acting = true
+            val revision = ++generation
+            work?.cancel()
+            work =
+                viewModelScope.launch {
+                    taskAttempt(revision) {
+                        val result = operation()
+                        if (!current(revision)) return@taskAttempt
+                        canCreate = result.collectionCapabilities?.canCreate == true
+                        applySuccess(result.tasks)
+                    }
+                    if (current(revision)) acting = false
+                }
+        }
+
+        private val readyToAct: Boolean get() = active && !acting && access.isCurrent
+
+        private fun current(revision: Int): Boolean = active && revision == generation && access.isCurrent
+
+        private suspend fun taskAttempt(
+            revision: Int,
+            operation: suspend () -> Unit,
+        ) {
+            try {
+                operation()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: NetworkError) {
+                if (current(revision)) fail(error.displayMessage("Could not refresh task access. Try again."))
+            } catch (error: IllegalStateException) {
+                if (active && revision == generation) fail(error.message ?: TASK_ACCESS_CHANGED)
+            } catch (error: IllegalArgumentException) {
+                if (active && revision == generation) fail(error.message ?: TASK_ACCESS_CHANGED)
+            }
+        }
+
+        private fun clearContent() {
+            tasks = null
+            canCreate = false
+            _tabs.value = initialTabs()
+            _banner.value = null
+            _pendingEvent.value = null
+        }
+
+        private fun fail(message: String) {
+            generation++
+            acting = false
+            clearContent()
+            _state.value = ListOfRowsUiState.Error(message)
+            _actionError.value = message
         }
 
         private fun applySuccess(loaded: List<HomeTaskDto>) {
@@ -384,30 +424,25 @@ class HouseholdTasksListViewModel
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.ListChecks,
                         headline = "No tasks yet",
-                        subcopy =
-                            "Track who's doing what. Add a one-off chore, or set up the " +
-                                "recurring stuff (trash, dog walks, plants) once and let it " +
-                                "spawn itself.",
-                        ctaTitle = "Add a task",
-                        onCta = { onAddTask() },
+                        subcopy = "Household tasks you can view will appear here.",
+                        ctaTitle = "Add a task".takeIf { canCreate },
+                        onCta = if (canCreate) ::requestCreate else null,
                     )
                 HouseholdTasksTab.Done ->
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.CheckCircle,
                         headline = "Nothing done yet",
                         subcopy = "Finished chores from the last 30 days will show up here.",
-                        ctaTitle = "Add a task",
-                        onCta = { onAddTask() },
+                        ctaTitle = "Add a task".takeIf { canCreate },
+                        onCta = if (canCreate) ::requestCreate else null,
                     )
                 HouseholdTasksTab.Recurring ->
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.ArrowsRepeat,
                         headline = "No recurring chores",
-                        subcopy =
-                            "Set up the weekly trash run, daily dog walks, or plant watering " +
-                                "once and they'll spawn themselves.",
-                        ctaTitle = "Add a recurring task",
-                        onCta = { onAddTask() },
+                        subcopy = "Tasks with repeat schedules or saved preferences will appear here.",
+                        ctaTitle = "Add a recurring task".takeIf { canCreate },
+                        onCta = if (canCreate) ::requestCreate else null,
                     )
             }
 
@@ -461,7 +496,7 @@ class HouseholdTasksListViewModel
                 template = RowTemplate.StatusChip,
                 leading = leadingFor(projection),
                 trailing = trailingFor(task, tab, taskId),
-                onTap = { onOpenTask(taskId) },
+                onTap = { if (active && access.isCurrent && !acting) onOpenTask(taskId) },
                 inlineChip =
                     if (tab == HouseholdTasksTab.Recurring && projection.recurrenceChip != null) {
                         RowChip(
@@ -498,43 +533,47 @@ class HouseholdTasksListViewModel
             }
         }
 
-        /**
-         * Active + Done rows carry a two-button trailing: the checkbox
-         * that toggles the task **both ways** (RN's checkbox does
-         * `done → open` as well, `src/app/homes/[id]/tasks.tsx:52-58`)
-         * and the trash affordance RN puts on every row (`:167-169`).
-         * Recurring keeps its kebab — a recurring chore is still
-         * deletable from the Active tab, where the same row appears.
-         */
         private fun trailingFor(
             task: HomeTaskDto,
             tab: HouseholdTasksTab,
             taskId: String,
-        ): RowTrailing =
-            when (tab) {
-                HouseholdTasksTab.Active, HouseholdTasksTab.Done -> {
-                    val isDone = task.status == "done"
-                    RowTrailing.IconActions(
-                        primary =
-                            RowIconAction(
-                                icon = if (isDone) PantopusIcon.Check else PantopusIcon.Circle,
-                                accessibilityLabel = if (isDone) "Mark not done" else "Mark done",
-                                background = if (isDone) PantopusColors.homeBg else PantopusColors.appSurface,
-                                foreground = if (isDone) PantopusColors.home else PantopusColors.appTextMuted,
-                                onClick = { toggleDone(taskId) },
-                            ),
-                        secondary =
-                            RowIconAction(
-                                icon = PantopusIcon.Trash,
-                                accessibilityLabel = "Delete task",
-                                background = PantopusColors.appSurfaceSunken,
-                                foreground = PantopusColors.error,
-                                onClick = { requestDelete(taskId) },
-                            ),
-                    )
-                }
-                HouseholdTasksTab.Recurring -> RowTrailing.Kebab
+        ): RowTrailing {
+            if (tab == HouseholdTasksTab.Recurring) return RowTrailing.Chevron
+            val complete = task.capabilities?.canComplete == true
+            val delete = task.capabilities?.canDelete == true
+            val isDone = task.status == "done"
+            val completion =
+                RowIconAction(
+                    icon = if (isDone) PantopusIcon.Check else PantopusIcon.Circle,
+                    accessibilityLabel = if (isDone) "Mark not done" else "Mark done",
+                    background = PantopusColors.homeBg,
+                    foreground = PantopusColors.home,
+                    onClick = { toggleDone(taskId) },
+                )
+            val removal =
+                RowIconAction(
+                    icon = PantopusIcon.Trash,
+                    accessibilityLabel = "Delete task",
+                    background = PantopusColors.appSurfaceSunken,
+                    foreground = PantopusColors.error,
+                    onClick = { requestDelete(taskId) },
+                )
+            return when {
+                complete && delete -> RowTrailing.IconActions(completion, removal)
+                complete -> completion.singleTaskAction()
+                delete -> removal.singleTaskAction()
+                else -> RowTrailing.Chevron
             }
+        }
+
+        private fun RowIconAction.singleTaskAction(): RowTrailing =
+            RowTrailing.CircularAction(
+                icon,
+                accessibilityLabel,
+                background,
+                foreground,
+                onClick,
+            )
 
         private fun chipsLine(
             tab: HouseholdTasksTab,
@@ -578,7 +617,7 @@ class HouseholdTasksListViewModel
                 val category = HouseholdTaskCategory.from(task.title, task.taskType)
                 val assigneeLabel = assigneeDisplay(task.assignedTo)
                 val isAssigned = assigneeLabel != null
-                val recurrenceChip = humanRecurrence(task.recurrenceRule)
+                val recurrenceChip = task.automaticRecurrence?.label() ?: humanRecurrence(task.recurrenceRule)?.let { "Saved: $it" }
                 return when (task.status) {
                     "done" -> {
                         val doneTime = humanRelativeTime(task.completedAt ?: task.updatedAt, now)
@@ -675,7 +714,7 @@ class HouseholdTasksListViewModel
              * Tab membership per the brief:
              *   - Active    = status in {open, in_progress}
              *   - Done      = status == done within the last 30 days
-             *   - Recurring = recurrence_rule != null
+             *   - Recurring = automatic schedule or saved repeat preference
              */
             @JvmStatic
             fun passes(
@@ -694,7 +733,7 @@ class HouseholdTasksListViewModel
                             date == null || Duration.between(date, now).toDays() <= 30
                         }
                     }
-                    HouseholdTasksTab.Recurring -> !task.recurrenceRule.isNullOrBlank()
+                    HouseholdTasksTab.Recurring -> task.automaticRecurrence != null || !task.recurrenceRule.isNullOrBlank()
                 }
 
             /** Pure summary projection. Public-static for tests. */

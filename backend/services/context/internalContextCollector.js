@@ -7,6 +7,7 @@
  */
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
+const homeRecordService = require('../homeRecordService');
 const logger = require('../../utils/logger');
 
 /**
@@ -78,26 +79,19 @@ async function collectInternalContext(userId, homeId = null) {
       : Promise.resolve({ data: [] }),
 
     tasks: hasHomes
-      ? supabaseAdmin
-          .from('HomeTask')
-          .select('id, title, due_at, priority, status')
-          .in('home_id', homeIds)
-          .not('status', 'in', '("completed","cancelled")')
-          .gte('due_at', now.toISOString())
-          .lte('due_at', twoDaysOut.toISOString())
-          .order('due_at', { ascending: true })
-          .limit(10)
+      ? Promise.all(homeIds.map(id => homeRecordService.visibleRecords({ homeId: id, actorId: userId, kind: 'task' })))
+          .then(groups => ({ data: groups.flat().filter(t => !['done', 'canceled'].includes(t.status)
+            && t.due_at && Date.parse(t.due_at) >= now.getTime() && Date.parse(t.due_at) <= twoDaysOut.getTime())
+            .sort((a, b) => Date.parse(a.due_at) - Date.parse(b.due_at)).slice(0, 10)
+            .map(({ id, title, due_at, priority, status }) => ({ id, title, due_at, priority, status })) }))
       : Promise.resolve({ data: [] }),
 
     calendarEvents: hasHomes
-      ? supabaseAdmin
-          .from('HomeCalendarEvent')
-          .select('id, title, start_at, end_at, event_type')
-          .in('home_id', homeIds)
-          .gte('start_at', startOfToday.toISOString())
-          .lt('start_at', endOfTomorrow.toISOString())
-          .order('start_at', { ascending: true })
-          .limit(10)
+      ? Promise.all(homeIds.map(id => homeRecordService.visibleRecords({ homeId: id, actorId: userId, kind: 'event',
+          startAfter: startOfToday.toISOString(), startBefore: endOfTomorrow.toISOString() })))
+          .then(groups => ({ data: groups.flat().filter(e => Date.parse(e.start_at) < endOfTomorrow.getTime())
+            .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at)).slice(0, 10)
+            .map(({ id, title, start_at, end_at, event_type }) => ({ id, title, start_at, end_at, event_type })) }))
       : Promise.resolve({ data: [] }),
 
     unreadMail: supabaseAdmin
@@ -132,6 +126,10 @@ async function collectInternalContext(userId, homeId = null) {
 
   const keys = Object.keys(queries);
   const results = await Promise.allSettled(Object.values(queries));
+  for (const key of ['tasks', 'calendarEvents']) {
+    const result = results[keys.indexOf(key)];
+    if (result.status === 'rejected') throw result.reason;
+  }
 
   // Map results back to keys
   const resolved = {};

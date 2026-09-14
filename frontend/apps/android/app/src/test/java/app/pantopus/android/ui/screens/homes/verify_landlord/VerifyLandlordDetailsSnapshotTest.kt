@@ -11,6 +11,8 @@ import androidx.lifecycle.SavedStateHandle
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.wizard.WizardChrome
 import app.pantopus.android.ui.screens.shared.wizard.WizardLeadingControl
 import app.pantopus.android.ui.screens.shared.wizard.WizardModel
@@ -18,6 +20,7 @@ import app.pantopus.android.ui.screens.shared.wizard.WizardProgressLabel
 import app.pantopus.android.ui.screens.shared.wizard.WizardShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -64,10 +67,18 @@ class VerifyLandlordDetailsSnapshotTest {
         networkMonitor: NetworkMonitor,
         handle: SavedStateHandle,
     ) : VerifyLandlordWizardViewModel(
-            networkMonitor,
-            handle,
-            mockk(relaxed = true),
-            mockk(relaxed = true),
+            networkMonitor = networkMonitor,
+            savedStateHandle = handle,
+            tenantRepository = mockk(relaxed = true),
+            sessions =
+                mockk<HomeClaimSessionScopeFactory>().also { factory ->
+                    every { factory.create(any()) } returns
+                        mockk<HomeClaimSessionScope>().also { session ->
+                            every { session.isCurrent } returns true
+                            coEvery { session.confirmCurrent() } returns true
+                            every { session.invalidated } returns MutableStateFlow(false)
+                        }
+                },
         ) {
         override val submitDelayMillis: Long = 0L
     }
@@ -79,21 +90,7 @@ class VerifyLandlordDetailsSnapshotTest {
                 handle = SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-snapshot")),
             )
         vm.onPrimary() // -> Details
-        with(form) {
-            vm.setOwnerName(ownerName)
-            vm.setContactName(contactName)
-            vm.setEmail(email)
-            vm.setPhone(phone)
-            vm.setLease(lease)
-            vm.setPMEnabled(pmEnabled)
-            if (pmEnabled) {
-                vm.setPMName(pmName)
-                vm.setPMEmail(pmEmail)
-                vm.setPMPhone(pmPhone)
-            }
-            vm.setMoveInDate(moveInDate)
-            vm.setMessageToLandlord(messageToLandlord)
-        }
+        vm.setVariant(VerifyLandlordVariant.Canonical, form)
         return vm
     }
 
@@ -119,6 +116,20 @@ class VerifyLandlordDetailsSnapshotTest {
         paparazzi.snapshot {
             Frame(chrome = SnapshotDetailsChrome.disabled) {
                 DetailsStep(state = vm.state.value, viewModel = vm)
+            }
+        }
+    }
+
+    @Test
+    fun verify_landlord_details_submission_error() {
+        val vm = seededVm(VerifyLandlordSampleData.populatedForm)
+        val state =
+            vm.state.value.copy(
+                submitState = VerifyLandlordSubmitState.Error("This home is unavailable for lease decisions"),
+            )
+        paparazzi.snapshot {
+            Frame(chrome = SnapshotDetailsChrome.enabled) {
+                DetailsStep(state = state, viewModel = vm)
             }
         }
     }

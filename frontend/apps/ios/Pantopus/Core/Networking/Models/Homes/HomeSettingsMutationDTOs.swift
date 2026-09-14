@@ -53,19 +53,15 @@ public struct MoveOutResponse: Decodable, Sendable, Hashable {
 public struct DeleteOwnershipClaimResponse: Decodable, Sendable, Hashable {
     public let ok: Bool
     public let deleted: Bool
+    public let withdrawn: Bool
+    public let replayed: Bool
+    public let homeId: String
+    public let claimId: String
+    public let action: String
+    public let state: String
 
-    public init(ok: Bool = true, deleted: Bool = true) {
-        self.ok = ok
-        self.deleted = deleted
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case ok, deleted
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        ok = try container.decodeIfPresent(Bool.self, forKey: .ok) ?? true
-        deleted = try container.decodeIfPresent(Bool.self, forKey: .deleted) ?? true
+    func matches(homeId: String, claimId: String) -> Bool {
+        ok && !deleted && withdrawn && self.homeId == homeId && self.claimId == claimId
+            && action == "withdraw" && state == "revoked"
     }
 }

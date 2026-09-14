@@ -9,8 +9,7 @@ import {
 import { getAuthToken } from '@pantopus/api';
 import { useHomeAccess } from '@/hooks/useHomeAccess';
 import { toast } from '@/components/ui/toast-store';
-import { confirmStore } from '@/components/ui/confirm-store';
-import * as api from '@pantopus/api';
+import { removalLink } from '@/components/home/member-removals/removalModel';
 
 interface StatusConfig {
   icon: typeof Mail;
@@ -64,13 +63,8 @@ function WaitingRoomContent() {
     }
   }, [loading, access, needsVerification, router, verifiedDest]);
 
-  const handleMoveOut = useCallback(async () => {
-    const yes = await confirmStore.open({ title: "This isn't my home", description: 'This will remove you from this home. You can request to join again later.', confirmLabel: 'Remove me', variant: 'destructive' });
-    if (!yes) return;
-    try {
-      await (api as any).post(`/api/homes/${homeId}/move-out`);
-      router.push('/app/hub');
-    } catch { toast.error('Failed to process move-out'); }
+  const handleMoveOut = useCallback(() => {
+    router.push(removalLink(homeId, 'self'));
   }, [homeId, router]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-3 border-emerald-600 border-t-transparent rounded-full" /></div>;

@@ -1,53 +1,26 @@
-//
-//  LeaveHomeViewModel.swift
-//  Pantopus
-//
-//  Confirmation + submit for `POST /api/homes/:id/move-out`.
-//
-
 import Foundation
-import OSLog
 
-private let logger = Logger(subsystem: "app.pantopus", category: "LeaveHome")
-
+/// Settings and the waiting room use the same protected self-removal original.
 @MainActor
 @Observable
 public final class LeaveHomeViewModel {
     public let homeId: String
+    private let scope: HomeCreationScope
+    var actorId: String {
+        scope.actorId
+    }
 
-    public private(set) var isSubmitting = false
-    public var errorMessage: String?
-    public private(set) var shouldDismissAfterLeave = false
+    let removal: HomeMemberRemovalViewModel
 
-    private let api: APIClient
-
-    init(homeId: String, api: APIClient = .shared) {
+    init(homeId: String, api: APIClient = .shared, store: any PendingHomeMemberRemovalStoring = PendingHomeMemberRemovalStore()) {
         self.homeId = homeId
-        self.api = api
+        let scope = HomeInvitationDecisionViewModel.scope(api: api)
+        self.scope = scope
+        removal = HomeMemberRemovalViewModel(target: .init(homeId: homeId, userId: scope.actorId), api: api, store: store)
     }
 
-    public func submit() {
-        guard !isSubmitting, !shouldDismissAfterLeave else { return }
-        isSubmitting = true
-        errorMessage = nil
-        Task {
-            do {
-                _ = try await api.request(
-                    HomesEndpoints.moveOut(homeId: homeId),
-                    as: MoveOutResponse.self
-                )
-                // Keep isSubmitting true until the host pops so a second tap
-                // cannot re-fire move-out during the dismiss window.
-                shouldDismissAfterLeave = true
-            } catch {
-                logger.warning("move-out failed: \(error.localizedDescription)")
-                errorMessage = error.localizedDescription
-                isSubmitting = false
-            }
-        }
-    }
-
-    public func acknowledgeDismiss() {
-        shouldDismissAfterLeave = false
+    func acknowledgedSelfRemoval(_ original: PendingHomeMemberRemoval?) -> Bool {
+        original?.matches(scope) == true && original?.homeId == homeId && original?.targetId == actorId
+            && original?.outcome?.state == "completed"
     }
 }

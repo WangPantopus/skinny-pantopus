@@ -14,11 +14,9 @@
 const express = require('express');
 const router = express.Router();
 const Joi = require('joi');
-const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
-const { checkHomePermission } = require('../utils/homePermissions');
 const addressCalendarService = require('../services/addressCalendarService');
 
 const pickupSchema = Joi.object({
@@ -28,36 +26,20 @@ const pickupSchema = Joi.object({
   recycling_next_date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
-async function loadHomeForMember(homeId, userId) {
-  const access = await checkHomePermission(homeId, userId);
-  if (access?.readFailed) return { error: { status: 503, body: { error: 'Could not check home access. Try again.' } } };
-  if (!access || !access.hasAccess) return { error: { status: 403, body: { error: 'Not authorized' } } };
-  const { data: home, error } = await supabaseAdmin
-    .from('Home')
-    .select('id, city, state, county, timezone')
-    .eq('id', homeId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!home) return { error: { status: 404, body: { error: 'Home not found' } } };
-  return { home };
-}
-
 router.get('/:id/calendar', verifyToken, async (req, res) => {
   try {
-    const { home, error } = await loadHomeForMember(req.params.id, req.user.id);
-    if (error) return res.status(error.status).json(error.body);
-    const calendar = await addressCalendarService.composeForHome(home);
+    const { home, rules } = await addressCalendarService.getPickupContext(req.params.id, req.user.id);
+    const calendar = await addressCalendarService.composeForHome(home, { rules });
     return res.json({ calendar });
   } catch (err) {
     logger.error('addressCalendar: read failed', { homeId: req.params.id, error: err.message });
-    return res.status(500).json({ error: 'Could not load the calendar' });
+    return res.status(err.statusCode || 500).json({ error: 'Could not load the calendar' });
   }
 });
 
 router.put('/:id/calendar/pickup-day', verifyToken, validate(pickupSchema), async (req, res) => {
   try {
-    const { home, error } = await loadHomeForMember(req.params.id, req.user.id);
-    if (error) return res.status(error.status).json(error.body);
+    const { home } = await addressCalendarService.getPickupContext(req.params.id, req.user.id);
     const result = await addressCalendarService.setPickupDay(home, {
       weekday: req.body.weekday,
       // Older clients only send a weekday/boolean. Accept them, but do not
@@ -66,25 +48,26 @@ router.put('/:id/calendar/pickup-day', verifyToken, validate(pickupSchema), asyn
       recyclingNextDate: req.body.recycling_next_date,
       userId: req.user.id,
     });
-    const calendar = await addressCalendarService.composeForHome(home);
+    const refreshed = await addressCalendarService.getPickupContext(req.params.id, req.user.id);
+    const calendar = await addressCalendarService.composeForHome(refreshed.home, { rules: refreshed.rules });
     return res.json({ pickup: result, calendar });
   } catch (err) {
     if (err.code === 'INVALID_PICKUP') return res.status(400).json({ error: err.message });
     logger.error('addressCalendar: set pickup day failed', { homeId: req.params.id, error: err.message });
-    return res.status(500).json({ error: 'Could not save your pickup day' });
+    return res.status(err.statusCode || 500).json({ error: 'Could not save your pickup day' });
   }
 });
 
 router.delete('/:id/calendar/pickup-day', verifyToken, async (req, res) => {
   try {
-    const { home, error } = await loadHomeForMember(req.params.id, req.user.id);
-    if (error) return res.status(error.status).json(error.body);
-    await addressCalendarService.clearPickupDay(home);
-    const calendar = await addressCalendarService.composeForHome(home);
+    const { home } = await addressCalendarService.getPickupContext(req.params.id, req.user.id);
+    await addressCalendarService.clearPickupDay(home, req.user.id);
+    const refreshed = await addressCalendarService.getPickupContext(req.params.id, req.user.id);
+    const calendar = await addressCalendarService.composeForHome(refreshed.home, { rules: refreshed.rules });
     return res.json({ calendar });
   } catch (err) {
     logger.error('addressCalendar: clear pickup day failed', { homeId: req.params.id, error: err.message });
-    return res.status(500).json({ error: 'Could not reset your pickup day' });
+    return res.status(err.statusCode || 500).json({ error: 'Could not reset your pickup day' });
   }
 });
 

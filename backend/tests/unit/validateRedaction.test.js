@@ -51,6 +51,19 @@ describe('validate() redacts credential-bearing fields', () => {
     expect(detailFor(payload, 'device.attestation.token').rejectedValue).toBe('[redacted]');
   });
 
+  test('optional Home access values stay private at both leaf and array errors', () => {
+    for (const schema of [
+      Joi.object({ access_secrets: Joi.array().items(Joi.object({ secret_value: Joi.string().max(4) })) }),
+      Joi.object({ access_secrets: Joi.array().max(0) }),
+    ]) {
+      logger.warn.mockClear();
+      const { status, payload } = run(schema, { access_secrets: [{ secret_value: SECRET }] });
+      expect(status).toBe(400);
+      expect(JSON.stringify(payload)).not.toContain(SECRET);
+      expect(JSON.stringify(logger.warn.mock.calls)).not.toContain(SECRET);
+    }
+  });
+
   test('the log line does not carry the secret either', () => {
     logger.warn.mockClear?.();
     run(Joi.object({ password: Joi.string().max(8).required() }), { password: SECRET });

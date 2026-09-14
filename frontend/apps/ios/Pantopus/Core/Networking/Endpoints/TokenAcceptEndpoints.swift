@@ -44,6 +44,15 @@ public enum TokenAcceptEndpoints {
         )
     }
 
+    /// Lease proofs stay in authenticated request bodies, never URL probes.
+    public static func leaseInvite(token: String) -> Endpoint {
+        Endpoint(method: .post, path: "/api/v1/tenant/preview-invite", body: BusinessSeatDeclineBody(token: token))
+    }
+
+    public static func acceptLeaseInvite(token: String) -> Endpoint {
+        Endpoint(method: .post, path: "/api/v1/tenant/accept-invite", body: BusinessSeatDeclineBody(token: token))
+    }
+
     // MARK: - Accept / decline
 
     /// `POST /api/homes/invitations/token/:token/accept`. Route

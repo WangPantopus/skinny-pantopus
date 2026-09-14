@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.homes.claim_ownership
 
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -43,9 +44,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.data.homes.readHomeEvidenceBytes
 import app.pantopus.android.ui.screens.homes.claim_ownership.components.ClaimDocumentTypePicker
 import app.pantopus.android.ui.screens.homes.claim_ownership.components.ClaimHomeChip
-import app.pantopus.android.ui.screens.homes.claim_ownership.components.ClaimStatement
 import app.pantopus.android.ui.screens.homes.claim_ownership.components.UploadSlot
 import app.pantopus.android.ui.screens.homes.claim_ownership.components.UploadSlotFile
 import app.pantopus.android.ui.screens.homes.claim_ownership.components.UploadSlotState
@@ -62,6 +63,8 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Test tag applied to the Claim Ownership wizard root. */
 const val CLAIM_OWNERSHIP_SCREEN_TAG: String = "claimOwnershipWizard"
@@ -108,16 +111,27 @@ fun ClaimOwnershipWizardScreen(
         model = viewModel,
         modifier = Modifier.testTag(CLAIM_OWNERSHIP_SCREEN_TAG),
     ) {
-        when (state.currentStep) {
-            ClaimOwnershipStep.Start ->
-                StartStep(
-                    content = state.startContent,
-                    showsAskVerifiedOwner = state.showsAskVerifiedOwner,
-                    selectedMethod = state.selectedStartMethod,
-                    onSelectMethod = viewModel::selectStartMethod,
-                )
-            ClaimOwnershipStep.Upload -> UploadStep(state, viewModel)
-            ClaimOwnershipStep.Success -> SuccessStep(outcomeNote = state.submissionOutcomeNote)
+        if (!state.contextReady) {
+            ClaimHomeChip(label = "This home")
+            HeadlineBlock(state.verificationType.wizardTitle)
+            if (state.isLoadingContext) {
+                SubcopyBlock("Loading verification…")
+            } else {
+                ErrorBanner(state.contextError ?: "Could not load verification. Try again.")
+                TextButton(onClick = viewModel::retryContext) { Text("Try again") }
+            }
+        } else {
+            when (state.currentStep) {
+                ClaimOwnershipStep.Start ->
+                    StartStep(
+                        content = state.startContent,
+                        showsAskVerifiedOwner = state.showsAskVerifiedOwner,
+                        selectedMethod = state.selectedStartMethod,
+                        onSelectMethod = viewModel::selectStartMethod,
+                    )
+                ClaimOwnershipStep.Upload -> UploadStep(state, viewModel)
+                ClaimOwnershipStep.Success -> SuccessStep(outcomeNote = state.submissionOutcomeNote)
+            }
         }
     }
 
@@ -202,7 +216,7 @@ private fun ClaimAlertDialog(
 
 @Composable
 internal fun StartStep(
-    content: ClaimOwnershipStartContent = ClaimOwnershipSampleData.canonicalStart,
+    content: ClaimOwnershipStartContent = ClaimOwnershipStartContent("This home"),
     showsAskVerifiedOwner: Boolean = false,
     selectedMethod: ClaimStartMethod = ClaimStartMethod.VerifyOwnership,
     onSelectMethod: (ClaimStartMethod) -> Unit = {},
@@ -214,8 +228,8 @@ internal fun StartStep(
         if (content.isContested) {
             "Same process, but the reviewer compares both submissions side-by-side. Bring your strongest documents."
         } else {
-            "Claiming ownership lets you invite residents, receive mail, post packages, and run the household's " +
-                "command center. Verification is a one-time step."
+            "Submit an ownership document for review. Uploading does not verify identity or grant Home access. " +
+                "Residency is verified separately."
         },
     )
     if (showsAskVerifiedOwner) {
@@ -347,50 +361,15 @@ private fun ClaimMethodRow(
 }
 
 private fun requirementsRows(isContested: Boolean): List<RequirementsRow> =
-    if (isContested) {
-        listOf(
-            RequirementsRow(
-                id = "strongest-doc",
-                icon = PantopusIcon.Zap,
-                title = "Strongest property record or deed",
-                subcopy = "A deed or county property record gets prioritized in contested reviews.",
-                emphasized = true,
-            ),
-            RequirementsRow(
-                id = "id",
-                icon = PantopusIcon.Check,
-                title = "Government-issued ID",
-                subcopy = "Driver's license, state ID, or passport.",
-            ),
-            RequirementsRow(
-                id = "utility-bill",
-                icon = PantopusIcon.Check,
-                title = "Utility bill for this address",
-                subcopy = "A recent bill helps match your name to 412 Elm St.",
-            ),
-        )
-    } else {
-        listOf(
-            RequirementsRow(
-                id = "id",
-                icon = PantopusIcon.Check,
-                title = "Government-issued ID",
-                subcopy = "Driver's license, state ID, or passport.",
-            ),
-            RequirementsRow(
-                id = "utility-bill",
-                icon = PantopusIcon.Check,
-                title = "Utility bill",
-                subcopy = "A recent bill showing your name and this address.",
-            ),
-            RequirementsRow(
-                id = "property-record",
-                icon = PantopusIcon.Check,
-                title = "Property record or deed",
-                subcopy = "Deed, tax record, or mortgage statement.",
-            ),
-        )
-    }
+    listOf(
+        RequirementsRow(
+            id = "ownership-document",
+            icon = PantopusIcon.FileText,
+            title = if (isContested) "Strongest ownership document" else "Ownership document",
+            subcopy = "Choose a deed, tax bill, or closing disclosure for this Home.",
+            emphasized = isContested,
+        ),
+    )
 
 @Composable
 private fun ContestedClaimNotice(claim: ClaimOwnershipContestedClaim) {
@@ -539,7 +518,7 @@ private fun WhyWeAskSection() {
                     color = PantopusColors.primary700,
                 )
                 Text(
-                    text = "Address proof keeps Pantopus real-people only.",
+                    text = "Documents help a reviewer check your connection to this Home.",
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
                 )
@@ -554,8 +533,8 @@ private fun WhyWeAskSection() {
         if (expanded) {
             Text(
                 text =
-                    "A reviewer checks that your ID and address documents match this home, then compares " +
-                        "ownership records. Your files stay private and are only used for verification.",
+                    "A reviewer checks the ownership document for this Home. Uploading does not verify your identity " +
+                        "or residency. Evidence access is limited to the claimant and authorized reviewers.",
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextStrong,
                 modifier =
@@ -575,21 +554,25 @@ private fun UploadStep(
     vm: ClaimOwnershipWizardViewModel,
 ) {
     val context = LocalContext.current
-    var pickerSlot by remember { mutableStateOf<ClaimEvidenceSlot?>(null) }
+    var pickerSlot by remember { mutableStateOf<Pair<ClaimEvidenceSlot, String>?>(null) }
     val picker =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.OpenDocument(),
         ) { uri: Uri? ->
-            val slot = pickerSlot ?: return@rememberLauncherForActivityResult
+            val (slot, ticket) = pickerSlot ?: return@rememberLauncherForActivityResult
             pickerSlot = null
             if (uri == null) return@rememberLauncherForActivityResult
-            val resolver = context.contentResolver
-            val mime = resolver.getType(uri) ?: "application/octet-stream"
-            val name = uri.lastPathSegment?.substringAfterLast('/') ?: "evidence"
-            val bytes =
-                resolver.openInputStream(uri)?.use { it.readBytes() }
-                    ?: return@rememberLauncherForActivityResult
-            vm.picked(slot, ClaimPickedFile(filename = name, mimeType = mime, bytes = bytes))
+            vm.acceptPick(slot, ticket) {
+                withContext(Dispatchers.IO) {
+                    val resolver = context.contentResolver
+                    val mime = resolver.getType(uri) ?: "application/octet-stream"
+                    val name =
+                        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                            if (it.moveToFirst()) it.getString(0) else null
+                        } ?: "evidence"
+                    resolver.openInputStream(uri)?.use { ClaimPickedFile(name, mime, readHomeEvidenceBytes(it)) }
+                }
+            }
         }
 
     UploadStepContent(
@@ -608,19 +591,18 @@ private fun UploadStep(
                     hint = slot.acceptHint,
                     state =
                         (state.slots[slot] ?: ClaimSlotState.Empty)
-                            .toUploadState(state.addressMatches[slot], state.startContent.homeLabel),
+                            .toUploadState(),
                 )
             },
-        note = state.note,
-        onNoteChange = vm::setNote,
         verificationType = state.verificationType,
         documentOptions = state.documentOptions,
         selectedDocumentType = state.selectedDocumentType,
         submitError = state.submitError,
         onPick = { id ->
             val slot = ClaimEvidenceSlot.entries.firstOrNull { it.name == id } ?: return@UploadStepContent
-            pickerSlot = slot
-            picker.launch(arrayOf("image/*", "application/pdf"))
+            val ticket = vm.beginPick(slot) ?: return@UploadStepContent
+            pickerSlot = slot to ticket
+            picker.launch(arrayOf("image/*", "application/pdf", "text/plain"))
         },
         onRemove = { id ->
             val slot = ClaimEvidenceSlot.entries.firstOrNull { it.name == id } ?: return@UploadStepContent
@@ -648,8 +630,6 @@ internal data class ClaimUploadSlotModel(
 internal fun UploadStepContent(
     homeLabel: String,
     slots: List<ClaimUploadSlotModel>,
-    note: String,
-    onNoteChange: (String) -> Unit,
     submitError: String?,
     onPick: (String) -> Unit,
     onRemove: (String) -> Unit,
@@ -728,11 +708,6 @@ internal fun UploadStepContent(
                 }
             }
         }
-        ClaimStatement(
-            value = note,
-            onValueChange = onNoteChange,
-            placeholder = ClaimUploadCopy.STATEMENT_PLACEHOLDER,
-        )
         submitError?.let { ErrorBanner(it) }
         EncryptionFooter()
     }
@@ -798,25 +773,13 @@ private fun SuccessStep(outcomeNote: String? = null) {
 
 // MARK: - Helpers
 
-private fun ClaimSlotState.toUploadState(
-    verdict: ClaimAddressMatch?,
-    homeLabel: String,
-): UploadSlotState =
+private fun ClaimSlotState.toUploadState(): UploadSlotState =
     when (this) {
         ClaimSlotState.Empty -> UploadSlotState.Empty
         is ClaimSlotState.Uploading -> UploadSlotState.Uploading(file.toDisplay(), fraction)
-        is ClaimSlotState.Picked -> file.toDisplay().withVerdict(verdict ?: file.fallbackMatch(homeLabel))
-        is ClaimSlotState.Uploaded -> file.toDisplay().withVerdict(verdict ?: file.fallbackMatch(homeLabel))
-        is ClaimSlotState.Failed -> file.toDisplay().withVerdict(verdict ?: file.fallbackMatch(homeLabel))
-    }
-
-private fun ClaimPickedFile.fallbackMatch(homeLabel: String): ClaimAddressMatch =
-    ClaimOwnershipSampleData.addressMatch(filename = filename, homeLabel = homeLabel)
-
-private fun UploadSlotFile.withVerdict(verdict: ClaimAddressMatch): UploadSlotState =
-    when (verdict) {
-        is ClaimAddressMatch.Matches -> UploadSlotState.Done(this, verdict.detail)
-        is ClaimAddressMatch.Differs -> UploadSlotState.Warn(this, verdict.detail)
+        is ClaimSlotState.Picked -> UploadSlotState.Pending(file.toDisplay(), "Selected. Submit to save for review.")
+        is ClaimSlotState.Uploaded -> UploadSlotState.Pending(file.toDisplay(), "Saved pending review. No access has been granted.")
+        is ClaimSlotState.Failed -> UploadSlotState.Pending(file.toDisplay(), message)
     }
 
 private fun ClaimPickedFile.toDisplay(): UploadSlotFile =

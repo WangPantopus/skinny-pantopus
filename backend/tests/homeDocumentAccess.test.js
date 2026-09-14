@@ -17,7 +17,7 @@ const visibilities = ['public', 'members', 'managers', 'sensitive'];
 
 function allow({ role = 'member', sensitive = false, denied = [], owner = false } = {}) {
   checkHomePermission.mockImplementation(async (_home, _user, permission) => ({
-    hasAccess: permission === 'sensitive.view' ? sensitive : !denied.includes(permission),
+    hasAccess: permission === 'sensitive.view' ? (sensitive || owner) : !denied.includes(permission),
     isOwner: owner,
     occupancy: { role_base: role, can_view_sensitive: true, can_manage_home: true },
   }));
@@ -25,7 +25,7 @@ function allow({ role = 'member', sensitive = false, denied = [], owner = false 
 beforeEach(() => {
   db.resetTables();
   allow();
-  getUserAccess.mockResolvedValue({ permissions: ['docs.view'] });
+  getUserAccess.mockResolvedValue({ hasAccess: true, effective_role_base: 'member', permissions: ['home.view', 'docs.view'] });
   db.seedTable('Home', [{ id: homeId, name: 'Test Home' }]);
   db.seedTable('HomeDocument', [
     ...visibilities.map(visibility => ({ id: visibility, home_id: homeId, visibility })),
@@ -101,8 +101,15 @@ test('a permitted member can create a document record in their visible scope', a
 });
 
 test.each([true, false])('dashboard document counts include only permitted records (docs.view=%s)', async permitted => {
-  getUserAccess.mockResolvedValue({ permissions: permitted ? ['docs.view'] : [] });
-  const response = await request(app).get(`/api/homes/${homeId}/dashboard`);
+  db.setRpcMock(async name => name === 'home_record_context'
+    ? { data: { allowed: true, private: false, user_id: userId, role: 'member', permissions: (await getUserAccess()).permissions }, error: null }
+    : name === 'get_home_records'
+    ? { data: { ok: true, records: [], attendees: [] }, error: null }
+    : name === 'home_delete_eligibility'
+      ? { data: { allowed: false, deleted: false, code: 'HOME_DELETE_ACCESS_DENIED' }, error: null }
+      : { data: null, error: { message: 'Unexpected RPC' } });
+  getUserAccess.mockResolvedValue({ hasAccess: true, effective_role_base: 'member', permissions: permitted ? ['home.view', 'docs.view'] : ['home.view'] });
+  const response = await request(app).get(`/api/homes/${homeId}/dashboard`).set('Authorization', 'Bearer synthetic-document-session');
   expect(response.status).toBe(200);
   expect(response.body.counts.documents).toBe(permitted ? 2 : 0);
 });

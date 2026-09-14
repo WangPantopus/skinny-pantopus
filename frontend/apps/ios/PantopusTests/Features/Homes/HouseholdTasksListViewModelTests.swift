@@ -43,9 +43,34 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
 
     private func makeVM(api: APIClient? = nil) -> HouseholdTasksListViewModel {
         let frozen = Self.fixedNow
+        let currentAPI = api ?? makeAPI()
+        // Existing projection tests explicitly model an authorized editor.
+        // Add the actual collection/session transport fields to their fixtures.
+        SequencedURLProtocol.sequence = SequencedURLProtocol.sequence.map { response in
+            guard var body = try? JSONSerialization.jsonObject(with: response.body) as? [String: Any],
+                  let tasks = body["tasks"] as? [[String: Any]] else { return response }
+            body["tasks"] = tasks.map { task in
+                task.merging([
+                    "capabilities": ["can_edit": true, "can_complete": true, "can_delete": true, "can_upload": true]
+                ]) { _, value in value }
+            }
+            body["collection_capabilities"] = ["can_create": true]
+            body["task_session"] = [
+                "home_id": "10000000-0000-4000-8000-000000000001",
+                "actor_id": "10000000-0000-4000-8000-000000000002",
+                "session_scope": String(repeating: "a", count: 64)
+            ]
+            guard let data = try? JSONSerialization.data(withJSONObject: body) else { return response }
+            return .init(status: response.status, body: data, headers: response.headers, delay: response.delay)
+        }
         return HouseholdTasksListViewModel(
-            homeId: "home-1",
-            api: api ?? makeAPI()
+            homeId: "10000000-0000-4000-8000-000000000001",
+            api: currentAPI,
+            access: HomeTaskAccess(
+                homeId: "10000000-0000-4000-8000-000000000001",
+                api: currentAPI,
+                actorId: "10000000-0000-4000-8000-000000000002"
+            ) { "fixed-editor-session" }
         ) { frozen }
     }
 
@@ -62,7 +87,7 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
     ) -> HomeTaskDTO {
         HomeTaskDTO(
             id: id,
-            homeId: "home-1",
+            homeId: "10000000-0000-4000-8000-000000000001",
             taskType: taskType,
             title: title,
             description: nil,
@@ -106,7 +131,8 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: """
             {"tasks":[
-              {"id":"t1","home_id":"home-1","task_type":"chore","title":"Vacuum living room",
+              {"id":"10000000-0000-4000-8000-000000000101","home_id":"10000000-0000-4000-8000-000000000001",
+               "task_type":"chore","title":"Vacuum living room",
                "status":"open","due_at":"2026-05-15T18:00:00Z","created_by":"u"}
             ]}
             """)
@@ -119,7 +145,7 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
         }
         XCTAssertEqual(sections[0].rows.count, 1)
         let row = sections[0].rows[0]
-        XCTAssertEqual(row.id, "t1")
+        XCTAssertEqual(row.id, "10000000-0000-4000-8000-000000000101")
         XCTAssertEqual(row.title, "Vacuum living room")
         // Active trailing = the checkbox + trash pair. RN puts a trash
         // affordance on every task row, so the round-checkbox now shares
@@ -153,14 +179,14 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
     // MARK: - Tab filtering
 
     func testActiveTabIncludesOpenAndInProgress() {
-        let open = makeTask(id: "t1", status: "open")
-        let inProgress = makeTask(id: "t2", status: "in_progress")
+        let open = makeTask(id: "10000000-0000-4000-8000-000000000101", status: "open")
+        let inProgress = makeTask(id: "10000000-0000-4000-8000-000000000102", status: "in_progress")
         XCTAssertTrue(HouseholdTasksListViewModel.passes(open, tab: .active, now: Self.fixedNow))
         XCTAssertTrue(HouseholdTasksListViewModel.passes(inProgress, tab: .active, now: Self.fixedNow))
     }
 
     func testActiveTabExcludesDoneAndCanceled() {
-        let done = makeTask(id: "t3", status: "done")
+        let done = makeTask(id: "10000000-0000-4000-8000-000000000103", status: "done")
         let canceled = makeTask(id: "t4", status: "canceled")
         XCTAssertFalse(HouseholdTasksListViewModel.passes(done, tab: .active, now: Self.fixedNow))
         XCTAssertFalse(HouseholdTasksListViewModel.passes(canceled, tab: .active, now: Self.fixedNow))
@@ -168,10 +194,10 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
 
     func testDoneTabRestrictsTo30DayWindow() {
         // fixedNow = 2026-05-15. 20 days back = 2026-04-25 (in window).
-        let recent = makeTask(id: "t1", status: "done", completedAt: "2026-04-25T00:00:00Z")
+        let recent = makeTask(id: "10000000-0000-4000-8000-000000000101", status: "done", completedAt: "2026-04-25T00:00:00Z")
         XCTAssertTrue(HouseholdTasksListViewModel.passes(recent, tab: .done, now: Self.fixedNow))
         // 40 days back = 2026-04-05 (out of window).
-        let old = makeTask(id: "t2", status: "done", completedAt: "2026-04-05T00:00:00Z")
+        let old = makeTask(id: "10000000-0000-4000-8000-000000000102", status: "done", completedAt: "2026-04-05T00:00:00Z")
         XCTAssertFalse(HouseholdTasksListViewModel.passes(old, tab: .done, now: Self.fixedNow))
     }
 
@@ -179,9 +205,9 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
         // Per the prompt the spec calls for `template_id != nil` but the
         // live HomeTask schema has no such column; recurrence is the
         // RRULE-ish `recurrence_rule` text. Empty/whitespace ⇒ not recurring.
-        let oneOff = makeTask(id: "t1", status: "open", recurrenceRule: nil)
-        let recurring = makeTask(id: "t2", status: "open", recurrenceRule: "FREQ=WEEKLY;BYDAY=TU")
-        let blank = makeTask(id: "t3", status: "open", recurrenceRule: "")
+        let oneOff = makeTask(id: "10000000-0000-4000-8000-000000000101", status: "open", recurrenceRule: nil)
+        let recurring = makeTask(id: "10000000-0000-4000-8000-000000000102", status: "open", recurrenceRule: "FREQ=WEEKLY;BYDAY=TU")
+        let blank = makeTask(id: "10000000-0000-4000-8000-000000000103", status: "open", recurrenceRule: "")
         XCTAssertFalse(HouseholdTasksListViewModel.passes(oneOff, tab: .recurring, now: Self.fixedNow))
         XCTAssertTrue(HouseholdTasksListViewModel.passes(recurring, tab: .recurring, now: Self.fixedNow))
         XCTAssertFalse(HouseholdTasksListViewModel.passes(blank, tab: .recurring, now: Self.fixedNow))
@@ -243,9 +269,9 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
 
     func testBannerSummaryCountsOverdueAndDueToday() {
         let tasks = [
-            makeTask(id: "t1", status: "open", dueAt: "2026-05-13T00:00:00Z"), // overdue
-            makeTask(id: "t2", status: "open", dueAt: "2026-05-12T00:00:00Z"), // overdue
-            makeTask(id: "t3", status: "open", dueAt: "2026-05-15T18:00:00Z"), // today
+            makeTask(id: "10000000-0000-4000-8000-000000000101", status: "open", dueAt: "2026-05-13T00:00:00Z"), // overdue
+            makeTask(id: "10000000-0000-4000-8000-000000000102", status: "open", dueAt: "2026-05-12T00:00:00Z"), // overdue
+            makeTask(id: "10000000-0000-4000-8000-000000000103", status: "open", dueAt: "2026-05-15T18:00:00Z"), // today
             makeTask(id: "t4", status: "open", dueAt: "2026-05-20T00:00:00Z"), // later
             makeTask(id: "t5", status: "done", dueAt: "2026-05-15T00:00:00Z") // done — ignored
         ]
@@ -257,7 +283,7 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
 
     func testBannerHasContentFalseWhenAllFuture() {
         let tasks = [
-            makeTask(id: "t1", status: "open", dueAt: "2026-05-20T00:00:00Z")
+            makeTask(id: "10000000-0000-4000-8000-000000000101", status: "open", dueAt: "2026-05-20T00:00:00Z")
         ]
         let summary = HouseholdTasksListViewModel.summarize(tasks: tasks, now: Self.fixedNow)
         XCTAssertFalse(summary.hasContent)
@@ -332,31 +358,33 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
         XCTAssertNil(HouseholdTasksListViewModel.humanRecurrence(rule: nil))
         XCTAssertNil(HouseholdTasksListViewModel.humanRecurrence(rule: ""))
     }
+}
 
-    // MARK: - Optimistic toggle
+extension HouseholdTasksListViewModelTests {
+    // MARK: - Current access and projection
 
-    func testToggleDoneRollsBackOnFailure() async {
+    func testFailedCurrentAccessClearsTaskSnapshot() async {
         SequencedURLProtocol.sequence = [
             // Initial load
             .status(200, body: """
             {"tasks":[
-              {"id":"t1","home_id":"home-1","task_type":"chore","title":"Vacuum",
+              {"id":"10000000-0000-4000-8000-000000000101","home_id":"10000000-0000-4000-8000-000000000001",
+               "task_type":"chore","title":"Vacuum",
                "status":"open","due_at":"2026-05-15T18:00:00Z","created_by":"u"}
             ]}
             """),
-            // PUT toggle fails
+            // Current exact-record authorization fails before any PUT
             .status(500, body: "{\"error\":\"boom\"}")
         ]
         let vm = makeVM()
         await vm.load()
-        await vm.toggleDone(taskId: "t1")
-        // After roll-back the row should still be on the Active tab as open.
-        guard case let .loaded(sections, _) = vm.state else {
-            XCTFail("Expected loaded after roll-back")
+        await vm.toggleDone(taskId: "10000000-0000-4000-8000-000000000101")
+        guard case .error = vm.state else {
+            XCTFail("Failed access must clear the previous task snapshot")
             return
         }
-        XCTAssertEqual(sections[0].rows.count, 1)
-        XCTAssertEqual(sections[0].rows[0].id, "t1")
+        XCTAssertNil(vm.fab)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET", "GET"])
     }
 
     // MARK: - Tab counts
@@ -365,11 +393,14 @@ final class HouseholdTasksListViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: """
             {"tasks":[
-              {"id":"t1","home_id":"home-1","task_type":"chore","title":"Trash",
+              {"id":"10000000-0000-4000-8000-000000000101","home_id":"10000000-0000-4000-8000-000000000001",
+               "task_type":"chore","title":"Trash",
                "status":"open","recurrence_rule":"FREQ=WEEKLY;BYDAY=TU","created_by":"u"},
-              {"id":"t2","home_id":"home-1","task_type":"chore","title":"Vacuum",
+              {"id":"10000000-0000-4000-8000-000000000102","home_id":"10000000-0000-4000-8000-000000000001",
+               "task_type":"chore","title":"Vacuum",
                "status":"open","created_by":"u"},
-              {"id":"t3","home_id":"home-1","task_type":"chore","title":"Dishwasher",
+              {"id":"10000000-0000-4000-8000-000000000103","home_id":"10000000-0000-4000-8000-000000000001",
+               "task_type":"chore","title":"Dishwasher",
                "status":"done","completed_at":"2026-05-14T10:00:00Z","created_by":"u"}
             ]}
             """)

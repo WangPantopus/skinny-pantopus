@@ -9,6 +9,7 @@
 const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
+const homeRecordService = require('../services/homeRecordService');
 const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -820,198 +821,47 @@ function categoryCommunityType(category) {
 //                       TASK ENDPOINTS
 // ====================================================================
 
-// GET /tasks — mail-linked tasks
+// The mail interface keeps its legacy pending/completed labels; persisted
+// Home tasks use canonical open/done status and immutable source provenance.
+const mailTaskDto = task => ({ ...task, status: ({ open: 'pending', done: 'completed' })[task.status] || task.status });
 router.get('/tasks', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const homeId = req.query.homeId;
-    const homeIds =
-      homeId && isUuid(homeId) ? [homeId] : await getAccessibleHomeIds(userId);
-    if (!homeIds.length) return res.json({ active: [], completed: [] });
-
-    const { data: tasks, error } = await supabaseAdmin
-      .from('HomeTask')
-      .select('*')
-      .in('home_id', homeIds)
-      .not('mail_id', 'is', null)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    // Enrich with mail preview
-    const mailIds = (tasks || []).map(t => t.mail_id).filter(Boolean);
-    let mailMap = {};
-    if (mailIds.length) {
-      const { data: mailItems } = await supabaseAdmin
-        .from('Mail')
-        .select('id, subject, sender_name')
-        .in('id', mailIds);
-      (mailItems || []).forEach(m => { mailMap[m.id] = m; });
-    }
-
-    const enriched = (tasks || []).map(t => ({
-      id: t.id,
-      home_id: t.home_id,
-      mail_id: t.mail_id,
-      title: t.title,
-      description: t.description,
-      due_at: t.due_at || t.due_date,
-      priority: t.priority || 'medium',
-      status: t.status || 'pending',
-      assigned_to: t.assigned_to,
-      converted_to_gig_id: t.converted_to_gig_id,
-      created_at: t.created_at,
-      mail_preview: mailMap[t.mail_id]?.subject,
-      mail_sender: mailMap[t.mail_id]?.sender_name,
-    }));
-
-    const active = enriched.filter(t => t.status !== 'completed');
-    const completed = enriched.filter(t => t.status === 'completed');
-
-    res.json({ active, completed });
-  } catch (err) {
-    logger.error('[P3] GET /tasks failed', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch tasks' });
-  }
+    if (homeId && !isUuid(homeId)) return res.status(400).json({ error: 'Invalid Home id' });
+    const homeIds = homeId ? [homeId] : await getAccessibleHomeIds(userId);
+    const sets = await Promise.all(homeIds.map(id => homeId
+      ? homeRecordService.list({ homeId: id, actorId: userId, kind: 'task', mailOnly: true }).then(r => r.records)
+      : homeRecordService.visibleRecords({ homeId: id, actorId: userId, kind: 'task', mailOnly: true })));
+    const tasks = sets.flat().map(mailTaskDto);
+    res.json({ active: tasks.filter(t => !['completed', 'canceled'].includes(t.status)),
+      completed: tasks.filter(t => t.status === 'completed') });
+  } catch (error) { homeRecordService.sendError(res, error); }
 });
-
-// POST /tasks/from-mail — create a task from a mail item
 router.post('/tasks/from-mail', verifyToken, validate(createTaskSchema), async (req, res) => {
   try {
-    const userId = req.user.id;
     const { mailId, homeId, title, description, dueAt, priority } = req.body;
-
-    const { data: task, error } = await supabaseAdmin
-      .from('HomeTask')
-      .insert({
-        home_id: homeId,
-        created_by: userId,
-        title,
-        description: description || null,
-        due_date: dueAt || null,
-        priority: priority || 'medium',
-        status: 'pending',
-        mail_id: mailId,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Update mail with linked task
-    await supabaseAdmin
-      .from('Mail')
-      .update({ linked_task_id: task.id })
-      .eq('id', mailId);
-
-    logMailEvent(userId, 'task_created_from_mail', mailId, { taskId: task.id, title });
-    res.json({
-      task: {
-        id: task.id,
-        home_id: task.home_id,
-        mail_id: task.mail_id,
-        title: task.title,
-        description: task.description,
-        due_at: task.due_date,
-        priority: task.priority,
-        status: task.status,
-        created_at: task.created_at,
-      },
-    });
-  } catch (err) {
-    logger.error('[P3] POST /tasks/from-mail failed', { error: err.message });
-    res.status(500).json({ error: 'Failed to create task' });
-  }
+    const result = await homeRecordService.mutate({ homeId, actorId: req.user.id, kind: 'task', action: 'create',
+      sourceMailId: mailId, payload: { task_type: 'reminder', title, description: description ?? null,
+        due_at: dueAt ?? null, priority, status: 'open' } });
+    res.json({ task: mailTaskDto(result.record) });
+  } catch (error) { homeRecordService.sendError(res, error); }
 });
-
-// PATCH /tasks/:id — update task
 router.patch('/tasks/:id', verifyToken, validate(updateTaskSchema), async (req, res) => {
   try {
-    const userId = req.user.id;
-    const taskId = req.params.id;
-    const updates = {};
-
-    if (req.body.status) updates.status = req.body.status;
-    if (req.body.title) updates.title = req.body.title;
-    if (req.body.priority) updates.priority = req.body.priority;
-    if (req.body.dueAt !== undefined) updates.due_date = req.body.dueAt;
-    if (req.body.status === 'completed') updates.completed_at = new Date().toISOString();
-
-    const { data: task, error } = await supabaseAdmin
-      .from('HomeTask')
-      .update(updates)
-      .eq('id', taskId)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    logMailEvent(userId, 'task_updated', task.mail_id, { taskId, updates: Object.keys(updates) });
-    res.json({
-      task: {
-        id: task.id,
-        home_id: task.home_id,
-        mail_id: task.mail_id,
-        title: task.title,
-        description: task.description,
-        due_at: task.due_date,
-        priority: task.priority,
-        status: task.status,
-        created_at: task.created_at,
-      },
-    });
-  } catch (err) {
-    logger.error('[P3] PATCH /tasks/:id failed', { error: err.message });
-    res.status(500).json({ error: 'Failed to update task' });
-  }
+    const payload = {};
+    for (const key of ['title', 'priority']) if (req.body[key] !== undefined) payload[key] = req.body[key];
+    if (req.body.status !== undefined) payload.status = ({ pending: 'open', completed: 'done' })[req.body.status] || req.body.status;
+    if (req.body.dueAt !== undefined) payload.due_at = req.body.dueAt;
+    const result = await homeRecordService.mutateTaskById({ actorId: req.user.id, taskId: req.params.id, action: 'update', payload });
+    res.json({ task: mailTaskDto(result.record) });
+  } catch (error) { homeRecordService.sendError(res, error); }
 });
-
-// POST /tasks/:id/to-gig — convert task to neighbor gig
 router.post('/tasks/:id/to-gig', verifyToken, validate(taskToGigSchema), async (req, res) => {
   try {
-    const userId = req.user.id;
-    const taskId = req.params.id;
-
-    const { data: task } = await supabaseAdmin
-      .from('HomeTask')
-      .select('*')
-      .eq('id', taskId)
-      .single();
-
-    if (!task) return res.status(404).json({ error: 'Task not found' });
-
-    // Create a gig placeholder (simplified — full gig creation uses gig routes)
-    const gigTitle = req.body.title || task.title;
-    const gigDesc = req.body.description || task.description || '';
-
-    const { data: gig, error } = await supabaseAdmin
-      .from('Gig')
-      .insert({
-        created_by: userId,
-        title: gigTitle,
-        description: gigDesc,
-        status: 'open',
-        home_id: task.home_id,
-        gig_type: 'task',
-        compensation: req.body.compensation || null,
-      })
-      .select('id, title')
-      .single();
-
-    if (error) throw error;
-
-    // Link task to gig
-    await supabaseAdmin
-      .from('HomeTask')
-      .update({ converted_to_gig_id: gig.id, status: 'in_progress' })
-      .eq('id', taskId);
-
-    logMailEvent(userId, 'task_converted_to_gig', task.mail_id, { taskId, gigId: gig.id });
-    res.json({ gigId: gig.id, title: gig.title });
-  } catch (err) {
-    logger.error('[P3] POST /tasks/:id/to-gig failed', { error: err.message });
-    res.status(500).json({ error: 'Failed to convert to gig' });
-  }
+    await homeRecordService.mutateTaskById({ actorId: req.user.id, taskId: req.params.id, action: 'authorize_publication' });
+    res.status(409).json({ error: 'Use the gig creation flow to publish this task.', code: 'HOME_TASK_GIG_FLOW_REQUIRED' });
+  } catch (error) { homeRecordService.sendError(res, error); }
 });
 
 // ====================================================================

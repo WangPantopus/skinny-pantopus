@@ -93,13 +93,13 @@ export default function PlaceDashboard() {
   // a verified occupancy or a verified owner; everything else is claimed.
   const switchHomes = useMemo<PlaceSwitcherHome[]>(
     () =>
-      (myHomesQuery.data?.homes ?? []).map((h) => {
+      (myHomesQuery.data?.homes ?? []).filter(h => h.has_home_access === true).map((h) => {
         const unit = h.unit_number?.replace(/^#/, '').trim();
         const verified =
           h.occupancy?.verification_status === 'verified' || h.ownership_status === 'verified';
         return {
           id: h.id,
-          line1: unit ? `${h.address} #${unit}` : h.address,
+          line1: unit && h.address ? `${h.address} #${unit}` : h.address || h.name || 'Home',
           city: [h.city, h.state].filter(Boolean).join(', '),
           status: verified ? 'verified' : 'claimed',
         };

@@ -1,101 +1,54 @@
-// ============================================================
-// JOB: Process Expired Claim Windows
-// Finds provisional occupancies whose challenge window has expired
-// and promotes them to fully verified.
-// Runs every 10 minutes.
-// ============================================================
-
+// Review-window promotion uses the same locked current policy as code entry.
+// Candidate reads are paginated so an earlier blocked Home cannot starve later
+// eligible rows. A saved result still requires a fresh client access check.
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
-const { applyOccupancyTemplate, writeAuditLog } = require('../utils/homePermissions');
+const { validityDays } = require('../utils/verificationAge');
+const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
 async function processExpiredClaimWindows() {
-  const now = new Date().toISOString();
-
-  // 1. Find occupancies past their challenge window
-  const { data: expiredOccupancies, error } = await supabaseAdmin
-    .from('HomeOccupancy')
-    .select('id, home_id, user_id')
-    .eq('verification_status', 'provisional')
-    .eq('is_active', true)
-    .not('challenge_window_ends_at', 'is', null)
-    .lt('challenge_window_ends_at', now)
-    .limit(200);
-
-  if (error) {
-    logger.error('[processClaimWindows] Failed to query expired occupancies', { error: error.message });
-    return;
-  }
-
-  if (!expiredOccupancies || expiredOccupancies.length === 0) return;
-
-  logger.info('[processClaimWindows] Found expired challenge windows', { count: expiredOccupancies.length });
-
-  let promoted = 0;
-  let errors = 0;
-
-  for (const occ of expiredOccupancies) {
-    try {
-      // 2a. Look up the linked HomeResidencyClaim to get claimed_role
-      const { data: claim } = await supabaseAdmin
-        .from('HomeResidencyClaim')
-        .select('id, claimed_role')
-        .eq('home_id', occ.home_id)
-        .eq('user_id', occ.user_id)
-        .in('status', ['pending', 'provisional', 'approved'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const roleBase = claim?.claimed_role || 'member';
-
-      // 2b. Promote via applyOccupancyTemplate (the single write path)
-      await applyOccupancyTemplate(occ.home_id, occ.user_id, roleBase, 'verified');
-
-      // 2c. Reset Home.security_state to 'normal' if currently 'claim_window'
-      await supabaseAdmin
-        .from('Home')
-        .update({ security_state: 'normal', updated_at: now })
-        .eq('id', occ.home_id)
-        .eq('security_state', 'claim_window');
-
-      // 2d. Notify the user
-      try {
-        const notificationService = require('../services/notificationService');
-        notificationService.createNotification({
-          userId: occ.user_id,
-          type: 'challenge_window_passed',
-          title: 'Access confirmed',
-          body: 'Your access is now fully active.',
-          link: `/homes/${occ.home_id}/dashboard`,
-          metadata: { home_id: occ.home_id },
-        });
-      } catch (notifErr) {
-        logger.warn('[processClaimWindows] Failed to send promotion notification (non-fatal)', {
-          error: notifErr.message,
-          userId: occ.user_id,
-        });
-      }
-
-      // 2e. Audit log
-      await writeAuditLog(occ.home_id, occ.user_id, 'CHALLENGE_WINDOW_EXPIRED_PROMOTED', 'HomeOccupancy', occ.id, {
-        claimed_role: roleBase,
-        claim_id: claim?.id || null,
-      });
-
-      promoted++;
-    } catch (err) {
-      errors++;
-      logger.error('[processClaimWindows] Failed to promote occupancy', {
-        error: err.message,
-        occupancyId: occ.id,
-        homeId: occ.home_id,
-        userId: occ.user_id,
-      });
+  const cutoff = new Date().toISOString();
+  let cursor = null, promoted = 0, checked = 0, unavailable = 0;
+  for (;;) {
+    let query = supabaseAdmin.from('HomeOccupancy').select('id, home_id, user_id')
+      .eq('verification_status', 'provisional').eq('is_active', true)
+      .not('challenge_window_ends_at', 'is', null).lt('challenge_window_ends_at', cutoff)
+      .order('id', { ascending: true }).limit(200);
+    if (cursor) query = query.gt('id', cursor);
+    let response;
+    try { response = await query; } catch (_) { response = null; }
+    const rows = response?.data;
+    if (response?.error || !Array.isArray(rows) || rows.length > 200
+      || rows.some((row, index) => ![row?.id, row?.home_id, row?.user_id].every(v => typeof v === 'string' && UUID.test(v))
+        || (index > 0 ? row.id <= rows[index - 1].id : cursor && row.id <= cursor))) {
+      logger.error('[processClaimWindows] Candidate read unavailable'); return;
     }
+    if (!rows.length) break;
+    cursor = rows.at(-1).id;
+    for (const row of rows) {
+      checked++;
+      let result;
+      try {
+        const response = await supabaseAdmin.rpc('promote_home_postcard_review', {
+          p_home_id: row.home_id, p_actor_id: row.user_id, p_occupancy_id: row.id, p_validity_days: validityDays(),
+        });
+        if (response?.error || !response?.data) { unavailable++; continue; }
+        result = response.data;
+      } catch (_) { unavailable++; continue; }
+      if (result.ok === false || (result.ok === true && result.promoted === false)) continue;
+      if (result.ok !== true || result.promoted !== true || result.home_id !== row.home_id
+        || result.user_id !== row.user_id || result.occupancy_id !== row.id) { unavailable++; continue; }
+      promoted++;
+      try {
+        await require('../services/notificationService').createNotification({
+          userId: row.user_id, type: 'challenge_window_passed', title: 'Residency review recorded',
+          body: 'Your mail review window is complete. Check your Home status for current access.',
+          link: `/homes/${row.home_id}/residency`, metadata: { home_id: row.home_id },
+        });
+      } catch (_) { logger.warn('[processClaimWindows] Status notification unavailable'); }
+    }
+    if (rows.length < 200) break;
   }
-
-  logger.info('[processClaimWindows] Completed', { promoted, errors, total: expiredOccupancies.length });
+  if (checked) logger.info('[processClaimWindows] Completed', { promoted, checked, unavailable });
 }
-
 module.exports = processExpiredClaimWindows;

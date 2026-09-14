@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PantopusBadge from '@/components/PantopusBadge';
+import AuthForm from '@/components/auth/AuthForm';
 import * as api from '@pantopus/api';
 import { authPageHref, readAuthRedirectQuery, safeRedirectPath, extractApiError } from '@/lib/auth-utils';
 
@@ -95,7 +96,7 @@ function ResetPasswordPageContent() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-app-surface/90 backdrop-blur py-8 px-4 shadow-lg shadow-black/5 dark:shadow-black/30 rounded-2xl border border-app-border-subtle sm:px-10">
-          <form className="space-y-5" onSubmit={handleSubmit}>
+          <AuthForm fieldsClassName="space-y-5" onSubmit={handleSubmit}>
             {error ? (
               <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
                 {error}
@@ -166,7 +167,7 @@ function ResetPasswordPageContent() {
             >
               {loading ? 'Resetting...' : 'Reset password'}
             </button>
-          </form>
+          </AuthForm>
 
           <p className="mt-6 text-center text-sm text-app-text-secondary">
             <Link href={loginHref} className="font-medium text-primary-700 dark:text-primary-300 hover:opacity-90">

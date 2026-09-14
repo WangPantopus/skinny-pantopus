@@ -3,28 +3,36 @@
 package app.pantopus.android.ui.screens.homes.verify_landlord
 
 import androidx.lifecycle.SavedStateHandle
-import app.pantopus.android.data.api.models.homes.PostcardInfoDto
-import app.pantopus.android.data.api.models.homes.RequestPostcardResponse
+import app.pantopus.android.data.api.models.tenant.TenantHomeStatusResponse
 import app.pantopus.android.data.api.models.tenant.TenantLeaseDto
 import app.pantopus.android.data.api.models.tenant.TenantLeaseMetadataDto
 import app.pantopus.android.data.api.models.tenant.TenantRequestApprovalRequest
 import app.pantopus.android.data.api.models.tenant.TenantRequestApprovalResponse
+import app.pantopus.android.data.api.models.tenant.TenantRequestContextDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.homes.HomeVerificationRepository
+import app.pantopus.android.data.api.services.TenantApi
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.tenant.TenantRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
+import com.squareup.moshi.Moshi
 import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.coVerifySequence
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -33,18 +41,23 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
+import java.util.TimeZone
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class VerifyLandlordWizardViewModelTest {
-    private val networkMonitor: NetworkMonitor =
+abstract class VerifyLandlordWizardTestFixture {
+    protected val networkMonitor: NetworkMonitor =
         mockk<NetworkMonitor>(relaxed = true).also {
             every { it.isOnline } returns MutableStateFlow(true)
         }
 
-    private val verificationRepository: HomeVerificationRepository = mockk(relaxed = true)
-    private val tenantRepository: TenantRepository = mockk(relaxed = true)
+    protected val tenantRepository: TenantRepository = mockk(relaxed = true)
+    protected val session: HomeClaimSessionScope = mockk()
+    protected val sessions: HomeClaimSessionScopeFactory = mockk()
+    protected val invalidated = MutableStateFlow(false)
+    protected var storedSessionCurrent = true
 
-    private val stubLease =
+    protected val stubLease =
         TenantLeaseDto(
             id = "lease-1",
             homeId = "home-1",
@@ -57,9 +70,12 @@ class VerifyLandlordWizardViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        coEvery { verificationRepository.requestPostcard(any()) } returns
-            NetworkResult.Success(RequestPostcardResponse("ok", PostcardInfoDto("p1")))
-        coEvery { tenantRepository.requestApproval(any()) } returns
+        every { sessions.create(any()) } returns session
+        every { session.invalidated } returns invalidated
+        every { session.isCurrent } answers { !invalidated.value }
+        every { session.actorId } returns "actor-1"
+        coEvery { session.confirmCurrent() } answers { storedSessionCurrent && !invalidated.value }
+        coEvery { tenantRepository.requestApproval(any(), any()) } returns
             NetworkResult.Success(TenantRequestApprovalResponse(stubLease))
     }
 
@@ -67,25 +83,23 @@ class VerifyLandlordWizardViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private class TestVm(
+    protected inner class TestVm(
         networkMonitor: NetworkMonitor,
         handle: SavedStateHandle,
-        verificationRepository: HomeVerificationRepository,
         tenantRepository: TenantRepository,
-    ) : VerifyLandlordWizardViewModel(networkMonitor, handle, verificationRepository, tenantRepository) {
+    ) : VerifyLandlordWizardViewModel(networkMonitor, handle, tenantRepository, sessions) {
         override val submitDelayMillis: Long = 0L
     }
 
-    private fun makeVm(homeId: String = "home-1"): TestVm =
+    protected fun makeVm(homeId: String = "home-1"): TestVm =
         TestVm(
             networkMonitor = networkMonitor,
             handle = SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to homeId)),
-            verificationRepository = verificationRepository,
             tenantRepository = tenantRepository,
         )
 
     /** Feeds a valid form through the public mutators. */
-    private fun TestVm.seedPopulatedForm() {
+    protected fun TestVm.seedPopulatedForm() {
         VerifyLandlordSampleData.populatedForm.let { f ->
             setOwnerName(f.ownerName)
             setContactName(f.contactName)
@@ -99,10 +113,290 @@ class VerifyLandlordWizardViewModelTest {
         }
     }
 
+    protected fun noSavedRequest() =
+        TenantHomeStatusResponse(
+            "home-1",
+            TenantRequestContextDto("home-1", "actor-1", null, null),
+            TenantHomeStatusResponse.LeaseStatus("none"),
+        )
+
+    protected fun savedRequest() =
+        TenantHomeStatusResponse(
+            "home-1",
+            TenantRequestContextDto("home-1", "actor-1", "lease-1", "pending"),
+            TenantHomeStatusResponse.LeaseStatus("pending", stubLease),
+        )
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
+    @Test fun discarding_held_status_does_not_submit_after_departure() =
+        runTest {
+            val api = mockk<TenantApi>()
+            val held = CompletableDeferred<TenantHomeStatusResponse>()
+            coEvery { api.homeStatus("home-1") } coAnswers { withContext(NonCancellable) { held.await() } }
+            coEvery { api.requestApproval(any()) } returns TenantRequestApprovalResponse(stubLease)
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.onPrimary()
+            vm.seedPopulatedForm()
+            vm.onPrimary()
+            coVerify(exactly = 1) { api.homeStatus("home-1") }
+            vm.onLeading()
+            vm.onDiscard()
+            assertEquals(VerifyLandlordOutboundEvent.Dismiss, vm.pendingEvent.value)
+            held.complete(TenantHomeStatusResponse("home-1", TenantRequestContextDto("home-1", "actor-1", null, null)))
+            coVerify(exactly = 0) { api.requestApproval(any()) }
+            assertEquals(VerifyLandlordStep.Start, vm.state.value.currentStep)
+        }
+
+    @Test fun late_submitted_response_after_discard_cannot_restore_sent_state() =
+        runTest {
+            val api = mockk<TenantApi>()
+            val held = CompletableDeferred<TenantRequestApprovalResponse>()
+            coEvery { api.homeStatus("home-1") } returns
+                TenantHomeStatusResponse("home-1", TenantRequestContextDto("home-1", "actor-1", null, null))
+            coEvery { api.requestApproval(any()) } coAnswers {
+                withContext(NonCancellable) { held.await() }
+            }
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.onPrimary()
+            vm.seedPopulatedForm()
+            vm.onPrimary()
+            coVerify(exactly = 1) { api.requestApproval(any()) }
+            vm.onLeading()
+            vm.onDiscard()
+            held.complete(TenantRequestApprovalResponse(stubLease))
+            assertEquals(VerifyLandlordStep.Start, vm.state.value.currentStep)
+            assertEquals(VerifyLandlordOutboundEvent.Dismiss, vm.pendingEvent.value)
+            assertEquals(VerifyLandlordSubmitState.Idle, vm.state.value.submitState)
+            assertNull(vm.state.value.approvalResult)
+        }
+
+    @Test fun reopening_recovers_saved_pending_and_active_details_using_only_get() =
+        runTest {
+            val moshi = Moshi.Builder().build()
+            for (leaseState in listOf("pending", "active")) {
+                val api = mockk<TenantApi>()
+                val decoded =
+                    moshi.adapter(TenantHomeStatusResponse::class.java).fromJson(
+                        """{"home_id":"home-1","request_context":{"home_id":"home-1","actor_id":"actor-1",
+                    "lease_id":"lease-1","lease_state":"$leaseState"},"lease":{"state":"$leaseState","lease":{
+                    "id":"lease-1","home_id":"home-1","state":"$leaseState","start_at":"2026-04-01T00:00:00.000Z",
+                    "created_at":"2026-03-04T18:12:00.000Z","metadata":{"message":"Saved before the reply was lost"}}}}""",
+                    )!!
+                coEvery { api.homeStatus("home-1") } returns decoded
+                val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+                vm.restoreSavedRequest()
+                assertEquals(VerifyLandlordStep.Sent, vm.state.value.currentStep)
+                assertEquals("Saved before the reply was lost", vm.state.value.approvalResult?.message)
+                assertEquals(stubLease.startAt, vm.state.value.approvalResult?.requestedStartAt)
+                assertEquals(stubLease.createdAt, vm.state.value.approvalResult?.submittedAt)
+                val expected =
+                    if (leaseState == "active") {
+                        VerifyLandlordApprovalResult.Kind.AlreadyActive
+                    } else {
+                        VerifyLandlordApprovalResult.Kind.AlreadyPending
+                    }
+                assertEquals(expected, vm.state.value.approvalResult?.kind)
+                coVerify(exactly = 1) { api.homeStatus("home-1") }
+                coVerify(exactly = 0) { api.requestApproval(any()) }
+            }
+        }
+
+    @Test fun opening_failed_status_retries_get_and_retains_the_draft() =
+        runTest {
+            val api = mockk<TenantApi>()
+            coEvery { api.homeStatus("home-1") } throws IOException("offline") andThen noSavedRequest()
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.setMessageToLandlord("Keep this draft")
+            vm.restoreSavedRequest()
+            assertEquals("Retry status", vm.chrome.primaryCtaLabel)
+            assertTrue(vm.state.value.statusNeedsRetry)
+            assertTrue(vm.state.value.submitState is VerifyLandlordSubmitState.Error)
+            vm.onPrimary()
+            assertEquals(VerifyLandlordStep.Start, vm.state.value.currentStep)
+            assertEquals("Start verification", vm.chrome.primaryCtaLabel)
+            assertEquals("Keep this draft", vm.state.value.form.messageToLandlord)
+            vm.onPrimary()
+            assertEquals(VerifyLandlordStep.Details, vm.state.value.currentStep)
+            coVerify(exactly = 2) { api.homeStatus("home-1") }
+            coVerify(exactly = 0) { api.requestApproval(any()) }
+        }
+
+    @Test fun malformed_or_other_actor_saved_status_never_exposes_request_details() =
+        runTest {
+            val saved = savedRequest()
+            for (status in listOf(
+                saved.copy(homeId = "other-home"),
+                saved.copy(requestContext = saved.requestContext.copy(actorId = "actor-2")),
+                saved.copy(lease = null),
+                saved.copy(lease = TenantHomeStatusResponse.LeaseStatus("pending")),
+                saved.copy(lease = TenantHomeStatusResponse.LeaseStatus("pending", stubLease.copy(id = "other-lease"))),
+                saved.copy(lease = TenantHomeStatusResponse.LeaseStatus("active", stubLease)),
+            )) {
+                val api = mockk<TenantApi>()
+                coEvery { api.homeStatus("home-1") } returns status
+                val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+                vm.restoreSavedRequest()
+                assertEquals("Retry status", vm.chrome.primaryCtaLabel)
+                assertNull(vm.state.value.approvalResult)
+                assertEquals(VerifyLandlordStep.Start, vm.state.value.currentStep)
+                coVerify(exactly = 0) { api.requestApproval(any()) }
+            }
+        }
+
+    @Test fun departed_recovery_cannot_show_a_deliberately_delivered_old_request() =
+        runTest {
+            val api = mockk<TenantApi>()
+            val held = CompletableDeferred<TenantHomeStatusResponse>()
+            coEvery { api.homeStatus("home-1") } coAnswers { withContext(NonCancellable) { held.await() } }
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.restoreSavedRequest()
+            assertFalse(vm.chrome.primaryCtaEnabled)
+            vm.onPrimary()
+            assertEquals(VerifyLandlordStep.Start, vm.state.value.currentStep)
+            vm.onDeparture()
+            held.complete(savedRequest())
+            assertNull(vm.state.value.approvalResult)
+            assertFalse(vm.state.value.isLoadingStatus)
+            coVerify(exactly = 0) { api.requestApproval(any()) }
+        }
+
+    @Test fun replaced_account_clears_the_draft_and_retires_held_recovery() =
+        runTest {
+            val api = mockk<TenantApi>()
+            val held = CompletableDeferred<TenantHomeStatusResponse>()
+            coEvery { api.homeStatus("home-1") } coAnswers { withContext(NonCancellable) { held.await() } }
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.setMessageToLandlord("Previous tenant's private draft")
+            vm.restoreSavedRequest()
+            invalidated.value = true
+            held.complete(savedRequest())
+            assertEquals(VerifyLandlordOutboundEvent.Dismiss, vm.pendingEvent.value)
+            assertEquals("", vm.state.value.form.messageToLandlord)
+            assertNull(vm.state.value.approvalResult)
+            coVerify(exactly = 0) { api.requestApproval(any()) }
+        }
+
+    @Test fun changed_stored_session_during_preflight_blocks_post_even_before_account_flow_updates() =
+        runTest {
+            val api = mockk<TenantApi>()
+            val held = CompletableDeferred<TenantHomeStatusResponse>()
+            coEvery { api.homeStatus("home-1") } coAnswers { withContext(NonCancellable) { held.await() } }
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.onPrimary()
+            vm.seedPopulatedForm()
+            vm.onPrimary()
+            storedSessionCurrent = false
+            held.complete(noSavedRequest())
+            coVerify(exactly = 0) { api.requestApproval(any()) }
+            assertEquals(VerifyLandlordOutboundEvent.Dismiss, vm.pendingEvent.value)
+            assertEquals(VerifyLandlordForm(), vm.state.value.form)
+            assertNull(vm.state.value.approvalResult)
+        }
+
+    @Test fun replaced_account_cannot_receive_deliberately_delivered_submitted_details() =
+        runTest {
+            val api = mockk<TenantApi>()
+            val held = CompletableDeferred<TenantRequestApprovalResponse>()
+            coEvery { api.homeStatus("home-1") } returns noSavedRequest()
+            coEvery { api.requestApproval(any()) } coAnswers { withContext(NonCancellable) { held.await() } }
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.onPrimary()
+            vm.seedPopulatedForm()
+            vm.onPrimary()
+            coVerify(exactly = 1) { api.requestApproval(any()) }
+            invalidated.value = true
+            held.complete(TenantRequestApprovalResponse(stubLease))
+            assertEquals(VerifyLandlordStep.Start, vm.state.value.currentStep)
+            assertEquals(VerifyLandlordForm(), vm.state.value.form)
+            assertNull(vm.state.value.approvalResult)
+            assertEquals(VerifyLandlordOutboundEvent.Dismiss, vm.pendingEvent.value)
+        }
+
     // MARK: - Step machine
+
+    @Test fun actual_repository_reads_context_before_retry_and_preserves_the_form() =
+        runTest {
+            val api = mockk<TenantApi>()
+            val initial = TenantRequestContextDto("home-1", "actor-1", null, null)
+            val canceled = initial.copy(leaseId = "lease-canceled", leaseState = "canceled")
+            coEvery { api.homeStatus("home-1") } returnsMany
+                listOf(
+                    TenantHomeStatusResponse("home-1", initial),
+                    TenantHomeStatusResponse("home-1", canceled),
+                )
+            val bodies = mutableListOf<TenantRequestApprovalRequest>()
+            coEvery { api.requestApproval(capture(bodies)) } throws IOException("reply lost") andThen
+                TenantRequestApprovalResponse(stubLease)
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.onPrimary()
+            vm.seedPopulatedForm()
+            vm.setMessageToLandlord("Retain this request")
+            vm.onPrimary()
+            assertEquals(VerifyLandlordStep.Details, vm.state.value.currentStep)
+            assertEquals("Retain this request", vm.state.value.form.messageToLandlord)
+            assertNull(vm.pendingEvent.value)
+            vm.onPrimary()
+            assertEquals(VerifyLandlordStep.Sent, vm.state.value.currentStep)
+            assertEquals(initial, bodies[0].requestContext)
+            assertEquals(canceled, bodies[1].requestContext)
+            assertEquals(bodies[0].message, bodies[1].message)
+            coVerifySequence {
+                api.homeStatus("home-1")
+                api.requestApproval(any())
+                api.homeStatus("home-1")
+                api.requestApproval(any())
+            }
+            val encoded = Moshi.Builder().build().adapter(TenantRequestApprovalRequest::class.java).toJson(bodies[0])
+            val context = org.json.JSONObject(encoded).getJSONObject("request_context")
+            assertEquals("home-1", context.getString("home_id"))
+            assertEquals("actor-1", context.getString("actor_id"))
+            assertTrue(context.isNull("lease_id"))
+            assertTrue(context.isNull("lease_state"))
+        }
+
+    @Test fun malformed_status_cannot_post_or_discard_the_existing_form() =
+        runTest {
+            val valid = TenantRequestContextDto("home-1", "actor-1", null, null)
+            for (status in listOf(
+                TenantHomeStatusResponse("other-home", valid),
+                TenantHomeStatusResponse("home-1", valid.copy(homeId = "other-home")),
+                TenantHomeStatusResponse("home-1", valid.copy(actorId = "")),
+                TenantHomeStatusResponse("home-1", valid.copy(leaseState = "pending")),
+            )) {
+                val api = mockk<TenantApi>()
+                coEvery { api.homeStatus(any()) } returns status
+                val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+                vm.onPrimary()
+                vm.seedPopulatedForm()
+                vm.onPrimary()
+                assertEquals(VerifyLandlordStep.Details, vm.state.value.currentStep)
+                assertTrue(vm.state.value.submitState is VerifyLandlordSubmitState.Error)
+                assertNull(vm.pendingEvent.value)
+                coVerify(exactly = 0) { api.requestApproval(any()) }
+            }
+        }
+
+    @Test fun failed_status_read_remains_retryable_without_a_write() =
+        runTest {
+            val api = mockk<TenantApi>()
+            coEvery { api.homeStatus(any()) } throws IOException("offline")
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.onPrimary()
+            vm.seedPopulatedForm()
+            vm.onPrimary()
+            assertEquals(VerifyLandlordStep.Details, vm.state.value.currentStep)
+            assertTrue(vm.state.value.submitState is VerifyLandlordSubmitState.Error)
+            assertNull(vm.pendingEvent.value)
+            coVerify(exactly = 0) { api.requestApproval(any()) }
+        }
 
     @Test fun initial_state_is_start_step() {
         val vm = makeVm()
+        assertFalse(vm.state.value.startContent.homeChip.label.contains("412 Elm"))
+        assertNull(vm.state.value.startContent.existingLandlord)
+        assertEquals(VerifyLandlordForm(), vm.state.value.form)
         assertEquals(VerifyLandlordStep.Start, vm.state.value.currentStep)
         assertEquals("Start verification", vm.chrome.primaryCtaLabel)
         assertTrue(vm.chrome.primaryCtaEnabled)
@@ -141,7 +435,8 @@ class VerifyLandlordWizardViewModelTest {
     // MARK: - Variants
 
     @Test fun fast_track_variant_surfaces_existing_landlord() {
-        val vm = makeVm("home-fast-track")
+        val vm = makeVm()
+        vm.setVariant(VerifyLandlordVariant.FastTrack)
         assertTrue(vm.state.value.startContent.isFastTrack)
         assertNotNull(vm.state.value.startContent.existingLandlord)
     }
@@ -202,6 +497,7 @@ class VerifyLandlordWizardViewModelTest {
     @Test fun submit_blocked_when_errors_present() =
         runTest {
             val vm = makeVm()
+            vm.setVariant(VerifyLandlordVariant.Canonical, VerifyLandlordForm(registeredUnit = "Apt 3B"))
             vm.onPrimary() // -> details
             // Feed the errored form through the public mutators so the
             // VM's validation pipeline runs identically to the runtime.
@@ -221,11 +517,17 @@ class VerifyLandlordWizardViewModelTest {
     @Test fun submit_posts_approval_request_and_lands_on_sent_step() =
         runTest {
             val captured = slot<TenantRequestApprovalRequest>()
-            coEvery { tenantRepository.requestApproval(capture(captured)) } returns
+            coEvery { tenantRepository.requestApproval(capture(captured), any()) } returns
                 NetworkResult.Success(TenantRequestApprovalResponse(stubLease))
             val vm = makeVm("home-42")
             vm.onPrimary()
             vm.seedPopulatedForm()
+            assertFalse(vm.state.value.form.composedMessage.orEmpty().contains("Lease on file:"))
+            vm.setLease(null)
+            vm.attachLeaseTapped()
+            assertNull(vm.state.value.form.lease)
+            assertTrue(vm.state.value.attachment.pickerOpen)
+            vm.leaseAttachment.receive(null)
             vm.setMoveInDate("2026-04-01")
             vm.setMessageToLandlord("Hi, I'm the new tenant.")
             vm.onPrimary() // submit
@@ -238,6 +540,7 @@ class VerifyLandlordWizardViewModelTest {
             assertEquals("home-42", captured.captured.homeId)
             assertEquals("2026-04-01T00:00:00.000Z", captured.captured.startAt)
             assertTrue(captured.captured.message.orEmpty().contains("Hi, I'm the new tenant."))
+            assertFalse(captured.captured.message.orEmpty().contains("Lease on file:"))
             assertTrue(
                 "Landlord details must travel with the request instead of being discarded",
                 captured.captured.message.orEmpty().contains("Elm Street Holdings LLC"),
@@ -247,7 +550,7 @@ class VerifyLandlordWizardViewModelTest {
 
     @Test fun submit_without_verified_landlord_falls_back_to_postcard() =
         runTest {
-            coEvery { tenantRepository.requestApproval(any()) } returns
+            coEvery { tenantRepository.requestApproval(any(), any()) } returns
                 NetworkResult.Failure(
                     NetworkError.ClientError(
                         400,
@@ -262,12 +565,12 @@ class VerifyLandlordWizardViewModelTest {
                 VerifyLandlordOutboundEvent.OpenPostcardVerification("home-42"),
                 vm.pendingEvent.value,
             )
-            assertEquals(VerifyLandlordSubmitState.Submitted, vm.state.value.submitState)
+            assertEquals(VerifyLandlordSubmitState.Idle, vm.state.value.submitState)
         }
 
     @Test fun submit_surfaces_existing_pending_request() =
         runTest {
-            coEvery { tenantRepository.requestApproval(any()) } returns
+            coEvery { tenantRepository.requestApproval(any(), any()) } returns
                 NetworkResult.Failure(
                     NetworkError.ClientError(
                         409,
@@ -289,9 +592,34 @@ class VerifyLandlordWizardViewModelTest {
             )
         }
 
+    @Test fun unrelated_request_failures_keep_the_form_without_claiming_a_lease_or_mail_fallback() =
+        runTest {
+            val failures =
+                listOf(
+                    NetworkError.ClientError(400, "This home is unavailable for lease decisions"),
+                    NetworkError.ClientError(400, "This is a multi-unit building. A unit number is required."),
+                    NetworkError.ClientError(400, "End date must be after the start date and must not have expired"),
+                    NetworkError.NotFound,
+                    NetworkError.ClientError(409, "The current request needs review"),
+                )
+            failures.forEach { failure ->
+                coEvery { tenantRepository.requestApproval(any(), any()) } returns NetworkResult.Failure(failure)
+                val vm = makeVm()
+                vm.onPrimary()
+                vm.seedPopulatedForm()
+                vm.setMessageToLandlord("Keep my entered message")
+                vm.onPrimary()
+                assertEquals(failure.message, VerifyLandlordStep.Details, vm.state.value.currentStep)
+                assertEquals(VerifyLandlordSubmitState.Error(failure.message), vm.state.value.submitState)
+                assertNull(vm.pendingEvent.value)
+                assertNull(vm.state.value.approvalResult)
+                assertEquals("Keep my entered message", vm.state.value.form.messageToLandlord)
+            }
+        }
+
     @Test fun submit_surfaces_existing_active_lease() =
         runTest {
-            coEvery { tenantRepository.requestApproval(any()) } returns
+            coEvery { tenantRepository.requestApproval(any(), any()) } returns
                 NetworkResult.Failure(
                     NetworkError.ClientError(
                         409,
@@ -315,7 +643,7 @@ class VerifyLandlordWizardViewModelTest {
             vm.seedPopulatedForm()
             vm.onPrimary() // submit -> Sent
             assertEquals(VerifyLandlordStep.Sent, vm.state.value.currentStep)
-            assertEquals("Mail me a code", vm.chrome.secondaryCta?.label)
+            assertEquals("Review mail verification", vm.chrome.secondaryCta?.label)
             vm.onSecondary()
             assertEquals(
                 VerifyLandlordOutboundEvent.OpenPostcardVerification("home-9"),
@@ -336,7 +664,53 @@ class VerifyLandlordWizardViewModelTest {
         )
     }
 
+    @Test fun move_in_date_must_exist_in_the_gregorian_calendar() {
+        listOf("2026-02-30", "2026-02-29", "2026-04-31", "1900-02-29", "2100-02-29", "1899-12-31", "2026-+9-14").forEach { value ->
+            val form = VerifyLandlordSampleData.populatedForm.copy(moveInDate = value)
+            assertNotNull(value, form.validate().moveInDate)
+            assertNull(value, form.startAtISO)
+        }
+        listOf("2024-02-29", "2000-02-29", "2026-09-14", "1900-01-01").forEach { value ->
+            val form = VerifyLandlordSampleData.populatedForm.copy(moveInDate = value)
+            assertNull(value, form.validate().moveInDate)
+            assertEquals("${value}T00:00:00.000Z", form.startAtISO)
+        }
+    }
+
+    @Test fun impossible_move_in_date_never_reaches_the_repository() =
+        runTest {
+            val vm = makeVm()
+            vm.onPrimary()
+            vm.seedPopulatedForm()
+            vm.setMoveInDate("2026-02-30")
+            vm.onPrimary()
+            assertNotNull(vm.state.value.errors?.moveInDate)
+            assertFalse(vm.chrome.primaryCtaEnabled)
+            coVerify(exactly = 0) { tenantRepository.requestApproval(any(), any()) }
+            vm.setMoveInDate("2026-02-28")
+            assertTrue(vm.chrome.primaryCtaEnabled)
+        }
+
     // MARK: - Field mutations
+
+    @Test fun date_phone_and_message_alone_require_discard_confirmation() {
+        val edits: List<(TestVm) -> Unit> =
+            listOf(
+                { it.setMoveInDate("2026-09-14") },
+                { it.setPhone("555-0100") },
+                { it.setMessageToLandlord("Please review my request.") },
+            )
+        edits.forEach { edit ->
+            val vm = makeVm()
+            assertFalse(vm.chrome.dirty)
+            vm.onPrimary()
+            edit(vm)
+            vm.onLeading()
+            assertTrue(vm.chrome.dirty)
+            assertNull(vm.pendingEvent.value)
+        }
+        assertFalse(VerifyLandlordUiState(form = VerifyLandlordForm(registeredUnit = "3B")).isDirty)
+    }
 
     @Test fun pm_toggle_off_clears_pm_fields() {
         val vm = makeVm()
@@ -355,6 +729,7 @@ class VerifyLandlordWizardViewModelTest {
     @Test fun field_update_revalidates_when_errors_shown() =
         runTest {
             val vm = makeVm()
+            vm.setVariant(VerifyLandlordVariant.Canonical, VerifyLandlordForm(registeredUnit = "Apt 3B"))
             vm.onPrimary()
             vm.setOwnerName(VerifyLandlordSampleData.errorForm.ownerName)
             vm.setContactName(VerifyLandlordSampleData.errorForm.contactName)
@@ -374,15 +749,176 @@ class VerifyLandlordWizardViewModelTest {
         assertNull(vm.state.value.errors)
     }
 
-    @Test fun postcard_request_failure_does_not_claim_mail_was_sent() =
-        runTest {
-            for (status in listOf(400, 429)) {
-                coEvery { verificationRepository.requestPostcard(any()) } returns
-                    NetworkResult.Failure(NetworkError.Server(status, "Request rejected"))
-                val vm = makeVm()
-                vm.startPostcardFallback()
-                assertNull(vm.pendingEvent.value)
-                assertTrue(vm.state.value.submitState is VerifyLandlordSubmitState.Error)
+    @Test fun mail_fallback_opens_review_without_claiming_a_mailing_or_approval() {
+        val vm = makeVm("home-42")
+        vm.startPostcardFallback()
+        assertEquals(VerifyLandlordOutboundEvent.OpenPostcardVerification("home-42"), vm.pendingEvent.value)
+        assertEquals(VerifyLandlordSubmitState.Idle, vm.state.value.submitState)
+        assertNull(vm.state.value.approvalResult)
+        io.mockk.coVerify(exactly = 0) { tenantRepository.requestApproval(any(), any()) }
+    }
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class VerifyLandlordSessionRetirementTest : VerifyLandlordWizardTestFixture() {
+    @Test fun lease_calendar_day_is_preserved_while_submission_uses_local_time() {
+        val previous = TimeZone.getDefault()
+        try {
+            for (zone in listOf("America/Los_Angeles", "Pacific/Honolulu", "Pacific/Auckland")) {
+                TimeZone.setDefault(TimeZone.getTimeZone(zone))
+                assertEquals(zone, "Sep 1, 2026", formatSentDate("2026-09-01T00:00:00.000Z", calendarDate = true))
+                assertEquals(zone, "Sep 1, 2026", formatSentDate("2026-09-01T23:00:00Z", calendarDate = true))
+                assertEquals(
+                    zone,
+                    if (zone == "Pacific/Auckland") "Sep 1, 2026" else "Aug 31, 2026",
+                    formatSentDate("2026-09-01T00:00:00.000Z"),
+                )
             }
+            assertNull(formatSentDate(null, calendarDate = true))
+            assertNull(formatSentDate("unavailable", calendarDate = true))
+        } finally {
+            TimeZone.setDefault(previous)
+        }
+    }
+
+    private fun activeRequest() =
+        savedRequest().copy(
+            requestContext = savedRequest().requestContext.copy(leaseState = "active"),
+            lease = TenantHomeStatusResponse.LeaseStatus("active", stubLease.copy(state = "active")),
+        )
+
+    @Test fun foreground_refresh_observes_an_approved_request_using_only_get() =
+        runTest {
+            val api = mockk<TenantApi>()
+            coEvery { api.homeStatus("home-1") } returnsMany listOf(savedRequest(), activeRequest())
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.restoreSavedRequest()
+            assertEquals(VerifyLandlordApprovalResult.Kind.AlreadyPending, vm.state.value.approvalResult?.kind)
+            vm.onDeparture()
+            vm.restoreSavedRequest()
+            assertEquals(VerifyLandlordApprovalResult.Kind.AlreadyActive, vm.state.value.approvalResult?.kind)
+            coVerify(exactly = 2) { api.homeStatus("home-1") }
+            coVerify(exactly = 0) { api.requestApproval(any()) }
+        }
+
+    @Test fun foreground_without_a_saved_request_preserves_details_and_the_draft() =
+        runTest {
+            val api = mockk<TenantApi>()
+            val held = CompletableDeferred<TenantHomeStatusResponse>()
+            coEvery { api.homeStatus("home-1") } coAnswers { held.await() }
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.onPrimary()
+            vm.setMessageToLandlord("Preserve this draft")
+            vm.onDeparture()
+            vm.restoreSavedRequest()
+            assertFalse(vm.chrome.primaryCtaEnabled)
+            held.complete(noSavedRequest())
+            assertEquals(VerifyLandlordStep.Details, vm.state.value.currentStep)
+            assertEquals("Preserve this draft", vm.state.value.form.messageToLandlord)
+            assertEquals("Submit", vm.chrome.primaryCtaLabel)
+            coVerify(exactly = 0) { api.requestApproval(any()) }
+        }
+
+    @Test fun foreground_failure_in_details_offers_get_retry_instead_of_submission() =
+        runTest {
+            val api = mockk<TenantApi>()
+            coEvery { api.homeStatus("home-1") } throws IOException("offline") andThen savedRequest()
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.onPrimary()
+            vm.setMessageToLandlord("Keep my draft")
+            vm.onDeparture()
+            vm.restoreSavedRequest()
+            assertEquals("Retry status", vm.chrome.primaryCtaLabel)
+            assertTrue(vm.chrome.primaryCtaEnabled)
+            assertEquals("Keep my draft", vm.state.value.form.messageToLandlord)
+            vm.onPrimary()
+            assertEquals(VerifyLandlordStep.Sent, vm.state.value.currentStep)
+            coVerify(exactly = 0) { api.requestApproval(any()) }
+        }
+
+    @Test fun foreground_failure_on_confirmation_offers_get_retry_before_done() =
+        runTest {
+            val api = mockk<TenantApi>()
+            coEvery { api.homeStatus("home-1") } returns savedRequest() andThenThrows IOException("offline") andThen activeRequest()
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.restoreSavedRequest()
+            vm.onDeparture()
+            vm.restoreSavedRequest()
+            assertEquals("Retry status", vm.chrome.primaryCtaLabel)
+            assertEquals(VerifyLandlordApprovalResult.Kind.AlreadyPending, vm.state.value.approvalResult?.kind)
+            vm.onPrimary()
+            assertEquals(VerifyLandlordApprovalResult.Kind.AlreadyActive, vm.state.value.approvalResult?.kind)
+            assertEquals("Done", vm.chrome.primaryCtaLabel)
+            assertNull(vm.pendingEvent.value)
+        }
+
+    @Test fun old_status_delivered_after_foreground_cannot_replace_the_new_status() =
+        runTest {
+            val api = mockk<TenantApi>()
+            val held = CompletableDeferred<TenantHomeStatusResponse>()
+            var calls = 0
+            coEvery { api.homeStatus("home-1") } coAnswers {
+                calls += 1
+                if (calls == 1) withContext(NonCancellable) { held.await() } else activeRequest()
+            }
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.restoreSavedRequest()
+            vm.onDeparture()
+            vm.restoreSavedRequest()
+            assertEquals(VerifyLandlordApprovalResult.Kind.AlreadyActive, vm.state.value.approvalResult?.kind)
+            held.complete(savedRequest())
+            assertEquals(VerifyLandlordApprovalResult.Kind.AlreadyActive, vm.state.value.approvalResult?.kind)
+        }
+
+    @Test fun foreground_recovers_a_committed_request_before_its_retired_reply_arrives() =
+        runTest {
+            val api = mockk<TenantApi>()
+            val held = CompletableDeferred<TenantRequestApprovalResponse>()
+            coEvery { api.homeStatus("home-1") } returnsMany listOf(noSavedRequest(), activeRequest())
+            coEvery { api.requestApproval(any()) } coAnswers { withContext(NonCancellable) { held.await() } }
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.onPrimary()
+            vm.seedPopulatedForm()
+            vm.onPrimary()
+            coVerify(exactly = 1) { api.requestApproval(any()) }
+            vm.onDeparture()
+            vm.restoreSavedRequest()
+            assertEquals(VerifyLandlordApprovalResult.Kind.AlreadyActive, vm.state.value.approvalResult?.kind)
+            held.complete(TenantRequestApprovalResponse(stubLease))
+            assertEquals(VerifyLandlordApprovalResult.Kind.AlreadyActive, vm.state.value.approvalResult?.kind)
+            coVerify(exactly = 1) { api.requestApproval(any()) }
+        }
+
+    @Test fun departure_during_a_noncancelable_session_check_cannot_restore_old_details() =
+        runTest {
+            val api = mockk<TenantApi>()
+            coEvery { api.homeStatus("home-1") } returns savedRequest()
+            val heldSession = CompletableDeferred<Boolean>()
+            var checks = 0
+            coEvery { session.confirmCurrent() } coAnswers {
+                checks += 1
+                if (checks == 2) withContext(NonCancellable) { heldSession.await() } else true
+            }
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.restoreSavedRequest()
+            assertEquals(2, checks)
+            vm.onDeparture()
+            heldSession.complete(true)
+            assertEquals(VerifyLandlordStep.Start, vm.state.value.currentStep)
+            assertNull(vm.state.value.approvalResult)
+            assertFalse(vm.state.value.isLoadingStatus)
+        }
+
+    @Test fun account_change_immediately_clears_an_already_visible_saved_request() =
+        runTest {
+            val api = mockk<TenantApi>()
+            coEvery { api.homeStatus("home-1") } returns savedRequest()
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.restoreSavedRequest()
+            assertEquals(stubLease.metadata?.message, vm.state.value.approvalResult?.message)
+            invalidated.value = true
+            assertNull(vm.state.value.approvalResult)
+            assertEquals(VerifyLandlordStep.Start, vm.state.value.currentStep)
+            assertEquals(VerifyLandlordOutboundEvent.Dismiss, vm.pendingEvent.value)
         }
 }

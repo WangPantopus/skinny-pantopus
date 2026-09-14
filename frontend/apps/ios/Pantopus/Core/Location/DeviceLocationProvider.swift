@@ -1,133 +1,154 @@
-//
-//  DeviceLocationProvider.swift
-//  Pantopus
-//
-//  Production location provider backed by Core Location. Requests
-//  when-in-use authorization on first use and surfaces the device's
-//  best-known coordinate to map surfaces.
-//
-
 import CoreLocation
 import Foundation
 
+/// One shared Core Location request can serve multiple independently cancellable
+/// callers. A request's acquisition deadline starts after permission is answered.
 @MainActor
 public final class DeviceLocationProvider: NSObject, LocationProviding, CLLocationManagerDelegate, @unchecked Sendable {
-    public static let shared = DeviceLocationProvider()
+    public static let shared = DeviceLocationProvider(manager: CLLocationManager())
 
-    private let manager = CLLocationManager()
-    private var cached: UserCoordinate?
-    private var pendingLocation: CheckedContinuation<UserCoordinate?, Never>?
-    private var pendingAuthorization: CheckedContinuation<Void, Never>?
+    private let manager: CLLocationManager
+    private var cached: CLLocation?
+    private var accessRefused = false
+    private var authorizations: [UUID: CheckedContinuation<Bool, Never>] = [:]
+    private var locations: [UUID: CheckedContinuation<UserCoordinate?, Never>] = [:]
+    private var deadlines: [UUID: Task<Void, Never>] = [:]
 
-    override private init() {
+    init(manager: CLLocationManager) {
+        self.manager = manager
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
-        syncFromLastKnown()
     }
 
     public func cachedCoordinate() -> UserCoordinate? {
-        syncFromLastKnown()
-        return cached
+        guard isAuthorized, !accessRefused else { cached = nil
+            return nil
+        }
+        if let location = manager.location { remember(location) }
+        guard let cached, isUsable(cached) else { cached = nil
+            return nil
+        }
+        return UserCoordinate(cached)
     }
 
     public func requestCurrent(timeoutSeconds: TimeInterval = 4) async -> UserCoordinate? {
-        syncFromLastKnown()
-        await ensureAuthorization()
-
-        guard isAuthorized else {
-            return cached
+        guard timeoutSeconds.isFinite, timeoutSeconds > 0, !Task.isCancelled else { return nil }
+        guard await ensureAuthorization(), !Task.isCancelled else { return nil }
+        let fresh = await requestFreshCoordinate(timeoutSeconds: min(timeoutSeconds, 60))
+        guard isAuthorized else { cached = nil
+            return nil
         }
-
-        if let fresh = await withTimeout(seconds: timeoutSeconds, operation: { await self.requestFreshCoordinate() }) {
-            cached = fresh
-            return fresh
-        }
-
-        syncFromLastKnown()
-        return cached
+        guard !Task.isCancelled else { return nil }
+        return fresh ?? cachedCoordinate()
     }
-
-    // MARK: - Authorization
 
     private var isAuthorized: Bool {
-        switch manager.authorizationStatus {
-        case .authorizedAlways, .authorizedWhenInUse:
-            true
-        default:
-            false
-        }
+        manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse
     }
 
-    private func ensureAuthorization() async {
-        switch manager.authorizationStatus {
-        case .notDetermined:
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                pendingAuthorization = continuation
-                manager.requestWhenInUseAuthorization()
+    private func ensureAuthorization() async -> Bool {
+        guard manager.authorizationStatus == .notDetermined else {
+            if !isAuthorized { cached = nil }
+            return isAuthorized
+        }
+        let id = UUID()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                guard !Task.isCancelled else { continuation.resume(returning: false)
+                    return
+                }
+                authorizations[id] = continuation
+                if authorizations.count == 1 { manager.requestWhenInUseAuthorization() }
             }
-        default:
-            break
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.completeAuthorization(id, allowed: false) }
         }
     }
 
-    // MARK: - CLLocationManagerDelegate
+    private func requestFreshCoordinate(timeoutSeconds: TimeInterval) async -> UserCoordinate? {
+        let id = UUID()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                guard isAuthorized, !Task.isCancelled else { continuation.resume(returning: nil)
+                    return
+                }
+                locations[id] = continuation
+                deadlines[id] = Task { [weak self] in
+                    do { try await Task.sleep(for: .seconds(timeoutSeconds)) } catch { return }
+                    self?.completeLocation(id, coordinate: nil)
+                }
+                if locations.count == 1 { manager.requestLocation() }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.completeLocation(id, coordinate: nil) }
+        }
+    }
+
+    private func completeAuthorization(_ id: UUID, allowed: Bool) {
+        authorizations.removeValue(forKey: id)?.resume(returning: allowed)
+    }
+
+    private func completeLocation(_ id: UUID, coordinate: UserCoordinate?) {
+        guard let continuation = locations.removeValue(forKey: id) else { return }
+        deadlines.removeValue(forKey: id)?.cancel()
+        if locations.isEmpty { manager.stopUpdatingLocation() }
+        continuation.resume(returning: isAuthorized ? coordinate : nil)
+    }
 
     public nonisolated func locationManagerDidChangeAuthorization(_: CLLocationManager) {
         Task { @MainActor in
-            syncFromLastKnown()
-            pendingAuthorization?.resume()
-            pendingAuthorization = nil
-        }
-    }
-
-    public nonisolated func locationManager(_: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        Task { @MainActor in
-            guard let location = locations.last else { return }
-            let coordinate = UserCoordinate(location)
-            cached = coordinate
-            pendingLocation?.resume(returning: coordinate)
-            pendingLocation = nil
-        }
-    }
-
-    public nonisolated func locationManager(_: CLLocationManager, didFailWithError _: Error) {
-        Task { @MainActor in
-            pendingLocation?.resume(returning: cached)
-            pendingLocation = nil
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func syncFromLastKnown() {
-        guard isAuthorized, let location = manager.location else { return }
-        cached = UserCoordinate(location)
-    }
-
-    private func requestFreshCoordinate() async -> UserCoordinate? {
-        await withCheckedContinuation { continuation in
-            pendingLocation = continuation
-            manager.requestLocation()
-        }
-    }
-
-    private func withTimeout(
-        seconds: TimeInterval,
-        operation: @escaping @Sendable () async -> UserCoordinate?
-    ) async -> UserCoordinate? {
-        await withTaskGroup(of: UserCoordinate?.self) { group in
-            group.addTask { await operation() }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-                return nil
+            // CLLocationManager also reports its initial, unanswered status.
+            guard manager.authorizationStatus != .notDetermined else { return }
+            let allowed = isAuthorized
+            for id in Array(authorizations.keys) {
+                completeAuthorization(id, allowed: allowed)
             }
-            if let first = await group.next() {
-                group.cancelAll()
-                return first
+            if !allowed {
+                cached = nil
+                for id in Array(locations.keys) {
+                    completeLocation(id, coordinate: nil)
+                }
             }
-            return nil
         }
+    }
+
+    public nonisolated func locationManager(_: CLLocationManager, didUpdateLocations values: [CLLocation]) {
+        Task { @MainActor in
+            guard !locations.isEmpty else { return }
+            if isAuthorized, let location = values.last(where: isUsable) {
+                accessRefused = false
+                remember(location)
+            }
+            let coordinate = isAuthorized ? cachedCoordinate() : nil
+            for id in Array(locations.keys) {
+                completeLocation(id, coordinate: coordinate)
+            }
+        }
+    }
+
+    public nonisolated func locationManager(_: CLLocationManager, didFailWithError error: any Error) {
+        Task { @MainActor in
+            if (error as? CLError)?.code == .denied {
+                accessRefused = true
+                cached = nil
+            }
+            for id in Array(locations.keys) {
+                completeLocation(id, coordinate: nil)
+            }
+        }
+    }
+
+    private func isUsable(_ location: CLLocation) -> Bool {
+        CLLocationCoordinate2DIsValid(location.coordinate)
+            && location.horizontalAccuracy.isFinite && location.horizontalAccuracy >= 0
+            && (-120...5).contains(location.timestamp.timeIntervalSinceNow)
+    }
+
+    private func remember(_ location: CLLocation) {
+        guard isAuthorized, isUsable(location) else { return }
+        if let cached, cached.timestamp > location.timestamp { return }
+        cached = location
     }
 }
 
@@ -136,7 +157,7 @@ private extension UserCoordinate {
         self.init(
             latitude: location.coordinate.latitude,
             longitude: location.coordinate.longitude,
-            accuracyMeters: max(location.horizontalAccuracy, 0)
+            accuracyMeters: location.horizontalAccuracy
         )
     }
 }

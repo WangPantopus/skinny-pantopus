@@ -11,6 +11,7 @@ import { useSocket } from '@/contexts/SocketContext';
 import { useBadges } from '@/contexts/BadgeContext';
 import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import { queryKeys } from '@/lib/query-keys';
+import { useNotificationTap } from '@/hooks/useNotificationTap';
 import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
 import type { Notification } from '@pantopus/types';
 import NotificationRow from './NotificationRow';
@@ -47,6 +48,7 @@ function isZoneTab(value: string | null | undefined): value is ZoneTab {
 
 export default function NotificationsPage() {
   const router = useRouter();
+  const tapNotification = useNotificationTap();
   const searchParams = useSearchParams();
   const socket = useSocket();
   const queryClient = useQueryClient();
@@ -259,25 +261,13 @@ export default function NotificationsPage() {
     };
   }, [socket, prependNotification, notificationMatchesZone]);
 
-  const handleNotificationClick = useCallback(
-    async (notif: Notification) => {
-      // Mark as read
-      if (!notif.is_read) {
-        try {
-          await api.notifications.markAsRead(notif.id);
-          mutateNotifications((n) => (n.id === notif.id ? { ...n, is_read: true } : n));
-        } catch {}
-      }
-
-      // If has a link, navigate directly through authenticated app routes when available.
-      if (notif.link) {
-        router.push(resolveWebNotificationPath(notif.link) || notif.link);
-      } else {
-        setSelectedNotif(notif);
-      }
-    },
-    [router, mutateNotifications]
-  );
+  const handleNotificationClick = useCallback((notif: Notification) => tapNotification(notif,
+    () => mutateNotifications((n) => n.id === notif.id ? { ...n, is_read: true } : n),
+    () => {
+      const path = resolveWebNotificationPath(notif.link, notif);
+      if (path) router.push(path);
+      else setSelectedNotif(notif);
+    }), [router, mutateNotifications, tapNotification]);
 
   const handleMarkAllRead = async () => {
     try {
@@ -417,8 +407,8 @@ export default function NotificationsPage() {
 
           {selectedNotif.body && <p className="text-sm text-app-text-strong leading-relaxed whitespace-pre-wrap">{selectedNotif.body}</p>}
 
-          {selectedNotif.link && (
-            <button onClick={() => router.push(resolveWebNotificationPath(selectedNotif.link) || selectedNotif.link!)} className="mt-4 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition">
+          {resolveWebNotificationPath(selectedNotif.link, selectedNotif) && (
+            <button onClick={() => handleNotificationClick(selectedNotif)} className="mt-4 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition">
               View Details →
             </button>
           )}

@@ -61,6 +61,7 @@ export interface OwnershipClaim {
 }
 
 export interface OwnershipClaimDetail {
+  review_token?: string;
   id: string;
   home_id: string;
   claim_type: string;
@@ -78,6 +79,8 @@ export interface OwnershipClaimDetail {
     risk_score: number;
   };
   evidence: Array<{
+    eligible_for_review?: boolean;
+    availability_code?: string;
     id: string;
     evidence_type: string;
     provider: string;
@@ -237,16 +240,16 @@ export interface OwnershipClaimComparison {
 export async function submitOwnershipClaim(homeId: string, data: {
   claim_type?: 'owner' | 'admin' | 'resident';
   method: 'invite' | 'vouch' | 'doc_upload' | 'escrow_agent' | 'landlord_portal' | 'property_data_match';
-}): Promise<OwnershipClaimSubmissionResponse> {
-  return post(`/api/homes/${homeId}/ownership-claims`, data);
+}, sessionScope?: string): Promise<OwnershipClaimSubmissionResponse> {
+  return post(`/api/homes/${homeId}/ownership-claims`, data, { headers: sessionScope ? { 'x-pantopus-session-scope': sessionScope } : undefined });
 }
 
-export async function getMyOwnershipClaims(): Promise<{ claims: OwnershipClaim[] }> {
-  return get('/api/homes/my-ownership-claims');
+export async function getMyOwnershipClaims(sessionScope?: string): Promise<{ claims: OwnershipClaim[]; upload_session: { actor_id: string; session_scope: string } }> {
+  return get('/api/homes/my-ownership-claims', undefined, { headers: sessionScope ? { 'x-pantopus-session-scope': sessionScope } : undefined });
 }
 
-/** Claimant deletes their own in-progress claim (hard delete). */
-export async function deleteMyOwnershipClaim(homeId: string, claimId: string): Promise<{ ok: boolean; deleted: boolean }> {
+/** Claimant withdraws their own in-progress claim; its audit/evidence history is retained. */
+export async function deleteMyOwnershipClaim(homeId: string, claimId: string): Promise<{ ok: boolean; deleted: false; withdrawn: true }> {
   return del(`/api/homes/${homeId}/ownership-claims/${claimId}`);
 }
 
@@ -264,6 +267,7 @@ export async function getOwnershipClaimComparison(homeId: string): Promise<Owner
 
 export async function reviewOwnershipClaim(homeId: string, claimId: string, data: {
   action: 'approve' | 'reject' | 'flag';
+  review_token: string;
   note?: string;
 }): Promise<{ message: string; state: string }> {
   return post(`/api/homes/${homeId}/ownership-claims/${claimId}/review`, data);
@@ -276,6 +280,33 @@ export async function uploadClaimEvidence(homeId: string, claimId: string, data:
   metadata?: Record<string, unknown>;
 }): Promise<{ evidence: { id: string; evidence_type: string; status: string } }> {
   return post(`/api/homes/${homeId}/ownership-claims/${claimId}/evidence`, data);
+}
+
+export type RelationshipAction = 'decline_relationship' | 'flag_unknown_person';
+export interface RelationshipCommand { action: RelationshipAction; note: string; request_id: string; review_token: string }
+export interface RelationshipReceipt {
+  id: string; home_id: string; claim_id: string; actor_id: string; request_id: string;
+  action: RelationshipAction; legacy_request: boolean; request_hash: string; review_token: string;
+  created_at: string; result: { state: string; claim_phase_v2: string | null; routing_classification: string | null;
+    challenge_state: string | null; claim_strength: string | null; qualifies_for_dispute: boolean };
+}
+export interface RelationshipResponse {
+  ok: true; homeId: string; claimId: string; claimantId: string; action: RelationshipAction;
+  replayed: boolean; receipt: RelationshipReceipt; message: string;
+  claim: { id: string; state: string; claim_phase_v2: string | null; review_token: string };
+  home_resolution_state: HouseholdResolutionState;
+}
+export interface RelationshipReview {
+  claim: OwnershipClaimDetail & { claimant_user_id: string; terminal_reason: string; merged_into_claim_id: string | null; expires_at: string | null };
+  relationship_session: { actor_id: string; home_id: string; session_scope: string };
+}
+export async function getRelationshipReview(homeId: string, claimId: string, sessionScope?: string): Promise<RelationshipReview> {
+  return get(`/api/homes/${homeId}/ownership-claims/${claimId}/relationship-decision`, undefined,
+    { headers: sessionScope ? { 'x-pantopus-session-scope': sessionScope } : undefined });
+}
+export async function decideClaimRelationship(homeId: string, claimId: string, command: RelationshipCommand, sessionScope: string): Promise<RelationshipResponse> {
+  return post(`/api/homes/${homeId}/ownership-claims/${claimId}/resolve-relationship`, command,
+    { headers: { 'x-pantopus-session-scope': sessionScope } });
 }
 
 export async function resolveOwnershipClaimRelationship(homeId: string, claimId: string, data: {
@@ -430,4 +461,82 @@ export async function verifyPostcardCode(homeId: string, code: string): Promise<
   occupancy: any;
 }> {
   return post(`/api/homes/${homeId}/verify-postcard`, { code });
+}
+
+
+export interface PostcardMailingAddress {
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+}
+export interface PostcardRequestOutcome {
+  state: 'pending' | 'completed' | 'rejected' | 'cancelled';
+  home_id: string;
+  command: { actor_id: string; request_id: string; created_at: string; updated_at: string };
+  postcard_id: string | null;
+  code?: string;
+  error?: string;
+  dispatch_error?: string;
+  current_access?: 'not_checked';
+  message?: string;
+}
+export interface CurrentPostcardStatus {
+  home_id: string;
+  actor_id: string;
+  checked_at: string;
+  can_request: boolean;
+  can_resume: boolean;
+  can_verify: boolean;
+  restriction: string | null;
+  restriction_message: string | null;
+  request: (PostcardRequestOutcome & { address: PostcardMailingAddress }) | null;
+  postcard: {
+    id: string;
+    requested_at: string;
+    expires_at: string;
+    status: 'pending' | 'verified' | 'expired' | 'cancelled';
+    delivery: 'not_started' | 'accepted' | 'unknown' | 'rejected';
+    attempts_remaining: number;
+  } | null;
+  current_access: 'not_checked';
+}
+export async function submitPostcardRequest(homeId: string, input: { request_id: string; address: PostcardMailingAddress }): Promise<PostcardRequestOutcome> {
+  return post(`/api/homes/${homeId}/postcard-requests`, input);
+}
+export async function getPostcardRequest(homeId: string, requestId: string): Promise<PostcardRequestOutcome> {
+  return get(`/api/homes/${homeId}/postcard-requests/${requestId}`);
+}
+export async function cancelPostcardRequest(homeId: string, requestId: string): Promise<PostcardRequestOutcome> {
+  return post(`/api/homes/${homeId}/postcard-requests/${requestId}/cancel`);
+}
+export async function getCurrentPostcardStatus(homeId: string): Promise<CurrentPostcardStatus> {
+  return get(`/api/homes/${homeId}/postcard-status`);
+}
+
+
+export interface PostcardVerificationOutcome {
+  state: 'pending' | 'completed' | 'rejected' | 'cancelled';
+  home_id: string;
+  postcard_id: string;
+  command: { actor_id: string; request_id: string; created_at: string; updated_at: string };
+  verification_status?: 'verified' | 'provisional';
+  recorded_at?: string;
+  challenge_window_ends_at?: string | null;
+  current_access?: 'not_checked';
+  code?: string;
+  error?: string;
+  attempts_remaining?: number;
+  message?: string;
+}
+export async function submitPostcardVerification(homeId: string, postcardId: string, input: { request_id: string; code: string }): Promise<PostcardVerificationOutcome> {
+  return post(`/api/homes/${homeId}/postcards/${postcardId}/verifications`, input);
+}
+export async function getPostcardVerification(homeId: string, postcardId: string, requestId: string): Promise<PostcardVerificationOutcome> {
+  return get(`/api/homes/${homeId}/postcards/${postcardId}/verifications/${requestId}`);
+}
+export async function cancelPostcardVerification(homeId: string, postcardId: string, requestId: string): Promise<PostcardVerificationOutcome> {
+  return post(`/api/homes/${homeId}/postcards/${postcardId}/verifications/${requestId}/cancel`);
 }

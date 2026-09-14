@@ -223,7 +223,7 @@ object HomeDashboardSampleData {
             overview = needsAttentionOverview,
             attentionSummary =
                 HomeDashboardAttentionSummary(
-                    message = "3 items need attention: 1 overdue bill, 2 maintenance items past due, 1 pending claim",
+                    message = "4 items need attention: 1 overdue bill, 2 maintenance items past due, 1 pending claim",
                     chips =
                         listOf(
                             HomeDashboardQuickJump(

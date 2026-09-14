@@ -44,6 +44,7 @@ public struct OwnersListView: View {
 
     public var body: some View {
         ListOfRowsView(dataSource: viewModel)
+            .toolbar(.visible, for: .navigationBar)
             .safeAreaInset(edge: .bottom) { transferBar }
             .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             .accessibilityIdentifier("ownersList")

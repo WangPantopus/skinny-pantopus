@@ -9,11 +9,30 @@
 //
 
 import SwiftUI
+import Vision
 import XCTest
 @testable import Pantopus
 
 @MainActor
 final class VerifyLandlordSnapshotTests: XCTestCase {
+    func test_lease_calendar_day_is_preserved_while_submission_uses_local_time() {
+        let previous = NSTimeZone.default
+        defer { NSTimeZone.default = previous }
+        for zone in ["America/Los_Angeles", "Pacific/Honolulu", "Pacific/Auckland"] {
+            guard let timeZone = TimeZone(identifier: zone) else { return XCTFail("Missing test time zone") }
+            NSTimeZone.default = timeZone
+            XCTAssertEqual(VerifySentStep.formatted("2026-09-01T00:00:00.000Z", calendarDate: true), "Sep 1, 2026", zone)
+            XCTAssertEqual(VerifySentStep.formatted("2026-09-01T23:00:00Z", calendarDate: true), "Sep 1, 2026", zone)
+            XCTAssertEqual(
+                VerifySentStep.formatted("2026-09-01T00:00:00.000Z"),
+                zone == "Pacific/Auckland" ? "Sep 1, 2026" : "Aug 31, 2026",
+                zone
+            )
+        }
+        XCTAssertNil(VerifySentStep.formatted(nil, calendarDate: true))
+        XCTAssertNil(VerifySentStep.formatted("unavailable", calendarDate: true))
+    }
+
     // MARK: - A12.5 Start
 
     func test_verify_landlord_start_canonical_renders() {
@@ -44,7 +63,8 @@ final class VerifyLandlordSnapshotTests: XCTestCase {
         let vm = VerifyLandlordWizardViewModel(
             homeId: "home-1",
             form: VerifyLandlordSampleData.populatedForm,
-            submitDelayNanos: 0
+            submitDelayNanos: 0,
+            sessionIdentity: VerifyLandlordWizardViewModelTests.syntheticSessionIdentity
         )
         vm.primaryTapped()
         assertRenders(
@@ -59,7 +79,8 @@ final class VerifyLandlordSnapshotTests: XCTestCase {
         let vm = VerifyLandlordWizardViewModel(
             homeId: "home-1",
             form: VerifyLandlordSampleData.errorForm,
-            submitDelayNanos: 0
+            submitDelayNanos: 0,
+            sessionIdentity: VerifyLandlordWizardViewModelTests.syntheticSessionIdentity
         )
         vm.primaryTapped()
         await vm.submit()
@@ -69,6 +90,44 @@ final class VerifyLandlordSnapshotTests: XCTestCase {
                 VerifyDetailsStep(viewModel: vm)
             }
         )
+    }
+
+    func test_submission_error_is_visible_in_existing_details_banner() async throws {
+        let message = "This home is unavailable for lease decisions"
+        let vm = VerifyLandlordWizardViewModel(
+            homeId: "home-1",
+            form: VerifyLandlordSampleData.populatedForm,
+            submitDelayNanos: 0,
+            sessionIdentity: VerifyLandlordWizardViewModelTests.syntheticSessionIdentity
+        ) { _ in
+            .failure(APIError.clientError(status: 400, message: message))
+        }
+        vm.primaryTapped()
+        await vm.submit()
+        let controller = UIHostingController(rootView:
+            SnapshotWizardFrame(model: SnapshotChrome.detailsModel(enabled: true)) {
+                VerifyDetailsStep(viewModel: vm)
+            }
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        controller.view.frame = window.bounds
+        controller.view.layoutIfNeeded()
+        let image = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in
+            controller.view.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "lease-submission-error-existing-banner"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        let read = VNRecognizeTextRequest()
+        read.recognitionLanguages = ["en-US"]
+        try VNImageRequestHandler(cgImage: XCTUnwrap(image.cgImage), options: [:]).perform([read])
+        let text = (read.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ").lowercased()
+        XCTAssertTrue(text.contains("home is unavailable for lease decisions"), text)
+        XCTAssertTrue(text.contains("submit request"), text)
     }
 
     // MARK: - A12.7 Postcard

@@ -9,6 +9,9 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceAccessFactory
+import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceController
+import app.pantopus.android.ui.screens.homes.claim_review.CLAIM_SESSION_CHANGED
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowLeading
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowModel
@@ -18,6 +21,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,9 +45,43 @@ class MyClaimsListViewModel
     @Inject
     constructor(
         private val repo: HomesRepository,
+        private val evidenceFactory: HomePrivateEvidenceAccessFactory,
     ) : ViewModel() {
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
+        private val session = evidenceFactory.session(viewModelScope)
+        private var generation = 0
+        private var claims = emptyList<OwnershipClaimDto>()
+        private val _evidencePanel = MutableStateFlow<HomePrivateEvidenceController?>(null)
+        val evidencePanel = _evidencePanel.asStateFlow()
+
+        init {
+            viewModelScope.launch {
+                session.invalidated.collect {
+                    if (it) {
+                        _evidencePanel.value?.close()
+                        _evidencePanel.value = null
+                        claims = emptyList()
+                        _state.value = ListOfRowsUiState.Error(CLAIM_SESSION_CHANGED)
+                    }
+                }
+            }
+        }
+
+        private fun openEvidence(claim: OwnershipClaimDto) {
+            if (!session.isCurrent || claim !in claims || _evidencePanel.value != null) return
+            _evidencePanel.value =
+                HomePrivateEvidenceController(
+                    viewModelScope,
+                    evidenceFactory.create(session, claim.homeId, claim.id), true,
+                )
+        }
+
+        fun closeEvidence() {
+            _evidencePanel.value?.close()
+            _evidencePanel.value = null
+            refresh()
+        }
 
         private var onStartNewClaim: () -> Unit = {}
         private var onOpenClaim: (String) -> Unit = {}
@@ -65,12 +103,31 @@ class MyClaimsListViewModel
         }
 
         fun refresh() {
+            if (!session.isCurrent) {
+                _state.value = ListOfRowsUiState.Error(CLAIM_SESSION_CHANGED)
+                return
+            }
+            val revision = ++generation
             _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
-                when (val result = repo.myOwnershipClaims()) {
-                    is NetworkResult.Success -> applySuccess(result.data.claims)
-                    is NetworkResult.Failure ->
-                        _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
+                try {
+                    session.requireCurrent()
+                    val result = repo.myOwnershipClaims()
+                    session.requireCurrent()
+                    if (revision != generation) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            claims = result.data.claims
+                            applySuccess(result.data.claims)
+                        }
+                        is NetworkResult.Failure ->
+                            _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: IllegalStateException) {
+                    claims = emptyList()
+                    _state.value = ListOfRowsUiState.Error(error.message ?: CLAIM_SESSION_CHANGED)
                 }
             }
         }
@@ -113,7 +170,7 @@ class MyClaimsListViewModel
                         text = statusText(claim.status),
                         variant = statusVariant(claim.status),
                     ),
-                onTap = { onOpenClaim(claim.id) },
+                onTap = { openEvidence(claim) },
             )
 
         private fun subtitleFor(claim: OwnershipClaimDto): String? {
@@ -159,6 +216,7 @@ class MyClaimsListViewModel
             when (status) {
                 "verified", "approved", "complete" -> "Verified"
                 "rejected", "denied" -> "Not approved"
+                "withdrawn", "revoked" -> "Withdrawn"
                 "under_review", "pending", "submitted" -> "Under review"
                 else -> status.replace('_', ' ').replaceFirstChar(Char::uppercase)
             }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import * as api from '@pantopus/api';
@@ -15,8 +15,10 @@ import AddressAutocomplete from '@/components/AddressAutocomplete';
 import MailVerificationFlow from '@/components/address/MailVerificationFlow';
 import PrivacyPromise from '@/components/place/PrivacyPromise';
 import AttomStructuredFields from '@/components/homes/AttomStructuredFields';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import { useHomeCreation } from '@/components/homes/creation/useHomeCreation';
+import { validHomeCreationInput, type HomeCreationInput } from '@/components/homes/creation/homeCreationModel';
+import HomeCreationRecoveryView from '@/components/homes/creation/HomeCreationRecoveryView';
+import { validHomeResidencyInput, type HomeResidencyInput } from '@/components/homes/creation/homeResidencySubmissionModel';
 
 type NormalizedAddress = {
   address: string;
@@ -107,6 +109,15 @@ const STEPS = [
 ];
 
 export default function NewHomePage() {
+  const recovery = useHomeCreation();
+  const [lastActor, setLastActor] = useState<string | null>(null);
+  useEffect(() => { if (recovery.actorId) setLastActor(recovery.actorId); }, [recovery.actorId]);
+  // A changed account gets a fresh ordinary form. Backgrounding hides recovery
+  // details while retaining this account's unsubmitted form only in memory.
+  return <NewHomeWizard key={recovery.actorId || lastActor || 'opening'} recovery={recovery} />;
+}
+
+function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreation> }) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -153,6 +164,7 @@ export default function NewHomePage() {
 
   // Step 3 — Your Setup
   const [isOwner, setIsOwner] = useState(true);
+  const [residencyRole, setResidencyRole] = useState<'renter' | 'household'>('renter');
   const [moveInDate, setMoveInDate] = useState('');
   const [wifiName, setWifiName] = useState('');
   const [wifiPassword, setWifiPassword] = useState('');
@@ -194,7 +206,43 @@ export default function NewHomePage() {
     return JSON.stringify(attomPropertyDetail, null, 2);
   }, [attomPropertyDetail]);
 
-  const resetAddressValidation = () => {
+  const addressRevision = useRef(0);
+  const addressSelectionRevision = useRef(0);
+  const addressLifetime = useRef(true);
+  useEffect(() => {
+    addressLifetime.current = true;
+    const invalidate = () => { addressRevision.current++; addressSelectionRevision.current++; };
+    const retire = () => {
+      invalidate();
+      setValidatingAddress(false); setValidatedAddressId(null); setAddressCheckResult(null);
+      setExistingHomeId(null); setIsClaimingExistingHome(false); setStep(1);
+    };
+    const visibility = () => { if (document.visibilityState === 'hidden') retire(); };
+    const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) retire(); };
+    const unsubscribe = api.onTokenChange(retire);
+    window.addEventListener('storage', storage); window.addEventListener('pagehide', retire);
+    document.addEventListener('visibilitychange', visibility);
+    return () => { addressLifetime.current = false; invalidate(); unsubscribe();
+      window.removeEventListener('storage', storage); window.removeEventListener('pagehide', retire);
+      document.removeEventListener('visibilitychange', visibility); };
+  }, []);
+  const beginAddressOperation = (selection = false) => {
+    const revision = ++addressRevision.current;
+    const selectionRevision = ++addressSelectionRevision.current;
+    try {
+      const token = getAuthToken(), origin = api.getApiBaseUrl(), marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+      return () => {
+        try { return addressLifetime.current && (selection ? selectionRevision === addressSelectionRevision.current : revision === addressRevision.current) && document.visibilityState !== 'hidden'
+          && !!token && getAuthToken() === token && api.getApiBaseUrl() === origin
+          && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker; } catch { return false; }
+      };
+    } catch { return () => false; }
+  };
+
+  const resetAddressValidation = (invalidateSelection = true) => {
+    addressRevision.current++;
+    if (invalidateSelection) addressSelectionRevision.current++;
+    setValidatingAddress(false);
     setValidatedAddressId(null);
     setNoUnitAttested(false);
     setAddressCheckResult(null);
@@ -208,15 +256,17 @@ export default function NewHomePage() {
   // Geolocation
   const useCurrent = async () => {
     if (!navigator.geolocation) { setError('Geolocation is not supported in this browser.'); return; }
+    const current = beginAddressOperation();
+    if (!current()) return;
+    setValidatingAddress(false); setValidatedAddressId(null); setAddressCheckResult(null); setExistingHomeId(null); setIsClaimingExistingHome(false);
     navigator.geolocation.getCurrentPosition(async (pos) => {
+      if (!current()) return;
       try {
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
-        const res = await fetch(`${API_BASE}/api/geo/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`, {
-          headers: { Authorization: `Bearer ${getAuthToken()}` }
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
+        const response = await api.apiClient.get(`/api/geo/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
+        if (!current()) return;
+        const data = response.data;
         const n = data?.normalized;
         if (!n?.address) throw new Error('Could not resolve address');
         resetAddressValidation();
@@ -228,8 +278,8 @@ export default function NewHomePage() {
           delete next.location;
           return next;
         });
-      } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to reverse geocode current location.'); }
-    }, (err) => { setError(err?.message || 'Failed to get location.'); }, { enableHighAccuracy: true, timeout: 12000 });
+      } catch (e: unknown) { if (current()) setError(e instanceof Error ? e.message : 'Failed to reverse geocode current location.'); }
+    }, (err) => { if (current()) setError(err?.message || 'Failed to get location.'); }, { enableHighAccuracy: true, timeout: 12000 });
   };
 
   const onSelectNormalized = (n: AutocompleteNormalizedAddress | null) => {
@@ -288,17 +338,13 @@ export default function NewHomePage() {
       attom_property_detail: attomPropertyDetail || undefined,
       amenities: Object.fromEntries(Object.entries(amenities).filter(([, v]) => v)),
       is_owner: isOwner,
+      role: isOwner ? 'owner' : 'renter',
       move_in_date: moveInDate || undefined,
       entry_instructions: entryInstructions.trim() || undefined,
       parking_instructions: parkingInstructions.trim() || undefined,
       wifi_name: wifiName.trim() || undefined,
-      wifi_password: wifiPassword.trim() || undefined,
+      wifi_password: wifiPassword.trim() ? wifiPassword : undefined,
     };
-  };
-
-  const handleCreateHomeSuccess = (res: Record<string, any> & { home?: { id?: string } }) => {
-    const id = res?.home?.id;
-    router.push(id ? `/app/homes/${id}/dashboard` : '/app/homes');
   };
 
   const handleCreateHomeError = (errorValue: unknown, options?: { fromStepUpFlow?: boolean }) => {
@@ -361,8 +407,12 @@ export default function NewHomePage() {
       return;
     }
 
-    const res = await api.homes.createHome(payload);
-    handleCreateHomeSuccess(res as Record<string, any> & { home?: { id?: string } });
+    if (!validateSetup()) return;
+    if (!validHomeCreationInput(payload)) {
+      setError('Check the address, Home details and optional setup before saving.');
+      return;
+    }
+    await recovery.submit(payload);
   };
 
   const handleAddressStepUpVerified = async () => {
@@ -382,6 +432,43 @@ export default function NewHomePage() {
     setStep(1);
   };
 
+  const validateSetup = () => {
+    if (!isClaimingExistingHome && (!!wifiName.trim() !== !!wifiPassword.trim())) {
+      setFieldErrors({ wifi: 'Enter both a network name and password, or leave both blank.' });
+      setError('Check the optional Wi-Fi details.'); setStep(3); return false;
+    }
+    return true;
+  };
+
+  const continueOriginal = async () => {
+    const original = await recovery.acknowledge();
+    if (!original) return;
+    if (original.outcome?.state === 'completed') { router.push('/app/homes'); router.refresh(); return; }
+    if (original.version === 2) {
+      const input = JSON.parse(original.request_json) as HomeResidencyInput;
+      setAddressText(buildAddressLabel(input.address.line1, input.address.city, input.address.state, input.address.postal_code));
+      setUnit(input.address.line2); setNormalized(null); resetAddressValidation(); setIsOwner(false); setResidencyRole(input.claimed_role);
+      setError('Check and select the original address again before continuing.'); setFieldErrors({}); setStep(1); return;
+    }
+    const input = JSON.parse(original.request_json) as HomeCreationInput;
+    setNormalized({ address: input.address, city: input.city, state: input.state,
+      zipcode: input.zip_code, latitude: input.latitude, longitude: input.longitude });
+    setAddressText(buildAddressLabel(input.address, input.city, input.state, input.zip_code));
+    setUnit(input.unit_number || ''); resetAddressValidation(); setNoUnitAttested(!!input.no_unit_attestation);
+    setHomeType(input.home_type || 'house'); setName(input.name || ''); setBedrooms(input.bedrooms?.toString() || '');
+    setBathrooms(input.bathrooms?.toString() || ''); setSqft(input.sq_ft?.toString() || '');
+    setLotSqft(input.lot_sq_ft?.toString() || ''); setYearBuilt(input.year_built?.toString() || '');
+    setDescription(input.description || ''); setAmenities(input.amenities || {});
+    setAttomPropertyDetail(input.attom_property_detail || null); setIsOwner(input.role === 'owner');
+    setMoveInDate(input.move_in_date || ''); setWifiName(input.wifi_name || ''); setWifiPassword(input.wifi_password || '');
+    setShowWifiPassword(false); setEntryInstructions(input.entry_instructions || ''); setParkingInstructions(input.parking_instructions || '');
+    setError(''); setFieldErrors({}); setStep(1);
+    if (original.outcome?.code === 'ADDRESS_STEP_UP_REQUIRED' && input.address_id) {
+      setValidatedAddressId(input.address_id);
+      setAddressStepUpRequirement({ addressId: input.address_id, reason: null });
+    }
+  };
+
   const canProceedStep1 = !!normalized;
   const visibleSteps = isClaimingExistingHome ? STEPS.filter((s) => s.id !== 2) : STEPS;
   const totalSteps = visibleSteps.length;
@@ -389,6 +476,8 @@ export default function NewHomePage() {
 
   const verifyAddress = async (opts?: { attestNoUnit?: boolean }) => {
     if (!normalized) return false;
+    const current = beginAddressOperation();
+    if (!current()) return false;
     const attestedNoUnit = opts?.attestNoUnit || noUnitAttested;
     if (opts?.attestNoUnit) setNoUnitAttested(true);
 
@@ -406,6 +495,7 @@ export default function NewHomePage() {
         zip: normalized.zipcode,
       });
 
+      if (!current()) return false;
       const verdict = validation?.verdict;
       const resolved = verdict?.normalized;
       const resolvedUnit = resolved?.line2 || unit.trim();
@@ -554,11 +644,18 @@ export default function NewHomePage() {
         state: resolvedState,
         zip_code: resolvedZip,
       });
+      if (!current()) return false;
       const resolvedResult =
         result.status === 'HOME_FOUND_CLAIMED' || !conflictFallbackResult
           ? result
           : conflictFallbackResult;
 
+      const requestedHome = new URLSearchParams(window.location.search).get('joinHome');
+      if (requestedHome && resolvedResult.home_id !== requestedHome) {
+        resetAddressValidation();
+        setError('This address does not match the Home you opened. Check its street and apartment, or return to My Homes to choose a different Home.');
+        return false;
+      }
       setAddressCheckResult(resolvedResult);
       setExistingHomeId(resolvedResult.home_id || conflictFallbackResult?.home_id || null);
 
@@ -570,12 +667,13 @@ export default function NewHomePage() {
 
       if (resolvedResult.status === 'HOME_FOUND_CLAIMED' || resolvedResult.status === 'HOME_FOUND_UNCLAIMED') {
         setIsClaimingExistingHome(true);
-        return { type: 'existing' as const };
+        return { type: 'existing' as const, current };
       }
 
       setIsClaimingExistingHome(false);
-      return { type: 'new' as const, validation: validation as ValidateAddressResponse };
+      return { type: 'new' as const, validation: validation as ValidateAddressResponse, current };
     } catch (e: unknown) {
+      if (!current()) return false;
       setValidatedAddressId(null);
       setAddressCheckResult(null);
       setExistingHomeId(null);
@@ -583,7 +681,7 @@ export default function NewHomePage() {
       setError(e instanceof Error ? e.message : 'Could not verify this address. Please check your connection and try again.');
       return false;
     } finally {
-      setValidatingAddress(false);
+      if (current()) setValidatingAddress(false);
     }
   };
 
@@ -614,12 +712,11 @@ export default function NewHomePage() {
           return;
         }
 
-        await api.homes.submitResidencyClaim(
-          targetHomeId,
-          normalized?.address || undefined,
-          isOwner ? 'owner' : 'renter',
-        );
-        router.push(`/app/homes/${targetHomeId}`);
+        const input = { claimed_role: residencyRole, address: addressCheckResult?.residency_address };
+        if (!validHomeResidencyInput(input)) {
+          setError('Check this address again to confirm the existing Home and apartment.'); resetAddressValidation(); setStep(1); return;
+        }
+        await recovery.submitResidency(targetHomeId, input);
         return;
       }
 
@@ -631,7 +728,6 @@ export default function NewHomePage() {
 
       await createHomeWithCurrentState();
     } catch (e: unknown) {
-      console.error(e);
       handleCreateHomeError(e);
     } finally {
       setLoading(false);
@@ -660,6 +756,10 @@ export default function NewHomePage() {
   const homeTypeLabel = HOME_TYPES.find(t => t.value === homeType)?.label || homeType;
   const homeTypeIcon = HOME_TYPES.find(t => t.value === homeType)?.icon || '🏠';
   const activeAmenities = AMENITIES_OPTIONS.filter(a => amenities[a.key]);
+
+  if (!recovery.ready || recovery.pending || recovery.busy || recovery.blocked) {
+    return <HomeCreationRecoveryView recovery={recovery} onContinue={() => void continueOriginal()} />;
+  }
 
   if (addressStepUpRequirement) {
     return (
@@ -717,7 +817,7 @@ export default function NewHomePage() {
           {visibleSteps.map((s) => (
             <button
               key={s.id}
-              onClick={() => { if (s.id <= step || (s.id === step + 1 && canProceedStep1)) setStep(s.id); }}
+              onClick={() => { if (s.id < step) setStep(s.id); }}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${
                 s.id === step
                   ? 'bg-black text-white'
@@ -784,6 +884,7 @@ export default function NewHomePage() {
                   setAddressText(value);
                   setNormalized(null);
                 }}
+                onResolveStart={() => { resetAddressValidation(); setNormalized(null); return beginAddressOperation(true); }}
                 onSelectNormalized={onSelectNormalized}
                 placeholder="Search address…"
                 labelId="home-address-label"
@@ -809,9 +910,11 @@ export default function NewHomePage() {
                 </label>
                 <input
                   id="home-unit"
+                  aria-label="Unit or apartment"
+                  maxLength={50}
                   value={unit}
                   onChange={e => {
-                    resetAddressValidation();
+                    resetAddressValidation(false);
                     setUnit(e.target.value);
                   }}
                   placeholder="e.g. Apt 12B"
@@ -872,6 +975,7 @@ export default function NewHomePage() {
 	                    const selectedAddress = normalized;
 	                    if (!selectedAddress) return;
 	                    const ok = await verifyAddress();
+                    if (!ok || typeof ok !== 'object' || !ok.current()) return;
                     if (ok && typeof ok === 'object' && ok.type === 'existing') {
                       setError('');
                       setPropertySuggestionNote('');
@@ -892,6 +996,7 @@ export default function NewHomePage() {
                           address_id: v?.address_id || null,
                           classification: verdict?.classification,
                         });
+                        if (!ok.current()) return;
                         const s = res?.suggestions;
                         setAttomPropertyDetail(res?.attom_property_detail ?? null);
                         if (s?.home_type) {
@@ -910,11 +1015,12 @@ export default function NewHomePage() {
                           );
                         }
                       } catch {
+                        if (!ok.current()) return;
                         setPropertySuggestionNote(
                           'Public records could not be loaded right now. You can continue and fetch them later from Property Details.',
                         );
                       }
-                      setStep(2);
+                      if (ok.current()) setStep(2);
                     }
                   }}
                   disabled={!canProceedStep1 || validatingAddress}
@@ -941,6 +1047,8 @@ export default function NewHomePage() {
               <div>
                 <label className="block text-sm font-medium text-app-text-strong mb-2">Home nickname (optional)</label>
                 <input
+                  aria-label="Home nickname"
+                  maxLength={120}
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="e.g. The Camas House, My First Apartment"
@@ -1021,6 +1129,8 @@ export default function NewHomePage() {
               <div>
                 <label className="block text-sm font-medium text-app-text-strong mb-2">Description (optional)</label>
                 <textarea
+                  aria-label="Description"
+                  maxLength={2000}
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   rows={3}
@@ -1078,7 +1188,7 @@ export default function NewHomePage() {
                   ← Back
                 </button>
                 <div className="flex gap-3">
-                  <button onClick={() => setStep(4)} className="px-4 py-3 text-app-text-secondary hover:text-app-text-strong text-sm font-medium">
+                  <button onClick={() => { if (validateSetup()) setStep(4); }} className="px-4 py-3 text-app-text-secondary hover:text-app-text-strong text-sm font-medium">
                     Skip to review
                   </button>
                   <button onClick={() => setStep(3)} className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-900 font-semibold">
@@ -1116,6 +1226,7 @@ export default function NewHomePage() {
                   <div className="flex gap-2">
                     <button
                       type="button"
+                      aria-pressed={isOwner}
                       onClick={() => setIsOwner(true)}
                       className={`flex-1 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
                         isOwner ? 'border-black bg-app-surface-raised' : 'border-app-border hover:border-app-border'
@@ -1125,20 +1236,27 @@ export default function NewHomePage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setIsOwner(false)}
+                      aria-pressed={!isOwner && residencyRole === 'renter'}
+                      onClick={() => { setIsOwner(false); setResidencyRole('renter'); }}
                       className={`flex-1 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
-                        !isOwner ? 'border-black bg-app-surface-raised' : 'border-app-border hover:border-app-border'
+                        !isOwner && residencyRole === 'renter' ? 'border-black bg-app-surface-raised' : 'border-app-border hover:border-app-border'
                       }`}
                     >
                       🔑 Renter / Tenant
                     </button>
+                    {isClaimingExistingHome && <button type="button" aria-pressed={!isOwner && residencyRole === 'household'}
+                      onClick={() => { setIsOwner(false); setResidencyRole('household'); }}
+                      className={`flex-1 py-2.5 rounded-lg border-2 text-sm font-medium ${!isOwner && residencyRole === 'household' ? 'border-black bg-app-surface-raised' : 'border-app-border'}`}>
+                      Household member
+                    </button>}
                   </div>
                 </div>
-                <div>
+                {!isClaimingExistingHome && <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Move-in date</label>
                   <div className="flex gap-2">
                     <input
                       type="date"
+                      aria-label="Move-in date"
                       value={moveInDate}
                       onChange={e => setMoveInDate(e.target.value)}
                       className="flex-1 px-4 py-2 border border-app-border rounded-lg focus:outline-none focus:ring-2 focus:ring-black/20"
@@ -1154,18 +1272,22 @@ export default function NewHomePage() {
                     </button>
                   </div>
                   <p className="text-xs text-app-text-secondary mt-1.5">Just moved? Your place page starts with the first-week checklist: pickup day, the previous resident&apos;s mail, utilities, schools.</p>
-                </div>
+                </div>}
               </div>
 
+              {!isClaimingExistingHome && <>
               {/* WiFi */}
               <div className="p-4 bg-app-surface-raised rounded-lg border border-app-border">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-lg">📶</span>
                   <span className="text-sm font-semibold text-app-text">WiFi credentials</span>
-                  <span className="text-xs bg-app-surface-sunken text-app-text-secondary px-2 py-0.5 rounded-full">Only visible to members</span>
+                  <span className="text-xs bg-app-surface-sunken text-app-text-secondary px-2 py-0.5 rounded-full">Protected household access</span>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-3">
                   <input
+                    aria-label="Network name (SSID)"
+                    maxLength={200}
+                    {...fieldA11y('wifi')}
                     value={wifiName}
                     onChange={e => setWifiName(e.target.value)}
                     placeholder="Network name (SSID)"
@@ -1173,6 +1295,9 @@ export default function NewHomePage() {
                   />
                   <div className="relative">
                     <input
+                      aria-label="Wi-Fi password"
+                      maxLength={200}
+                      {...fieldA11y('wifi')}
                       value={wifiPassword}
                       onChange={e => setWifiPassword(e.target.value)}
                       placeholder="Password"
@@ -1191,10 +1316,14 @@ export default function NewHomePage() {
                 </div>
               </div>
 
+              {fieldErrors.wifi && <p id="err-wifi" role="alert" className="text-sm text-red-700">{fieldErrors.wifi}</p>}
+
               {/* Entry & Parking Instructions */}
               <div>
                 <label className="block text-sm font-medium text-app-text-strong mb-2">Entry instructions (optional)</label>
                 <textarea
+                  aria-label="Entry instructions"
+                  maxLength={2000}
                   value={entryInstructions}
                   onChange={e => setEntryInstructions(e.target.value)}
                   rows={2}
@@ -1206,6 +1335,8 @@ export default function NewHomePage() {
               <div>
                 <label className="block text-sm font-medium text-app-text-strong mb-2">Parking instructions (optional)</label>
                 <textarea
+                  aria-label="Parking instructions"
+                  maxLength={2000}
                   value={parkingInstructions}
                   onChange={e => setParkingInstructions(e.target.value)}
                   rows={2}
@@ -1214,11 +1345,13 @@ export default function NewHomePage() {
                 />
               </div>
 
+              </>}
+
               <div className="flex justify-between gap-3 pt-4">
                 <button onClick={() => setStep(isClaimingExistingHome ? 1 : 2)} className="px-6 py-3 border border-app-border rounded-lg hover:bg-app-hover font-medium text-app-text-strong">
                   ← Back
                 </button>
-                <button onClick={() => setStep(4)} className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-900 font-semibold">
+                <button onClick={() => { if (validateSetup()) setStep(4); }} className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-900 font-semibold">
                   {isClaimingExistingHome ? 'Review claim →' : 'Review →'}
                 </button>
               </div>
@@ -1235,7 +1368,7 @@ export default function NewHomePage() {
                 <p className="text-sm text-app-text-secondary">
                   {isClaimingExistingHome
                     ? 'You are about to submit a claim for the existing home at this address.'
-                    : 'Everything looks good? You can always edit later.'}
+                    : 'This saves your Home and optional setup together. Ownership and residency still need verification.'}
                 </p>
               </div>
 
@@ -1292,8 +1425,8 @@ export default function NewHomePage() {
                   <button onClick={() => setStep(3)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Edit</button>
                 </div>
                 <div className="text-sm text-app-text-strong flex flex-wrap gap-x-4 gap-y-1">
-                  <span>{isOwner ? '🏠 Owner' : '🔑 Renter'}</span>
-                  {moveInDate && <span>Move-in: {moveInDate}</span>}
+                  <span>{isOwner ? '🏠 Owner' : isClaimingExistingHome && residencyRole === 'household' ? 'Household member' : '🔑 Renter'}</span>
+                  {!isClaimingExistingHome && moveInDate && <span>Move-in: {moveInDate}</span>}
                   {!isClaimingExistingHome && wifiName && <span>📶 WiFi: {wifiName}</span>}
                   {!isClaimingExistingHome && entryInstructions && <span>🚪 Entry instructions set</span>}
                   {!isClaimingExistingHome && parkingInstructions && <span>🅿️ Parking instructions set</span>}

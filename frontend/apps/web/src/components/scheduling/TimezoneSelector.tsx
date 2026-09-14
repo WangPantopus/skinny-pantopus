@@ -17,7 +17,7 @@ import clsx from "clsx";
 import BottomSheet from "@/components/ui/BottomSheet";
 import { pillarTokens, type Pillar } from "./pillarTokens";
 
-const COMMON_ZONES = [
+export const COMMON_ZONES = [
   "Pacific/Honolulu",
   "America/Anchorage",
   "America/Los_Angeles",

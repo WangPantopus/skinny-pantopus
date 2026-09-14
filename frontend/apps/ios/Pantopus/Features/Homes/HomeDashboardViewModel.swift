@@ -3,7 +3,7 @@
 //  Pantopus
 //
 //  Fetches, concurrently:
-//   - `GET /api/homes/:id` (detail, with a `/public-profile` fallback),
+//   - `GET /api/homes/:id` (detail, after current shared access),
 //   - `GET /api/homes/:id/dashboard`   — hero stats + Overview sections,
 //   - `GET /api/homes/:id/health-score`,
 //   - `GET /api/homes/:id/seasonal-checklist`,
@@ -27,8 +27,7 @@ public struct HomeDashboardContent: Sendable {
     /// who isn't the signed-in user.
     public let verified: Bool
     /// True when the signed-in user is the verified owner of this home.
-    /// Drives the claim-ownership banner gate: shown when this is false
-    /// regardless of whether anyone else is a verified owner.
+    /// Resolved from the current dashboard authority, never a pending claim.
     public let isVerifiedOwner: Bool
     public let stats: [HomeHeroStat]
     public let quickActions: [QuickActionTile]
@@ -163,6 +162,7 @@ public enum HomeDashboardState: Sendable {
     case empty(HomeDashboardBrandNewContent)
     case needsAttention(HomeDashboardContent)
     case error(message: String)
+    case limited(HomeDashboardLimitedContent)
 }
 
 /// Per-card state for the Home Intelligence stack. Each card renders its
@@ -193,7 +193,12 @@ final class HomeDashboardViewModel {
     /// Currently displayed state.
     private(set) var state: HomeDashboardState = .loading
     /// Currently selected grid tab.
-    var selectedTab: String = "overview"
+    private(set) var selectedTab: String = "overview"
+
+    func selectTab(_ id: String) {
+        guard HomeDashboardProjection.gatedTabs(access: access).contains(where: { $0.id == id }) else { return }
+        selectedTab = id
+    }
 
     // MARK: - Home Intelligence (independent per-card state)
 
@@ -201,143 +206,229 @@ final class HomeDashboardViewModel {
     private(set) var checklist: HomeIntelligenceCardState<SeasonalChecklistDTO> = .loading
     private(set) var propertyValue: HomeIntelligenceCardState<HomePropertyValueDTO> = .loading
     private(set) var billTrends: HomeIntelligenceCardState<HomeBillTrendsDTO> = .loading
+    private(set) var billCurrency = "USD"
+    private(set) var billCurrencies = ["USD"]
+    private var billReadID = UUID()
     /// Checklist item ids with an in-flight PATCH — the row disables while
     /// its mutation is awaiting the server's returned item state.
     private(set) var pendingChecklistItemIds: Set<String> = []
 
     private let homeId: String
     private let api: APIClient
+    private let authority: HomeDashboardAccess
+    private var generation = 0
+    private var visible = false
+    private var accessFingerprint: Data?
+    private(set) var canCreateTask = false
+
+    var activationRevision: Int {
+        generation
+    }
+
+    var isCurrent: Bool {
+        authority.isCurrent
+    }
+
+    var canEditChecklist: Bool {
+        visible && isCurrent && access?.can("home.edit") == true
+    }
+
+    func can(_ permission: String) -> Bool {
+        visible && isCurrent && access?.can(permission) == true
+    }
+
+    func canPerform(_ action: String) -> Bool {
+        guard visible, isCurrent else { return false }
+        if action == "add_task" { return canCreateTask }
+        let permissions = [
+            "track_bill": "finance.manage", "track_package": "packages.edit", "log_package": "packages.edit",
+            "add_pet": "home.edit", "create_poll": "home.edit", "send_mail": "mailbox.view",
+            "add_member": "members.view", "view_bills": "finance.view", "view_polls": "home.view",
+            "view_maintenance": "maintenance.view", "pets": "home.view", "calendar": "calendar.view",
+            "view_docs": "docs.view", "view_emergency": "sensitive.view", "view_packages": "packages.view",
+            "view_tasks": "tasks.view", "view_claims": "ownership.view"
+        ]
+        if action == "access_codes" { return can("access.view_wifi") || can("access.view_codes") }
+        return permissions[action].map(can) ?? false
+    }
+
+    func suspend() {
+        generation += 1
+        visible = false
+        clearPrivateData()
+    }
+
+    func retireSession() {
+        suspend()
+        state = .error(message: "Your session changed. Reopen this Home to continue.")
+    }
+
+    private func clearPrivateData() {
+        detailData = nil
+        dashboardData = nil
+        access = nil
+        accessFingerprint = nil
+        canCreateTask = false
+        selectedTab = "overview"
+        healthScore = .loading
+        checklist = .loading
+        propertyValue = .loading
+        billReadID = UUID()
+        billTrends = .loading
+        pendingChecklistItemIds = []
+        state = .loading
+    }
+
+    private func current(_ revision: Int) -> Bool {
+        visible && revision == generation && isCurrent && !Task.isCancelled
+    }
+
+    private func requireCurrent(_ revision: Int) throws {
+        guard current(revision) else { throw CancellationError() }
+    }
+
+    private func retireAccess(_ revision: Int) {
+        guard visible, generation == revision else { return }
+        generation += 1
+        clearPrivateData()
+        state = .error(message: "Home access changed or could not be confirmed. Reload to check current access.")
+    }
 
     // Raw responses; `rebuild()` composes the rendered content from them.
     private var detailData: HomeDetail?
-    private var publicData: HomePublicProfileResponse.HomePublicProfile?
     private var dashboardData: HomeDashboardResponse?
     /// The viewer's own per-home access record. Gates the quick-action
     /// tiles + tab strip exactly as RN gates its dashboard cards.
-    /// Best-effort: a 403 / offline read leaves this nil and the surface
-    /// renders ungated rather than blank.
+    /// Required for shared content; denial or suspension clears private state.
     private(set) var access: HomeAccessDTO?
 
-    init(homeId: String, api: APIClient = .shared) {
+    init(homeId: String, api: APIClient = .shared, identity: (() -> String?)? = nil) {
         self.homeId = homeId
         self.api = api
+        authority = HomeDashboardAccess(homeId: homeId, api: api, identity: identity)
     }
 
-    /// Initial load; no-op when we already have content.
+    func activate(ifCurrent revision: Int) async {
+        guard revision == generation, !Task.isCancelled else { return }
+        visible = true
+        await refresh()
+    }
+
     func load() async {
-        if isContentState { return }
-        if let sampleState = HomeDashboardSampleData.state(for: homeId) {
-            state = sampleState
-            return
-        }
-        state = .loading
-        await fetchAll()
+        await activate(ifCurrent: generation)
     }
 
-    /// Pull-to-refresh / retry.
     func refresh() async {
+        guard visible else { return }
         if let sampleState = HomeDashboardSampleData.state(for: homeId) {
             state = sampleState
             return
         }
-        await fetchAll()
-    }
-
-    private var isContentState: Bool {
-        switch state {
-        case .loaded, .empty, .needsAttention:
-            true
-        case .loading, .error:
-            false
+        generation += 1
+        let revision = generation
+        clearPrivateData()
+        guard isCurrent else {
+            state = .error(message: "Your session changed. Reopen this Home to continue.")
+            return
         }
-    }
-
-    // MARK: - Fetch
-
-    private func fetchAll() async {
-        async let core: Void = fetchCore()
-        async let health: Void = loadHealthScore()
-        async let seasonal: Void = loadChecklist()
-        async let property: Void = loadPropertyValue()
-        async let trends: Void = loadBillTrends()
-        await core
-        await health
-        await seasonal
-        await property
-        await trends
-    }
-
-    /// Home detail (identity / ownership) + the dashboard aggregate +
-    /// the viewer's access record.
-    private func fetchCore() async {
-        async let detailOutcome = loadDetail()
-        async let dashboard = loadDashboard()
-        async let myAccess = loadAccess()
-        let outcome = await detailOutcome
-        dashboardData = await dashboard
-        access = await myAccess
-
-        switch outcome {
-        case let .detail(home):
-            detailData = home
-            publicData = nil
+        do {
+            let opening = try await authority.read()
+            try requireCurrent(revision)
+            guard let currentAccess = opening.access, currentAccess.can("home.view") else {
+                // Only the exact task collection can admit private first use or
+                // a separately granted task route. No inferred owner capability.
+                let collection = try? await HomeTaskAccess(homeId: homeId, api: api).list()
+                try requireCurrent(revision)
+                let final = try await authority.read()
+                try requireCurrent(revision)
+                guard final.fingerprint == opening.fingerprint else { throw APIError.invalidResponse }
+                canCreateTask = collection?.collectionCapabilities?.canCreate == true
+                state = .limited(HomeDashboardLimitedContent(
+                    verificationKind: opening.verificationKind,
+                    verificationStatus: opening.verificationStatus,
+                    canOpenTasks: collection != nil
+                ))
+                return
+            }
+            var detail: HomeDetail?
+            var dashboard: HomeDashboardResponse?
+            // Typed task groups preserve the prior iOS runtime-crash repair.
+            try await withThrowingTaskGroup(of: CoreReadResult.self) { group in
+                group.addTask { [self] in
+                    let result: HomeDetailResponse = try await api.request(HomesEndpoints.detail(homeId: homeId))
+                    return .detail(result.home)
+                }
+                group.addTask { [self] in
+                    let result: HomeDashboardResponse = try await api.request(HomeDashboardEndpoints.dashboard(homeId: homeId))
+                    return .dashboard(result)
+                }
+                for try await result in group {
+                    switch result {
+                    case let .detail(value): detail = value
+                    case let .dashboard(value): dashboard = value
+                    }
+                }
+            }
+            try requireCurrent(revision)
+            guard let detail, let dashboard, detail.base.id == homeId, dashboard.home?.id == homeId,
+                  Set(dashboard.myAccess?.permissions ?? []) == Set(currentAccess.permissions),
+                  dashboard.myAccess?.isOwner == currentAccess.isOwner else { throw APIError.invalidResponse }
+            let collection = currentAccess.can("tasks.view") ? try? await HomeTaskAccess(homeId: homeId, api: api).list() : nil
+            try requireCurrent(revision)
+            let final = try await authority.read()
+            try requireCurrent(revision)
+            guard final.fingerprint == opening.fingerprint else { throw APIError.invalidResponse }
+            accessFingerprint = final.fingerprint
+            access = currentAccess
+            detailData = detail
+            dashboardData = dashboard
+            canCreateTask = collection?.collectionCapabilities?.canCreate == true
             rebuild()
-        case .needsPublicProfile:
-            await fetchPublicProfile()
-        case let .failed(message):
-            detailData = nil
-            publicData = nil
-            state = .error(message: message)
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { [self] in await loadHealthScore() }
+                group.addTask { [self] in await loadChecklist() }
+                group.addTask { [self] in await loadPropertyValue() }
+                group.addTask { [self] in await loadBillTrends() }
+            }
+        } catch {
+            guard visible, revision == generation else { return }
+            clearPrivateData()
+            state = .error(message: "Current Home information could not be confirmed. Reload to try again.")
         }
     }
 
-    private enum DetailOutcome {
+    private enum CoreReadResult {
         case detail(HomeDetail)
-        case needsPublicProfile
-        case failed(message: String)
+        case dashboard(HomeDashboardResponse)
     }
 
-    private func loadDetail() async -> DetailOutcome {
-        do {
-            let response: HomeDetailResponse = try await api.request(HomesEndpoints.detail(homeId: homeId))
-            return .detail(response.home)
-        } catch APIError.forbidden, APIError.notFound {
-            return .needsPublicProfile
-        } catch {
-            return .failed(message: (error as? APIError)?.errorDescription ?? "Couldn't load home.")
+    private func authorize(_ revision: Int) async throws {
+        try requireCurrent(revision)
+        guard let accessFingerprint else { throw APIError.forbidden }
+        let snapshot = try await authority.read()
+        try requireCurrent(revision)
+        guard snapshot.access?.can("home.view") == true, snapshot.fingerprint == accessFingerprint else {
+            throw APIError.forbidden
         }
     }
 
-    private func loadDashboard() async -> HomeDashboardResponse? {
-        try? await api.request(
-            HomeDashboardEndpoints.dashboard(homeId: homeId),
-            as: HomeDashboardResponse.self
-        )
-    }
-
-    /// `GET /api/homes/:id/me` — route `backend/routes/homeIam.js:51`.
-    /// Best-effort: a 403 here means "no access record", which must not
-    /// fail the dashboard.
-    private func loadAccess() async -> HomeAccessDTO? {
-        let record = try? await api.request(
-            HomeAdminEndpoints.myAccess(homeId: homeId),
-            as: HomeAccessDTO.self
-        )
-        // The 403 body decodes into the same shape with hasAccess=false;
-        // treat that as "unknown" so the surface stays ungated.
-        guard let record, record.hasAccess else { return nil }
-        return record
-    }
-
-    private func fetchPublicProfile() async {
+    private func authorizedCard<Value: Sendable>(
+        permissions: [String], _ work: () async throws -> Value
+    ) async -> HomeIntelligenceCardState<Value>? {
+        let revision = generation
+        guard current(revision), accessFingerprint != nil else { return nil }
+        guard permissions.allSatisfy({ access?.can($0) == true }) else { return .forbidden }
         do {
-            let response: HomePublicProfileResponse =
-                try await api.request(HomesEndpoints.publicProfile(homeId: homeId))
-            publicData = response.home
-            detailData = nil
-            rebuild()
+            try await authorize(revision)
+            let result = await fetchCard(work)
+            try await authorize(revision)
+            if case .forbidden = result { retireAccess(revision)
+                return nil
+            }
+            return result
         } catch {
-            state = .error(message: (error as? APIError)?.errorDescription ?? "Couldn't load home.")
+            retireAccess(revision)
+            return nil
         }
     }
 
@@ -346,41 +437,61 @@ final class HomeDashboardViewModel {
     /// Mirrors RN's `useHomeIntelligence`, which always forces a server
     /// recompute so a stale zero-score can't mask a populated home.
     private func loadHealthScore() async {
-        healthScore = await fetchCard {
-            try await self.api.request(
-                HomeDashboardEndpoints.healthScore(homeId: self.homeId, force: true),
-                as: HomeHealthScoreDTO.self
-            )
-        }
+        guard let result = await authorizedCard(
+            permissions: ["home.view", "maintenance.view", "finance.view", "members.view", "docs.view", "sensitive.view"],
+            {
+                let value = try await self.api.request(
+                    HomeDashboardEndpoints.healthScore(homeId: self.homeId, force: true),
+                    as: HomeHealthScoreDTO.self
+                )
+                guard HomeIntelligenceValidation.health(value, homeId: self.homeId) else { throw APIError.invalidResponse }
+                return value
+            }
+        ) else { return }
+        healthScore = result
         // The Overview's emergency row reads the health breakdown.
         rebuild()
     }
 
     private func loadChecklist() async {
-        checklist = await fetchCard {
-            try await self.api.request(
+        guard let result = await authorizedCard(permissions: ["home.view"], {
+            let value = try await self.api.request(
                 HomeDashboardEndpoints.seasonalChecklist(homeId: self.homeId),
                 as: SeasonalChecklistDTO.self
             )
-        }
+            guard HomeIntelligenceValidation.checklist(value, homeId: self.homeId) else { throw APIError.invalidResponse }
+            return value
+        }) else { return }
+        checklist = result
     }
 
     private func loadPropertyValue() async {
-        propertyValue = await fetchCard {
-            try await self.api.request(
+        guard let result = await authorizedCard(permissions: ["home.view"], {
+            let value = try await self.api.request(
                 HomeDashboardEndpoints.propertyValue(homeId: self.homeId),
                 as: HomePropertyValueDTO.self
             )
-        }
+            guard HomeIntelligenceValidation.property(value) else { throw APIError.invalidResponse }
+            return value
+        }) else { return }
+        propertyValue = result
     }
 
     private func loadBillTrends() async {
-        billTrends = await fetchCard {
+        let readID = UUID()
+        billReadID = readID
+        let currency = billCurrency
+        guard let result = await authorizedCard(permissions: ["finance.view"], {
             try await self.api.request(
-                HomeDashboardEndpoints.billTrends(homeId: self.homeId),
+                HomeDashboardEndpoints.billTrends(homeId: self.homeId, currency: currency),
                 as: HomeBillTrendsDTO.self
             )
+        }) else { return }
+        guard readID == billReadID, currency == billCurrency else { return }
+        if let data = result.value, HomeBillPresentation.isCurrent(data, currency: currency) {
+            billCurrencies = Array(Set(data.availableCurrencies + ["USD", currency])).sorted()
         }
+        billTrends = result
     }
 
     private func fetchCard<Value: Sendable>(
@@ -391,6 +502,12 @@ final class HomeDashboardViewModel {
             return .loaded(value)
         } catch APIError.forbidden {
             return .forbidden
+        } catch APIError.invalidResponse {
+            return .failed(message: "Current Home information is unavailable. Reload this card.")
+        } catch APIError.decoding {
+            return .failed(message: "Current Home information is unavailable. Reload this card.")
+        } catch APIError.server {
+            return .failed(message: "This Home information couldn't be loaded. Please retry.")
         } catch {
             return .failed(
                 message: (error as? APIError)?.errorDescription ?? "Couldn't load this card."
@@ -434,12 +551,21 @@ final class HomeDashboardViewModel {
         await loadBillTrends()
     }
 
+    func selectBillCurrency(_ currency: String) async {
+        guard currency != billCurrency, billCurrencies.contains(currency) else { return }
+        billCurrency = currency
+        billTrends = .loading
+        await loadBillTrends()
+    }
+
     private func updateChecklistItem(_ itemId: String, status: String) async {
-        guard !pendingChecklistItemIds.contains(itemId) else { return }
+        guard canEditChecklist, !pendingChecklistItemIds.contains(itemId) else { return }
+        let revision = generation
         pendingChecklistItemIds.insert(itemId)
-        defer { pendingChecklistItemIds.remove(itemId) }
+        defer { if revision == generation { pendingChecklistItemIds.remove(itemId) } }
 
         do {
+            try await authorize(revision)
             let updated: SeasonalChecklistItemDTO = try await api.request(
                 HomeDashboardEndpoints.updateSeasonalChecklistItem(
                     homeId: homeId,
@@ -447,15 +573,22 @@ final class HomeDashboardViewModel {
                     status: status
                 )
             )
+            try await authorize(revision)
+            guard HomeIntelligenceValidation.item(updated, homeId: homeId),
+                  updated.id == itemId, updated.status == status else { throw APIError.invalidResponse }
             // Reflect exactly what the server returned, then re-read the
             // score (seasonal progress is one of its six dimensions).
             applyChecklistItem(updated)
             await loadHealthScore()
+        } catch APIError.forbidden {
+            retireAccess(revision)
         } catch {
-            checklist = .failed(
-                message: (error as? APIError)?.errorDescription
-                    ?? "Couldn't update that task. Try again."
-            )
+            guard current(revision) else { return }
+            let detail = (error as? APIError).flatMap { failure -> String? in
+                if case .clientError = failure { return failure.errorDescription }
+                return nil
+            }
+            checklist = .failed(message: detail ?? "Couldn't confirm the checklist change. Reload to check its current state.")
         }
     }
 
@@ -492,24 +625,12 @@ final class HomeDashboardViewModel {
             state = .loaded(content(
                 address: detailData.base.address ?? detailData.base.name ?? "Home",
                 // Header badge / summary row: home has any verified owner.
-                verified: detailData.isOwner || detailData.owners.contains { $0.ownerStatus == "verified" },
-                // Banner gate: I'm the verified owner only when isOwner is
-                // true and there's no pending claim still in flight.
-                isVerifiedOwner: detailData.isOwner && !detailData.isPendingOwner,
+                verified: detailData.ownershipStatus == "verified" || detailData.owners.contains { $0.ownerStatus == "verified" },
+                isVerifiedOwner: detailData.ownershipStatus == "verified",
                 securityBanner: Self.securityBanner(
                     state: detailData.securityState,
                     claimWindowEndsAt: detailData.claimWindowEndsAt
                 )
-            ))
-        } else if let publicData {
-            state = .loaded(content(
-                address: publicData.address,
-                verified: publicData.hasVerifiedOwner,
-                // Public-profile path is hit when the user is NOT a verified
-                // owner; the private detail call returned 403/404 first.
-                isVerifiedOwner: false,
-                // The public preview carries no security_state column.
-                securityBanner: nil
             ))
         }
     }
@@ -525,7 +646,10 @@ final class HomeDashboardViewModel {
             address: address,
             verified: verified,
             isVerifiedOwner: isVerifiedOwner,
-            stats: HomeDashboardProjection.stats(counts: counts),
+            stats: HomeDashboardProjection.stats(counts: counts).filter {
+                let permission = ["packages": "packages.view", "bills": "finance.view", "tasks": "tasks.view"][$0.id]
+                return permission.map(can) ?? false
+            },
             quickActions: HomeDashboardProjection.quickActions(counts: counts, access: access),
             tabs: HomeDashboardProjection.gatedTabs(access: access),
             overview: HomeDashboardProjection.overview(

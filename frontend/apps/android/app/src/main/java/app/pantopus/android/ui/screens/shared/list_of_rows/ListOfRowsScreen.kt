@@ -1208,7 +1208,7 @@ private fun ContentColumn(
                             FontWeight.SemiBold
                         },
                     color = PantopusColors.appText,
-                    maxLines = 2,
+                    maxLines = row.titleMaxLines,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )

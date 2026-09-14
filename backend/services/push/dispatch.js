@@ -27,7 +27,7 @@ const SEND_ORDER = ['apns', 'fcm', 'expo'];
  * @param {{title?:string,body?:string,data?:object}} message
  * @returns {Promise<{invalidTokens:string[], counts:Record<string,number>}>}
  */
-async function dispatchToTokens(rows, senders, message) {
+async function dispatchToTokens(rows, senders, message, { receipt = false } = {}) {
   const groups = { apns: [], fcm: [], expo: [] };
   for (const row of rows || []) {
     if (!row || !row.token) continue;
@@ -37,15 +37,18 @@ async function dispatchToTokens(rows, senders, message) {
 
   const invalidTokens = [];
   const counts = { apns: 0, fcm: 0, expo: 0 };
+  let acceptedCount = 0;
+  let unresolvedCount = (rows || []).filter((row) => row?.token && !groups[classifyProvider(row)]).length;
 
   for (const provider of SEND_ORDER) {
     const tokens = groups[provider];
     if (tokens.length === 0) continue;
 
     const sender = senders[provider];
-    if (!sender || typeof sender.sendMany !== 'function') continue;
+    if (!sender || typeof sender.sendMany !== 'function') { unresolvedCount += tokens.length; continue; }
 
     if (!sender.isConfigured()) {
+      unresolvedCount += tokens.length;
       logger.debug('Push provider not configured — skipping', {
         provider,
         skipped: tokens.length,
@@ -56,11 +59,14 @@ async function dispatchToTokens(rows, senders, message) {
     counts[provider] = tokens.length;
     try {
       const result = await sender.sendMany(tokens, message);
+      const accepted = new Set(Array.isArray(result?.acceptedTokens) ? result.acceptedTokens : []);
+      const invalid = new Set(Array.isArray(result?.invalidTokens) ? result.invalidTokens : []);
+      acceptedCount += tokens.filter((token) => accepted.has(token)).length;
+      unresolvedCount += tokens.filter((token) => !accepted.has(token) && !invalid.has(token)).length;
       // Correlate provider acceptance with a stored notification without
       // recording device tokens, message text, or private recipient identity.
       const notificationId = message?.data?.notificationId;
       if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(notificationId || '')) {
-        const accepted = new Set(Array.isArray(result?.acceptedTokens) ? result.acceptedTokens : []);
         logger.info('Push provider acceptance', {
           notificationId,
           provider,
@@ -72,6 +78,7 @@ async function dispatchToTokens(rows, senders, message) {
         invalidTokens.push(...result.invalidTokens);
       }
     } catch (err) {
+      unresolvedCount += tokens.length;
       // A transport-level failure shouldn't drop the other providers.
       logger.error('Push provider send failed', {
         provider,
@@ -80,7 +87,7 @@ async function dispatchToTokens(rows, senders, message) {
     }
   }
 
-  return { invalidTokens, counts };
+  return { invalidTokens, counts, ...(receipt ? { acceptedCount, unresolvedCount } : {}) };
 }
 
 module.exports = { dispatchToTokens, SEND_ORDER };

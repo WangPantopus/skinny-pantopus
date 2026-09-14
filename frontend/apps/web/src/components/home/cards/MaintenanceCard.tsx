@@ -8,7 +8,7 @@ import type { HomeVendor } from '@pantopus/types';
 import DashboardCard from '../DashboardCard';
 import VisibilityChip from '../VisibilityChip';
 
-type SubTab = 'suggested' | 'scheduled' | 'history' | 'providers';
+type SubTab = 'active' | 'suggested' | 'scheduled' | 'history' | 'providers';
 
 // Seasonal suggestions based on month (hardcoded initial set)
 function getSeasonalSuggestions(): { title: string; description: string; icon: ReactNode; season: string }[] {
@@ -49,32 +49,26 @@ export function MaintenanceCardPreview({
   issues: Record<string, any>[];
   onExpand: () => void;
 }) {
-  const scheduledCount = issues.filter((i) => i.status === 'scheduled').length;
-  const nextScheduled = issues
-    .filter((i) => i.status === 'scheduled')
-    .sort((a, b) => new Date(a.scheduled_at || 0).getTime() - new Date(b.scheduled_at || 0).getTime())[0];
+  const active = issues.filter((i) => ['open', 'in_progress', 'scheduled'].includes(i.status));
+  const nextIssue = active[0];
 
   return (
     <DashboardCard
       title="Maintenance"
       icon={<Wrench className="w-5 h-5" />}
       visibility="members"
-      count={scheduledCount}
+      count={active.length}
       onClick={onExpand}
     >
-      {nextScheduled ? (
+      {nextIssue ? (
         <div className="space-y-1">
-          <div className="text-sm font-medium text-app-text-strong truncate">{nextScheduled.title}</div>
-          <div className="text-xs text-app-text-muted">
-            Next: {nextScheduled.scheduled_at
-              ? new Date(nextScheduled.scheduled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-              : 'TBD'}
-          </div>
+          <div className="text-sm font-medium text-app-text-strong truncate">{nextIssue.title}</div>
+          <div className="text-xs text-app-text-muted capitalize">{nextIssue.status.replace('_', ' ')}</div>
         </div>
       ) : (
         <div className="text-center py-2">
           <div className="mb-1"><CheckCircle className="w-5 h-5 mx-auto text-app-text-muted" /></div>
-          <p className="text-xs text-app-text-muted">No scheduled maintenance</p>
+          <p className="text-xs text-app-text-muted">No active maintenance issues</p>
         </div>
       )}
     </DashboardCard>
@@ -90,6 +84,7 @@ export default function MaintenanceCard({
   onAddIssue,
   onViewIssue,
   onBack,
+  canManage = false,
 }: {
   issues: Record<string, any>[];
   homeId: string;
@@ -97,9 +92,10 @@ export default function MaintenanceCard({
   onAddIssue: () => void;
   onViewIssue: (issue: Record<string, any>) => void;
   onBack: () => void;
+  canManage?: boolean;
 }) {
   const router = useRouter();
-  const [subTab, setSubTab] = useState<SubTab>('suggested');
+  const [subTab, setSubTab] = useState<SubTab>('active');
   const [vendors, setVendors] = useState<HomeVendor[]>([]);
   const [loadingVendors, setLoadingVendors] = useState(false);
 
@@ -116,9 +112,11 @@ export default function MaintenanceCard({
   }, [subTab, homeId]);
 
   const scheduled = issues.filter((i) => i.status === 'scheduled');
+  const active = issues.filter((i) => ['open', 'in_progress', 'scheduled'].includes(i.status));
   const history = issues.filter((i) => i.status === 'resolved' || i.status === 'canceled');
 
   const SUB_TABS: { key: SubTab; label: string; count?: number }[] = [
+    { key: 'active', label: 'Active', count: active.length },
     { key: 'suggested', label: 'Suggested', count: suggestions.length },
     { key: 'scheduled', label: 'Scheduled', count: scheduled.length },
     { key: 'history', label: 'History', count: history.length },
@@ -132,12 +130,12 @@ export default function MaintenanceCard({
           <button onClick={onBack} className="text-sm text-app-text-secondary hover:text-app-text-strong transition flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Back</button>
           <h2 className="text-lg font-semibold text-app-text flex items-center gap-2"><Wrench className="w-5 h-5" /> Maintenance</h2>
         </div>
-        <button
+        {canManage && <button
           onClick={onAddIssue}
           className="px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition"
         >
           + Log Maintenance
-        </button>
+        </button>}
       </div>
 
       <div className="flex gap-1 overflow-x-auto">
@@ -184,15 +182,15 @@ export default function MaintenanceCard({
       )}
 
       {/* Scheduled */}
-      {subTab === 'scheduled' && (
+      {(subTab === 'active' || subTab === 'scheduled') && (
         <div className="bg-app-surface rounded-xl border border-app-border shadow-sm divide-y divide-app-border-subtle">
-          {scheduled.length === 0 ? (
+          {(subTab === 'active' ? active : scheduled).length === 0 ? (
             <div className="px-5 py-8 text-center">
               <div className="mb-2"><Calendar className="w-8 h-8 mx-auto text-app-text-muted" /></div>
-              <p className="text-sm text-app-text-secondary">No scheduled maintenance</p>
+              <p className="text-sm text-app-text-secondary">{subTab === 'active' ? 'No active maintenance issues' : 'No scheduled maintenance'}</p>
             </div>
           ) : (
-            scheduled.map((issue) => (
+            (subTab === 'active' ? active : scheduled).map((issue) => (
               <div
                 key={issue.id}
                 onClick={() => onViewIssue(issue)}
@@ -201,9 +199,7 @@ export default function MaintenanceCard({
                 <Wrench className="w-5 h-5 flex-shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-app-text">{issue.title}</div>
-                  <div className="text-xs text-app-text-secondary mt-0.5">
-                    {issue.scheduled_at && new Date(issue.scheduled_at).toLocaleDateString()}
-                  </div>
+                  <div className="text-xs text-app-text-secondary mt-0.5 capitalize">{issue.status.replace('_', ' ')}</div>
                 </div>
                 {issue.visibility && <VisibilityChip visibility={issue.visibility} />}
               </div>

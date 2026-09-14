@@ -32,6 +32,8 @@ const affinityService = require('../services/gig/affinityService');
 const { recordCompletedJob } = require('../services/homeSystemsService');
 const rankingService = require('../services/gig/rankingService');
 const optionalAuth = require('../middleware/optionalAuth');
+const homeTaskGigService = require('../services/homeTaskGigService');
+const { requireExpectedSessionScope, getRequestSessionScope } = require('../utils/requestSessionScope');
 const gigPricingService = require('../services/gig/gigPricingService');
 const { alertMatchingSavedSearches } = require('../services/savedSearchAlertService');
 const { haversineMiles } = require('../utils/geo');
@@ -425,11 +427,16 @@ function emitGigUpdate(req, gigId, eventType) {
 // ============ VALIDATION SCHEMAS ============
 
 const createGigSchema = Joi.object({
+  home_task_source: Joi.object({
+    home_id: Joi.string().uuid().required(), task_id: Joi.string().uuid().required(),
+    request_id: Joi.string().uuid().required(), expected_updated_at: Joi.string().isoDate().raw().required(),
+    reviewed: Joi.boolean().valid(true).required(),
+  }).optional(),
   title: Joi.string().min(5).max(255).required(),
   description: Joi.string().min(10).required(),
-  price: Joi.number().min(0).required(),
+  price: Joi.number().min(0).when('home_task_source', { is: Joi.exist(), then: Joi.number().precision(2).max(99999999.99).strict() }).required(),
   category: Joi.string().max(100).optional(),
-  deadline: Joi.date().iso().min('now').optional(),
+  deadline: Joi.date().iso().when('home_task_source', { is: Joi.exist(), then: Joi.optional(), otherwise: Joi.date().min('now').optional() }),
   estimated_duration: Joi.number().positive().optional(), // hours
   attachments: Joi.array().items(Joi.string().uri()).max(10).optional(),
 
@@ -899,7 +906,16 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
   } = req.body;
   const userId = req.user.id;
 
-  logger.info('Creating gig', { userId, title, beneficiary_user_id });
+  const homeTaskSource = req.body.home_task_source;
+  if (homeTaskSource) {
+    res.set('Cache-Control', 'private, no-store');
+    if (!requireExpectedSessionScope(req, res, { required: true })) return;
+    if (beneficiary_user_id || source_type || source_id || ref_listing_id || location.homeId || location.mode === 'home'
+      || !['after_assignment', 'never_public'].includes(reveal_policy)) {
+      return res.status(400).json({ code: 'HOME_RECORD_INVALID', error: 'Review a personal Gig with an explicit location and private address reveal.' });
+    }
+  }
+  logger.info('Creating gig', { userId, beneficiary_user_id });
 
   try {
     // ─── Proxy posting (post as business) ───
@@ -961,8 +977,8 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
       time_window_end: time_window_end || null,
       source_flow: source_flow || 'classic',
       engagement_mode: engagement_mode || null, // DB default 'curated_offers' applies when null
-      // T6.0b — helper-engagement format. DB default 'in_person' applies when null.
-      task_format: task_format || null,
+      // Send the required task format explicitly; SQL defaults do not apply to NULL.
+      task_format: task_format || 'in_person',
       special_instructions: special_instructions || null,
       access_notes: access_notes || null,
       required_tools: required_tools || [],
@@ -1018,8 +1034,13 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
     gigData.geocode_source_flow = 'gig_create';
     gigData.geocode_created_at = new Date().toISOString();
 
-    // Insert gig using admin client (bypasses RLS)
-    const { data: gig, error } = await supabaseAdmin
+    // Conversion shares all ordinary preparation above. Its insert, private
+    // backlink, receipt and audit commit in one current-authority transaction.
+    let conversion;
+    const created = homeTaskSource
+      ? await homeTaskGigService.publish({ actorId: userId, source: homeTaskSource, command: req.body, gigData })
+        .then(result => { conversion = result; return { data: result.gig, error: null }; })
+      : await supabaseAdmin
       .from('Gig')
       .insert(gigData)
       .select(
@@ -1061,6 +1082,7 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
       )
       .single();
 
+    const { data: gig, error } = created;
     if (error) {
       logger.error('Error creating gig', { error: error.message, userId });
       return res.status(500).json({ error: 'Failed to create gig' });
@@ -1069,7 +1091,8 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
     // Parse location back to coordinates
     const response = {
       ...gig,
-      location: location ? { latitude: location.latitude, longitude: location.longitude } : null,
+      location: conversion ? parsePostGISPoint(gig.exact_location)
+        : location ? { latitude: location.latitude, longitude: location.longitude } : null,
     };
 
     // Remove PostGIS raw strings from response
@@ -1080,7 +1103,7 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
 
     // Broadcast to all connected clients so browse pages can show "new tasks" banner
     const io = req.app.get('io');
-    if (io) {
+    if (io && !conversion?.replayed) {
       io.emit('gig:new', {
         id: gig.id,
         title: gig.title,
@@ -1092,18 +1115,21 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
     }
 
     // Invalidate browse cache near this gig's location
-    if (location && Number.isFinite(location.latitude) && Number.isFinite(location.longitude)) {
+    if (!conversion?.replayed && location && Number.isFinite(location.latitude) && Number.isFinite(location.longitude)) {
       browseCache.invalidateNear(location.latitude, location.longitude);
       // P6 — saved-search alerts. Fire-and-forget: a fan-out failure
       // must never fail the post.
       alertMatchingSavedSearches(gig, location).catch(() => {});
     }
 
-    res.status(201).json({
-      message: 'Gig created successfully',
+    res.status(conversion?.replayed ? 200 : 201).json({
+      message: conversion?.replayed ? 'Original Gig publication confirmed' : 'Gig created successfully',
+      ...(conversion ? { publication_receipt: conversion.receipt, replayed: conversion.replayed,
+        task_session: { ...getRequestSessionScope(req), home_id: homeTaskSource.home_id } } : {}),
       gig: response,
     });
   } catch (err) {
+    if (homeTaskSource) return homeTaskGigService.sendError(res, err);
     logger.error('Gig creation error', { error: err.message, userId });
     res.status(500).json({ error: 'Failed to create gig' });
   }

@@ -11,7 +11,7 @@
  * seeded per-test.
  */
 
-const { resetTables, seedTable } = require('./__mocks__/supabaseAdmin');
+const { resetTables, seedTable, setRpcMock } = require('./__mocks__/supabaseAdmin');
 
 const {
   getDensityBucket,
@@ -26,6 +26,11 @@ const {
   relativeToPeers,
   BENCHMARK_DISPLAY_MIN,
 } = require('../services/place/billBenchmarkReader');
+
+function seedPeerMonths(rows) {
+  setRpcMock(async name => name === 'read_bill_peer_months'
+    ? { data: rows, error: null } : { data: null, error: { message: 'Unconfigured RPC' } });
+}
 
 const VALID_BUCKETS = ['none', 'forming', 'few', 'growing'];
 
@@ -181,13 +186,13 @@ describe('billBenchmarkReader.relativeToPeers', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// getBillBenchmark — reads BillBenchmark, gated by the household display floor
+// getBillBenchmark — reads current SQL peer months, gated by the household display floor
 // ─────────────────────────────────────────────────────────────────────────
 describe('billBenchmarkReader.getBillBenchmark', () => {
   it('returns the most recent displayable month with a peer comparison', async () => {
-    seedTable('BillBenchmark', [
-      { geohash: 'c20fbf', bill_type: 'electric', month: 3, year: 2026, avg_amount_cents: 12500, median_amount_cents: 12000, household_count: 18 },
-      { geohash: 'c20fbf', bill_type: 'electric', month: 1, year: 2026, avg_amount_cents: 13000, median_amount_cents: 12800, household_count: 22 },
+    seedPeerMonths([
+      { bill_type: 'electric', currency: 'USD', month: '2026-03', avg_amount: 125.0, median_amount: 120.0, household_count: 18 },
+      { bill_type: 'electric', currency: 'USD', month: '2026-01', avg_amount: 130.0, median_amount: 128.0, household_count: 22 },
     ]);
 
     const result = await getBillBenchmark('c20fbf', 'electric', { userAmountCents: 14200 });
@@ -201,8 +206,8 @@ describe('billBenchmarkReader.getBillBenchmark', () => {
   });
 
   it('omits the comparison when no resident amount is provided', async () => {
-    seedTable('BillBenchmark', [
-      { geohash: 'c20fbf', bill_type: 'electric', month: 3, year: 2026, avg_amount_cents: 12500, median_amount_cents: 12000, household_count: 18 },
+    seedPeerMonths([
+      { bill_type: 'electric', currency: 'USD', month: '2026-03', avg_amount: 125.0, median_amount: 120.0, household_count: 18 },
     ]);
     const result = await getBillBenchmark('c20fbf', 'electric');
     expect(result.status).toBe('ok');
@@ -210,8 +215,8 @@ describe('billBenchmarkReader.getBillBenchmark', () => {
   });
 
   it('returns insufficient_data (no amounts) below the display floor', async () => {
-    seedTable('BillBenchmark', [
-      { geohash: 'c20fbf', bill_type: 'electric', month: 3, year: 2026, avg_amount_cents: 12500, median_amount_cents: 12000, household_count: 6 },
+    seedPeerMonths([
+      { bill_type: 'electric', currency: 'USD', month: '2026-03', avg_amount: null, median_amount: null, household_count: 6 },
     ]);
 
     const result = await getBillBenchmark('c20fbf', 'electric', { userAmountCents: 14200 });
@@ -223,7 +228,7 @@ describe('billBenchmarkReader.getBillBenchmark', () => {
   });
 
   it('returns unavailable when there is no row for the geohash+type', async () => {
-    seedTable('BillBenchmark', []);
+    seedPeerMonths([]);
     const result = await getBillBenchmark('c20fbf', 'electric');
     expect(result.status).toBe('unavailable');
   });

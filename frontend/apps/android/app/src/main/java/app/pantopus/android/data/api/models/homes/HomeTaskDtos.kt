@@ -35,19 +35,49 @@ data class HomeTaskDto(
     @Json(name = "created_by") val createdBy: String? = null,
     @Json(name = "created_at") val createdAt: String? = null,
     @Json(name = "updated_at") val updatedAt: String? = null,
+    val visibility: String? = null,
+    val capabilities: HomeTaskCapabilitiesDto? = null,
+    @Json(name = "automatic_recurrence") val automaticRecurrence: HomeTaskAutomaticRecurrence? = null,
+)
+
+/** Missing capabilities never enable an action. */
+@JsonClass(generateAdapter = true)
+data class HomeTaskCapabilitiesDto(
+    @Json(name = "can_edit") val canEdit: Boolean = false,
+    @Json(name = "can_complete") val canComplete: Boolean = false,
+    @Json(name = "can_delete") val canDelete: Boolean = false,
+    @Json(name = "can_upload") val canUpload: Boolean = false,
+)
+
+@JsonClass(generateAdapter = true)
+data class HomeTaskCollectionCapabilitiesDto(
+    @Json(name = "can_create") val canCreate: Boolean = false,
+)
+
+@JsonClass(generateAdapter = true)
+data class HomeTaskSessionDto(
+    @Json(name = "actor_id") val actorId: String,
+    @Json(name = "home_id") val homeId: String,
+    @Json(name = "session_scope") val sessionScope: String,
 )
 
 /** Envelope for `GET /api/homes/:id/tasks`. */
 @JsonClass(generateAdapter = true)
 data class GetHomeTasksResponse(
     val tasks: List<HomeTaskDto> = emptyList(),
+    @Json(name = "collection_capabilities") val collectionCapabilities: HomeTaskCollectionCapabilitiesDto? = null,
+    @Json(name = "task_session") val taskSession: HomeTaskSessionDto? = null,
 )
 
 /** Envelope for `POST /api/homes/:id/tasks` and `PUT …/:taskId`. */
 @JsonClass(generateAdapter = true)
 data class HomeTaskResponse(
     val task: HomeTaskDto,
+    @Json(name = "task_session") val taskSession: HomeTaskSessionDto? = null,
 )
+
+@JsonClass(generateAdapter = true)
+data class HomeTaskDeleteResponse(val message: String)
 
 /**
  * Body for `POST /api/homes/:id/tasks`. `task_type` and `title` are
@@ -63,19 +93,14 @@ data class CreateHomeTaskRequest(
     @Json(name = "due_at") val dueAt: String? = null,
     @Json(name = "recurrence_rule") val recurrenceRule: String? = null,
     val priority: String? = null,
+    @Json(name = "request_id") val requestId: String? = null,
 )
 
 /**
  * Body for `PUT /api/homes/:id/tasks/:taskId`. All fields optional.
  *
- * Backend `allowed` list at `home.js:4316` accepts `title /
- * description / status / assigned_to / priority / due_at / budget /
- * details / completed_at / visibility / viewer_user_ids` —
- * `recurrence_rule` is **not** in that allowlist today. We carry
- * `recurrenceRule` on the client side so the Add/Edit Task form has
- * a single source of truth; when the backend extends its allowlist,
- * no client change is needed. Until then the field is silently
- * dropped by the server.
+ * Used for status-only completion. The form uses HomeTaskEditPatch
+ * so omitted fields and explicit nullable clears remain distinct.
  */
 @JsonClass(generateAdapter = true)
 data class UpdateHomeTaskRequest(

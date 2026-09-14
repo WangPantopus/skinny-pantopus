@@ -35,9 +35,9 @@ struct VerifyStartStep: View {
     }
 
     private var canonicalSubcopy: String {
-        "Verifying your landlord links this rental to a real owner so you can send rent, " +
-            "raise maintenance tickets, and resolve disputes inside Pantopus. " +
-            "We'll ask them to confirm by email — they don't need an account."
+        "Request approval from this rental's verified property owner. " +
+            "They review your saved request in Pantopus. " +
+            "Home access follows the approved lease dates."
     }
 
     private var fastTrackSubcopy: String {
@@ -73,20 +73,20 @@ struct VerifyStartStep: View {
             RequirementsRow(
                 id: "lease",
                 icon: .check,
-                title: "A signed lease agreement",
-                subcopy: "PDF, photo, or scan. Current term only — older leases are fine if still active."
+                title: "Your tenancy details",
+                subcopy: "Your move-in date and a message are optional. A document is not required to send a request."
             ),
             RequirementsRow(
                 id: "contact",
                 icon: .check,
                 title: "Landlord contact info",
-                subcopy: "Their name, email, and phone. We send a one-time confirmation link to them."
+                subcopy: "Their name, email, and optional phone number are included in your request."
             ),
             RequirementsRow(
                 id: "time",
                 icon: .check,
                 title: "A few minutes",
-                subcopy: "Most verifications take 3–4 min on your side. Landlord confirms in their inbox."
+                subcopy: "Complete the form, then check its status. Review times depend on the property owner."
             )
         ]
     }

@@ -1,674 +1,264 @@
 # Pantopus project handoff
 
-Updated September 10, 2026. This is the continuing-work entry point. Detailed
-reports below retain their original dates; their historical blockers must not
-be mistaken for current status. Refresh Git, CI and infrastructure observations
-before changing anything. A merged branch is not a production release.
-
-## Current objective and first action
-
-Finish the existing **Home, Pulse and Beacon** journeys, then the remaining
-platform/account/vendor checks and production upgrade/release preparation in
-the ordered backlog below. The owner now requests autonomous continuation and
-authorizes iOS simulator use for remaining iPhone app checks. Preserve the
-recorded distinction between simulator coverage and real APNs/device delivery.
-Do not repeat completed physical iPhone Beacon preference acceptance.
-
-### Deep-link privacy integration refresh — September 10
-
-The [diagnostics report](deep-link-diagnostics-privacy-2026-09-07.md) records
-PR #7's fixed-category router events and omission of notification link payloads.
-The refresh at `c858d743a` failed compilation because its tests used the older
-Boolean session hook. They now use master's account-ID hook; current source
-review and strict Swift quality pass. Final-head build/routing/required CI remain
-necessary before merge. No application routing policy, migration or provider
-configuration changes as part of this privacy fix.
-
-Continue primary work in `/private/tmp/pantopus-home-permission-boundaries`;
-its newer handoff/resume is the detailed continuation record. Home #32
-`3393baa18` passes required CI and Android installed relationship recovery is
-in progress. Paid #34 remains `e9ef2decb`, green but unfinished. Both feature PRs
-stay drafts until remaining scope and combined migrations are reconciled. The
-committed set has 43 distinct versions; an unapplied residency receipt candidate
-is being developed locally. Keep paid services one final launch bundle.
-
-### Design collection integrated — September 10
-
-PR #24 merged as `cd764458f` after its final `054f4dcd1` required checks passed.
-The [design collection](pantopus-product-design-index-2026-09-09.md) preserves 34
-verified archive artifacts; all 142 relative Markdown links resolve. Its scope
-is documentation only. This preserves proposals without approving new app
-implementation or claiming new provider/workflow acceptance. Original owner
-files and private operator evidence remain untouched. Merged-master CI is a
-separate post-merge check; no deployment ran.
-
-
-### Payment integration and next checkpoints — September 9
-
-[PR #31](https://github.com/WangPantopus/skinny-pantopus/pull/31) merged into
-master as `d7be416b872a31ceb53094d7d19c3f114185831f` at 04:15 UTC September 10.
-Every [final-head CI check](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34434288893)
-passed at `57787d55d`, including all three iOS simulator jobs and Android
-quality/build/snapshot/instrumented checks. Native saved-card acceptance and
-exact cleanup are complete. No checks were waived, no production deployment ran,
-and the completed payment fixtures must not be reused.
-
-Home authority/deletion is committed and pushed in draft PR #32 at `7f6b59ba3`,
-with full current-head CI passing, 4,661 backend tests and 24 real concurrency
-checks. Continue ordinary admission, WiFi creation and the remaining resource,
-record, storage and client permission gates before household acceptance.
-Paid-gig backend proof is committed/pushed at `15754b439` on
-`codex/staging-paid-gig`: 4,692 backend tests, fresh replay, 19 SQL contracts and
-35 concurrent connections pass. It still needs provider reconciliation,
-durable delivery, native/web recovery, refunds and actual sandbox acceptance.
-
-The separate `codex/native-sensitive-auth` worktree repairs the reproduced
-money-screen authentication failure and stale-account prompt paths. Its
-[milestone report](native-sensitive-auth-2026-09-09.md) records 19 passing iOS
-tests, 12 Android tests, native lint and Android APK assembly. Independent review
-and current-head CI remain integration gates. Continue paid-gig web/native
-recovery and Home admission/resource boundaries next. Older status below is
-historical where it conflicts with this checkpoint. The main checkout's
-unrelated design/handoff work is preserved.
-
-### Current source and acceptance checkpoint — September 9
-
-**Saved-card PaymentSheet acceptance and exact cleanup are complete.** Draft
-[PR #31](https://github.com/WangPantopus/skinny-pantopus/pull/31) contains the
-owned-setup recovery, atomic preferences/removal, customer-binding protection and
-native accessibility repairs. Both simulators pass cancel → cold restart → same
-setup, two-card save/default/cold persistence, removal cancellation/fallback/empty
-state and normal logout. Provider/API checks confirm exactly two successful
-setups per actor, foreign/removed-proof denial, no charges and exact cleanup.
-The [payment report](staging-payment-sheet-2026-09-09.md) records the staged iOS
-reconciliation, 85 focused native tests, 4,607 backend tests (16 skipped), privacy,
-18 SQL contracts and 32-connection concurrency coverage. Never rerun the completed
-payment actors, SDK setup or cleanup. No owner device input is pending.
-
-**Next integrate PR #31 only after all final current-head checks pass**, then
-continue the isolated paid-gig and Home authorization work below. No CI waiver
-applies to this PR. The private API candidate remains committed `2e7b04293`, image
-`2e0a32e8b0e2`; its additive payment migration is applied only to Free staging,
-preserving existing records and the absent ledger. Native app source includes
-`9fbf548bf`; later acceptance-selector edits are test-only. The prior private
-candidate is retained stopped. Public API/worker, browser API/web and production
-runtimes are unchanged. Source integration does not enable deployment.
-
-Home work is isolated in `/private/tmp/pantopus-home-permission-boundaries`,
-`codex/home-permission-boundaries`, draft [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32).
-First effective-permission checkpoint `2fabe0c94` and finance RLS checkpoint
-`a248b15c1` pass current-head CI; the latter passes all 20 SQL contracts. Initial
-full backend coverage is 4,620 tests, privacy gates, 29 web hook tests and web
-TypeScript. Core IAM/deletion is in progress: the raw authority contract passes
-and deletion passes 13 local races; final source review/full integration tests
-remain pending. No hosted Home policies or new role grants ran. Continue enrollment,
-scoped resources, task/calendar/attachment/dashboard/recipient boundaries, client
-navigation, then reviewed ordinary defaults and actual household acceptance.
-
-Paid-gig work is isolated in `/private/tmp/pantopus-staging-paid-gig`, branch
-`codex/staging-paid-gig`, initially from `89662d8da`. Backend/SQL work addresses
-concurrent acceptance, proof before assignment, exact capture and cancellation
-recovery. No hosted migration or provider call ran there. UI pending recovery,
-selected-bid amount and scoped refund follow the first backend checkpoint.
-
-The adoption inventory/audit documentation is pushed at `71473ed5a` on
-`codex/staging-adoption-plan`. Ledger reconciliation, final candidate replay,
-managed Auth/storage and external-object restore remain unfinished. Native
-sensitive-screen invalid-capability handling is a separate pre-release repair
-found during payment diagnosis; normal simulator success does not cover it.
-Smarty subscription activation/retest remains an owner launch prerequisite, with
-its existing reminder retained. PR #29/#30 and mail acceptance are complete.
-The older checkpoint below is historical where it conflicts.
-
-### Earlier source integration checkpoint — September 9
-
-**Next active work:** `/private/tmp/pantopus-staging-payment-sheet`, branch
-`codex/staging-payment-sheet`. Complete account-scoped recovery of the same
-owned Stripe SetupIntent through native navigation/restart, then actual
-PaymentSheet acceptance on both simulators with exact sandbox cleanup. Backend
-reconciliation tests and privacy gates pass; lifecycle expansion and native
-checks are in progress. No provider calls or live payment fixtures have run for
-this milestone. It remains separate from the completed mail integration.
-
-The [modern mail report](staging-mail-unit-binding-2026-09-09.md)
-records exact apartment/destination binding plus atomic confirmation, current
-membership retry/status and legacy partial-proof recovery. Independent review
-also repaired Home-only address changes, pending-owner/resident transitions,
-rejected-claim status, and webhook/dispatch metadata races. All 4,554 backend
-tests and privacy gates pass. The database has 17 passing SQL contracts and
-124 application functions/73 trigger bindings. Real competing transactions
-prove one membership, bounded guesses, concurrent-freeze/authority denial and
-preservation of confirmation metadata during vendor updates.
-
-Hosted multi-unit acceptance and exact cleanup now pass. Both additive functions
-were applied only to Free staging; existing records and the absent ledger were
-preserved. The private candidate runs committed `694a213e2`
-(`68e3e052a578`), with `26102bfb2`/`312b5a382fd6` retained stopped for rollback.
-One real Lob test card targets Unit 4 while Unit 5 has another resident. Three
-concurrent HTTP confirmations produce one exact membership; wrong/foreign proof,
-changed Home, frozen access, rejected claim and revoked member are denied.
-Concurrent signed synthetic webhook processing preserves completion metadata;
-same-code retries after expiry preserve the original member and proof count.
-The exact postcard, temporary Homes/proofs/claims and callback are removed;
-all fixture sessions are revoked, zero push tokens remain, and original Home
-document IDs are unchanged. Public/browser/production runtimes are unchanged.
-
-[PR #29](https://github.com/WangPantopus/skinny-pantopus/pull/29) merged as
-`3009eb0be78efc900c234cc8588a7206526f9626` at 01:29 UTC September 10 after
-[full final-head CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34425328329)
-passed at `76ada1aa1`, including the repaired migration safeguard and complete
-database replay. Its merged-master CI is pending. No checks were waived.
-The modern printed web link, physical
-mail and externally delivered Lob callbacks remain outside this acceptance;
-the separate native postcard simulator journey is already complete.
-
-The isolated [rollback binding repair](release-rollback-binding-2026-09-09.md)
-is in `/private/tmp/pantopus-release-rollback-binding`, branch
-`codex/release-rollback-binding`. The rollback workflow now forwards the same
-environment-specific API binding as deployment; all 47 deployment-script tests
-pass. It must pass current-head CI before integration. No hosted rollback or
-configuration change ran; a real staging deploy/rollback rehearsal remains in
-release preparation.
-
-[PR #28](https://github.com/WangPantopus/skinny-pantopus/pull/28) merged as
-`2259b8ee912cee90f538b024aa3971df6fd33ff2` at 21:03 UTC after
-[full current-head CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34401283503)
-passed at `95842b119`, including all three iOS simulator jobs and Android
-quality/build/snapshots/instrumented tests. Its [merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34404747901) also passed.
-The prior native worktree and branch are preserved. All native simulator mail
-fixtures are cleaned; no owner device check is pending.
-
-The next native PaymentSheet repair is isolated in
-`/private/tmp/pantopus-staging-payment-sheet`, branch `codex/staging-payment-sheet`,
-from master `2259b8ee9`. Backend and native changes are in progress there:
-reconcile the exact owned successful SetupIntent before claiming a saved card,
-retain retry state and prevent duplicate presentation. This is separate from
-PR #29; no payment provider calls or live fixtures have run for that milestone.
-
-[PR #27](https://github.com/WangPantopus/skinny-pantopus/pull/27) merged at
-19:15 UTC after [final current-head CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34393203339)
-passed at `d24632cda`. Backend, web, database replay/contracts and image checks
-passed; native jobs were correctly skipped because that PR did not change them.
-PRs #23, #25 and #26 are also merged. PR #26's merged-master CI passed;
-PR #27's latest merged-master CI also passed (run `34396663166`).
-
-The [mail recovery report](staging-mail-recovery-2026-09-09.md) records real Lob
-test lost-response and concurrent HTTP admission acceptance. Three keyed sends
-produced one postcard; retries retained proof, foreign/wrong-code access was
-denied, a signed synthetic webhook recovered the receipt, and exact confirmation
-created one member occupancy. Atomic admission passes all 13 SQL contracts,
-119 application functions/73 trigger bindings, nine competing PostgreSQL
-connections, 4,480 backend tests and privacy gates. Its additive migration was
-applied only to Free staging, preserving the absent ledger and existing rows.
-All disposable mail/Home/proof fixtures are cleaned and fixture sessions revoked.
-The private candidate runs `a00629db1` (`7cd158c515ed`); the last unit guard at
-`d24632cda` is source-tested but not deployed. Public API/worker, browser API and
-web remain separate, older runtimes. Externally delivered Lob callbacks remain
-unverified; the signed synthetic callback is not that evidence.
-
-The [native postcard report](staging-native-mail-2026-09-09.md) records atomic
-request admission and confirmation: unit/receipt preservation, member role
-ceiling, revoked/frozen/changed-address denial, rollback and retry safety.
-Confirmation passes 4,509 backend tests plus privacy gates; a final request guard
-passes all 29 focused mail tests. All 15 SQL contracts and 22 competing PostgreSQL
-connections pass. iOS passes 44 focused tests; Android passes 40 plus formatting, Detekt and
-assembly. Both clients now distinguish a temporary throttle from an exhausted
-code and show live request metadata instead of sample tracking. The final native
-mail link repair targets the exact Home without putting a code in its URL; it
-is running in the refreshed private candidate; simulator acceptance is active.
-
-The private candidate now runs `26102bfb2` (`312b5a382fd6`). Both additive native
-mail migrations are applied only to Free staging, preserving existing records and
-the absent ledger. Real Lob test/API acceptance passes: one postcard across
-three lost receipts, own status/retry, signed synthetic receipt recovery, one
-member across concurrent confirmations, and foreign/unit/revoked-access denial.
-All disposable test mail/Home/proof/notification fixtures are cleaned, fixture
-sessions revoked, and original document IDs preserved. Public runtimes are unchanged.
-
-Native simulator acceptance is complete on iOS and Android: exact printed link,
-real pending status/read-only refresh, cold launch, wrong-code denial, correct
-confirmation, same-code retry and normal logout all pass. Each fixture produced
-one member for only its Home and exactly two attempts. The Place menu repair
-passes on both devices, keeping account settings reachable after auto-landing.
-Both exact Lob test postcards and temporary Home/proof/claim/occupancy records
-are removed; all fixture sessions are revoked, no push tokens remain, and the
-original document IDs are preserved. Do not rerun these completed publishers.
-
-[PR #28](https://github.com/WangPantopus/skinny-pantopus/pull/28) is integrated
-after full CI, including the successful replacement for the earlier Docker Hub
-HTTP 500. Continue modern mail acceptance, then the remaining payment/OAuth work.
-No owner device observation is pending. Simulator proof is not physical mail or
-an externally delivered Lob callback.
-
-The [vendor report](staging-vendor-acceptance-2026-09-09.md) records completed
-browser synthetic email entry/recovery, cookies/CSRF, session revocation and
-saved-card sandbox API acceptance. Staging frontend DNS and trusted TLS now work.
-The [provider report](staging-provider-acceptance-2026-09-09.md) records Google
-validation, operational Lob test mail and fail-closed address-provider outage
-handling. Google/Apple staging OAuth remains disabled; saved-card API proof does
-not cover PaymentSheet, charges, Connect or subscriptions.
-
-The owner confirmed no active Smarty subscription and plans to obtain one for
-testing and launch. Activation plus real DPV/unit/eligibility/error/access retests
-is a required prelaunch step. A one-time reminder is scheduled for September 10
-at 9 a.m. Pacific. Continue independent work without purchasing a plan. Preserve
-the unrelated main-checkout design work and PR #24. Detailed historical reports
-below retain their original runtime/verification limits.
-
-- PRs #9 and #10 are on master. PR #13 merged to master as
-  `1d5a1d752f85e7409367a9b9246ea5dcc331b555`, bringing in the canonical baseline
-  and large-baseline history checker repair; its full CI passed.
-- PR #12 merged as `92593d4f68b7703355ba154f75ecb18d63157dc3` into
-  `codex/database-baseline-adoption`, so it did not by itself deliver its Beacon
-  preference changes to master. Its final CI passed at `d33a33c1a`.
-- [PR #14](https://github.com/WangPantopus/skinny-pantopus/pull/14) merged into
-  master at 07:59 UTC as `939878b4f6cd1c3084b1d2811cb98270ab38a440`, integrating
-  #12's completed preference changes and the Android session-return repair.
-  Only the handoff conflicted; application/migration bytes matched the tested
-  branch. The owner explicitly waived waiting for CI. GitHub's administrator
-  enforcement was temporarily lifted solely for this merge and the complete
-  original protection was immediately restored and compared successfully.
-- [Merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34326720080)
-  subsequently passed in full, including all three iOS simulator jobs and
-  Android quality/build/instrumented tests. The earlier waiver was not itself
-  evidence of passing checks.
-- [PR #15](https://github.com/WangPantopus/skinny-pantopus/pull/15) merged as
-  `0e57e4f2a3517de386acf8e69f2218ca5f8bc8f1` after its
-  [CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34331005965)
-  passed, including all three iOS simulator jobs. It preserves iOS post
-  destinations through session recovery. Its
-  [merged-master CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34333762148)
-  also passed.
-- Both deployment and migration switches were freshly verified false in staging
-  and production. Source integration is not a production deployment. Hosted
-  canonical ledger adoption and production cutover remain separate work.
-
-[PR #16](https://github.com/WangPantopus/skinny-pantopus/pull/16) merged at
-11:20 UTC as `8e856dcd9619d4e42557a803619582fff76ec719` after its
-[full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34341032792)
-passed. It adds native Beacon acceptance and preserves chat destinations through
-session recovery. The [chat report](chat-notification-continuation-2026-09-09.md)
-records 220 iOS unit tests, four native post/chat expiry/revocation UI journeys,
-190 Android tests, and live staging/FCM → security sign-in → exact chat return.
-Unread clears; normal Android logout removes all fresh fixture tokens and its
-global push is restored off. Its revoked sessions stay revoked; the owned
-Android emulator is closed.
-
-The [native Beacon report](beacon-native-acceptance-2026-09-09.md) records native
-composer publication, audience notification, exact post/author, cold start and
-logout. Natural expiry now also passes: after more than 3,605 seconds untouched,
-the existing Staging app refreshed the same hosted session and opened exact N2
-without login, rebuild or token replacement. N1/N2 and the single chat marker
-must never be republished. Final native logout and scoped cleanup pass: two Beacon posts, their audience
-notifications, the direct chat and beta enrollment are removed. The two
-synthetic accounts and already revoked session records remain as evidence,
-with zero push tokens and all their registry sessions revoked. The owned
-iOS simulator is closed. No iPhone observation is pending.
-
-Account evidence remains in `/private/tmp/pantopus-staging-account-delivery`, branch
-`codex/staging-account-delivery`, [PR #17](https://github.com/WangPantopus/skinny-pantopus/pull/17),
-now based on master including #16. The [account delivery report](staging-account-delivery-2026-09-09.md)
-records the missing-SMTP repair: 4,338 backend tests and privacy gates pass;
-strict Swift lint/format pass. A private SMTP capture service and an unexposed
-API candidate run on the existing host. Synthetic signup, captured verification
-and resend, single-use verification, and verified login pass. Live recovery
-exposed an immediate-login timestamp boundary after reset; its repair and two new
-regressions now pass all 4,340 backend tests. Two fresh live recovery cycles now pass immediate login/profile access while
-old tokens remain denied. A live SMTP outage returned the same 503 for known and
-unknown accounts without creating a user; restored delivery and login pass.
-Two outdated Android email screenshots were inspected and updated; all seven
-status-screen snapshots pass local verification. Final CI at `61139c1bd` passed
-after rerunning an unrelated iPhone 16 search timing failure. PR #17 merged as
-`82d57ee0f70d182776ec88af8aaab52d0317635d` at 12:44 UTC. The configured
-`staging.pantopus.com` frontend hostname does not resolve, so real browser link
-completion remains unfinished.
-
-Staging web preparation is in `/private/tmp/pantopus-staging-web-delivery`,
-branch `codex/staging-web-delivery`. The container build now accepts an explicit
-public app origin as well as the API origin, keeping staging links isolated.
-The image build passes; hostname/TLS setup is pending.
-
-The [staging web report](staging-web-delivery-2026-09-09.md) records a successful
-production image build and six entry/account pages served on the existing host,
-loopback only. The image has verified staging origins and a sandbox Stripe key.
-Cloudflare sign-in is pending before configuring the currently absent frontend
-hostname and completing browser email links. PR #17 is merged with passing final CI.
-PR #16's merged-master CI passed in full.
-
-The [Home file access repair](home-file-access-2026-09-09.md),
-[PR #19](https://github.com/WangPantopus/skinny-pantopus/pull/19), now enforces
-both legacy file and current document permissions, manager/sensitive visibility,
-and matching dashboard counts. All 36 new regressions, 76 targeted Home tests,
-4,376 backend tests and privacy gates pass. The next concrete gap is native
-Home document upload: both clients currently save metadata without bytes and
-report success. Complete real scoped upload/retrieval on existing/free storage,
-including retry and revoked-access denial. Hosted storage is not yet certified.
-PR #19 merged as `0021cb59d6649f501a86bacd4d69edfc932c0e94` after its integrated checks passed. Its integration worktree is
-`/private/tmp/pantopus-home-access-integration`.
-The [byte-delivery report](home-document-storage-2026-09-09.md) tracks work in
-`/private/tmp/pantopus-home-file-access`, branch `codex/home-document-storage`.
-Both native upload test sets pass. All 22 iOS upload/preview/denial/export tests
-and strict Swift lint pass. Android document tests pass (49, with five existing
-skips), along with formatting, Detekt and lint. All 4,415 backend tests pass,
-including a new repair that excludes restricted document metadata from the old
-Home File list. An isolated private staging bucket and local-only API candidate
-are now running. Live exact bytes, concurrent retry/quota, sensitive scope, old-link revocation
-and legacy metadata isolation now pass. Native acceptance exposed missing Home
-tools/Documents entry points; both clients now connect them with confirmed
-document permissions. Android OS picker → upload → exact PDF preview/share and
-iOS opening/sharing that same document now pass; both share copies match all
-609 original bytes. Android foreground return after permission revocation hides
-the content; fixture access is restored. All 47 focused Android tests, its Place
-snapshot/quality checks, 18 iOS dashboard/access tests, ten list tests and strict
-Swift lint pass. Delete/replace, abandoned-upload cleanup and quota concurrency
-remain next; iOS picker upload itself has unit coverage, not a live picker run.
-Android private HTTP logging is repaired. PR #19's merged-master CI passes.
-See the byte-delivery report for exact limits. Staging lacks default
-member IAM rows; fixture-only grants permit this test, without certifying the
-unadopted global reference data. PR #18 merged with passing checks at 12:51 UTC
-as `fd8a94eef727342340fc522f7196e6e64814ed08`.
-
-[PR #20](https://github.com/WangPantopus/skinny-pantopus/pull/20) merged as
-`7a440d61ded9b3338340c8dce3fe2da2d894d655` after its
-[full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34361613124)
-passed. Its merged-master checks are running. The
-same worktree now uses `codex/home-document-lifecycle`. The
-[lifecycle report](home-document-lifecycle-2026-09-09.md) records completed native
-Delete wiring, atomic quota release/tombstones and direct database access guards.
-All 4,425 backend tests, privacy gates, SQL contract, real concurrent deletion,
-function lint, 33 Android and 17 iOS focused tests and native quality/build checks
-pass. Live staging concurrent deletion and both native confirmation/list-refresh
-journeys pass, including provider removal, quota release and old-content denial.
-The compatible deletion migration is applied only to Free staging, preserving
-existing rows and its absent migration ledger; public API/worker are unchanged.
-Three disposable documents were removed and the temporary delete grant was
-removed. Live iOS Files picker → upload → exact document/share now passes with
-609 matching bytes and one quota increment. It exposed and fixed duplicate
-success navigation: the upload form now closes once and remains on Documents.
-The initial I4 fixture was removed before final I5 acceptance; I5 remains with
-the original four documents. Next are replacement, abandoned upload cleanup,
-quota enforcement across different upload IDs and stale native export cleanup.
-
-The public staging API/worker still run `65d2cc2d9`; the candidate is separate.
-
-[PR #21](https://github.com/WangPantopus/skinny-pantopus/pull/21) merged as
-`c1f411c583e9375616e06570bdcea062f16bf532` after its
-[full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34369706912)
-passed. Its merged-master CI also passed. The completed recovery work is isolated in
-`/private/tmp/pantopus-home-upload-recovery`, branch `codex/home-upload-recovery`.
-The [upload recovery report](home-upload-recovery-2026-09-09.md) records passing
-local quota/access SQL contracts and three real competing-connection checks for
-storage, file-count and daily limits. The compatible migration is now applied
-only to Free staging, preserving all existing rows and its absent ledger. Durable
-reservation and the bounded abandoned-upload/deleted-object recovery worker now
-pass 4,439 backend tests, privacy gates, the SQL contract, application function
-lint and both real publication-versus-expiry races. Live private staging quota,
-expiry/outage/retry and late-write reconciliation pass; original five documents,
-exact bytes and quotas/limits are preserved. Native launch cleanup passes 35 iOS
-and 34 Android tests plus lint/build checks. Both native share → process restart
-checks pass with exact 609-byte copies removed on relaunch. The zero-cache
-candidate follow-up also passes exact upload and immediate post-delete denial.
-[PR #22](https://github.com/WangPantopus/skinny-pantopus/pull/22) merged as
-`6fbdcce1203780b475bd209ed4f6fc5e03bfb487` after its
-[full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34374779134)
-passed at `134b25751`. Its merged-master checks are pending. Replacement work is isolated in
-`/private/tmp/pantopus-home-document-replacement`, branch
-`codex/home-document-replacement`; see the
-[replacement report](home-document-replacement-2026-09-09.md). Initial replacement
-backend/SQL work passes 4,453 backend tests, 12 contracts and the full function
-linter in a separate owned local database. Explicit backend privacy gates and
-three real replacement/expiry/deletion races also pass. The compatible migration and private staging candidate are now applied without
-changing existing rows or public runtime. Two live API replacement cycles pass;
-provider cleanup has the documented eventual-read limit. All 41 iOS focused tests
-and signed simulator build pass. The live iOS picker → confirmation → same document → Share also passes, with all
-1,292 bytes matching and its temporary copy removed on restart. Both native picker → confirmation → same document → Share journeys now pass,
-with 41 focused tests per platform and matching 1,292-byte exports removed on
-restart. Both disposable documents and the temporary manage grant are removed;
-original five documents and quotas remain. [PR #23](https://github.com/WangPantopus/skinny-pantopus/pull/23) is ready with
-all local checks passing, including final Android lint. Its CI/integration remain;
-continue independent staging account/vendor work while checks run. The recovery report preserves
-the earlier iOS unmarked temporary-copy limitation and provider-cache observation.
-PR #20's merged-master CI passed in full; public staging API/worker stay unchanged.
-No production changes or new paid resources were made. The earlier worktree
-`/private/tmp/pantopus-database-baseline-adoption` and unrelated local work,
-including the owner's design proposal, remain preserved. Update this handoff
-after each meaningful milestone.
-
-### Completed Beacon and platform evidence
-
-The [full Beacon report](beacon-full-journey-2026-09-08.md) records live publish →
-audience notification → exact permitted post, authenticated WebSocket fanout,
-mute/resume, membership/revocation/block restrictions and draft/archive denial.
-Physical iPhone foreground/background/closed-app taps, old blocked-link denial,
-mute/resume and global push off/restore were owner-confirmed. Android emulator
-foreground/background/process-absent return and old blocked-link denial passed.
-
-The [push-only preference report](beacon-push-preference-2026-09-08.md) records
-schema/API/web/iOS/Android preference support, global opt-out precedence,
-retained in-app notifications and no replay. It also records the Android
-first-run menu repair and iOS Socket.IO authentication/refresh-loop repair.
-All 20 live staging API/access checks passed. Android native off/restore passed;
-the owner confirmed repaired iPhone saves, I-off silence with exact in-app
-return, and I-restored as the sole new alert opening the exact post. Both
-preference fixtures were cleaned up; original device accounts/preferences,
-prior iPhone notifications and its APNs registration were preserved. PR #12's
-[final full CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34322453803)
-passed. The earlier iPhone SE timing failure was fixed by awaiting the save task;
-16 settings tests passed five repetitions.
-
-The [September 9 platform report](notification-platform-verification-2026-09-09.md)
-records Android OS permission denial, retained in-app exact return, restoration
-and no replay through live staging/FCM. It reproduced a revoked-session
-notification losing its post after login. Fix `9c443b69a` binds unfinished post
-arrivals to the original account and clears them after load/departure or manual
-logout. All 148 targeted tests, formatting, Detekt, Android lint and the staging
-build passed. A fresh live notification → security sign-out → same-account
-login opened the exact emerald-harbor post and public Beacon author; the native
-persisted destination was verified before login and cleared after load/logout.
-Four test posts, five notifications, the fresh Beacon/membership and creator
-were removed. Android is signed out with zero FCM tokens; its original account,
-AuthDevice, preferences and OS permission remain. The owned emulator is closed.
-Global/internal Beacon enablement remains false and beta is empty.
-
-The [canonical baseline report](database-canonical-baseline-2026-09-08.md) and
-linked [upgrade rehearsal](database-baseline-rehearsal-2026-09-08.md),
-[empty replay](database-empty-replay-2026-09-08.md) and
-[reference/lint evidence](database-reference-lint-2026-09-08.md) record unchanged
-archived history, full schema replay, all 6,467 static reference rows, reviewed
-function/ACL contracts and preservation of original values. Staging received
-only the rehearsed compatible preference/security expansion, preserving its
-hosted migration ledger. API and worker still run `65d2cc2d9`; earlier containers
-are retained for rollback. Production and the old testing database are preserved.
-
-### First unfinished work
-
-1. Complete application mail-code dispatch/confirmation and uncertain-send
-   recovery, then reachable sandbox payment UI/transactions and real OAuth
-   callbacks. Browser signup/recovery and staging hostname/TLS now pass.
-   Smarty needs an existing active subscription; Google/Apple staging OAuth
-   remains disabled. Use existing/free capacity.
-2. PRs #23, #25 and #26 are merged after their required checks passed. Continue
-   monitoring merged-master CI. Home replacement, saved-card API retry and Lob
-   mail-purpose acceptance are recorded in their reports; public runtime
-   deployment remains separate from this source integration.
-3. Complete the production upgrade/ledger, external-file recovery and
-   deploy/rollback plan, then release-candidate Home/Pulse/Beacon and adjacent
-   reachable-feature acceptance. Keep actual production cutover distinct from
-   preparation and preserve records, balances and entitlements.
-
-Beacon publication, mute/access/preferences, native post/chat return, natural
-expiry and their fixture cleanup are complete within the recorded platform
-limits. Do not repeat the completed iPhone observations. Physical Android remains
-unverified; simulator/emulator results do not establish physical-device delivery.
-
-Start each continuation by fetching origin, checking PR/master CI and staging
-state, and reading the linked report for the next concrete case. Earlier physical
-Beacon/device fixtures are cleaned up; never reuse their deleted creators,
-Beacons or post IDs. The simulator fixture above is also cleaned. Read the
-private operator checkpoint before sending or
-mutating. No user device observation is currently pending.
-
-## Decisions to preserve
-
-- Home, Pulse and Beacon are all product pillars. Address-free social discovery
-  and Beacon following must remain available; local posting eligibility remains
-  enforced. Do not require a household simply to follow a publisher.
-- Private home usefulness must work without recruiting neighbors. Saving a
-  public address preview, household membership, residency verification and
-  property ownership are separate facts. Entering an address grants no access
-  to another household. Keep private/public identity boundaries explicit.
-- Preserve authorized Home intelligence: supported ATTOM/property data,
-  weather, air quality, alerts, sunrise/sunset and the visual daylight arc,
-  environmental and civic/election sections. Existing provider coverage and
-  verification/licensing restrictions still apply; availability is not certified
-  merely because the UI code remains present.
-- Keep setup progressive and destinations durable across login, signup and
-  retry. A follow, save or post requires the relevant explicit action. Distinguish
-  saved data from delivered reminders, physical mail or completed payments.
-- The owner authorized staging recovery on the existing AWS host, designated
-  synthetic-device tests, and feature-branch commits/pushes. Existing paid host
-  operation was approved; creating new paid resources was declined. The new
-  Supabase and Firebase staging projects use free plans. Do not treat that
-  history as authorization for new spending or a production database/DNS cutover.
-- Screenshots are not required for this milestone. Sanitized textual evidence
-  is sufficient; keep secrets and private database contents out of reports.
-
-The [v1 release brief](v1-release-brief-2026-09-06.md) and
-[journey audit](v1-journey-audit-2026-09-06.md) define acceptance. Navigation
-redesigns in those documents are proposals, not claims about the deployed UI.
-
-## What is complete, and what the evidence proves
-
-| Work | Latest evidence / limits |
-| --- | --- |
-| Entry continuity and private address saving | Web/native implementations preserve destinations and explicit private saves. Home access/redaction repairs and calendar continuity are integrated through PR #4. Real provider and device scenarios still need release-level coverage. See [web/shared entry](entry-continuity-implementation-2026-09-06.md), [native entry](native-entry-continuity-2026-09-06.md) and [master integration](master-integration-2026-09-07.md). The old six web type errors were fixed; do not reopen them solely from earlier notes. |
-| Social discovery and Beacon return | Address-free discovery, following, publication and permitted Following updates exist. See [social discovery](social-discovery-2026-09-06.md), [Beacon return](beacon-return-journey-2026-09-07.md) and [activity reliability](following-activity-reliability-2026-09-07.md). The live API/access matrix and iPhone/Android emulator returns pass; remaining acceptance limits are recorded in the [full journey report](beacon-full-journey-2026-09-08.md). |
-| CI and prior integration | PRs #1–#5 are merged, including contrast/brand work, entry/calendar integration and explicit staging configuration. Full CI passed for deployed backend release `9d1fe24dc`; final consolidated-branch CI must be checked separately. |
-| Staging infrastructure | Current backend API and separate worker run on the existing AWS host, with isolated Free Supabase, HTTPS and verified renewal, sandbox Lob/Stripe settings, database TLS, real queue schedules and job consumption. No new instance was created. |
-| Hosted API contracts | Authenticated API, secure cookies/CSRF, notification ownership/preferences/read state, Home/Hub/Following/identity/device queries, authenticated WebSocket, CORS and Lob webhook signature/replay checks passed. This does not certify email delivery, storage or real postcards. |
-| Production preservation | Production backup captured and restored locally in isolation. All 299 archived COPY sections matched restored row counts/hashes. Upgrade rehearsal retained original records but exposed schema gaps. No production schema/ledger/DNS cutover occurred. External file contents are not included in the database backup. |
-| Notification opt-out | Both native and legacy token registration preserve existing global opt-outs. Backend regression/privacy tests and real PostgREST checks passed; Android staging exercised opt-out, re-registration and restore. Raw APNs token logging was removed. See [lifecycle audit](notification-lifecycle-audit-2026-09-07.md). |
-| Physical iPhone | iPhone 16 Pro, iOS 26.5.2, development-signed Staging build. Actual Beacon foreground/background/closed-app notifications opened the exact permitted post. Old blocked-notification denial, mute/resume and repeated global push off/restore passed with owner confirmation; provider acceptance is recorded separately. |
-| Android emulator | Google APIs ARM64 Android 14/API 34. Real FCM chat notifications opened the exact conversation; Beacon foreground/background/process-absent notifications opened the exact post, and an old blocked notification denied access. Global opt-out persisted across registration, restored delivery worked, logout removed tokens, re-login registered again. Physical Android remains unverified; owner has no Android phone. See [Android report](android-staging-verification-2026-09-08.md). |
-| Android fixes | `fd9a60dcd` fixes `+` in chat titles and a false security warning after voluntary logout. 98 routing/dispatcher tests and 93 auth/matching-view-model tests passed; lint/build and final emulator checks passed. This is targeted evidence, not final all-surface CI. |
-
-## Environments and release identity
-
-| Environment | Recorded state |
-| --- | --- |
-| Production database | Supabase `ankjdyvoduutkhhaxvhx`; existing users/data must be preserved. Resumed after pause; session-pooler TLS connection and backup verified. Current application schema is not ready for the new backend. |
-| Existing testing database | Supabase `gzzdqechcbfpalfvgyro`, “Pantopus-backend”; preserve it. It is not production and is not the new staging runtime's database. |
-| Isolated staging database | Supabase `ptudkfqdhqpkbkzqlabu`, “Pantopus-staging”; synthetic test accounts plus permitted reference data, no copied real user records. |
-| Staging API | `https://staging-api.pantopus.com`; API and worker release `65d2cc2d9ab4857e044325315f0023a6d8f4bf54`. Image ID `sha256:c7d81368d0fac60b73134c0fd3d0243696de6fef4cb40ed6e32bf0c8f9a527f5`. Repository HEAD may be newer than this deployed image. |
-| AWS host | Existing Oregon EC2; staging API binds `127.0.0.1:18001` behind nginx; worker has no public port. Container names `pantopus-backend-staging` and `pantopus-worker-staging`. Original production container is retained. Exact host/access details are in the private operator handoff. |
-| Production DNS | Last inspected production API DNS points to the old address and times out. Fixing DNS alone would route users to an obsolete backend. Reconcile production first, then perform a planned cutover. |
-| GitHub automation | On September 8, both production and staging have `BACKEND_DEPLOY_ENABLED=false` and `DB_MIGRATIONS_ENABLED=false`. Merging source does not deploy while these switches remain false. Re-read them before merging/enabling releases; do not enable deployment to make a source PR mergeable. |
-| Firebase | `pantopus-staging`, free Spark; debug Android package `app.pantopus.android.debug`. FCM is used for Android push, not Firebase Auth/database. A narrowly scoped sender key exists privately. The approved temporary project-only key-creation exception was removed and the inherited block restored. |
-| Apple push | Sandbox APNs, topic `app.pantopus.ios`; signed app entitlement is development. The supplied WeatherKit and Sign in with Apple keys could not send push. A separately approved APNs key is active; do not substitute the older `.p8` files merely because they parse. Distribution/TestFlight requires separately matching credentials/entitlement. |
-
-Numbered migration 152's `PushToken.platform` / `provider` change was rehearsed
-transactionally and applied only to staging. Earlier comparison against staging
-missed this contract because both old databases lacked it. Include it in the
-production gap audit; the historical migration ledger was not altered.
-
-## Ordered backlog and exit criteria
-
-| Order | Deliverable | Exit criterion |
-| --- | --- | --- |
-| 1. Integrate this branch — complete | PR #9 merged as `a373b1094`; final PR and merged-master CI pass. | Current work starts from merged master. Deployment/migration switches remain disabled. PRs #6–#8 remain separate review housekeeping; do not treat their state as a blocker to Beacon verification. |
-| 2. Beacon end-to-end staging | Dedicated creator and address-free follower publish/read/follow/mute/return through the actual staging API and native UI. | One stored post ID matches Following, audience notification and opened post. No unrelated recipients. Mute/global/type opt-out and restore work; restricted membership and revoked/block access deny correctly, including old notification taps. Record every case in the linked matrix. Do not enable feature flags globally simply to populate fixtures. |
-| 3. Finish released-platform notification coverage | Actual post/chat destinations, foreground/background/ordinary cold start, denied permission, expired session/login continuation, token rotation/logout and relevant settings UI. | Exact permitted destination opens on each released platform/state; unread behavior is coherent. Owner confirms physical iPhone observations; physical Android remains explicitly pending until hardware is available. Emulator results are useful but not physical acceptance. |
-| 4. Finish isolated vendor/account flows | Safe staging signup/recovery/verification email and real OAuth callbacks; isolated media/document storage; reachable sandbox payments and address-verification states. | New user can authenticate/recover, upload/read only authorized files, and complete reachable test-mode actions. Failures/retries are visible and idempotent; no live charge or postcard is triggered by staging. Use existing/free capacity unless further spending is authorized. |
-| 5. Make production upgrade reviewable | The [canonical baseline](database-canonical-baseline-2026-09-08.md) completes local gap repairs, object/reference/ACL comparison, fresh replay, function gates and original-value preservation. Remaining work is per-environment hosted upgrade/ledger adoption planning, external-file recovery and hosted Auth/storage configuration verification, plus deploy/rollback plans. | Preserve legacy production fields/tables and records; reconcile the final release's migrations and platform dependencies. Local replay and compatible staging expansion do not complete hosted ledger adoption. No hosted production write/cutover until the concrete plan is reviewed and authorized. |
-| 6. Complete v1 journeys and reachable features | Run Home/Pulse/Beacon acceptance on release candidates; inventory adjacent mailbox, tasks, marketplace, payments and household actions. | Address-free paths, private-address boundaries, correct calendar outcomes, exact-content returns, error/retry/accessibility and real provider coverage pass. Finish or honestly constrain unfinished reachable operations; preserve records, balances and entitlements. |
-| 7. Release/pilot | Tie exact web/iOS/Android builds, backend, migrations, flags and rollback together; configure deployment only after its prerequisites. | Approved production cutover and post-deploy checks pass; small consenting pilot measures actual first value and voluntary returns. Passing engineering tests alone is not product-market fit or proof every feature is finished. |
-
-The owner's [original product proposal](pantopus-next-stage-design-2026-09-08.md)
-is preserved in the [product design collection](pantopus-product-design-index-2026-09-09.md). It
-explores coherent Home/Nearby/Following/Inbox destinations, a private note →
-public question → private bookmark journey, and reviewed personal calendar
-saves from Beacon events. It explicitly describes new work, not a release.
-Preserve it and review it with the owner before treating its label choices,
-personal-record contracts or implementation packages as approved scope. Do not
-import its implementation into unrelated recovery work incidentally. The current v1 gates above remain
-the immediate direction unless the owner changes priorities.
-
-## Evidence index and local continuation
-
-September 8–9 product-design collection: the [nationwide design](pantopus-nationwide-product-design-2026-09-08.md),
-[formatted reader](pantopus-nationwide-product-design-2026-09-08.html), and
-[experience companion](designs/pantopus-nationwide-experience-2026-09-08.html)
-develop the owner's useful-without-neighbors direction while preserving existing
-features. [Places and social conversations](pantopus-place-social-design-2026-09-09.md)
-adds canonical public places, original-post/reply continuity, quiet/viral-place
-behavior, and sensitive-location safeguards. Its [expanded place concept](designs/pantopus-place-page-concept-2026-09-09.html)
-includes Recent conditions, Offers, and Visit info; sections 6, 10.6 and 12.1
-specify the interface, backend contracts and acceptance cases. Its code audit
-flags platform tag/precision parity and alternate-coordinate privacy checks to
-resolve before broader map exposure.
-
-At the owner's request these designs, the [bill concept](designs/pantopus-bill-insight-concept-2026-09-08.html),
-and relevant temporary drafts, editable fragments and historical QA evidence
-are collected on `codex/product-and-place-design`, based on freshly fetched
-master `6fbdcce1203780b475bd209ed4f6fc5e03bfb487`. That base's
-[CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34378389968)
-was verified successful. See the [index](pantopus-product-design-index-2026-09-09.md)
-and [source manifest](designs/archive/2026-09-08-09/manifest.json). Publication
-checks cover collected bytes, links, HTML structure and documentation-only
-scope. The historical nationwide reports do not validate the later place
-concept; all prototypes use fictional session-only examples. No application,
-native-device, backend, provider or scale acceptance is claimed by this milestone.
-Next: review the proposed work packages and choose an implementation slice;
-refresh the code audit against that implementation's base. The operational
-backlog above continues. The original main checkout, unrelated code work and
-private operator evidence remain intact.
-
-Public, versioned reports contain sanitized findings rather than raw secrets:
-
-- [Recovery, backup/restore, schema gaps and runtime](backend-recovery-2026-09-07.md).
-- [Local baseline prerequisite expansion and SQL contracts](database-baseline-rehearsal-2026-09-08.md).
-- [Staging inventory, native setup and physical iPhone record](staging-notification-setup.md).
-- [Android delivery, navigation, opt-out and logout record](android-staging-verification-2026-09-08.md).
-- [Beacon live results and fixes](beacon-full-journey-2026-09-08.md) and
-  [scenario matrix](beacon-staging-verification-2026-09-07.md).
-- [CI/CD setup](ci-cd.md) and [migration adoption runbook](supabase-migration-automation-runbook.md).
-- [Following query validation](following-activity-reliability-2026-09-07.md) and
-  [notification lifecycle audit](notification-lifecycle-audit-2026-09-07.md).
-
-On the owner's Mac, the private durable evidence root is
-`/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/20260907/`.
-Start with its `OPERATOR_HANDOFF.md`. It indexes backups, schema rehearsals,
-operator logs, private test-account fixtures, push configuration and native test
-evidence. Keep these materials private; some logs and SQL archives include
-credentials or application records. They are not part of a Git clone. A new
-machine needs a separately authorized private transfer and its own access.
-
-The current Beacon checkout is `/private/tmp/pantopus-beacon-journey`; the
-prior recovery checkout `/private/tmp/pantopus-current-backend-release` is retained. Temporary build files live in
-`/private/tmp/pantopus-native-staging-build`; do not assume either survives a
-restart. The branch is pushed and key evidence is copied to the durable private
-root. If the checkout is gone, create a fresh feature worktree from current
-master after confirming the integration state; never reconstruct code from logs.
-
-Fresh September 8 inspection finds the main checkout
-`/Users/yingpengwang/skinny-pantopus` clean on merged master. Preserve ignored
-artifacts, the product-design proposal and all other worktrees. Do not reset,
-clean, stash wholesale or incidentally commit unrelated files.
-
-Native rebuild commands and environment selection are in staging setup. Android
-uses ignored `.env.staging` and `app/src/debug/google-services.json`; iOS uses
-the Staging scheme and generated private overlay. Operator scripts may send or
-mutate when executed: inspect their intended action, recipient and idempotency
-marker before reuse. The Android test app ended signed out with zero registered
-tokens and its original push preference restored; the designated iPhone token
-remains. Inspect fresh registration state before another send.
-
-## Keep this handoff current
-
-After each milestone, update the top next action, exact commit/deployment state,
-results and remaining coverage. Add a dated report for substantial work and
-link it here. Record blockers with the concrete next action and any required
-owner input. Keep proposals distinct from implementation and device acceptance.
-Refresh private operator state when credentials, server configuration or test
-fixtures change. Do not append an unfiltered chat/tool transcript: the indexed
-reports and private evidence are the durable record.
+Updated September14,2026. The user resumed verification and development with full
+permission: inspect existing implementations, repair demonstrated bugs/security
+issues, preserve working behavior and screen designs, then cover the remaining
+features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered backlog;
+its8 locally closed/72 partial or open rows are not an effort/completion percentage.
+Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
+
+## Current state and next action
+
+**Active worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
+`codex/private-lease-evidence`, based on request-controls checkpoint
+`e16c0c499` on draft [PR42](https://github.com/WangPantopus/skinny-pantopus/pull/42). The private lease backend, existing iOS attachment controls and existing web landlord reader are locally verified and pushed at481c45b81 in draft [PR43](https://github.com/WangPantopus/skinny-pantopus/pull/43). CI34870041822 passes13 jobs/two skips. The Android attachment follow-up is pushed at557a556db on the same PR; CI34875176418 passed every nonaggregate job except three Details screenshot comparisons. Their availability-text references are now visually reviewed and refreshed; corrected-source CI is required; see [Android evidence](VERIFICATION_FIRST_2026-09-13.md#existing-android-lease-attachment-controls). Web tenant entry and remaining native readers are next. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
+73 backend/90 rendered tests and actual browser/HTTP/SQL recovery checks pass.
+See [the unit evidence](VERIFICATION_FIRST_2026-09-13.md#existing-unit-import-and-range-generation). The preserved
+`codex/lease-approval-dates` branch backs draft [PR38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
+against `codex/home-permission-boundaries`. Owner checkout edits and all unrelated
+worktrees are preserved. The separate renewal/two-table draft remains paused.
+
+**Current repairs reuse existing implementations.** The one existing unmerged
+service-only lease transaction uses existing leases, invitations, residents,
+occupancies and audit records. No replacement screens or tenancy tables were
+added. Current Home/authority checks and atomic decisions protect approval,
+acceptance, end/move-out, tenant cancellation and request/invitation creation.
+Existing web/native callers preserve original dates, recover saved requests and
+retire old Home/account/departure work. Reuse unchanged accepted evidence.
+
+Recent follow-ups: existing unit vacancy reuses lease-end and per-unit authority;
+old invitation URLs reach the existing recipient screen; the existing sharing
+modal keeps the link; real multi_unit parent Homes cannot admit tenants. Creation
+now rejects invalid dates/revoked authority, saves invitation/audit atomically and
+recovers the same row from a retained random proof. Web closing/reloading uses the
+existing encrypted recovery database, scoped to origin/account/unit, and POST
+binds the observed actor. Notification recovery uses the existing Notification
+idempotency column/index; duplicate retries do not re-emit or reset a read notice.
+
+Detailed source-specific evidence is in the [verification report](VERIFICATION_FIRST_2026-09-13.md):
+[creation](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-creation-boundaries),
+[protected reload](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-retained-recovery),
+[notice recovery](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-notification-recovery).
+Latest bounded checks pass186 backend/notification tests,70 rendered web lease
+tests, standalone web TypeScript/scoped lint, full lease SQL contract and generated
+pgTAP wrapper. Application-function lint has266 functions/85 trigger bindings,
+zero errors/eight existing warnings. Actual browser/SDK/HTTP/SQL and9 actual
+IndexedDB/WebCrypto checks pass within their documented synthetic boundaries.
+
+**Git/CI:** PR38 at c51740fce passes all15 applicable checks/one unchanged
+Seeder skip in [CI34840961607](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34840961607), including both native platforms.
+PR39 at461120fca passes all8 applicable checks/three path-based skips in
+[CI34843857113](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34843857113).
+Neither PR is merged. Preserve the earlier failed runs as failed: CI34836085491
+had a stale generated SQL wrapper; CI34843214305 caught an immutable migration
+edit. Existing generator synchronization and the forward function update fix those
+issues. Before migration changes check the actual PR base; all54 wrappers synchronize.
+
+**Next:** finish corrected-source CI and merge the reviewed Home chain through PR43 into master under the user’s September14 merge authorization. Master6a1013784 is an ancestor of all seven heads; its merge tree is exactly the accepted tip. PR43 now targets master and is ready for review; retain every commit/branch. PR34 remains a separate draft with its nine conflicts resolved only in /private/tmp/pantopus-paid-gig-integration, uncommitted and under integration review. Its cancellation presentation/custom reason and unfinished tip/provider gates remain. Then trace existing/archived web tenant attachment entry and native landlord readers before making changes; both web request forms already exist, while the existing web “Upload your lease” links use the separate residency-claim flow. Do not merge those contracts or add screens based solely on an open inventory row. The existing iOS controls and web landlord reader are now locally verified within the [client evidence limits](VERIFICATION_FIRST_2026-09-13.md#existing-ios-lease-attachment-and-web-landlord-reader). Inspect each existing caller before editing; preserve screen design.
+See [attachment evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-lease-file-storage-and-request-binding).
+The request-controls follow-up is verified on draft PR42. The previously open installed Android request journey is now verified
+within the [recorded limits](VERIFICATION_FIRST_2026-09-13.md#existing-native-lease-request-controls-and-calendar-validation).
+Existing shell state binding fixes stale step/action controls; existing native
+validators reject impossible calendar dates, and existing dirty-form guards cover
+date-only, phone-only and message-only edits. Five existing product files change;
+the only new file is an Android rendered regression test. Android passes74 final
+checks and static checks; all52 final iOS request model/snapshot checks and
+SwiftLint/SwiftFormat pass. No screen/layout/schema
+replacement. Other wizard callers remain candidates for rendered verification.
+Draft [PR41](https://github.com/WangPantopus/skinny-pantopus/pull/41) now includes
+`1ed6f6793`, which fixes an existing Support Train test's shared FIFO response race
+using the already available session-scoped route stubs. All13 selected tests pass.
+Original [CI34851208086](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34851208086)
+remains failed for that iPhone16 fixture; the other original applicable checks pass.
+Replacement [CI34855898348](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34855898348)
+passes all11 applicable checks/five path-based skips. No product Support Train
+change or disabled assertion. PR42 at e16c0c499 passed all original applicable
+checks except its iOS build: Sentry binary download hit a runner cache collision
+before compilation. Original [CI34857194083](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34857194083)
+remains a failed attempt; the failed build/dependent jobs were retried as attempt2
+on the same source. Attempt2 now passes all11 applicable checks/five path skips, including all three iOS devices, Android and database replay. No app change or cache-policy workaround.
+Draft [PR40](https://github.com/WangPantopus/skinny-pantopus/pull/40) at a1069e1de
+repairs existing private document delivery and generic uploads; all6 applicable
+[CI34845551425](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34845551425)
+checks pass/five path-based jobs skip. Seven document and12 generic-upload actual
+HTTP/SQL cases,115 selected tests and privacy gates pass, with exact fixture cleanup.
+See [document evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-document-download-authorization)
+and [upload evidence](VERIFICATION_FIRST_2026-09-13.md#existing-standalone-file-upload-compatibility).
+
+Both native routers interpreted /invite/lease/<proof> as a token literally named
+lease. The Android baseline reproduces it. The native candidate keeps
+the complete proof and lease kind through the existing root navigation/invitation
+screen. It calls only authenticated recipient-only preview/acceptance bodies and
+validates the returned Home, actor and active membership. Not now closes without
+a recorded decision. Existing recovery/session lifetimes and screen designs are
+preserved. All134 selected Android routing/model/unchanged snapshot checks and
+static checks pass. All88 selected iOS tests pass. Installed iOS verifies the
+existing offer layout/dates, Not now without a decision, sign-in replay, and lost
+acceptance response recovery with the same SQL lease/occupancy. Android also passes the installed offer, Not now, saved-response-loss recovery
+and signed-out replay with no automatic acceptance or duplicate lease/occupancy.
+The installed APK hash matches the candidate; an initial IDE snapshot restored an
+older APK and was corrected before acceptance. See
+[native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-lease-invitation-links).
+No screen, schema or new tracked file is added by the candidate.
+
+Private lease client coverage remains partial. Its backend reuses File,
+HomeLease, homeDocumentStorage and the existing recovery worker; the new route
+only supplies the missing applicant/current-authority boundary. One forward
+migration extends existing functions and permits an ownerless File only for a
+retired private lease upload. Parent deletion preserves immutable cleanup keys;
+no new tables or screen/layout changes. An abandoned draft's Home-delete blocker
+was reproduced and repaired in the existing eligibility function. All244 selected
+backend tests/privacy gates, eight SQL contracts and16 actual HTTP/SQL checks pass.
+The populated forward rehearsal preserves374 table fingerprints and all existing
+function identities/grants; application lint checks270 functions/88 trigger
+bindings with zero errors/eight existing warnings. Actual storage and login are
+synthetic in these bounded checks; hosted provider/rollout criteria stay open.
+The subsequent iOS-to-web journey and Android attachment journey are locally verified within their reports; web tenant entry, remaining native readers and real provider acceptance stay open. Legacy generic S3 direct URLs remain unaccepted private evidence.
+
+The current client milestone passes248 selected backend tests,148 web tests,60 iOS tests and18 actual HTTP/SQL cases, plus types/lint/format/privacy gates. The existing iOS file picker/card/removal/Submit controls reuse the existing multipart uploader and session lifetime. Lost upload/request replies recover the same File/request. The existing web property query omitted request metadata; its safe projection now exposes message and File ID, and RequestsTab reuses the private byte renderer. An installed iOS request opens in the actual browser reader; revocation during delivery and account changes prevent old private content appearing. All679 installed app files match the final tested product. Drafts are in memory, not durable across restart. Login/object storage/notices are synthetic, with real local API/database behavior; hosted delivery and all-platform completion remain open.
+
+The Android follow-up passes69 selected tests and static/build checks. Installed
+Android verifies real picker selection with a Unicode filename, committed-upload
+response-loss retry, explicit failed-removal retry and committed-request recovery
+without a second lease. Its final caption-only correction passes three Details
+rendering checks and static/build gates; the final installed APK hash matches.
+The installed functional journey is the preceding candidate, with all other
+application/test source identical. No new screen, migration or table. See
+[the source-specific Android evidence](VERIFICATION_FIRST_2026-09-13.md#existing-android-lease-attachment-controls).
+
+**Native evidence/limits:** unchanged request/display source passes50 iOS/49
+Android focused/rendering tests and static checks. Installed iOS covers Back/
+Discard, saved-request/account/foreground recovery, correct calendar/status,
+the earlier unavailable Attach feedback and invalid-date rejection/corrected save.
+Live forms no longer insert sample files/data or promise email delivery. iOS and Android Attach are now connected and locally verified within their reports; all-platform completion remains open. Installed Android now passes the actual request route/SQL journey and real
+Compose control/discard regressions under the recorded native request limits. Reuse the retained
+products; one heavy native build at a time. Provider identity/delivery, combined
+populated adoption and hosted rollout remain open. Notification recovery is
+best effort and requires retry after a lost process; no eventual-push claim.
+
+**Owned runtime:** private root `/private/tmp/pantopus-lease-transaction-r1`;
+Next18110 is stopped after restoring its private harness page. The invitation fixture on API18109 is stopped. Exact owned Home, HomeLease,
+HomeOccupancy, HomeLeaseInvite, HomeAuthority, HomeAddress and User cleanup is zero
+under native-invitation-r1. Unit API18117
+and notice API18116 are stopped.
+The unit fixture has zero remaining owned Home, User, address or command rows;
+source/evidence and exact cleanup are recorded in the private checkpoint. Earlier unit/invitation/sharing/building/
+creation/retention/native API fixtures are stopped with exact row cleanup. The
+owned iOS simulator, Android AVD and this session Android Studio are stopped;
+owned Android registration was released and device data/products retained.
+Android request verification finished on the matching calendar candidate APK.
+API18109/fb23 is stopped, with exact Home/lease/occupancy/invitation/authority/
+address/User cleanup zero under android-request-r2. Owned Android AVD and IDE are
+stopped; only its owned registration was released, retaining device data/products.
+The owned iOS simulator is stopped after its final bounded regression suite. The
+incomplete worktree-only Gradle accessor cache was quarantined; no shared/user
+cache was cleared. Owner iPhone17,
+Bill Acceptance and Home Recurrence Acceptance devices remain untouched. The
+schema-only `home_landlord_verify_20260913_r1` database/REST18089 remain reserved;
+direct PostgreSQL64522 responds. Its existing Home-create function includes the
+unit candidate body, with unchanged signature and passing generated SQL contract. Docker control stalls: use the private direct-SQL
+helper that verifies the exact database, not repeated Docker calls/global restart.
+The private lease File candidate is now applied only to this owned rehearsal
+database (including the existing Home-delete eligibility extension). All fb26
+HTTP fixtures are cleaned. Subsequent attachment API18109, browser proxy18117 and owned simulator are stopped. Both installed-client fb27 cycles have zero remaining owned rows/objects. The exact synthetic picker file was removed. Build/test products and source bindings are retained privately.
+Android fb28 attachment fixtures are also exactly cleaned (all eight row/object
+counts zero), API18109 is stopped, the owned emulator is stopped and registration
+released, and its exact synthetic picker file/reverse mapping are removed. R6/R7
+products and evidence are retained. Inspect the private current-checkpoint/runtime leases before reuse; clean exact
+owned fixtures afterwards. Credentials, tokens, archives and operator logs stay
+outside Git/chat. Evidence is mirrored to the owner's private
+`.pantopus-recovery/audits/20260913-lease-transaction` directory.
+
+**Other PRs:** draft [PR32](https://github.com/WangPantopus/skinny-pantopus/pull/32)
+was7f2a5e6d6 with16 checks passing and includes35/36/37. Draft
+[PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34) was conflicting against
+master at e9ef2decbb; paid/provider acceptance remains incomplete. Master was
+6a1013784d. These are recorded context, not current integration authorization or
+fresh remote inspection. The user authorized continued repairs; preserve unrelated
+work and verify current state before integration.
+
+## Accepted native history
+
+Both installed own-review history readers and both separate fresh native
+applicant/reviewer cycles pass. Each fresh cycle retains two submissions, two
+immutable decisions and one completed removal, followed by denied old Home-link
+access. Current authority and historical decisions remain distinct. All history
+fixtures are exactly cleaned; accepted products and private evidence are preserved.
+
+The [iOS report](home-ios-residency-review-history-2026-09-13.md) binds the signed
+product and all 679 installed app files, reader pagination/detail/account/retry
+behavior, delivered old 200 responses after newer denials, and the fresh cycle.
+Its lost rejection reply uses one UUID with canonical SQL replay; wire hashes differ.
+The [Android report](home-android-residency-review-history-2026-09-13.md) binds Debug
+and optimized Release products, installed readers and its fresh cycle. Android's
+held reads cancel or abandon their sockets; they are not proof of delivered stale
+bytes. Its lost rejection reply uses one UUID and one wire hash. Secure dialog
+capture and driver-only interruptions retain their stated limits.
+
+See [the integration report](home-native-history-wip-2026-09-13.md). Reader/product
+source `9350896c4` also passed all 16 checks in CI 34768705945. The later iPhone 16
+failure in CI 34774032459 was a global request-count assertion; the repaired test
+filters history routes. It changes no accepted application or migration bytes.
+
+## Preserved current-claims acceptance and paused work
+
+The pre-restoration PR #36 acceptance checkpoint is
+`1c5f7bb1bc4686ea41f411f6bf554dbf7dd2efe1`, preserved in
+`/private/tmp/pantopus-home-current-residency-claims`. Final exact-head
+[CI 34781479982](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34781479982)
+passes (15 successes and one unchanged Seeder skip). Its accepted
+privacy/recovery application source is `4d4183a79111ba06f1df8e713dbcbc4dd9502ad8`.
+Read its [accepted report at the candidate head](https://github.com/WangPantopus/skinny-pantopus/blob/1c5f7bb1bc4686ea41f411f6bf554dbf7dd2efe1/docs/home-current-claims-wip-2026-09-13.md).
+
+Recorded actual HTTP/SDK/SQL, both browser consumers and both installed native
+queue journeys pass, including populated/error/retry, account/background/restart
+and stale responses after newer denial. Protected rejection commands drain the
+queue. Exact fixture cleanup, preserved products and three durable evidence
+archives are recorded. Owned current-claims REST/API/web and native devices are
+stopped with data retained and leases released. Inspect leases before reuse.
+
+The additive migration creates a service-only reader over existing tables; it
+creates no tables. Populated upgrade preservation passes, but combined paid/Home
+adoption and hosted rollout remain open. Browser type checking has zero errors;
+standalone API checking retains 39 baseline diagnostics and no candidate-only
+errors. Android optimized codec verification is not Release UI acceptance. Preserve
+all other report limitations. Primary now includes the privacy repair. Combined migration inventory is
+50 Home / 21 paid / 59 combined, with 12 identical shared versions and zero
+collisions at this source checkpoint; combined adoption remains open.
+
+The uncommitted renewal worktree `/private/tmp/pantopus-home-residency-renewal`
+stays paused at #36's head. Its proposed two-table renewal migration and contract
+are neither applied nor pushed. Compare existing claims, occupancy, submission
+commands and review receipts before deciding whether any new schema is needed.
+Its small storage-check/test patch is also unaccepted; larger storage consolidation
+was deferred and preserved privately. Do not treat this draft as an implementation
+requirement. The reconciliation retains exact paths and dispositions. The supplementary
+read-only reuse review is preserved in the owner checkout at
+`.pantopus-recovery/audits/20260913-claims-presentation/R03_REUSE_REVIEW.md`.
+
+The older documentation run 34784251075 at `a1d278e33` failed one iPhone SE
+`HomeTaskMediaViewModelTests.testSessionReplacementDuringUploadCannotPublishOldCompletion`
+setup wait: the attachment request did not start within the fixture's 100 × 5ms
+poll. It failed before the session-change assertions. The current candidate
+passes that test on all three iOS devices; do not relabel the older run green.
+Keep a bounded test-stability follow-up in G05 instead of repeating unchanged
+app journeys or assuming a production defect from that timeout.
+
+## Preserve and continue
+
+Keep owner work in `/Users/yingpengwang/skinny-pantopus`, every other worktree,
+accepted products, database state, devices and private evidence intact. Before
+using a device, API or database, inspect the current explicit lease. One heavy
+native build at a time; never install loopback builds on a physical iPhone.
+Credentials, tokens, database archives and operator logs stay outside Git and chat.
+
+The private index is
+`/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/20260907/OPERATOR_HANDOFF.md`.
+Durable evidence is under its linked `home-invitation-handoff-20260912` root.
+
+Preserve accepted invitation, Task first-use and removal journeys instead of
+repeating them. Their reports and the inventory retain each boundary. The
+[previous primary handoff](https://github.com/WangPantopus/skinny-pantopus/blob/f149896378893c6e8308b8790085695c5dd9c449/docs/PROJECT_HANDOFF.md)
+and [handoff history](HANDOFF_HISTORY_THROUGH_2026-09-12.md) retain detailed earlier
+milestones. Paid/provider activation belongs in one final launch bundle; concrete
+production release/rollback preparation precedes any required cutover authorization.

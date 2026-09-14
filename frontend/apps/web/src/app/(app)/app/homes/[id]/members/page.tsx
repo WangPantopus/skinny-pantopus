@@ -1,6 +1,8 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { removalLink } from '@/components/home/member-removals/removalModel';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, UserPlus, ShieldCheck, Shield, Key, User, Lock, Clock, ArrowLeftRight, UserMinus, Users, Mail } from 'lucide-react';
 import * as api from '@pantopus/api';
@@ -10,13 +12,16 @@ import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 
 const ROLE_ORDER = ['owner', 'admin', 'manager', 'member', 'restricted_member', 'guest'];
+const DISPLAY_ROLE_ORDER = ['owner', 'admin', 'manager', 'lease_resident', 'member', 'restricted_member', 'guest', 'service_provider'];
 const ROLE_META: Record<string, { icon: typeof ShieldCheck; color: string; label: string }> = {
   owner:             { icon: ShieldCheck, color: '#7c3aed', label: 'Owner' },
   admin:             { icon: Shield,      color: '#0284c7', label: 'Admin' },
   manager:           { icon: Key,         color: '#0891b2', label: 'Manager' },
+  lease_resident:    { icon: User,        color: '#059669', label: 'Lease member' },
   member:            { icon: User,        color: '#059669', label: 'Member' },
   restricted_member: { icon: Lock,        color: '#d97706', label: 'Restricted' },
   guest:             { icon: Clock,       color: '#6b7280', label: 'Guest' },
+  service_provider:  { icon: Key,         color: '#6b7280', label: 'Service provider' },
 };
 
 type MemberTab = 'members' | 'requests' | 'audit';
@@ -53,42 +58,66 @@ function MembersContent() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<MemberTab>('members');
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
+  const [membersError, setMembersError] = useState('');
+  const generation = useRef(0);
 
   const tabFromUrl = searchParams.get('tab');
   const accessRequesterParam = searchParams.get('access_requester');
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
+  const retire = useCallback(() => {
+    generation.current++;
+    setMembers([]); setMyAccess(null); setAuditLog([]); setAccessRequests([]); setMembersError('');
+  }, []);
   const fetchData = useCallback(async () => {
     if (!homeId) return;
+    retire();
+    const revision = generation.current, token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => generation.current === revision && api.getAuthToken() === token && api.getApiBaseUrl() === origin
+      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker && document.visibilityState !== 'hidden';
+    setLoading(true);
     const [membersRes, accessRes, auditRes, reqRes] = await Promise.allSettled([
-      api.homeIam.getHomeMembers(homeId),
-      api.homeIam.getMyHomeAccess(homeId),
-      api.homeIam.getAuditLog(homeId),
-      api.getHouseholdAccessRequests(homeId, { status: 'pending' }),
+      api.homeIam.getHomeMembers(homeId), api.homeIam.getMyHomeAccess(homeId),
+      api.homeIam.getAuditLog(homeId), api.getHouseholdAccessRequests(homeId, { status: 'pending' }),
     ]);
+    if (!current()) return;
     if (membersRes.status === 'fulfilled') {
       const val = membersRes.value as any;
-      setMembers(val?.members || val?.occupants || (Array.isArray(val) ? val : []));
+      const rows = val?.occupants || val?.members;
+      if (Array.isArray(rows) && rows.every(m => m && m.home_id === homeId && typeof m.user_id === 'string' && m.is_active === true)) setMembers(rows);
+      else setMembersError('The current member list could not be verified. Refresh to try again.');
+    } else setMembersError('The current member list could not be loaded. Refresh to check current household access.');
+    if (accessRes.status === 'fulfilled') {
+      const access = accessRes.value;
+      if (access?.hasAccess === true && Array.isArray(access.permissions) && access.permissions.every(p => typeof p === 'string')) setMyAccess(access);
     }
-    if (accessRes.status === 'fulfilled') setMyAccess((accessRes.value as any)?.access || accessRes.value);
     if (auditRes.status === 'fulfilled') setAuditLog((auditRes.value as any)?.entries || (auditRes.value as any)?.log || []);
-    if (reqRes.status === 'fulfilled') {
-      setAccessRequests((reqRes.value as { requests: HouseholdAccessRequestRow[] }).requests || []);
-    } else {
-      setAccessRequests([]);
-    }
-  }, [homeId]);
+    if (reqRes.status === 'fulfilled') setAccessRequests(reqRes.value.requests || []);
+    setLoading(false);
+  }, [homeId, retire]);
 
-  useEffect(() => { setLoading(true); fetchData().finally(() => setLoading(false)); }, [fetchData]);
+  useEffect(() => {
+    let disposed = false;
+    const refresh = () => { retire(); if (!disposed && document.visibilityState !== 'hidden') void fetchData(); };
+    const visibility = () => { if (document.visibilityState === 'hidden') retire(); else refresh(); };
+    const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) refresh(); };
+    const unsubscribe = api.onTokenChange(refresh);
+    window.addEventListener('focus', refresh); window.addEventListener('pageshow', visibility); window.addEventListener('pagehide', retire);
+    window.addEventListener('storage', storage); document.addEventListener('visibilitychange', visibility); void fetchData();
+    return () => { disposed = true; retire(); unsubscribe(); window.removeEventListener('focus', refresh);
+      window.removeEventListener('pageshow', visibility); window.removeEventListener('pagehide', retire);
+      window.removeEventListener('storage', storage); document.removeEventListener('visibilitychange', visibility); };
+  }, [fetchData, retire]);
 
   useEffect(() => {
     if (tabFromUrl === 'requests') setTab('requests');
   }, [tabFromUrl]);
 
-  const canManage = myAccess?.isOwner || myAccess?.permissions?.includes('members.manage') || myAccess?.role_base === 'owner' || myAccess?.role_base === 'admin';
+  const canManage = !membersError && myAccess?.hasAccess === true && myAccess.permissions.includes('members.manage');
 
-  const grouped = ROLE_ORDER.reduce<Record<string, any[]>>((acc, role) => {
+  const grouped = DISPLAY_ROLE_ORDER.reduce<Record<string, any[]>>((acc, role) => {
     const roleMembers = members.filter((m: any) => m.role === role || m.role_base === role);
     if (roleMembers.length > 0) acc[role] = roleMembers;
     return acc;
@@ -116,21 +145,10 @@ function MembersContent() {
     } catch (err: any) { toast.error(err?.message || 'Failed to update role'); }
   }, [homeId, canManage, fetchData]);
 
-  const handleRemove = useCallback(async (member: any) => {
-    if (!canManage) return;
-    const yes = await confirmStore.open({
-      title: 'Remove Member',
-      description: `Remove ${member.display_name || member.email} from this home?`,
-      confirmLabel: 'Remove',
-      variant: 'destructive',
-    });
-    if (!yes) return;
-    try {
-      await api.homeIam.removeMember(homeId!, member.user_id || member.id);
-      toast.success('Member removed');
-      await fetchData();
-    } catch (err: any) { toast.error(err?.message || 'Failed to remove member'); }
-  }, [homeId, canManage, fetchData]);
+  const handleRemove = useCallback((member: any) => {
+    if (!canManage || typeof member.user_id !== 'string') return;
+    router.push(removalLink(homeId, member.user_id));
+  }, [homeId, canManage, router]);
 
   const handleApproveAccessRequest = useCallback(async (requestId: string) => {
     if (!canManage || !homeId) return;
@@ -191,10 +209,16 @@ function MembersContent() {
         )}
       </div>
 
+      <div className="mb-4"><Link href="/app/homes/member-removals" className="text-sm text-blue-700 underline">Recover a member removal</Link></div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <button type="button" onClick={() => void fetchData()} className="rounded-lg border border-app-border px-3 py-2 text-sm">Refresh members</button>
+        {membersError && <p role="alert" className="text-sm text-amber-800">{membersError}</p>}
+      </div>
       {/* Tabs */}
       <div className="flex border-b border-app-border mb-4 overflow-x-auto">
         <button type="button" onClick={() => setTab('members')} className={`px-4 py-2.5 text-sm font-medium transition whitespace-nowrap ${tab === 'members' ? 'text-emerald-600 border-b-2 border-emerald-600' : 'text-app-text-secondary hover:text-app-text'}`}>
-          Members ({members.length})
+          Members {membersError ? '(unavailable)' : `(${members.length})`}
         </button>
         {canManage && (
           <button type="button" onClick={() => setTab('requests')} className={`px-4 py-2.5 text-sm font-medium transition whitespace-nowrap ${tab === 'requests' ? 'text-emerald-600 border-b-2 border-emerald-600' : 'text-app-text-secondary hover:text-app-text'}`}>
@@ -225,11 +249,11 @@ function MembersContent() {
                     <div key={member.id || member.user_id} className="flex items-center gap-3 bg-app-surface border border-app-border rounded-xl p-3">
                       <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: meta.color + '15' }}>
                         <span className="text-sm font-bold" style={{ color: meta.color }}>
-                          {(member.display_name || member.user?.name || member.email || '?').charAt(0).toUpperCase()}
+                          {(member.display_name || member.user?.name || member.user?.username || member.username || '?').charAt(0).toUpperCase()}
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-app-text truncate">{member.display_name || member.user?.name || member.email || 'Unknown'}</p>
+                        <p className="text-sm font-medium text-app-text truncate">{member.display_name || member.user?.name || member.user?.username || member.username || 'Unknown'}</p>
                         {(member.username || member.user?.username) && <p className="text-xs text-app-text-muted">@{member.username || member.user?.username}</p>}
                         {member.joined_at && <p className="text-[11px] text-app-text-muted mt-0.5">Joined {new Date(member.joined_at).toLocaleDateString()}</p>}
                       </div>
@@ -238,7 +262,7 @@ function MembersContent() {
                           <button onClick={() => handleRoleChange(member)} title="Change role" className="p-1.5 text-app-text-secondary hover:bg-app-hover rounded-lg transition">
                             <ArrowLeftRight className="w-4 h-4" />
                           </button>
-                          <button onClick={() => handleRemove(member)} title="Remove" className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition">
+                          <button onClick={() => handleRemove(member)} title="Remove" aria-label={`Review removal of ${member.user?.username || member.username || 'this member'}`} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition">
                             <UserMinus className="w-4 h-4" />
                           </button>
                         </div>
@@ -250,7 +274,7 @@ function MembersContent() {
             );
           })}
 
-          {members.length === 0 && (
+          {!membersError && members.length === 0 && (
             <div className="text-center py-16"><Users className="w-10 h-10 mx-auto text-app-text-muted mb-3" /><p className="text-sm text-app-text-secondary">No members yet</p></div>
           )}
 

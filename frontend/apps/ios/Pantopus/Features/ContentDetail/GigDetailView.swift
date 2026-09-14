@@ -689,6 +689,7 @@ public struct GigDetailView: View {
     /// open gigs; the *update*-bid sheet when the viewer already bid;
     /// otherwise the place-bid sheet.
     private func presentPrimaryAction() {
+        guard case let .loaded(content) = viewModel.state, content.dock.primary.enabled else { return }
         if viewModel.canTip {
             tipCustomAmountText = ""
             showTipSheet = true

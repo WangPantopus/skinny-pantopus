@@ -273,3 +273,34 @@ test('retry cannot reveal a document moved into a restricted visibility', async 
   expect(retry.status).toBe(403);
   expect(retry.body.document).toBeUndefined();
 });
+
+test.each([
+  ['revoked access', 403], ['permission read failure', 503], ['sensitive visibility', 403],
+  ['deleted file', 404], ['removed document', 404], ['replaced bytes', 409],
+])('%s while a private document is downloading prevents delivery of the old bytes', async (change, status) => {
+  await uploading();
+  const download = bucket.download.getMockImplementation();
+  bucket.download.mockImplementationOnce(async key => {
+    const stored = await download(key);
+    if (change === 'revoked access') checkHomePermission.mockResolvedValue({ hasAccess: false });
+    else if (change === 'permission read failure') checkHomePermission.mockResolvedValue({ hasAccess: false, readFailed: true });
+    else if (change === 'sensitive visibility') db.getTable('HomeDocument')[0].visibility = 'sensitive';
+    else if (change === 'deleted file') db.getTable('File')[0].is_deleted = true;
+    else if (change === 'removed document') db.seedTable('HomeDocument', []);
+    else {
+      const changed = Buffer.from('new private version');
+      const hash = require('crypto').createHash('sha256').update(changed).digest('hex');
+      const file = db.getTable('File')[0], document = db.getTable('HomeDocument')[0];
+      file.metadata = { ...file.metadata, upload_sha256: hash, upload_fingerprint: 'changed' };
+      file.file_path = `${homeId}/${documentId}/${hash}`; file.file_size = changed.length;
+      document.details = { ...document.details, upload_sha256: hash, upload_fingerprint: 'changed' };
+      document.storage_path = file.file_path; document.size_bytes = changed.length;
+      objects.set(file.file_path, changed);
+    }
+    return stored;
+  });
+  const result = await request(app).get(contentPath);
+  expect(result.status).toBe(status);
+  expect(result.text).not.toContain(bytes.toString());
+  expect(result.headers['content-disposition']).toBeUndefined();
+});

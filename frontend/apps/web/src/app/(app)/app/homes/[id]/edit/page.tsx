@@ -156,8 +156,8 @@ export default function EditHomePage() {
         unit_number: unit.trim() || null,
         home_type: homeType,
         description: description.trim() || null,
-        entry_instructions: entryInstructions.trim() || null,
-        parking_instructions: parkingInstructions.trim() || null,
+        ...(Object.hasOwn(home || {}, 'entry_instructions') && { entry_instructions: entryInstructions.trim() || null }),
+        ...(Object.hasOwn(home || {}, 'parking_instructions') && { parking_instructions: parkingInstructions.trim() || null }),
         visibility,
         is_owner: isOwner,
       };
@@ -341,7 +341,7 @@ export default function EditHomePage() {
           </div>
 
           {/* ── Instructions ── */}
-          <div className="rounded-xl border border-app-border bg-app-surface p-5">
+          {Object.hasOwn(home || {}, 'entry_instructions') && Object.hasOwn(home || {}, 'parking_instructions') && <div className="rounded-xl border border-app-border bg-app-surface p-5">
             <h2 className="text-base font-semibold text-app-text mb-4">🚪 Instructions</h2>
             <div className="space-y-4">
               <div>
@@ -367,7 +367,7 @@ export default function EditHomePage() {
                 />
               </div>
             </div>
-          </div>
+          </div>}
 
           {/* ── Visibility ── */}
           <div className="rounded-xl border border-app-border bg-app-surface p-5">

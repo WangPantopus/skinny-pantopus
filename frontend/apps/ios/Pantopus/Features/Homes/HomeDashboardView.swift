@@ -6,15 +6,17 @@
 //  body + FAB CTA.
 //
 
-// swiftlint:disable function_body_length type_body_length
+// swiftlint:disable type_body_length
 
 import SwiftUI
 
 /// Home Dashboard screen wired to `GET /api/homes/:id` (with public-profile fallback).
 struct HomeDashboardView: View {
     @Environment(AuthManager.self) private var auth
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: HomeDashboardViewModel
     @State private var showsInviteOwner = false
+    @State private var isVisible = false
 
     private static let actionLabels: [String: String] = [
         "add_task": "Add Task",
@@ -178,12 +180,73 @@ struct HomeDashboardView: View {
                 dashboardBody(for: content, brandNew: nil)
             case let .error(message):
                 HomeDashboardErrorView(message: message, onBack: onBack) { Task { await viewModel.refresh() } }
+            case let .limited(content):
+                limitedEntry(content)
             }
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("homeDashboard")
-        .onAppear { Analytics.track(.screenHomeDashboardViewed) }
-        .task { await viewModel.load() }
+        .onAppear { isVisible = true
+            Analytics.track(.screenHomeDashboardViewed)
+        }
+        .task { await viewModel.activate(ifCurrent: viewModel.activationRevision) }
+        .onDisappear { isVisible = false
+            showsInviteOwner = false
+            viewModel.suspend()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard isVisible else { return }
+            if phase == .active {
+                let revision = viewModel.activationRevision
+                Task {
+                    guard isVisible, scenePhase == .active else { return }
+                    await viewModel.activate(ifCurrent: revision)
+                }
+            } else { showsInviteOwner = false
+                viewModel.suspend()
+            }
+        }
+        .onChange(of: viewModel.isCurrent) { _, current in
+            if !current { showsInviteOwner = false
+                viewModel.retireSession()
+            }
+        }
+        .toolbar(onBack == nil ? .automatic : .hidden, for: .navigationBar)
+    }
+
+    private var createActions: [FABSheetAction] {
+        [
+            FABSheetAction(id: "add_task", title: "Add Task", icon: .listChecks),
+            FABSheetAction(id: "track_bill", title: "Track Bill", icon: .creditCard),
+            FABSheetAction(id: "track_package", title: "Track Package", icon: .package),
+            FABSheetAction(id: "add_pet", title: "Add Pet", icon: .pawPrint),
+            FABSheetAction(id: "create_poll", title: "Create Poll", icon: .barChart3),
+            FABSheetAction(id: "send_mail", title: "Send Mail", icon: .mail)
+        ].filter { viewModel.canPerform($0.id) }
+    }
+
+    private func limitedEntry(_ content: HomeDashboardLimitedContent) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            if let onBack { Button("Back", action: onBack) }
+            Text(content.title).font(.title2).bold()
+            Text(content.message)
+            if content.canOpenTasks {
+                Button("Open your Home tasks") { if viewModel.isCurrent { onOpenTasks?(homeId) } }
+                    .accessibilityIdentifier("homeDashboard_limitedTasks")
+            }
+            if content.verificationKind == "ownership" {
+                Button("Continue ownership verification") { if viewModel.isCurrent { onClaimOwnership?() } }
+                    .accessibilityIdentifier("homeDashboard_verifyOwnership")
+                Button("View your ownership claims") { if viewModel.isCurrent { onOpenClaimsList?() } }
+            }
+            Button("Reload current Home access") { Task { await viewModel.refresh() } }
+                .accessibilityIdentifier("homeDashboard_accessRetry")
+        }
+        .padding(Spacing.s4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("homeDashboard_limited")
     }
 
     private func dashboardBody(
@@ -221,19 +284,12 @@ struct HomeDashboardView: View {
                         NeedsAttentionBanner(summary: attention) { handleQuickAction($0) }
                             .padding(.horizontal, Spacing.s4)
                     }
-                    if !content.isVerifiedOwner {
-                        ClaimOwnershipBanner(
-                            onClaim: { onClaimOwnership?() },
-                            onViewClaims: { onOpenClaimsList?() }
-                        )
-                        .padding(.horizontal, Spacing.s4)
-                    }
                     GridTabsBody(
                         quickActions: content.quickActions,
                         tabs: content.tabs,
                         selectedTab: Binding(
                             get: { viewModel.selectedTab },
-                            set: { viewModel.selectedTab = $0 }
+                            set: { viewModel.selectTab($0) }
                         ),
                         onQuickAction: { handleQuickAction($0) },
                         overview: {
@@ -244,31 +300,28 @@ struct HomeDashboardView: View {
                                     homeIntelligenceStack
                                     HomeOverviewSection(
                                         content: content,
-                                        onOpenEmergency: { onOpenEmergency?(homeId) },
-                                        onOpenPropertyDetails: { onOpenPropertyDetails?(homeId) }
+                                        onOpenEmergency: { if viewModel.can("sensitive.view") { onOpenEmergency?(homeId) } },
+                                        onOpenPropertyDetails: { if viewModel.can("home.view") { onOpenPropertyDetails?(homeId) } },
+                                        canViewActivity: viewModel.can("security.manage"),
+                                        canViewEmergency: viewModel.can("sensitive.view")
                                     )
                                 }
                             }
                         }
                     )
                 }
-            },
-            cta: {
-                // Six one-tap creates, matching RN's `homeFabActions`
-                // (`src/app/homes/[id]/index.tsx:154-161`). Every entry
-                // routes to a real create surface — no placeholders.
-                FABCreateCTA(
-                    actions: [
-                        FABSheetAction(id: "add_task", title: "Add Task", icon: .listChecks),
-                        FABSheetAction(id: "track_bill", title: "Track Bill", icon: .creditCard),
-                        FABSheetAction(id: "track_package", title: "Track Package", icon: .package),
-                        FABSheetAction(id: "add_pet", title: "Add Pet", icon: .pawPrint),
-                        FABSheetAction(id: "create_poll", title: "Create Poll", icon: .barChart3),
-                        FABSheetAction(id: "send_mail", title: "Send Mail", icon: .mail)
-                    ]
-                ) { handleFabAction($0) }
             }
         )
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !createActions.isEmpty {
+                HStack {
+                    Spacer()
+                    FABCreateCTA(actions: createActions) { handleFabAction($0) }
+                }
+                .padding(Spacing.s4)
+                .background(Theme.Color.appBg)
+            }
+        }
         .sheet(isPresented: $showsInviteOwner) {
             InviteOwnerFormView(
                 homeId: homeId,
@@ -290,6 +343,7 @@ struct HomeDashboardView: View {
         SeasonalChecklistCard(
             state: viewModel.checklist,
             pendingItemIds: viewModel.pendingChecklistItemIds,
+            canEdit: viewModel.canEditChecklist,
             onComplete: { itemId in Task { await viewModel.completeChecklistItem(itemId) } },
             onSkip: { itemId in Task { await viewModel.skipChecklistItem(itemId) } },
             onHireHelp: { item in
@@ -302,16 +356,22 @@ struct HomeDashboardView: View {
             state: viewModel.propertyValue
         ) { Task { await viewModel.retryPropertyValue() } }
         BillTrendsCard(
-            state: viewModel.billTrends
-        ) { Task { await viewModel.retryBillTrends() } }
+            state: viewModel.billTrends,
+            currency: viewModel.billCurrency,
+            currencies: viewModel.billCurrencies,
+            onCurrencyChange: { currency in Task { await viewModel.selectBillCurrency(currency) } },
+            onRetry: { Task { await viewModel.retryBillTrends() } }
+        )
     }
 
     /// Security-banner CTA routing. Mirrors RN's
     /// `HomeStatusBanner.tsx:53` (claim window → invite co-owner) and
     /// `:60` / `:66` (review / dispute → the home's security surface).
     private func handleSecurityBannerCTA(_ action: HomeSecurityBannerContent.Action) {
+        guard viewModel.isCurrent else { return }
         switch action {
         case .inviteCoOwner:
+            guard viewModel.can("ownership.manage") else { return }
             showsInviteOwner = true
         case .openSecuritySettings:
             if let onOpenSettings {
@@ -324,6 +384,7 @@ struct HomeDashboardView: View {
     }
 
     private func handleFabAction(_ action: String) {
+        guard viewModel.canPerform(action) else { return }
         switch action {
         case "add_task":
             route(onAddTask, fallback: onOpenTasks, action: action)
@@ -363,6 +424,7 @@ struct HomeDashboardView: View {
     }
 
     private func handleQuickAction(_ action: String) {
+        guard viewModel.canPerform(action) else { return }
         if let handler = quickActionHandlers[action] {
             handler()
         } else {
@@ -393,7 +455,7 @@ struct HomeDashboardView: View {
         // callback. Falls back to the legacy InviteOwnerForm sheet.
         if let onOpenMembers {
             onOpenMembers(homeId)
-        } else {
+        } else if viewModel.access?.can("ownership.manage") == true {
             showsInviteOwner = true
         }
     }
@@ -408,7 +470,7 @@ struct HomeDashboardView: View {
             content.address
         case let .empty(brandNew):
             brandNew.content.address
-        case .loading, .error:
+        case .loading, .error, .limited:
             nil
         }
     }

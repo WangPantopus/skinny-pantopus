@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import { getAuthToken } from '@pantopus/api';
+import { getAuthToken, onTokenChange } from '@pantopus/api';
 import { API_BASE_URL } from '@pantopus/utils';
 
 // ── Context ──────────────────────────────────────────────────
@@ -44,6 +44,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
+  const [sessionRevision, setSessionRevision] = useState(0);
   const socketRef = useRef<Socket | null>(null);
   const socketTokenRef = useRef<string | null>(null);
 
@@ -52,26 +53,40 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     setAuthToken((prev) => (prev === next ? prev : next));
   }, []);
 
+  const replaceSession = useCallback(() => {
+    // Cookie-backed sessions can share the same '__session__' marker. Retire
+    // the old socket immediately instead of waiting for a different token value.
+    socketRef.current?.disconnect();
+    socketRef.current = null;
+    socketTokenRef.current = null;
+    setSocket(null);
+    setConnected(false);
+    syncToken();
+    setSessionRevision((revision) => revision + 1);
+  }, [syncToken]);
+
   // Sync token on mount, tab visibility change, and cross-tab storage events
   useEffect(() => {
     syncToken(); // initial sync
+    const unsubscribe = onTokenChange(replaceSession);
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') syncToken();
     };
     const handleStorage = (e: StorageEvent) => {
       if (e.key === null || e.key?.includes('auth') || e.key?.includes('token') || e.key?.includes('session')) {
-        syncToken();
+        replaceSession();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('storage', handleStorage);
     return () => {
+      unsubscribe();
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('storage', handleStorage);
     };
-  }, [syncToken]);
+  }, [syncToken, replaceSession]);
 
   useEffect(() => {
     if (!authToken) {
@@ -109,16 +124,19 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     setSocket(nextSocket);
 
     nextSocket.on('connect', () => {
+      if (socketRef.current !== nextSocket) return;
       console.log('[Socket] Connected:', nextSocket.id);
       setConnected(true);
     });
 
     nextSocket.on('disconnect', (reason) => {
+      if (socketRef.current !== nextSocket) return;
       console.log('[Socket] Disconnected:', reason);
       setConnected(false);
     });
 
     nextSocket.on('connect_error', (err) => {
+      if (socketRef.current !== nextSocket) return;
       console.warn('[Socket] Connection retry:', err.message);
       setConnected(false);
     });
@@ -133,7 +151,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       socketRef.current = null;
       setConnected(false);
     };
-  }, [authToken]);
+  }, [authToken, sessionRevision]);
 
   return (
     <SocketContext.Provider value={{ socket, connected }}>

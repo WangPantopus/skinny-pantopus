@@ -1,7 +1,8 @@
 'use client';
 
 /* eslint-disable @next/next/no-img-element */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import ClaimEvidenceReview from '@/components/home/ClaimEvidenceReview';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, CheckCircle, XCircle, HelpCircle, MapPin, User,
@@ -45,6 +46,9 @@ export default function AdminReviewClaimsPage() {
   const router = useRouter();
   const [claims, setClaims] = useState<ClaimForReview[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reviewSession, setReviewSession] = useState<{ actor_id: string; session_scope: string } | null>(null);
+  const detailGeneration = useRef(0);
+  const decisionInFlight = useRef(false);
 
   // Detail panel (right side on desktop, overlay on mobile)
   const [selectedClaim, setSelectedClaim] = useState<ClaimForReview | null>(null);
@@ -57,8 +61,11 @@ export default function AdminReviewClaimsPage() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
 
-  // Evidence viewer
-  const [evidenceViewerUrl, setEvidenceViewerUrl] = useState<string | null>(null);
+  const closeDetail = () => {
+    detailGeneration.current++;
+    setSelectedClaim(null); setClaimDetail(null); setComparison(null); setShowRejectModal(false);
+  };
+  useEffect(() => () => { detailGeneration.current++; }, []);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
@@ -66,6 +73,7 @@ export default function AdminReviewClaimsPage() {
     try {
       const result = await api.admin.getPendingClaims();
       setClaims(result.claims || []);
+      setReviewSession(result.review_session);
     } catch (err: any) {
       if (err?.statusCode === 403 || err?.status === 403) {
         toast.error('You do not have admin access.');
@@ -80,23 +88,30 @@ export default function AdminReviewClaimsPage() {
   }, [fetchClaims]);
 
   const openClaimDetail = async (claim: ClaimForReview) => {
+    if (decisionInFlight.current) return;
+    if (!reviewSession?.session_scope) { toast.error('Reload the queue before opening a claim.'); return; }
+    const request = ++detailGeneration.current;
     setSelectedClaim(claim);
     setDetailLoading(true);
     setClaimDetail(null);
     setComparison(null);
     try {
-      const detail = await api.admin.getClaimDetail(claim.id);
+      const detail = await api.admin.getClaimDetail(claim.id, reviewSession.session_scope);
+      if (request !== detailGeneration.current) return;
+      if (detail.claim_session?.session_scope !== reviewSession.session_scope || detail.claim_session?.actor_id !== reviewSession.actor_id) {
+        throw new Error('Your session changed. Reload the queue.');
+      }
       setClaimDetail(detail);
       try {
         const compare = await api.homeOwnership.getOwnershipClaimComparison(claim.home_id);
-        setComparison(compare);
+        if (request === detailGeneration.current) setComparison(compare);
       } catch {
-        setComparison(null);
+        if (request === detailGeneration.current) setComparison(null);
       }
     } catch {
-      toast.error('Failed to load claim details');
+      if (request === detailGeneration.current) toast.error('Failed to load claim details');
     } finally {
-      setDetailLoading(false);
+      if (request === detailGeneration.current) setDetailLoading(false);
     }
   };
 
@@ -215,13 +230,22 @@ export default function AdminReviewClaimsPage() {
     action: 'approve' | 'reject' | 'request_more_info',
     note?: string,
   ) => {
+    if (decisionInFlight.current) return;
+    decisionInFlight.current = true;
+    const request = detailGeneration.current;
     setReviewingAction(action);
     try {
-      await api.admin.reviewClaim(claimId, { action, note });
+      if (claimDetail?.claim.id !== claimId || !claimDetail.claim.review_token) {
+        throw new Error('Reopen the claim before reviewing it.');
+      }
+      await api.claimEvidence.assertClaimSession(claimDetail.claim_session, true);
+      await api.admin.reviewClaim(claimId, { action, note, review_token: claimDetail.claim.review_token }, claimDetail.claim_session.session_scope);
+      await api.claimEvidence.assertClaimSession(claimDetail.claim_session, true);
+      if (request !== detailGeneration.current) return;
       toast.success(
-        action === 'approve' ? 'Claim approved. User has been verified.'
-          : action === 'reject' ? 'Claim rejected. User has been notified.'
-          : 'More info requested. User has been notified.',
+        action === 'approve' ? 'Claim approved.'
+          : action === 'reject' ? 'Claim rejected.'
+          : 'Request for more information saved.',
       );
       setSelectedClaim(null);
       setClaimDetail(null);
@@ -230,19 +254,21 @@ export default function AdminReviewClaimsPage() {
       setRejectNote('');
       await fetchClaims();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to review claim');
+      if (request === detailGeneration.current) toast.error(err?.message || 'Failed to review claim');
     } finally {
+      decisionInFlight.current = false;
       setReviewingAction(null);
     }
   };
 
   const handleApprove = async (claimId: string) => {
+    const request = detailGeneration.current;
     const ok = await confirmStore.open({
       title: 'Approve Claim',
-      description: 'This will verify the user and grant them access. Are you sure?',
+      description: 'Approve this claim using the evidence currently displayed? Access follows the claim type and current household policy.',
       confirmLabel: 'Approve',
     });
-    if (ok) handleReview(claimId, 'approve');
+    if (ok && request === detailGeneration.current) handleReview(claimId, 'approve');
   };
 
   // ── CLAIM LIST ──
@@ -299,9 +325,9 @@ export default function AdminReviewClaimsPage() {
       <div className={`${selectedClaim ? 'fixed inset-0 z-50 bg-app-surface lg:static lg:z-auto' : 'hidden lg:block'} flex flex-col flex-1 overflow-hidden`}>
         {/* Detail header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-app-border flex-shrink-0">
-          <button onClick={() => { setSelectedClaim(null); setClaimDetail(null); setComparison(null); }} className="lg:hidden p-1.5 hover:bg-app-hover rounded-lg"><ArrowLeft className="w-5 h-5" /></button>
+          <button onClick={closeDetail} className="lg:hidden p-1.5 hover:bg-app-hover rounded-lg"><ArrowLeft className="w-5 h-5" /></button>
           <h2 className="text-base font-semibold text-app-text">Review Claim</h2>
-          <button onClick={() => { setSelectedClaim(null); setClaimDetail(null); setComparison(null); }} className="hidden lg:block p-1.5 hover:bg-app-hover rounded-lg"><X className="w-5 h-5 text-app-text-muted" /></button>
+          <button onClick={closeDetail} className="hidden lg:block p-1.5 hover:bg-app-hover rounded-lg"><X className="w-5 h-5 text-app-text-muted" /></button>
         </div>
 
         {detailLoading ? (
@@ -381,13 +407,21 @@ export default function AdminReviewClaimsPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-app-text">{EVIDENCE_LABELS[ev.evidence_type] || ev.evidence_type}</p>
                         <p className="text-xs text-app-text-secondary truncate">{ev.file_name || 'Document'}</p>
+                        <p className="text-xs text-app-text-secondary">
+                          {ev.availability_code === 'CLAIM_EVIDENCE_PRIVATE_REUPLOAD_REQUIRED'
+                            ? 'A private copy must be uploaded before review.'
+                            : ev.eligible_for_review ? 'Verified evidence' : 'Pending verification'}
+                        </p>
                         {ev.file_size && <p className="text-[11px] text-app-text-muted">{(ev.file_size / 1024).toFixed(0)} KB &middot; {formatDate(ev.created_at)}</p>}
                       </div>
-                      {ev.file_url && (
-                        <button onClick={() => setEvidenceViewerUrl(ev.file_url!)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 bg-violet-50 text-violet-600 text-xs font-semibold rounded-lg hover:bg-violet-100 transition">
-                          View
-                        </button>
+                      {ev.available === true && claimDetail.claim_session && (
+                        <ClaimEvidenceReview key={`${ev.id}:${claimDetail.claim.review_token}`}
+                          scope={claimDetail.claim_session} evidenceId={ev.id} reviewToken={claimDetail.claim.review_token} platformAdmin alreadyVerified={ev.eligible_for_review === true}
+                          onVerified={async () => {
+                            const request = detailGeneration.current;
+                            const refreshed = await api.admin.getClaimDetail(claimDetail.claim.id, claimDetail.claim_session.session_scope);
+                            if (request === detailGeneration.current) setClaimDetail(refreshed);
+                          }} />
                       )}
                     </div>
                   ))}
@@ -450,21 +484,6 @@ export default function AdminReviewClaimsPage() {
 
           {/* Right: detail panel */}
           {renderDetailPanel()}
-        </div>
-      )}
-
-      {/* Evidence viewer modal */}
-      {evidenceViewerUrl && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
-          <div className="w-full max-w-4xl mx-4 bg-app-surface rounded-xl shadow-2xl border border-app-border flex flex-col" style={{ height: '85vh' }}>
-            <div className="flex items-center justify-between px-5 py-3 border-b border-app-border">
-              <h3 className="text-sm font-semibold text-app-text">Document Viewer</h3>
-              <button onClick={() => setEvidenceViewerUrl(null)} className="p-1 text-app-text-muted hover:text-app-text-secondary"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="flex-1">
-              <iframe src={evidenceViewerUrl} className="w-full h-full border-0 rounded-b-xl" title="Evidence document" />
-            </div>
-          </div>
         </div>
       )}
 

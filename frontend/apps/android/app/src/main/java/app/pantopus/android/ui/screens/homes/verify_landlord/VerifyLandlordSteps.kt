@@ -2,6 +2,8 @@
 
 package app.pantopus.android.ui.screens.homes.verify_landlord
 
+import java.time.LocalDate
+
 /**
  * Steps the A12.5 / A12.6 verify-landlord wizard owns. The third leg
  * of the flow (A12.7 Postcard verification) lives outside this state
@@ -50,7 +52,7 @@ data class VerifyLandlordApprovalResult(
     val headline: String
         get() =
             when (kind) {
-                Kind.Submitted -> "Request sent"
+                Kind.Submitted -> "Request submitted"
                 Kind.AlreadyPending -> "Waiting for approval"
                 Kind.AlreadyActive -> "You're already a verified tenant"
             }
@@ -59,11 +61,20 @@ data class VerifyLandlordApprovalResult(
         get() =
             when (kind) {
                 Kind.Submitted ->
-                    "Your request has been sent to the landlord. They'll review and approve your tenancy."
+                    "Your request is saved and is waiting for the property owner's review."
                 Kind.AlreadyPending ->
                     serverMessage ?: "You already have a pending request for this home."
                 Kind.AlreadyActive ->
                     serverMessage ?: "You already have an active lease at this home."
+            }
+
+    val statusNote: String
+        get() =
+            when (kind) {
+                Kind.Submitted, Kind.AlreadyPending ->
+                    "The property owner can approve or deny your saved request."
+                Kind.AlreadyActive ->
+                    "Your lease is active. Home access follows the approved lease dates."
             }
 }
 
@@ -93,10 +104,16 @@ sealed interface VerifyLandlordSubmitState {
 data class VerifyLandlordLeaseFile(
     val filename: String,
     val sizeLabel: String,
-    val pageCount: Int,
+    val pageCount: Int?,
     val detectedOwner: String?,
     val detectedUnit: String?,
-)
+    val typeLabel: String = "PDF",
+    val uploadStatus: String = "Uploaded just now",
+    val reviewNote: String? = null,
+    val uploadUnconfirmed: Boolean = false,
+) {
+    val detailLabel: String get() = listOfNotNull(sizeLabel, pageCount?.let { "$it pages" }, uploadStatus).joinToString(" · ")
+}
 
 /**
  * Per-slot validation messages surfaced in the A12.6 error frame
@@ -187,8 +204,7 @@ data class VerifyLandlordForm(
             }
         val leaseError =
             when {
-                lease == null -> "Required"
-                lease.detectedUnit != null &&
+                lease?.detectedUnit != null &&
                     registeredUnit.isNotEmpty() &&
                     !lease.detectedUnit.equals(registeredUnit, ignoreCase = true) -> "Unit mismatch"
                 else -> null
@@ -255,7 +271,6 @@ data class VerifyLandlordForm(
                         val pmParts = listOf(pmName, pmEmail, pmPhone).map { it.trim() }.filter { it.isNotEmpty() }
                         if (pmParts.isNotEmpty()) add("Property manager: " + pmParts.joinToString(" · "))
                     }
-                    lease?.let { add("Lease on file: ${it.filename}") }
                 }
             if (lines.isEmpty()) return null
             val joined = lines.joinToString("\n")
@@ -275,13 +290,9 @@ data class VerifyLandlordForm(
          */
         @Suppress("MagicNumber", "ReturnCount")
         internal fun looksLikeISODate(candidate: String): Boolean {
-            val parts = candidate.split('-')
-            if (parts.size != 3) return false
-            if (parts[0].length != 4 || parts[1].length != 2 || parts[2].length != 2) return false
-            val year = parts[0].toIntOrNull() ?: return false
-            val month = parts[1].toIntOrNull() ?: return false
-            val day = parts[2].toIntOrNull() ?: return false
-            return year >= 1900 && month in 1..12 && day in 1..31
+            if (candidate.length != 10) return false
+            val date = runCatching { LocalDate.parse(candidate) }.getOrNull() ?: return false
+            return date.year >= 1900
         }
 
         /**
@@ -309,7 +320,7 @@ sealed interface VerifyLandlordOutboundEvent {
 
     /**
      * Submit succeeded — pop the wizard and push the standalone A12.7
-     * Postcard verification screen so the user can track delivery.
+     * Mail verification screen so the user can review their mailing address.
      */
     data class OpenPostcardVerification(val homeId: String) : VerifyLandlordOutboundEvent
 }

@@ -37,6 +37,7 @@ final class ListOfRowsRenderTests: XCTestCase {
         )
         XCTAssertEqual(row.id, "id")
         XCTAssertEqual(row.title, "Title")
+        XCTAssertEqual(row.titleLineLimit, 2)
         XCTAssertEqual(row.subtitle, "subtitle")
         XCTAssertNil(row.body)
         XCTAssertNil(row.inlineChip)

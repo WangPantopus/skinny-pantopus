@@ -79,7 +79,7 @@ public struct VerifyLandlordApprovalResult: Sendable, Equatable {
 
     public var headline: String {
         switch kind {
-        case .submitted: "Request sent"
+        case .submitted: "Request submitted"
         case .alreadyPending: "Waiting for approval"
         case .alreadyActive: "You're already a verified tenant"
         }
@@ -88,11 +88,20 @@ public struct VerifyLandlordApprovalResult: Sendable, Equatable {
     public var body: String {
         switch kind {
         case .submitted:
-            "Your request has been sent to the landlord. They'll review and approve your tenancy."
+            "Your request is saved and is waiting for the property owner's review."
         case .alreadyPending:
             serverMessage ?? "You already have a pending request for this home."
         case .alreadyActive:
             serverMessage ?? "You already have an active lease at this home."
+        }
+    }
+
+    public var statusNote: String {
+        switch kind {
+        case .submitted, .alreadyPending:
+            "The property owner can approve or deny your saved request."
+        case .alreadyActive:
+            "Your lease is active. Home access follows the approved lease dates."
         }
     }
 }
@@ -102,22 +111,35 @@ public struct VerifyLandlordApprovalResult: Sendable, Equatable {
 public struct VerifyLandlordLeaseFile: Sendable, Equatable {
     public let filename: String
     public let sizeLabel: String
-    public let pageCount: Int
+    public let pageCount: Int?
     public let detectedOwner: String?
     public let detectedUnit: String?
+    public let typeLabel: String
+    public let uploadStatus: String
+    public let reviewNote: String?
+
+    var detailLabel: String {
+        [sizeLabel, pageCount.map { "\($0) pages" }, uploadStatus].compactMap { $0 }.joined(separator: " · ")
+    }
 
     public init(
         filename: String,
         sizeLabel: String,
-        pageCount: Int,
+        pageCount: Int?,
         detectedOwner: String?,
-        detectedUnit: String?
+        detectedUnit: String?,
+        typeLabel: String = "PDF",
+        uploadStatus: String = "Uploaded just now",
+        reviewNote: String? = nil
     ) {
         self.filename = filename
         self.sizeLabel = sizeLabel
         self.pageCount = pageCount
         self.detectedOwner = detectedOwner
         self.detectedUnit = detectedUnit
+        self.typeLabel = typeLabel
+        self.uploadStatus = uploadStatus
+        self.reviewNote = reviewNote
     }
 }
 
@@ -258,8 +280,6 @@ public struct VerifyLandlordForm: Sendable, Equatable {
                detected.caseInsensitiveCompare(registeredUnit) != .orderedSame {
                 errors.lease = "Unit mismatch"
             }
-        } else {
-            errors.lease = "Required"
         }
         if pmEnabled {
             if pmName.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -289,7 +309,14 @@ public struct VerifyLandlordForm: Sendable, Equatable {
               year >= 1900, (1...12).contains(month), (1...31).contains(day) else {
             return false
         }
-        return true
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
+        guard let date = formatter.date(from: candidate) else { return false }
+        return formatter.string(from: date) == candidate
     }
 
     /// Widen `YYYY-MM-DD` into the ISO-8601 timestamp Joi's
@@ -325,10 +352,6 @@ public struct VerifyLandlordForm: Sendable, Equatable {
                 lines.append("Property manager: " + pmParts.joined(separator: " · "))
             }
         }
-        if let lease {
-            lines.append("Lease on file: \(lease.filename)")
-        }
-
         guard !lines.isEmpty else { return nil }
         let joined = lines.joined(separator: "\n")
         guard joined.count > Self.messageMaxLength else { return joined }

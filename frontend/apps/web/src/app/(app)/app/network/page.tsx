@@ -135,19 +135,6 @@ function DiscoverPageContent() {
     }
   };
 
-  const handleClaimHome = async (homeId: string) => {
-    setActionLoading((p) => ({ ...p, [`home-claim-${homeId}`]: true }));
-    try {
-      const res = await api.homes.submitResidencyClaim(homeId);
-      const resObj = res as Record<string, any>;
-      const claim = resObj?.claim as Record<string, any> | undefined;
-      const status = (claim?.status || 'pending') as string;
-      setHomes((prev) => prev.map((h) => (h.id === homeId ? { ...h, claim_status: status } as Home : h)));
-    } finally {
-      setActionLoading((p) => ({ ...p, [`home-claim-${homeId}`]: false }));
-    }
-  };
-
   const visiblePeople = tab === 'all' || tab === 'people';
   const visibleBusinesses = tab === 'all' || tab === 'businesses';
   const visibleHomes = tab === 'all' || tab === 'homes';
@@ -294,9 +281,8 @@ function DiscoverPageContent() {
             <h2 className="text-lg font-semibold text-app mb-3">Homes</h2>
             <div className="grid md:grid-cols-2 gap-3">
               {homes.map((h) => {
-                const busy = !!actionLoading[`home-claim-${h.id}`];
                 const claimState = h.claim_status;
-                const canClaim = !h.is_member && !claimState;
+                const canClaim = !h.is_member && (!claimState || claimState === 'rejected');
                 return (
                   <div key={h.id} className="rounded-lg border border-app bg-surface p-4 flex items-center justify-between gap-4">
                     <div className="min-w-0">
@@ -318,15 +304,17 @@ function DiscoverPageContent() {
                       {h.is_member ? (
                         <span className="rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-sm text-green-700">Member</span>
                       ) : claimState === 'pending' ? (
-                        <span className="rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-1.5 text-sm text-yellow-700">Claim Pending</span>
+                        <Link href={`/app/homes/new?joinHome=${encodeURIComponent(h.id)}`}
+                          className="rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-1.5 text-sm text-yellow-700">
+                          Review request
+                        </Link>
+                      ) : canClaim ? (
+                        <Link href={`/app/homes/new?joinHome=${encodeURIComponent(h.id)}`}
+                          className="rounded-lg border border-app-strong px-3 py-1.5 text-sm text-app-strong">
+                          {claimState === 'rejected' ? 'Review and submit again' : 'Request residency'}
+                        </Link>
                       ) : (
-                        <button
-                          onClick={() => canClaim && handleClaimHome(h.id)}
-                          disabled={!canClaim || busy}
-                          className="rounded-lg border border-app-strong px-3 py-1.5 text-sm text-app-strong disabled:opacity-50"
-                        >
-                          {busy ? '...' : 'Claim'}
-                        </button>
+                        <Link href="/app/homes" className="text-sm text-app-strong">Check My Homes</Link>
                       )}
                     </div>
                   </div>

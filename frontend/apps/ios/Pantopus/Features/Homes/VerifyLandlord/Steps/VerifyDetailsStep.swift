@@ -23,11 +23,15 @@ struct VerifyDetailsStep: View {
     var body: some View {
         HeadlineBlock(
             "Landlord & lease details",
-            subtitle: "We'll email this person a one-time link to confirm the rental."
+            subtitle: "These details are included in your request for the verified property owner to review."
         )
 
         if let errors = viewModel.errors, !errors.isEmpty {
             VerifyErrorSummaryBanner(errors: errors)
+        } else if let message = viewModel.attachment.errorMessage {
+            VerifyErrorSummaryBanner(errors: .init(), serverMessage: message, title: "Couldn't confirm attachment")
+        } else if case let .error(message) = viewModel.submitState {
+            VerifyErrorSummaryBanner(errors: .init(), serverMessage: message)
         }
 
         BusinessInfoCard(viewModel: viewModel)
@@ -73,7 +77,7 @@ private struct BusinessInfoCard: View {
                 placeholder: "mira@elmstholdings.com",
                 icon: .mail,
                 keyboard: .emailAddress,
-                hint: "We'll send a confirmation link here.",
+                hint: "Included as contact information in your request.",
                 error: viewModel.errors?.email,
                 onChange: viewModel.setEmail
             )
@@ -98,22 +102,19 @@ private struct LeaseUploadCard: View {
             VerifyLandlordSectionHeader(
                 overline: "Lease or deed",
                 title: "Attach proof of the rental",
-                subtitle: "One document is enough — the lease you signed, "
-                    + "or a deed showing the owner above."
+                subtitle: "Optional · PDF, text or supported image, up to 25 MB. "
+                    + "The verified property owner can read it after you submit."
             )
             LeaseUploadView(
-                lease: viewModel.form.lease,
+                lease: viewModel.attachment.displayFile ?? viewModel.form.lease,
                 registeredUnit: viewModel.form.registeredUnit,
-                hasError: viewModel.errors?.lease != nil,
-                onAttach: {
-                    // Wired to a real picker when the verify-landlord
-                    // bytes upload endpoint ships. For sample data we
-                    // attach the populated fixture so QA can step
-                    // through the done / warn states inline.
-                    viewModel.setLease(VerifyLandlordSampleData.populatedForm.lease)
-                },
-                onRemove: { viewModel.setLease(nil) }
-            )
+                hasError: viewModel.errors?.lease != nil || viewModel.attachment.needsRetry
+                    || (viewModel.attachment.hasDraft && viewModel.attachment.file == nil),
+                onAttach: viewModel.attachLeaseTapped
+            ) {
+                if viewModel.attachment.hasDraft { viewModel.attachment.remove() } else { viewModel.setLease(nil) }
+            }
+            .disabled(viewModel.isSubmitting)
         }
     }
 }
@@ -467,7 +468,7 @@ private struct LeaseUploadEmptyButton: View {
                         .pantopusTextStyle(.body)
                         .fontWeight(.semibold)
                         .foregroundStyle(Theme.Color.appText)
-                    Text("PDF, JPG, or PNG · up to 10 MB")
+                    Text("PDF, text or image · up to 25 MB")
                         .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
@@ -498,7 +499,7 @@ private struct LeaseUploadDoneRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack(alignment: .center, spacing: Spacing.s3) {
-                PDFThumb()
+                PDFThumb(label: lease.typeLabel)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(lease.filename)
                         .pantopusTextStyle(.caption)
@@ -506,7 +507,7 @@ private struct LeaseUploadDoneRow: View {
                         .foregroundStyle(Theme.Color.appText)
                         .lineLimit(1)
                     Text(
-                        "\(lease.sizeLabel) · \(lease.pageCount) pages · Uploaded just now"
+                        lease.detailLabel
                     )
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
@@ -540,12 +541,13 @@ private struct LeaseUploadDoneRow: View {
 }
 
 private struct PDFThumb: View {
+    let label: String
     var body: some View {
         RoundedRectangle(cornerRadius: 5, style: .continuous)
             .fill(Theme.Color.errorBg)
             .frame(width: 36, height: 44)
             .overlay {
-                Text("PDF", style: .overline)
+                Text(label, style: .overline)
                     .foregroundStyle(Theme.Color.error)
                     .tracking(0.4)
             }
@@ -570,7 +572,7 @@ private struct LeaseParseStatusRow: View {
                         color: Theme.Color.appTextInverse
                     )
                 }
-            (Text(hasError ? "Unit doesn't match. " : "Lease parsed. ")
+            (Text(lease.reviewNote != nil ? "\(lease.uploadStatus). " : (hasError ? "Unit doesn't match. " : "Lease parsed. "))
                 .fontWeight(.bold)
                 +
                 Text(statusBody)
@@ -587,21 +589,25 @@ private struct LeaseParseStatusRow: View {
     }
 
     private var statusBody: String {
+        if let note = lease.reviewNote { return note }
         if hasError {
             let detected = lease.detectedUnit ?? "Unknown"
             return "Detected \"\(detected)\" — your home is registered as \"\(registeredUnit)\". "
                 + "Re-upload the correct lease or update your home."
         }
-        let owner = lease.detectedOwner ?? "M. Patel"
-        let unit = lease.detectedUnit ?? registeredUnit
+        guard let owner = lease.detectedOwner, let unit = lease.detectedUnit else {
+            return "The property owner will review this file."
+        }
         return "Owner \"\(owner)\" and unit \"\(unit)\" detected."
     }
 }
 
 // MARK: - Summary banner
 
-private struct VerifyErrorSummaryBanner: View {
+struct VerifyErrorSummaryBanner: View {
     let errors: VerifyLandlordValidationErrors
+    var serverMessage: String?
+    var title: String?
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.s3) {
@@ -613,11 +619,12 @@ private struct VerifyErrorSummaryBanner: View {
                 }
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Fix \(errors.count) thing\(errors.count == 1 ? "" : "s") to submit")
+                Text(title ?? (serverMessage == nil ? "Fix \(errors.count) thing\(errors.count == 1 ? "" : "s") to submit" :
+                        "Couldn't submit request"))
                     .pantopusTextStyle(.body)
                     .fontWeight(.semibold)
                     .foregroundStyle(Theme.Color.error)
-                Text(errors.compactSummary)
+                Text(serverMessage ?? errors.compactSummary)
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.error)
                     .opacity(0.9)
@@ -644,8 +651,8 @@ private struct VerifyEncryptionFootnote: View {
         HStack(spacing: Spacing.s2) {
             Icon(.lock, size: 12, color: Theme.Color.appTextSecondary)
             Text(
-                "Confirmation email goes only to the landlord. "
-                    + "Your name and unit will be shown."
+                "The verified property owner can review your request. "
+                    + "Contact details you enter are included as a note."
             )
             .pantopusTextStyle(.caption)
             .foregroundStyle(Theme.Color.appTextSecondary)

@@ -52,6 +52,9 @@ const createNextConfig = (phase) => ({
     ];
   },
   // Proxy API calls through Next.js so backend cookies are same-origin.
+  async redirects() {
+    return [{ source: '/invite/lease/:token', destination: '/app/homes/invite?type=lease&code=:token', permanent: false }];
+  },
   async rewrites() {
     const backendUrl = defaultApiUrl;
     return [

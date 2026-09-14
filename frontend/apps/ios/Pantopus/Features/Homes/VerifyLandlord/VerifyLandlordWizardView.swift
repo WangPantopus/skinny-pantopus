@@ -9,12 +9,15 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Concrete verify-landlord wizard. Mirrors the
 /// `ClaimOwnershipWizardView` shape so the two A12 wizards stay
 /// interchangeable to host-stack callers.
 @MainActor
 public struct VerifyLandlordWizardView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var visible = false
     @State private var viewModel: VerifyLandlordWizardViewModel
     private let onClose: @MainActor () -> Void
     private let onOpenPostcardVerification: @MainActor (String) -> Void
@@ -45,13 +48,42 @@ public struct VerifyLandlordWizardView: View {
         .onChange(of: viewModel.pendingEvent) { _, event in
             handle(event)
         }
+        .onAppear {
+            visible = true
+            if scenePhase == .active { viewModel.resume() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard visible else { return }
+            if phase == .active {
+                viewModel.resume()
+            } else if phase == .background || !viewModel.attachment.showsPicker {
+                viewModel.retirePendingWork()
+            }
+        }
+        .onChange(of: viewModel.isCurrentSession) { _, current in if !current { viewModel.sessionChanged() } }
+        .onDisappear { visible = false
+            viewModel.retirePendingWork()
+        }
         .accessibilityIdentifier("verifyLandlordWizard")
+        .fileImporter(
+            isPresented: Binding(
+                get: { viewModel.attachment.showsPicker },
+                set: { viewModel.attachment.showsPicker = $0 }
+            ),
+            allowedContentTypes: [.pdf, .plainText, .jpeg, .png, .webP, .heic, .heif],
+            allowsMultipleSelection: false
+        ) {
+            viewModel.attachment.received($0)
+        }
     }
 
     @ViewBuilder
     private var stepContent: some View {
         switch viewModel.currentStep {
         case .start:
+            if let message = submitErrorMessage {
+                VerifyErrorSummaryBanner(errors: .init(), serverMessage: message)
+            }
             VerifyStartStep(content: viewModel.startContent)
         case .details:
             VerifyDetailsStep(viewModel: viewModel)

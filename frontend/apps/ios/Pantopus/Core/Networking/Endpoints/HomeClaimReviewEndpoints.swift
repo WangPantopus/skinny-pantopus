@@ -38,6 +38,10 @@ public enum HomeClaimReviewEndpoints {
         Endpoint(method: .get, path: "/api/homes/\(homeId)/ownership-claims/compare")
     }
 
+    public static func ownershipClaimDetail(homeId: String, claimId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/homes/\(homeId)/ownership-claims/\(claimId)")
+    }
+
     /// `POST /api/homes/:id/ownership-claims/:claimId/review` — route
     /// `backend/routes/homeOwnership.js:665`. `action` ∈
     /// approve | reject | flag.

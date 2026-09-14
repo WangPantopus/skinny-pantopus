@@ -127,7 +127,7 @@ struct AddressTodayTabView: View {
         loadFailed = false
         do {
             let response: MyHomesResponse = try await APIClient.shared.request(HomesEndpoints.myHomes())
-            let id = response.homes.first { $0.isPrimaryOwner == true }?.id ?? response.homes.first?.id
+            let id = response.sharedHomes.first { $0.isPrimaryOwner == true }?.id ?? response.sharedHomes.first?.id
             homeId = id
             if let id { detail = PlaceDetailViewModel(homeId: id, group: .today) }
         } catch is CancellationError {

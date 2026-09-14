@@ -30,7 +30,7 @@ router.put('/:id/record-watch', verifyToken, async (req, res) => {
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this place.' });
+      return res.status(403).json({ error: 'You do not have access to this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     }
     if (!isVerifiedResident(access)) {
       return res.status(403).json({
@@ -62,7 +62,7 @@ router.get('/:id/record-watch', verifyToken, async (req, res) => {
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this place.' });
+      return res.status(403).json({ error: 'You do not have access to this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     }
     const watch = await homeRecordWatchService.getWatch({ homeId: id, userId });
     return res.json({ watch });
@@ -79,7 +79,7 @@ router.delete('/:id/record-watch', verifyToken, async (req, res) => {
   try {
     const access = await checkHomePermission(id, userId);
     if (!access.hasAccess) {
-      return res.status(403).json({ error: 'You do not have access to this place.' });
+      return res.status(403).json({ error: 'You do not have access to this place.', ...(access.verificationRequired && { code: 'VERIFICATION_REQUIRED' }) });
     }
     const removed = await homeRecordWatchService.deleteWatch({ homeId: id, userId });
     if (!removed) return res.status(404).json({ error: 'No watch to remove.' });

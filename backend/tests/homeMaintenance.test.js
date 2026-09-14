@@ -40,7 +40,7 @@ function seedOccupancy(userId, role = 'member') {
       user_id: userId,
       role,
       role_base: role,
-      is_active: true,
+      is_active: true, verification_status: 'verified',
       start_at: null,
       end_at: null,
     },

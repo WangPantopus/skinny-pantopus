@@ -8,10 +8,8 @@
 //  `HomeLease` row the backend returned (submitted-at, requested start,
 //  the message the landlord will read).
 //
-//  There is no `GET /api/v1/tenant/home/:id/status` route in
-//  `backend/routes/landlordTenant.js`, so this screen deliberately does
-//  not poll — it renders what the submit answered with and offers the
-//  mailed-code path as the alternative.
+//  The wizard refreshes the existing status endpoint on foreground;
+//  this view renders its saved result without claiming notice delivery.
 //
 
 import SwiftUI
@@ -40,7 +38,7 @@ struct VerifySentStep: View {
                     .foregroundStyle(Theme.Color.error)
                     .accessibilityIdentifier("verifyLandlordSentError")
             }
-            Text("Your landlord will be notified and can approve or deny your request.")
+            Text(result.statusNote)
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -80,7 +78,7 @@ struct VerifySentStep: View {
 
     private var detailCard: some View {
         VStack(spacing: Spacing.s0) {
-            let start = VerifySentStep.formatted(result.requestedStartAt)
+            let start = VerifySentStep.formatted(result.requestedStartAt, calendarDate: true)
             let hasMessage = !(result.message ?? "").isEmpty
             if let submitted = VerifySentStep.formatted(result.submittedAt) {
                 detailRow(
@@ -172,7 +170,7 @@ struct VerifySentStep: View {
 
     /// ISO-8601 → "Mar 4, 2026". Returns nil when the field is absent or
     /// unparsable so the row simply doesn't render.
-    static func formatted(_ iso: String?) -> String? {
+    static func formatted(_ iso: String?, calendarDate: Bool = false) -> String? {
         guard let iso, !iso.isEmpty else { return nil }
         let withFraction = ISO8601DateFormatter()
         withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -180,6 +178,9 @@ struct VerifySentStep: View {
         plain.formatOptions = [.withInternetDateTime]
         guard let date = withFraction.date(from: iso) ?? plain.date(from: iso) else { return nil }
         let out = DateFormatter()
+        // Lease forms store calendar dates at midnight UTC, like the web caller.
+        // Submission timestamps continue to use the device's local calendar.
+        if calendarDate { out.timeZone = TimeZone(secondsFromGMT: 0) }
         out.dateFormat = "MMM d, yyyy"
         return out.string(from: date)
     }

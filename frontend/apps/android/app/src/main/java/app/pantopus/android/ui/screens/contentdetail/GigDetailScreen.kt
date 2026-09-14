@@ -251,6 +251,7 @@ fun GigDetailScreen(
         onPrimaryAction = {
             val gig = (state as? ContentDetailUiState.Loaded)?.content?.hero
             when {
+                (state as? ContentDetailUiState.Loaded)?.content?.dock?.primary?.enabled != true -> Unit
                 // Poster on a completed gig → Send-a-tip sheet (Block 3D).
                 viewModel.canTip() -> showTipSheet = true
                 // Assigned worker on an in-progress task → Delivery Proof sheet.

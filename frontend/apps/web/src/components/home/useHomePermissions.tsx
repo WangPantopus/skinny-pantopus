@@ -1,6 +1,9 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
+
+import * as api from '@pantopus/api';
+import { readCurrentHomeAccess } from './homeAccessFingerprint';
 
 // ============================================================
 // Types
@@ -10,6 +13,7 @@ export interface HomeAccess {
   hasAccess: boolean;
   isOwner: boolean;
   role_base: string | null;
+  effective_role_base?: string | null;
   permissions: string[];
   occupancy: {
     id: string;
@@ -19,7 +23,7 @@ export interface HomeAccess {
     end_at: string | null;
     age_band: string | null;
   } | null;
-  // Navigation-gating booleans (from occupancy row)
+  // Navigation booleans projected from effective permissions by the server.
   can_manage_home: boolean;
   can_manage_access: boolean;
   can_manage_finance: boolean;
@@ -27,6 +31,8 @@ export interface HomeAccess {
   can_view_sensitive: boolean;
   // Verification context
   verification_status: string;
+  verification_required?: boolean;
+  verification_kind?: 'ownership' | 'residency';
   is_in_challenge_window: boolean;
   challenge_window_ends_at: string | null;
   /** When user has an ownership claim that was rejected or needs more info (for dashboard messaging) */
@@ -75,9 +81,11 @@ interface HomePermissionsContextType {
 // ============================================================
 
 const ROLE_RANK: Record<string, number> = {
+  service_provider: 5,
   guest: 10,
   restricted_member: 20,
   member: 30,
+  lease_resident: 35,
   manager: 40,
   admin: 50,
   owner: 60,
@@ -117,15 +125,33 @@ export function HomePermissionsProvider({
   const [access, setAccess] = useState<HomeAccess | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const generation = useRef(0);
+  const scopeHome = useRef(homeId);
+  const ready = useRef<(() => boolean) | null>(null);
+  const retireGeneration = useCallback(() => { generation.current++; ready.current = null; }, []);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const revision = ++generation.current;
+    scopeHome.current = homeId; ready.current = null;
+    const token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => revision === generation.current && token === api.getAuthToken()
+      && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)
+      && document.visibilityState !== 'hidden';
+    setAccess(null); setLoading(true);
     setError(null);
     try {
-      const { get } = await import('@pantopus/api');
-      const data = await get(`/api/homes/${homeId}/me`);
-      setAccess(data as HomeAccess);
+      if (!token) throw new Error('Sign in again to check current home access.');
+      const data = await readCurrentHomeAccess(homeId);
+      if (!current()) return;
+      const confirmed = data as HomeAccess;
+      if ((confirmed.hasAccess !== true && confirmed.verification_required !== true) || !Array.isArray(confirmed.permissions)) {
+        throw new Error('Current access to this home could not be confirmed. Reload to check access.');
+      }
+      ready.current = current;
+      setAccess(confirmed);
     } catch (err: unknown) {
+      if (!current()) return;
       setError(err instanceof Error ? err.message : 'Failed to load permissions');
       setAccess({
         hasAccess: false,
@@ -150,49 +176,63 @@ export function HomePermissionsProvider({
         occupancy_id: null,
       });
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }, [homeId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    void load();
+    const invalidate = () => { retireGeneration(); setAccess(null); setLoading(true); setError(null); };
+    const changed = () => { invalidate(); if (document.visibilityState !== 'hidden') void load(); };
+    const visibility = () => { if (document.visibilityState === 'hidden') invalidate(); else changed(); };
+    const focus = () => { if (document.visibilityState !== 'hidden') changed(); };
+    const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed(); };
+    const unsubscribe = api.onTokenChange(changed);
+    window.addEventListener('storage', storage); window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', visibility);
+    return () => { retireGeneration(); unsubscribe(); window.removeEventListener('storage', storage);
+      window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', visibility); };
+  }, [load, retireGeneration]);
 
+  const visibleAccess = scopeHome.current === homeId ? access : null;
+  const opening = ready.current;
   const can = useCallback(
     (permission: string) => {
-      if (!access) return false;
-      if (access.isOwner) return true; // owner can do everything
-      return access.permissions.includes(permission);
+      if (!opening?.() || !visibleAccess?.hasAccess) return false;
+      return visibleAccess.permissions.includes(permission);
     },
-    [access]
+    [visibleAccess, opening]
   );
 
   const hasRoleAtLeast = useCallback(
     (minRole: string) => {
-      if (!access?.role_base) return false;
-      if (access.isOwner) return true;
-      return (ROLE_RANK[access.role_base] || 0) >= (ROLE_RANK[minRole] || 0);
+      if (!opening?.() || !visibleAccess?.hasAccess || !ROLE_RANK[minRole]) return false;
+      const role = visibleAccess.effective_role_base ?? visibleAccess.role_base;
+      const rank = ROLE_RANK[role || ''] || 0;
+      const ceiling = visibleAccess.age_band === 'child' ? ROLE_RANK.restricted_member
+        : visibleAccess.age_band === 'teen' ? ROLE_RANK.member : rank;
+      return Math.min(rank, ceiling) >= ROLE_RANK[minRole];
     },
-    [access]
+    [visibleAccess, opening]
   );
 
   const canSeeTab = useCallback(
     (tab: TabName) => {
-      if (!access) return false;
+      if (!opening?.() || !visibleAccess?.hasAccess) return false;
       const field = TAB_PERMISSION_MAP[tab];
-      return field ? access[field] : false;
+      return field ? visibleAccess[field] : false;
     },
-    [access]
+    [visibleAccess, opening]
   );
 
-  const needsVerification = !access || access.verification_status !== 'verified';
+  const needsVerification = !visibleAccess || visibleAccess.verification_status !== 'verified';
 
-  const isProvisional = access?.verification_status === 'provisional'
-    || access?.verification_status === 'provisional_bootstrap';
+  const isProvisional = visibleAccess?.verification_status === 'provisional'
+    || visibleAccess?.verification_status === 'provisional_bootstrap';
 
   return (
     <HomePermissionsContext.Provider
-      value={{ access, loading, error, can, hasRoleAtLeast, canSeeTab, needsVerification, isProvisional, reload: load }}
+      value={{ access: visibleAccess, loading, error, can, hasRoleAtLeast, canSeeTab, needsVerification, isProvisional, reload: load }}
     >
       {children}
     </HomePermissionsContext.Provider>

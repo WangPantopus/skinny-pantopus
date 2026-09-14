@@ -15,7 +15,10 @@ const {
   ROLE_RANK,
 } = require('../utils/homePermissions');
 
-beforeEach(() => resetTables());
+beforeEach(() => {
+  resetTables();
+  seedTable('Home', [{ id: 'home-1', owner_id: 'another-owner' }]);
+});
 
 // ── mapLegacyRole (pure logic) ──────────────────────────────
 describe('mapLegacyRole', () => {
@@ -71,7 +74,7 @@ describe('getActiveOccupancy', () => {
       id: 'occ-1',
       home_id: homeId,
       user_id: userId,
-      is_active: true,
+      is_active: true, verification_status: 'verified',
       role: 'member',
       role_base: 'member',
       start_at: null,
@@ -102,7 +105,7 @@ describe('getActiveOccupancy', () => {
       id: 'occ-1',
       home_id: homeId,
       user_id: userId,
-      is_active: true,
+      is_active: true, verification_status: 'verified',
       role_base: 'member',
       start_at: new Date(Date.now() + 86400000).toISOString(), // tomorrow
       end_at: null,
@@ -117,7 +120,7 @@ describe('getActiveOccupancy', () => {
       id: 'occ-1',
       home_id: homeId,
       user_id: userId,
-      is_active: true,
+      is_active: true, verification_status: 'verified',
       role_base: 'member',
       start_at: null,
       end_at: new Date(Date.now() - 86400000).toISOString(), // yesterday
@@ -141,7 +144,7 @@ describe('hasPermission', () => {
 
   test('returns true when role has the permission', async () => {
     seedTable('HomeOccupancy', [{
-      id: 'occ-1', home_id: homeId, user_id: userId, is_active: true,
+      id: 'occ-1', home_id: homeId, user_id: userId, is_active: true, verification_status: 'verified',
       role_base: 'admin', start_at: null, end_at: null,
     }]);
     seedTable('HomePermissionOverride', []);
@@ -155,7 +158,7 @@ describe('hasPermission', () => {
 
   test('returns false when role does not have the permission', async () => {
     seedTable('HomeOccupancy', [{
-      id: 'occ-1', home_id: homeId, user_id: userId, is_active: true,
+      id: 'occ-1', home_id: homeId, user_id: userId, is_active: true, verification_status: 'verified',
       role_base: 'guest', start_at: null, end_at: null,
     }]);
     seedTable('HomePermissionOverride', []);
@@ -167,7 +170,7 @@ describe('hasPermission', () => {
 
   test('override grants permission even if role denies', async () => {
     seedTable('HomeOccupancy', [{
-      id: 'occ-1', home_id: homeId, user_id: userId, is_active: true,
+      id: 'occ-1', home_id: homeId, user_id: userId, is_active: true, verification_status: 'verified',
       role_base: 'guest', start_at: null, end_at: null,
     }]);
     seedTable('HomePermissionOverride', [{
@@ -182,7 +185,7 @@ describe('hasPermission', () => {
 
   test('override denies permission even if role grants', async () => {
     seedTable('HomeOccupancy', [{
-      id: 'occ-1', home_id: homeId, user_id: userId, is_active: true,
+      id: 'occ-1', home_id: homeId, user_id: userId, is_active: true, verification_status: 'verified',
       role_base: 'admin', start_at: null, end_at: null,
     }]);
     seedTable('HomePermissionOverride', [{
@@ -211,7 +214,7 @@ describe('getUserAccess', () => {
       home_id: homeId,
       subject_id: coOwnerId,
       subject_type: 'user',
-      owner_status: 'verified',
+      owner_status: 'verified', subject_type: 'user',
       verification_tier: 'standard',
       is_primary_owner: false,
     }]);
@@ -219,7 +222,7 @@ describe('getUserAccess', () => {
       id: 'occ-co',
       home_id: homeId,
       user_id: coOwnerId,
-      is_active: true,
+      is_active: true, verification_status: 'verified',
       role_base: 'owner',
       start_at: null,
       end_at: null,
@@ -242,7 +245,7 @@ describe('getUserAccess', () => {
       id: 'occ-prom',
       home_id: homeId,
       user_id: promotedId,
-      is_active: true,
+      is_active: true, verification_status: 'verified',
       role: 'member',
       role_base: 'owner',
       start_at: null,
@@ -268,7 +271,7 @@ describe('checkHomePermission', () => {
   test('owner always has all permissions', async () => {
     seedTable('Home', [{ id: homeId, owner_id: ownerId }]);
     seedTable('HomeOccupancy', [{
-      id: 'occ-1', home_id: homeId, user_id: ownerId, is_active: true,
+      id: 'occ-1', home_id: homeId, user_id: ownerId, is_active: true, verification_status: 'verified',
       role_base: 'owner', start_at: null, end_at: null,
     }]);
     seedTable('HomeOwner', []);
@@ -294,7 +297,7 @@ describe('checkHomePermission', () => {
     seedTable('Home', [{ id: homeId, owner_id: ownerId }]);
     seedTable('HomeOwner', []);
     seedTable('HomeOccupancy', [{
-      id: 'occ-2', home_id: homeId, user_id: memberId, is_active: true,
+      id: 'occ-2', home_id: homeId, user_id: memberId, is_active: true, verification_status: 'verified',
       role_base: 'member', start_at: null, end_at: null,
     }]);
     seedTable('HomePermissionOverride', []);
@@ -314,7 +317,7 @@ describe('checkHomePermission', () => {
     seedTable('Home', [{ id: homeId, owner_id: ownerId }]);
     seedTable('HomeOwner', []);
     seedTable('HomeOccupancy', [{
-      id: 'occ-2', home_id: homeId, user_id: memberId, is_active: true,
+      id: 'occ-2', home_id: homeId, user_id: memberId, is_active: true, verification_status: 'verified',
       role_base: 'admin', start_at: null, end_at: null,
     }]);
     seedTable('HomePermissionOverride', []);
@@ -330,11 +333,11 @@ describe('checkHomePermission', () => {
     seedTable('Home', [{ id: homeId, owner_id: 'someone-else' }]);
     seedTable('HomeOwner', [{
       id: 'ho-1', home_id: homeId, subject_id: memberId,
-      owner_status: 'verified', verification_tier: 'deed',
+      owner_status: 'verified', subject_type: 'user', verification_tier: 'deed',
       is_primary_owner: true,
     }]);
     seedTable('HomeOccupancy', [{
-      id: 'occ-2', home_id: homeId, user_id: memberId, is_active: true,
+      id: 'occ-2', home_id: homeId, user_id: memberId, is_active: true, verification_status: 'verified',
       role_base: 'member', start_at: null, end_at: null,
     }]);
     seedTable('HomePermissionOverride', []);
@@ -353,7 +356,7 @@ describe('checkHomePermission', () => {
       id: 'occ-iam',
       home_id: homeId,
       user_id: iamOwnerId,
-      is_active: true,
+      is_active: true, verification_status: 'verified',
       role_base: 'owner',
       start_at: null,
       end_at: null,

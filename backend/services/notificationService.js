@@ -160,18 +160,27 @@ function getUserSocketIds(userId) {
   return [entry];
 }
 
+// In-app events deliberately ignore push preferences. Browser OS alerts must
+// use this separate event, emitted only after the push eligibility checks.
+function emitDesktopAlert(notification) {
+  if (!_io || !_connectedUsers) return;
+  for (const socketId of getUserSocketIds(notification.user_id)) {
+    _io.to(socketId).emit('notification:alert', notification);
+  }
+}
+
 /**
  * Check whether a user has push notifications enabled in their preferences.
  * Returns false if the preference row doesn't exist or push is disabled.
  */
 async function isPushEnabled(userId) {
   try {
-    const { data } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('MailPreferences')
       .select('push_notifications')
       .eq('user_id', userId)
       .single();
-    return data?.push_notifications === true;
+    return !error && data?.push_notifications === true;
   } catch {
     return false;
   }
@@ -252,14 +261,14 @@ async function isTypeEnabled(userId, type) {
       .eq('user_id', userId)
       .maybeSingle();
 
-    // A read failure cannot establish that a saved Beacon opt-out is absent.
+    // A read failure cannot establish that a saved opt-out is absent.
     // Only transport uses this check; the in-app row already exists.
-    if (isBeacon && error) return false;
+    if (error) return false;
     // Default to enabled if no row exists
     if (!data) return true;
     return data[prefField] !== false;
   } catch {
-    return !isBeacon; // Preserve existing categories; fail closed for Beacon push.
+    return false;
   }
 }
 
@@ -297,6 +306,7 @@ async function shouldSuppressAudienceNotification(userId, type, metadata) {
  * @param {string} [opts.icon] - emoji icon
  * @param {string} [opts.link] - in-app link to navigate to
  * @param {Object} [opts.metadata] - extra data (home_id, gig_id, etc.)
+ * @param {string} [opts.idempotencyKey] - stable event identity; existing notices are never re-emitted
  * @param {string} [opts.contextType] - 'personal' or 'business' (Identity Firewall)
  * @param {string} [opts.contextId] - business_user_id when contextType='business'
  * @param {string} [opts.context] - 'personal' | 'audience' | 'platform'
@@ -305,7 +315,7 @@ async function shouldSuppressAudienceNotification(userId, type, metadata) {
  *   pass `context: 'audience'` explicitly).
  * @returns {Promise<Object|null>} notification or null on error
  */
-async function createNotification({ userId, type, title, body, icon, link, metadata, contextType, contextId, context }) {
+async function createNotification({ userId, type, title, body, icon, link, metadata, contextType, contextId, context, idempotencyKey }) {
   if (!userId || !type || !title) {
     logger.warn('createNotification called with missing required fields', { userId, type, title });
     return null;
@@ -337,11 +347,15 @@ async function createNotification({ userId, type, title, body, icon, link, metad
         context_type: contextType || 'personal',
         context_id: contextId || null,
         context: resolvedContext,
+        ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
       })
       .select()
       .single();
 
     if (error) {
+      // The existing unique index is the concurrency boundary. A retry must
+      // preserve read state and cannot repeat badge, socket or push emission.
+      if (idempotencyKey && error.code === '23505') return null;
       logger.error('Failed to create notification', { error: error.message, userId, type });
       return null;
     }
@@ -363,7 +377,8 @@ async function createNotification({ userId, type, title, body, icon, link, metad
     Promise.all([isPushEnabled(userId), isTypeEnabled(userId, type)])
       .then(([pushEnabled, typeEnabled]) => {
         if (!pushEnabled || !typeEnabled) return;
-        pushService.sendToUser(userId, {
+        emitDesktopAlert(data);
+        return pushService.sendToUser(userId, {
           title,
           body: body || '',
           data: { notificationId: data.id, type, link: link || null, ...(metadata || {}) },
@@ -440,7 +455,8 @@ async function createBulkNotifications(notifications) {
         Promise.all([isPushEnabled(notif.user_id), isTypeEnabled(notif.user_id, notif.type)])
           .then(([pushEnabled, typeEnabled]) => {
             if (!pushEnabled || !typeEnabled) return;
-            pushService.sendToUser(notif.user_id, {
+            emitDesktopAlert(notif);
+            return pushService.sendToUser(notif.user_id, {
               title: notif.title,
               body: notif.body || '',
               data: { notificationId: notif.id, type: notif.type, link: notif.link || null, ...(notif.metadata || {}) },
@@ -1265,9 +1281,41 @@ async function notifyHouseholdAccessRequest({
 }
 
 
+/** Deliver an existing exact assignment notice; never insert a second one. */
+async function deliverStoredHomeTaskNotification(notification, { pushAllowedAtAssignment } = {}) {
+  if (!notification?.id || !notification.user_id || notification.type !== 'task_assigned'
+    || notification.context !== 'personal' || notification.context_type !== 'personal'
+    || notification.context_id != null || !notification.metadata?.assignment_event_id
+    || typeof pushAllowedAtAssignment !== 'boolean') {
+    throw new Error('Unsupported stored Home task notification');
+  }
+  const userId = notification.user_id;
+  const [global, granular] = await Promise.all([
+    supabaseAdmin.from('MailPreferences').select('push_notifications').eq('user_id', userId).maybeSingle(),
+    supabaseAdmin.from('UserNotificationPreferences').select('home_reminders_enabled').eq('user_id', userId).maybeSingle(),
+  ]);
+  if (global.error || granular.error) throw new Error('Home notification preferences unavailable');
+  // A notice created while disabled stays in-app even if push is later enabled.
+  const suppressed = !pushAllowedAtAssignment || global.data?.push_notifications !== true
+    || granular.data?.home_reminders_enabled === false;
+  if (!suppressed) emitDesktopAlert(notification);
+  const result = suppressed ? { acceptedCount: 0, unresolvedCount: 0 }
+    : await pushService.sendToUserWithReceipt(userId, {
+      title: notification.title, body: notification.body || '',
+      data: { ...notification.metadata, notificationId: notification.id,
+        type: notification.type, link: notification.link || null },
+    });
+  badgeService.emitBadgeUpdate(userId);
+  if (_io && _connectedUsers) {
+    for (const socketId of getUserSocketIds(userId)) _io.to(socketId).emit('notification:new', notification);
+  }
+  return { ...result, suppressed };
+}
+
 module.exports = {
   init,
   createNotification,
+  deliverStoredHomeTaskNotification,
   createBulkNotifications,
   notifyHomeInvite,
   notifyHomeInviteAccepted,

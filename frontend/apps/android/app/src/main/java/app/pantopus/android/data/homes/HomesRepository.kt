@@ -29,6 +29,7 @@ import app.pantopus.android.data.api.models.homes.GetHomePollsResponse
 import app.pantopus.android.data.api.models.homes.GetHomeTasksResponse
 import app.pantopus.android.data.api.models.homes.HomeAccessSecretResponse
 import app.pantopus.android.data.api.models.homes.HomeAccessSecretsResponse
+import app.pantopus.android.data.api.models.homes.HomeAddressValidationRequest
 import app.pantopus.android.data.api.models.homes.HomeBillResponse
 import app.pantopus.android.data.api.models.homes.HomeEventDetailResponse
 import app.pantopus.android.data.api.models.homes.HomeEventResponse
@@ -97,6 +98,8 @@ open class HomesRepository
         /** `POST /api/homes/property-suggestions`. */
         open suspend fun propertySuggestions(request: PropertySuggestionsRequest) = safeApiCall { api.propertySuggestions(request) }
 
+        open suspend fun validateAddress(request: HomeAddressValidationRequest) = safeApiCall { api.validateAddress(request) }
+
         /** `POST /api/homes/check-address`. */
         open suspend fun checkAddress(request: CheckAddressRequest) = safeApiCall { api.checkAddress(request) }
 
@@ -113,7 +116,8 @@ open class HomesRepository
         open suspend fun submitClaim(
             homeId: String,
             request: SubmitClaimRequest,
-        ): NetworkResult<SubmitClaimResponse> = safeApiCall { api.submitClaim(homeId, request) }
+            expectedSession: String? = null,
+        ): NetworkResult<SubmitClaimResponse> = safeApiCall { api.submitClaim(homeId, request, expectedSession) }
 
         /** `POST /api/homes/:id/ownership-claims/:claimId/evidence`. */
         open suspend fun uploadEvidence(

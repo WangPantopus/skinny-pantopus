@@ -97,3 +97,21 @@ test('correlates explicit provider acceptance without logging tokens or notifica
   expect(logged).not.toContain('Private content');
   expect(logged).not.toContain('Private title');
 });
+
+describe('durable dispatch receipts', () => {
+  test('partial acceptance and unknown tokens remain unresolved', async () => {
+    const sender = { isConfigured: () => true, sendMany: jest.fn().mockResolvedValue({ acceptedTokens: ['ok'], invalidTokens: ['gone'] }) };
+    expect(await dispatchToTokens(['ok', 'gone', 'unknown'].map((token) => ({ token, provider: 'apns' })),
+      { apns: sender }, {}, { receipt: true })).toMatchObject({ acceptedCount: 1, unresolvedCount: 1 });
+  });
+  test('disabled transport does not produce a false acceptance receipt', async () => {
+    expect(await dispatchToTokens([{ token: 'device', provider: 'apns' }],
+      { apns: { isConfigured: () => false, sendMany: jest.fn() } }, {}, { receipt: true }))
+      .toMatchObject({ acceptedCount: 0, unresolvedCount: 1 });
+  });
+  test('provider exception retains retry eligibility', async () => {
+    expect(await dispatchToTokens([{ token: 'device', provider: 'apns' }],
+      { apns: { isConfigured: () => true, sendMany: jest.fn().mockRejectedValue(new Error('unknown')) } }, {}, { receipt: true }))
+      .toMatchObject({ acceptedCount: 0, unresolvedCount: 1 });
+  });
+});

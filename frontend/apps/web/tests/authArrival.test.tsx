@@ -1,4 +1,5 @@
 import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server.node';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { authPageHref, oauthRedirectParamForWeb, safeRedirectPath } from '../src/lib/auth-utils';
 
@@ -31,6 +32,18 @@ import ResetPassword from '../src/app/(auth)/reset-password/page';
 
 beforeEach(() => { jest.clearAllMocks(); search = new URLSearchParams(); window.history.replaceState({}, '', '/'); localStorage.clear(); });
 const TARGETS = ['/app/place?preview=0123456789abcdef', '/app/feed/post/post-1?comment=reply-2', '/persona/garden', '/app/persona/garden/follow?tier_rank=1', '/app/feed?surface=personas'];
+
+test.each([
+  ['login', Login], ['registration', Register], ['password recovery', ForgotPassword], ['password reset', ResetPassword],
+])('%s credentials are inert before hydration and cannot fall back to a GET', (_name, Page) => {
+  const container = document.createElement('div');
+  container.innerHTML = renderToStaticMarkup(<Page />);
+  const form = container.querySelector('form');
+  expect(form).toHaveAttribute('method', 'post');
+  const controls = form!.querySelectorAll('input, button, select, textarea');
+  expect(controls.length).toBeGreaterThan(0);
+  controls.forEach(control => expect(control).toBeDisabled());
+});
 
 describe('safe return destinations', () => {
   test.each([...TARGETS, '/@garden', '/posts/post-1', '/invite/seat?token=x'])('preserves %s', (target) => expect(safeRedirectPath(target)).toBe(target));

@@ -12,13 +12,12 @@ import app.pantopus.android.data.api.models.homes.HomeClaimUserDto
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimDto
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimMaskedClaimantDto
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimsResponse
-import app.pantopus.android.data.api.models.homes.HomeResidencyClaimDto
-import app.pantopus.android.data.api.models.homes.HomeResidencyClaimantDto
 import app.pantopus.android.data.api.models.homes.HomeResidencyClaimsResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeClaimReviewRepository
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -50,6 +49,8 @@ class HomeClaimReviewViewModelTest {
     private fun makeVm(): HomeClaimReviewViewModel =
         HomeClaimReviewViewModel(
             repo = repo,
+            scopeFactory = claimScopeFactory(),
+            evidenceFactory = mockk(relaxed = true),
             savedStateHandle = SavedStateHandle(mapOf(HOME_CLAIM_REVIEW_HOME_ID_KEY to "home_1")),
         )
 
@@ -65,7 +66,7 @@ class HomeClaimReviewViewModelTest {
     // region Load / state transitions
 
     @Test
-    fun `all three reads failing surfaces the error state`() =
+    fun `both ownership reads failing surfaces the error state`() =
         runTest {
             stubAllFailing()
             val vm = makeVm()
@@ -88,43 +89,15 @@ class HomeClaimReviewViewModelTest {
         }
 
     @Test
-    fun `a 403 on ownership does not hide pending residency claims`() =
+    fun `ownership failure cannot borrow residency success`() =
         runTest {
-            coEvery { repo.ownershipClaims(any()) } returns
-                NetworkResult.Failure(NetworkError.Forbidden)
-            coEvery { repo.ownershipClaimComparison(any()) } returns
-                NetworkResult.Failure(NetworkError.NotFound)
-            coEvery { repo.residencyClaims(any()) } returns
-                NetworkResult.Success(
-                    HomeResidencyClaimsResponse(
-                        claims =
-                            listOf(
-                                HomeResidencyClaimDto(
-                                    id = "rc_1",
-                                    status = "pending",
-                                    claimedRole = "renter",
-                                    claimedAddress = "418 Elm St",
-                                    createdAt = "2026-08-01T10:00:00Z",
-                                    claimant =
-                                        HomeResidencyClaimantDto(
-                                            id = "u1",
-                                            name = "Maria Kovács",
-                                        ),
-                                ),
-                            ),
-                    ),
-                )
+            stubAllFailing()
+            coEvery { repo.residencyClaims(any()) } returns NetworkResult.Success(HomeResidencyClaimsResponse(emptyList()))
             val vm = makeVm()
             vm.load()
-            val loaded = vm.state.value as HomeClaimReviewUiState.Loaded
-            assertTrue(loaded.data.ownership.isEmpty())
-            assertEquals(1, loaded.data.residency.size)
-            assertEquals("Requesting: Renter", loaded.data.residency.first().roleLabel)
+            assertTrue(vm.state.value is HomeClaimReviewUiState.Error)
+            coVerify(exactly = 0) { repo.residencyClaims(any()) }
         }
-
-    // endregion
-
-    // region Projection
 
     @Test
     fun `comparison claims win over the masked fallback list`() {
@@ -188,16 +161,17 @@ class HomeClaimReviewViewModelTest {
     }
 
     @Test
-    fun `non-pending residency claims are dropped`() {
-        val items =
-            HomeClaimReviewViewModel.residencyItems(
-                listOf(
-                    HomeResidencyClaimDto(id = "r1", status = "pending", claimedRole = "member"),
-                    HomeResidencyClaimDto(id = "r2", status = "verified", claimedRole = "member"),
-                ),
-            )
-        assertEquals(listOf("r1"), items.map { it.id })
-    }
+    fun `empty ownership does not replace the selected residency tab`() =
+        runTest {
+            stubAllFailing()
+            coEvery { repo.ownershipClaims(any()) } returns NetworkResult.Success(HomeOwnershipClaimsResponse(emptyList()))
+            val vm = makeVm()
+            vm.selectTab(HomeClaimReviewTab.Residency)
+            vm.load()
+            assertEquals(HomeClaimReviewUiState.Empty, vm.state.value)
+            assertEquals(HomeClaimReviewTab.Residency, vm.selectedTab.value)
+            coVerify(exactly = 0) { repo.residencyClaims(any()) }
+        }
 
     @Test
     fun `comparison projects both columns of the side-by-side view`() {

@@ -2,24 +2,12 @@
 //  ClaimOwnershipWizardViewModel.swift
 //  Pantopus
 //
-//  3-step claim-ownership wizard. Backend flow:
-//   1. POST /api/homes/:id/ownership-claims  (claim_type=owner, method=doc_upload)
-//   2. For each evidence file:
-//        a. POST /api/files/upload (multipart) → file URL
-//        b. POST /api/homes/:id/ownership-claims/:claimId/evidence with storage_ref
-//   3. On all-success: advance to .success
-//   4. On any failure: stay on .upload, mark the failing slot, preserve files
+//  Private manual evidence is uploaded once under its immutable retry identity.
+//  Saving a document never approves a claim.
 //
-//  Backend reality vs P20 spec — flagged in the PR description:
-//  - submitClaimSchema does NOT accept a `note` field. The textarea
-//    value is sent as `metadata.note` on the FIRST evidence upload.
-//  - The evidence endpoint takes JSON `storage_ref`, not multipart.
-//    Real bytes go through `/api/files/upload` first.
-//
-// swiftlint:disable cyclomatic_complexity file_length function_body_length type_body_length
+// swiftlint:disable cyclomatic_complexity file_length type_body_length
 
 import Foundation
-import Logging
 import Observation
 
 /// Outbound events the wizard view must react to.
@@ -33,11 +21,7 @@ public enum ClaimOwnershipOutboundEvent: Sendable, Equatable {
     case openFindHome
 }
 
-/// How the viewer wants to get onto this home. Mirrors RN
-/// `src/app/homes/[id]/claim-owner/index.tsx:14-15` — the document /
-/// escrow / IDV methods all funnel into the same evidence upload
-/// natively, so they collapse into `.verifyOwnership`; the
-/// `ask_verified_owner` branch posts instead of uploading.
+/// The manual document path and the separate request to a verified owner.
 public enum ClaimStartMethod: String, Sendable, CaseIterable {
     case verifyOwnership
     case askVerifiedOwner
@@ -56,10 +40,16 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
     /// Selected `evidence_type` for slots that accept several document
     /// kinds (residency). `nil` until the user picks one.
     var selectedDocumentType: String?
-    var slots: [ClaimEvidenceSlot: ClaimSlotUiState] = [:]
-    /// Per-slot address-match verdict from the on-upload OCR check. Computed
-    /// when a file is picked (sample-data heuristic until the evidence
-    /// pipeline returns a parsed address) and cleared when the slot is reset.
+    private var storedSlots: [ClaimEvidenceSlot: ClaimSlotUiState] = [:]
+    var slots: [ClaimEvidenceSlot: ClaimSlotUiState] {
+        evidenceClient.isCurrent ? storedSlots : [:]
+    }
+
+    var hasCurrentSession: Bool {
+        evidenceClient.isCurrent
+    }
+
+    /// No address-verification verdict is inferred from a selected filename.
     var addressMatches: [ClaimEvidenceSlot: ClaimAddressMatch] = [:]
     var note: String = ""
     private(set) var startContent: ClaimOwnershipStartContent
@@ -101,12 +91,10 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
     /// (`claim-owner/evidence.tsx:223-241`).
     private(set) var routingWarning: ClaimRoutingWarning?
 
-    /// Extra line on the success step describing what the submission
-    /// actually did — a parallel claim, or a challenge that opened.
+    /// Describes the pending manual submission without implying verification.
     private(set) var submissionOutcomeNote: String?
 
-    /// `routing_classification` from the claim POST, held across the
-    /// warning round-trip and the challenge activation.
+    /// The server routing classification is retained through a retry.
     private var routingClassification: String?
     /// True once the user tapped "Continue" on the routing warning, so a
     /// resumed submit doesn't re-prompt.
@@ -129,19 +117,45 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
     /// across retry attempts so a partial-success → retry doesn't create
     /// a duplicate claim row server-side.
     private var pendingClaimId: String?
-    /// File URLs successfully pushed through `/api/files/upload` whose
-    /// evidence registration later failed. Held so retry can POST the
-    /// evidence call directly with the existing `storage_ref` instead
-    /// of re-uploading the bytes (which would orphan the prior file).
-    private var pendingUploadURLs: [ClaimEvidenceSlot: String] = [:]
+    /// Stable private upload reservations are retained with the selected bytes
+    /// so a lost response can recover the same immutable upload.
+    private var pendingUploadIDs: [ClaimEvidenceSlot: String] = [:]
+    private var attemptedUploadSlots: Set<ClaimEvidenceSlot> = []
+    private let evidenceClient: PrivateClaimEvidenceClient
+    private let makeUploadId: () -> String
+    private(set) var sessionReady = false
+    private var canAct: Bool {
+        sessionReady && evidenceClient.isCurrent && !isSubmitting
+    }
+
+    var canPick: Bool {
+        canAct && attemptedUploadSlots.isEmpty
+    }
+
+    var needsUploadRecovery: Bool {
+        canAct && !attemptedUploadSlots.isEmpty && currentStep != .success
+    }
+
+    func manageSavedDocuments() {
+        guard needsUploadRecovery else { return }
+        pendingEvent = .openClaimsList
+    }
+
+    func retire() {
+        evidenceClient.retire()
+        sessionReady = false
+        storedSlots = [:]
+        pendingUploadIDs = [:]
+        attemptedUploadSlots = []
+        pendingClaimId = nil
+        note = ""
+    }
 
     // MARK: - Init
 
     private let homeId: String
     private let api: APIClient
-    private let uploader: MultipartUploader
     private let isOnlineProvider: @MainActor () -> Bool
-    private let logger = Logger(label: "app.pantopus.ios.ClaimOwnershipWizard")
 
     init(
         homeId: String,
@@ -151,26 +165,22 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
         verificationType: ClaimVerificationType = .owner,
         // Defaults to the live monitor in production. Tests inject a fixed
         // value so CI simulator reachability does not gate stubbed requests.
+        evidenceClient: PrivateClaimEvidenceClient? = nil,
+        makeUploadId: @escaping () -> String = { UUID().uuidString.lowercased() },
         isOnlineProvider: @escaping @MainActor () -> Bool = { NetworkMonitor.shared.isOnline }
     ) {
         self.homeId = homeId
         self.api = api
-        self.uploader = uploader
+        self.evidenceClient = evidenceClient ?? PrivateClaimEvidenceClient(api: api, uploader: uploader)
+        self.makeUploadId = makeUploadId
         self.verificationType = verificationType
         self.isOnlineProvider = isOnlineProvider
-        self.startContent = startContent ?? ClaimOwnershipSampleData.startContent(for: homeId)
+        self.startContent = startContent ?? ClaimOwnershipStartContent(homeLabel: "This home", contestedClaim: nil)
         for slot in ClaimEvidenceSlot.allCases {
-            slots[slot] = .empty
+            storedSlots[slot] = .empty
         }
         currentStep = verificationType.steps.first ?? .start
-        // Residency's single slot accepts three document kinds; RN forces
-        // an explicit pick (`evidence.tsx:162`), so we start unselected.
-        //
-        // The owner variant carries a second, fixed "Government ID" slot
-        // alongside the ownership proof, so its picker starts on `deed` —
-        // the type this wizard sent before the picker existed. The
-        // claimant can switch to any of the other four ownership document
-        // kinds (RN `OWNERSHIP_DOC_OPTIONS`, `evidence.tsx:26-32`).
+        // Residency requires an explicit document choice; ownership defaults to a deed.
         selectedDocumentType = verificationType == .owner ? "deed" : nil
     }
 
@@ -192,7 +202,8 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
     }
 
     func selectDocumentType(_ id: String) {
-        guard documentOptions.contains(where: { $0.id == id }) else { return }
+        guard canPick, documentOptions.contains(where: { $0.id == id }) else { return }
+        if selectedDocumentType != id { pendingUploadIDs = [:] }
         selectedDocumentType = id
         submitError = nil
     }
@@ -225,7 +236,7 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
                 primaryCTALabel: selectedStartMethod == .askVerifiedOwner
                     ? "Send request"
                     : "Start claim",
-                primaryCTAEnabled: !isSendingAskRequest,
+                primaryCTAEnabled: canPick && !isSendingAskRequest,
                 secondaryCTA: nil,
                 isSubmitting: isSendingAskRequest,
                 // Once the user has filled any slot or typed a note on the
@@ -315,9 +326,14 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
     /// replace the sample home label with the real address.
     func load() async {
         do {
+            _ = try await evidenceClient.claims()
+            try evidenceClient.requireCurrent()
+            sessionReady = true
             let response: HomePublicPreviewResponse = try await api.request(
                 HomeDiscoveryEndpoints.publicProfile(homeId: homeId)
             )
+            try evidenceClient.requireCurrent()
+            guard response.home.id == homeId else { throw APIError.invalidResponse }
             hasVerifiedOwner = response.hasVerifiedOwner
             isMember = response.isMember
             let label = response.home.displayAddress
@@ -333,14 +349,16 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
         } catch {
             // The picker degrades to the ownership-verification path
             // when the preview can't be read — never invent the flag.
-            logger.warning("Claim start public-profile load failed: \(error)")
+            sessionReady = false
+            submitError = HomeClaimReviewError.message(for: error)
+            if !evidenceClient.isCurrent { retire() }
         }
     }
 
     /// `POST /api/homes/:id/request-household-from-owner` — notifies the
     /// home's verified owner(s) that a non-member wants to be added.
     func sendHouseholdRequest() async {
-        guard !isSendingAskRequest else { return }
+        guard canPick, !isSendingAskRequest else { return }
         if !isOnlineProvider() {
             askRequestError = "You're offline. Try again when you're back online."
             return
@@ -348,14 +366,15 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
         isSendingAskRequest = true
         defer { isSendingAskRequest = false }
         do {
+            try evidenceClient.requireCurrent()
             _ = try await api.request(
                 HomeDiscoveryEndpoints.requestHouseholdFromOwner(
                     homeId: homeId,
                     request: RequestHouseholdFromOwnerRequest(requestedIdentity: "owner")
                 )
             ) as RequestHouseholdFromOwnerResponse
-            askRequestConfirmation =
-                "Verified owners were notified. They can add you from the home Members screen."
+            try evidenceClient.requireCurrent()
+            askRequestConfirmation = "Your household request was saved. Check its status before sending another."
         } catch {
             askRequestError = (error as? APIError)?.errorDescription ?? "Try again later."
         }
@@ -391,195 +410,115 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
     // MARK: - Slot management
 
     func picked(_ slot: ClaimEvidenceSlot, file: ClaimPickedFile) {
-        slots[slot] = .picked(file: file)
-        // Run the address check on upload completion (sample-data heuristic
-        // for now) so the slot can render its done/warn confirmation.
-        addressMatches[slot] = ClaimOwnershipSampleData.addressMatch(
-            forFilename: file.filename,
-            homeLabel: startContent.homeLabel
-        )
-        // Picking a new file invalidates any prior URL we'd cached for
-        // this slot — the next submit must re-upload these bytes.
-        pendingUploadURLs[slot] = nil
+        guard canPick, activeSlots.contains(slot) else { return }
+        guard !file.data.isEmpty, file.sizeBytes <= CLAIM_FILE_MAX_BYTES,
+              PrivateClaimEvidenceClient.allowedMIMEs.contains(file.mimeType) else {
+            submitError = "Choose a PDF, text file or supported image of 25 MB or less."
+            return
+        }
+        storedSlots[slot] = .picked(file: file)
+        addressMatches[slot] = nil
+        pendingUploadIDs[slot] = makeUploadId()
         submitError = nil
     }
 
     func remove(_ slot: ClaimEvidenceSlot) {
-        slots[slot] = .empty
+        guard canPick else { return }
+        storedSlots[slot] = .empty
         addressMatches[slot] = nil
-        pendingUploadURLs[slot] = nil
+        pendingUploadIDs[slot] = nil
     }
 
     /// Surface a "file too large" error inline rather than letting the
     /// upload round-trip to a 413. Called by the picker when the user
     /// selects a file over `CLAIM_FILE_MAX_BYTES`.
     func fileTooLarge(for _: ClaimEvidenceSlot) {
-        submitError = "That file is over 10 MB. Try a smaller photo."
+        submitError = "That file is over 25 MB. Choose a smaller document."
+    }
+
+    func filePickFailed(_ error: any Error) {
+        guard canPick else { return }
+        submitError = error.localizedDescription
     }
 
     /// Every slot the active variant requires carries a file.
     var bothSlotsHaveFiles: Bool {
-        activeSlots.allSatisfy { slots[$0]?.hasFile == true }
+        activeSlots.allSatisfy { storedSlots[$0]?.hasFile == true }
     }
 
     var anySlotHasFile: Bool {
-        activeSlots.contains { slots[$0]?.hasFile == true }
+        activeSlots.contains { storedSlots[$0]?.hasFile == true }
     }
 
     /// Submit gate — files in every required slot, plus an explicit
     /// document-kind pick when the variant offers a choice.
     var canSubmit: Bool {
-        bothSlotsHaveFiles && !needsDocumentTypeSelection
+        canAct && bothSlotsHaveFiles && !needsDocumentTypeSelection
     }
 
     // MARK: - Submit
 
     func submit() async {
         guard canSubmit, !isSubmitting else { return }
-        if !isOnlineProvider() {
-            submitError = "You're offline. Try again when you're back online."
+        guard isOnlineProvider() else { submitError = "You're offline. Try again when you're back online."
             return
         }
         isSubmitting = true
         submitError = nil
         defer { isSubmitting = false }
-
-        // Step 1: create the claim — but only once across retry attempts.
-        // Holding the id in `pendingClaimId` keeps a partial-success retry
-        // from creating a duplicate claim row server-side.
-        let claimId: String
-        if let existing = pendingClaimId {
-            claimId = existing
-        } else {
-            let claimResponse: SubmitClaimResponse
-            do {
-                claimResponse = try await api.request(
-                    HomesEndpoints.submitClaim(
-                        homeId: homeId,
-                        request: SubmitClaimRequest(
-                            claimType: verificationType.claimType,
-                            method: "doc_upload"
-                        )
-                    )
-                )
-            } catch {
-                // 409 = someone else's verification is already in
-                // flight for this home (EXISTING_IN_FLIGHT_CLAIM /
-                // DUPLICATE_CLAIM). RN offers "Search homes" here
-                // (`claim-owner/evidence.tsx:194-212`); mirror that so
-                // the user has somewhere to go.
-                if case let .clientError(status, _) = error as? APIError ?? .invalidResponse,
-                   status == 409 {
-                    blockedByOtherClaimPrompt = blockedByOtherClaimCopy
-                } else {
-                    submitError = "Couldn't submit. Retry."
-                }
-                logger.warning("Claim submit failed: \(error)")
-                Analytics.track(.ctaClaimOwnershipSubmit(result: .error))
+        do {
+            let claims = try await evidenceClient.claims().claims
+            if pendingClaimId == nil {
+                // A closed page or lost create reply can rediscover the exact
+                // user's existing open claim instead of duplicating it.
+                let existing = claims
+                    .filter { $0.homeId == homeId && $0.claimType == verificationType.claimType && $0.status == "under_review" }
+                guard existing.count <= 1 else { throw HomeClaimReviewError.snapshotChanged }
+                pendingClaimId = existing.first?.id
+            }
+            if pendingClaimId == nil {
+                let result = try await evidenceClient.submit(homeId: homeId, type: verificationType.claimType)
+                guard let id = result.claim.id, UUID(uuidString: id) != nil else { throw HomeClaimReviewError.snapshotChanged }
+                pendingClaimId = id
+                routingClassification = result.claim.routingClassification
+            }
+            guard let claimId = pendingClaimId else { throw APIError.invalidResponse }
+            if routingClassification == SubmitClaimResponse.RoutingClassification.challengeClaim {
+                submitError = "This address needs the dedicated dispute review flow. Document upload cannot open a challenge here."
                 return
             }
-            guard let id = claimResponse.claim.id else {
-                // Opaque-handshake path can return nil claim id when a
-                // duplicate exists — same user-visible outcome as the
-                // 409 above.
-                blockedByOtherClaimPrompt = blockedByOtherClaimCopy
-                Analytics.track(.ctaClaimOwnershipSubmit(result: .error))
-                return
-            }
-            claimId = id
-            pendingClaimId = id
-            routingClassification = claimResponse.claim.routingClassification
-        }
-
-        // Step 1b: surface the backend's routing verdict before anything
-        // is uploaded. RN blocks on the same two alerts
-        // (`claim-owner/evidence.tsx:223-241`) and only continues once
-        // the claimant taps "Continue". Residency claims skip both.
-        if verificationType != .residency,
-           !acknowledgedRoutingWarning,
-           let warning = Self.routingWarning(for: routingClassification) {
-            routingWarning = warning
-            return
-        }
-
-        // Step 2: upload each slot's file then register evidence. Skip
-        // any slot we already finished on a prior attempt, and skip the
-        // upload step for slots whose bytes are already in storage —
-        // both retry-paths exist so partial failures don't repeat work.
-        for (index, slot) in activeSlots.enumerated() {
-            if case .uploaded = slots[slot] { continue }
-            guard let file = slots[slot]?.pickedFile else { continue }
-            let metadata: [String: String]? =
-                index == 0 && !note.trimmingCharacters(in: .whitespaces).isEmpty
-                    ? ["note": note] : nil
-            do {
-                let fileURL: String
-                if let cached = pendingUploadURLs[slot] {
-                    fileURL = cached
-                } else {
-                    slots[slot] = .uploading(file: file, fraction: 0.4)
-                    let upload = try await uploader.uploadFile(
-                        MultipartFile(
-                            fieldName: "file",
-                            filename: file.filename,
-                            mimeType: file.mimeType,
-                            data: file.data
-                        ),
-                        formFields: ["file_type": "claim_evidence", "visibility": "private"]
-                    )
-                    fileURL = upload.file.url
-                    pendingUploadURLs[slot] = fileURL
-                }
-                slots[slot] = .uploading(file: file, fraction: 0.8)
-                _ = try await api.request(
-                    HomesEndpoints.uploadEvidence(
+            for slot in activeSlots {
+                if case .uploaded = storedSlots[slot] { continue }
+                guard let file = storedSlots[slot]?.pickedFile else { throw APIError.invalidResponse }
+                let uploadId = pendingUploadIDs[slot] ?? makeUploadId()
+                pendingUploadIDs[slot] = uploadId
+                storedSlots[slot] = .uploading(file: file, fraction: 0)
+                attemptedUploadSlots.insert(slot)
+                do {
+                    let record = try await evidenceClient.upload(
                         homeId: homeId,
                         claimId: claimId,
-                        request: UploadEvidenceRequest(
-                            evidenceType: evidenceType(for: slot),
-                            storageRef: fileURL,
-                            metadata: metadata
-                        )
+                        uploadId: uploadId,
+                        type: evidenceType(for: slot),
+                        file: file
                     )
-                ) as UploadEvidenceResponse
-                slots[slot] = .uploaded(file: file, fileURL: fileURL)
-                // Evidence row exists — no need to keep the URL cache.
-                pendingUploadURLs[slot] = nil
-            } catch {
-                logger.warning("Evidence upload failed for slot \(slot.rawValue): \(error)")
-                slots[slot] = .failed(file: file, message: "Upload failed")
-                submitError = "Couldn't submit. Retry."
-                Analytics.track(.ctaClaimOwnershipSubmit(result: .error))
-                return
+                    try evidenceClient.requireCurrent()
+                    storedSlots[slot] = .uploaded(file: file, fileURL: record.id)
+                } catch {
+                    if evidenceClient.isCurrent { storedSlots[slot] = .failed(file: file, message: "Upload unconfirmed. Retry this file.") }
+                    throw error
+                }
             }
+            try evidenceClient.requireCurrent()
+            submissionOutcomeNote = "Your private document is saved as pending evidence. "
+                + "A reviewer must inspect it before making a separate claim decision."
+            currentStep = .success
+            Analytics.track(.ctaClaimOwnershipSubmit(result: .success))
+        } catch {
+            submitError = HomeClaimReviewError.message(for: error)
+            if !evidenceClient.isCurrent { retire() }
+            Analytics.track(.ctaClaimOwnershipSubmit(result: .error))
         }
-
-        // Step 3: a challenge-classified claim backed by a strong
-        // ownership document opens a formal challenge against the
-        // verified household. RN does the same at
-        // `claim-owner/evidence.tsx:285-297`; failures are non-fatal
-        // (the backend 409s when the evidence isn't strong enough).
-        var challengeOpened = false
-        if verificationType != .residency,
-           routingClassification == SubmitClaimResponse.RoutingClassification.challengeClaim,
-           activeSlots.contains(where: { Self.strongChallengeDocs.contains(evidenceType(for: $0)) }) {
-            do {
-                _ = try await api.request(
-                    HomeOwnershipClaimEndpoints.challenge(homeId: homeId, claimId: claimId)
-                ) as ChallengeClaimResponse
-                challengeOpened = true
-            } catch {
-                logger.warning("Challenge activation skipped: \(error)")
-            }
-        }
-        submissionOutcomeNote = Self.outcomeNote(
-            routingClassification: routingClassification,
-            challengeOpened: challengeOpened
-        )
-
-        // All uploads succeeded — advance to success.
-        Analytics.track(.ctaClaimOwnershipSubmit(result: .success))
-        currentStep = .success
     }
 
     /// "Continue" on the routing warning — resume the same submit with
@@ -602,9 +541,7 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
     /// Evidence types strong enough to challenge a verified household.
     /// Copied from RN's `STRONG_CHALLENGE_DOCS`
     /// (`src/app/homes/[id]/claim-owner/evidence.tsx:40`).
-    static let strongChallengeDocs: Set<String> = [
-        "deed", "closing_disclosure", "escrow_attestation", "title_match"
-    ]
+    static let strongChallengeDocs: Set<String> = []
 
     /// Pre-upload warning copy per `routing_classification`. Verbatim
     /// from RN (`claim-owner/evidence.tsx:223-241`).
@@ -620,9 +557,7 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
         case SubmitClaimResponse.RoutingClassification.challengeClaim:
             ClaimRoutingWarning(
                 title: "Verified household exists",
-                message: "This address already has a verified household. You can still submit "
-                    + "ownership proof. If your documents are stronger, your claim can challenge "
-                    + "the current verification."
+                message: "This address needs the dedicated dispute review flow. Uploading a document does not open a challenge."
             )
         default:
             nil
@@ -635,8 +570,7 @@ final class ClaimOwnershipWizardViewModel: WizardModel {
         challengeOpened: Bool
     ) -> String? {
         if challengeOpened {
-            return "Your documents were strong enough to challenge the current verified household. "
-                + "A reviewer will compare both sets of evidence."
+            return "A dispute requires its dedicated review flow. No challenge was opened by this upload."
         }
         if routingClassification == SubmitClaimResponse.RoutingClassification.parallelClaim {
             return "Another person also has a pending claim on this address. Both claims will be reviewed."

@@ -15,6 +15,8 @@ import SwiftUI
 @MainActor
 public struct AddHouseholdTaskFormView: View {
     @State var viewModel: AddHouseholdTaskFormViewModel
+    @State private var isVisible = false
+    @Environment(\.scenePhase) private var scenePhase
     private let onClose: @MainActor () -> Void
     private let onCreated: (@MainActor (String) -> Void)?
 
@@ -46,10 +48,13 @@ public struct AddHouseholdTaskFormView: View {
             case let .error(message):
                 EmptyState(
                     icon: .alertCircle,
-                    headline: "Couldn't load the task",
-                    subcopy: message,
-                    cta: EmptyState.CTA(title: "Try again") {
-                        await viewModel.refresh()
+                    headline: viewModel.terminalRequestMessage != nil ? "Saved request ended" : "Task unavailable",
+                    subcopy: viewModel.terminalRequestMessage ?? message,
+                    cta: EmptyState.CTA(title: viewModel.terminalRequestMessage != nil ? "Clear saved request" : "Try again") {
+                        guard isVisible, scenePhase == .active else { return }
+                        if viewModel.terminalRequestMessage != nil { viewModel.acknowledgeTerminalRequest() } else {
+                            await viewModel.resume(ifCurrent: viewModel.activationRevision)
+                        }
                     }
                 )
                 .background(Theme.Color.appBg)
@@ -57,6 +62,21 @@ public struct AddHouseholdTaskFormView: View {
         }
         .background(Theme.Color.appBg)
         .task { await viewModel.load() }
+        .onAppear { isVisible = true }
+        .onDisappear { isVisible = false
+            viewModel.suspend()
+        }
+        .onChange(of: viewModel.isCurrent) { _, _ in viewModel.accessChanged() }
+        .onChange(of: scenePhase) { _, phase in
+            guard isVisible else { return }
+            if phase == .active {
+                let revision = viewModel.activationRevision
+                Task {
+                    guard isVisible, scenePhase == .active else { return }
+                    await viewModel.resume(ifCurrent: revision)
+                }
+            } else { viewModel.suspend() }
+        }
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
                 ToastView(message: toast)
@@ -71,34 +91,31 @@ public struct AddHouseholdTaskFormView: View {
         }
         .pantopusAnimation(.componentState, value: viewModel.toast)
         .onChange(of: viewModel.shouldDismiss) { _, newValue in
-            guard newValue else { return }
+            guard newValue, isVisible, scenePhase == .active, viewModel.isCurrent else { return }
             viewModel.acknowledgeDismiss()
-            let newId = viewModel.createdTaskId
-            Task {
-                try? await Task.sleep(nanoseconds: 700_000_000)
-                if let newId, let onCreated {
-                    onCreated(newId)
-                } else {
-                    onClose()
-                }
-            }
+            if let newId = viewModel.createdTaskId, let onCreated { onCreated(newId) } else { onClose() }
         }
     }
 
     private var editor: some View {
         FormShell(
             title: viewModel.isEditing ? "Edit task" : "Add task",
-            rightActionLabel: "Save",
+            rightActionLabel: viewModel.saveLabel,
             isValid: viewModel.isValid,
             isDirty: viewModel.isDirty,
             isSaving: viewModel.isSaving,
             onClose: onClose,
             onCommit: { Task { await viewModel.save() } },
             content: {
-                titleAndCategorySection
-                assigneeSection
-                scheduleSection
-                notesSection
+                if let message = viewModel.recoveryMessage {
+                    Text(message).font(.callout).accessibilityIdentifier("homeTask.savedRequest")
+                }
+                Group {
+                    titleAndCategorySection
+                    assigneeSection
+                    scheduleSection
+                    notesSection
+                }.disabled(viewModel.hasPendingSave || viewModel.isSaving)
             }
         )
         .formShakeOnChange(of: viewModel.shakeTrigger)

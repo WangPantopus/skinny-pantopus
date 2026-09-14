@@ -8,6 +8,7 @@ import type { HomeMember } from '@pantopus/types';
 import ResidencyClaimsPanel from '../ResidencyClaimsPanel';
 import MemberDetail from './MemberDetail';
 import InviteFlow from './InviteFlow';
+import { useHomePermissions } from '../useHomePermissions';
 import LockdownPanel from './LockdownPanel';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import Image from 'next/image';
@@ -76,8 +77,6 @@ export default function MembersSecurityTab({
   home,
   members,
   can,
-  currentUserId,
-  onInvite,
   onMembersChange,
 }: {
   homeId: string;
@@ -85,10 +84,10 @@ export default function MembersSecurityTab({
   members: HomeMember[];
   can: (perm: string) => boolean;
   currentUserId: string | null;
-  onInvite: (data: Record<string, any>) => Promise<void>;
   onMembersChange: () => void;
 }) {
-  const isOwner = home?.owner_id === currentUserId;
+  const { access } = useHomePermissions();
+  const isOwner = access?.isOwner === true;
 
   // Detail panel
   const [detailMember, setDetailMember] = useState<HomeMember | null>(null);
@@ -207,7 +206,6 @@ export default function MembersSecurityTab({
       <InviteFlow
         open={showInvite}
         onClose={() => setShowInvite(false)}
-        onInvite={async (data) => { await onInvite(data); onMembersChange(); }}
         homeId={homeId}
       />
 
@@ -362,7 +360,7 @@ export default function MembersSecurityTab({
       </div>
 
       {/* ===== Section 3: Audit Log ===== */}
-      {(isOwner || can('security.manage')) && (
+      {can('members.manage') && (
         <div>
           <button
             onClick={handleShowAudit}
@@ -437,10 +435,11 @@ function MemberRow({
   homeOwnerId?: string;
   onClick: () => void;
 }) {
-  const name = member.user?.name || member.user?.username || member.name || member.username || 'Unknown';
+  const name = member.user?.displayName || member.user?.handle || member.user?.name || member.user?.username || member.name || member.username || 'Unknown';
   const isOwner = member.user_id === homeOwnerId || member.role === 'owner' || member.role_base === 'owner';
   const { config } = resolveRole(member);
-  const profilePic = member.user?.profile_picture_url || member.user?.avatar_url;
+  const profilePic = member.user?.avatarUrl || member.user?.profile_picture_url || member.user?.avatar_url;
+  const handle = member.user?.handle || member.user?.username;
   const joinedDate = member.created_at || member.start_at;
 
   return (
@@ -460,7 +459,7 @@ function MemberRow({
         <div className="flex items-center gap-2">
           <UserIdentityLink
             userId={member.user_id || member.user?.id}
-            username={member.user?.username}
+            username={handle}
             displayName={name}
             avatarUrl={profilePic}
             textClassName="text-sm font-medium text-app-text truncate hover:text-primary-600"
@@ -469,8 +468,8 @@ function MemberRow({
           {isOwner && <span className="text-xs">👑</span>}
         </div>
         <div className="flex items-center gap-2 mt-0.5">
-          {member.user?.username && (
-            <span className="text-[10px] text-app-text-muted">@{member.user.username}</span>
+          {handle && (
+            <span className="text-[10px] text-app-text-muted">@{handle}</span>
           )}
           {joinedDate && (
             <span className="text-[10px] text-gray-300">

@@ -18,8 +18,10 @@ jest.mock('next/navigation', () => ({
 
 // ── Mock @pantopus/api ──────────────────────────────────────
 const mockPost = jest.fn();
+const mockTenantStatus = jest.fn();
 jest.mock('@pantopus/api', () => ({
   get: jest.fn(),
+  tenant: { getTenantHomeStatus: (...args: unknown[]) => mockTenantStatus(...args) },
   post: (...args: unknown[]) => mockPost(...args),
 }));
 
@@ -71,6 +73,11 @@ const HOME_ID = 'test-home-123';
 beforeEach(() => {
   mockPush.mockReset();
   mockPost.mockReset();
+  // These cases exercise the ordinary verification branch after a successful
+  // lookup confirms no landlord or tenant lease, not after a missing mock throws.
+  mockTenantStatus.mockReset().mockImplementation(async (homeId: string) => ({
+    home_id: homeId, landlord: { has_landlord: false }, lease: { state: 'none', lease: null },
+  }));
   mockConfirmOpen.mockReset();
   mockReload.mockReset();
   mockAccess = null;
@@ -226,33 +233,30 @@ describe('button actions', () => {
     expect(mockPush).toHaveBeenCalledWith(`/app/homes/${HOME_ID}/verify-postcard`);
   });
 
-  test('"This isn\'t my home" calls move-out API', async () => {
+  test('"This isn\'t my home" opens reviewed self-leave without a mutation', async () => {
     mockAccess = buildAccess({ verification_status: 'pending_postcard' });
-    mockConfirmOpen.mockResolvedValueOnce(true);
-    mockPost.mockResolvedValueOnce({});
 
     render(<VerificationCenter homeId={HOME_ID} />);
 
     fireEvent.click(screen.getByText(/isn.*t my home/i));
 
     await waitFor(() => {
-      expect(mockPost).toHaveBeenCalledWith(`/api/homes/${HOME_ID}/move-out`);
+      expect(mockPush).toHaveBeenCalledWith(`/app/homes/member-removals?home=${HOME_ID}&self=1`);
     });
-
-    // Should redirect to /app after move-out
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/app');
-    });
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(mockConfirmOpen).not.toHaveBeenCalled();
   });
 
-  test('"This isn\'t my home" does nothing if user cancels confirm', async () => {
-    mockAccess = buildAccess({ verification_status: 'pending_postcard' });
-    mockConfirmOpen.mockResolvedValueOnce(false);
+  test('self-leave selection retains current membership and delegates confirmation to recovery', async () => {
+    mockAccess = buildAccess({ verification_status: 'pending_approval' });
+    const before = { ...mockAccess };
 
     render(<VerificationCenter homeId={HOME_ID} />);
 
     fireEvent.click(screen.getByText(/isn.*t my home/i));
-    await waitFor(() => expect(mockConfirmOpen).toHaveBeenCalled());
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(mockAccess).toEqual(before);
+    expect(mockReload).not.toHaveBeenCalled();
     expect(mockPost).not.toHaveBeenCalled();
   });
 

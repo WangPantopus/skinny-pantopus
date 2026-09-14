@@ -46,7 +46,7 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
       return res.status(400).json({ error: sectionsError });
     }
 
-    const access = await checkHomePermission(id, userId);
+    const access = await checkHomePermission(id, userId, 'home.view');
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'You do not have access to this place.' });
     }
@@ -61,6 +61,7 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Home not found' });
     }
 
+    res.setHeader('Cache-Control', 'private, no-store');
     return res.json(intelligence);
   } catch (err) {
     logger.error('Place intelligence error', { error: err.message, homeId: id });

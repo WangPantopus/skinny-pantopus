@@ -19,7 +19,7 @@ jest.mock('../services/ai/propertyIntelligenceService', () => ({
 
 const express = require('express');
 const request = require('supertest');
-const { resetTables, seedTable } = require('./__mocks__/supabaseAdmin');
+const { resetTables, seedTable, setRpcMock } = require('./__mocks__/supabaseAdmin');
 const { encodeGeohash } = require('../utils/geohash');
 
 const providerOrchestrator = require('../services/context/providerOrchestrator');
@@ -60,6 +60,24 @@ function seedHome(extra = {}) {
     home_type: 'single_family',
     ...extra,
   }]);
+}
+
+// Composer contract uses canonical major-unit SQL output. Real SQL grouping,
+// currency/date filtering and authority are exercised by the HTTP/SQL driver.
+let billSnapshot;
+function seedBenchmarks(rows) {
+  const offsets = {};
+  billSnapshot.peer_months = rows.map(row => {
+    const offset = offsets[row.bill_type] = (offsets[row.bill_type] || 2) + 1;
+    return { ...row, currency: 'USD', month: `2026-${String(offset).padStart(2, '0')}`,
+      avg_amount: row.household_count >= 10 ? row.avg_amount : null,
+      median_amount: row.household_count >= 10 ? row.avg_amount : null };
+  });
+}
+function seedOwnMonths(rows) {
+  const offsets = {};
+  billSnapshot.own_months = rows.map(row => ({ bill_type: row.bill_type, amount: row.amount,
+    month: `2026-${String(offsets[row.bill_type] = (offsets[row.bill_type] || 2) + 1).padStart(2, '0')}` }));
 }
 
 function defaultHubToday() {
@@ -161,6 +179,11 @@ describe('GET /api/homes/:id/intelligence', () => {
 
   beforeEach(() => {
     resetTables();
+    billSnapshot = { ok: true, home_id: HOME_ID, currency: 'USD', calculation_version: 2,
+      can_view_finance: true, own_months: [], peer_months: [], available_currencies: [], bill_benchmark_opt_in: false };
+    setRpcMock(async name => name === 'get_home_bill_comparison'
+      ? { data: billSnapshot, error: null } : { data: null, error: { message: 'Unconfigured RPC' } });
+    seedTable('HomeRolePermission', [{ role_base: 'member', permission: 'home.view', allowed: true }]);
     delete process.env.ATTOM_API_KEY; // default: no ATTOM
     providerOrchestrator.getHubToday.mockResolvedValue(defaultHubToday());
     neighborhoodProfileService.getProfile.mockResolvedValue(defaultNeighborhoodProfile());
@@ -310,10 +333,6 @@ describe('GET /api/homes/:id/intelligence', () => {
   // read and the own-amount read, while the refresh job has always grouped
   // by type — so gas/water/internet benchmarks were computed and ignored.
   describe('bill benchmark picks a bill it can actually compare', () => {
-    function seedBenchmarks(rows) {
-      seedTable('BillBenchmark', rows.map((r) => ({ geohash: GEOHASH, ...r })));
-    }
-
     async function benchmark() {
       const res = await request(app)
         .get(`/api/homes/${HOME_ID}/intelligence?sections=bill_benchmark`)
@@ -325,8 +344,8 @@ describe('GET /api/homes/:id/intelligence', () => {
 
     test('surfaces a non-electric benchmark that used to be ignored', async () => {
       seedBenchmarks([
-        { bill_type: 'internet', avg_amount_cents: 7000, household_count: 14 },
-        { bill_type: 'internet', avg_amount_cents: 9000, household_count: 14 },
+        { bill_type: 'internet', avg_amount: 70.0, household_count: 14 },
+        { bill_type: 'internet', avg_amount: 90.0, household_count: 14 },
       ]);
 
       const s = await benchmark();
@@ -339,12 +358,12 @@ describe('GET /api/homes/:id/intelligence', () => {
       // Electric has the bigger cohort, but the resident only logs internet —
       // and a comparison is the whole point of the section.
       seedBenchmarks([
-        { bill_type: 'electric', avg_amount_cents: 16000, household_count: 40 },
-        { bill_type: 'electric', avg_amount_cents: 20000, household_count: 40 },
-        { bill_type: 'internet', avg_amount_cents: 7000, household_count: 12 },
-        { bill_type: 'internet', avg_amount_cents: 9000, household_count: 12 },
+        { bill_type: 'electric', avg_amount: 160.0, household_count: 40 },
+        { bill_type: 'electric', avg_amount: 200.0, household_count: 40 },
+        { bill_type: 'internet', avg_amount: 70.0, household_count: 12 },
+        { bill_type: 'internet', avg_amount: 90.0, household_count: 12 },
       ]);
-      seedTable('HomeBill', [{ home_id: HOME_ID, bill_type: 'internet', amount: 6000 }]);
+      seedOwnMonths([{ home_id: HOME_ID, bill_type: 'internet', amount: 60.0 }]);
 
       const s = await benchmark();
       expect(s.data.utility).toBe('internet');
@@ -355,8 +374,8 @@ describe('GET /api/homes/:id/intelligence', () => {
 
     test('falls back to the largest cohort when nothing is comparable', async () => {
       seedBenchmarks([
-        { bill_type: 'water', avg_amount_cents: 4000, household_count: 11 },
-        { bill_type: 'electric', avg_amount_cents: 16000, household_count: 40 },
+        { bill_type: 'water', avg_amount: 40.0, household_count: 11 },
+        { bill_type: 'electric', avg_amount: 160.0, household_count: 40 },
       ]);
 
       expect((await benchmark()).data.utility).toBe('electric');
@@ -366,16 +385,16 @@ describe('GET /api/homes/:id/intelligence', () => {
       // Wildly home-specific: comparing them tells the resident nothing, and
       // rent already has its own section from HUD Fair Market Rents.
       seedBenchmarks([
-        { bill_type: 'rent', avg_amount_cents: 210000, household_count: 30 },
-        { bill_type: 'mortgage', avg_amount_cents: 320000, household_count: 30 },
+        { bill_type: 'rent', avg_amount: 2100.0, household_count: 30 },
+        { bill_type: 'mortgage', avg_amount: 3200.0, household_count: 30 },
       ]);
-      seedTable('HomeBill', [{ home_id: HOME_ID, bill_type: 'rent', amount: 200000 }]);
+      seedOwnMonths([{ home_id: HOME_ID, bill_type: 'rent', amount: 2000.0 }]);
 
       expect((await benchmark()).status).toBe('unavailable');
     });
 
     test('still honours the k-anon cohort floor', async () => {
-      seedBenchmarks([{ bill_type: 'gas', avg_amount_cents: 5000, household_count: 4 }]);
+      seedBenchmarks([{ bill_type: 'gas', avg_amount: 50.0, household_count: 4 }]);
       expect((await benchmark()).status).toBe('unavailable');
     });
   });
@@ -383,9 +402,9 @@ describe('GET /api/homes/:id/intelligence', () => {
   test('composes the grouped contract with per-section status', async () => {
     seedHome();
     seedTable('NeighborhoodPreview', [{ geohash: GEOHASH, verified_users_count: 12 }]);
-    seedTable('BillBenchmark', [
-      { geohash: GEOHASH, bill_type: 'electric', avg_amount_cents: 16500, household_count: 14 },
-      { geohash: GEOHASH, bill_type: 'electric', avg_amount_cents: 21000, household_count: 14 },
+    seedBenchmarks([
+      { geohash: GEOHASH, bill_type: 'electric', avg_amount: 165.0, household_count: 14 },
+      { geohash: GEOHASH, bill_type: 'electric', avg_amount: 210.0, household_count: 14 },
     ]);
 
     const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', USER);
@@ -420,7 +439,7 @@ describe('GET /api/homes/:id/intelligence', () => {
     expect(s.block_density.data).not.toHaveProperty('count');
     expect(s.block_density.data).not.toHaveProperty('verified_users_count');
 
-    // Money Signals — composed from the BillBenchmark table.
+    // Money Signals — composed from the current SQL snapshot.
     expect(s.bill_benchmark.status).toBe('ready');
     expect(s.bill_benchmark.data.band_low).toBe(165);
     expect(s.bill_benchmark.data.band_high).toBe(210);
@@ -440,16 +459,16 @@ describe('GET /api/homes/:id/intelligence', () => {
     }
   });
 
-  test('bill benchmark compares the resident amount in the right unit (cents → $)', async () => {
+  test('bill benchmark preserves major-unit amounts across matching months', async () => {
     seedHome();
-    seedTable('BillBenchmark', [
-      { geohash: GEOHASH, bill_type: 'electric', avg_amount_cents: 16500, household_count: 14 },
-      { geohash: GEOHASH, bill_type: 'electric', avg_amount_cents: 21000, household_count: 14 },
+    seedBenchmarks([
+      { geohash: GEOHASH, bill_type: 'electric', avg_amount: 165.0, household_count: 14 },
+      { geohash: GEOHASH, bill_type: 'electric', avg_amount: 210.0, household_count: 14 },
     ]);
-    // HomeBill.amount is in cents → $142/mo average.
-    seedTable('HomeBill', [
-      { id: 'b1', home_id: HOME_ID, bill_type: 'electric', amount: 14200 },
-      { id: 'b2', home_id: HOME_ID, bill_type: 'electric', amount: 14200 },
+    // The canonical SQL snapshot returns decimal major units: $142/mo average.
+    seedOwnMonths([
+      { id: 'b1', home_id: HOME_ID, bill_type: 'electric', amount: 142.0 },
+      { id: 'b2', home_id: HOME_ID, bill_type: 'electric', amount: 142.0 },
     ]);
 
     const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', USER);

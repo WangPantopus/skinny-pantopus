@@ -22,6 +22,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
+import app.pantopus.android.ui.theme.PantopusIcon
 
 /** Test tag on the Members list root container. */
 const val MEMBERS_LIST_TAG = "membersList"
@@ -34,14 +36,16 @@ const val MEMBERS_LIST_TAG = "membersList"
  *
  * Reaches `GET /api/homes/:id/occupants`, `GET /api/homes/:id/me`,
  * `GET /api/homes/:id/household-access-requests`,
- * `POST /api/homes/:id/invite`, `POST …/members/:userId/role`,
+ * the current-session sender list and prepared sender commands,
+ * `POST …/members/:userId/role`,
  * `POST …/household-access-requests/:requestId/(approve|reject)`, and
- * `DELETE …/members/:userId`.
+ * prepared member-removal commands and separate historical recovery.
  */
 @Composable
 fun MembersListScreen(
     onBack: () -> Unit,
     onAddGuest: () -> Unit = {},
+    onReviewResidency: () -> Unit = {},
     viewModel: MembersListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -50,8 +54,8 @@ fun MembersListScreen(
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
 
-    var inviting by remember { mutableStateOf(false) }
-    var removeTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var inviting by remember { mutableStateOf<HomeInvitationSenderTarget?>(null) }
+    var removeTarget by remember { mutableStateOf<HomeMemberRemovalTarget?>(null) }
     var actionsTarget by remember { mutableStateOf<MemberActionTarget?>(null) }
     var roleTarget by remember { mutableStateOf<MemberActionTarget?>(null) }
     var approveTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -66,7 +70,11 @@ fun MembersListScreen(
         when (val event = pendingEvent) {
             null -> Unit
             MembersListEvent.OpenInvite -> {
-                inviting = true
+                inviting = HomeInvitationSenderTarget(viewModel.homeId)
+                viewModel.acknowledgeEvent()
+            }
+            is MembersListEvent.ReviewInvitation -> {
+                inviting = HomeInvitationSenderTarget(viewModel.homeId, event.action, event.invitationId)
                 viewModel.acknowledgeEvent()
             }
             MembersListEvent.OpenAddGuest -> {
@@ -78,7 +86,8 @@ fun MembersListScreen(
                 viewModel.acknowledgeEvent()
             }
             is MembersListEvent.ConfirmRemove -> {
-                removeTarget = event.userId to event.name
+                viewModel.retireForRemovalRecovery()
+                removeTarget = HomeMemberRemovalTarget(viewModel.homeId, event.userId)
                 viewModel.acknowledgeEvent()
             }
             is MembersListEvent.ConfirmApproveRequest -> {
@@ -95,6 +104,15 @@ fun MembersListScreen(
     Box(modifier = Modifier.fillMaxSize().testTag(MEMBERS_LIST_TAG)) {
         ListOfRowsScreen(
             title = "Members",
+            customHeader = {
+                TextButton(
+                    onClick = {
+                        viewModel.retireForRemovalRecovery()
+                        removeTarget = HomeMemberRemovalTarget(viewModel.homeId)
+                    },
+                    modifier = Modifier.testTag("membersList_removalRecovery"),
+                ) { Text("Recover a member removal") }
+            },
             state = state,
             onRefresh = { viewModel.refresh() },
             onEndReached = { viewModel.loadMoreIfNeeded() },
@@ -102,16 +120,23 @@ fun MembersListScreen(
             selectedTab = selectedTab,
             onSelectTab = viewModel::selectTab,
             fab = viewModel.fab,
+            topBarAction =
+                if (viewModel.canManageMembers) {
+                    TopBarAction(PantopusIcon.Gavel, "Review residency claims", onReviewResidency, label = "Review residency claims")
+                } else {
+                    null
+                },
             onBack = onBack,
         )
     }
 
-    if (inviting) {
+    inviting?.let { target ->
         InviteMemberWizardSheet(
-            homeId = viewModel.homeId,
-            onClose = { invitation ->
-                inviting = false
-                invitation?.let(viewModel::handleInvited)
+            target = target,
+            onClose = { inviting = null },
+            onAcknowledged = {
+                inviting = null
+                viewModel.refresh()
             },
         )
     }
@@ -125,7 +150,7 @@ fun MembersListScreen(
             },
             onRemove = {
                 actionsTarget = null
-                removeTarget = target.userId to target.name
+                viewModel.requestRemoval(target.userId)
             },
             onDismiss = { actionsTarget = null },
         )
@@ -142,22 +167,16 @@ fun MembersListScreen(
         )
     }
 
-    removeTarget?.let { (userId, name) ->
-        AlertDialog(
-            onDismissRequest = { removeTarget = null },
-            title = { Text("Remove member?") },
-            text = { Text("$name will lose access to this home. They can be re-invited later.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.remove(userId)
-                        removeTarget = null
-                    },
-                    modifier = Modifier.testTag("membersList_removeConfirm"),
-                ) { Text("Remove $name") }
+    removeTarget?.let { target ->
+        HomeMemberRemovalDialog(
+            target = target,
+            onClose = {
+                removeTarget = null
+                viewModel.refresh()
             },
-            dismissButton = {
-                TextButton(onClick = { removeTarget = null }) { Text("Cancel") }
+            onAcknowledged = {
+                removeTarget = null
+                viewModel.refresh()
             },
         )
     }

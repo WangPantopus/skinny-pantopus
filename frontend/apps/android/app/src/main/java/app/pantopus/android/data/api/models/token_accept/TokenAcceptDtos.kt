@@ -120,3 +120,41 @@ data class GenericAcknowledgement(
     val ok: Boolean? = null,
     val message: String? = null,
 )
+
+@JsonClass(generateAdapter = true)
+data class LeaseInvitePreviewResponse(
+    val home: HomeInviteHomeDto,
+    val invitation: LeaseInviteDetailsDto,
+    @Json(name = "account_email") val accountEmail: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class LeaseInviteDetailsDto(
+    val status: String,
+    @Json(name = "proposed_start") val proposedStart: String,
+    @Json(name = "proposed_end") val proposedEnd: String? = null,
+    @Json(name = "expires_at") val expiresAt: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class LeaseInviteAcceptanceResponse(
+    val lease: LeaseInviteReceipt,
+    val occupancy: LeaseInviteOccupancy,
+)
+
+@JsonClass(generateAdapter = true)
+data class LeaseInviteReceipt(
+    val id: String,
+    @Json(name = "home_id") val homeId: String,
+    @Json(name = "primary_resident_user_id") val primaryResidentUserId: String,
+    val state: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class LeaseInviteOccupancy(
+    val id: String,
+    @Json(name = "home_id") val homeId: String,
+    @Json(name = "user_id") val userId: String,
+    @Json(name = "is_active") val isActive: Boolean,
+    @Json(name = "verification_status") val verificationStatus: String,
+)

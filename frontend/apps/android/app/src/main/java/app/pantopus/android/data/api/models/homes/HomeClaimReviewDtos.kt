@@ -44,6 +44,8 @@ data class HomeOwnershipClaimDto(
     @Json(name = "risk_score") val riskScore: Double? = null,
     @Json(name = "created_at") val createdAt: String? = null,
     @Json(name = "updated_at") val updatedAt: String? = null,
+    @Json(name = "claimant_user_id") val claimantUserId: String? = null,
+    @Json(name = "review_token") val reviewToken: String? = null,
     val claimant: HomeOwnershipClaimMaskedClaimantDto? = null,
     val evidence: List<HomeClaimEvidenceDto>? = null,
 )
@@ -56,6 +58,9 @@ data class HomeOwnershipClaimMaskedClaimantDto(
     val method: String? = null,
     @Json(name = "risk_score") val riskScore: Double? = null,
 )
+
+@JsonClass(generateAdapter = true)
+data class HomeOwnershipClaimDetailResponse(val claim: HomeOwnershipClaimDto)
 
 /** Envelope for `GET /api/homes/:id/ownership-claims`. */
 @JsonClass(generateAdapter = true)
@@ -76,6 +81,8 @@ data class HomeClaimEvidenceDto(
     val provider: String? = null,
     val status: String? = null,
     @Json(name = "confidence_level") val confidenceLevel: String? = null,
+    @Json(name = "eligible_for_review") val eligibleForReview: Boolean? = null,
+    @Json(name = "availability_code") val availabilityCode: String? = null,
     @Json(name = "created_at") val createdAt: String? = null,
 )
 
@@ -188,6 +195,7 @@ data class HomeClaimUserDto(
 @JsonClass(generateAdapter = true)
 data class HomeOwnershipClaimReviewRequest(
     val action: String,
+    @Json(name = "review_token") val reviewToken: String,
     val note: String? = null,
 )
 
@@ -283,3 +291,37 @@ data class HomeResidencyClaimActionResponse(
 )
 
 // endregion
+
+/** Exact committed result; absent or mismatched fields never imply success. */
+@JsonClass(generateAdapter = true)
+data class HomeClaimDecisionReceipt(
+    val ok: Boolean,
+    val homeId: String,
+    val claimId: String,
+    val claimantId: String,
+    val action: String,
+    val state: String,
+    val replayed: Boolean,
+    val occupancy: HomeClaimDecisionOccupancy? = null,
+) {
+    fun matches(
+        homeId: String,
+        claimId: String,
+        claimantId: String,
+        action: String,
+    ): Boolean {
+        if (!ok || this.homeId != homeId || this.claimId != claimId) return false
+        if (this.claimantId != claimantId || this.action != action) return false
+        val expected =
+            mapOf("approve" to "approved", "reject" to "rejected", "flag" to "pending_review", "request_more_info" to "needs_more_info")
+        if (state != expected[action]) return false
+        return action != "approve" || occupancy?.let { it.homeId == homeId && it.userId == claimantId && it.id.isNotBlank() } == true
+    }
+}
+
+@JsonClass(generateAdapter = true)
+data class HomeClaimDecisionOccupancy(
+    val id: String,
+    @Json(name = "home_id") val homeId: String,
+    @Json(name = "user_id") val userId: String,
+)

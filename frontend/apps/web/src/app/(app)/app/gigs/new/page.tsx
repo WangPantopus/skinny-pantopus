@@ -12,6 +12,7 @@ import FileUpload from '@/components/FileUpload';
 import { toast } from '@/components/ui/toast-store';
 import { InlineDraftHelper } from '@/components/ai-assistant';
 import type { BusinessMembership } from '@pantopus/types';
+import { HomeTaskGigComposer } from '@/components/home/tasks/HomeTaskGigComposer';
 
 interface TaskItem {
   name: string;
@@ -895,10 +896,20 @@ function PostTaskPageContent() {
   );
 }
 
+function GigComposerEntry() {
+  const params = useSearchParams();
+  const home = params.get('sourceHomeId');
+  const task = params.get('sourceTaskId');
+  return home !== null || task !== null
+    ? <HomeTaskGigComposer key={`${home}:${task}`} homeId={home || ''} taskId={task || ''}
+        invalid={!!params.get('editGigId') || !!params.get('beneficiary') || !!params.get('prefill')} />
+    : <PostTaskPageContent />;
+}
+
 export default function PostTaskPage() {
   return (
     <Suspense>
-      <PostTaskPageContent />
+      <GigComposerEntry />
     </Suspense>
   );
 }

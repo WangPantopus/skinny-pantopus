@@ -7,6 +7,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 
 enum class InviteType(val key: String) {
     HomeInvite("home_invite"),
+    LeaseInvite("lease_invite"),
     BusinessSeat("business_seat"),
     GuestPass("guest_pass"),
 }
@@ -40,6 +41,8 @@ data class TokenAcceptOffer(
 )
 
 sealed interface TokenAcceptUiState {
+    data object HomeInvitation : TokenAcceptUiState
+
     data object Loading : TokenAcceptUiState
 
     data class Ready(val offer: TokenAcceptOffer) : TokenAcceptUiState

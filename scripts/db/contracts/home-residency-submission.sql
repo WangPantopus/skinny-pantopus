@@ -1,0 +1,156 @@
+-- Original submission, pending admission, audit and historical proof are atomic.
+BEGIN;
+SET LOCAL lock_timeout='5s';
+SET LOCAL statement_timeout='30s';
+INSERT INTO auth.users(id,email,last_sign_in_at) SELECT ('ddc24400-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+  'residency-submit-contract-'||n||'@example.invalid',now() FROM generate_series(1,3)n;
+INSERT INTO public."User"(id,email,username,name) SELECT id,email,
+  'residency_submit_contract_'||right(id::text,1),'Residency submission fixture'
+  FROM auth.users WHERE id::text LIKE 'ddc24400-0000-4000-8000-%';
+INSERT INTO public."Home"(id,created_by_user_id,address,city,state,zipcode)
+  VALUES('ddc24400-0000-4000-8000-000000000100','ddc24400-0000-4000-8000-000000000001',
+    'Private residency submission fixture','Test','WA','98607');
+INSERT INTO public."HomeOwner"(home_id,subject_id,owner_status,is_primary_owner)
+  VALUES('ddc24400-0000-4000-8000-000000000100','ddc24400-0000-4000-8000-000000000001','verified',true);
+CREATE FUNCTION pg_temp.fail_residency_submission() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.action='residency_submission_saved' AND current_setting('pantopus.fixture_submit_failure',true)='yes'
+    AND NEW.home_id='ddc24400-0000-4000-8000-000000000100'::uuid THEN
+    RAISE EXCEPTION 'Synthetic residency audit refusal' USING ERRCODE='P0042';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER residency_submission_contract_failure BEFORE INSERT ON public."HomeAuditLog"
+  FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_residency_submission();
+CREATE FUNCTION pg_temp.stale_submission_fixture_authority() RETURNS void
+LANGUAGE sql SECURITY DEFINER SET search_path=pg_temp AS $$
+  UPDATE auth.users SET last_sign_in_at=now()-interval '60 days'
+    WHERE id='ddc24400-0000-4000-8000-000000000001';
+$$;
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  h uuid:='ddc24400-0000-4000-8000-000000000100';
+  owner_actor uuid:='ddc24400-0000-4000-8000-000000000001';
+  applicant uuid:='ddc24400-0000-4000-8000-000000000002';
+  other_actor uuid:='ddc24400-0000-4000-8000-000000000003';
+  original_request uuid:=gen_random_uuid(); next_request uuid; claim uuid; occ uuid; postcard uuid;
+  result jsonb; original jsonb; before_occ jsonb; before_claim jsonb; before_card jsonb;
+  selected_address jsonb:='{"line1":"Private residency submission fixture","line2":"","city":"Test","state":"WA","postal_code":"98607","country":"US"}';
+  renter_intent jsonb:=jsonb_build_object('claimed_role','renter','address',selected_address);
+  household_intent jsonb:=jsonb_build_object('claimed_role','household','address',selected_address);
+  owner_intent jsonb:=jsonb_build_object('claimed_role','owner','address',selected_address);
+  failed boolean:=false;
+BEGIN
+  ASSERT NOT has_table_privilege('authenticated','public."HomeResidencySubmissionCommand"','SELECT');
+  ASSERT NOT has_table_privilege('anon','public."HomeResidencySubmissionCommand"','INSERT');
+  ASSERT NOT has_function_privilege('authenticated','public.submit_home_residency(uuid,uuid,uuid,jsonb)','EXECUTE');
+  ASSERT NOT has_function_privilege('anon','public.cancel_home_residency_submission(uuid,uuid,uuid)','EXECUTE');
+  ASSERT (SELECT relrowsecurity FROM pg_class WHERE oid='public."HomeResidencySubmissionCommand"'::regclass);
+  ASSERT public.submit_home_residency(h,applicant,gen_random_uuid(),'[]')->>'code'='RESIDENCY_SUBMISSION_INVALID';
+  ASSERT public.submit_home_residency(h,applicant,gen_random_uuid(),'{"claimed_role":"renter","address":[]}')->>'code'='RESIDENCY_SUBMISSION_INVALID';
+  result:=public.submit_home_residency(h,applicant,original_request,renter_intent);
+  ASSERT result->>'state'='completed' AND result->>'routing'='household_review';
+  claim:=(result->>'claim_id')::uuid; occ:=(result->>'occupancy_id')::uuid;
+  ASSERT (SELECT status='pending' AND claimed_role='renter' FROM public."HomeResidencyClaim" WHERE id=claim);
+  ASSERT (SELECT is_active AND verification_status='pending_approval' AND role_base='restricted_member'
+    AND verified_at IS NULL AND verification_expires_at IS NULL
+    AND NOT can_manage_home AND NOT can_manage_access AND NOT can_manage_finance
+    AND NOT can_manage_tasks AND NOT can_view_sensitive FROM public."HomeOccupancy" WHERE id=occ);
+  ASSERT public.home_effective_access(h,applicant)->>'has_access'='false';
+  original:=public.get_home_residency_submission(h,applicant,original_request);
+  ASSERT original=public.cancel_home_residency_submission(h,applicant,original_request);
+  ASSERT original=(public.submit_home_residency(h,applicant,original_request,renter_intent)-'replayed');
+  ASSERT public.get_home_residency_submission(h,other_actor,original_request)->>'code'='RESIDENCY_SUBMISSION_NOT_FOUND';
+  ASSERT public.submit_home_residency(h,applicant,original_request,household_intent)->>'code'='RESIDENCY_SUBMISSION_CONFLICT';
+  ASSERT public.submit_home_residency(h,applicant,gen_random_uuid(),owner_intent)->>'code'='RESIDENCY_SUBMISSION_INVALID';
+  ASSERT (SELECT count(*)=1 FROM public."HomeAuditLog" WHERE home_id=h AND action='residency_submission_saved');
+  ASSERT NOT original ? 'intent_hash' AND NOT original::text LIKE '%Private residency submission fixture%';
+  ASSERT public.submit_home_residency(h,applicant,gen_random_uuid(),'{"claimed_role":"renter"}')->>'code'='RESIDENCY_SUBMISSION_INVALID';
+  UPDATE public."Home" SET address2='Unit 2' WHERE id=h;
+  next_request:=gen_random_uuid();
+  ASSERT public.submit_home_residency(h,applicant,next_request,renter_intent)->>'code'='RESIDENCY_ADDRESS_CHANGED';
+  ASSERT original=(public.submit_home_residency(h,applicant,original_request,renter_intent)-'replayed');
+  ASSERT (SELECT count(*)=1 FROM public."HomeAuditLog" WHERE home_id=h AND action='residency_submission_saved');
+  UPDATE public."Home" SET address2=NULL WHERE id=h;
+  ASSERT public.submit_home_residency(h,applicant,next_request,renter_intent)->>'code'='RESIDENCY_ADDRESS_CHANGED';
+
+
+  -- A rejected review changes current state, not the old immutable proof.
+  UPDATE public."HomeResidencyClaim" SET status='rejected',reviewed_by=owner_actor,reviewed_at=clock_timestamp()
+    WHERE id=claim;
+  UPDATE public."HomeOccupancy" SET age_band='teen',start_at=now()-interval '1 day',access_end_at=now()+interval '2 days'
+    WHERE id=occ;
+  INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(h,applicant,'home.view',false);
+  INSERT INTO public."HomePostcardCode"(home_id,user_id,code_hash,status,dispatch_status,vendor_job_id)
+    VALUES(h,applicant,repeat('a',64),'pending','accepted','synthetic-residency-submission-card') RETURNING id INTO postcard;
+  SELECT to_jsonb(o) INTO before_occ FROM public."HomeOccupancy" o WHERE id=occ;
+  SELECT to_jsonb(c) INTO before_claim FROM public."HomeResidencyClaim" c WHERE id=claim;
+  SELECT to_jsonb(c) INTO before_card FROM public."HomePostcardCode" c WHERE id=postcard;
+  ASSERT original=(public.submit_home_residency(h,applicant,original_request,renter_intent)-'replayed');
+  ASSERT (SELECT to_jsonb(c)=before_claim FROM public."HomeResidencyClaim" c WHERE id=claim);
+  next_request:=gen_random_uuid();
+  PERFORM set_config('pantopus.fixture_submit_failure','yes',true);
+  BEGIN
+    PERFORM public.submit_home_residency(h,applicant,next_request,renter_intent);
+  EXCEPTION WHEN SQLSTATE 'P0042' THEN failed:=true;
+  END;
+  ASSERT failed;
+  ASSERT public.get_home_residency_submission(h,applicant,next_request)->>'code'='RESIDENCY_SUBMISSION_NOT_FOUND';
+  ASSERT (SELECT to_jsonb(c)=before_claim FROM public."HomeResidencyClaim" c WHERE id=claim);
+  ASSERT (SELECT to_jsonb(c)=before_card FROM public."HomePostcardCode" c WHERE id=postcard);
+  ASSERT (SELECT to_jsonb(o)=before_occ FROM public."HomeOccupancy" o WHERE id=occ);
+  PERFORM set_config('pantopus.fixture_submit_failure','no',true);
+  result:=public.submit_home_residency(h,applicant,next_request,renter_intent);
+  ASSERT result->>'state'='completed' AND result->>'claim_id'=claim::text;
+  ASSERT (SELECT status='pending' AND reviewed_at IS NULL AND reviewed_by IS NULL FROM public."HomeResidencyClaim" WHERE id=claim);
+  ASSERT (SELECT to_jsonb(o)=before_occ FROM public."HomeOccupancy" o WHERE id=occ);
+  ASSERT (SELECT allowed=false FROM public."HomePermissionOverride" WHERE home_id=h AND user_id=applicant AND permission='home.view');
+  ASSERT (SELECT status='cancelled' AND code_hash=before_card->>'code_hash'
+    AND dispatch_status=before_card->>'dispatch_status' AND vendor_job_id=before_card->>'vendor_job_id'
+    FROM public."HomePostcardCode" WHERE id=postcard);
+
+  -- Revocation and ownership fences cannot be renewed through a new submission.
+  UPDATE public."HomeOccupancy" SET is_active=false WHERE id=occ;
+  result:=public.submit_home_residency(h,applicant,gen_random_uuid(),renter_intent);
+  ASSERT result->>'state'='rejected' AND result->>'code'='MEMBERSHIP_RENEWAL_REQUIRED';
+  ASSERT (SELECT NOT is_active FROM public."HomeOccupancy" WHERE id=occ);
+  result:=public.submit_home_residency(h,owner_actor,gen_random_uuid(),renter_intent);
+  ASSERT result->>'state'='rejected' AND result->>'code'='OWNERSHIP_FLOW_REQUIRED';
+  next_request:=gen_random_uuid();result:=public.cancel_home_residency_submission(h,other_actor,next_request);
+  ASSERT result->>'state'='cancelled';
+  ASSERT public.submit_home_residency(h,other_actor,next_request,household_intent)->>'state'='cancelled';
+  ASSERT NOT EXISTS(SELECT FROM public."HomeResidencyClaim" WHERE home_id=h AND user_id=other_actor);
+
+  -- Current owner restrictions/staleness affect new routing; postal dispatch
+  -- is never inferred from a committed application or a requested role.
+  INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(h,owner_actor,'members.manage',false);
+  result:=public.submit_home_residency(h,other_actor,gen_random_uuid(),household_intent);
+  ASSERT result->>'routing'='external_postcard';
+  ASSERT public.home_effective_access(h,other_actor)->>'has_access'='false';
+  ASSERT NOT EXISTS(SELECT FROM public."HomePostcardCode" WHERE home_id=h AND user_id=other_actor);
+  DELETE FROM public."HomePermissionOverride" WHERE home_id=h AND user_id=owner_actor;
+  DELETE FROM public."HomeResidencyClaim" WHERE home_id=h AND user_id=other_actor;
+  DELETE FROM public."HomeOccupancy" WHERE home_id=h AND user_id=other_actor;
+  PERFORM pg_temp.stale_submission_fixture_authority();
+  result:=public.submit_home_residency(h,other_actor,gen_random_uuid(),household_intent);
+  ASSERT result->>'routing'='stale_authority_postcard';
+  DELETE FROM public."HomeResidencyClaim" WHERE home_id=h AND user_id=other_actor;
+  DELETE FROM public."HomeOccupancy" WHERE home_id=h AND user_id=other_actor;
+  UPDATE public."Home" SET home_status='archived' WHERE id=h;
+  result:=public.submit_home_residency(h,other_actor,gen_random_uuid(),household_intent);
+  ASSERT result->>'state'='rejected' AND result->>'code'='RESIDENCY_HOME_UNAVAILABLE';
+  ASSERT original=public.get_home_residency_submission(h,applicant,original_request);
+  DELETE FROM public."HomeAuditLog" WHERE home_id=h;
+  DELETE FROM public."HomePermissionOverride" WHERE home_id=h;
+  DELETE FROM public."HomeResidencyClaim" WHERE home_id=h;
+  DELETE FROM public."HomePostcardCode" WHERE home_id=h;
+  DELETE FROM public."HomeOccupancy" WHERE home_id=h;
+  DELETE FROM public."HomeOwner" WHERE home_id=h;
+  DELETE FROM public."Home" WHERE id=h;
+  ASSERT original=public.get_home_residency_submission(h,applicant,original_request);
+  ASSERT original=(public.submit_home_residency(h,applicant,original_request,renter_intent)-'replayed');
+  RAISE NOTICE 'PASS: atomic residency submission, original outcome, rollback, old-proof retirement, current routing and preserved authority boundaries';
+END $$;
+RESET ROLE;
+ROLLBACK;
