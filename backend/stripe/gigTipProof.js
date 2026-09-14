@@ -120,5 +120,94 @@ async function verifyTipCustomer(stripe, payerId, customerId, expectedLive) {
   return customer;
 }
 
+function originalTipRequest(data) {
+  const payment = data?.payment;
+  const original = data?.original;
+  const terms = original?.terms;
+  if (!payment?.id || payment.payment_type !== 'tip' || original?.version !== 1
+      || terms?.gigId !== payment.gig_id || terms.payerId !== payment.payer_id || terms.payeeId !== payment.payee_id
+      || typeof terms.ownerConfirmedAt !== 'string' || !Number.isFinite(Date.parse(terms.ownerConfirmedAt))
+      || !Number.isSafeInteger(payment.amount_total) || payment.amount_total < MINIMUM_TIP_CENTS
+      || payment.amount_total > MAXIMUM_TIP_CENTS || payment.currency !== 'usd'
+      || payment.amount_subtotal !== payment.amount_total || payment.tip_amount !== payment.amount_total
+      || payment.amount_platform_fee !== 0 || payment.amount_to_payee !== payment.amount_total
+      || typeof original.livemode !== 'boolean' || !id(original.stripe_account_id, 'acct')
+      || !['reserved', 'creating', 'pending', 'canceling', 'needs_review', 'succeeded', 'canceled'].includes(original.state)
+      || (original.payment_method_id !== null && !id(original.payment_method_id, 'pm'))) throw fail();
+  return { id: payment.id, source: 'original', payment_id: payment.id, gig_id: payment.gig_id,
+    payer_id: payment.payer_id, payee_id: payment.payee_id, amount_cents: payment.amount_total,
+    currency: payment.currency, stripe_account_id: original.stripe_account_id, livemode: original.livemode,
+    intent_id: payment.stripe_payment_intent_id || null };
+}
+
+function projectTipOriginal(data) {
+  const request = originalTipRequest(data);
+  const { payment, original } = data;
+  const terminal = ['succeeded', 'canceled'].includes(original.state);
+  const receipt = original.receipt || null;
+  if (terminal && (!receipt || receipt.requestId !== request.id || receipt.paymentId !== payment.id
+      || receipt.gigId !== payment.gig_id || receipt.payerId !== payment.payer_id || receipt.payeeId !== payment.payee_id
+      || receipt.amountCents !== payment.amount_total || receipt.currency !== payment.currency || receipt.status !== original.state
+      || receipt.paymentIntentId !== (payment.stripe_payment_intent_id || null)
+      || receipt.chargeId !== (payment.stripe_charge_id || null)
+      || receipt.amountChargedCents !== (original.state === 'succeeded' ? payment.amount_total : 0)
+      || (original.state === 'succeeded' && (!id(receipt.paymentIntentId, 'pi') || !id(receipt.chargeId, 'ch') || !payment.payment_succeeded_at)))) throw fail();
+  return { request: { requestId: payment.id, paymentId: payment.id, gigId: payment.gig_id,
+    payerId: payment.payer_id, payeeId: payment.payee_id, amountCents: payment.amount_total, currency: payment.currency,
+    terms: original.terms, paymentMethodId: original.payment_method_id },
+  status: terminal ? original.state : original.state === 'needs_review' ? 'needs_review'
+    : original.provider_status === 'requires_action' ? 'requires_action' : 'pending',
+  paymentStatus: payment.payment_status, providerStatus: original.provider_status || null,
+  paymentIntentId: payment.stripe_payment_intent_id || null,
+  canRetry: !terminal && original.state !== 'needs_review', canCancel: !terminal, receipt: terminal ? receipt : null };
+}
+
+// Validate the complete frozen create payload before handing it to Stripe.
+// Future code changes must keep retrying this saved payload unchanged.
+function tipProviderParams(data) {
+  const request = originalTipRequest(data);
+  const { payment, original } = data;
+  assertTipTerms(payment, request, original.livemode);
+  const expected = { amount: payment.amount_total, currency: 'usd', customer: payment.stripe_customer_id,
+    capture_method: 'automatic', confirmation_method: 'automatic',
+    metadata: { payer_id: payment.payer_id, payee_id: payment.payee_id, gig_id: payment.gig_id,
+      payment_type: 'tip', platform_fee: '0', payee_stripe_account: original.stripe_account_id,
+      tip_request_id: payment.id, payment_id: payment.id }, description: `Pantopus Tip - Gig ${payment.gig_id}` };
+  if (original.payment_method_id) Object.assign(expected, { payment_method: original.payment_method_id, off_session: true, confirm: true });
+  const canonical = value => value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+  if (!original.provider_started_at || !Number.isFinite(Date.parse(original.provider_started_at))
+      || JSON.stringify(canonical(original.provider_params)) !== JSON.stringify(canonical(expected))) throw fail();
+  return original.provider_params;
+}
+
+async function discoverOriginalTip(stripe, data) {
+  const request = originalTipRequest(data);
+  const { payment, original } = data;
+  if (!original.provider_started_at || !id(payment.stripe_customer_id, 'cus')) return null;
+  const found = [];
+  let after;
+  // Bound recovery work; truncation is unresolved, never proof of absence.
+  for (let page = 0; page < 5; page += 1) {
+    const result = await stripe.paymentIntents.list({ customer: payment.stripe_customer_id, limit: 100,
+      created: { gte: Math.max(0, Math.floor(Date.parse(original.provider_started_at) / 1000) - 86400) },
+      ...(after ? { starting_after: after } : {}) });
+    if (!Array.isArray(result?.data) || typeof result.has_more !== 'boolean') throw fail();
+    for (const intent of result.data) {
+      if (intent.metadata?.tip_request_id === request.id || intent.metadata?.payment_id === payment.id) {
+        assertTipIntent(payment, { ...request, intent_id: intent.id }, intent, original.livemode);
+        found.push(intent.id);
+      }
+    }
+    if (found.length > 1) throw fail();
+    if (!result.has_more) return found[0] || null;
+    const next = result.data.at(-1)?.id;
+    if (!id(next, 'pi') || next === after) throw fail();
+    after = next;
+  }
+  throw fail();
+}
+
 module.exports = { MINIMUM_TIP_CENTS, MAXIMUM_TIP_CENTS, expectedTipLiveMode,
-  assertTipTerms, assertTipIntent, readTipProof, verifyTipCustomer };
+  assertTipTerms, assertTipIntent, readTipProof, verifyTipCustomer,
+  originalTipRequest, projectTipOriginal, tipProviderParams, discoverOriginalTip };

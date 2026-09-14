@@ -12,7 +12,9 @@ const { PAYMENT_STATES, transitionPaymentStatus, matchPaymentSnapshot } = requir
 const { createNotification } = require('../services/notificationService');
 const { conflict, providerId, assertPaymentTerms, assertIntentBinding, assertAuthorizedIntent, assertCapturedIntent } = require('./gigPaymentProof');
 const { readGigAuthorizationDeadline, requireLiveAuthorization } = require('./gigAuthorizationDeadline');
-const { expectedTipLiveMode, readTipProof } = require('./gigTipProof');
+const { expectedTipLiveMode, readTipProof, verifyTipCustomer, originalTipRequest, projectTipOriginal,
+  tipProviderParams, discoverOriginalTip } = require('./gigTipProof');
+const { isDeepStrictEqual } = require('node:util');
 
 // Default platform fee: 15%
 const DEFAULT_PLATFORM_FEE_PCT = 15;
@@ -46,6 +48,7 @@ class StripeService {
     const notification = await createNotification({
       userId: payment.payee_id,
       type: 'tip_received',
+      ...(metadata.gig_tip_original_v1 ? { idempotencyKey: `gig-tip-received:${payment.id}` } : {}),
       title: 'You received a tip!',
       body: `The poster of "${gig?.title || 'a gig'}" sent you a $${(payment.amount_total / 100).toFixed(2)} tip. 🎉`,
       icon: '💰',
@@ -96,6 +99,16 @@ class StripeService {
 
     if (payment.payment_type !== 'tip') {
       return { payment_status: payment.payment_status, payment };
+    }
+
+    if (payment.metadata?.gig_tip_original_v1) {
+      const original = payment.metadata.gig_tip_original_v1;
+      const progress = await this.createTipPayment({ requestId: payment.id, payerId: payment.payer_id, gigId: payment.gig_id,
+        amount: payment.amount_total, paymentMethodId: original.payment_method_id, expectedTerms: original.terms,
+        sessionScope: original.original_session_scope, mode: 'check' });
+      const saved = await this._tipRpc('read_gig_tip_original', { p_request_id: payment.id, p_actor_id: payment.payer_id });
+      if (progress.status === 'succeeded') await this._notifyTipReceivedIfNeeded(saved.payment);
+      return { payment_status: saved.payment.payment_status, stripe_status: progress.providerStatus, payment: saved.payment };
     }
 
     const alreadySucceededStates = new Set([
@@ -1239,120 +1252,146 @@ class StripeService {
    * Pantopus also absorbs the Stripe processing fee on tips, so the worker's
    * wallet receives the full tip amount.
    */
-  async createTipPayment({ payerId, payeeId, gigId, amount, paymentMethodId, offSession = false }) {
+  async _tipRpc(name, args) {
+    const { data, error } = await supabaseAdmin.rpc(name, args);
+    if (error || !data) throw Object.assign(new Error('Tip progress could not be saved. Keep the same request and check again.'),
+      { code: 'TIP_RECEIPT_UNKNOWN', statusCode: 503 });
+    if (data.error) {
+      const failure = Object.assign(new Error('The original tip needs to be checked before continuing.'),
+        { code: data.error.startsWith('TIP_') ? data.error : `TIP_${data.error}`, statusCode: data.error === 'FORBIDDEN' ? 403 : data.error === 'NOT_FOUND' ? 404 : 409 });
+      if (data.error === 'TIP_ACTIVE') Object.assign(failure, { code: 'TIP_ACTIVE', activeRequestId: data.requestId || null });
+      throw failure;
+    }
+    return data;
+  }
+
+  async previewTip({ gigId, payerId }) {
+    return this._tipRpc('preview_gig_tip', { p_gig_id: gigId, p_actor_id: payerId });
+  }
+
+  async readTipRequest({ requestId, payerId }) {
+    return projectTipOriginal(await this._tipRpc('read_gig_tip_original', { p_request_id: requestId, p_actor_id: payerId }));
+  }
+
+  async createTipPayment({ requestId, payerId, gigId, amount, paymentMethodId = null, sessionScope, expectedTerms, mode = 'resume' }) {
+    if (!requestId || !expectedTerms || !/^[a-f0-9]{64}$/.test(sessionScope || '') || !['resume', 'check', 'cancel'].includes(mode)) {
+      throw Object.assign(new Error('Refresh the tip preview before continuing.'), { code: 'TIP_TERMS_REQUIRED', statusCode: 409 });
+    }
+    const args = { p_request_id: requestId, p_actor_id: payerId };
+    const live = expectedTipLiveMode();
+    // A check cannot reserve a replacement. Explicit cancellation may reserve
+    // the same UUID locally, so a late first submission sees its canceled receipt.
+    let data = mode !== 'check'
+      ? await this._tipRpc('reserve_gig_tip_original', { ...args, p_gig_id: gigId, p_amount: amount,
+        p_payment_method_id: paymentMethodId, p_expected: expectedTerms, p_session_scope: sessionScope, p_livemode: live })
+      : await this._tipRpc('read_gig_tip_original', args);
+    const sameCommand = candidate => {
+      const original = originalTipRequest(candidate);
+      if (original.id !== requestId || original.gig_id !== gigId || original.payer_id !== payerId || original.amount_cents !== amount
+          || original.livemode !== live || candidate.original.payment_method_id !== paymentMethodId
+          || !isDeepStrictEqual(candidate.original.terms, expectedTerms)) {
+        throw Object.assign(new Error('Keep the original tip amount, worker and request.'), { code: 'TIP_REQUEST_CONFLICT', statusCode: 409 });
+      }
+      return original;
+    };
+    sameCommand(data);
+    if (['succeeded', 'canceled'].includes(data.original.state)) {
+      if (mode === 'check' && data.payment.stripe_payment_intent_id) {
+        const current = await readTipProof(stripe, data.payment, sameCommand(data), live);
+        if (current.intent.status !== data.original.state) throw Object.assign(new Error('The saved tip outcome needs verification.'),
+          { code: 'TIP_PROVIDER_REVIEW', statusCode: 409 });
+      }
+      return projectTipOriginal(data);
+    }
+    try { data = await this._tipRpc('claim_gig_tip_original', args); }
+    catch (error) {
+      if (error.code === 'TIP_BUSY') return { ...projectTipOriginal(data), canRetry: false };
+      throw error;
+    }
+    sameCommand(data);
+    if (['succeeded', 'canceled'].includes(data.original.state)) return projectTipOriginal(data);
+    const leaseId = data.original.lease_id;
+    const leased = { ...args, p_lease_id: leaseId };
+    let checkoutProof = null;
     try {
-      const payeeAccount = await this._getPayeeAccount(payeeId);
-      const customerId = await this.getOrCreateCustomer(payerId);
-
-      // Tips: 100% to worker. No platform fee, and Pantopus absorbs processing.
-      const estimatedStripeFee = Math.floor(amount * 0.029) + 30; // 2.9% + 30¢
-      const platformFee = 0;
-      const amountToPayee = amount;
-
-      const piParams = {
-        amount,
-        currency: 'usd',
-        customer: customerId,
-        // Tips are auto-captured (no manual capture needed)
-        metadata: {
-          payer_id: payerId,
-          payee_id: payeeId,
-          gig_id: gigId || '',
-          payment_type: 'tip',
-          platform_fee: '0',
-          payee_stripe_account: payeeAccount.stripe_account_id,
-        },
-        description: `Pantopus Tip - Gig ${gigId || 'unknown'}`,
-      };
-
-      if (paymentMethodId) {
-        piParams.payment_method = paymentMethodId;
+      if (mode === 'cancel' && !data.original.provider_started_at && !data.payment.stripe_payment_intent_id) {
+        data = await this._tipRpc('cancel_unstarted_gig_tip', leased);
+        return projectTipOriginal(data);
       }
-      if (offSession) {
-        piParams.off_session = true;
-        piParams.confirm = true;
-      }
-
-      const paymentIntent = await stripe.paymentIntents.create(piParams);
-      const isTipCaptured = paymentIntent.status === 'succeeded';
-
-      // Insert with AUTHORIZE_PENDING — the natural initial state when a PI is created
-      const { data: payment, error: dbError } = await supabaseAdmin
-        .from('Payment')
-        .insert({
-          payer_id: payerId,
-          payee_id: payeeId,
-          gig_id: gigId,
-          stripe_payment_intent_id: paymentIntent.id,
-          stripe_customer_id: customerId,
-          stripe_payment_method_id: paymentMethodId || null,
-          amount_total: amount,
-          amount_subtotal: amount,
-          amount_platform_fee: platformFee,
-          amount_to_payee: amountToPayee,
-          amount_processing_fee: estimatedStripeFee,
-          payment_status: PAYMENT_STATES.AUTHORIZE_PENDING,
-          payment_type: 'tip',
-          currency: 'usd',
-          tip_amount: amount,
-          is_escrowed: true,
-        })
-        .select()
-        .single();
-
-      if (dbError) {
-        logger.error('Error saving tip payment', { error: dbError.message });
-        throw new Error(`Failed to save tip payment: ${dbError.message}`);
-      }
-
-      // If the auto-capture PI already succeeded, reconcile immediately so the
-      // worker sees the tip in wallet/history even if webhooks are delayed.
-      if (isTipCaptured) {
+      let intentId = data.payment.stripe_payment_intent_id || null;
+      if (!intentId && data.original.provider_started_at) intentId = await discoverOriginalTip(stripe, data);
+      if (!intentId && mode === 'resume') {
+        // Reuse the existing durable customer CAS. No PaymentIntent exists
+        // before Payment reservation and provider preparation commit.
+        const customer = data.payment.stripe_customer_id || await this.getOrCreateCustomer(payerId);
+        await verifyTipCustomer(stripe, payerId, customer, live);
+        if (paymentMethodId) {
+          const method = await stripe.paymentMethods.retrieve(paymentMethodId);
+          if (method?.id !== paymentMethodId || providerId(method.customer) !== customer || method.livemode !== live) {
+            throw Object.assign(new Error('The original saved method needs verification.'), { code: 'TIP_PROVIDER_REVIEW', statusCode: 409 });
+          }
+        }
+        data = await this._tipRpc('prepare_gig_tip_provider', { ...leased, p_customer_id: customer });
+        sameCommand(data);
+        const params = tipProviderParams(data);
+        const elapsed = Date.now() - Date.parse(data.original.provider_started_at);
+        if (!Number.isFinite(elapsed) || elapsed < -60000 || elapsed >= 23 * 60 * 60 * 1000) {
+          throw Object.assign(new Error('The original provider outcome needs recovery.'), { code: 'TIP_PROVIDER_OUTCOME_UNKNOWN', statusCode: 409 });
+        }
         try {
-          await this.syncTipPaymentStatus(payment.id, { paymentIntent });
-        } catch (transErr) {
-          logger.error('Tip payment: success reconciliation failed', {
-            paymentId: payment.id, error: transErr.message,
-          });
+          const created = await stripe.paymentIntents.create(params, { idempotencyKey: `gig-tip:${requestId}` });
+          intentId = providerId(created);
+        } catch (error) {
+          // Card/SCA errors may name an existing intent. Its current state is
+          // still independently retrieved and verified before binding it.
+          intentId = providerId(error.payment_intent) || providerId(error.raw?.payment_intent)
+            || await discoverOriginalTip(stripe, data);
+          if (!intentId) throw error;
         }
       }
-
-      // For on-session tips (no paymentMethodId), mint an ephemeral key so the
-      // mobile PaymentSheet can display saved cards and let the user pick one.
-      // Web ignores these fields.
-      let ephemeralKey = null;
-      if (!paymentMethodId) {
+      if (!intentId) return projectTipOriginal(data);
+      const readCurrent = () => readTipProof(stripe, data.payment, { ...sameCommand(data), intent_id: intentId }, live);
+      checkoutProof = await readCurrent();
+      data = await this._tipRpc('record_gig_tip_original', { ...leased, p_proof: checkoutProof.proof });
+      sameCommand(data);
+      if (mode === 'cancel' && !['succeeded', 'canceled'].includes(data.original.state)) {
         try {
-          const key = await this.createEphemeralKey(customerId);
-          ephemeralKey = key.secret;
-        } catch (ekErr) {
-          logger.warn('Tip payment: failed to create ephemeral key', {
-            paymentId: payment.id, error: ekErr.message,
-          });
+          await stripe.paymentIntents.cancel(intentId, { cancellation_reason: 'requested_by_customer' },
+            { idempotencyKey: `gig-tip-cancel:${requestId}:${intentId}` });
+        } catch (_) { /* Read-only recovery decides whether cancellation actually happened. */ }
+        checkoutProof = await readCurrent();
+        data = await this._tipRpc('record_gig_tip_original', { ...leased, p_proof: checkoutProof.proof });
+      }
+      const result = projectTipOriginal(data);
+      if (result.status === 'succeeded') {
+        try { await this._notifyTipReceivedIfNeeded(data.payment); } catch (_) { /* Durable payment remains recoverable by the existing notice path. */ }
+      }
+      if (mode !== 'cancel' && !['succeeded', 'canceled'].includes(result.status)
+          && ['requires_payment_method', 'requires_confirmation', 'requires_action'].includes(checkoutProof.intent.status)) {
+        const secret = checkoutProof.intent.client_secret;
+        if (typeof secret === 'string' && secret.startsWith(`${intentId}_secret_`)) {
+          let ephemeralKey = null;
+          try { ephemeralKey = (await this.createEphemeralKey(data.payment.stripe_customer_id)).secret; } catch (_) { /* Retry checkout on the same intent. */ }
+          result.checkout = { paymentIntentId: intentId, clientSecret: secret, customer: data.payment.stripe_customer_id,
+            ephemeralKey, publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null };
         }
       }
-
-      logger.info('Tip payment created', {
-        paymentIntentId: paymentIntent.id,
-        paymentId: payment.id,
-        amount,
-        gigId,
-      });
-
-      return {
-        success: true,
-        clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id,
-        paymentId: payment.id,
-        payment,
-        customer: customerId,
-        ephemeralKey,
-        publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
-      };
-
-    } catch (err) {
-      logger.error('Error creating tip payment', { error: err.message, gigId });
-      throw err;
+      return result;
+    } catch (error) {
+      // A failed provider call or lost database acknowledgement keeps the same
+      // original. A fresh durable terminal receipt can recover a lost reply.
+      const saved = await this._tipRpc('read_gig_tip_original', args);
+      sameCommand(saved);
+      const result = projectTipOriginal(saved);
+      if (['succeeded', 'canceled'].includes(result.status)) return result;
+      if (['TIP_PROVIDER_REVIEW', 'TIP_PROVIDER_OUTCOME_UNKNOWN', 'TIP_CUSTOMER_CHANGED', 'TIP_TERMS_CHANGED', 'TIP_PAYMENT_CHANGED', 'TIP_INVALID_PROOF'].includes(error.code)) {
+        return { ...result, status: 'needs_review', canRetry: false };
+      }
+      return { ...result, canRetry: error.code !== 'TIP_LEASE_LOST' };
+    } finally {
+      // Lease release cannot erase provider start, original identity or a
+      // terminal receipt, including when another worker already recovered it.
+      try { await this._tipRpc('release_gig_tip_original', leased); } catch (_) { /* Lease expires; keep original for recovery. */ }
     }
   }
 

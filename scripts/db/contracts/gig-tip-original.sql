@@ -129,11 +129,68 @@ DO $$ DECLARE d jsonb; lease uuid; old_lease uuid; started text; frozen jsonb; B
  PERFORM set_config('app.gig_tip_original','off',true);
  PERFORM pg_temp.tip_assert(public.cancel_unstarted_gig_tip(pg_temp.tip_id(307),pg_temp.tip_id(1),lease)->>'error'='PROVIDER_OUTCOME_UNKNOWN','Old unknown outcome erased');
 END $$;
+CREATE FUNCTION pg_temp.tip_proof(request_number integer,gig_number integer) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_build_object('id','pi_tiporiginal'||request_number,'customer','cus_changed','livemode',false,
+  'amount',500,'currency','usd','capture_method','automatic','confirmation_method','automatic','status','succeeded',
+  'amount_received',500,'amount_capturable',0,'payer_id',pg_temp.tip_id(1),'payee_id',pg_temp.tip_id(2),'gig_id',pg_temp.tip_id(gig_number),
+  'payment_type','tip','platform_fee','0','request_id',pg_temp.tip_id(request_number),'payment_id',pg_temp.tip_id(request_number),
+  'stripe_account_id','acct_tiporiginal','transfer_data',NULL,'on_behalf_of',NULL,'application_fee_amount',NULL)
+  ||jsonb_build_object('charge_id','ch_tiporiginal'||request_number,'charge_paid',true,'charge_captured',true,
+  'charge_amount_captured',500,'charge_amount_refunded',0,'charge_refunded',false,'charge_disputed',false,'charge_dispute_id',NULL,
+  'charge_transfer',NULL,'charge_destination',NULL,'charge_application_fee',NULL,'charge_application_fee_amount',NULL,
+  'payment_method_id','pm_tiporiginal','captured_at','2026-09-14T12:00:00Z') $$;
+DO $$ DECLARE d jsonb; lease uuid; proof jsonb; patch jsonb; receipt jsonb; BEGIN
+ d:=pg_temp.tip_reserve(10);d:=public.claim_gig_tip_original(pg_temp.tip_id(310),pg_temp.tip_id(1));lease:=(d->'original'->>'lease_id')::uuid;
+ proof:=pg_temp.tip_proof(310,110);
+ PERFORM pg_temp.tip_assert(public.record_gig_tip_original(pg_temp.tip_id(310),pg_temp.tip_id(1),lease,proof)->>'error'='INVALID_PROOF','Unprepared original accepted a charge');
+ d:=public.prepare_gig_tip_provider(pg_temp.tip_id(310),pg_temp.tip_id(1),lease,'cus_changed');
+ FOREACH patch IN ARRAY ARRAY['{"amount":501}'::jsonb,'{"customer":"cus_other"}','{"livemode":true}','{"currency":"eur"}',
+  '{"request_id":null}','{"payment_id":null}','{"gig_id":null}','{"stripe_account_id":"acct_other"}',
+  '{"amount_received":0}','{"charge_paid":false}','{"charge_captured":false}','{"charge_amount_captured":499}',
+  '{"captured_at":"not-a-date"}','{"captured_at":"infinity"}','{"charge_id":null}','{"application_fee_amount":5}',
+  '{"transfer_data":{"destination":"acct_other"}}','{"charge_destination":"acct_other"}','{"charge_amount_refunded":501}'] LOOP
+  PERFORM pg_temp.tip_assert(public.record_gig_tip_original(pg_temp.tip_id(310),pg_temp.tip_id(1),lease,proof||patch)->>'error'='INVALID_PROOF','Mismatched proof admitted: '||patch::text);
+ END LOOP;
+ d:=public.record_gig_tip_original(pg_temp.tip_id(310),pg_temp.tip_id(1),lease,proof||
+  '{"status":"requires_action","amount_received":0,"charge_id":null,"charge_paid":false,"charge_captured":false,"charge_amount_captured":0,"captured_at":null}');
+ PERFORM pg_temp.tip_assert(d->'original'->>'state'='pending' AND d->'original'->>'provider_status'='requires_action'
+  AND d->'payment'->>'stripe_payment_intent_id'='pi_tiporiginal310' AND NOT(d->'original' ? 'receipt'),'Pending provider state created a success receipt');
+ PERFORM pg_temp.tip_assert(public.prepare_gig_tip_provider(pg_temp.tip_id(310),pg_temp.tip_id(1),lease,'cus_changed')->>'error'='PROVIDER_ALREADY_BOUND','Bound request prepared another create');
+ PERFORM pg_temp.tip_assert(public.record_gig_tip_original(pg_temp.tip_id(310),pg_temp.tip_id(1),lease,proof||'{"id":"pi_other"}')->>'error'='INVALID_PROOF','Provider identity replaced');
+ PERFORM pg_temp.tip_assert(public.record_gig_tip_original(pg_temp.tip_id(310),pg_temp.tip_id(1),gen_random_uuid(),proof)->>'error'='LEASE_LOST','Late lease established success');
+ d:=public.record_gig_tip_original(pg_temp.tip_id(310),pg_temp.tip_id(1),lease,proof);receipt:=d->'original'->'receipt';
+ PERFORM pg_temp.tip_assert(receipt->>'status'='succeeded' AND receipt->>'paymentId'=pg_temp.tip_id(310)::text
+  AND receipt->>'amountChargedCents'='500' AND d->'payment'->>'payment_status'='captured_hold','Exact charge did not commit same-ID receipt');
+ PERFORM pg_temp.tip_assert((d->'payment'->>'cooling_off_ends_at')::timestamptz='2026-09-16T12:00:00Z'::timestamptz,'Existing cooling period changed');
+ PERFORM pg_temp.tip_assert(public.record_gig_tip_original(pg_temp.tip_id(310),pg_temp.tip_id(1),lease,proof)->'original'->'receipt'=receipt,'Receipt replay changed terminal truth');
+ PERFORM pg_temp.tip_assert(public.preview_gig_tip(pg_temp.tip_id(110),pg_temp.tip_id(1))->>'remainingTipSlots'='2','Successful original not counted');
+ UPDATE public."Payment" SET payment_status='transferred',transfer_status='paid' WHERE id=pg_temp.tip_id(310);
+ PERFORM pg_temp.tip_assert(public.read_gig_tip_original(pg_temp.tip_id(310),pg_temp.tip_id(1))->'original'->'receipt'=receipt,'Existing downstream transfer erased receipt');
+ BEGIN UPDATE public."Payment" SET payment_status='authorize_pending' WHERE id=pg_temp.tip_id(310);
+  RAISE EXCEPTION 'Captured original reopened'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."Payment" SET stripe_charge_id='ch_other' WHERE id=pg_temp.tip_id(310);
+  RAISE EXCEPTION 'Captured Charge identity changed'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."Payment" SET payment_succeeded_at=NULL WHERE id=pg_temp.tip_id(310);
+  RAISE EXCEPTION 'Captured original evidence erased'; EXCEPTION WHEN check_violation THEN NULL; END;
+ d:=pg_temp.tip_reserve(11);d:=public.claim_gig_tip_original(pg_temp.tip_id(311),pg_temp.tip_id(1));lease:=(d->'original'->>'lease_id')::uuid;
+ d:=public.prepare_gig_tip_provider(pg_temp.tip_id(311),pg_temp.tip_id(1),lease,'cus_changed');
+ proof:=pg_temp.tip_proof(311,111)||'{"status":"canceled","amount_received":0,"charge_id":null,"charge_paid":false,"charge_captured":false,"charge_amount_captured":0,"captured_at":null}';
+ PERFORM pg_temp.tip_assert(public.record_gig_tip_original(pg_temp.tip_id(311),pg_temp.tip_id(1),lease,proof||'{"charge_amount_captured":1}')->>'error'='INVALID_PROOF','Canceled provider with captured funds called zero charge');
+ d:=public.record_gig_tip_original(pg_temp.tip_id(311),pg_temp.tip_id(1),lease,proof);
+ PERFORM pg_temp.tip_assert(d->'original'->'receipt'->>'status'='canceled' AND d->'original'->'receipt'->>'amountChargedCents'='0','Exact canceled proof not retained');
+ PERFORM pg_temp.tip_assert(NOT(pg_temp.tip_reserve(11,391) ? 'error'),'Proven canceled provider did not release slot');
+ d:=pg_temp.tip_reserve(12);d:=public.claim_gig_tip_original(pg_temp.tip_id(312),pg_temp.tip_id(1));lease:=(d->'original'->>'lease_id')::uuid;
+ d:=public.prepare_gig_tip_provider(pg_temp.tip_id(312),pg_temp.tip_id(1),lease,'cus_changed');
+ d:=public.record_gig_tip_original(pg_temp.tip_id(312),pg_temp.tip_id(1),lease,pg_temp.tip_proof(312,112)||'{"charge_amount_refunded":200}');
+ PERFORM pg_temp.tip_assert(d->'payment'->>'payment_status'='refunded_partial' AND d->'payment'->>'refunded_amount'='200'
+  AND d->'original'->'receipt'->>'amountChargedCents'='500','Existing capture and later refund conflated');
+END $$;
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
  BEGIN PERFORM public.preview_gig_tip(NULL,NULL); RAISE EXCEPTION 'Client preview RPC bypassed API scope'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.read_gig_tip_original(NULL,NULL); RAISE EXCEPTION 'Client read original RPC'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.reserve_gig_tip_original(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL); RAISE EXCEPTION 'Client reserved original RPC'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN PERFORM public.record_gig_tip_original(NULL,NULL,NULL,NULL); RAISE EXCEPTION 'Client recorded provider receipt'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.claim_gig_tip_original(NULL,NULL); RAISE EXCEPTION 'Client leased provider'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.prepare_gig_tip_provider(NULL,NULL,NULL,NULL); RAISE EXCEPTION 'Client prepared provider'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.cancel_unstarted_gig_tip(NULL,NULL,NULL); RAISE EXCEPTION 'Client canceled original'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;

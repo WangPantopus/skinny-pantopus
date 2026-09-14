@@ -44,20 +44,27 @@ BEGIN
    NEW.amount_subtotal,NEW.amount_platform_fee,NEW.amount_to_payee,NEW.amount_processing_fee,NEW.tip_amount,NEW.currency)
   IS DISTINCT FROM ROW(OLD.id,OLD.payer_id,OLD.payee_id,OLD.gig_id,OLD.payment_type,OLD.amount_total,
    OLD.amount_subtotal,OLD.amount_platform_fee,OLD.amount_to_payee,OLD.amount_processing_fee,OLD.tip_amount,OLD.currency)
-  OR (after_original-'state'-'lease_id'-'lease_until'-'provider_started_at'-'last_error'-'receipt')
-   IS DISTINCT FROM (before_original-'state'-'lease_id'-'lease_until'-'provider_started_at'-'last_error'-'receipt')
+  OR (after_original-'state'-'lease_id'-'lease_until'-'provider_started_at'-'provider_params'-'provider_status'-'last_error'-'receipt')
+   IS DISTINCT FROM (before_original-'state'-'lease_id'-'lease_until'-'provider_started_at'-'provider_params'-'provider_status'-'last_error'-'receipt')
   OR (before_original->>'provider_started_at' IS NOT NULL AND after_original->'provider_started_at' IS DISTINCT FROM before_original->'provider_started_at')
+  OR (before_original ? 'provider_params' AND after_original->'provider_params' IS DISTINCT FROM before_original->'provider_params')
   OR (before_original ? 'receipt' AND after_original->'receipt' IS DISTINCT FROM before_original->'receipt')
   OR (before_original->>'state' IN ('succeeded','canceled') AND after_original->>'state' IS DISTINCT FROM before_original->>'state')
+  OR (OLD.payment_succeeded_at IS NOT NULL AND ROW(NEW.payment_succeeded_at,NEW.captured_at,NEW.stripe_charge_id)
+   IS DISTINCT FROM ROW(OLD.payment_succeeded_at,OLD.captured_at,OLD.stripe_charge_id))
   OR (OLD.stripe_customer_id IS NOT NULL AND NEW.stripe_customer_id IS DISTINCT FROM OLD.stripe_customer_id)
   OR (OLD.stripe_payment_intent_id IS NOT NULL AND NEW.stripe_payment_intent_id IS DISTINCT FROM OLD.stripe_payment_intent_id)
   THEN RAISE EXCEPTION 'Original tip identity is immutable' USING ERRCODE='23514'; END IF;
  IF NOT privileged AND (after_original IS DISTINCT FROM before_original
-  OR ROW(NEW.stripe_customer_id,NEW.stripe_payment_intent_id,NEW.stripe_charge_id,NEW.payment_status,
+  OR ROW(NEW.stripe_customer_id,NEW.stripe_payment_intent_id,NEW.stripe_charge_id,
     NEW.payment_succeeded_at,NEW.captured_at,NEW.payment_attempted_at)
-   IS DISTINCT FROM ROW(OLD.stripe_customer_id,OLD.stripe_payment_intent_id,OLD.stripe_charge_id,OLD.payment_status,
-    OLD.payment_succeeded_at,OLD.captured_at,OLD.payment_attempted_at)) THEN
+   IS DISTINCT FROM ROW(OLD.stripe_customer_id,OLD.stripe_payment_intent_id,OLD.stripe_charge_id,
+    OLD.payment_succeeded_at,OLD.captured_at,OLD.payment_attempted_at)
+  OR (NEW.payment_status IS DISTINCT FROM OLD.payment_status AND before_original->>'state' IS DISTINCT FROM 'succeeded')) THEN
   RAISE EXCEPTION 'Use the original tip transaction' USING ERRCODE='42501'; END IF;
+ IF before_original->>'state'='succeeded' AND coalesce(NEW.payment_status,'') NOT IN
+  ('captured_hold','transfer_scheduled','transfer_pending','transferred','refund_pending','refunded_partial','refunded_full','disputed')
+  THEN RAISE EXCEPTION 'A captured tip cannot be reopened' USING ERRCODE='23514'; END IF;
  RETURN NEW;
 END $$;
 CREATE TRIGGER payment_gig_tip_original BEFORE INSERT OR UPDATE OR DELETE ON public."Payment"
@@ -189,8 +196,15 @@ BEGIN
  IF o->>'provider_started_at' IS NULL THEN
   IF g.status IS DISTINCT FROM 'completed' OR public.gig_tip_terms(g) IS DISTINCT FROM o->'terms'
    THEN RETURN jsonb_build_object('error','TERMS_CHANGED'); END IF;
-  o:=o||jsonb_build_object('provider_started_at',clock_timestamp());
- ELSIF (o->>'provider_started_at')::timestamptz<=clock_timestamp()-interval '23 hours' THEN
+  o:=o||jsonb_build_object('provider_started_at',clock_timestamp(),'provider_params',jsonb_build_object(
+   'amount',p.amount_total,'currency',p.currency,'customer',p_customer_id,'capture_method','automatic','confirmation_method','automatic',
+   'metadata',jsonb_build_object('payer_id',p.payer_id,'payee_id',p.payee_id,'gig_id',p.gig_id,'payment_type','tip',
+    'platform_fee','0','payee_stripe_account',o->>'stripe_account_id','tip_request_id',p.id,'payment_id',p.id),
+   'description','Pantopus Tip - Gig '||p.gig_id::text));
+  IF o->>'payment_method_id' IS NOT NULL THEN
+   o:=jsonb_set(o,'{provider_params}',(o->'provider_params')||jsonb_build_object('payment_method',o->>'payment_method_id','off_session',true,'confirm',true));
+  END IF;
+ ELSIF o->'provider_params' IS NULL OR (o->>'provider_started_at')::timestamptz<=clock_timestamp()-interval '23 hours' THEN
   RETURN jsonb_build_object('error','PROVIDER_OUTCOME_UNKNOWN');
  END IF;
  o:=o||jsonb_build_object('state','creating');
@@ -238,13 +252,98 @@ BEGIN
  RETURN public.read_gig_tip_original(p_request_id,p_actor_id);
 END $$;
 
+-- The service passes freshly checked gigTipProof evidence. SQL binds that
+-- evidence to this exact original and commits status plus receipt atomically.
+CREATE FUNCTION public.record_gig_tip_original(p_request_id uuid,p_actor_id uuid,p_lease_id uuid,p_proof jsonb) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
+DECLARE p public."Payment"; o jsonb; d jsonb; status text; receipt jsonb; captured timestamptz; next_payment_status text;
+BEGIN
+ SELECT * INTO p FROM public."Payment" WHERE id=p_request_id FOR UPDATE;
+ d:=public.read_gig_tip_original(p_request_id,p_actor_id); IF d ? 'error' THEN RETURN d; END IF;
+ o:=d->'original';
+ IF o->>'state' IN ('succeeded','canceled') THEN RETURN d; END IF;
+ IF p_lease_id IS NULL OR o->>'lease_id' IS DISTINCT FROM p_lease_id::text
+  OR coalesce((o->>'lease_until')::timestamptz,'-infinity')<=clock_timestamp()
+  THEN RETURN jsonb_build_object('error','LEASE_LOST'); END IF;
+ status:=p_proof->>'status';
+ IF o->>'provider_started_at' IS NULL OR p.stripe_customer_id IS NULL
+  OR jsonb_typeof(p_proof) IS DISTINCT FROM 'object'
+  OR NOT coalesce(p_proof @> jsonb_build_object('customer',p.stripe_customer_id,'livemode',o->'livemode',
+    'amount',p.amount_total,'currency',p.currency,'confirmation_method','automatic','amount_capturable',0,
+    'payer_id',p.payer_id,'payee_id',p.payee_id,'gig_id',p.gig_id,'payment_type','tip','platform_fee','0',
+    'request_id',p.id,'payment_id',p.id,'stripe_account_id',o->>'stripe_account_id',
+    'transfer_data',NULL,'on_behalf_of',NULL,'charge_transfer',NULL,'charge_destination',NULL,'charge_application_fee',NULL),false)
+  OR coalesce(p_proof->>'id','') !~ '^pi_[a-zA-Z0-9]+$'
+  OR (p.stripe_payment_intent_id IS NOT NULL AND p_proof->>'id' IS DISTINCT FROM p.stripe_payment_intent_id)
+  OR coalesce(p_proof->>'capture_method','') NOT IN ('automatic','automatic_async')
+  OR coalesce(status,'') NOT IN ('requires_payment_method','requires_confirmation','requires_action','processing','succeeded','canceled')
+  OR p_proof->'application_fee_amount' IS NULL OR p_proof->'application_fee_amount' NOT IN ('null'::jsonb,'0'::jsonb)
+  OR p_proof->'charge_application_fee_amount' IS NULL OR p_proof->'charge_application_fee_amount' NOT IN ('null'::jsonb,'0'::jsonb)
+  OR jsonb_typeof(p_proof->'amount_received') IS DISTINCT FROM 'number'
+  OR (p_proof->>'amount_received')::integer NOT BETWEEN 0 AND p.amount_total
+  OR jsonb_typeof(p_proof->'charge_amount_refunded') IS DISTINCT FROM 'number'
+  OR (p_proof->>'charge_amount_refunded')::integer NOT BETWEEN 0 AND p.amount_total
+  OR jsonb_typeof(p_proof->'charge_amount_captured') IS DISTINCT FROM 'number'
+  OR (p_proof->>'charge_amount_captured')::integer NOT BETWEEN 0 AND p.amount_total
+  OR jsonb_typeof(p_proof->'charge_paid') IS DISTINCT FROM 'boolean'
+  OR jsonb_typeof(p_proof->'charge_captured') IS DISTINCT FROM 'boolean'
+  OR p_proof->'charge_id' IS NULL
+  OR (p_proof->'charge_id'<>'null'::jsonb AND coalesce(p_proof->>'charge_id','') !~ '^ch_[a-zA-Z0-9]+$')
+  OR jsonb_typeof(p_proof->'charge_disputed') IS DISTINCT FROM 'boolean'
+  OR jsonb_typeof(p_proof->'charge_refunded') IS DISTINCT FROM 'boolean'
+  THEN RETURN jsonb_build_object('error','INVALID_PROOF'); END IF;
+ IF status='succeeded' THEN
+  IF NOT coalesce(p_proof @> jsonb_build_object('amount_received',p.amount_total,'charge_paid',true,'charge_captured',true,
+    'charge_amount_captured',p.amount_total),false)
+   OR coalesce(p_proof->>'charge_id','') !~ '^ch_[a-zA-Z0-9]+$'
+   OR jsonb_typeof(p_proof->'captured_at') IS DISTINCT FROM 'string'
+   OR (p_proof->>'charge_refunded')::boolean IS DISTINCT FROM ((p_proof->>'charge_amount_refunded')::integer=p.amount_total)
+   THEN RETURN jsonb_build_object('error','INVALID_PROOF'); END IF;
+  captured:=(p_proof->>'captured_at')::timestamptz;
+  IF NOT isfinite(captured) THEN RETURN jsonb_build_object('error','INVALID_PROOF'); END IF;
+ ELSIF status<>'processing' THEN
+  IF NOT coalesce(p_proof @> '{"amount_received":0,"charge_captured":false,"charge_amount_captured":0}',false)
+   THEN RETURN jsonb_build_object('error','INVALID_PROOF'); END IF;
+ END IF;
+ -- Only the original pending payment may first become financially terminal.
+ IF p.payment_status IS DISTINCT FROM 'authorize_pending' OR p.payment_succeeded_at IS NOT NULL OR p.captured_at IS NOT NULL
+  THEN RETURN jsonb_build_object('error','PAYMENT_CHANGED'); END IF;
+ IF status IN ('succeeded','canceled') THEN
+  receipt:=jsonb_build_object('requestId',p.id,'paymentId',p.id,'gigId',p.gig_id,'payerId',p.payer_id,'payeeId',p.payee_id,
+    'amountCents',p.amount_total,'currency',p.currency,'status',status,'paymentIntentId',p_proof->>'id',
+    'chargeId',p_proof->'charge_id','amountChargedCents',CASE WHEN status='succeeded' THEN p.amount_total ELSE 0 END);
+  o:=(o-'lease_id'-'lease_until')||jsonb_build_object('state',status,'receipt',receipt,'provider_status',status);
+ ELSE
+  o:=o||jsonb_build_object('state','pending','provider_status',status);
+ END IF;
+ next_payment_status:=CASE WHEN status='canceled' THEN 'canceled'
+  WHEN status<>'succeeded' THEN 'authorize_pending'
+  WHEN p_proof->>'charge_disputed'='true' THEN 'disputed'
+  WHEN (p_proof->>'charge_amount_refunded')::integer=p.amount_total THEN 'refunded_full'
+  WHEN (p_proof->>'charge_amount_refunded')::integer>0 THEN 'refunded_partial'
+  ELSE 'captured_hold' END;
+ PERFORM set_config('app.gig_tip_original','on',true);
+ UPDATE public."Payment" SET stripe_payment_intent_id=p_proof->>'id',stripe_charge_id=p_proof->>'charge_id',
+  stripe_payment_method_id=coalesce(p_proof->>'payment_method_id',stripe_payment_method_id),
+  payment_status=next_payment_status,payment_succeeded_at=captured,captured_at=captured,
+  cooling_off_ends_at=CASE WHEN captured IS NULL THEN NULL ELSE captured+interval '48 hours' END,
+  refunded_amount=(p_proof->>'charge_amount_refunded')::integer,dispute_id=p_proof->>'charge_dispute_id',
+  metadata=jsonb_set(metadata,'{gig_tip_original_v1}',o) WHERE id=p.id;
+ PERFORM set_config('app.gig_tip_original','off',true);
+ RETURN public.read_gig_tip_original(p_request_id,p_actor_id);
+EXCEPTION WHEN invalid_text_representation OR numeric_value_out_of_range OR invalid_datetime_format OR datetime_field_overflow
+ THEN RETURN jsonb_build_object('error','INVALID_PROOF');
+END $$;
+
 REVOKE ALL ON FUNCTION public.gig_tip_terms(public."Gig"),public.protect_gig_tip_original(),
  public.read_gig_tip_original(uuid,uuid),public.preview_gig_tip(uuid,uuid),
  public.reserve_gig_tip_original(uuid,uuid,text,uuid,jsonb,integer,text,boolean),
  public.claim_gig_tip_original(uuid,uuid),public.prepare_gig_tip_provider(uuid,uuid,uuid,text),
- public.release_gig_tip_original(uuid,uuid,uuid),public.cancel_unstarted_gig_tip(uuid,uuid,uuid) FROM PUBLIC,anon,authenticated;
+ public.release_gig_tip_original(uuid,uuid,uuid),public.cancel_unstarted_gig_tip(uuid,uuid,uuid),
+ public.record_gig_tip_original(uuid,uuid,uuid,jsonb) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.gig_tip_terms(public."Gig"),public.protect_gig_tip_original(),
  public.read_gig_tip_original(uuid,uuid),public.preview_gig_tip(uuid,uuid),
  public.reserve_gig_tip_original(uuid,uuid,text,uuid,jsonb,integer,text,boolean),
  public.claim_gig_tip_original(uuid,uuid),public.prepare_gig_tip_provider(uuid,uuid,uuid,text),
- public.release_gig_tip_original(uuid,uuid,uuid),public.cancel_unstarted_gig_tip(uuid,uuid,uuid) TO service_role;
+ public.release_gig_tip_original(uuid,uuid,uuid),public.cancel_unstarted_gig_tip(uuid,uuid,uuid),
+ public.record_gig_tip_original(uuid,uuid,uuid,jsonb) TO service_role;

@@ -2298,3 +2298,49 @@ of Git. These functions are not yet wired into the app. Modern provider binding,
 terminal receipts, route/session commands, original-ID client recovery, legacy
 cancellation and delivery remain open, as do hosted adoption and real provider /
 installed-client acceptance. Current screen designs are unchanged.
+
+
+## Tip service and API use the original Payment
+
+September14 working follow-up to reservation `ff51584d5`. The same unmerged
+migration now freezes the exact provider create JSON once and records matching
+pending/terminal evidence atomically in Payment. No additional table/column was
+introduced. Existing StripeService.createTipPayment reuses getOrCreateCustomer's
+existing CAS, then prepares the original before calling Stripe with a fixed key.
+Unknown create responses recover by exact-intent discovery or an explicit retry
+within the saved recovery window. Current provider proof precedes SQL receipt
+recording and transient checkout; check cannot create/confirm/cancel an intent.
+Cancellation is explicit and needs current zero-charge proof, or the durable fact
+that provider preparation never happened. Ordinary downstream refund/transfer
+states remain compatible with protected original capture identity.
+
+The existing tip POST requires original UUID, unchanged amount/method/terms and
+current actor/session. Preview and local original-read endpoints return opening
+proof. Old unscoped commands fail409 before the service; pending progress is202,
+and only terminal receipts are200. Existing refresh/webhook paths route marked
+Payments through the same original check. Modern notices reuse the existing
+Notification idempotency key; durable push delivery remains open.
+
+Evidence:86 focused backend tests/5 suites pass. The43 service tests initially
+had17 failures from the test's cross-realm structuredClone objects compared with
+Node strict equality; replacing the fake RPC copy with actual JSON transport
+semantics fixed that fixture. Actual SQL contract, service and provider semantics
+are independently covered:12 service/real-SQL scenarios pass in129 queries,
+including a first free-task tip through existing customer CAS, provider response
+loss/discovery, identical create retry parameters, transient checkout, provider and
+unstarted cancellation, lost committed/uncommitted database outcomes, concurrent
+service requests, provider amount mismatch, unknown original reads, and cancellation admitted before a delayed first submission. The
+reusable `scripts/db/test-gig-tip-original-service.cjs` uses synthetic provider and
+notice transports plus real local SQL through a bounded psql adapter; it is not
+PostgREST or real-provider acceptance. Exact synthetic cleanup is zero.
+
+All65 raw contracts pass again; function lint passes358 functions/107 bindings,
+zero errors/eight existing warnings. The first full backend run records5878 passes,
+16 skips and one `homeDocumentFiles` socket interruption. That unchanged file
+passes33 tests alone; the full repeat reports5879 passes/16 skips, with natural
+exit0. The later cancel-before-first-admission repair is covered by the final
+focused86 assertions and12 real-SQL scenarios; it follows the full run. Full current-head CI is still required for this newer
+working source. Pushed89658c9e6 completed CI34893989362 with15 successes/one path
+skip. Existing clients are still on the old tip command, so this is a partial
+backend integration, not a deployable or merge-ready feature. Keep original screen
+designs and reuse the existing SDK/confirmation components for the client update.

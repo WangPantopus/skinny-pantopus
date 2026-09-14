@@ -1,16 +1,16 @@
 # Durable Gig tip contract — partial implementation
 
-**Status checked September14,2026:** the existing tip status service now uses
-`gigTipProof.js` for current legacy PaymentIntent/Charge verification and guarded
-local status updates. Migration `20260914040000_gig_tip_original.sql` adds a tested,
-service-only original reservation and provider lease in existing Payment storage;
-it adds no table or column. It is applied only to the owned local contract database.
-The reservation, customer preparation and unstarted cancellation functions are
-not yet called by the app. The current POST still reaches the provider before
-inserting Payment and does not return TIP_TERMS_REQUIRED. The preview/command API,
-provider creation and terminal reconciliation, recovery clients and delivery work
-below remain incomplete. The TipModal status repair uses the existing refresh API.
-Keep hosted rollout and provider activation gated.
+**Status checked September14,2026:** backend implementation is in progress and
+not ready for coordinated release. The existing StripeService uses current matching
+PaymentIntent/Charge proof for legacy status. The same service now uses
+`20260914040000_gig_tip_original.sql` for original Payment reservation, frozen
+provider parameters/leases and atomic pending/success/zero-charge cancellation
+receipts, without adding a table or column. Its SQL is applied only to the owned
+local contract database. The existing tip POST now enforces the original UUID,
+terms and current actor/session; preview and local request reads are implemented.
+The web/iOS/Android clients still need the coordinated update described below.
+Legacy recovery, durable delivery and real provider/installed-client acceptance
+remain open. Do not deploy this partial integration or merge PR34 yet.
 
 Matching clients and backend must deploy together. The previous tip POST without an
 original request UUID, current opening session proof and exact displayed terms returns
@@ -73,7 +73,10 @@ creates again based on list absence ([Stripe idempotency](https://docs.stripe.co
 and reconciles that evidence; it never creates, confirms, cancels, captures or refunds
 an intent. `cancel` is a separate explicit cancellation request; only durable proof
 of no charge completes cancellation. A closed SDK sheet or a timeout is not such
-proof. Provider processing and unknown creation/cancellation results remain pending.
+proof. If an explicit cancellation arrives before the first submission, it may
+reserve and cancel that same UUID locally; a delayed first submission then reads
+the canceled receipt without reaching the provider. Provider processing and
+unknown creation/cancellation results remain pending.
 
 `GET /api/payments/tip-requests/:requestId` reads the saved local request only. It
 never creates provider work or treats absence as permission for a new UUID. A cold
@@ -157,6 +160,6 @@ New request creation requires a nonnull current owner confirmation. Unverified o
 multiple historical pending payments block an ambiguous new tip until individually
 reconciled. Existing successful tips and financial records are preserved.
 
-The reservation migration is `20260914040000_gig_tip_original.sql`. It reuses Payment.id for both identities and financial columns for amounts/customer/provider IDs; only absent original terms and control state use metadata.gig_tip_original_v1. Legacy rows remain unmarked. Additional provider reconciliation and client work must complete this boundary before activation; do not add a competing tip table.
+The reservation migration is `20260914040000_gig_tip_original.sql`. It reuses Payment.id for both identities and financial columns for amounts/customer/provider IDs; only absent original terms and control state use metadata.gig_tip_original_v1. Legacy rows remain unmarked. The remaining client, legacy recovery and delivery work must complete this boundary before activation; do not add a competing tip table.
 Hosted application, new provider acceptance and client completion remain separate
 verification gates until the corresponding source and receipt tests pass.

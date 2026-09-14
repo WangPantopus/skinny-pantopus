@@ -11,6 +11,8 @@ const { resetTables, seedTable } = require('./__mocks__/supabaseAdmin');
 
 jest.mock('../stripe/stripeService', () => ({
   createTipPayment: jest.fn(),
+  previewTip: jest.fn(),
+  readTipRequest: jest.fn(),
   syncTipPaymentStatus: jest.fn(),
   createSmartRefund: jest.fn(),
 }));
@@ -27,6 +29,7 @@ jest.mock('../middleware/verifyToken', () => {
       id: req.headers['x-test-user-id'] || 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa',
       role,
     };
+    req.session = { id: 'tip-route-session' };
     next();
   };
   mw.requireAdmin = (req, res, next) => {
@@ -52,18 +55,6 @@ function buildApp() {
   return app;
 }
 
-function makeGig(overrides = {}) {
-  return {
-    id: GIG_ID,
-    user_id: DEFAULT_USER,
-    accepted_by: WORKER_ID,
-    status: 'completed',
-    title: 'Test Gig',
-    owner_confirmed_at: new Date().toISOString(),
-    ...overrides,
-  };
-}
-
 function makePayment(overrides = {}) {
   return {
     id: overrides.id || 'pay-001',
@@ -87,187 +78,106 @@ beforeEach(() => {
 // 1. POST /api/payments/tip
 // ============================================================
 
+const TIP_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const { getRequestSessionScope } = require('../utils/requestSessionScope');
+const opening = actor => getRequestSessionScope({ user: { id: actor }, session: { id: 'tip-route-session' } }).session_scope;
+function tipCommand(overrides = {}) {
+  return { requestId: TIP_ID, gigId: GIG_ID, amount: 500, expectedActorId: DEFAULT_USER,
+    expectedSessionScope: opening(DEFAULT_USER), expectedTerms: { gigId: GIG_ID, payerId: DEFAULT_USER,
+      payeeId: WORKER_ID, ownerConfirmedAt: '2026-09-14T00:00:00Z' }, mode: 'resume', ...overrides };
+}
+function tipProgress(status = 'pending') {
+  const original = { requestId: TIP_ID, paymentId: TIP_ID, gigId: GIG_ID, payerId: DEFAULT_USER, payeeId: WORKER_ID,
+    amountCents: 500, currency: 'usd', terms: tipCommand().expectedTerms, paymentMethodId: null };
+  return { request: original, status, paymentStatus: status === 'succeeded' ? 'captured_hold' : 'authorize_pending',
+    providerStatus: status === 'succeeded' ? 'succeeded' : 'requires_action', paymentIntentId: 'pi_tiproute',
+    canRetry: status !== 'succeeded', canCancel: status !== 'succeeded', receipt: status === 'succeeded'
+      ? { ...original, status, paymentIntentId: 'pi_tiproute', chargeId: 'ch_tiproute', amountChargedCents: 500 } : null };
+}
+
 describe('POST /api/payments/tip', () => {
-  test('happy path: creates tip for completed confirmed gig', async () => {
-    const app = buildApp();
-    seedTable('Gig', [makeGig()]);
-    seedTable('Payment', []); // no existing tips
-
-    stripeService.createTipPayment.mockResolvedValue({
-      success: true,
-      clientSecret: 'pi_xxx_secret_xxx',
-      paymentId: 'pay-tip-001',
-      paymentIntentId: 'pi_xxx',
-    });
-
-    const res = await request(app)
-      .post('/api/payments/tip')
-      .send({ gigId: GIG_ID, amount: 500 });
-
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.paymentId).toBe('pay-tip-001');
-    expect(res.body.clientSecret).toBe('pi_xxx_secret_xxx');
-    expect(stripeService.createTipPayment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        payerId: DEFAULT_USER,
-        payeeId: WORKER_ID,
-        gigId: GIG_ID,
-        amount: 500,
-        offSession: false,
-      })
-    );
-    expect(createNotification).not.toHaveBeenCalled();
+  test('passes the original UUID, exact terms and current actor/session to the service', async () => {
+    stripeService.createTipPayment.mockResolvedValue(tipProgress());
+    const res = await request(buildApp()).post('/api/payments/tip').send(tipCommand());
+    expect(res.status).toBe(202); expect(res.body.status).toBe('pending'); expect(res.body.receipt).toBeNull();
+    expect(res.body.success).toBeUndefined(); expect(res.body.sessionScope).toBe(opening(DEFAULT_USER));
+    expect(stripeService.createTipPayment).toHaveBeenCalledWith({ ...tipCommand(), paymentMethodId: null,
+      payerId: DEFAULT_USER, sessionScope: opening(DEFAULT_USER) });
   });
-
-  test('rejects tip on non-existent gig', async () => {
-    const app = buildApp();
-    seedTable('Gig', []);
-
-    const res = await request(app)
-      .post('/api/payments/tip')
-      .send({ gigId: GIG_ID, amount: 500 });
-
-    expect(res.status).toBe(404);
-    expect(res.body.error).toMatch(/not found/i);
+  test('returns a successful terminal receipt without replacing original identity', async () => {
+    stripeService.createTipPayment.mockResolvedValue(tipProgress('succeeded'));
+    const res = await request(buildApp()).post('/api/payments/tip').send(tipCommand({ mode: 'check' }));
+    expect(res.status).toBe(200); expect(res.body.receipt.paymentId).toBe(TIP_ID);
+    expect(res.body.receipt.amountChargedCents).toBe(500);
+  });
+  test.each([
+    { gigId: GIG_ID, amount: 500 }, tipCommand({ amount: 49 }), tipCommand({ amount: 100000000 }),
+    tipCommand({ amount: '500' }), tipCommand({ requestId: 'not-a-uuid' }), tipCommand({ mode: 'capture' }),
+    tipCommand({ paymentMethodId: 'other' }), tipCommand({ expectedTerms: {} }),
+  ])('rejects incomplete or invalid original commands before service access: %j', async body => {
+    const res = await request(buildApp()).post('/api/payments/tip').send(body);
+    expect(res.status).toBe(409); expect(res.body.code).toBe('TIP_TERMS_REQUIRED');
     expect(stripeService.createTipPayment).not.toHaveBeenCalled();
   });
-
-  test('rejects tip from non-poster', async () => {
-    const app = buildApp();
-    seedTable('Gig', [makeGig({ user_id: 'cccccccc-cccc-1ccc-8ccc-cccccccccccc' })]);
-
-    const res = await request(app)
-      .post('/api/payments/tip')
-      .send({ gigId: GIG_ID, amount: 500 });
-
-    expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/only the gig poster/i);
+  test('stale account opening fails before provider service access', async () => {
+    const res = await request(buildApp()).post('/api/payments/tip').set('x-test-user-id', WORKER_ID).send(tipCommand());
+    expect(res.status).toBe(409); expect(res.body.code).toBe('SESSION_SCOPE_CHANGED');
+    expect(stripeService.createTipPayment).not.toHaveBeenCalled();
   });
-
-  test('rejects tip on incomplete gig', async () => {
-    const app = buildApp();
-    seedTable('Gig', [makeGig({ status: 'in_progress' })]);
-
-    const res = await request(app)
-      .post('/api/payments/tip')
-      .send({ gigId: GIG_ID, amount: 500 });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/completed/i);
+  test('stale session opening fails before provider service access', async () => {
+    const res = await request(buildApp()).post('/api/payments/tip').send(tipCommand({ expectedSessionScope: 'f'.repeat(64) }));
+    expect(res.status).toBe(409); expect(res.body.code).toBe('SESSION_SCOPE_CHANGED');
+    expect(stripeService.createTipPayment).not.toHaveBeenCalled();
   });
-
-  test('rejects tip on unconfirmed gig', async () => {
-    const app = buildApp();
-    seedTable('Gig', [makeGig({ owner_confirmed_at: null })]);
-
-    const res = await request(app)
-      .post('/api/payments/tip')
-      .send({ gigId: GIG_ID, amount: 500 });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/confirmed/i);
+  test.each([
+    ['TIP_FORBIDDEN', 403], ['TIP_NOT_FOUND', 404], ['TIP_NOT_CONFIRMED', 409], ['TIP_WORKER_UNAVAILABLE', 409],
+    ['TIP_LIMIT', 409], ['TIP_LEGACY_REVIEW', 409], ['TIP_REQUEST_CONFLICT', 409], ['TIP_RECEIPT_UNKNOWN', 503],
+  ])('preserves the atomic service admission or recovery error %s', async (code, statusCode) => {
+    stripeService.createTipPayment.mockRejectedValue(Object.assign(new Error('Check original tip'), { code, statusCode }));
+    const res = await request(buildApp()).post('/api/payments/tip').send(tipCommand());
+    expect(res.status).toBe(statusCode); expect(res.body.code).toBe(code); expect(res.body.receipt).toBeUndefined();
   });
-
-  test('rejects tip when 3 successful tips already exist for gig', async () => {
-    const app = buildApp();
-    seedTable('Gig', [makeGig()]);
-    seedTable('Payment', [
-      makePayment({
-        id: 'tip-1',
-        payment_type: 'tip',
-        payment_status: 'transferred',
-        payment_succeeded_at: '2026-04-01T00:00:00.000Z',
-      }),
-      makePayment({
-        id: 'tip-2',
-        payment_type: 'tip',
-        payment_status: 'captured_hold',
-        payment_succeeded_at: '2026-04-02T00:00:00.000Z',
-      }),
-      makePayment({
-        id: 'tip-3',
-        payment_type: 'tip',
-        payment_status: 'refund_pending',
-        payment_succeeded_at: '2026-04-03T00:00:00.000Z',
-      }),
-    ]);
-
-    const res = await request(app)
-      .post('/api/payments/tip')
-      .send({ gigId: GIG_ID, amount: 500 });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/maximum 3 tips/i);
+  test('only TIP_ACTIVE may identify another active original for explicit recovery', async () => {
+    stripeService.createTipPayment.mockRejectedValue(Object.assign(new Error('Original active'),
+      { code: 'TIP_ACTIVE', statusCode: 409, activeRequestId: TIP_ID }));
+    const res = await request(buildApp()).post('/api/payments/tip').send(tipCommand());
+    expect(res.body.activeRequestId).toBe(TIP_ID);
+    stripeService.createTipPayment.mockRejectedValue(Object.assign(new Error('Other conflict'),
+      { code: 'TIP_REQUEST_CONFLICT', statusCode: 409, activeRequestId: TIP_ID }));
+    const conflict = await request(buildApp()).post('/api/payments/tip').send(tipCommand());
+    expect(conflict.body.activeRequestId).toBeUndefined();
   });
-
-  test('does not count abandoned pre-confirmation tip attempts toward the cap', async () => {
-    const app = buildApp();
-    seedTable('Gig', [makeGig()]);
-    seedTable('Payment', [
-      makePayment({ id: 'tip-abandoned-1', payment_type: 'tip', payment_status: 'authorize_pending' }),
-      makePayment({ id: 'tip-abandoned-2', payment_type: 'tip', payment_status: 'authorize_pending' }),
-      makePayment({ id: 'tip-abandoned-3', payment_type: 'tip', payment_status: 'authorize_pending' }),
-    ]);
-
-    stripeService.createTipPayment.mockResolvedValue({
-      success: true,
-      clientSecret: 'pi_retry_secret',
-      paymentId: 'pay-tip-retry',
-      paymentIntentId: 'pi_retry',
-    });
-
-    const res = await request(app)
-      .post('/api/payments/tip')
-      .send({ gigId: GIG_ID, amount: 500 });
-
-    expect(res.status).toBe(200);
-    expect(res.body.paymentId).toBe('pay-tip-retry');
-    expect(stripeService.createTipPayment).toHaveBeenCalledTimes(1);
+  test('unexpected failure returns a recoverable error without exposing provider internals', async () => {
+    stripeService.createTipPayment.mockRejectedValue(new Error('synthetic private provider payload'));
+    const res = await request(buildApp()).post('/api/payments/tip').send(tipCommand());
+    expect(res.status).toBe(503); expect(res.body.code).toBe('TIP_UNKNOWN');
+    expect(JSON.stringify(res.body)).not.toContain('synthetic private');
   });
+});
 
-  test('returns 500 when stripeService.createTipPayment throws', async () => {
-    const app = buildApp();
-    seedTable('Gig', [makeGig()]);
-    seedTable('Payment', []);
-
-    stripeService.createTipPayment.mockRejectedValue(new Error('Stripe connect failure'));
-
-    const res = await request(app)
-      .post('/api/payments/tip')
-      .send({ gigId: GIG_ID, amount: 500 });
-
-    expect(res.status).toBe(500);
-    expect(res.body.error).toMatch(/stripe connect failure/i);
+describe('original tip preview and local receipt reads', () => {
+  test('preview returns current opening proof and existing service eligibility', async () => {
+    stripeService.previewTip.mockResolvedValue({ terms: tipCommand().expectedTerms, eligible: true, activeRequestId: null });
+    const res = await request(buildApp()).get('/api/payments/tip-preview').query({ gigId: GIG_ID });
+    expect(res.status).toBe(200); expect(res.body.actorId).toBe(DEFAULT_USER); expect(res.body.sessionScope).toBe(opening(DEFAULT_USER));
+    expect(stripeService.previewTip).toHaveBeenCalledWith({ gigId: GIG_ID, payerId: DEFAULT_USER });
+    expect(stripeService.createTipPayment).not.toHaveBeenCalled();
   });
-
-  test('returns 402 for SCA authentication_required error', async () => {
-    const app = buildApp();
-    seedTable('Gig', [makeGig()]);
-    seedTable('Payment', []);
-
-    const scaError = new Error('Your card was declined');
-    scaError.type = 'StripeCardError';
-    scaError.code = 'authentication_required';
-    stripeService.createTipPayment.mockRejectedValue(scaError);
-
-    const res = await request(app)
-      .post('/api/payments/tip')
-      .send({ gigId: GIG_ID, amount: 500, paymentMethodId: 'pm_xxx' });
-
-    expect(res.status).toBe(402);
-    expect(res.body.code).toBe('authentication_required');
+  test('read retains the original and binds the response to the current session', async () => {
+    stripeService.readTipRequest.mockResolvedValue(tipProgress());
+    const res = await request(buildApp()).get(`/api/payments/tip-requests/${TIP_ID}`);
+    expect(res.status).toBe(200); expect(res.body.request.requestId).toBe(TIP_ID);
+    expect(res.body.sessionScope).toBe(opening(DEFAULT_USER)); expect(res.body.checkout).toBeUndefined();
+    expect(stripeService.createTipPayment).not.toHaveBeenCalled();
   });
-
-  test('rejects invalid body (missing amount)', async () => {
-    const app = buildApp();
-
-    const res = await request(app)
-      .post('/api/payments/tip')
-      .send({ gigId: GIG_ID });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/validation/i);
+  test('an absent original remains 404 without reserving another payment', async () => {
+    stripeService.readTipRequest.mockRejectedValue(Object.assign(new Error('Original absent'), { code: 'TIP_NOT_FOUND', statusCode: 404 }));
+    const res = await request(buildApp()).get(`/api/payments/tip-requests/${TIP_ID}`);
+    expect(res.status).toBe(404); expect(stripeService.createTipPayment).not.toHaveBeenCalled();
+  });
+  test('invalid read identity fails before any service read', async () => {
+    const res = await request(buildApp()).get('/api/payments/tip-requests/invalid');
+    expect(res.status).toBe(400); expect(stripeService.readTipRequest).not.toHaveBeenCalled();
   });
 });
 

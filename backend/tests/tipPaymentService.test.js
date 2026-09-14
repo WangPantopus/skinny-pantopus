@@ -120,85 +120,220 @@ describe('existing tip status requires the current matching provider payment', (
   });
 });
 
-describe('stripeService.createTipPayment', () => {
-  let originalKey;
+describe('original tip creation and recovery in the existing service', () => {
+  const db = require('../config/supabaseAdmin');
+  const { projectTipOriginal } = require('../stripe/gigTipProof');
+  let originalKey, saved, intent, charge, calls, reserveError, recordError, loseRecord, claimBusy;
+  // RPC responses use JSON transport, including plain objects in this test realm.
+  const copy = value => JSON.parse(JSON.stringify(value));
+  const terms = () => ({ gigId: 'tip-gig', payerId: 'tip-payer', payeeId: 'tip-worker', ownerConfirmedAt: '2026-09-14T00:00:00Z' });
+  const command = (overrides = {}) => ({ requestId: 'tip-proof-payment', payerId: 'tip-payer', gigId: 'tip-gig', amount: 500,
+    paymentMethodId: null, sessionScope: 'a'.repeat(64), expectedTerms: terms(), mode: 'resume', ...overrides });
+  function frozenParams() {
+    const p = saved.payment;
+    return { amount: 500, currency: 'usd', customer: p.stripe_customer_id, capture_method: 'automatic', confirmation_method: 'automatic',
+      metadata: { payer_id: p.payer_id, payee_id: p.payee_id, gig_id: p.gig_id, payment_type: 'tip', platform_fee: '0',
+        payee_stripe_account: 'acct_tipproof', tip_request_id: p.id, payment_id: p.id }, description: `Pantopus Tip - Gig ${p.gig_id}` };
+  }
+  function prepared(age = 0) {
+    saved.original.provider_started_at = new Date(Date.now() - age).toISOString();
+    saved.original.provider_params = frozenParams(); saved.original.state = 'creating';
+  }
+  function pendingProvider(status = 'requires_payment_method') {
+    Object.assign(intent, { status, amount_received: 0, latest_charge: null });
+    stripe.paymentIntents.retrieve.mockImplementation(async () => copy(intent));
+  }
   beforeEach(() => {
-    resetTables();
-    jest.clearAllMocks();
-    stripe._resetAll();
-    originalKey = process.env.STRIPE_SECRET_KEY;
-    process.env.STRIPE_SECRET_KEY = 'sk_test_tip_proof_fixture';
+    resetTables(); jest.clearAllMocks(); stripe._resetAll();
+    originalKey = process.env.STRIPE_SECRET_KEY; process.env.STRIPE_SECRET_KEY = 'sk_test_tip_original_fixture';
+    const fixture = tipFixture(); ({ intent, charge } = fixture);
+    saved = { payment: { ...fixture.payment, stripe_payment_intent_id: null }, original: { version: 1, state: 'reserved',
+      terms: terms(), payment_method_id: null, original_session_scope: 'a'.repeat(64), stripe_account_id: 'acct_tipproof', livemode: false } };
+    intent.metadata = { ...intent.metadata, tip_request_id: saved.payment.id, payment_id: saved.payment.id };
+    intent.client_secret = `${intent.id}_secret_fixture`;
+    calls = []; reserveError = false; recordError = false; loseRecord = false; claimBusy = false;
+    stripe.paymentIntents.list = jest.fn().mockResolvedValue({ data: [], has_more: false });
+    stripe.paymentMethods = { retrieve: jest.fn() };
+    stripe.customers.retrieve.mockResolvedValue({ id: 'cus_tipproof', livemode: false, metadata: { user_id: 'tip-payer' } });
+    stripe.paymentIntents.create.mockImplementation(async () => { calls.push('provider-create'); return copy(intent); });
+    stripe.paymentIntents.retrieve.mockImplementation(async () => copy(intent));
+    stripe.charges.retrieve.mockImplementation(async () => copy(charge));
+    jest.spyOn(stripeService, 'createEphemeralKey').mockResolvedValue({ secret: 'ephemeral_fixture' });
+    jest.spyOn(stripeService, '_notifyTipReceivedIfNeeded').mockResolvedValue(true);
+    jest.spyOn(db, 'rpc').mockImplementation(async (name, args) => {
+      calls.push(name);
+      if (name === 'reserve_gig_tip_original' && reserveError) return { error: { message: 'Reservation unavailable' } };
+      if (name === 'read_gig_tip_original' && saved === null) return { data: { error: 'NOT_FOUND' } };
+      if (name === 'claim_gig_tip_original') {
+        if (claimBusy) return { data: { error: 'BUSY' } };
+        saved.original.lease_id = 'tip-fixture-lease';
+      }
+      if (name === 'prepare_gig_tip_provider') {
+        saved.payment.stripe_customer_id = args.p_customer_id;
+        if (!saved.original.provider_started_at) prepared();
+      }
+      if (name === 'record_gig_tip_original') {
+        if (recordError) return { error: { message: 'Receipt unavailable' } };
+        const proof = args.p_proof;
+        Object.assign(saved.payment, { stripe_payment_intent_id: proof.id, stripe_charge_id: proof.charge_id });
+        Object.assign(saved.original, { state: 'pending', provider_status: proof.status });
+        if (['succeeded', 'canceled'].includes(proof.status)) {
+          saved.original.state = proof.status;
+          saved.payment.payment_status = proof.status === 'succeeded' ? 'captured_hold' : 'canceled';
+          saved.payment.payment_succeeded_at = proof.status === 'succeeded' ? proof.captured_at : null;
+          saved.original.receipt = { requestId: saved.payment.id, paymentId: saved.payment.id, gigId: saved.payment.gig_id,
+            payerId: saved.payment.payer_id, payeeId: saved.payment.payee_id, amountCents: 500, currency: 'usd',
+            status: proof.status, paymentIntentId: proof.id, chargeId: proof.charge_id,
+            amountChargedCents: proof.status === 'succeeded' ? 500 : 0 };
+        }
+        if (loseRecord) { loseRecord = false; return { error: { message: 'Lost committed acknowledgement' } }; }
+      }
+      if (name === 'cancel_unstarted_gig_tip') {
+        saved.original.state = 'canceled'; saved.payment.payment_status = 'canceled';
+        saved.original.receipt = { requestId: saved.payment.id, paymentId: saved.payment.id, gigId: saved.payment.gig_id,
+          payerId: saved.payment.payer_id, payeeId: saved.payment.payee_id, amountCents: 500, currency: 'usd', status: 'canceled',
+          paymentIntentId: null, chargeId: null, amountChargedCents: 0 };
+      }
+      if (name === 'release_gig_tip_original') delete saved.original.lease_id;
+      return { data: copy(saved) };
+    });
   });
   afterEach(() => {
-    if (originalKey === undefined) delete process.env.STRIPE_SECRET_KEY;
-    else process.env.STRIPE_SECRET_KEY = originalKey;
+    jest.restoreAllMocks();
+    if (originalKey === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = originalKey;
   });
-
-  test('credits the worker with the full tip amount and reconciles immediate success', async () => {
-    seedTable('User', [{
-      id: 'payer-1',
-      email: 'payer@example.com',
-      name: 'Payer',
-      username: 'payer',
-      stripe_customer_id: 'cus_existing123',
-    }]);
-    seedTable('StripeAccount', [{
-      id: 'acct-row-1',
-      user_id: 'payee-1',
-      stripe_account_id: 'acct_payee123',
-      charges_enabled: true,
-      payouts_enabled: true,
-    }]);
-    seedTable('Gig', [{
-      id: 'gig-tip-1',
-      title: 'Babysitter needed',
-    }]);
-    seedTable('Payment', []);
-
-    const fixture = tipFixture();
-    const intent = { ...fixture.intent, id: 'pi_tip123', customer: 'cus_existing123',
-      client_secret: 'pi_tip123_secret', latest_charge: 'ch_tip123', payment_method: 'pm_saved123',
-      metadata: { payer_id: 'payer-1', payee_id: 'payee-1', gig_id: 'gig-tip-1',
-        payment_type: 'tip', platform_fee: '0', payee_stripe_account: 'acct_payee123' } };
-    stripe.paymentIntents.create.mockResolvedValue(intent);
-    stripe.paymentIntents.retrieve.mockResolvedValue(intent);
-    stripe.charges.retrieve.mockResolvedValue({ ...fixture.charge, id: 'ch_tip123',
-      payment_intent: intent.id, customer: intent.customer });
-
-    const result = await stripeService.createTipPayment({
-      payerId: 'payer-1',
-      payeeId: 'payee-1',
-      gigId: 'gig-tip-1',
-      amount: 500,
-      paymentMethodId: 'pm_saved123',
-      offSession: true,
+  test('old commands fail before reservation or provider operations', async () => {
+    await expect(stripeService.createTipPayment({ payerId: 'tip-payer', gigId: 'tip-gig', amount: 500 }))
+      .rejects.toMatchObject({ code: 'TIP_TERMS_REQUIRED' });
+    expect(calls).toEqual([]); expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
+  });
+  test('reserves and freezes parameters before provider work, then requires current capture and durable receipt', async () => {
+    const result = await stripeService.createTipPayment(command());
+    expect(calls.indexOf('reserve_gig_tip_original')).toBeLessThan(calls.indexOf('provider-create'));
+    expect(calls.indexOf('prepare_gig_tip_provider')).toBeLessThan(calls.indexOf('provider-create'));
+    expect(stripe.paymentIntents.create).toHaveBeenCalledWith(frozenParams(), { idempotencyKey: 'gig-tip:tip-proof-payment' });
+    expect(result.status).toBe('succeeded'); expect(result.receipt.amountChargedCents).toBe(500);
+    expect(saved.payment.amount_to_payee).toBe(500); expect(saved.payment.amount_platform_fee).toBe(0);
+    expect(stripe.paymentIntents.retrieve).toHaveBeenCalledWith(intent.id);
+    expect(stripeService._notifyTipReceivedIfNeeded).toHaveBeenCalledTimes(1);
+  });
+  test('reservation failure prevents all provider work', async () => {
+    reserveError = true;
+    await expect(stripeService.createTipPayment(command())).rejects.toMatchObject({ code: 'TIP_RECEIPT_UNKNOWN' });
+    expect(stripe.customers.retrieve).not.toHaveBeenCalled(); expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
+  });
+  test('a lost create response retains the UUID and recovers the exact intent without another create', async () => {
+    stripe.paymentIntents.create.mockRejectedValue(new Error('Lost provider response'));
+    const first = await stripeService.createTipPayment(command());
+    expect(first.status).toBe('pending'); expect(first.receipt).toBeNull(); expect(saved.original.provider_started_at).toBeTruthy();
+    stripe.paymentIntents.list.mockResolvedValue({ data: [copy(intent)], has_more: false });
+    const result = await stripeService.createTipPayment(command({ sessionScope: 'b'.repeat(64) }));
+    expect(result.status).toBe('succeeded'); expect(result.request.requestId).toBe(first.request.requestId);
+    expect(stripe.paymentIntents.create).toHaveBeenCalledTimes(1);
+  });
+  test('explicit retry in the recovery window uses identical saved parameters and idempotency key', async () => {
+    stripe.paymentIntents.create.mockRejectedValueOnce(new Error('Lost response'));
+    await stripeService.createTipPayment(command()); const originalStart = saved.original.provider_started_at;
+    const result = await stripeService.createTipPayment(command());
+    expect(result.status).toBe('succeeded'); expect(saved.original.provider_started_at).toBe(originalStart);
+    expect(stripe.paymentIntents.create.mock.calls[0]).toEqual(stripe.paymentIntents.create.mock.calls[1]);
+  });
+  test('old unknown creation cannot create again when discovery finds nothing', async () => {
+    prepared(24 * 60 * 60 * 1000);
+    const result = await stripeService.createTipPayment(command());
+    expect(result.status).toBe('needs_review'); expect(result.receipt).toBeNull();
+    expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
+  });
+  test('check of an unknown UUID never reserves or creates a replacement', async () => {
+    saved = null;
+    await expect(stripeService.createTipPayment(command({ mode: 'check' }))).rejects.toMatchObject({ code: 'TIP_NOT_FOUND' });
+    expect(calls).toEqual(['read_gig_tip_original']); expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
+  });
+  test('check only reconciles current provider state; checkout secrets stay transient', async () => {
+    prepared(); saved.payment.stripe_payment_intent_id = intent.id; pendingProvider('requires_action');
+    const result = await stripeService.createTipPayment(command({ mode: 'check' }));
+    expect(result.status).toBe('requires_action'); expect(result.receipt).toBeNull();
+    expect(result.checkout.clientSecret).toBe(intent.client_secret);
+    expect(JSON.stringify(saved)).not.toContain('_secret_'); expect(JSON.stringify(saved)).not.toContain('ephemeral_fixture');
+    expect(stripe.paymentIntents.create).not.toHaveBeenCalled(); expect(stripe.paymentIntents.confirm).not.toHaveBeenCalled();
+    expect(stripe.paymentIntents.cancel).not.toHaveBeenCalled(); expect(stripe.refunds.create).not.toHaveBeenCalled();
+  });
+  test('read API returns only local original progress with no provider access', async () => {
+    const result = await stripeService.readTipRequest({ requestId: saved.payment.id, payerId: saved.payment.payer_id });
+    expect(result.status).toBe('pending'); expect(result.checkout).toBeUndefined(); expect(calls).toEqual(['read_gig_tip_original']);
+    expect(stripe.paymentIntents.retrieve).not.toHaveBeenCalled(); expect(stripeService.createEphemeralKey).not.toHaveBeenCalled();
+  });
+  test('unstarted cancellation completes with zero provider calls', async () => {
+    const result = await stripeService.createTipPayment(command({ mode: 'cancel' }));
+    expect(result.status).toBe('canceled'); expect(result.receipt.amountChargedCents).toBe(0);
+    expect(stripe.paymentIntents.create).not.toHaveBeenCalled(); expect(stripe.paymentIntents.cancel).not.toHaveBeenCalled();
+    expect(stripe.customers.retrieve).not.toHaveBeenCalled();
+  });
+  test('unknown creation cannot be canceled by assuming the provider has no payment', async () => {
+    prepared();
+    const result = await stripeService.createTipPayment(command({ mode: 'cancel' }));
+    expect(result.status).toBe('pending'); expect(result.receipt).toBeNull();
+    expect(stripe.paymentIntents.create).not.toHaveBeenCalled(); expect(stripe.paymentIntents.cancel).not.toHaveBeenCalled();
+    expect(calls).not.toContain('cancel_unstarted_gig_tip');
+  });
+  test('cancel reads fresh proof after the provider call before returning a zero-charge receipt', async () => {
+    prepared(); saved.payment.stripe_payment_intent_id = intent.id; pendingProvider();
+    stripe.paymentIntents.cancel.mockImplementation(async () => { intent.status = 'canceled'; throw new Error('Lost cancellation reply'); });
+    const result = await stripeService.createTipPayment(command({ mode: 'cancel' }));
+    expect(result.status).toBe('canceled'); expect(result.receipt.amountChargedCents).toBe(0);
+    expect(stripe.paymentIntents.retrieve).toHaveBeenCalledTimes(2);
+    expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
+  });
+  test('provider still processing after failed cancellation remains recoverable', async () => {
+    prepared(); saved.payment.stripe_payment_intent_id = intent.id; pendingProvider('processing');
+    stripe.paymentIntents.cancel.mockRejectedValue(new Error('Not cancellable yet'));
+    const result = await stripeService.createTipPayment(command({ mode: 'cancel' }));
+    expect(result.status).toBe('pending'); expect(result.receipt).toBeNull(); expect(result.checkout).toBeUndefined();
+  });
+  test.each([{ amount: 600 }, { customer: 'cus_other' }, { livemode: true }, { metadata: {} }])(
+    'mismatched current intent cannot bind or report paid: %j', async patch => {
+      prepared(); saved.payment.stripe_payment_intent_id = intent.id; Object.assign(intent, patch);
+      const result = await stripeService.createTipPayment(command({ mode: 'check' }));
+      expect(result.status).toBe('needs_review'); expect(result.receipt).toBeNull(); expect(result.checkout).toBeUndefined();
+      expect(calls).not.toContain('record_gig_tip_original'); expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
     });
-
-    expect(result.success).toBe(true);
-
-    const payment = getTable('Payment').find((row) => row.id === result.paymentId);
-    expect(payment).toBeTruthy();
-    expect(payment.amount_total).toBe(500);
-    expect(payment.amount_platform_fee).toBe(0);
-    expect(payment.amount_processing_fee).toBe(44);
-    expect(payment.amount_to_payee).toBe(500);
-    expect(payment.payment_status).toBe(PAYMENT_STATES.CAPTURED_HOLD);
-    expect(payment.payment_succeeded_at).toBeTruthy();
-    expect(payment.stripe_charge_id).toBe('ch_tip123');
-    expect(payment.metadata.tip_notification_sent_at).toBeTruthy();
-
-    expect(createNotification).toHaveBeenCalledWith({
-      userId: 'payee-1',
-      type: 'tip_received',
-      title: 'You received a tip!',
-      body: 'The poster of "Babysitter needed" sent you a $5.00 tip. 🎉',
-      icon: '💰',
-      link: '/gigs/gig-tip-1',
-      metadata: {
-        gig_id: 'gig-tip-1',
-        amount: 500,
-        payment_id: result.paymentId,
-      },
-    });
+  test('lost database acknowledgement recovers the committed exact receipt', async () => {
+    loseRecord = true;
+    const result = await stripeService.createTipPayment(command());
+    expect(result.status).toBe('succeeded'); expect(result.receipt.paymentIntentId).toBe(intent.id);
+    expect(calls.filter(call => call === 'record_gig_tip_original')).toHaveLength(1);
+    expect(stripe.paymentIntents.create).toHaveBeenCalledTimes(1);
+  });
+  test('a database write that never committed cannot report paid or hand out checkout', async () => {
+    recordError = true;
+    const result = await stripeService.createTipPayment(command());
+    expect(result.status).toBe('pending'); expect(result.receipt).toBeNull(); expect(result.checkout).toBeUndefined();
+    expect(stripeService._notifyTipReceivedIfNeeded).not.toHaveBeenCalled();
+  });
+  test('a busy original returns pending without any provider work', async () => {
+    claimBusy = true;
+    const result = await stripeService.createTipPayment(command());
+    expect(result.status).toBe('pending'); expect(result.canRetry).toBe(false); expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
+  });
+  test('changed displayed terms fail before provider access on a check', async () => {
+    await expect(stripeService.createTipPayment(command({ mode: 'check', amount: 501 }))).rejects.toMatchObject({ code: 'TIP_REQUEST_CONFLICT' });
+    expect(stripe.paymentIntents.retrieve).not.toHaveBeenCalled(); expect(calls).not.toContain('claim_gig_tip_original');
+  });
+  test('cancel of an already captured intent records success without a new refund or cancellation', async () => {
+    prepared(); saved.payment.stripe_payment_intent_id = intent.id;
+    const result = await stripeService.createTipPayment(command({ mode: 'cancel' }));
+    expect(result.status).toBe('succeeded'); expect(stripe.paymentIntents.cancel).not.toHaveBeenCalled();
+    expect(stripe.refunds.create).not.toHaveBeenCalled();
+  });
+  test('modern webhook reconciliation checks the original without creating payment work', async () => {
+    prepared(); saved.payment.stripe_payment_intent_id = intent.id;
+    seedTable('Payment', [{ ...copy(saved.payment), metadata: { gig_tip_original_v1: copy(saved.original) } }]);
+    const result = await stripeService.syncTipPaymentStatus(saved.payment.id);
+    expect(result.payment_status).toBe('captured_hold'); expect(stripe.paymentIntents.create).not.toHaveBeenCalled();
+    expect(calls).not.toContain('reserve_gig_tip_original');
+  });
+  test('a corrupted receipt cannot establish completion on the local read API', async () => {
+    saved.original.state = 'succeeded'; saved.original.receipt = { status: 'succeeded', amountChargedCents: 500 };
+    expect(() => projectTipOriginal(saved)).toThrow();
   });
 });

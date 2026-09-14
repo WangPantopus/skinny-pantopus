@@ -72,6 +72,30 @@ wired into API/services/clients yet. Provider proof/receipts, same-ID commands,
 legacy cancellation recovery, delivery and installed client/provider acceptance
 remain open. No hosted schema change or provider operation ran.
 
+**Working tip integration after reservation checkpoint `ff51584d5`:** the existing
+StripeService and tip route now use the original Payment reservation. Provider
+parameters are frozen once in that row; create retries use the same key and payload,
+checks never create an intent, and terminal receipt/status commit atomically after
+fresh matching provider proof. The original tip endpoint now requires the displayed
+terms, original UUID and current actor/session; preview/local-read routes are added.
+Existing web/native clients still use the previous command and MUST be updated
+before deployment or merging this draft. Current working backend source is newer
+than pushed `89658c9e6`, whose CI34893989362 now passes all15 applicable checks /
+one Seeder skip. No hosted change ran.
+
+The integration passes86 focused backend assertions,12 actual-service/local-SQL
+scenarios (129 queries; simulated provider and notice transport), all65 SQL
+contracts, and function lint358/107 with zero errors/eight existing warnings.
+The first full backend attempt has5878 passes/16 skips/one unrelated Home document
+socket interruption. That unchanged33-test file passes alone; full repeat reports
+5879 passes/16 skips and natural exit0. Only the subsequent same-ID cancellation
+before initial admission follows that full run; it passes the final focused and
+real-SQL verification. Do not erase the first
+failure. Private evidence and the precise client next steps are in
+`existing-tip-provider-proof-r1/NEXT.md`. Modern delivery uses the existing
+Notification idempotency key, but durable push delivery and legacy tip recovery
+remain separate open gates.
+
 **Current cancellation explanation follow-up:** the existing Other textarea is
 restored with its original design. The existing private GigStopRequest.reason
 retains its immutable explanation; the API/native receipts carry only a hash,
