@@ -87,9 +87,20 @@ complexity limit; all13 other non-aggregate jobs passed, with one Seeder skip.
 The equivalent simplified condition passes local full detekt/ktlint and28 focused
 Android tests. New remote CI is required before integration.
 
-**Next:** continue installed native saved-request recovery/account/background/
-restart, then repair the demonstrated attachment/Home-label/provider-copy defects
-using existing upload and status paths. The API still accepts older clients without context. The separate
+**iOS saved-request recovery:** the installed app reproduced a committed request
+whose reply timed out; restart reopened an empty Start screen. The existing DTO now
+reads the status endpoint's existing lease, and the existing wizard restores its
+pending/active confirmation with saved dates/message using GET only. It reuses
+HomeClaimSessionScope to retire old-session reads/submissions and clear the draft.
+All36 model/network tests and7 existing screen checks pass, with Swift lint/format.
+The installed candidate recovers the same pending lease without another POST.
+Normal Settings logout → second synthetic login → same Home shows no prior tenant
+confirmation/message. These checks use synthetic auth/shell and actual tenant SQL.
+See [recovery evidence](VERIFICATION_FIRST_2026-09-13.md#existing-ios-saved-request-recovery).
+
+**Next:** check the existing Android recovery path, complete native background/
+foreground behavior, then repair the demonstrated attachment/Home-label/provider-copy
+defects using existing upload and status paths. The API still accepts older clients without context. The separate
 submitted page's notification/time estimate and native email claims remain open.
 Do not build speculative command/renewal tables; the separate renewal draft stays
 paused. R05 stays open; the [80-row inventory](REMAINING_WORK_2026-09-11.md)

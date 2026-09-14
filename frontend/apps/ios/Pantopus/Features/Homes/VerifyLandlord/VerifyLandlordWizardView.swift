@@ -45,6 +45,8 @@ public struct VerifyLandlordWizardView: View {
         .onChange(of: viewModel.pendingEvent) { _, event in
             handle(event)
         }
+        .task { await viewModel.restoreSavedRequest() }
+        .onChange(of: viewModel.isCurrentSession) { _, current in if !current { viewModel.sessionChanged() } }
         .onDisappear { viewModel.retirePendingWork() }
         .accessibilityIdentifier("verifyLandlordWizard")
     }
@@ -53,6 +55,9 @@ public struct VerifyLandlordWizardView: View {
     private var stepContent: some View {
         switch viewModel.currentStep {
         case .start:
+            if let message = submitErrorMessage {
+                VerifyErrorSummaryBanner(errors: .init(), serverMessage: message)
+            }
             VerifyStartStep(content: viewModel.startContent)
         case .details:
             VerifyDetailsStep(viewModel: viewModel)

@@ -602,7 +602,7 @@ private struct LeaseParseStatusRow: View {
 
 // MARK: - Summary banner
 
-private struct VerifyErrorSummaryBanner: View {
+struct VerifyErrorSummaryBanner: View {
     let errors: VerifyLandlordValidationErrors
     var serverMessage: String?
 

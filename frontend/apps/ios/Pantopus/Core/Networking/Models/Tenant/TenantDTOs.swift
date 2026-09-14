@@ -27,10 +27,25 @@ public struct TenantRequestContext: Codable, Sendable {
 public struct TenantHomeStatusResponse: Decodable, Sendable {
     public let homeId: String
     public let requestContext: TenantRequestContext
+    public let lease: LeaseStatus?
+
+    public struct LeaseStatus: Decodable, Sendable {
+        public let state: TenantLeaseState
+        public let lease: TenantLeaseDTO?
+    }
+
+    func matches(homeId: String) -> Bool {
+        let context = requestContext
+        let validLease = context.leaseId == nil
+            ? context.leaseState == nil
+            : context.leaseId?.isEmpty == false && ["pending", "active", "ended", "canceled"].contains(context.leaseState ?? "")
+        return self.homeId == homeId && context.homeId == homeId && !context.actorId.isEmpty && validLease
+    }
 
     private enum CodingKeys: String, CodingKey {
         case homeId = "home_id"
         case requestContext = "request_context"
+        case lease
     }
 }
 

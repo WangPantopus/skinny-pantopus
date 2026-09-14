@@ -17,6 +17,10 @@ import XCTest
 final class VerifyLandlordWizardViewModelTests: XCTestCase {
     // MARK: - Helpers
 
+    static func syntheticSessionIdentity() -> String? {
+        "synthetic-session"
+    }
+
     func makeVM(
         homeId: String = "home-1",
         form: VerifyLandlordForm? = nil,
@@ -28,6 +32,7 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
             startContent: startContent,
             form: form,
             submitDelayNanos: 0,
+            sessionIdentity: VerifyLandlordWizardViewModelTests.syntheticSessionIdentity,
             approvalRequester: approvalRequester ?? { _ in .success(Self.stubLease) }
         )
     }
@@ -50,19 +55,6 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
         // swiftlint:disable:next force_try
         return try! JSONDecoder().decode(TenantLeaseDTO.self, from: Data(json.utf8))
     }()
-
-    func waitFor(
-        _ description: String = "predicate",
-        timeout: TimeInterval = 5.0,
-        _ predicate: @escaping @MainActor () -> Bool
-    ) async {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if predicate() { return }
-            try? await Task.sleep(nanoseconds: 25_000_000)
-        }
-        XCTFail("Timed out waiting for \(description)")
-    }
 
     // MARK: - Step machine
 
@@ -350,7 +342,8 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
         let vm = VerifyLandlordWizardViewModel(
             homeId: "home-1",
             api: APIClient(environment: .current, session: TestSession.make()),
-            submitDelayNanos: 0
+            submitDelayNanos: 0,
+            sessionIdentity: VerifyLandlordWizardViewModelTests.syntheticSessionIdentity
         )
         await vm.startPostcardFallback()
         XCTAssertEqual(vm.pendingEvent, .openPostcardVerification(homeId: "home-1"))
@@ -390,7 +383,13 @@ extension VerifyLandlordWizardViewModelTests {
         ])
         var form = VerifyLandlordSampleData.populatedForm
         form.messageToLandlord = "Retain this request"
-        let vm = VerifyLandlordWizardViewModel(homeId: "home-1", form: form, api: api, submitDelayNanos: 0)
+        let vm = VerifyLandlordWizardViewModel(
+            homeId: "home-1",
+            form: form,
+            api: api,
+            submitDelayNanos: 0,
+            sessionIdentity: VerifyLandlordWizardViewModelTests.syntheticSessionIdentity
+        )
         vm.primaryTapped()
         await vm.submit()
         XCTAssertEqual(vm.currentStep, .details)
@@ -446,7 +445,8 @@ extension VerifyLandlordWizardViewModelTests {
                 homeId: "home-1",
                 form: VerifyLandlordSampleData.populatedForm,
                 api: api,
-                submitDelayNanos: 0
+                submitDelayNanos: 0,
+                sessionIdentity: VerifyLandlordWizardViewModelTests.syntheticSessionIdentity
             )
             vm.primaryTapped()
             await vm.submit()

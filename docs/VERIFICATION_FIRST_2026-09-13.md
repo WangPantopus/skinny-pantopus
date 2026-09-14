@@ -869,3 +869,55 @@ CI remains required. Source, baseline/candidate results, installed-product hashe
 fixture observations and failed attempts are retained privately in
 `ios-departure-r1`. The temporary simulator remains exclusively leased for the
 next installed checks and will be removed when those checks finish.
+
+
+### Existing iOS saved-request recovery
+
+Installed source `6dbad11de` saved a pending request through the actual tenant
+route/service/SQL, but the held reply timed out. The existing error banner kept
+the form; terminating/relaunching the app and reopening the existing deep link
+returned the empty Start screen. The status endpoint already returned the actor's
+saved lease, but the iOS DTO discarded it and the wizard did not read on appearance.
+The initial private assertion expected a still-connected reply; it had already
+timed out, so no termination ran until the next controlled call. The timeout and
+empty restart are retained as the actual baseline, not a before-timeout kill.
+
+The existing DTO now decodes that lease envelope. The existing wizard reads it on
+appearance, validates Home/lease/state identity and shows the same pending/active
+confirmation with its saved date/message. Recovery only GETs; it never creates a
+request. Failed/malformed reads offer Retry status before entering the form.
+The existing error banner is shared with Start rather than copied. The existing
+HomeClaimSessionScope binds the controller to its opening account/session. Changed
+sessions retire work, clear the private draft/result and dismiss; stale preflights
+cannot POST and late request replies cannot restore Sent. Existing views/layouts,
+navigation and database bytes are preserved. Same-file extensions keep the existing
+controller/tests within lint's type-body limit; no new product or test file was added.
+
+All43 selected iOS tests pass:36 model/network cases and7 existing rendering cases,
+including the visible error text. New cases exercise pending/active recovery,
+no-request continuation, failed/malformed read retry, departure during recovery,
+account change during recovery/preflight, and a delivered POST reply after account
+change. Pinned SwiftLint/SwiftFormat pass. Earlier build failures were the existing
+banner's private access modifier and an extra test-only argument accidentally added
+to two postcard constructors; both were corrected before the passing test run.
+
+The source-bound Xcode-signed candidate was installed on the exclusively owned
+simulator. Reopening the same saved request displays Waiting for approval and its
+exact persisted details; the database still contains one lease and one original
+POST. Native Settings logout → Not you → second synthetic account → same Home
+shows Start without the prior tenant confirmation/message. The server observes the
+second actor's own status request; it leaves the first tenant's lease unchanged.
+Login/profile/Hub are synthetic, tenant routes/Joi/service/SQL are real and isolated,
+and notifications are intercepted. This does not verify an identity provider or
+provider delivery. The sample attachment was used solely to satisfy the currently
+broken form and remains a confirmed defect, not upload acceptance.
+
+Private `ios-recovery-r1` retains source hashes, result bundles, compiled product,
+fixture states, UI observations and failed attempts. The equivalent Android
+recovery and native foreground refresh remain open, along with the documented
+attachment, sample Home label and delivery-copy issues. Existing accepted web/SQL
+and native Leave Home evidence is reused. R05 stays open and the80-row inventory
+remains8closed/72partial or open. The prior pushed6dbad11de checkpoint's
+[CI34811429769](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34811429769)
+was still running at last inspection with no failures; this recovery candidate
+requires its own remote CI before integration.

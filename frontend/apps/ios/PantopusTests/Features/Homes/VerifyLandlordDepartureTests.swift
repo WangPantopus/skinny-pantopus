@@ -4,6 +4,19 @@ import XCTest
 
 @MainActor
 extension VerifyLandlordWizardViewModelTests {
+    func waitFor(
+        _ description: String = "predicate",
+        timeout: TimeInterval = 5.0,
+        _ predicate: @escaping @MainActor () -> Bool
+    ) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if predicate() { return }
+            try? await Task.sleep(nanoseconds: 25_000_000)
+        }
+        XCTFail("Timed out waiting for \(description)")
+    }
+
     func testDepartureDuringStatusCannotSubmitAfterBackAndDiscard() async {
         SequencedURLProtocol.reset()
         let marker = FileManager.default.temporaryDirectory.appendingPathComponent("lease-departure-" + UUID().uuidString)
@@ -28,7 +41,11 @@ extension VerifyLandlordWizardViewModelTests {
             allowSecureEnclave: false
         )
         let vm = VerifyLandlordWizardViewModel(
-            homeId: "home-1", form: VerifyLandlordSampleData.populatedForm, api: api, submitDelayNanos: 0
+            homeId: "home-1",
+            form: VerifyLandlordSampleData.populatedForm,
+            api: api,
+            submitDelayNanos: 0,
+            sessionIdentity: VerifyLandlordWizardViewModelTests.syntheticSessionIdentity
         )
         vm.primaryTapped()
         let original = Task { await vm.submit() }
@@ -99,5 +116,158 @@ extension VerifyLandlordWizardViewModelTests {
         XCTAssertEqual(vm.currentStep, .start)
         XCTAssertEqual(vm.submitState, .idle)
         XCTAssertEqual(vm.pendingEvent, .dismiss)
+    }
+}
+
+@MainActor
+extension VerifyLandlordWizardViewModelTests {
+    private func savedStatus(_ state: String = "pending") -> String {
+        """
+        {"home_id":"home-1","request_context":{"home_id":"home-1","actor_id":"actor-1",
+        "lease_id":"saved-lease","lease_state":"\(state)"},"lease":{"state":"\(state)",
+        "lease":{"id":"saved-lease","home_id":"home-1","state":"\(state)",
+        "created_at":"2026-09-13T01:00:00Z","start_at":"2026-09-14T00:00:00Z",
+        "metadata":{"message":"Previously saved request"}}}}
+        """
+    }
+
+    private func withRecoveryVM(
+        responses: [SequencedURLProtocol.Response],
+        identity: @escaping () -> String? = { "synthetic-session" },
+        check: (VerifyLandlordWizardViewModel) async -> Void
+    ) async {
+        SequencedURLProtocol.reset()
+        let marker = FileManager.default.temporaryDirectory.appendingPathComponent("lease-recovery-" + UUID().uuidString)
+        defer { SequencedURLProtocol.reset()
+            try? FileManager.default.removeItem(at: marker)
+        }
+        let api = APIClient(session: SequencedURLProtocol.makeSession(routeResponses: [
+            "/api/v1/tenant/home/home-1/status": responses
+        ]), retryPolicy: .none)
+        let auth = AuthManager(
+            store: InMemorySecureStore(),
+            apiClient: api,
+            installMarker: InstallMarker(directory: marker),
+            allowSecureEnclave: false
+        )
+        let vm = VerifyLandlordWizardViewModel(homeId: "home-1", api: api, sessionIdentity: identity)
+        await check(vm)
+        await auth.awaitBackgroundWork()
+    }
+
+    func testReopenRecoversPendingAndActiveWithoutPosting() async {
+        for state in ["pending", "active"] {
+            await withRecoveryVM(responses: [.status(200, body: savedStatus(state))]) { vm in
+                await vm.restoreSavedRequest()
+                XCTAssertEqual(vm.currentStep, .sent)
+                XCTAssertEqual(vm.approvalResult?.kind, state == "pending" ? .alreadyPending : .alreadyActive)
+                XCTAssertEqual(vm.approvalResult?.message, "Previously saved request")
+                XCTAssertEqual(vm.approvalResult?.requestedStartAt, "2026-09-14T00:00:00Z")
+                XCTAssertFalse(vm.isSubmitting)
+                XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains { $0.httpMethod == "POST" })
+            }
+        }
+    }
+
+    func testFailedOrMalformedRecoveryRequiresReadRetryBeforeDetails() async {
+        let mismatch = savedStatus().replacingOccurrences(of: "\"id\":\"saved-lease\"", with: "\"id\":\"wrong-lease\"")
+        for response in [SequencedURLProtocol.Response.status(503, body: "{}"), .status(200, body: mismatch)] {
+            await withRecoveryVM(responses: [response, .status(200, body: savedStatus())]) { vm in
+                vm.setOwnerName("Draft stays here")
+                await vm.restoreSavedRequest()
+                XCTAssertEqual(vm.currentStep, .start)
+                XCTAssertEqual(vm.chrome.primaryCTALabel, "Retry status")
+                XCTAssertNil(vm.approvalResult)
+                XCTAssertEqual(vm.form.ownerName, "Draft stays here")
+                vm.primaryTapped()
+                await waitFor("saved request recovered after retry") { vm.currentStep == .sent }
+                XCTAssertEqual(vm.approvalResult?.message, "Previously saved request")
+                XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains { $0.httpMethod == "POST" })
+            }
+        }
+    }
+
+    func testNoSavedRequestLeavesExistingStartAndDetailsAvailable() async {
+        let body = """
+        {"home_id":"home-1","request_context":{"home_id":"home-1","actor_id":"actor-1"},
+        "lease":{"state":"none","lease":null}}
+        """
+        await withRecoveryVM(responses: [.status(200, body: body)]) { vm in
+            await vm.restoreSavedRequest()
+            XCTAssertEqual(vm.currentStep, .start)
+            XCTAssertNil(vm.approvalResult)
+            vm.primaryTapped()
+            XCTAssertEqual(vm.currentStep, .details)
+            XCTAssertTrue(SequencedURLProtocol.capturedRequests.allSatisfy { $0.httpMethod == "GET" })
+        }
+    }
+
+    func testRetiredRecoveryCannotRestoreConfirmation() async {
+        await withRecoveryVM(responses: [.status(200, body: savedStatus(), delay: 0.3)]) { vm in
+            let read = Task { await vm.restoreSavedRequest() }
+            await waitFor("recovery GET started") { !SequencedURLProtocol.capturedRequests.isEmpty }
+            XCTAssertFalse(vm.chrome.primaryCTAEnabled)
+            vm.leadingTapped()
+            await read.value
+            XCTAssertEqual(vm.pendingEvent, .dismiss)
+            XCTAssertNil(vm.approvalResult)
+            XCTAssertEqual(vm.currentStep, .start)
+        }
+    }
+
+    func testChangedSessionCannotRestoreOrSendOldRequest() async {
+        var identity = "first-account"
+        let currentIdentity = { identity }
+        await withRecoveryVM(responses: [.status(200, body: savedStatus(), delay: 0.3)], identity: currentIdentity) { vm in
+            vm.setOwnerName("Old private draft")
+            let read = Task { await vm.restoreSavedRequest() }
+            await waitFor("recovery GET started") { !SequencedURLProtocol.capturedRequests.isEmpty }
+            identity = "second-account"
+            await read.value
+            XCTAssertNil(vm.approvalResult)
+            XCTAssertEqual(vm.form.ownerName, "")
+            XCTAssertEqual(vm.pendingEvent, .dismiss)
+            vm.primaryTapped()
+            XCTAssertEqual(vm.currentStep, .start)
+            XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains { $0.httpMethod == "POST" })
+        }
+        identity = "first-account"
+        await withRecoveryVM(responses: [.status(200, body: savedStatus(), delay: 0.3)], identity: currentIdentity) { vm in
+            vm.form = VerifyLandlordSampleData.populatedForm
+            vm.primaryTapped()
+            let submit = Task { await vm.submit() }
+            await waitFor("preflight GET started") { !SequencedURLProtocol.capturedRequests.isEmpty }
+            identity = "second-account"
+            await submit.value
+            XCTAssertNil(vm.approvalResult)
+            XCTAssertEqual(vm.form.ownerName, "")
+            XCTAssertEqual(vm.pendingEvent, .dismiss)
+            XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains { $0.httpMethod == "POST" })
+        }
+    }
+}
+
+@MainActor
+extension VerifyLandlordWizardViewModelTests {
+    func testChangedSessionDropsAlreadySentRequestReply() async {
+        var identity = "first-account"
+        let currentIdentity = { identity }
+        var held: CheckedContinuation<Result<TenantLeaseDTO, any Error>, Never>?
+        let vm = VerifyLandlordWizardViewModel(
+            homeId: "home-1",
+            form: VerifyLandlordSampleData.populatedForm,
+            submitDelayNanos: 0,
+            sessionIdentity: currentIdentity
+        ) { _ in await withCheckedContinuation { held = $0 } }
+        vm.primaryTapped()
+        let submit = Task { await vm.submit() }
+        await waitFor("submission reply held") { held != nil }
+        identity = "second-account"
+        held?.resume(returning: .success(Self.stubLease))
+        await submit.value
+        XCTAssertEqual(vm.pendingEvent, .dismiss)
+        XCTAssertNil(vm.approvalResult)
+        XCTAssertEqual(vm.form, VerifyLandlordForm())
+        XCTAssertEqual(vm.currentStep, .start)
     }
 }

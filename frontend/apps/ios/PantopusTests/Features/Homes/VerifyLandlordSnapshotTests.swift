@@ -45,7 +45,8 @@ final class VerifyLandlordSnapshotTests: XCTestCase {
         let vm = VerifyLandlordWizardViewModel(
             homeId: "home-1",
             form: VerifyLandlordSampleData.populatedForm,
-            submitDelayNanos: 0
+            submitDelayNanos: 0,
+            sessionIdentity: VerifyLandlordWizardViewModelTests.syntheticSessionIdentity
         )
         vm.primaryTapped()
         assertRenders(
@@ -60,7 +61,8 @@ final class VerifyLandlordSnapshotTests: XCTestCase {
         let vm = VerifyLandlordWizardViewModel(
             homeId: "home-1",
             form: VerifyLandlordSampleData.errorForm,
-            submitDelayNanos: 0
+            submitDelayNanos: 0,
+            sessionIdentity: VerifyLandlordWizardViewModelTests.syntheticSessionIdentity
         )
         vm.primaryTapped()
         await vm.submit()
@@ -77,7 +79,8 @@ final class VerifyLandlordSnapshotTests: XCTestCase {
         let vm = VerifyLandlordWizardViewModel(
             homeId: "home-1",
             form: VerifyLandlordSampleData.populatedForm,
-            submitDelayNanos: 0
+            submitDelayNanos: 0,
+            sessionIdentity: VerifyLandlordWizardViewModelTests.syntheticSessionIdentity
         ) { _ in
             .failure(APIError.clientError(status: 400, message: message))
         }
