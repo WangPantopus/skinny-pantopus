@@ -86,10 +86,10 @@ test.each([new Error('Could not save lease dates.'), { message: 'Could not save 
 
 test('canceling the denial prompt does not cancel the tenant lease', async () => {
   openApproval();
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   const prompt = jest.spyOn(window, 'prompt').mockReturnValue(null);
   try {
-    fireEvent.click(screen.getByRole('button', { name: 'Deny', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
     expect(post).not.toHaveBeenCalled();
   } finally { prompt.mockRestore(); }
 });

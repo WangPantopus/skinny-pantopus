@@ -449,6 +449,8 @@ describe('GET /landlord/properties/:homeId', () => {
     seedTable('HomeLease', [
       { id: 'lease-active', home_id: 'home-1', state: 'active', source: 'landlord_invite', primary_resident_user_id: 't1' },
       { id: 'lease-pending', home_id: 'home-1', state: 'pending', source: 'tenant_request', primary_resident_user_id: 't2' },
+      { id: 'lease-ended', home_id: 'home-1', state: 'ended', source: 'tenant_request', primary_resident_user_id: 't3' },
+      { id: 'lease-canceled', home_id: 'home-1', state: 'canceled', source: 'tenant_request', primary_resident_user_id: 't4' },
     ]);
 
     const req = mockReq({ params: { homeId: 'home-1' }, method: 'GET' });
@@ -457,6 +459,7 @@ describe('GET /landlord/properties/:homeId', () => {
 
     expect(res._json.pending_requests).toHaveLength(1);
     expect(res._json.pending_requests[0].id).toBe('lease-pending');
+    expect(res._json.leases.map(lease => lease.id).sort()).toEqual(['lease-active', 'lease-canceled', 'lease-ended', 'lease-pending']);
   });
 });
 
@@ -765,6 +768,7 @@ describe('POST /landlord/lease/:leaseId/deny', () => {
 // ============================================================
 
 describe('POST /landlord/lease/:leaseId/end', () => {
+  beforeEach(() => decisionReply());
   test('returns success on lease end', async () => {
     seedHome();
     seedLease({ state: 'active' });
@@ -786,7 +790,8 @@ describe('POST /landlord/lease/:leaseId/end', () => {
     expect(res._json.success).toBe(true);
   });
 
-  test('returns 400 when lease already ended', async () => {
+  test('returns 400 for a historical ended lease without a receipt', async () => {
+    decisionReply({ success: false, error: 'Cannot end: lease is ended' });
     seedLease({ state: 'ended' });
 
     const req = mockReq({
@@ -1183,6 +1188,7 @@ describe('POST /tenant/accept-invite', () => {
 // ============================================================
 
 describe('POST /tenant/move-out', () => {
+  beforeEach(() => decisionReply());
   test('ends lease and returns success', async () => {
     seedHome();
     seedLease({ state: 'active', primary_resident_user_id: 'test-user-id' });
@@ -1214,6 +1220,7 @@ describe('POST /tenant/move-out', () => {
   });
 
   test('returns 403 when user is not on the lease', async () => {
+    decisionReply({ success: false, error: 'Only a lease resident can move out', status: 403 });
     seedLease({ state: 'active', primary_resident_user_id: 'someone-else' });
 
     const req = mockReq({
@@ -1250,7 +1257,8 @@ describe('POST /tenant/move-out', () => {
     expect(res._json.success).toBe(true);
   });
 
-  test('returns 400 when lease not active', async () => {
+  test('returns 400 when the transaction refuses a historical ended lease', async () => {
+    decisionReply({ success: false, error: 'Cannot end: lease is ended' });
     seedLease({ state: 'ended', primary_resident_user_id: 'test-user-id' });
 
     const req = mockReq({
@@ -1262,26 +1270,32 @@ describe('POST /tenant/move-out', () => {
     expect(res._status).toBe(400);
   });
 
-  test('writes move-out audit log', async () => {
-    seedHome();
+  test('sends the move-out reason to the atomic audit owner', async () => {
     seedLease({ state: 'active', primary_resident_user_id: 'test-user-id' });
-    seedTable('HomeOccupancy', [{
-      id: 'occ-1',
-      home_id: 'home-1',
-      user_id: 'test-user-id',
-      is_active: true,
-    }]);
+    const req = mockReq({ body: { lease_id: 'lease-1', reason: 'Moving to another city' } });
+    const res = mockRes();await moveOutHandler(req,res);
+    expect(res._status).toBe(200);
+    expect(leaseRpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_action: 'move_out', p_actor_id: 'test-user-id', p_reason: 'Moving to another city',
+    }));
+    expect(writeAuditLog).not.toHaveBeenCalled();
+  });
 
-    const req = mockReq({
-      body: { lease_id: 'lease-1', reason: 'New job' },
-    });
-    const res = mockRes();
-    await moveOutHandler(req, res);
+  test('replays a departed co-resident after the transaction removed the edge', async () => {
+    seedLease({ state: 'active', primary_resident_user_id: 'primary-tenant' });
+    decisionReply({ success: true, replayed: true, lease: { id: 'lease-1', state: 'active' } });
+    const res = mockRes(); await moveOutHandler(mockReq({ body: { lease_id: 'lease-1' } }), res);
+    expect(res._status).toBe(200);
+    expect(leaseRpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({ p_actor_id: 'test-user-id', p_action: 'move_out' }));
+  });
 
-    expect(writeAuditLog).toHaveBeenCalledWith(
-      'home-1', 'test-user-id', 'TENANT_MOVE_OUT', 'HomeLease', 'lease-1',
-      expect.objectContaining({ reason: 'New job', initiated_by: 'tenant' }),
-    );
+  test('lets the transaction replay an already-ended move-out', async () => {
+    seedLease({ state: 'ended', primary_resident_user_id: 'test-user-id' });
+    decisionReply({ success: true, replayed: true, lease: { id: 'lease-1', state: 'ended' } });
+    const res = mockRes();await moveOutHandler(mockReq({ body: { lease_id: 'lease-1' } }),res);
+    expect(res._status).toBe(200);
+    expect(leaseRpc).toHaveBeenCalledTimes(1);
+    expect(writeAuditLog).not.toHaveBeenCalled();
   });
 });
 

@@ -476,7 +476,7 @@ class LandlordAuthorityService {
       });
       if (error || !data || typeof data.success !== 'boolean'
         || (!data.success && typeof data.error !== 'string')
-        || (data.success && (!data.lease || (params.p_action !== 'deny' && !data.occupancy)))) {
+        || (data.success && (!data.lease || (['approve', 'accept'].includes(params.p_action) && !data.occupancy)))) {
         logger.error('LandlordAuthorityService: lease transaction unavailable', {
           action: params.p_action, leaseId: params.p_lease_id, code: error?.code,
         });
@@ -510,98 +510,21 @@ class LandlordAuthorityService {
    * @param {string} initiatedBy - userId of person ending the lease
    * @returns {Promise<{success: boolean, error?: string}>}
    */
-  async endLease(leaseId, initiatedBy) {
-    // ── 1. Fetch lease ────────────────────────────────────────
-    const { data: lease } = await supabaseAdmin
-      .from('HomeLease')
-      .select('*')
-      .eq('id', leaseId)
-      .maybeSingle();
-
-    if (!lease) {
-      return { success: false, error: 'Lease not found' };
-    }
-
-    if (lease.state !== 'active') {
-      return { success: false, error: `Cannot end: lease is ${lease.state}` };
-    }
-
-    // ── 2. End the lease ──────────────────────────────────────
-    const now = new Date().toISOString();
-
-    const { error: updateErr } = await supabaseAdmin
-      .from('HomeLease')
-      .update({
-        state: 'ended',
-        end_at: now,
-        updated_at: now,
-      })
-      .eq('id', leaseId);
-
-    if (updateErr) {
-      logger.error('LandlordAuthorityService.endLease: update failed', {
-        leaseId, error: updateErr.message,
-      });
-      return { success: false, error: 'Failed to end lease' };
-    }
-
-    // ── 3. Deactivate HomeOccupancy (via centralized gateway) ──
-    const occupancyAttachService = require('../occupancyAttachService');
-    await occupancyAttachService.detach({
-      homeId: lease.home_id,
-      userId: lease.primary_resident_user_id,
-      reason: 'lease_ended',
-      actorId: initiatedBy,
-      metadata: { lease_id: leaseId },
+  async endLease(leaseId, initiatedBy, options = {}) {
+    const result = await this._decideLease({
+      p_action: options.moveOut ? 'move_out' : 'end', p_actor_id: initiatedBy,
+      p_lease_id: leaseId, p_authority_id: options.authorityId || null,
+      p_reason: options.reason || null,
     });
-
-    // Also deactivate any co-residents on this lease
-    const { data: residents } = await supabaseAdmin
-      .from('HomeLeaseResident')
-      .select('user_id')
-      .eq('lease_id', leaseId);
-
-    if (residents && residents.length > 0) {
-      for (const resident of residents) {
-        await occupancyAttachService.detach({
-          homeId: lease.home_id,
-          userId: resident.user_id,
-          reason: 'lease_ended',
-          actorId: initiatedBy,
-          metadata: { lease_id: leaseId },
-        });
-      }
-    }
-
-    // ── 4. Notify tenant ──────────────────────────────────────
-    try {
-      const notificationService = require('../notificationService');
-      notificationService.createNotification({
-        userId: lease.primary_resident_user_id,
-        type: 'lease_ended',
-        title: 'Your lease has ended',
-        body: 'Your lease has been terminated. You will retain your own content history but lose household access.',
-        icon: '📋',
-        link: `/homes/${lease.home_id}`,
-        metadata: { home_id: lease.home_id, lease_id: leaseId, initiated_by: initiatedBy },
-      });
-    } catch (notifErr) {
-      logger.warn('LandlordAuthorityService.endLease: notification failed (non-fatal)', {
-        error: notifErr.message,
-      });
-    }
-
-    // ── 5. Audit log ──────────────────────────────────────────
-    await writeAuditLog(lease.home_id, initiatedBy, 'LEASE_ENDED', 'HomeLease', leaseId, {
-      tenant_user_id: lease.primary_resident_user_id,
-      initiated_by: initiatedBy,
+    if (!result.success || result.replayed) return result;
+    await this._notifyLeaseDecision({
+      userId: options.moveOut ? initiatedBy : result.lease.primary_resident_user_id,
+      type: 'lease_ended', title: options.moveOut ? 'You have moved out' : 'Your lease has ended',
+      body: options.moveOut ? 'You have moved out. You retain your own content history.' : 'Your lease has ended. You retain your own content history.',
+      icon: '📋', link: `/homes/${result.lease.home_id}`,
+      metadata: { home_id: result.lease.home_id, lease_id: leaseId, initiated_by: initiatedBy },
     });
-
-    logger.info('LandlordAuthorityService.endLease: ended', {
-      leaseId, initiatedBy, tenantUserId: lease.primary_resident_user_id,
-    });
-
-    return { success: true };
+    return result;
   }
 
   // ── Private helpers ─────────────────────────────────────────────

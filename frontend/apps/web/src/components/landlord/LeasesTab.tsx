@@ -8,6 +8,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import * as api from '@pantopus/api';
 import type { landlord } from '@pantopus/api';
+import { extractApiError } from '@pantopus/ui-utils';
 
 type Props = {
   homeId: string;
@@ -99,7 +100,7 @@ export default function LeasesTab({ homeId: _homeId, leases, onRefresh }: Props)
       await api.landlord.endLease(leaseId);
       onRefresh();
     } catch (err: unknown) {
-      console.error('End lease failed:', err);
+      alert(extractApiError(err, 'Could not end the lease. Please retry.'));
     } finally {
       setEndingId(null);
     }

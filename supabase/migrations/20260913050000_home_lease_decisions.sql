@@ -21,8 +21,11 @@ DECLARE
   v_receipt jsonb; v_intent jsonb; v_current boolean; v_actor_allowed boolean;
   v_start timestamptz; v_end timestamptz; v_role public.home_role_base;
   v_permissions text[];
+  v_resident_actor boolean:=false; v_target_id uuid; v_detach_ids uuid[]:='{}';
+  v_end_receipt jsonb; v_other_lease boolean; v_departure jsonb; v_removal jsonb;
+  v_resident public."HomeLeaseResident"%ROWTYPE; v_co_departure boolean:=false;
 BEGIN
-  IF p_actor_id IS NULL OR p_action NOT IN ('approve','deny','accept') OR p_action IS NULL
+  IF p_actor_id IS NULL OR p_action NOT IN ('approve','deny','accept','end','move_out') OR p_action IS NULL
     OR p_validity_days IS NULL OR p_validity_days<1 OR p_validity_days>36500
     OR p_dates IS NULL OR jsonb_typeof(p_dates)<>'object' THEN
     RETURN jsonb_build_object('success',false,'error','Invalid lease decision');
@@ -38,6 +41,18 @@ BEGIN
   -- Match the existing Home mutation lock order. Re-read proofs after waiting;
   -- authority revocation and competing lease decisions serialize on these rows.
   PERFORM id FROM public."HomeAuthority" WHERE home_id=v_home_id ORDER BY id FOR UPDATE;
+  IF p_action IN ('end','move_out') THEN
+    SELECT * INTO v_lease FROM public."HomeLease" WHERE id=p_lease_id AND home_id=v_home_id FOR UPDATE;
+    PERFORM user_id FROM public."HomeLeaseResident" WHERE lease_id=p_lease_id ORDER BY user_id FOR UPDATE;
+    SELECT * INTO v_resident FROM public."HomeLeaseResident" WHERE lease_id=p_lease_id AND user_id=p_actor_id;
+    v_departure:=v_lease.metadata->'resident_departures'->p_actor_id::text;
+    v_resident_actor:=v_lease.primary_resident_user_id=p_actor_id OR
+      (p_action='move_out' AND (v_resident.id IS NOT NULL OR v_departure IS NOT NULL));
+    v_co_departure:=p_action='move_out' AND v_lease.primary_resident_user_id IS DISTINCT FROM p_actor_id;
+    IF p_action='move_out' AND NOT coalesce(v_resident_actor,false) THEN
+      RETURN jsonb_build_object('success',false,'error','Only a lease resident can move out','status',403);
+    END IF;
+  END IF;
   IF p_action='accept' THEN
     SELECT * INTO v_invite FROM public."HomeLeaseInvite"
       WHERE token_hash=p_token_hash AND home_id=v_home_id FOR UPDATE;
@@ -54,10 +69,10 @@ BEGIN
     SELECT * INTO v_authority FROM public."HomeAuthority"
       WHERE id=p_authority_id AND home_id=v_home_id AND status='verified';
   END IF;
-  IF v_authority.id IS NULL THEN
-    RETURN jsonb_build_object('success',false,'error','Current verified authority required');
+  IF v_authority.id IS NULL AND NOT coalesce(v_resident_actor,false) THEN
+    RETURN jsonb_build_object('success',false,'error','Current verified authority required','status',403);
   END IF;
-  IF p_action<>'accept' THEN
+  IF p_action<>'accept' AND NOT coalesce(v_resident_actor,false) THEN
     v_actor_allowed:=v_authority.subject_type='user' AND v_authority.subject_id=p_actor_id;
     IF v_authority.subject_type='business' THEN
       -- Same two business paths as authorityResolution.js, with their binding
@@ -85,7 +100,19 @@ BEGIN
   END IF;
   v_now:=clock_timestamp();
   SELECT * INTO v_home FROM public."Home" WHERE id=v_home_id;
-  IF v_home.security_state IN ('frozen','frozen_silent') OR v_home.home_status IN ('merged','archived') THEN
+  IF p_action IN ('approve','accept') AND v_home.address_id IS NOT NULL THEN
+    PERFORM id FROM public."HomeAddress" WHERE id=v_home.address_id FOR SHARE;
+    v_now:=clock_timestamp();
+    -- Keep the existing occupancy gateway's unresolved-unit boundary. Verified
+    -- landlord authority does not turn a building-only address into a unit.
+    IF EXISTS(SELECT FROM public."HomeAddress" WHERE id=v_home.address_id
+      AND building_type='multi_unit' AND missing_secondary_flag) THEN
+      RETURN jsonb_build_object('success',false,'error','This is a multi-unit building. A unit number is required.');
+    END IF;
+  END IF;
+  IF (v_home.security_state IN ('frozen','frozen_silent')
+    AND NOT (p_action IN ('end','move_out') AND coalesce(v_resident_actor,false)))
+    OR v_home.home_status IN ('merged','archived') THEN
     RETURN jsonb_build_object('success',false,'error','This home is unavailable for lease decisions');
   END IF;
   v_tenant_id:=CASE WHEN p_action='accept' THEN p_actor_id ELSE v_lease.primary_resident_user_id END;
@@ -93,6 +120,105 @@ BEGIN
   v_intent:=jsonb_build_object('action',p_action,'actor_id',p_actor_id,'authority_id',v_authority.id,
     'dates',p_dates,'reason',p_reason);
   v_receipt:=v_lease.metadata->'landlord_decision';
+  IF p_action IN ('end','move_out') THEN
+    v_end_receipt:=v_lease.metadata->'landlord_end';
+    IF p_action='move_out' AND v_departure IS NOT NULL THEN
+      SELECT * INTO v_occupancy FROM public."HomeOccupancy" WHERE home_id=v_home_id AND user_id=p_actor_id;
+      IF (v_co_departure AND v_resident.id IS NOT NULL)
+        OR (v_occupancy.is_active AND (v_departure->>'occupancy_id' IS DISTINCT FROM v_occupancy.id::text
+          OR v_departure->>'membership_version' IS DISTINCT FROM v_occupancy.membership_version::text)) THEN
+        RETURN jsonb_build_object('success',false,'status',409,'error','Membership changed after move-out. Review your current home membership.');
+      END IF;
+      RETURN jsonb_build_object('success',true,'lease',to_jsonb(v_lease),'replayed',true);
+    END IF;
+    IF p_action='end' AND v_lease.state='ended' AND v_end_receipt IS NOT NULL THEN
+      RETURN jsonb_build_object('success',true,'lease',to_jsonb(v_lease),'replayed',true);
+    END IF;
+    IF v_lease.state<>'active' AND NOT (p_action='move_out' AND v_lease.state='ended') THEN
+      RETURN jsonb_build_object('success',false,'error','Cannot end: lease is '||v_lease.state);
+    END IF;
+    -- Validate all affected residents before any write. A co-resident's departure
+    -- affects only that person; it cannot terminate the primary resident's lease.
+    IF NOT v_co_departure AND v_lease.state='active' THEN
+      FOR v_target_id IN SELECT v_lease.primary_resident_user_id UNION
+        SELECT user_id FROM public."HomeLeaseResident" WHERE lease_id=v_lease.id LOOP
+        IF p_action='move_out' AND v_target_id=p_actor_id THEN CONTINUE; END IF;
+        SELECT * INTO v_occupancy FROM public."HomeOccupancy" WHERE home_id=v_home_id AND user_id=v_target_id;
+        IF v_occupancy.id IS NULL OR NOT v_occupancy.is_active THEN CONTINUE; END IF;
+        IF v_home.owner_id=v_target_id OR v_occupancy.role_base='owner' OR EXISTS
+          (SELECT FROM public."HomeOwner" WHERE home_id=v_home_id AND subject_type='user'
+            AND subject_id=v_target_id AND owner_status='verified') THEN CONTINUE; END IF;
+        IF v_target_id=v_lease.primary_resident_user_id AND v_receipt ? 'owns_membership' THEN
+          IF v_receipt->>'owns_membership'='false'
+            OR v_receipt->>'occupancy_id' IS DISTINCT FROM v_occupancy.id::text
+            OR v_receipt->>'membership_version' IS DISTINCT FROM v_occupancy.membership_version::text THEN CONTINUE; END IF;
+        ELSE
+          -- Historical lease roles lack a generation binding. Preserve other
+          -- household roles, and require explicit review for ambiguous access.
+          IF coalesce(v_occupancy.role_base::text,v_occupancy.role) NOT IN ('lease_resident','tenant','renter') THEN CONTINUE; END IF;
+          RETURN jsonb_build_object('success',false,'error','Historical lease membership requires review before ending access');
+        END IF;
+        SELECT EXISTS(SELECT FROM public."HomeLease" other WHERE other.home_id=v_home_id
+          AND other.id<>v_lease.id AND other.state='active' AND (other.end_at IS NULL OR other.end_at>v_now)
+          AND (other.primary_resident_user_id=v_target_id OR EXISTS(SELECT FROM public."HomeLeaseResident" lr
+            WHERE lr.lease_id=other.id AND lr.user_id=v_target_id))) INTO v_other_lease;
+        IF v_other_lease THEN
+          RETURN jsonb_build_object('success',false,'error','Overlapping lease membership requires review before ending access');
+        END IF;
+        v_detach_ids:=array_append(v_detach_ids,v_occupancy.id);
+      END LOOP;
+    END IF;
+    IF p_action='move_out' THEN
+      SELECT * INTO v_occupancy FROM public."HomeOccupancy" WHERE home_id=v_home_id AND user_id=p_actor_id;
+      IF v_occupancy.id IS NOT NULL THEN
+        -- Explicit self-departure uses the already accepted removal policy,
+        -- including ownership transfer, scoped grants and residency letters.
+        v_removal:=public.apply_home_member_removal(v_home_id,p_actor_id,p_actor_id);
+        IF v_removal->>'ok' IS DISTINCT FROM 'true' THEN
+          RETURN jsonb_build_object('success',false,'status',coalesce((v_removal->>'status')::integer,400),
+            'error',CASE WHEN v_removal->>'code'='TRANSFER_REQUIRED' THEN 'Transfer home ownership before moving out.'
+              ELSE 'Could not remove your home membership. Review your current home membership.' END);
+        END IF;
+        SELECT * INTO v_occupancy FROM public."HomeOccupancy" WHERE home_id=v_home_id AND user_id=p_actor_id;
+      END IF;
+      v_now:=clock_timestamp();
+      v_departure:=jsonb_build_object('completed_at',v_now,'reason',p_reason,'resident_id',v_resident.id,
+        'occupancy_id',v_occupancy.id,'membership_version',v_occupancy.membership_version);
+      UPDATE public."HomeLease" SET metadata=coalesce(metadata,'{}')||jsonb_build_object('resident_departures',
+        coalesce(metadata->'resident_departures','{}')||jsonb_build_object(p_actor_id::text,v_departure)),updated_at=v_now
+        WHERE id=v_lease.id RETURNING * INTO v_lease;
+      IF v_co_departure THEN
+        DELETE FROM public."HomeLeaseResident" WHERE id=v_resident.id;
+      END IF;
+      INSERT INTO public."HomeAuditLog"(home_id,actor_user_id,action,target_type,target_id,before_data,metadata)
+        VALUES(v_home_id,p_actor_id,'TENANT_MOVE_OUT','HomeLease',v_lease.id,to_jsonb(v_resident),
+          jsonb_build_object('reason',p_reason,'initiated_by','tenant','occupancy_id',v_occupancy.id));
+    END IF;
+    IF NOT v_co_departure AND v_lease.state='active' THEN
+      FOR v_occupancy IN SELECT * FROM public."HomeOccupancy" WHERE id=ANY(v_detach_ids) LOOP
+        UPDATE public."HomeOccupancy" SET is_active=false,end_at=least(coalesce(end_at,v_now),v_now),
+          access_end_at=least(coalesce(access_end_at,v_now),v_now),verification_status='inactive',
+          can_manage_home=false,can_manage_access=false,can_manage_finance=false,
+          can_manage_tasks=false,can_view_sensitive=false,updated_at=v_now WHERE id=v_occupancy.id;
+        DELETE FROM public."HomePermissionOverride" WHERE home_id=v_home_id AND user_id=v_occupancy.user_id;
+        UPDATE public."HomeScopedGrant" SET end_at=v_now,updated_at=v_now
+          WHERE home_id=v_home_id AND grantee_user_id=v_occupancy.user_id AND (end_at IS NULL OR end_at>v_now);
+        UPDATE public."ResidencyLetter" SET status='revoked',revoked_at=v_now,revoke_reason='residency_ended'
+          WHERE home_id=v_home_id AND user_id=v_occupancy.user_id AND status='issued';
+        INSERT INTO public."HomeAuditLog"(home_id,actor_user_id,action,target_type,target_id,metadata)
+          VALUES(v_home_id,p_actor_id,'OCCUPANCY_DETACHED','HomeOccupancy',v_occupancy.id,
+            jsonb_build_object('lease_id',v_lease.id,'reason','lease_ended'));
+      END LOOP;
+      UPDATE public."HomeLease" SET state='ended',end_at=v_now,updated_at=v_now,
+        metadata=coalesce(metadata,'{}')||jsonb_build_object('landlord_end',jsonb_build_object(
+          'actor_id',p_actor_id,'action',p_action,'reason',p_reason,'completed_at',v_now,'detached_occupancy_ids',v_detach_ids))
+        WHERE id=v_lease.id RETURNING * INTO v_lease;
+      INSERT INTO public."HomeAuditLog"(home_id,actor_user_id,action,target_type,target_id,metadata)
+        VALUES(v_home_id,p_actor_id,'LEASE_ENDED','HomeLease',v_lease.id,
+          jsonb_build_object('tenant_user_id',v_tenant_id,'initiated_by',p_actor_id));
+    END IF;
+    RETURN jsonb_build_object('success',true,'lease',to_jsonb(v_lease),'replayed',false);
+  END IF;
   IF v_receipt IS NOT NULL THEN
     IF v_receipt->'intent' IS DISTINCT FROM v_intent THEN
       RETURN jsonb_build_object('success',false,'error','Lease already has a different completed decision');
@@ -130,6 +256,14 @@ BEGIN
     EXCEPTION WHEN invalid_datetime_format OR datetime_field_overflow THEN
       RETURN jsonb_build_object('success',false,'error','Lease dates must be valid dates');
     END;
+  END IF;
+  IF p_action IN ('approve','accept') AND v_occupancy.is_active AND EXISTS
+    (SELECT FROM public."HomeLease" other WHERE other.home_id=v_home_id AND other.id IS DISTINCT FROM v_lease.id
+      AND other.state='active' AND (other.end_at IS NULL OR other.end_at>v_now)
+      AND other.metadata->'landlord_decision'->>'owns_membership'='true'
+      AND other.metadata->'landlord_decision'->>'occupancy_id'=v_occupancy.id::text
+      AND other.metadata->'landlord_decision'->>'membership_version'=v_occupancy.membership_version::text) THEN
+    RETURN jsonb_build_object('success',false,'error','An existing active lease must be resolved before another lease grants access');
   END IF;
   IF p_action='deny' THEN
     UPDATE public."HomeLease" SET state='canceled',updated_at=v_now,
@@ -187,7 +321,8 @@ BEGIN
     UPDATE public."HomeLease" SET state='active',start_at=v_start,end_at=v_end,
       approved_by_subject_type=v_authority.subject_type,approved_by_subject_id=v_authority.subject_id,
       metadata=coalesce(metadata,'{}')||jsonb_build_object('landlord_decision',jsonb_build_object(
-        'intent',v_intent,'occupancy_id',v_occupancy.id,'membership_version',v_occupancy.membership_version)),
+        'intent',v_intent,'occupancy_id',v_occupancy.id,'membership_version',v_occupancy.membership_version,
+        'owns_membership',NOT v_current)),
       updated_at=v_now WHERE id=v_lease.id RETURNING * INTO v_lease;
     UPDATE public."Home" SET vacancy_at=NULL,updated_at=v_now WHERE id=v_home_id AND vacancy_at IS NOT NULL AND v_start<=v_now;
   END IF;

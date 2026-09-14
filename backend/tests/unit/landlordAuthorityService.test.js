@@ -566,127 +566,44 @@ describe('lease decision adapter', () => {
   });
 });
 
-describe('endLease', () => {
-  beforeEach(() => {
-    seedHome();
-    seedLease({ state: 'active' });
-    seedTable('HomeOccupancy', [{
-      id: 'occ-1',
-      home_id: 'home-1',
-      user_id: 'tenant-1',
-      role: 'lease_resident',
-      role_base: 'lease_resident',
-      is_active: true,
-      verification_status: 'verified',
-    }]);
+// End/move-out persistence and generation checks execute the real SQL contract.
+describe('lease end adapter', () => {
+  let rpc;
+  const saved = { success: true, replayed: false,
+    lease: { id: 'lease-1', home_id: 'home-1', primary_resident_user_id: 'tenant-1', state: 'ended' } };
+  beforeEach(() => { rpc = jest.fn().mockResolvedValue({ data: saved, error: null }); setRpcMock(rpc); });
+  test('forwards the actor and authority and notifies after committed end', async () => {
+    expect(await service.endLease('lease-1', 'landlord-1', { authorityId: 'auth-1' })).toEqual(saved);
+    expect(rpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_action: 'end', p_actor_id: 'landlord-1', p_authority_id: 'auth-1', p_lease_id: 'lease-1',
+    }));
+    expect(mockOccDetach).not.toHaveBeenCalled();
+    expect(writeAuditLog).not.toHaveBeenCalled();
+    expect(notificationService.createNotification).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'lease_ended', userId: 'tenant-1', body: expect.stringContaining('retain your own content history'),
+    }));
   });
-
-  test('ends active lease', async () => {
-    const result = await service.endLease('lease-1', 'landlord-1');
-
-    expect(result.success).toBe(true);
-
-    const leases = getTable('HomeLease');
-    expect(leases[0].state).toBe('ended');
-    expect(leases[0].end_at).toBeTruthy();
+  test('move-out passes its reason into the same transaction', async () => {
+    await service.endLease('lease-1', 'co-resident', { moveOut: true, reason: 'Moving' });
+    expect(rpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_action: 'move_out', p_actor_id: 'co-resident', p_authority_id: null, p_reason: 'Moving',
+    }));
+    expect(notificationService.createNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 'co-resident', title: 'You have moved out' }));
   });
-
-  test('deactivates HomeOccupancy via occupancyAttachService', async () => {
-    await service.endLease('lease-1', 'landlord-1');
-
-    // Verify detach was called for the primary resident
-    expect(mockOccDetach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        homeId: 'home-1',
-        userId: 'tenant-1',
-        reason: 'lease_ended',
-        actorId: 'landlord-1',
-      }),
-    );
+  test('failed end and completed replay send no success or duplicate notification', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: '40001' } });
+    expect((await service.endLease('lease-1', 'tenant-1')).success).toBe(false);
+    rpc.mockResolvedValueOnce({ data: { ...saved, replayed: true }, error: null });
+    expect((await service.endLease('lease-1', 'tenant-1')).success).toBe(true);
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
-
-  test('deactivates co-resident occupancies via occupancyAttachService', async () => {
-    seedTable('HomeLeaseResident', [
-      { id: 'lr-1', lease_id: 'lease-1', user_id: 'tenant-1' },
-      { id: 'lr-2', lease_id: 'lease-1', user_id: 'co-resident-1' },
-    ]);
-    seedTable('HomeOccupancy', [{
-      id: 'occ-2',
-      home_id: 'home-1',
-      user_id: 'co-resident-1',
-      role: 'lease_resident',
-      role_base: 'lease_resident',
-      is_active: true,
-      verification_status: 'verified',
-    }]);
-
-    await service.endLease('lease-1', 'landlord-1');
-
-    // Primary resident detach
-    expect(mockOccDetach).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'tenant-1', reason: 'lease_ended' }),
-    );
-    // Co-resident detach
-    expect(mockOccDetach).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'co-resident-1', reason: 'lease_ended' }),
-    );
-  });
-
-  test('notifies tenant', async () => {
-    await service.endLease('lease-1', 'landlord-1');
-
-    expect(notificationService.createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'tenant-1',
-        type: 'lease_ended',
-        body: expect.stringContaining('retain your own content history'),
-      }),
-    );
-  });
-
-  test('writes audit log', async () => {
-    await service.endLease('lease-1', 'landlord-1');
-
-    expect(writeAuditLog).toHaveBeenCalledWith(
-      'home-1', 'landlord-1', 'LEASE_ENDED', 'HomeLease', 'lease-1',
-      expect.objectContaining({ tenant_user_id: 'tenant-1', initiated_by: 'landlord-1' }),
-    );
-  });
-
-  test('returns error when lease not found', async () => {
-    const result = await service.endLease('missing-lease', 'landlord-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('Lease not found');
-  });
-
-  test('returns error when lease is not active', async () => {
-    getTable('HomeLease')[0].state = 'ended';
-
-    const result = await service.endLease('lease-1', 'landlord-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('ended');
-  });
-
-  test('returns error when lease is pending', async () => {
-    getTable('HomeLease')[0].state = 'pending';
-
-    const result = await service.endLease('lease-1', 'landlord-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('pending');
-  });
-
-  test('tenant can initiate end lease', async () => {
-    const result = await service.endLease('lease-1', 'tenant-1');
-
-    expect(result.success).toBe(true);
-    const leases = getTable('HomeLease');
-    expect(leases[0].state).toBe('ended');
+  test('reports ambiguous historical linkage without an end notification', async () => {
+    const rejected = { success: false, error: 'Historical lease membership requires review before ending access' };
+    rpc.mockResolvedValue({ data: rejected, error: null });
+    expect(await service.endLease('lease-1', 'tenant-1')).toEqual(rejected);
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 });
-
-// ============================================================
-// _tierRank (private helper)
-// ============================================================
 
 describe('_tierRank', () => {
   test('ranks weak < standard < strong < legal', () => {

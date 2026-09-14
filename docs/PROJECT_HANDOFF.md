@@ -20,34 +20,43 @@ lease bounds on admission/reentry, and binds completed retries to the existing
 membership generation. Approval and denial cannot both commit. There are no
 new tables or screen/layout changes. See [the transaction evidence](VERIFICATION_FIRST_2026-09-13.md#existing-lease-decision-transaction--september-13-draft).
 
-Local checks pass: 134 service/route checks, the real SQL lifecycle and rollback
-contract, 12 actual HTTP/SDK/SQL checks and five multi-session SQL races.
-Application function lint reports zero errors. The older 187 mocked checks are
-not the current count: admission persistence assertions now run in PostgreSQL
-instead of an always-successful mocked occupancy gateway. The browser follow-up also repairs SDK error messages, canceled denial prompts
-and UTC lease-calendar display in the existing components; ten rendered checks
-and six actual browser/HTTP/SQL checks pass. No layout/classes changed.
+The end/move-out follow-up now makes lease termination and bound access
+withdrawal atomic too. It preserves independent/replaced membership, reports
+failures in the existing Leases UI, and restores the history its Ended filter
+already expects. A reproduced co-resident bug is repaired using the accepted
+self-removal helper: only the departing person loses access, the primary lease
+stays active, and an old request cannot remove restored membership. No table,
+screen, markup, layout or CSS class was added or changed.
+
+Current local checks: 125 service/route tests, ten rendered web/SDK tests, real
+SQL lifecycle and final-write rollback, five end HTTP/SQL comparisons, a separate
+co-resident HTTP/SQL baseline/candidate, seven multi-session SQL races and three
+actual browser end/retry cases pass. Six earlier actual browser approval/denial
+cases retain their source-specific evidence. Fresh standalone web TypeScript
+and application-function lint pass; scoped ESLint has one existing warning.
+See [the end evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-lease-end-and-move-out-follow-up).
+
 Transaction source `81cf3bef8` passes all eight executed checks in
 [CI34793608043](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34793608043),
-with three unchanged scopes skipped. Browser follow-up CI is pending. Home integration `7f2a5e6d6` now passes all 16 checks in
+with three unchanged scopes skipped. Browser source `695a1cfb3` failed CI on two
+test-only unsupported role-query options, now removed. An intermediate chained
+local command masked that TypeScript failure; the report corrects it. The end
+follow-up requires CI against its pushed head. Home integration `7f2a5e6d6`
+passes all 16 checks in
 [CI34790255357](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34790255357).
 
-**Next: repair the reproduced lease-end transaction failures.**
-Six browser checks now exercise the existing property detail/requests/leases
-components through real routes/SQL in an isolated Next renderer. The full
-application shell/login is outside that boundary. An actual HTTP/SQL end probe
-confirms two failures: ending a lease removes independent admin access; failing
-occupancy deactivation still returns 200 with lease ended and access active, then
-retry returns 400. Keep #38 draft while repairing that boundary using existing
-lease/audit/membership records. Do not infer ambiguous legacy membership links. Existing legacy active leases without a completed
-transaction receipt require a new review; this patch does not infer missing
-historical decisions or backfill membership. Installed client lease journeys,
-notification delivery, combined populated adoption and hosted rollout are not
-accepted by these local checks. R05 remains open; the proposed renewal tables
-remain paused. The owned schema-only lease database is exclusively leased to
-`/private/tmp/pantopus-lease-transaction-r1`; fixture rows are cleaned and its
-owned REST is running for the next browser/lease-end checks. Inspect its lease
-before reuse. Do not reuse unrelated devices, runtimes or databases.
+**Next: verify explicit legacy lease membership review/removal and end retry
+through the existing Home workflow, then reconcile the existing native Home
+move-out path and screen catalog.** Do not infer ambiguous historical lease
+bindings or create a new screen merely because a transport has no current UI
+caller. Keep #38 draft while these boundaries and current CI are reconciled.
+The browser evidence uses the actual property/requests/leases components and
+SDK/HTTP/SQL in an isolated renderer; full AppShell/login and installed-native
+lease journeys are not claimed. Provider delivery, combined populated adoption
+and hosted rollout remain open. R05 remains open; proposed renewal tables stay
+paused. The schema-only lease database and REST are exclusively leased to
+`/private/tmp/pantopus-lease-transaction-r1`; fixtures are cleaned after every
+check. Inspect the private runtime lease before reuse and preserve other runtimes.
 
 The integrated [PR #37](https://github.com/WangPantopus/skinny-pantopus/pull/37) repair checks the invitation
 issuer's current verified authority before writes. Baseline SQL granted access

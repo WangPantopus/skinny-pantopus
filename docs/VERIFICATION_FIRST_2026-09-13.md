@@ -348,8 +348,12 @@ converted UTC calendar dates to the previous day in Pacific time; both existing
 formatters now match the editor's UTC calendar day, while creation timestamps
 keep their local display. Markup, classes, layout and navigation stay intact.
 Two added cases fail before their fixes; all ten rendered component/SDK checks
-pass afterward, with TypeScript clean and scoped lint retaining one existing
-`any` warning. Browser preparation used installed Chrome after the Playwright
+pass afterward. The initial eight/nine-case TypeScript check passed, but the
+later ten-case source `695a1cfb3` failed CI typechecking: two test-only Testing
+Library role options incorrectly used `exact`. A chained local shell command
+masked that intermediate TypeScript exit code; it was not a passing check. The
+unsupported options are removed in the end follow-up, whose fresh standalone
+TypeScript check exits zero. Scoped lint retains one existing `any` warning. Browser preparation used installed Chrome after the Playwright
 bundled executable was absent; the initial missing-browser/expected-message
 failures are fixture/setup evidence, not additional application failures.
 
@@ -361,3 +365,83 @@ returns HTTP 200 with the lease ended and Home access still active; retry return
 records must be compared before defining safe end/retry behavior, particularly
 for historical memberships without a recorded generation. The draft remains
 unmerged. Private evidence remains in the lease-transaction archive.
+
+
+### Existing lease end and move-out follow-up
+
+The end baseline is repaired in the same existing service, routes and pending
+transaction migration; no table or screen was added. The lease end, bound access
+withdrawal and audit now commit together. A failed write leaves the active lease
+and access unchanged; a repeated completed end reads its receipt. Independently
+granted household membership and a later membership generation are preserved.
+The existing Leases tab reports actual API errors using the shared helper. Its
+existing Ended filter now receives ended/canceled history from property detail;
+previously the server excluded the records that this existing UI expected.
+No markup, CSS classes, layout or navigation changes were made.
+
+An additional actual HTTP/SQL baseline reproduced co-resident move-out ending
+the primary resident's lease and removing the primary access while the departing
+co-resident retained access. Self-departure now reuses the existing
+`apply_home_member_removal` policy, including ownership transfer, grant expiry
+and letter revocation. A co-resident leaves only their own membership; their
+resident edge is retained in the existing audit's before-data, and an existing
+lease-metadata receipt permits retry after removal. The primary lease and
+membership stay unchanged. Restored membership rejects an old departure request
+without writes. Co-residency alone cannot authorize ending the whole lease.
+An explicit primary self-departure removes that person's independent membership,
+including after a landlord ended the lease; landlord end itself preserves it.
+The departure notification targets the departing actor. Provider delivery is
+still intercepted in acceptance and remains outside this guarantee.
+
+Current bounded verification:
+
+- 125 existing service/pipeline/route checks and ten rendered web/SDK checks pass.
+  End persistence assertions moved from the mock gateway into real PostgreSQL.
+  Fresh standalone web TypeScript exits zero; scoped ESLint has zero errors and
+  the existing one `any` warning.
+- The expanded real SQL contract passes admission/end/self-departure, ownership,
+  independent and restored membership, overlapping/historical rejection,
+  unresolved-unit rejection and resolved-unit admission. A final end-audit fault
+  rolls back canonical self-removal, its receipt and every associated write.
+  Application function lint reports zero errors; the generated wrapper remains
+  part of the existing complete-replay CI gate.
+- Five actual end HTTP/SQL comparisons pass, including the two baseline repairs,
+  failed/committed retries, new membership after end, and primary move-out.
+  The separate co-resident baseline/candidate proves departing-only access,
+  correct notification recipient, edge-removal replay, whole-lease denial and
+  protection of restored membership through the actual routes and database.
+- Seven actual multi-session SQL cases pass. In addition to the five admission
+  races above, simultaneous end requests produce one audit and one replay; a
+  serialized end followed by fresh admission survives an old end retry.
+- Three actual Chrome/HTTP/SQL end cases pass: injected deactivation failure is
+  visible and retryable; a lost reply after commit reports an error while access
+  is withdrawn; retry refreshes the existing Ended history with one audit.
+  The screenshot was visually inspected. The earlier six browser approval/denial
+  cases retain their source-specific evidence. The isolated renderer, synthetic
+  auth, controlled notification delivery and absence of full AppShell/login
+  remain explicit limits.
+
+CI `695a1cfb3` failed only the two test type errors described above;
+[CI34794274687](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34794274687)
+is preserved as failed. This end follow-up still requires CI on its pushed head.
+The pending migration reuses existing Home locking and membership helpers; it
+also retains the existing unresolved-unit admission boundary. It does not
+backfill ambiguous historical membership bindings. Those landlord-end cases
+require an explicit current membership review/removal through the existing Home
+workflow before retry; that combined legacy journey is next to verify.
+
+Source search finds the tenant move-out transport in both native apps, but no
+current native screen caller of that lease-specific transport. This is not
+installed native lease acceptance and is not authorization to build a new screen.
+Reconcile the existing Home move-out path and the screen catalog first. Native
+landlord verification forms, notification delivery, combined populated adoption
+and hosted rollout remain open. R05 stays open; no additional acceptance row is
+closed. Private source bindings, failed and passing evidence, renderer source and
+runtime ownership are versioned under the existing lease-transaction archive.
+
+Local migration policy validation and generated-wrapper checking pass. The full
+local base-comparison process stalled in Xcode Git's `hash-object --stdin` and
+was stopped, so it is not recorded as passed. Git's diff against the actual
+Home integration base confirms only the new lease migration; applied baseline,
+archive, legacy migration and policy bytes are unchanged. Required CI still runs
+the original complete migration guard and full schema replay.

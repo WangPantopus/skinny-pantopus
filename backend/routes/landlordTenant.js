@@ -222,7 +222,7 @@ router.get(
         .select('id, name, home_type')
         .eq('parent_home_id', homeId);
 
-      // Fetch active leases
+      // Include the history consumed by the existing Ended filter.
       const { data: leases } = await supabaseAdmin
         .from('HomeLease')
         .select(`
@@ -230,7 +230,7 @@ router.get(
           primary_resident:primary_resident_user_id(id, username, name, email)
         `)
         .eq('home_id', homeId)
-        .in('state', ['active', 'pending'])
+        .in('state', ['active', 'pending', 'ended', 'canceled'])
         .order('created_at', { ascending: false });
 
       // Fetch pending tenant requests (leases sourced from tenant)
@@ -424,7 +424,14 @@ router.post(
         return res.status(403).json({ error: authCheck.reason || 'Not authorized to end this lease' });
       }
 
-      const result = await landlordAuthorityService.endLease(leaseId, userId);
+      // Co-residency authorizes self move-out, not ending everybody's lease.
+      let authority = authCheck.authority;
+      if (authCheck.lease.primary_resident_user_id !== userId && !authority) {
+        const resolved = await resolveVerifiedAuthorityForActor({ userId, homeId: authCheck.lease.home_id });
+        if (!resolved.found) return res.status(403).json({ error: 'Only the primary resident or verified landlord can end this lease' });
+        authority = resolved.authority;
+      }
+      const result = await landlordAuthorityService.endLease(leaseId, userId, { authorityId: authority?.id });
 
       if (!result.success) {
         const status = result.error.includes('not found') ? 404 : 400;
@@ -665,38 +672,16 @@ router.post(
         return res.status(404).json({ error: 'Lease not found' });
       }
 
-      if (lease.primary_resident_user_id !== userId) {
-        // Also check if user is a co-resident
-        const { data: resident } = await supabaseAdmin
-          .from('HomeLeaseResident')
-          .select('id')
-          .eq('lease_id', lease_id)
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (!resident) {
-          logger.warn('auth.denied', { event: 'move_out_denied', actor_id: userId, target_id: lease_id, reason: 'not_resident', ip: req.ip });
-          return res.status(403).json({ error: 'Not authorized to end this lease' });
-        }
-      }
-
-      if (lease.state !== 'active') {
-        return res.status(400).json({ error: `Cannot move out: lease is ${lease.state}` });
-      }
-
-      const result = await landlordAuthorityService.endLease(lease_id, userId);
+      // The transaction checks the current resident edge or its completed
+      // departure receipt under locks, so a lost-reply retry still works after
+      // the departing co-resident's edge was removed.
+      const result = await landlordAuthorityService.endLease(lease_id, userId, { moveOut: true, reason });
 
       if (!result.success) {
-        return res.status(400).json({ error: result.error });
+        return res.status(result.status || 400).json({ error: result.error });
       }
 
-      // Log the move-out reason
-      await writeAuditLog(lease.home_id, userId, 'TENANT_MOVE_OUT', 'HomeLease', lease_id, {
-        reason: reason || null,
-        initiated_by: 'tenant',
-      });
-
-      logger.info('auth.action', { event: 'lease_ended', actor_id: userId, target_id: lease_id, initiated_by: 'tenant' });
+      logger.info('auth.action', { event: 'tenant_moved_out', actor_id: userId, target_id: lease_id, initiated_by: 'tenant' });
       res.json({ success: true });
     } catch (err) {
       logger.error('POST /tenant/move-out failed', { error: err.message });

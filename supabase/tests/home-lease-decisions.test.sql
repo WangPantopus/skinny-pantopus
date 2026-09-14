@@ -23,11 +23,11 @@ INSERT INTO public."HomeAuthority"(id,home_id,subject_type,subject_id,role,statu
   ('f3190000-0000-4000-8000-000000000023','f3190000-0000-4000-8000-000000000010','trust','f3190000-0000-4000-8000-000000000004','manager','verified','landlord_portal');
 CREATE FUNCTION pg_temp.check_lease(p_ok boolean,p_label text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN IF p_ok IS DISTINCT FROM true THEN RAISE EXCEPTION '%',p_label; END IF; END $$;
-CREATE FUNCTION pg_temp.pending_lease() RETURNS uuid LANGUAGE plpgsql AS $$
+CREATE FUNCTION pg_temp.pending_lease(p_home uuid DEFAULT 'f3190000-0000-4000-8000-000000000010') RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE v_id uuid;
 BEGIN
  INSERT INTO public."HomeLease"(home_id,primary_resident_user_id,start_at,end_at,state,source,metadata)
- VALUES('f3190000-0000-4000-8000-000000000010','f3190000-0000-4000-8000-000000000002',
+ VALUES(p_home,'f3190000-0000-4000-8000-000000000002',
    now()-interval '1 day',now()+interval '1 year','pending','tenant_request','{"preserved":"yes"}') RETURNING id INTO v_id;
  RETURN v_id;
 END $$;
@@ -130,6 +130,7 @@ BEGIN
  VALUES('f3190000-0000-4000-8000-000000000050',business,'Contract seat',true);
  INSERT INTO public."SeatBinding"(seat_id,user_id,binding_method)
  VALUES('f3190000-0000-4000-8000-000000000050',a,'invite_accept');
+ DELETE FROM public."HomeOccupancy" WHERE home_id=h AND user_id=t;
  PERFORM pg_temp.check_lease(public.decide_home_lease('approve',a,l,'f3190000-0000-4000-8000-000000000022')->>'success'='true','Business seat authority');
  DELETE FROM public."HomeOccupancy" WHERE home_id=h AND user_id=t;
 
@@ -156,6 +157,7 @@ BEGIN
 
  -- Fresh invitations from existing business/trust issuers are still accepted.
  FOR i IN 1..2 LOOP
+   DELETE FROM public."HomeOccupancy" WHERE home_id=h AND user_id=t;
    INSERT INTO public."HomeLeaseInvite"(home_id,landlord_subject_type,landlord_subject_id,invitee_user_id,token_hash,expires_at)
    VALUES(h,CASE WHEN i=1 THEN 'business' ELSE 'trust' END::public.subject_type,business,t,repeat(i::text,64),now()+interval '1 day');
    PERFORM pg_temp.check_lease(public.decide_home_lease('accept',t,p_token_hash:=repeat(i::text,64))->>'success'='true','Verified business/trust invite issuer');
@@ -166,6 +168,164 @@ BEGIN
  RAISE NOTICE 'Lease decision lifecycle, dates, authority, membership and replay assertions passed';
 END $$;
 RESET ROLE;
+
+-- A verified landlord still cannot admit a building-only, unresolved unit.
+INSERT INTO public."HomeAddress"(id,address_line1_norm,city_norm,state,postal_code,address_hash,building_type,missing_secondary_flag)
+ VALUES('f3190000-0000-4000-8000-000000000014','lease unit contract','test','CA','00000','lease-unit-contract','multi_unit',true);
+UPDATE public."Home" SET address_id='f3190000-0000-4000-8000-000000000014' WHERE id='f3190000-0000-4000-8000-000000000010';
+SET LOCAL ROLE service_role;
+DO $$ DECLARE l uuid;r jsonb;
+BEGIN
+ l:=pg_temp.pending_lease();r:=public.decide_home_lease('approve','f3190000-0000-4000-8000-000000000001',l,'f3190000-0000-4000-8000-000000000020');
+ PERFORM pg_temp.check_lease(r->>'success'='false' AND r->>'error' LIKE '%unit number%'
+   AND (SELECT state='pending' FROM public."HomeLease" WHERE id=l),'Approval must preserve unresolved-unit boundary');
+ INSERT INTO public."HomeLeaseInvite"(home_id,landlord_subject_type,landlord_subject_id,token_hash,expires_at)
+ VALUES('f3190000-0000-4000-8000-000000000010','user','f3190000-0000-4000-8000-000000000001',repeat('d',64),now()+interval '1 day');
+ r:=public.decide_home_lease('accept','f3190000-0000-4000-8000-000000000002',p_token_hash:=repeat('d',64));
+ PERFORM pg_temp.check_lease(r->>'success'='false' AND r->>'error' LIKE '%unit number%'
+   AND (SELECT status='pending' FROM public."HomeLeaseInvite" WHERE token_hash=repeat('d',64)),'Invite must preserve unresolved-unit boundary');
+ UPDATE public."HomeAddress" SET missing_secondary_flag=false WHERE id='f3190000-0000-4000-8000-000000000014';
+ DELETE FROM public."HomeOccupancy" WHERE home_id='f3190000-0000-4000-8000-000000000010';
+ r:=public.decide_home_lease('approve','f3190000-0000-4000-8000-000000000001',l,'f3190000-0000-4000-8000-000000000020');
+ PERFORM pg_temp.check_lease(r->>'success'='true','Resolved unit address must remain admissible');
+
+END $$;
+RESET ROLE;
+UPDATE public."Home" SET address_id=NULL WHERE id='f3190000-0000-4000-8000-000000000010';
+
+-- End/retry proofs use a separate Home so earlier admission cases are independent.
+INSERT INTO public."Home"(id,address,city,state,zipcode) VALUES
+ ('f3190000-0000-4000-8000-000000000012','Lease end contract','Test','CA','00000');
+INSERT INTO public."HomeAuthority"(id,home_id,subject_type,subject_id,role,status) VALUES
+ ('f3190000-0000-4000-8000-000000000024','f3190000-0000-4000-8000-000000000012','user','f3190000-0000-4000-8000-000000000001','owner','verified');
+SET LOCAL ROLE service_role;
+DO $$ DECLARE
+ h uuid:='f3190000-0000-4000-8000-000000000012';a uuid:='f3190000-0000-4000-8000-000000000001';
+ t uuid:='f3190000-0000-4000-8000-000000000002';au uuid:='f3190000-0000-4000-8000-000000000024';
+ l uuid; second_lease uuid; r jsonb; saved jsonb;
+BEGIN
+ l:=pg_temp.pending_lease(h);r:=public.decide_home_lease('approve',a,l,au);
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND r->'lease'->'metadata'->'landlord_decision'->>'owns_membership'='true','Fresh lease must bind the membership it admits');
+ second_lease:=pg_temp.pending_lease(h);
+ PERFORM pg_temp.check_lease(public.decide_home_lease('approve',a,second_lease,au)->>'success'='false'
+   AND (SELECT state='pending' FROM public."HomeLease" WHERE id=second_lease),'Duplicate lease must not take over current lease access');
+ PERFORM pg_temp.check_lease(public.decide_home_lease('end','f3190000-0000-4000-8000-000000000003',l,au)->>'success'='false','Unrelated actor cannot end a lease');
+ UPDATE public."HomeAuthority" SET status='revoked' WHERE id=au;
+ PERFORM pg_temp.check_lease(public.decide_home_lease('end',a,l,au)->>'success'='false','Revoked landlord cannot end a lease');
+ UPDATE public."HomeAuthority" SET status='verified' WHERE id=au;
+ r:=public.decide_home_lease('end',a,l,au);
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND r->'lease'->>'state'='ended'
+   AND public.home_effective_access(h,t)->>'has_access'='false'
+   AND EXISTS(SELECT FROM public."HomeLeaseResident" WHERE lease_id=l AND user_id=t),'End must withdraw bound access while preserving historical resident records');
+ PERFORM pg_temp.check_lease(public.decide_home_lease('end',a,l,au)->>'replayed'='true'
+   AND (SELECT count(*)=1 FROM public."HomeAuditLog" WHERE target_id=l AND action='LEASE_ENDED'),'Completed end retry must not duplicate effects');
+ r:=public.decide_home_lease('approve',a,second_lease,au);saved:=r->'occupancy';
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND public.home_effective_access(h,t)->>'has_access'='true','Fresh admission after completed end');
+ PERFORM public.decide_home_lease('end',a,l,au);
+ PERFORM pg_temp.check_lease(saved=(SELECT to_jsonb(o) FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=t),'Old end replay must not touch later membership');
+ UPDATE public."Home" SET security_state='frozen' WHERE id=h;
+ r:=public.decide_home_lease('move_out',t,second_lease,p_reason:='Contract move');
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND public.home_effective_access(h,t)->>'has_access'='false'
+   AND public.decide_home_lease('move_out',t,second_lease,p_reason:='Contract move')->>'replayed'='true'
+   AND (SELECT count(*)=1 FROM public."HomeAuditLog" WHERE target_id=second_lease AND action='TENANT_MOVE_OUT'),
+   'Tenant move-out and reason audit must complete once');
+ UPDATE public."Home" SET security_state='normal' WHERE id=h;
+ UPDATE public."HomeOccupancy" SET role='admin',role_base='admin',is_active=true,verification_status='verified',
+   start_at=now()-interval '1 day',end_at=NULL,access_start_at=NULL,access_end_at=NULL WHERE home_id=h AND user_id=t;
+ SELECT to_jsonb(o) INTO saved FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=t;
+ l:=pg_temp.pending_lease(h);r:=public.decide_home_lease('approve',a,l,au);
+ PERFORM pg_temp.check_lease(r->'lease'->'metadata'->'landlord_decision'->>'owns_membership'='false','Independent membership must not be attributed to this lease');
+ r:=public.decide_home_lease('end',a,l,au);
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND saved=(SELECT to_jsonb(o) FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=t)
+   AND public.home_effective_access(h,t)->>'has_access'='true','Ending the lease must preserve independent admin membership');
+ -- An ambiguous historical link is never permission to sweep current access.
+ l:=pg_temp.pending_lease(h);UPDATE public."HomeLease" SET state='active' WHERE id=l;
+ UPDATE public."HomeOccupancy" SET role='lease_resident',role_base='lease_resident' WHERE home_id=h AND user_id=t;
+ SELECT to_jsonb(o) INTO saved FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=t;
+ r:=public.decide_home_lease('end',a,l,au);
+ PERFORM pg_temp.check_lease(r->>'success'='false' AND r->>'error' LIKE 'Historical lease membership%'
+   AND (SELECT state='active' FROM public."HomeLease" WHERE id=l)
+   AND saved=(SELECT to_jsonb(o) FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=t),
+   'Historical ambiguity requires review and must make no partial writes');
+ DELETE FROM public."HomeOccupancy" WHERE home_id=h AND user_id=t;
+ r:=public.decide_home_lease('end',a,l,au);
+ PERFORM pg_temp.check_lease(r->>'success'='true','Historical lease without any remaining membership can end');
+ RAISE NOTICE 'Lease end, move-out, independent membership and replay assertions passed';
+END $$;
+RESET ROLE;
+
+-- A co-resident leaves only their own membership. The accepted self-removal
+-- helper also enforces ownership transfer; no lease proof can bypass it.
+SET LOCAL ROLE service_role;
+DO $$ DECLARE
+ h uuid:='f3190000-0000-4000-8000-000000000012';a uuid:='f3190000-0000-4000-8000-000000000001';
+ t uuid:='f3190000-0000-4000-8000-000000000002';co uuid:='f3190000-0000-4000-8000-000000000003';
+ au uuid:='f3190000-0000-4000-8000-000000000024';l uuid;r jsonb;saved jsonb;
+BEGIN
+ l:=pg_temp.pending_lease(h);r:=public.decide_home_lease('approve',a,l,au);saved:=r->'occupancy';
+ INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,is_active,verification_status)
+   VALUES(h,co,'member','member',true,'verified');
+ INSERT INTO public."HomeLeaseResident"(lease_id,user_id) VALUES(l,co);
+ PERFORM pg_temp.check_lease(public.decide_home_lease('end',co,l)->>'success'='false','Co-residency does not authorize ending the entire lease');
+ UPDATE public."Home" SET owner_id=co WHERE id=h;
+ r:=public.decide_home_lease('move_out',co,l);
+ PERFORM pg_temp.check_lease(r->>'status'='409' AND r->>'error' LIKE 'Transfer home ownership%'
+   AND EXISTS(SELECT FROM public."HomeLeaseResident" WHERE lease_id=l AND user_id=co)
+   AND NOT EXISTS(SELECT FROM public."HomeAuditLog" WHERE target_id=l AND action='TENANT_MOVE_OUT'),
+   'Owner transfer failure leaves lease and resident edge unchanged');
+ UPDATE public."Home" SET owner_id=NULL WHERE id=h;
+ r:=public.decide_home_lease('move_out',co,l,p_reason:='Co-resident departure');
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND r->'lease'->>'state'='active'
+   AND saved=(SELECT to_jsonb(o) FROM public."HomeOccupancy" o WHERE home_id=h AND user_id=t)
+   AND public.home_effective_access(h,co)->>'has_access'='false'
+   AND NOT EXISTS(SELECT FROM public."HomeLeaseResident" WHERE lease_id=l AND user_id=co)
+   AND EXISTS(SELECT FROM public."HomeAuditLog" WHERE target_id=l AND action='TENANT_MOVE_OUT'
+     AND before_data->>'user_id'=co::text),'Co-resident departure preserves primary membership and retains its removed edge in audit history');
+ PERFORM pg_temp.check_lease(public.decide_home_lease('move_out',co,l)->>'replayed'='true'
+   AND (SELECT count(*)=1 FROM public."HomeAuditLog" WHERE target_id=l AND action='TENANT_MOVE_OUT'),'Lost co-resident departure reply is replayable after edge removal');
+ UPDATE public."HomeOccupancy" SET is_active=true,verification_status='verified',end_at=NULL,access_end_at=NULL WHERE home_id=h AND user_id=co;
+ r:=public.decide_home_lease('move_out',co,l);
+ PERFORM pg_temp.check_lease(r->>'status'='409' AND public.home_effective_access(h,co)->>'has_access'='true','Old self-departure must not remove restored membership');
+ -- Landlord end preserves independent access, but an explicit tenant departure
+ -- removes that person's household membership even after the lease is ended.
+ PERFORM public.decide_home_lease('end',a,l,au);
+ UPDATE public."HomeOccupancy" SET role='admin',role_base='admin',is_active=true,verification_status='verified',
+   end_at=NULL,access_end_at=NULL WHERE home_id=h AND user_id=t;
+ r:=public.decide_home_lease('move_out',t,l);
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND public.home_effective_access(h,t)->>'has_access'='false'
+   AND public.decide_home_lease('move_out',t,l)->>'replayed'='true','Self departure after landlord end must remove independent own membership');
+ DELETE FROM public."HomeOccupancy" WHERE home_id=h;
+ RAISE NOTICE 'Co-resident departure, ownership, saved history and restored membership assertions passed';
+END $$;
+RESET ROLE;
+
+-- Failure after every deactivation still rolls the entire end operation back.
+CREATE FUNCTION pg_temp.fail_lease_end_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN IF NEW.action='LEASE_ENDED' THEN RAISE EXCEPTION 'contract end audit failure'; END IF; RETURN NEW; END $$;
+CREATE TRIGGER contract_lease_end_fault BEFORE INSERT ON public."HomeAuditLog"
+ FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_lease_end_audit();
+SET LOCAL ROLE service_role;
+DO $$ DECLARE l uuid;r jsonb;saved jsonb;
+ h uuid:='f3190000-0000-4000-8000-000000000012';a uuid:='f3190000-0000-4000-8000-000000000001';au uuid:='f3190000-0000-4000-8000-000000000024';
+BEGIN
+ l:=pg_temp.pending_lease(h);r:=public.decide_home_lease('approve',a,l,au);saved:=r->'occupancy';
+ BEGIN
+  PERFORM public.decide_home_lease('end',a,l,au);RAISE EXCEPTION 'Expected end audit failure was not reached';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'contract end audit failure' THEN RAISE; END IF; END;
+ PERFORM pg_temp.check_lease((SELECT state='active' FROM public."HomeLease" WHERE id=l)
+   AND saved=(SELECT to_jsonb(o) FROM public."HomeOccupancy" o WHERE id=(saved->>'id')::uuid)
+   AND NOT EXISTS(SELECT FROM public."HomeAuditLog" WHERE target_id=l AND action='LEASE_ENDED'),'End audit fault must restore lease and membership');
+ BEGIN
+  PERFORM public.decide_home_lease('move_out',(saved->>'user_id')::uuid,l);
+  RAISE EXCEPTION 'Expected move-out audit failure was not reached';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'contract end audit failure' THEN RAISE; END IF; END;
+ PERFORM pg_temp.check_lease(saved=(SELECT to_jsonb(o) FROM public."HomeOccupancy" o WHERE id=(saved->>'id')::uuid)
+   AND (SELECT metadata->'resident_departures' IS NULL FROM public."HomeLease" WHERE id=l)
+   AND NOT EXISTS(SELECT FROM public."HomeAuditLog" WHERE target_id=l AND action='TENANT_MOVE_OUT'),
+   'Final end audit failure must also roll back canonical self-removal and its departure receipt');
+END $$;
+RESET ROLE;
+DROP TRIGGER contract_lease_end_fault ON public."HomeAuditLog";
 
 -- Fail the final audit write. Every preceding lease/resident/occupancy/invite
 -- mutation must roll back, and the same request must work after recovery.

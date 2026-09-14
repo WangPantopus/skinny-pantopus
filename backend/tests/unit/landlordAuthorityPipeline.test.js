@@ -1,7 +1,7 @@
 // ============================================================
 // TEST: Landlord service orchestration
 //
-// Invitation creation, authority verification and lease end use mocks here.
+// Invitation creation and authority verification use mocks here.
 // Admission persistence, authorization, dates and retry behavior execute the
 // real function in scripts/db/contracts/home-lease-decisions.sql.
 //
@@ -149,118 +149,7 @@ describe('invitation creation', () => {
   });
 });
 
-describe('lease end → deactivation', () => {
-  beforeEach(() => {
-    seedHome();
-    seedPendingLease({ state: 'active' });
-    seedTable('HomeOccupancy', [{
-      id: 'occ-primary',
-      home_id: 'home-1',
-      user_id: 'tenant-1',
-      role: 'lease_resident',
-      role_base: 'lease_resident',
-      is_active: true,
-      verification_status: 'verified',
-    }]);
-  });
-
-  test('ending lease marks it as ended with end_at timestamp', async () => {
-    const result = await service.endLease('lease-1', 'landlord-1');
-
-    expect(result.success).toBe(true);
-
-    const leases = getTable('HomeLease');
-    expect(leases[0].state).toBe('ended');
-    expect(leases[0].end_at).toBeTruthy();
-  });
-
-  test('ending lease deactivates primary resident occupancy', async () => {
-    await service.endLease('lease-1', 'landlord-1');
-
-    expect(mockOccDetach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        homeId: 'home-1',
-        userId: 'tenant-1',
-        reason: 'lease_ended',
-        actorId: 'landlord-1',
-      }),
-    );
-  });
-
-  test('ending lease deactivates co-residents too', async () => {
-    // Add co-residents
-    seedTable('HomeLeaseResident', [
-      { id: 'lr-1', lease_id: 'lease-1', user_id: 'tenant-1' },
-      { id: 'lr-2', lease_id: 'lease-1', user_id: 'co-resident-1' },
-      { id: 'lr-3', lease_id: 'lease-1', user_id: 'co-resident-2' },
-    ]);
-    seedTable('HomeOccupancy', [
-      {
-        id: 'occ-co1',
-        home_id: 'home-1',
-        user_id: 'co-resident-1',
-        role: 'lease_resident',
-        role_base: 'lease_resident',
-        is_active: true,
-        verification_status: 'verified',
-      },
-      {
-        id: 'occ-co2',
-        home_id: 'home-1',
-        user_id: 'co-resident-2',
-        role: 'lease_resident',
-        role_base: 'lease_resident',
-        is_active: true,
-        verification_status: 'verified',
-      },
-    ]);
-
-    await service.endLease('lease-1', 'landlord-1');
-
-    // Primary + 2 co-residents = 3 detach calls
-    expect(mockOccDetach).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'tenant-1', reason: 'lease_ended' }),
-    );
-    expect(mockOccDetach).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'co-resident-1', reason: 'lease_ended' }),
-    );
-    expect(mockOccDetach).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'co-resident-2', reason: 'lease_ended' }),
-    );
-  });
-
-  test('ending lease notifies tenant about content retention', async () => {
-    await service.endLease('lease-1', 'landlord-1');
-
-    expect(notificationService.createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'tenant-1',
-        type: 'lease_ended',
-        body: expect.stringContaining('retain your own content history'),
-      }),
-    );
-  });
-
-  test('tenant can also initiate lease end', async () => {
-    const result = await service.endLease('lease-1', 'tenant-1');
-
-    expect(result.success).toBe(true);
-    expect(getTable('HomeLease')[0].state).toBe('ended');
-  });
-
-  test('cannot end an already-ended lease', async () => {
-    getTable('HomeLease')[0].state = 'ended';
-
-    const result = await service.endLease('lease-1', 'landlord-1');
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('ended');
-  });
-});
-
-// ============================================================
-// 5. Unverified authority cannot approve
-// ============================================================
+// Lease end/withdrawal now uses the real SQL lifecycle contract.
 
 describe('invitation authority', () => {
   test('unverified authority cannot invite tenants', async () => {
