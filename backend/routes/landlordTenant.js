@@ -66,8 +66,9 @@ const tenantRequestSchema = Joi.object({
   request_context: Joi.object({
     home_id: Joi.string().uuid().required(),
     actor_id: Joi.string().uuid().required(),
-    lease_id: Joi.string().uuid().allow(null).required(),
-    lease_state: Joi.string().valid('pending', 'active', 'ended', 'canceled').allow(null).required(),
+    // Native encoders omit nil fields; normalize the no-lease observation.
+    lease_id: Joi.string().uuid().allow(null).default(null),
+    lease_state: Joi.string().valid('pending', 'active', 'ended', 'canceled').allow(null).default(null),
   }),
   start_at: Joi.string().isoDate().allow(null),
   end_at: Joi.string().isoDate().allow(null),

@@ -7,16 +7,22 @@ import LeasesTab from '@/components/landlord/LeasesTab';
 import LandlordVerificationFlow from '@/components/home/LandlordVerificationFlow';
 import VerificationCenter from '@/components/home/VerificationCenter';
 import { confirmStore } from '@/components/ui/confirm-store';
+import VerifyLandlordDetailsPage from '@/app/(app)/app/homes/[id]/verify-landlord/details/page';
+import { toast } from '@/components/ui/toast-store';
+
+const mockPush = jest.fn();
 
 jest.mock('../../../packages/api/src/client', () => ({ get: jest.fn(), post: jest.fn() }));
 jest.mock('@pantopus/api', () => ({
   landlord: jest.requireActual('../../../packages/api/src/endpoints/landlord'),
   tenant: jest.requireActual('../../../packages/api/src/endpoints/tenant'),
   onTokenChange: () => () => {},
+  getAuthToken: () => 'synthetic-fixture',
   AUTH_SESSION_CHANGE_KEY: 'pantopus_auth_session_change',
 }));
 
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }), useSearchParams: () => new URLSearchParams('tab=requests') }));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }), useParams: () => ({ id: 'home-1' }), useSearchParams: () => new URLSearchParams('tab=requests') }));
+jest.mock('@/components/ui/toast-store', () => ({ toast: { error: jest.fn() } }));
 jest.mock('@/components/home/useHomePermissions', () => ({ useHomePermissions: () => ({ access: null, reload: jest.fn() }) }));
 
 beforeEach(() => { jest.clearAllMocks(); jest.mocked(post).mockResolvedValue({}); });
@@ -318,4 +324,41 @@ test('missing submission context cannot silently send an unprotected request', a
   expect(await screen.findByText('Could not confirm this home’s lease status. Please retry.')).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Request Approval' })).toBeNull();
   expect(post).not.toHaveBeenCalled();
+});
+
+test('the separate details page reads current status before submitting through its existing SDK', async () => {
+  const context = { home_id: 'home-1', actor_id: 'tenant-1', lease_id: 'canceled-lease', lease_state: 'canceled' };
+  jest.mocked(get).mockReset().mockResolvedValue({ home_id: 'home-1', request_context: context });
+  render(<VerifyLandlordDetailsPage />);
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Keep my details' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Submit Request' }));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/app/homes/home-1/verify-landlord/submitted'));
+  expect(post).toHaveBeenCalledWith('/api/v1/tenant/request-approval', {
+    home_id: 'home-1', start_at: null, message: 'Keep my details', request_context: context,
+  });
+});
+
+test('the details page keeps edits after a failed status read without submitting', async () => {
+  jest.mocked(get).mockReset().mockRejectedValue({ message: 'Status unavailable' });
+  render(<VerifyLandlordDetailsPage />);
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Keep my details' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Submit Request' }));
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Status unavailable'));
+  expect(screen.getByRole('textbox')).toHaveValue('Keep my details');
+  expect(post).not.toHaveBeenCalled();
+  expect(mockPush).not.toHaveBeenCalled();
+});
+
+test('the details page retires a held preflight before an account change can submit it', async () => {
+  const old = deferredTenantStatus();
+  jest.mocked(get).mockReset().mockReturnValue(old.promise);
+  render(<VerifyLandlordDetailsPage />);
+  fireEvent.click(screen.getByRole('button', { name: 'Submit Request' }));
+  act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'pantopus_auth_session_change' })));
+  await act(async () => old.resolve({ home_id: 'home-1', request_context: {
+    home_id: 'home-1', actor_id: 'tenant-1', lease_id: null, lease_state: null,
+  } }));
+  expect(post).not.toHaveBeenCalled();
+  expect(mockPush).not.toHaveBeenCalled();
+  expect(toast.error).not.toHaveBeenCalled();
 });

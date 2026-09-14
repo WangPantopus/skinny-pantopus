@@ -7,6 +7,7 @@ import app.pantopus.android.data.api.models.tenant.TenantRequestApprovalResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.TenantApi
+import com.squareup.moshi.JsonDataException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,7 +20,20 @@ class TenantRepository
     ) {
         /** `POST /api/v1/tenant/request-approval`. */
         suspend fun requestApproval(body: TenantRequestApprovalRequest): NetworkResult<TenantRequestApprovalResponse> =
-            safeApiCall { api.requestApproval(body) }
+            safeApiCall {
+                val status = api.homeStatus(body.homeId)
+                val context = status.requestContext
+                val validLease =
+                    if (context.leaseId == null) {
+                        context.leaseState == null
+                    } else {
+                        context.leaseId.isNotBlank() && context.leaseState in setOf("pending", "active", "ended", "canceled")
+                    }
+                if (status.homeId != body.homeId || context.homeId != body.homeId || context.actorId.isBlank() || !validLease) {
+                    throw JsonDataException("Could not confirm this Home's lease status")
+                }
+                api.requestApproval(body.copy(requestContext = context))
+            }
 
         /** `POST /api/v1/tenant/move-out`. */
         suspend fun moveOut(

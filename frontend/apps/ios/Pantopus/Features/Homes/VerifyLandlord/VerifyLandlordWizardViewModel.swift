@@ -312,8 +312,24 @@ final class VerifyLandlordWizardViewModel: WizardModel {
             return await approvalRequester(request)
         }
         do {
+            let status: TenantHomeStatusResponse = try await api.request(TenantEndpoints.homeStatus(homeId: homeId))
+            let context = status.requestContext
+            let validLease = context.leaseId == nil
+                ? context.leaseState == nil
+                : context.leaseId?.isEmpty == false && ["pending", "active", "ended", "canceled"].contains(context.leaseState ?? "")
+            guard status.homeId == homeId, context.homeId == homeId, !context.actorId.isEmpty, validLease else {
+                return .failure(APIError.invalidResponse)
+            }
+            try Task.checkCancellation()
+            let observedRequest = TenantRequestApprovalRequest(
+                homeId: request.homeId,
+                startAt: request.startAt,
+                endAt: request.endAt,
+                message: request.message,
+                requestContext: context
+            )
             let response: TenantRequestApprovalResponse = try await api.request(
-                TenantEndpoints.requestApproval(request)
+                TenantEndpoints.requestApproval(observedRequest)
             )
             return .success(response.lease)
         } catch {

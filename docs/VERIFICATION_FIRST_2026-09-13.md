@@ -753,3 +753,46 @@ then verify account/background/restart and installed lease-verification journeys
 The successful browser uses an isolated renderer and synthetic authentication,
 not full AppShell/login. R05 remains open; provider delivery, combined populated
 adoption and rollout remain open. Queued-request application source `25c6a5c01` requires its own CI after push.
+
+
+### Existing native and second web request context
+
+The two native request controllers and the separate existing web details route
+were still omitting the observation used by the queued-request repair above.
+They now GET the existing tenant status, validate its Home/actor/lease tuple, and
+include it in the existing POST. Failed or malformed status prevents submission.
+The existing Joi route normalizes omitted native nil lease fields to null. The
+second web route also retires callbacks on account/Home changes and unmount.
+Existing form markup, styles, routes and database migration bytes are unchanged.
+No new product file, table or migration was added in this follow-up.
+
+Verification passes: 27 focused iOS and 26 Android tests exercise actual native
+network clients/repository with stub responses, including failed status, malformed
+context and an explicit retry observing cancellation. Web has 51 rendered checks,
+standalone TypeScript and scoped ESLint; 122 backend checks and scoped Swift
+format/lint pass. Actual HTTP/Joi/service/SQL accepts omitted nil fields, rejects
+a stale original/another actor's observation and permits an explicit fresh request.
+Actual Chrome uses the separate existing details route and SDK: a failed status
+preserves edits without POST, an old account's delivered status cannot POST or
+navigate, and current status → POST saves exactly one pending lease and reaches
+the existing submitted route. Notifications are intercepted fixture calls. An additional browser check simulates
+a 401 and successful cookie-refresh response through the actual SDK: its status
+retry retains the draft and saves one pending lease. It does not verify the identity
+provider itself.
+
+The browser's first final database assertion mistakenly selected a nonexistent
+`HomeLease.notes` column; correcting only that private assertion produced the
+passing run. Earlier native lint failures and the passing corrected runs remain
+in private evidence. The source-bound archive is `native-context-r1`, with native
+results, captured request bodies, browser evidence and preserved compiled products.
+The web renderer uses synthetic authentication; native network checks are separate
+from actual HTTP/SQL. Full login, installed native account/background/restart,
+response-loss recovery, provider delivery and combined adoption remain open.
+The submitted route still has unconditional notification/time-estimate copy,
+and native one-time-email claims need reconciliation. R05 stays open.
+
+At the user's request, unused completed test devices were cleaned: six iOS
+simulators, two Android AVDs and one tiny unregistered AVD folder. Exact inventory,
+exit codes and preserved devices are in private `device-cleanup-r1`; observed free
+space increased 6.46GiB. The owner running simulator and current retained iOS/Android
+acceptance devices remain. Shared SDK/runtime images, products and evidence remain.

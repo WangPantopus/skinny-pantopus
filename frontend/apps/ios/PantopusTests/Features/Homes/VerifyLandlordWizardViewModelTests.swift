@@ -358,3 +358,105 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
         XCTAssertTrue(URLProtocolStub.capturedRequests.isEmpty, "Address confirmation must precede every mailing command")
     }
 }
+
+@MainActor
+extension VerifyLandlordWizardViewModelTests {
+    func testNetworkSubmissionReadsContextBeforeEachAttempt() async throws {
+        URLProtocolStub.reset()
+        let marker = FileManager.default.temporaryDirectory.appendingPathComponent("lease-context-" + UUID().uuidString)
+        defer {
+            URLProtocolStub.reset()
+            try? FileManager.default.removeItem(at: marker)
+        }
+        let api = APIClient(session: TestSession.make(), retryPolicy: .none)
+        let auth = AuthManager(
+            store: InMemorySecureStore(),
+            apiClient: api,
+            installMarker: InstallMarker(directory: marker),
+            allowSecureEnclave: false
+        )
+        URLProtocolStub.stub(path: "/api/v1/tenant/home/home-1/status", responses: [
+            .json(#"{"home_id":"home-1","request_context":{"home_id":"home-1","actor_id":"actor-1","lease_id":null,"lease_state":null}}"#),
+            .json(
+                #"""
+                {"home_id":"home-1","request_context":{
+                  "home_id":"home-1","actor_id":"actor-1","lease_id":"canceled-lease","lease_state":"canceled"}}
+                """#
+            )
+        ])
+        URLProtocolStub.stub(path: "/api/v1/tenant/request-approval", responses: [
+            .json(#"{"error":"Reply unavailable"}"#, status: 503),
+            .json(#"{"lease":{"id":"new-lease","home_id":"home-1","state":"pending"}}"#, status: 201)
+        ])
+        var form = VerifyLandlordSampleData.populatedForm
+        form.messageToLandlord = "Retain this request"
+        let vm = VerifyLandlordWizardViewModel(homeId: "home-1", form: form, api: api, submitDelayNanos: 0)
+        vm.primaryTapped()
+        await vm.submit()
+        XCTAssertEqual(vm.currentStep, .details)
+        XCTAssertEqual(vm.form.messageToLandlord, "Retain this request")
+        XCTAssertNil(vm.pendingEvent)
+        await vm.submit()
+        XCTAssertEqual(vm.currentStep, .sent)
+        let requests = URLProtocolStub.capturedRequests.filter { $0.url?.path.hasPrefix("/api/v1/tenant/") == true }
+        XCTAssertEqual(requests.map(\.httpMethod), ["GET", "POST", "GET", "POST"])
+        XCTAssertEqual(requests.first?.cachePolicy, .reloadIgnoringLocalAndRemoteCacheData)
+        let posts = requests.filter { $0.httpMethod == "POST" }
+        XCTAssertEqual(posts.count, 2)
+        if posts.count == 2 {
+            let bodies = try posts.map { request -> [String: Any] in
+                let data = try XCTUnwrap(request.authTestBodyData())
+                let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+                attachment.name = "Lease request with observed context"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+                return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            }
+            let first = try XCTUnwrap(bodies[0]["request_context"] as? [String: Any])
+            let second = try XCTUnwrap(bodies[1]["request_context"] as? [String: Any])
+            XCTAssertEqual(first["actor_id"] as? String, "actor-1")
+            XCTAssertNil(first["lease_id"] as? String)
+            XCTAssertEqual(second["lease_id"] as? String, "canceled-lease")
+            XCTAssertEqual(second["lease_state"] as? String, "canceled")
+            XCTAssertEqual(bodies[0]["message"] as? String, bodies[1]["message"] as? String)
+        }
+        await auth.awaitBackgroundWork()
+    }
+
+    func testNetworkStatusFailureOrMismatchKeepsFormWithoutPosting() async {
+        let cases: [(Int, String)] = [
+            (503, #"{"error":"Unavailable"}"#),
+            (200, #"{"home_id":"home-1"}"#),
+            (200, #"{"home_id":"other-home","request_context":{"home_id":"home-1","actor_id":"actor-1"}}"#),
+            (200, #"{"home_id":"home-1","request_context":{"home_id":"other-home","actor_id":"actor-1"}}"#),
+            (200, #"{"home_id":"home-1","request_context":{"home_id":"home-1","actor_id":"actor-1","lease_state":"pending"}}"#)
+        ]
+        for (code, body) in cases {
+            URLProtocolStub.reset()
+            let marker = FileManager.default.temporaryDirectory.appendingPathComponent("lease-context-" + UUID().uuidString)
+            let api = APIClient(session: TestSession.make(), retryPolicy: .none)
+            let auth = AuthManager(
+                store: InMemorySecureStore(),
+                apiClient: api,
+                installMarker: InstallMarker(directory: marker),
+                allowSecureEnclave: false
+            )
+            URLProtocolStub.stub(path: "/api/v1/tenant/home/home-1/status", response: .json(body, status: code))
+            let vm = VerifyLandlordWizardViewModel(
+                homeId: "home-1",
+                form: VerifyLandlordSampleData.populatedForm,
+                api: api,
+                submitDelayNanos: 0
+            )
+            vm.primaryTapped()
+            await vm.submit()
+            XCTAssertEqual(vm.currentStep, .details)
+            if case .error = vm.submitState {} else { XCTFail("Failed status must remain an error") }
+            XCTAssertNil(vm.pendingEvent)
+            XCTAssertFalse(URLProtocolStub.capturedRequests.contains { $0.url?.path == "/api/v1/tenant/request-approval" })
+            await auth.awaitBackgroundWork()
+            try? FileManager.default.removeItem(at: marker)
+        }
+        URLProtocolStub.reset()
+    }
+}

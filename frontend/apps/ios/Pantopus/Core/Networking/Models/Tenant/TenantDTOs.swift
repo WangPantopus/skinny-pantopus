@@ -9,6 +9,31 @@
 
 import Foundation
 
+/// Observed existing lease, checked by the server before admitting a request.
+public struct TenantRequestContext: Codable, Sendable {
+    public let homeId: String
+    public let actorId: String
+    public let leaseId: String?
+    public let leaseState: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case homeId = "home_id"
+        case actorId = "actor_id"
+        case leaseId = "lease_id"
+        case leaseState = "lease_state"
+    }
+}
+
+public struct TenantHomeStatusResponse: Decodable, Sendable {
+    public let homeId: String
+    public let requestContext: TenantRequestContext
+
+    private enum CodingKeys: String, CodingKey {
+        case homeId = "home_id"
+        case requestContext = "request_context"
+    }
+}
+
 /// `HomeLease.state` — the tenant-visible lifecycle of a lease request.
 public enum TenantLeaseState: String, Decodable, Sendable, Hashable {
     case none
@@ -65,17 +90,20 @@ public struct TenantRequestApprovalRequest: Encodable, Sendable {
     public let startAt: String?
     public let endAt: String?
     public let message: String?
+    public let requestContext: TenantRequestContext?
 
     public init(
         homeId: String,
         startAt: String? = nil,
         endAt: String? = nil,
-        message: String? = nil
+        message: String? = nil,
+        requestContext: TenantRequestContext? = nil
     ) {
         self.homeId = homeId
         self.startAt = startAt
         self.endAt = endAt
         self.message = message
+        self.requestContext = requestContext
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -83,6 +111,7 @@ public struct TenantRequestApprovalRequest: Encodable, Sendable {
         case startAt = "start_at"
         case endAt = "end_at"
         case message
+        case requestContext = "request_context"
     }
 }
 

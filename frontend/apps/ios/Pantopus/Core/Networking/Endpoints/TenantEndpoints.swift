@@ -6,13 +6,21 @@
 //  mounted at `/api/v1` (`backend/app.js:397`), so the tenant routes
 //  resolve to `/api/v1/tenant/*`.
 //
-//  The existing status and request-cancellation routes are not yet consumed
-//  by this native wizard. They are implemented in `landlordTenant.js`.
+//  Submission reads the existing status route first. The request-cancellation
+//  route is not yet consumed by this native wizard.
 //
 
 import Foundation
 
 public enum TenantEndpoints {
+    public static func homeStatus(homeId: String) -> Endpoint {
+        Endpoint(
+            method: .get,
+            path: "/api/v1/tenant/home/\(homeId)/status",
+            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData
+        )
+    }
+
     /// `POST /api/v1/tenant/request-approval` — route
     /// `backend/routes/landlordTenant.js:483`. Creates a pending
     /// `HomeLease` addressed to the home's verified landlord authority.

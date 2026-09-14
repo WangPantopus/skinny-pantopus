@@ -3,6 +3,21 @@ package app.pantopus.android.data.api.models.tenant
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
+/** Observed existing lease, checked by the server before admitting a request. */
+@JsonClass(generateAdapter = true)
+data class TenantRequestContextDto(
+    @Json(name = "home_id") val homeId: String,
+    @Json(name = "actor_id") val actorId: String,
+    @Json(name = "lease_id") val leaseId: String?,
+    @Json(name = "lease_state") val leaseState: String?,
+)
+
+@JsonClass(generateAdapter = true)
+data class TenantHomeStatusResponse(
+    @Json(name = "home_id") val homeId: String,
+    @Json(name = "request_context") val requestContext: TenantRequestContextDto,
+)
+
 /**
  * DTOs for the tenant ↔ landlord approval flow
  * (`backend/routes/landlordTenant.js`, mounted at `/api/v1` in
@@ -21,6 +36,7 @@ data class TenantRequestApprovalRequest(
     @Json(name = "start_at") val startAt: String? = null,
     @Json(name = "end_at") val endAt: String? = null,
     val message: String? = null,
+    @Json(name = "request_context") val requestContext: TenantRequestContextDto? = null,
 )
 
 /** 201 envelope — `{ lease }` (`landlordTenant.js:587`). */

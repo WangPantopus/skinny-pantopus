@@ -1,21 +1,29 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.tenant.TenantHomeStatusResponse
 import app.pantopus.android.data.api.models.tenant.TenantMoveOutRequest
 import app.pantopus.android.data.api.models.tenant.TenantMoveOutResponse
 import app.pantopus.android.data.api.models.tenant.TenantRequestApprovalRequest
 import app.pantopus.android.data.api.models.tenant.TenantRequestApprovalResponse
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 
 /**
  * Tenant-side landlord flows. `backend/routes/landlordTenant.js` is
  * mounted at `/api/v1` (`backend/app.js:397`), so the tenant routes
  * resolve to `/api/v1/tenant/…`.
  *
- * The existing status and request-cancellation routes are not yet consumed
- * by this native wizard. They are implemented in `landlordTenant.js`.
+ * Submission reads the existing status route first. The request-cancellation
+ * route is not yet consumed by this native wizard.
  */
 interface TenantApi {
+    @GET("api/v1/tenant/home/{homeId}/status")
+    suspend fun homeStatus(
+        @Path("homeId") homeId: String,
+    ): TenantHomeStatusResponse
+
     /**
      * `POST /api/v1/tenant/request-approval` — route
      * `backend/routes/landlordTenant.js:483`. Creates a pending

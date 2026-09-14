@@ -55,11 +55,21 @@ pass. The existing unmerged migration is updated; no new tables or screen design
 See [queued-request evidence](VERIFICATION_FIRST_2026-09-13.md#existing-queued-tenant-request-follow-up).
 Application source `25c6a5c01` is committed; its own CI is pending after push.
 
-**Next:** carry the verified status observation through the existing iOS/Android
-lease-request controllers. The API accepts older clients without context; those
-callers still lack queued-original protection. Then verify account/background/
-restart and remaining installed lease-verification journeys. Do not build
-speculative command/renewal tables. The separate proposed renewal migration stays
+**Native and second web caller follow-up:** the existing iOS/Android request
+controllers and separate web details page now read current status and submit its
+Home/actor/lease observation. Native omitted nil fields are normalized by the
+existing route. Failed/malformed status prevents submission; failures retain the
+form. The second web caller also retires account/Home/unmount work. 27 focused iOS,
+26 Android, 51 rendered web and 122 backend tests pass, with web types/lint and
+Swift checks. Actual second-page browser/SDK/HTTP/SQL checks pass for failed reads,
+a delivered old-account preflight and a persisted request. Actual HTTP/SQL also
+accepts omitted nil fields and rejects the queued original. See [caller evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-and-second-web-request-context).
+
+**Next:** verify account/background/restart behavior and remaining installed
+lease-verification journeys in these existing native controllers. The API still
+accepts older clients without context. The separate submitted page's unconditional
+notification/time estimate and native email claims require workflow reconciliation.
+Do not build speculative command/renewal tables; the separate renewal draft stays
 paused. R05 stays open; the [80-row inventory](REMAINING_WORK_2026-09-11.md)
 remains **8 locally closed / 72 partial or open**, not a completion/effort percentage.
 
@@ -109,6 +119,13 @@ against master at `e9ef2decbb7ec435589bb3b92639041cfc4618a6`; paid/provider jour
 remain incomplete. Master was `6a1013784db69bf339535a2f4b33b328f2bbf40c` at inspection.
 Recheck remote state before integration. Earlier failed CI and the corrected
 masked local TypeScript failure remain recorded in the verification report.
+
+**Device cleanup requested by the user:** six completed iOS test simulators and
+two inactive Android AVDs were removed, plus a tiny unregistered AVD folder. Free
+space increased by about 6.5GiB at measurement. The owner's running iPhone17,
+iOS Bill Acceptance and Android Home Recurrence Acceptance remain, along with
+shared runtime/SDK images and saved products/evidence. The finished lease-context
+simulator lease is released. Use the retained devices for the next relevant work.
 
 ## Accepted native history
 
