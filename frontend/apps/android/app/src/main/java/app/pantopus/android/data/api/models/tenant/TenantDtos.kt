@@ -53,6 +53,7 @@ data class TenantRequestApprovalRequest(
     @Json(name = "end_at") val endAt: String? = null,
     val message: String? = null,
     @Json(name = "request_context") val requestContext: TenantRequestContextDto? = null,
+    @Json(name = "lease_file_id") val leaseFileId: String? = null,
 )
 
 /** 201 envelope — `{ lease }` (`landlordTenant.js:587`). */
@@ -81,6 +82,7 @@ data class TenantLeaseMetadataDto(
     val message: String? = null,
     @Json(name = "denied_reason") val deniedReason: String? = null,
     @Json(name = "denied_at") val deniedAt: String? = null,
+    @Json(name = "lease_file_id") val leaseFileId: String? = null,
 )
 
 /** Body for `POST /api/v1/tenant/move-out` (`landlordTenant.js:69`). */
@@ -95,3 +97,51 @@ data class TenantMoveOutRequest(
 data class TenantMoveOutResponse(
     val success: Boolean = false,
 )
+
+/** Safe private lease file metadata; no object key or public URL. */
+@JsonClass(generateAdapter = true)
+data class TenantLeaseFileSession(
+    @Json(name = "home_id") val homeId: String,
+    @Json(name = "actor_id") val actorId: String,
+    @Json(name = "session_scope") val sessionScope: String,
+) {
+    fun matches(
+        home: String,
+        actor: String,
+    ): Boolean =
+        homeId == home && actorId == actor && LEASE_FILE_UUID.matches(homeId) &&
+            LEASE_FILE_UUID.matches(actorId) && sessionScope.matches(Regex("^[a-f0-9]{64}$"))
+}
+
+@JsonClass(generateAdapter = true)
+data class TenantLeaseFile(
+    val id: String,
+    @Json(name = "home_id") val homeId: String,
+    @Json(name = "file_name") val fileName: String,
+    @Json(name = "file_size") val fileSize: Int,
+    @Json(name = "mime_type") val mimeType: String,
+    val available: Boolean,
+    @Json(name = "lease_id") val leaseId: String? = null,
+) {
+    fun matches(
+        home: String,
+        file: String,
+    ): Boolean =
+        homeId == home && id == file && LEASE_FILE_UUID.matches(homeId) && LEASE_FILE_UUID.matches(id) &&
+            fileName.isNotBlank() && fileName.length <= MAX_NAME_LENGTH && fileSize in 1..MAX_BYTES &&
+            mimeType in ALLOWED_MIMES && available && (leaseId == null || LEASE_FILE_UUID.matches(leaseId))
+
+    companion object {
+        const val MAX_BYTES = 25 * 1024 * 1024
+        const val MAX_NAME_LENGTH = 255
+        val ALLOWED_MIMES = setOf("application/pdf", "text/plain", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif")
+    }
+}
+
+@JsonClass(generateAdapter = true)
+data class TenantLeaseFileResponse(val file: TenantLeaseFile)
+
+@JsonClass(generateAdapter = true)
+data class TenantLeaseFileRemoval(val deleted: Boolean)
+
+internal val LEASE_FILE_UUID = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")

@@ -126,7 +126,7 @@ fun readHomeEvidenceBytes(input: InputStream): ByteArray {
 }
 
 /** Busboy decodes plain filename as Latin-1; filename* preserves the exact UTF-8 name. */
-private fun privateEvidencePart(
+internal fun privateEvidencePart(
     name: String,
     mime: String,
     bytes: ByteArray,

@@ -526,7 +526,8 @@ class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
             vm.setLease(null)
             vm.attachLeaseTapped()
             assertNull(vm.state.value.form.lease)
-            assertTrue(vm.state.value.submitState is VerifyLandlordSubmitState.Error)
+            assertTrue(vm.state.value.attachment.pickerOpen)
+            vm.leaseAttachment.receive(null)
             vm.setMoveInDate("2026-04-01")
             vm.setMessageToLandlord("Hi, I'm the new tenant.")
             vm.onPrimary() // submit

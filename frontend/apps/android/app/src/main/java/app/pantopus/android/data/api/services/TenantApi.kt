@@ -1,13 +1,23 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.tenant.TenantHomeStatusResponse
+import app.pantopus.android.data.api.models.tenant.TenantLeaseFileRemoval
+import app.pantopus.android.data.api.models.tenant.TenantLeaseFileResponse
+import app.pantopus.android.data.api.models.tenant.TenantLeaseFileSession
 import app.pantopus.android.data.api.models.tenant.TenantMoveOutRequest
 import app.pantopus.android.data.api.models.tenant.TenantMoveOutResponse
 import app.pantopus.android.data.api.models.tenant.TenantRequestApprovalRequest
 import app.pantopus.android.data.api.models.tenant.TenantRequestApprovalResponse
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
+import retrofit2.http.Headers
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 
 /**
@@ -49,4 +59,36 @@ interface TenantApi {
     suspend fun moveOut(
         @Body body: TenantMoveOutRequest,
     ): TenantMoveOutResponse
+
+    @Headers("Cache-Control: no-store")
+    @GET("api/v1/tenant/home/{homeId}/lease-files/session")
+    suspend fun leaseFileSession(
+        @Path("homeId") homeId: String,
+        @Header("x-pantopus-session-scope") expectedSession: String? = null,
+    ): TenantLeaseFileSession
+
+    @Headers("Cache-Control: no-store")
+    @Multipart
+    @POST("api/v1/tenant/home/{homeId}/lease-files")
+    suspend fun uploadLeaseFile(
+        @Path("homeId") homeId: String,
+        @Header("x-pantopus-session-scope") sessionScope: String,
+        @Part("upload_id") uploadId: RequestBody,
+        @Part("request_context") context: RequestBody,
+        @Part file: MultipartBody.Part,
+    ): TenantLeaseFileResponse
+
+    @Headers("Cache-Control: no-store")
+    @DELETE("api/v1/tenant/home/{homeId}/lease-files/{fileId}")
+    suspend fun removeLeaseFile(
+        @Path("homeId") homeId: String,
+        @Path("fileId") fileId: String,
+        @Header("x-pantopus-session-scope") sessionScope: String,
+    ): TenantLeaseFileRemoval
+
+    @POST("api/v1/tenant/request-approval")
+    suspend fun requestApprovalWithLease(
+        @Body body: TenantRequestApprovalRequest,
+        @Header("x-pantopus-session-scope") sessionScope: String,
+    ): TenantRequestApprovalResponse
 }

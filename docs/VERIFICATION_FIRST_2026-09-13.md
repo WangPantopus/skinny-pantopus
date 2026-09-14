@@ -1788,3 +1788,73 @@ no app/CI policy change was made for that retry. This client milestone has not y
 received remote CI. Android attachment, web tenant entry, remaining native landlord
 readers and other R05 criteria stay open. Continue existing paths, preserving
 designs. R05 and the app remain incomplete.
+
+### Existing Android lease attachment controls
+
+The existing Android Attach action still reported unavailable and could not send
+a file. Its existing picker, file card, removal and Submit now connect to the same
+private lease contract as iOS. TenantApi/TenantRepository retain the ordinary
+request path and add session-bound file operations. The bounded attachment helper
+owns only this opening wizard's selected bytes, upload UUID and original request
+context. It reuses HomeClaimSessionScope, the existing bounded document reader and
+the existing privateEvidencePart multipart encoder, including its UTF-8 filename
+handling. The encoder body is unchanged; only its visibility is extended. There
+is no new screen, storage service, migration or table in this Android follow-up.
+
+The existing card shows actual filename/type/size and unconfirmed-operation
+warnings without invented parsing results. Upload and removal retries retain the
+same File identity; unresolved operations block request submission. Request retry
+retains the original observed context and validates the returned File binding.
+Session changes clear selected bytes; generation/cancellation guards retire old
+picker and network completions. Existing form and layout structure are preserved.
+
+R6 passes69 selected tests: seven attachment cases,38 existing wizard cases,
+nine session-retirement cases, ten existing private multipart/API cases and five
+existing Start/Details rendering cases. Ktlint, Detekt and Debug assembly pass.
+The late-completion test waits for the released old operation to finish before
+asserting that it cannot publish. Initial R1–R3 formatting failures and R4's two
+Detekt failures remain recorded as failed attempts; normal formatting and bounded
+control-flow repairs resolve them without disabling guards or assertions.
+
+Installed R6 runs against the actual local API, multipart parser, private lease
+service and SQL. The real system picker selects an83-byte synthetic text file with
+a Unicode filename. A committed upload whose response is503 leaves one completed
+File/object and zero leases; explicit Retry recovers the same File. A removal503
+before the transaction leaves the card unconfirmed and blocks submission; explicit
+Retry sends the same DELETE, tombstones the File and clears the card. Physical
+object deletion is still queued at this point because this fixture does not run
+the existing recovery worker. After selecting a replacement, a committed request
+whose reply is503 leaves one pending lease. Explicit Submit retry recovers that
+same lease/File/date/message, and the existing completion screen shows Pending
+Approval with September14 dates. Done leaves the wizard.
+
+That installed journey exposed a stale empty-card caption saying attachment was
+unavailable. R7 changes only that caption relative to R6's application/test source;
+all three existing Details rendering tests, Ktlint, Detekt and assembly pass.
+The final APK is installed and its device hash matches the retained build. The
+functional installed journey is R6 evidence; the R7 caption was not separately
+reobserved in an installed journey. This explicit source comparison allows reuse
+of the unchanged functional checks without repeating them.
+
+Evidence is private-lease-evidence-r1/android-client-r1: build-r1 through build-r7
+logs, tests-r6/r7.json, product-binding-r6/r7.json, picker/upload/removal/request
+state snapshots, native-final-state.json and native-cleanup.json. Final cleanup
+has zero owned User/File/Home/HomeLease/HomeAuthority/HomeOccupancy/HomeLeaseInvite
+rows and zero synthetic objects. API18109 is stopped; the exact synthetic device
+file and owned reverse mapping are removed. The owned emulator is stopped, its
+temporary registration released, and AVD data/products retained. Other devices
+are untouched. Evidence is mirrored to the owner's private recovery directory.
+
+This journey does not establish installed Android account-switch or delivered
+late-byte behavior for the new attachment helper; its focused tests cover the
+stated lifetime boundaries. Identity, storage and notices are synthetic, and
+drafts are retained in memory only. Web tenant attachment entry, remaining native
+landlord readers, real provider acceptance, combined adoption and hosted rollout
+remain open. Inspect existing/archived controls before extending those paths.
+R05 and the8 locally closed/72 partial or open inventory remain unchanged.
+
+The preceding iOS/web checkpoint481c45b81 is pushed on draft
+[PR43](https://github.com/WangPantopus/skinny-pantopus/pull/43), based on PR42.
+[CI34870041822](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34870041822)
+passes all13 applicable jobs with two path-based skips. The Android follow-up
+requires CI at its own pushed source; this earlier green run does not cover it.

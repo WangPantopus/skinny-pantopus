@@ -11,6 +11,8 @@
 
 package app.pantopus.android.ui.screens.homes.verify_landlord
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -59,6 +62,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.api.models.tenant.TenantLeaseFile
 import app.pantopus.android.ui.screens.shared.wizard.WizardShell
 import app.pantopus.android.ui.screens.shared.wizard.blocks.HeadlineBlock
 import app.pantopus.android.ui.screens.shared.wizard.blocks.RequirementsCardBlock
@@ -87,13 +91,24 @@ fun VerifyLandlordWizardScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
 
+    val context = LocalContext.current
+    val filePicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            viewModel.leasePicked(context.contentResolver, uri)
+        }
+    LaunchedEffect(state.attachment.launchPicker) {
+        if (state.attachment.launchPicker) {
+            viewModel.leasePickerLaunched()
+            filePicker.launch(TenantLeaseFile.ALLOWED_MIMES.toTypedArray())
+        }
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(viewModel, lifecycleOwner) {
         val observer =
             LifecycleEventObserver { _, event ->
                 when (event) {
                     Lifecycle.Event.ON_RESUME -> viewModel.restoreSavedRequest()
-                    Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> viewModel.onDeparture()
+                    Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> viewModel.onBackground()
                     else -> Unit
                 }
             }
@@ -461,7 +476,9 @@ internal fun DetailsStep(
     SubcopyBlock("These details are included in your request for the verified property owner to review.")
 
     val validationErrors = state.errors?.takeIf { !it.isEmpty }
-    if (validationErrors != null) {
+    if (state.attachment.error != null) {
+        ErrorSummaryBanner(VerifyLandlordValidationErrors(), serverMessage = state.attachment.error, title = "Couldn't confirm attachment")
+    } else if (validationErrors != null) {
         ErrorSummaryBanner(validationErrors)
     } else {
         (state.submitState as? VerifyLandlordSubmitState.Error)?.let {
@@ -470,7 +487,7 @@ internal fun DetailsStep(
     }
 
     BusinessInfoCard(form = state.form, errors = state.errors, viewModel = viewModel)
-    LeaseUploadCard(form = state.form, errors = state.errors, viewModel = viewModel)
+    LeaseUploadCard(form = state.form, errors = state.errors, attachment = state.attachment, viewModel = viewModel)
     PropertyManagerCard(form = state.form, errors = state.errors, viewModel = viewModel)
     TenancyCard(form = state.form, errors = state.errors, viewModel = viewModel)
 
@@ -535,23 +552,25 @@ private fun BusinessInfoCard(
 private fun LeaseUploadCard(
     form: VerifyLandlordForm,
     errors: VerifyLandlordValidationErrors?,
+    attachment: VerifyLandlordAttachmentState,
     viewModel: VerifyLandlordWizardViewModel,
 ) {
+    val file = attachment.file ?: form.lease
     VerifyCard {
         SectionHeader(
             overline = "Lease or deed",
             title = "Attach proof of the rental",
             subtitle =
-                "Attachments are not available in this request yet. You can submit without a document.",
+                "Optional. Choose a PDF, text file or supported image of 25 MB or less. Shared privately when you submit.",
         )
-        if (form.lease == null) {
+        if (file == null) {
             LeaseEmpty(onAttach = viewModel::attachLeaseTapped)
         } else {
             LeaseDone(
-                lease = form.lease,
+                lease = file,
                 registeredUnit = form.registeredUnit,
-                hasError = errors?.lease != null,
-                onRemove = { viewModel.setLease(null) },
+                hasError = errors?.lease != null || file.uploadUnconfirmed,
+                onRemove = viewModel::removeLease,
             )
         }
     }
@@ -1163,7 +1182,7 @@ private fun LeaseEmpty(onAttach: () -> Unit) {
                 color = PantopusColors.appText,
             )
             Text(
-                text = "Not available yet · submit without a file",
+                text = "PDF, text or image · up to 25 MB",
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextSecondary,
             )
@@ -1197,7 +1216,7 @@ private fun LeaseDone(
             horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            PDFThumb()
+            PDFThumb(lease.typeLabel)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = lease.filename,
@@ -1205,7 +1224,7 @@ private fun LeaseDone(
                     color = PantopusColors.appText,
                 )
                 Text(
-                    text = "${lease.sizeLabel} · ${lease.pageCount} pages · Uploaded just now",
+                    text = lease.detailLabel,
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
                 )
@@ -1232,7 +1251,7 @@ private fun LeaseDone(
 }
 
 @Composable
-private fun PDFThumb() {
+private fun PDFThumb(label: String) {
     Box(
         modifier =
             Modifier
@@ -1243,7 +1262,7 @@ private fun PDFThumb() {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "PDF",
+            text = label,
             style = PantopusTextStyle.overline,
             color = PantopusColors.error,
         )
@@ -1284,15 +1303,16 @@ private fun ParseStatusRow(
             )
         }
         val statusBody =
-            if (hasError) {
-                val detected = lease.detectedUnit ?: "Unknown"
-                "Unit doesn't match. Detected \"$detected\" — your home is registered as " +
-                    "\"$registeredUnit\". Re-upload the correct lease or update your home."
-            } else {
-                val owner = lease.detectedOwner ?: "M. Patel"
-                val unit = lease.detectedUnit ?: registeredUnit
-                "Lease parsed. Owner \"$owner\" and unit \"$unit\" detected."
-            }
+            lease.reviewNote
+                ?: if (hasError) {
+                    val detected = lease.detectedUnit ?: "Unknown"
+                    "Unit doesn't match. Detected \"$detected\" — your home is registered as " +
+                        "\"$registeredUnit\". Re-upload the correct lease or update your home."
+                } else {
+                    val owner = lease.detectedOwner ?: "Unknown"
+                    val unit = lease.detectedUnit ?: registeredUnit
+                    "Lease parsed. Owner \"$owner\" and unit \"$unit\" detected."
+                }
         Text(
             text = statusBody,
             style = PantopusTextStyle.caption.copy(fontWeight = FontWeight.Medium),
@@ -1308,6 +1328,7 @@ private fun ParseStatusRow(
 private fun ErrorSummaryBanner(
     errors: VerifyLandlordValidationErrors,
     serverMessage: String? = null,
+    title: String? = null,
 ) {
     Row(
         modifier =
@@ -1339,7 +1360,7 @@ private fun ErrorSummaryBanner(
         Column(modifier = Modifier.weight(1f)) {
             val noun = if (errors.count == 1) "thing" else "things"
             Text(
-                text = if (serverMessage == null) "Fix ${errors.count} $noun to submit" else "Couldn't submit request",
+                text = title ?: if (serverMessage == null) "Fix ${errors.count} $noun to submit" else "Couldn't submit request",
                 style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.error,
             )

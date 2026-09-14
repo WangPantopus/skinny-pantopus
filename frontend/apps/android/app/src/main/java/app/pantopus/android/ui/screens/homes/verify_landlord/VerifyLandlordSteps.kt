@@ -104,10 +104,16 @@ sealed interface VerifyLandlordSubmitState {
 data class VerifyLandlordLeaseFile(
     val filename: String,
     val sizeLabel: String,
-    val pageCount: Int,
+    val pageCount: Int?,
     val detectedOwner: String?,
     val detectedUnit: String?,
-)
+    val typeLabel: String = "PDF",
+    val uploadStatus: String = "Uploaded just now",
+    val reviewNote: String? = null,
+    val uploadUnconfirmed: Boolean = false,
+) {
+    val detailLabel: String get() = listOfNotNull(sizeLabel, pageCount?.let { "$it pages" }, uploadStatus).joinToString(" · ")
+}
 
 /**
  * Per-slot validation messages surfaced in the A12.6 error frame
