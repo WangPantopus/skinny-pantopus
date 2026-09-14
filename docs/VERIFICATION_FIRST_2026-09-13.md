@@ -1588,3 +1588,14 @@ notifications, and owned only its exact fb22-prefixed fixtures. The two disposab
 leases do not establish real provider identity, push delivery, terms acceptance
 or hosted rollout. Private lease upload remains open.
 PR40 a1069e1de separately passes all6 applicable CI34845551425 checks/five skips.
+
+The iPhone16 job in [CI34851208086](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34851208086)
+failed an existing Support Train fixture: its debounced recipient GET consumed a
+FIFO response intended for a slot/publish request, leaving publish with a synthetic
+599. This is a recorded failed run, not a native invitation failure or a pass.
+The existing test now uses the already available session-scoped route responses,
+with a delayed create response to exercise overlapping recipient search. It checks
+all seven slot requests and the single publish request. All13 selected Support
+Train tests pass; no Support Train product code, design or schema changes. Private evidence is in android-request-r2. The two
+other original iOS CI device jobs and Android instrumented tests passed; the
+remaining original Android build/test job was still running at this checkpoint.

@@ -5,7 +5,7 @@
 //  P2.6 — Drives the Start-a-Support-Train wizard VM through every step
 //  state (loading the first step gate, slot generation, launch happy
 //  path, launch error). Mirrors the Ceremonial Mail wizard test shape
-//  so the SequencedURLProtocol sequence stays the spec.
+//  with session-scoped route responses so recipient search cannot consume a publish reply.
 //
 
 import XCTest
@@ -20,10 +20,10 @@ final class StartSupportTrainWizardViewModelTests: XCTestCase {
         SequencedURLProtocol.reset()
     }
 
-    private func makeAPI() -> APIClient {
+    private func makeAPI(routes: [String: [SequencedURLProtocol.Response]]) -> APIClient {
         APIClient(
             environment: .current,
-            session: SequencedURLProtocol.makeSession(),
+            session: SequencedURLProtocol.makeSession(routeResponses: routes),
             retryPolicy: .none
         )
     }
@@ -41,11 +41,11 @@ final class StartSupportTrainWizardViewModelTests: XCTestCase {
         XCTFail("Timed out waiting for \(description)")
     }
 
-    private func makeVM() -> StartSupportTrainWizardViewModel {
+    private func makeVM(routes: [String: [SequencedURLProtocol.Response]] = [:]) -> StartSupportTrainWizardViewModel {
         let calendar = Calendar(identifier: .gregorian)
         let start = calendar.date(from: DateComponents(year: 2026, month: 5, day: 19))!
         let end = calendar.date(from: DateComponents(year: 2026, month: 5, day: 25))!
-        return StartSupportTrainWizardViewModel(api: makeAPI(), startDate: start, endDate: end)
+        return StartSupportTrainWizardViewModel(api: makeAPI(routes: routes), startDate: start, endDate: end)
     }
 
     // MARK: - Step gating
@@ -169,18 +169,12 @@ final class StartSupportTrainWizardViewModelTests: XCTestCase {
     // MARK: - Launch happy path
 
     func testLaunchCreatesTrainAddsSlotsPublishesAndEmitsOpenEvent() async {
-        SequencedURLProtocol.sequence = [
-            .status(201, body: "{\"id\":\"train_demo\"}"),
-            .status(201, body: "{}"),
-            .status(201, body: "{}"),
-            .status(201, body: "{}"),
-            .status(201, body: "{}"),
-            .status(201, body: "{}"),
-            .status(201, body: "{}"),
-            .status(201, body: "{}"),
-            .status(200, body: "{}")
-        ]
-        let vm = makeVM()
+        let vm = makeVM(routes: [
+            "/api/activities/support-trains": [.status(201, body: "{\"id\":\"train_demo\"}", delay: 0.3)],
+            "/api/activities/support-trains/train_demo/slots": Array(repeating: .status(201, body: "{}"), count: 7),
+            "/api/activities/support-trains/train_demo/publish": [.status(200, body: "{}")],
+            "/api/mailbox/compose/recipients": [.status(200, body: "{\"recipients\":[]}")]
+        ])
         vm.updateBeneficiaryQuery("Chen family")
         vm.updateReason("Welcoming a new baby.")
         vm.primaryTapped() // → whatAndWhen
@@ -189,15 +183,18 @@ final class StartSupportTrainWizardViewModelTests: XCTestCase {
         await waitFor("publish completes") { vm.step == .success }
         XCTAssertEqual(vm.publishedTrainId, "train_demo")
         XCTAssertEqual(vm.step, .success)
+        let requests = SequencedURLProtocol.capturedRequests
+        XCTAssertEqual(requests.filter { $0.url?.path == "/api/activities/support-trains/train_demo/slots" }.count, 7)
+        XCTAssertEqual(requests.filter { $0.url?.path == "/api/activities/support-trains/train_demo/publish" }.count, 1)
         vm.primaryTapped() // open
         XCTAssertEqual(vm.pendingEvent, .openTrain(trainId: "train_demo"))
     }
 
     func testLaunchErrorSurfacesMessageAndStaysOnReviewStep() async {
-        SequencedURLProtocol.sequence = [
-            .status(500, body: "{\"error\":\"INTERNAL\",\"message\":\"Boom\"}")
-        ]
-        let vm = makeVM()
+        let vm = makeVM(routes: [
+            "/api/activities/support-trains": [.status(500, body: "{\"error\":\"INTERNAL\",\"message\":\"Boom\"}")],
+            "/api/mailbox/compose/recipients": [.status(200, body: "{\"recipients\":[]}")]
+        ])
         vm.updateBeneficiaryQuery("Chen family")
         vm.updateReason("Welcoming a new baby.")
         vm.primaryTapped()
