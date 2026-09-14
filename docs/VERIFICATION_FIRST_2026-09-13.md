@@ -697,3 +697,60 @@ failed attempts/passing result bundle, exported image, lint and formatting logs
 are retained with their source binding. The five HTTP scenarios cleaned their
 synthetic rows. Backend/service/SQL behavior did not change during this native
 follow-up, so its accepted lifecycle/race/rollback evidence is reused.
+
+
+### Existing queued tenant-request follow-up
+
+Actual Express/Joi/service/SQL reproduced a delayed request being saved after its
+identical retry had already been saved and canceled. The first authenticated call
+was held before SQL while the client stopped waiting. Status was `none`, the retry
+saved one pending lease, cancellation returned status to `none`, and releasing the
+original produced a second pending lease. This is a request-ordering defect, not
+missing tables or screens. The baseline is bound to `29603b01a` in private evidence
+`queued-request-r1`.
+
+The existing status response now includes an observation of this actor's latest
+lease: Home, actor, lease ID and stored state. The current web form sends that
+observation in `request_context`. The same service-only lease transaction compares
+it under its existing Home lock before inserting. A stale observation returns409
+without adding a lease, audit or notification. Creation timestamps use the clock
+after acquiring the lock, so a transaction that waited does not sort its new row
+behind an earlier committed request. The context also binds the stored state:
+a focused SQL regression showed that an ID-only comparison would miss cancellation
+of the same observed pending lease. The final candidate rejects that case too.
+
+The form preserves its edits and observed context after a lost response. If its
+recovery read establishes a newer `none`/`ended` status for the same actor/Home,
+only a subsequent user click submits with that new observation. Recovery does not
+automatically submit. Missing context fails closed in the existing error view.
+Existing forms, styling, routes and tables are reused; the single unmerged lease
+migration is updated rather than adding another migration or command table.
+
+Local verification passes: 122 focused backend tests, 48 rendered web tests,
+standalone web TypeScript, scoped ESLint and the complete lease SQL lifecycle/
+rollback contract. All54 generated SQL contract wrappers are synchronized. Actual
+HTTP verifies the delayed original leaves exactly one canceled lease and two
+existing submit/cancel audits; another actor's context returns409, malformed
+context returns400, and an explicit fresh context succeeds201. Actual Chrome uses
+the existing form/SDK/HTTP/SQL: first request loses its browser reply while held
+before SQL, identical retry saves, the existing confirmation cancels, and the
+original later receives409 while the form stays canceled. Another explicit click
+uses the canceled lease observation and saves a fresh pending request. Notification
+assertions use the existing intercepted fixture, not provider delivery.
+
+The first fixture attempts stalled in Docker's control interface before a useful
+product result. Setup/read/cleanup were switched to the already-owned REST service;
+direct PostgreSQL access verified the exact owned database before applying the
+candidate and running its rollback contract. An initial direct connection lacked
+function ownership; subsequent private helper syntax errors ran no SQL. A local
+PL/pgSQL lint attempt found that extension absent; no local PL/pgSQL-lint pass is
+claimed. Required complete-schema CI remains the gate. All attempts are retained
+with their stated boundaries, and synthetic acceptance fixtures are cleaned.
+
+**Limits and next:** `request_context` remains optional for older API clients.
+Existing native wizard callers still omit it and therefore do not yet have this
+queued-original protection. Continue in those existing controllers and SDK models,
+then verify account/background/restart and installed lease-verification journeys.
+The successful browser uses an isolated renderer and synthetic authentication,
+not full AppShell/login. R05 remains open; provider delivery, combined populated
+adoption and rollout remain open. This candidate requires its own CI after push.

@@ -57,7 +57,12 @@ export default function LandlordVerificationFlow({ homeId, onApproved, onBack }:
       if (!current()) return;
       if (!res || res.home_id !== homeId || typeof res.landlord?.has_landlord !== 'boolean'
         || !['none', 'pending', 'active', 'denied', 'ended'].includes(res.lease?.state)
-        || (res.lease.state !== 'none' && !res.lease.lease)) {
+        || (res.lease.state !== 'none' && !res.lease.lease)
+        || (res.landlord.has_landlord && ['none', 'ended'].includes(res.lease.state)
+          && (res.request_context?.home_id !== homeId || typeof res.request_context.actor_id !== 'string'
+            || (res.request_context.lease_id !== null && typeof res.request_context.lease_id !== 'string')
+            || (res.request_context.lease_id === null ? res.request_context.lease_state !== null
+              : !['pending', 'active', 'ended', 'canceled'].includes(res.request_context.lease_state || ''))))) {
         throw new Error('Could not confirm this home’s lease status. Please retry.');
       }
       setStatus(res); setStatusGeneration(generation);
@@ -170,6 +175,7 @@ export default function LandlordVerificationFlow({ homeId, onApproved, onBack }:
         isCurrent={isCurrent}
         landlord={landlord}
         homeId={homeId}
+        requestContext={status.request_context}
         onRequested={loadStatus}
       />
     );
@@ -196,17 +202,20 @@ function LandlordExistsState({
   homeId,
   onRequested,
   isCurrent,
+  requestContext,
 }: {
   landlord: tenant.LandlordInfo;
   homeId: string;
   onRequested: () => void;
   isCurrent: () => boolean;
+  requestContext: tenant.TenantHomeStatus['request_context'];
 }) {
   const [message, setMessage] = useState('');
   const [startDate, setStartDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showDetails, setShowDetails] = useState(false);
+  const observedContext = useRef(requestContext);
 
   const tier = TIER_BADGE[landlord.verification_tier || 'weak'] || TIER_BADGE.weak;
 
@@ -217,6 +226,7 @@ function LandlordExistsState({
     try {
       await api.tenant.requestApproval({
         home_id: homeId,
+        request_context: observedContext.current,
         start_at: startDate || null,
         message: message.trim() || null,
       });
@@ -227,8 +237,19 @@ function LandlordExistsState({
       // before offering another submission, and retain edits if it is unavailable
       // or represents a different pending request.
       try {
-        const saved = (await api.tenant.getTenantHomeStatus(homeId)).lease.lease;
+        const latest = await api.tenant.getTenantHomeStatus(homeId);
         if (!isCurrent()) return;
+        if (latest.home_id !== homeId || latest.request_context?.home_id !== homeId
+          || latest.request_context.actor_id !== observedContext.current.actor_id) {
+          throw new Error('Could not confirm the current request.');
+        }
+        const saved = latest.lease.lease;
+        if (['none', 'ended'].includes(latest.lease.state)
+          && (latest.request_context.lease_id === null ? latest.request_context.lease_state === null
+            : typeof latest.request_context.lease_id === 'string'
+              && ['pending', 'active', 'ended', 'canceled'].includes(latest.request_context.lease_state || ''))) {
+          observedContext.current = latest.request_context;
+        }
         if (saved && ['pending', 'active'].includes(saved.state)
           && (saved.metadata?.message || '') === message.trim()
           && (saved.state === 'active' || !startDate || saved.start_at.slice(0, 10) === startDate)) {

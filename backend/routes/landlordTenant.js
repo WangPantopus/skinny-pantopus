@@ -63,6 +63,12 @@ const endLeaseSchema = Joi.object({});
 
 const tenantRequestSchema = Joi.object({
   home_id: Joi.string().uuid().required(),
+  request_context: Joi.object({
+    home_id: Joi.string().uuid().required(),
+    actor_id: Joi.string().uuid().required(),
+    lease_id: Joi.string().uuid().allow(null).required(),
+    lease_state: Joi.string().valid('pending', 'active', 'ended', 'canceled').allow(null).required(),
+  }),
   start_at: Joi.string().isoDate().allow(null),
   end_at: Joi.string().isoDate().allow(null),
   message: Joi.string().max(1000).allow(null, ''),
@@ -524,6 +530,7 @@ router.get('/tenant/home/:homeId/status', verifyToken, async (req, res) => {
       },
     } : null;
     return res.json({ home_id: homeId,
+      request_context: { home_id: homeId, actor_id: req.user.id, lease_id: lease?.id || null, lease_state: lease?.state || null },
       landlord: authority ? { has_landlord: true, landlord_entity_type: authority.subject_type, verification_tier: authority.verification_tier }
         : { has_landlord: false },
       lease: { state, lease: ownLease },
@@ -553,12 +560,12 @@ router.post(
   async (req, res) => {
     try {
       const userId = req.user.id;
-      const { home_id, start_at, end_at, message } = req.body;
+      const { home_id, start_at, end_at, message, request_context } = req.body;
 
       const dates = {};
       if (start_at !== undefined) dates.start_at = start_at;
       if (end_at !== undefined) dates.end_at = end_at;
-      const result = await landlordAuthorityService.requestLease(home_id, userId, dates, message || null);
+      const result = await landlordAuthorityService.requestLease(home_id, userId, dates, message || null, request_context);
       if (!result.success) return res.status(result.status || 400).json({ error: result.error });
       const lease = result.lease;
       res.status(201).json({ lease });

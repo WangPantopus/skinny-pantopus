@@ -35,6 +35,8 @@ export type TenantLease = {
 };
 
 export type TenantHomeStatus = {
+  request_context: { home_id: string; actor_id: string; lease_id: string | null;
+    lease_state: 'pending' | 'active' | 'ended' | 'canceled' | null };
   home_id: string;
   landlord: LandlordInfo;
   lease: {
@@ -59,6 +61,7 @@ export async function getTenantHomeStatus(homeId: string): Promise<TenantHomeSta
  */
 export async function requestApproval(data: {
   home_id: string;
+  request_context?: TenantHomeStatus['request_context'];
   start_at?: string | null;
   end_at?: string | null;
   message?: string | null;

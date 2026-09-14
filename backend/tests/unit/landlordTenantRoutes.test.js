@@ -984,6 +984,17 @@ describe('POST /tenant/request-approval', () => {
     const res = mockRes(); await tenantRequestHandler(mockReq({ body: { home_id: 'home-1' } }), res);
     expect(res._status).toBe(400); expect(res._json.error).toMatch(/Unable to complete/);
   });
+  test('forwards the observed context while keeping the authenticated actor authoritative', async () => {
+    const context = { home_id: 'home-1', actor_id: 'previous-account', lease_id: 'canceled-lease', lease_state: 'canceled' };
+    decisionReply({ success: false, status: 409, error: 'Your lease request status changed.' });
+    const res = mockRes();
+    await tenantRequestHandler(mockReq({ body: { home_id: 'home-1', request_context: context } }), res);
+    expect(leaseRpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_actor_id: 'test-user-id', p_request_context: context,
+    }));
+    expect(res._status).toBe(409);
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
+  });
 });
 
 // ============================================================
@@ -1103,9 +1114,11 @@ describe('existing tenant status projection', () => {
     seedLease({ home_id: homeId, primary_resident_user_id: 'someone-else' });
     let res = mockRes(); await tenantStatusHandler(mockReq({ params: { homeId } }), res);
     expect(res._json.lease).toEqual({ state: 'none', lease: null });
+    expect(res._json.request_context).toEqual({ home_id: homeId, actor_id: 'test-user-id', lease_id: null, lease_state: null });
     seedLease({ home_id: homeId, primary_resident_user_id: 'test-user-id', state: 'canceled', metadata: { tenant_cancellation: { actor_id: 'test-user-id' } } });
     res = mockRes(); await tenantStatusHandler(mockReq({ params: { homeId } }), res);
     expect(res._json.lease).toEqual({ state: 'none', lease: null });
+    expect(res._json.request_context).toEqual({ home_id: homeId, actor_id: 'test-user-id', lease_id: 'lease-1', lease_state: 'canceled' });
   });
   test('expired lease selects the existing ended/request state without rewriting history', async () => {
     seedLease({ home_id: homeId, primary_resident_user_id: 'test-user-id', state: 'active', end_at: '2000-01-01T00:00:00Z' });

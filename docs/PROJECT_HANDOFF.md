@@ -45,12 +45,22 @@ source `1a17a22a9fe5e4490e56290f1d51f50af1d0fa39` passes all eight applicable ch
 in [CI34800605686](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34800605686),
 with three unchanged native/Seeder skips. See [landlord privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-landlord-homeaccount-boundaries).
 
-**Next:** verify background/return behavior, reconcile the legacy request API's
-queued-original boundary using existing records, then verify remaining installed
-lease-verification consumers. Saved-status recovery does not prove cancellation
-of an unseen request; first establish what the existing flow actually offers.
-Do not build speculative command/renewal tables. The separate proposed renewal
-migration remains paused. R05 stays open; the [80-row inventory](REMAINING_WORK_2026-09-11.md)
+**Queued-request web follow-up:** actual HTTP/SQL and Chrome reproduced a delayed
+original creating a second pending lease after its retry was canceled. The existing
+status response/form now carry the actor's latest lease ID and stored state; the
+same Home-locked transaction rejects a stale observation. Actual HTTP and browser
+retry → cancel → release-original checks pass, as does an explicit fresh request.
+122 backend/48 rendered tests, types, scoped lint and the full lease SQL contract
+pass. The existing unmerged migration is updated; no new tables or screen designs.
+See [queued-request evidence](VERIFICATION_FIRST_2026-09-13.md#existing-queued-tenant-request-follow-up).
+This candidate still requires CI after push.
+
+**Next:** carry the verified status observation through the existing iOS/Android
+lease-request controllers. The API accepts older clients without context; those
+callers still lack queued-original protection. Then verify account/background/
+restart and remaining installed lease-verification journeys. Do not build
+speculative command/renewal tables. The separate proposed renewal migration stays
+paused. R05 stays open; the [80-row inventory](REMAINING_WORK_2026-09-11.md)
 remains **8 locally closed / 72 partial or open**, not a completion/effort percentage.
 
 **Current native candidate:** actual HTTP/SQL confirms HTTP 400 responses
@@ -76,7 +86,7 @@ shut down and deleted; its `native-error-runtime-lease.json` is released. Compil
 products and result bundles are retained. Check available disk space before another
 heavy native build, and run only one at a time. No physical device was involved.
 Local acceptance is source-bound under `native-errors-r1`; this native candidate
-still requires CI after push. See [the current native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-submission-error-follow-up).
+is pushed at `29603b01a9151705c44456950e0d46dfb7bf40f6`; [CI34803605947](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34803605947) is still running. See [the current native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-submission-error-follow-up).
 
 **Verification limits:** browser evidence uses actual components, SDK, HTTP and
 SQL with synthetic authentication in an isolated renderer. Full AppShell/login,
@@ -85,7 +95,7 @@ Accepted native Leave Home source is unchanged and its evidence is reused. Actua
 provider delivery, combined populated adoption and hosted rollout remain open.
 The schema-only lease DB, REST18089 and private Next18110 remain exclusively leased
 to `/private/tmp/pantopus-lease-transaction-r1`; inspect its private runtime lease
-before reuse. Synthetic fixtures are cleaned after checks. No provider/production
+before reuse. Docker control calls currently stall, but the owned REST18089 and direct database64522 respond. The private direct-SQL helper verifies the exact database before use; avoid repeated stalled Docker exec calls or a global restart. Synthetic fixtures are cleaned after checks. No provider/production
 activation occurred. Owner checkout edits and unrelated worktrees are preserved.
 
 **Other verified Git state:** Home integration [PR #32](https://github.com/WangPantopus/skinny-pantopus/pull/32)

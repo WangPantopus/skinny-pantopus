@@ -11,7 +11,8 @@ CREATE FUNCTION public.decide_home_lease(
   p_authority_id uuid DEFAULT NULL, p_token_hash text DEFAULT NULL,
   p_user_email text DEFAULT NULL, p_dates jsonb DEFAULT '{}',
   p_reason text DEFAULT NULL, p_validity_days integer DEFAULT 730,
-  p_home_id uuid DEFAULT NULL, p_message text DEFAULT NULL
+  p_home_id uuid DEFAULT NULL, p_message text DEFAULT NULL,
+  p_request_context jsonb DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
 DECLARE
@@ -25,6 +26,7 @@ DECLARE
   v_resident_actor boolean:=false; v_target_id uuid; v_detach_ids uuid[]:='{}';
   v_end_receipt jsonb; v_other_lease boolean; v_departure jsonb; v_removal jsonb;
   v_resident public."HomeLeaseResident"%ROWTYPE; v_co_departure boolean:=false;
+  v_latest_lease_id uuid; v_latest_lease_state text;
 BEGIN
   IF p_actor_id IS NULL OR p_action NOT IN ('approve','deny','accept','end','move_out','cancel','request') OR p_action IS NULL
     OR p_validity_days IS NULL OR p_validity_days<1 OR p_validity_days>36500
@@ -144,6 +146,19 @@ BEGIN
     RETURN jsonb_build_object('success',false,'error','This home is unavailable for lease decisions');
   END IF;
   IF p_action='request' THEN
+    -- A status read binds a new submission to the actor's latest existing lease.
+    -- A delayed original cannot recreate a request after its retry was canceled.
+    -- Keep older clients compatible; new clients must send the observed context.
+    IF p_request_context IS NOT NULL THEN
+      SELECT id,state INTO v_latest_lease_id,v_latest_lease_state FROM public."HomeLease"
+        WHERE home_id=v_home_id AND primary_resident_user_id=p_actor_id
+        ORDER BY created_at DESC,id DESC LIMIT 1;
+      IF p_request_context IS DISTINCT FROM jsonb_build_object(
+        'home_id',v_home_id,'actor_id',p_actor_id,'lease_id',v_latest_lease_id,'lease_state',v_latest_lease_state) THEN
+        RETURN jsonb_build_object('success',false,'status',409,
+          'error','Your lease request status changed. Check its current status before submitting again.');
+      END IF;
+    END IF;
     -- The same Home lock serializes preflight and insert with both another
     -- submission and a landlord decision. No replacement request table/index
     -- or cleanup of ambiguous historical duplicates is necessary.
@@ -162,8 +177,8 @@ BEGIN
     IF NOT isfinite(v_start) OR (v_end IS NOT NULL AND NOT isfinite(v_end)) OR v_end<=v_start OR v_end<=v_now THEN
       RETURN jsonb_build_object('success',false,'status',400,'error','End date must be after the start date and must not have expired');
     END IF;
-    INSERT INTO public."HomeLease"(home_id,primary_resident_user_id,start_at,end_at,state,source,metadata)
-      VALUES(v_home_id,p_actor_id,v_start,v_end,'pending','tenant_request',jsonb_build_object('message',nullif(trim(p_message),'')))
+    INSERT INTO public."HomeLease"(home_id,primary_resident_user_id,start_at,end_at,state,source,metadata,created_at)
+      VALUES(v_home_id,p_actor_id,v_start,v_end,'pending','tenant_request',jsonb_build_object('message',nullif(trim(p_message),'')),v_now)
       RETURNING * INTO v_lease;
     INSERT INTO public."HomeAuditLog"(home_id,actor_user_id,action,target_type,target_id,metadata)
       VALUES(v_home_id,p_actor_id,'TENANT_REQUEST_SUBMITTED','HomeLease',v_lease.id,
@@ -389,5 +404,5 @@ BEGIN
   RETURN jsonb_build_object('success',true,'lease',to_jsonb(v_lease),'occupancy',
     CASE WHEN p_action='deny' THEN NULL ELSE to_jsonb(v_occupancy) END,'replayed',false);
 END $$;
-REVOKE ALL ON FUNCTION public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text) TO service_role;
+REVOKE ALL ON FUNCTION public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text,jsonb) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text,jsonb) TO service_role;

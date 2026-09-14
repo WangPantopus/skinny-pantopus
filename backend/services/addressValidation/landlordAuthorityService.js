@@ -468,9 +468,9 @@ class LandlordAuthorityService {
     return result;
   }
 
-  async requestLease(homeId, actorId, dates = {}, message = null) {
+  async requestLease(homeId, actorId, dates = {}, message = null, requestContext = null) {
     const result = await this._decideLease({ p_action: 'request', p_actor_id: actorId,
-      p_home_id: homeId, p_dates: dates, p_message: message });
+      p_home_id: homeId, p_dates: dates, p_message: message, p_request_context: requestContext });
     if (!result.success || result.replayed) return result;
     if (result.authority?.subject_type === 'user') {
       await this._notifyLeaseDecision({ userId: result.authority.subject_id,

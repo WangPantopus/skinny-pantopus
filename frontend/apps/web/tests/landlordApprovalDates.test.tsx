@@ -131,8 +131,8 @@ test('approved tenant view displays the reviewed calendar date without promising
 
 
 test('request form recovers its own saved intent after a lost reply', async () => {
-  jest.mocked(get).mockResolvedValueOnce({ home_id: 'home-1', landlord: { has_landlord: true }, lease: { state: 'none', lease: null } })
-    .mockResolvedValue({ home_id: 'home-1', landlord: { has_landlord: true }, lease: { state: 'pending',
+  jest.mocked(get).mockResolvedValueOnce({ home_id: 'home-1', request_context: { home_id: 'home-1', actor_id: 'tenant-1', lease_id: null, lease_state: null }, landlord: { has_landlord: true }, lease: { state: 'none', lease: null } })
+    .mockResolvedValue({ home_id: 'home-1', request_context: { home_id: 'home-1', actor_id: 'tenant-1', lease_id: 'lease-1', lease_state: 'pending' }, landlord: { has_landlord: true }, lease: { state: 'pending',
       lease: { id: 'lease-1', state: 'pending', start_at: '2026-10-01', created_at: '2026-09-01', metadata: { message: null } } } });
   jest.mocked(post).mockRejectedValueOnce({ message: 'Connection interrupted' });
   render(<LandlordVerificationFlow homeId="home-1" />);
@@ -142,7 +142,7 @@ test('request form recovers its own saved intent after a lost reply', async () =
 });
 
 test('request form retains its edits when a lost reply cannot be resolved', async () => {
-  jest.mocked(get).mockResolvedValueOnce({ home_id: 'home-1', landlord: { has_landlord: true }, lease: { state: 'none', lease: null } })
+  jest.mocked(get).mockResolvedValueOnce({ home_id: 'home-1', request_context: { home_id: 'home-1', actor_id: 'tenant-1', lease_id: null, lease_state: null }, landlord: { has_landlord: true }, lease: { state: 'none', lease: null } })
     .mockRejectedValue({ message: 'Status unavailable' });
   jest.mocked(post).mockRejectedValueOnce({ message: 'Connection interrupted' });
   const { container } = render(<LandlordVerificationFlow homeId="home-1" />);
@@ -193,7 +193,7 @@ test('a confirmation opened before account change cannot submit the previous acc
   let confirm!: (value: boolean) => void;
   const prompt = jest.spyOn(confirmStore, 'open').mockReturnValueOnce(new Promise<boolean>(resolve => { confirm = resolve; }));
   jest.mocked(get).mockReset().mockResolvedValueOnce(pendingTenantStatus('home-a', 'Previous account request'))
-    .mockResolvedValue({ home_id: 'home-a', landlord: { has_landlord: true }, lease: { state: 'none', lease: null } });
+    .mockResolvedValue({ home_id: 'home-a', request_context: { home_id: 'home-a', actor_id: 'tenant-1', lease_id: null, lease_state: null }, landlord: { has_landlord: true }, lease: { state: 'none', lease: null } });
   try {
     render(<LandlordVerificationFlow homeId="home-a" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel request' }));
@@ -288,4 +288,34 @@ test('a retired lease-end failure cannot alert or refresh the next account', asy
     await act(async () => reject({ message: 'Previous account private error' }));
     expect(alert).not.toHaveBeenCalled(); expect(refresh).not.toHaveBeenCalled();
   } finally { alert.mockRestore(); }
+});
+
+
+test('a stale request keeps edits and requires another click after observing cancellation', async () => {
+  const initial = { home_id: 'home-1', actor_id: 'tenant-1', lease_id: null, lease_state: null };
+  const canceled = { ...initial, lease_id: 'canceled-lease', lease_state: 'canceled' };
+  const status = (request_context: typeof canceled | typeof initial) => ({ home_id: 'home-1', request_context,
+    landlord: { has_landlord: true }, lease: { state: 'none', lease: null } });
+  jest.mocked(get).mockReset().mockResolvedValueOnce(status(initial)).mockResolvedValue(status(canceled));
+  jest.mocked(post).mockRejectedValue({ message: 'Your lease request status changed.' });
+  render(<LandlordVerificationFlow homeId="home-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Add a message or move-in date (optional)' }));
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Keep this request' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Request Approval' }));
+  expect(await screen.findByText('Your lease request status changed.')).toBeVisible();
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(jest.mocked(post).mock.calls[0][1]).toEqual(expect.objectContaining({ request_context: initial }));
+  expect(screen.getByRole('textbox')).toHaveValue('Keep this request');
+  fireEvent.click(screen.getByRole('button', { name: 'Request Approval' }));
+  await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+  expect(jest.mocked(post).mock.calls[1][1]).toEqual(expect.objectContaining({ request_context: canceled, message: 'Keep this request' }));
+  await screen.findByText('Your lease request status changed.');
+});
+
+test('missing submission context cannot silently send an unprotected request', async () => {
+  jest.mocked(get).mockReset().mockResolvedValue({ home_id: 'home-1', landlord: { has_landlord: true }, lease: { state: 'none', lease: null } });
+  render(<LandlordVerificationFlow homeId="home-1" />);
+  expect(await screen.findByText('Could not confirm this home’s lease status. Please retry.')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Request Approval' })).toBeNull();
+  expect(post).not.toHaveBeenCalled();
 });

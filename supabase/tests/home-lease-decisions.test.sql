@@ -33,9 +33,9 @@ BEGIN
 END $$;
 DO $$ BEGIN
  PERFORM pg_temp.check_lease(NOT has_function_privilege('authenticated',
-  'public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text)','execute')
-  AND NOT has_function_privilege('anon','public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text)','execute')
-  AND has_function_privilege('service_role','public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text)','execute'),
+  'public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text,jsonb)','execute')
+  AND NOT has_function_privilege('anon','public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text,jsonb)','execute')
+  AND has_function_privilege('service_role','public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text,jsonb)','execute'),
   'Only the service may decide a lease');
 END $$;
 SET LOCAL ROLE service_role;
@@ -329,6 +329,39 @@ BEGIN
  l:=(r->'lease'->>'id')::uuid;PERFORM public.decide_home_lease('approve',a,l,au);
  PERFORM pg_temp.check_lease(public.decide_home_lease('request',t,p_home_id:=h)->>'status'='409','Existing active lease prevents another pending request');
  PERFORM public.decide_home_lease('end',a,l,au);DELETE FROM public."HomeOccupancy" WHERE home_id=h;
+END $$;
+RESET ROLE;
+
+-- The observed existing lease prevents a queued original from recreating a
+-- request after another attempt is saved and canceled. No new command records.
+SET LOCAL ROLE service_role;
+DO $$ DECLARE
+ h uuid:='f3190000-0000-4000-8000-000000000012';t uuid:='f3190000-0000-4000-8000-000000000003';
+ observed jsonb; latest jsonb; r jsonb; l uuid; audit_count bigint;
+BEGIN
+ observed:=jsonb_build_object('home_id',h,'actor_id',t,'lease_id',NULL,'lease_state',NULL);
+ PERFORM pg_temp.check_lease(public.decide_home_lease('request',t,p_home_id:=h,
+   p_request_context:=observed||jsonb_build_object('actor_id',h))->>'status'='409','Observed context belongs to the authenticated actor');
+ PERFORM pg_temp.check_lease(public.decide_home_lease('request',t,p_home_id:=h,
+   p_request_context:=observed||jsonb_build_object('home_id',t))->>'status'='409','Observed context belongs to this Home');
+ r:=public.decide_home_lease('request',t,p_home_id:=h,p_request_context:=observed);
+ l:=(r->'lease'->>'id')::uuid;
+ PERFORM pg_temp.check_lease(r->>'success'='true','First observed request can be saved');
+ PERFORM public.decide_home_lease('cancel',t,l);
+ PERFORM pg_temp.check_lease(public.decide_home_lease('request',t,p_home_id:=h,
+   p_request_context:=observed||jsonb_build_object('lease_id',l,'lease_state','pending'))->>'status'='409',
+   'A context read while pending also retires after cancellation of that same lease');
+ SELECT count(*) INTO audit_count FROM public."HomeAuditLog" WHERE home_id=h;
+ PERFORM pg_temp.check_lease(public.decide_home_lease('request',t,p_home_id:=h,p_request_context:=observed)->>'status'='409'
+   AND (SELECT count(*)=1 FROM public."HomeLease" WHERE home_id=h AND primary_resident_user_id=t)
+   AND (SELECT state='canceled' FROM public."HomeLease" WHERE id=l)
+   AND (SELECT count(*)=audit_count FROM public."HomeAuditLog" WHERE home_id=h),
+   'Queued original after retry cancellation cannot add lease, audit or membership');
+ latest:=observed||jsonb_build_object('lease_id',l,'lease_state','canceled');
+ r:=public.decide_home_lease('request',t,p_home_id:=h,p_request_context:=latest);
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND r->'lease'->>'id'<>l::text,
+   'Explicit submission after observing cancellation can create a fresh request');
+ PERFORM public.decide_home_lease('cancel',t,(r->'lease'->>'id')::uuid);
 END $$;
 RESET ROLE;
 
