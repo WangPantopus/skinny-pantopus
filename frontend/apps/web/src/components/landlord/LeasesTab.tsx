@@ -106,7 +106,8 @@ export default function LeasesTab({ homeId: _homeId, leases, onRefresh }: Props)
   }, [onRefresh]);
 
   const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    // Match the calendar date shown by the existing UTC-based lease editor.
+    new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
   if (leases.length === 0) {
     return (

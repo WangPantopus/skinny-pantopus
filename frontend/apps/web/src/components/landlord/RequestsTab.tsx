@@ -9,6 +9,7 @@ import Image from 'next/image';
 import { useState, useCallback } from 'react';
 import * as api from '@pantopus/api';
 import type { landlord } from '@pantopus/api';
+import { extractApiError } from '@pantopus/ui-utils';
 
 type Props = {
   homeId: string;
@@ -59,7 +60,7 @@ function ApproveModal({
       onSuccess();
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to approve');
+      setError(extractApiError(err, 'Failed to approve'));
     } finally {
       setLoading(false);
     }
@@ -132,8 +133,11 @@ function RequestCard({
   const resident = request.primary_resident;
   const message = (request.metadata as Record<string, any>)?.message;
 
-  const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const formatDate = (iso: string, leaseDate = false) =>
+    new Date(iso).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      ...(leaseDate ? { timeZone: 'UTC' } : {}),
+    });
 
   return (
     <div className="rounded-xl border border-app-border bg-app-surface p-5">
@@ -172,8 +176,8 @@ function RequestCard({
             <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
           </svg>
           <span className="text-app-text-strong">
-            {formatDate(request.start_at)}
-            {request.end_at ? ` \u2013 ${formatDate(request.end_at)}` : ' \u2013 Open'}
+            {formatDate(request.start_at, true)}
+            {request.end_at ? ` \u2013 ${formatDate(request.end_at, true)}` : ' \u2013 Open'}
           </span>
         </div>
       </div>
@@ -213,6 +217,7 @@ export default function RequestsTab({ homeId: _homeId, authorityId, requests, on
 
   const handleDeny = useCallback(async (leaseId: string) => {
     const reason = prompt('Reason for denial (optional):');
+    if (reason === null) return;
     try {
       await api.landlord.denyLease(leaseId, authorityId, reason || undefined);
       onRefresh();

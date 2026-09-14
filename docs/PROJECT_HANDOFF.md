@@ -24,14 +24,22 @@ Local checks pass: 134 service/route checks, the real SQL lifecycle and rollback
 contract, 12 actual HTTP/SDK/SQL checks and five multi-session SQL races.
 Application function lint reports zero errors. The older 187 mocked checks are
 not the current count: admission persistence assertions now run in PostgreSQL
-instead of an always-successful mocked occupancy gateway. Existing web date
-acceptance remains source-bound and unchanged. Candidate CI is pending at this
-checkpoint. Home integration `7f2a5e6d6` now passes all 16 checks in
+instead of an always-successful mocked occupancy gateway. The browser follow-up also repairs SDK error messages, canceled denial prompts
+and UTC lease-calendar display in the existing components; ten rendered checks
+and six actual browser/HTTP/SQL checks pass. No layout/classes changed.
+Transaction source `81cf3bef8` passes all eight executed checks in
+[CI34793608043](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34793608043),
+with three unchanged scopes skipped. Browser follow-up CI is pending. Home integration `7f2a5e6d6` now passes all 16 checks in
 [CI34790255357](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34790255357).
 
-**Next: exercise the existing landlord browser workflow and lease ending.**
-Keep #38 draft while completing that acceptance and investigating any reproduced
-end/reentry inconsistency. Existing legacy active leases without a completed
+**Next: repair the reproduced lease-end transaction failures.**
+Six browser checks now exercise the existing property detail/requests/leases
+components through real routes/SQL in an isolated Next renderer. The full
+application shell/login is outside that boundary. An actual HTTP/SQL end probe
+confirms two failures: ending a lease removes independent admin access; failing
+occupancy deactivation still returns 200 with lease ended and access active, then
+retry returns 400. Keep #38 draft while repairing that boundary using existing
+lease/audit/membership records. Do not infer ambiguous legacy membership links. Existing legacy active leases without a completed
 transaction receipt require a new review; this patch does not infer missing
 historical decisions or backfill membership. Installed client lease journeys,
 notification delivery, combined populated adoption and hosted rollout are not

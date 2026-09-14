@@ -314,3 +314,50 @@ Preparation failures (a wrong enum value, unsupported Home fixture type, short
 non-hex invite fixture token, and running Jest outside its backend cwd) are
 retained separately from passing application checks. None is claimed as a
 production failure. Candidate exact-head CI is pending at this checkpoint.
+
+
+### Existing browser follow-up and lease-end baseline
+
+Transaction source `81cf3bef8d4c1338b1ca7d082561399bf8ec5698` passes all eight
+executed checks in [CI34793608043](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34793608043),
+including complete schema replay/lint/SQL contracts; three unchanged scopes skip.
+The prior `6ca504854` run failed the required migration compatibility-header
+pattern, with database consequently skipped. Its header correction adds no
+function-body change; the failed run remains preserved.
+
+The actual existing `PropertyDetail`, Requests and Leases components and theme
+CSS ran in an isolated Next renderer, using the actual shared SDK, Express
+routes, authority resolvers, PostgREST and SQL. Its shell supplies synthetic
+authentication and intercepts provider notifications; full AppShell/login and
+installed-native lease acceptance are not claimed. Chrome used an isolated
+headless profile, with Pacific timezone explicitly set. No personal browser
+profile or device was used.
+
+Six browser cases pass: invalid dates send no request; server failure retains
+edits; a lost reply after commit retains edits and the retry sends identical
+intent, closes the modal and refreshes the queue; the Leases tab shows the
+chosen October 1 calendar date while actual future access stays denied; canceling
+denial sends no request; confirmed denial persists its reason and refreshes the
+queue without admitting membership. Screenshots were visually inspected.
+
+This found three small existing-component defects. The real SDK rejects with a
+plain `{message}` object, so `instanceof Error` hid its message; the modal now
+uses the existing `extractApiError` helper. The denial handler did not distinguish
+Cancel from an empty optional reason; it now returns on null. Lease display
+converted UTC calendar dates to the previous day in Pacific time; both existing
+formatters now match the editor's UTC calendar day, while creation timestamps
+keep their local display. Markup, classes, layout and navigation stay intact.
+Two added cases fail before their fixes; all ten rendered component/SDK checks
+pass afterward, with TypeScript clean and scoped lint retaining one existing
+`any` warning. Browser preparation used installed Chrome after the Playwright
+bundled executable was absent; the initial missing-browser/expected-message
+failures are fixture/setup evidence, not additional application failures.
+
+The separate actual HTTP/SQL lease-end baseline **fails**: after preserving an
+existing admin membership during approval, ending the lease removes that
+independent access. Injecting a database failure on occupancy deactivation
+returns HTTP 200 with the lease ended and Home access still active; retry returns
+400. These precise failures are the next R05 repair. Existing lease/resident/audit
+records must be compared before defining safe end/retry behavior, particularly
+for historical memberships without a recorded generation. The draft remains
+unmerged. Private evidence remains in the lease-transaction archive.

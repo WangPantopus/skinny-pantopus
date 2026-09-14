@@ -70,8 +70,9 @@ test.each([
   expect(screen.getByText('Confirm Lease Dates')).toBeVisible();
 });
 
-test('a failed save retains the edited dates for retry', async () => {
-  jest.mocked(post).mockRejectedValueOnce(new Error('Could not save lease dates.'));
+test.each([new Error('Could not save lease dates.'), { message: 'Could not save lease dates.', statusCode: 503 }])(
+  'a failed save retains the edited dates for retry (%j)', async (failure) => {
+  jest.mocked(post).mockRejectedValueOnce(failure);
   const { dates, refresh } = openApproval();
   fireEvent.change(dates[0], { target: { value: '2026-10-01' } });
   fireEvent.click(screen.getByRole('button', { name: 'Approve Lease' }));
@@ -81,4 +82,14 @@ test('a failed save retains the edited dates for retry', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Approve Lease' }));
   await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
   expect(jest.mocked(post).mock.calls[1]).toEqual(jest.mocked(post).mock.calls[0]);
+});
+
+test('canceling the denial prompt does not cancel the tenant lease', async () => {
+  openApproval();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel', exact: true }));
+  const prompt = jest.spyOn(window, 'prompt').mockReturnValue(null);
+  try {
+    fireEvent.click(screen.getByRole('button', { name: 'Deny', exact: true }));
+    expect(post).not.toHaveBeenCalled();
+  } finally { prompt.mockRestore(); }
 });
