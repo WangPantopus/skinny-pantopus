@@ -91,6 +91,8 @@ function InviteTenantModal({
   const [error, setError] = useState('');
   const [inviteLink, setInviteLink] = useState('');
   const [copied, setCopied] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const pendingInvite = useRef<Parameters<typeof api.landlord.inviteTenant>[0] | null>(null);
   const scope = useRef({ generation: 0, busy: false });
   useEffect(() => { const current = scope.current; return () => { ++current.generation; }; }, []);
 
@@ -106,20 +108,27 @@ function InviteTenantModal({
     setLoading(true);
     setError('');
     try {
-      const result = await api.landlord.inviteTenant({
-        home_id: unitId,
-        authority_id: authorityId,
-        invitee_email: email.trim(),
-        start_at: startAt,
-        end_at: endAt || undefined,
-      });
+      if (!pendingInvite.current) {
+        if (!globalThis.crypto?.getRandomValues) throw new Error('Could not prepare a secure invitation. Reopen in a supported browser.');
+        const inviteToken = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
+        pendingInvite.current = { home_id: unitId, authority_id: authorityId,
+          invitee_email: email.trim(), start_at: startAt, end_at: endAt || undefined, invite_token: inviteToken };
+      }
+      const result = await api.landlord.inviteTenant(pendingInvite.current);
       if (!current()) return;
       if (!result?.invite?.id || result.invite.home_id !== unitId || !/^[a-f0-9]{64}$/.test(result.token)) {
         throw new Error('Could not recover the invitation link. Reopen the property to check its status.');
       }
+      setUncertain(false);
       setInviteLink(`${window.location.origin}/invite/lease/${result.token}`);
     } catch (err: unknown) {
-      if (current()) setError(extractApiError(err, 'Failed to create invite'));
+      if (current()) {
+        const status = err && typeof err === 'object' && 'statusCode' in err ? err.statusCode : null;
+        const rejected = !uncertain && typeof status === 'number' && [400, 401, 403, 404, 409, 410, 422].includes(status);
+        if (rejected) pendingInvite.current = null;
+        setUncertain(pendingInvite.current !== null);
+        setError(extractApiError(err, 'Could not confirm the invitation. Retry the original invitation.'));
+      }
     } finally {
       if (current()) { scope.current.busy = false; setLoading(false); }
     }
@@ -139,7 +148,7 @@ function InviteTenantModal({
         <h3 className="text-lg font-semibold text-app-text mb-1">Invite Tenant</h3>
         <p className="text-sm text-app-text-secondary mb-4">{inviteLink
           ? `Invitation created for ${email}. Share the link with the tenant. Email delivery has not been confirmed.`
-          : `Send a lease invite for ${unitName}.`}</p>
+          : uncertain ? 'The result is not confirmed. Retry the original invitation to recover its link before changing the details.' : `Send a lease invite for ${unitName}.`}</p>
 
         <div className="space-y-3">
           <div>
@@ -149,7 +158,7 @@ function InviteTenantModal({
               type={inviteLink ? 'text' : 'email'}
               value={inviteLink || email}
               readOnly={!!inviteLink}
-              disabled={loading}
+              disabled={loading || uncertain}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="tenant@example.com"
               className="w-full px-4 py-2.5 border border-app-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -161,7 +170,7 @@ function InviteTenantModal({
               <label className="block text-sm font-medium text-app-text-strong mb-1">Start date</label>
               <input
                 type="date"
-                disabled={loading || !!inviteLink}
+                disabled={loading || !!inviteLink || uncertain}
                 value={startAt}
                 onChange={(e) => setStartAt(e.target.value)}
                 className="w-full px-3 py-2.5 border border-app-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -171,7 +180,7 @@ function InviteTenantModal({
               <label className="block text-sm font-medium text-app-text-strong mb-1">End date <span className="text-app-text-muted font-normal">(optional)</span></label>
               <input
                 type="date"
-                disabled={loading || !!inviteLink}
+                disabled={loading || !!inviteLink || uncertain}
                 value={endAt}
                 onChange={(e) => setEndAt(e.target.value)}
                 className="w-full px-3 py-2.5 border border-app-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -184,7 +193,7 @@ function InviteTenantModal({
 
         <div className="mt-5 flex items-center justify-end gap-3">
           <button type="button" onClick={close} className="px-4 py-2.5 text-sm font-medium text-app-text-secondary hover:text-app-text transition-colors">
-            {inviteLink ? 'Done' : 'Cancel'}
+            {inviteLink ? 'Done' : uncertain || loading ? 'Close' : 'Cancel'}
           </button>
           <button
             type="button"
@@ -192,7 +201,7 @@ function InviteTenantModal({
             disabled={!email.trim() || loading}
             className="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-black transition-colors disabled:opacity-40"
           >
-            {inviteLink ? copied ? 'Copied' : 'Copy Link' : loading ? 'Sending...' : 'Send Invite'}
+            {inviteLink ? copied ? 'Copied' : 'Copy Link' : loading ? 'Sending...' : uncertain ? 'Retry Original Invite' : 'Send Invite'}
           </button>
         </div>
       </div>

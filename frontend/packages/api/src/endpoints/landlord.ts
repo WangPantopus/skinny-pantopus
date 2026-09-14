@@ -159,6 +159,7 @@ export async function getPropertyRequests(homeId: string): Promise<{ requests: T
 
 /** Invite a tenant to a unit */
 export async function inviteTenant(data: {
+  invite_token?: string;
   home_id: string;
   authority_id: string;
   invitee_email: string;

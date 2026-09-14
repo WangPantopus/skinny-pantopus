@@ -511,42 +511,21 @@ describe('GET /landlord/properties/:homeId', () => {
 // ============================================================
 
 describe('POST /landlord/lease/invite', () => {
-  test('returns 201 with invite and token', async () => {
-    seedHome();
-    seedAuthority();
-
-    const req = mockReq({
-      authority: { id: 'auth-1', home_id: 'home-1', subject_type: 'user', subject_id: 'test-user-id', status: 'verified' },
-      body: {
-        home_id: 'home-1',
-        invitee_email: 'tenant@example.com',
-        start_at: '2026-04-01T00:00:00.000Z',
-      },
-    });
-    const res = mockRes();
-    await inviteTenantHandler(req, res);
-
-    expect(res._status).toBe(201);
-    expect(res._json.invite).toBeDefined();
-    expect(res._json.token).toBeTruthy();
+  test('forwards the authenticated actor and retained proof and returns the sharing envelope', async () => {
+    const proof = 'b'.repeat(64);
+    const rpc = jest.fn(async (_name, args) => ({ data: { success: true, replayed: false,
+      invite: { id: 'invite-1', home_id: args.p_home_id, token_hash: args.p_token_hash, status: 'pending' } }, error: null }));
+    setRpcMock(rpc); const res = mockRes();
+    await inviteTenantHandler(mockReq({ authority: { id: 'auth-1' }, body: { home_id: 'home-1', invitee_email: 'tenant@example.com',
+      start_at: '2026-10-01', invite_token: proof, actor_id: 'other-user' } }), res);
+    expect(res._status).toBe(201); expect(res._json.token).toBe(proof);
+    expect(rpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({ p_action: 'invite', p_actor_id: 'test-user-id', p_authority_id: 'auth-1' }));
   });
-
-  test('returns 400 when authority not verified', async () => {
-    seedHome();
-    seedAuthority({ status: 'pending' });
-
-    const req = mockReq({
-      authority: { id: 'auth-1', home_id: 'home-1', subject_type: 'user', subject_id: 'test-user-id', status: 'pending' },
-      body: {
-        home_id: 'home-1',
-        invitee_email: 'tenant@example.com',
-        start_at: '2026-04-01',
-      },
-    });
+  test.each([400, 403, 409, 410, 503])('preserves failure status %i with no token', async status => {
+    setRpcMock(jest.fn().mockResolvedValue({ data: { success: false, status, error: 'Creation failed' }, error: null }));
     const res = mockRes();
-    await inviteTenantHandler(req, res);
-
-    expect(res._status).toBe(400);
+    await inviteTenantHandler(mockReq({ authority: { id: 'auth-1' }, body: { home_id: 'home-1', invitee_email: 'tenant@example.com', start_at: '2026-10-01' } }), res);
+    expect(res._status).toBe(status); expect(res._json).toEqual({ error: 'Creation failed' });
   });
 });
 

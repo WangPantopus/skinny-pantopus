@@ -44,6 +44,7 @@ const requestAuthoritySchema = Joi.object({
 });
 
 const inviteTenantSchema = Joi.object({
+  invite_token: Joi.string().hex().lowercase().length(64),
   home_id: Joi.string().uuid().required(),
   invitee_email: Joi.string().email().required(),
   start_at: Joi.string().isoDate().raw().required(),
@@ -305,11 +306,11 @@ router.post(
       const authority_id = req.authority.id;
 
       const result = await landlordAuthorityService.inviteTenant(
-        authority_id, home_id, invitee_email, start_at, end_at || undefined,
+        authority_id, home_id, invitee_email, start_at, end_at || undefined, req.user.id, req.body.invite_token,
       );
 
       if (!result.success) {
-        const status = result.error.includes('not found') ? 404 : 400;
+        const status = result.status || (result.error.includes('not found') ? 404 : 400);
         return res.status(status).json({ error: result.error });
       }
 

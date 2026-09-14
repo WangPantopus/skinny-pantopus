@@ -577,7 +577,7 @@ test.each(['closed', 'account'])('a %s landlord invitation cannot refresh or rev
   const view = openUnitInvite(jest.fn(), () => current);
   fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
   await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
-  if (mode === 'closed') fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  if (mode === 'closed') fireEvent.click(screen.getByRole('button', { name: 'Close' }));
   else current = false;
   await act(async () => resolve({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: leaseToken }));
   expect(view.onRefresh).not.toHaveBeenCalled(); expect(screen.queryByLabelText('Invitation link')).not.toBeInTheDocument();
@@ -617,4 +617,43 @@ test.each(['missing-token', 'wrong-home'])('an incomplete invitation response (%
   const view = openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
   await waitFor(() => expect(screen.getByText('Could not recover the invitation link. Reopen the property to check its status.')).toBeVisible());
   expect(screen.queryByLabelText('Invitation link')).not.toBeInTheDocument(); expect(view.onRefresh).not.toHaveBeenCalled();
+});
+
+test('uncertain creation retries the same retained proof and details without replacing the form', async () => {
+  jest.mocked(post).mockRejectedValueOnce({ statusCode: 503, message: 'Reply lost.' })
+    .mockResolvedValueOnce({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: leaseToken });
+  const view = openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Retry Original Invite' })).toBeVisible());
+  const original = jest.mocked(post).mock.calls[0][1];
+  expect(original).toEqual(expect.objectContaining({ invite_token: expect.stringMatching(/^[a-f0-9]{64}$/), home_id: 'unit-1', start_at: '2026-09-01' }));
+  expect(screen.getByLabelText('Email address')).toBeDisabled();
+  expect(view.dates[0]).toBeDisabled(); expect(view.dates[1]).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry Original Invite' }));
+  await waitFor(() => expect(screen.getByLabelText('Invitation link')).toBeVisible());
+  expect(jest.mocked(post).mock.calls[1][1]).toEqual(original);
+});
+
+test('a definite validation rejection permits corrected details with a fresh invitation proof', async () => {
+  jest.mocked(post).mockRejectedValueOnce({ statusCode: 400, message: 'Email is invalid.' })
+    .mockResolvedValueOnce({ invite: { id: 'invite-1', home_id: 'unit-1' }, token: leaseToken });
+  openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await waitFor(() => expect(screen.getByText('Email is invalid.')).toBeVisible());
+  expect(screen.getByLabelText('Email address')).not.toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'corrected@example.com' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await waitFor(() => expect(screen.getByLabelText('Invitation link')).toBeVisible());
+  const original = jest.mocked(post).mock.calls[0][1] as { invite_token: string };
+  const corrected = jest.mocked(post).mock.calls[1][1] as { invite_token: string; invitee_email: string };
+  expect(corrected.invitee_email).toBe('corrected@example.com'); expect(corrected.invite_token).not.toBe(original.invite_token);
+});
+
+test('a later authority rejection does not discard an already uncertain creation proof', async () => {
+  jest.mocked(post).mockRejectedValueOnce({ statusCode: 503, message: 'Reply lost.' })
+    .mockRejectedValueOnce({ statusCode: 403, message: 'Current verified authority required' });
+  openUnitInvite(); fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Retry Original Invite' })).toBeVisible());
+  fireEvent.click(screen.getByRole('button', { name: 'Retry Original Invite' }));
+  await waitFor(() => expect(screen.getByText('Current verified authority required')).toBeVisible());
+  expect(screen.getByLabelText('Email address')).toBeDisabled();
+  expect(jest.mocked(post).mock.calls[1][1]).toEqual(jest.mocked(post).mock.calls[0][1]);
 });

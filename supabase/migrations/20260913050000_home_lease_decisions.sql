@@ -26,14 +26,14 @@ DECLARE
   v_resident_actor boolean:=false; v_target_id uuid; v_detach_ids uuid[]:='{}';
   v_end_receipt jsonb; v_other_lease boolean; v_departure jsonb; v_removal jsonb;
   v_resident public."HomeLeaseResident"%ROWTYPE; v_co_departure boolean:=false;
-  v_latest_lease_id uuid; v_latest_lease_state text;
+  v_latest_lease_id uuid; v_latest_lease_state text; v_invitee_email text;
 BEGIN
-  IF p_actor_id IS NULL OR p_action NOT IN ('approve','deny','accept','end','move_out','cancel','request') OR p_action IS NULL
+  IF p_actor_id IS NULL OR p_action NOT IN ('approve','deny','accept','end','move_out','cancel','request','invite') OR p_action IS NULL
     OR p_validity_days IS NULL OR p_validity_days<1 OR p_validity_days>36500
     OR p_dates IS NULL OR jsonb_typeof(p_dates)<>'object' THEN
     RETURN jsonb_build_object('success',false,'error','Invalid lease decision');
   END IF;
-  IF p_action='request' THEN
+  IF p_action IN ('request','invite') THEN
     v_home_id:=p_home_id;
   ELSIF p_action='accept' THEN
     SELECT home_id INTO v_home_id FROM public."HomeLeaseInvite" WHERE token_hash=p_token_hash;
@@ -41,7 +41,7 @@ BEGIN
     SELECT home_id INTO v_home_id FROM public."HomeLease" WHERE id=p_lease_id;
   END IF;
   IF v_home_id IS NULL OR NOT public.lock_home_invitation_scope(v_home_id) THEN
-    RETURN jsonb_build_object('success',false,'status',404,'error',CASE WHEN p_action='request' THEN 'Home not found' ELSE 'Lease or invite not found' END);
+    RETURN jsonb_build_object('success',false,'status',404,'error',CASE WHEN p_action IN ('request','invite') THEN 'Home not found' ELSE 'Lease or invite not found' END);
   END IF;
   -- Match the existing Home mutation lock order. Re-read proofs after waiting;
   -- authority revocation and competing lease decisions serialize on these rows.
@@ -110,7 +110,7 @@ BEGIN
   ELSIF p_action='accept' THEN
     SELECT * INTO v_lease FROM public."HomeLease" WHERE home_id=v_home_id
       AND metadata->>'invite_id'=v_invite.id::text ORDER BY id LIMIT 1 FOR UPDATE;
-  ELSE
+  ELSIF p_action<>'invite' THEN
     SELECT * INTO v_lease FROM public."HomeLease" WHERE id=p_lease_id AND home_id=v_home_id FOR UPDATE;
     IF NOT FOUND THEN RETURN jsonb_build_object('success',false,'error','Lease not found'); END IF;
   END IF;
@@ -130,10 +130,10 @@ BEGIN
       VALUES(v_home_id,p_actor_id,'LEASE_REQUEST_CANCELED','HomeLease',v_lease.id);
     RETURN jsonb_build_object('success',true,'lease',to_jsonb(v_lease),'replayed',false);
   END IF;
-  IF p_action IN ('approve','accept','request') AND v_home.home_type='multi_unit' THEN
+  IF p_action IN ('approve','accept','request','invite') AND v_home.home_type='multi_unit' THEN
     RETURN jsonb_build_object('success',false,'error','This is a multi-unit building. A unit number is required.');
   END IF;
-  IF p_action IN ('approve','accept','request') AND v_home.address_id IS NOT NULL THEN
+  IF p_action IN ('approve','accept','request','invite') AND v_home.address_id IS NOT NULL THEN
     PERFORM id FROM public."HomeAddress" WHERE id=v_home.address_id FOR SHARE;
     v_now:=clock_timestamp();
     -- Keep the existing occupancy gateway's unresolved-unit boundary. Verified
@@ -147,6 +147,54 @@ BEGIN
     AND NOT (p_action IN ('end','move_out') AND coalesce(v_resident_actor,false)))
     OR v_home.home_status IN ('merged','archived') THEN
     RETURN jsonb_build_object('success',false,'error','This home is unavailable for lease decisions');
+  END IF;
+  IF p_action='invite' THEN
+    v_invitee_email:=lower(trim(p_user_email));
+    IF coalesce(v_invitee_email,'')='' OR length(v_invitee_email)>320
+      OR p_token_hash IS NULL OR p_token_hash !~ '^[a-f0-9]{64}$' OR p_dates->>'start_at' IS NULL THEN
+      RETURN jsonb_build_object('success',false,'status',400,'error','Invalid invitation details');
+    END IF;
+    BEGIN
+      v_start:=(p_dates->>'start_at')::timestamptz; v_end:=(p_dates->>'end_at')::timestamptz;
+    EXCEPTION WHEN invalid_datetime_format OR datetime_field_overflow THEN
+      RETURN jsonb_build_object('success',false,'status',400,'error','Lease dates must be valid dates');
+    END;
+    IF NOT isfinite(v_start) OR (v_end IS NOT NULL AND NOT isfinite(v_end)) OR v_end<=v_start THEN
+      RETURN jsonb_build_object('success',false,'status',400,'error','End date must be after the start date and must not have expired');
+    END IF;
+    -- A caller-retained random proof lets a lost creation reply recover the same
+    -- existing invite. The hash lock also prevents reuse across different Homes.
+    PERFORM pg_advisory_xact_lock(hashtextextended('home-lease-invite:'||p_token_hash,0));
+    SELECT * INTO v_invite FROM public."HomeLeaseInvite" WHERE token_hash=p_token_hash ORDER BY id LIMIT 1;
+    IF FOUND THEN
+      IF v_invite.home_id<>v_home_id OR v_invite.landlord_subject_type<>v_authority.subject_type
+        OR v_invite.landlord_subject_id<>v_authority.subject_id OR lower(trim(v_invite.invitee_email)) IS DISTINCT FROM v_invitee_email
+        OR v_invite.proposed_start IS DISTINCT FROM v_start OR v_invite.proposed_end IS DISTINCT FROM v_end THEN
+        RETURN jsonb_build_object('success',false,'status',409,'error','This invitation proof belongs to different details. Retry the original invitation.');
+      END IF;
+      IF v_invite.status NOT IN ('pending','accepted') OR (v_invite.status='pending' AND v_invite.expires_at<=clock_timestamp()) THEN
+        RETURN jsonb_build_object('success',false,'status',410,'error','This invitation is closed or expired');
+      END IF;
+      RETURN jsonb_build_object('success',true,'invite',to_jsonb(v_invite),'replayed',true);
+    END IF;
+    IF v_end<=clock_timestamp() THEN
+      RETURN jsonb_build_object('success',false,'status',400,'error','End date must not have expired');
+    END IF;
+    IF EXISTS(SELECT FROM public."HomeLeaseInvite" WHERE home_id=v_home_id
+      AND lower(trim(invitee_email))=v_invitee_email AND status='pending' AND expires_at>clock_timestamp()) THEN
+      RETURN jsonb_build_object('success',false,'status',409,'error','Pending invite already exists for this email');
+    END IF;
+    SELECT id INTO v_tenant_id FROM public."User" WHERE email=v_invitee_email LIMIT 1;
+    v_now:=clock_timestamp();
+    INSERT INTO public."HomeLeaseInvite"(home_id,landlord_subject_type,landlord_subject_id,invitee_email,invitee_user_id,
+      token_hash,proposed_start,proposed_end,status,expires_at,created_at,updated_at)
+    VALUES(v_home_id,v_authority.subject_type,v_authority.subject_id,v_invitee_email,v_tenant_id,
+      p_token_hash,v_start,v_end,'pending',v_now+make_interval(days=>p_validity_days),v_now,v_now) RETURNING * INTO v_invite;
+    INSERT INTO public."HomeAuditLog"(home_id,actor_user_id,action,target_type,target_id,metadata)
+      VALUES(v_home_id,p_actor_id,'TENANT_INVITED','HomeLeaseInvite',v_invite.id,
+        jsonb_build_object('invitee_email',v_invitee_email,'proposed_start',v_start,'proposed_end',v_end));
+    RETURN jsonb_build_object('success',true,'invite',to_jsonb(v_invite),'replayed',false,
+      'home',jsonb_build_object('id',v_home_id,'name',v_home.name));
   END IF;
   IF p_action='request' THEN
     -- A status read binds a new submission to the actor's latest existing lease.

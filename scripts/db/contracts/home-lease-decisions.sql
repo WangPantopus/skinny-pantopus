@@ -32,6 +32,59 @@ DO $$ BEGIN
   AND has_function_privilege('service_role','public.decide_home_lease(text,uuid,uuid,uuid,text,text,jsonb,text,integer,uuid,text,jsonb)','execute'),
   'Only the service may decide a lease');
 END $$;
+-- Creation uses the existing invite row as its retry identity, with the same
+-- current authority/Home lock and atomic audit as admission decisions.
+INSERT INTO public."Home"(id,address,city,state,zipcode,home_type) VALUES
+ ('f3190000-0000-4000-8000-000000000019','Invite creation contract','Test','CA','00000','apartment');
+INSERT INTO public."HomeAuthority"(id,home_id,subject_type,subject_id,role,status) VALUES
+ ('f3190000-0000-4000-8000-000000000029','f3190000-0000-4000-8000-000000000019','user','f3190000-0000-4000-8000-000000000001','owner','verified');
+SET LOCAL ROLE service_role;
+DO $$ DECLARE
+ h uuid:='f3190000-0000-4000-8000-000000000019';a uuid:='f3190000-0000-4000-8000-000000000001';
+ au uuid:='f3190000-0000-4000-8000-000000000029';r jsonb;again jsonb;proof text:=md5('invite-create-proof')||md5('invite-create-proof');
+ dates jsonb:=jsonb_build_object('start_at',now()+interval '1 day','end_at',now()+interval '1 year');
+BEGIN
+ r:=public.decide_home_lease('invite','f3190000-0000-4000-8000-000000000003',p_authority_id:=au,p_home_id:=h,p_token_hash:=proof,p_user_email:='lease-contract-2@example.invalid',p_dates:=dates,p_validity_days:=14);
+ PERFORM pg_temp.check_lease(r->>'success'='false','Invite creation requires the current authority actor');
+ r:=public.decide_home_lease('invite',a,p_authority_id:=au,p_home_id:=h,p_token_hash:=proof,p_user_email:='lease-contract-2@example.invalid',p_dates:='{"start_at":"2026-02-31"}',p_validity_days:=14);
+ PERFORM pg_temp.check_lease(r->>'success'='false','Invite creation rejects impossible calendar dates');
+ r:=public.decide_home_lease('invite',a,p_authority_id:=au,p_home_id:=h,p_token_hash:=proof,p_user_email:='lease-contract-2@example.invalid',p_dates:=jsonb_build_object('start_at',now()+interval '2 years','end_at',now()+interval '1 year'),p_validity_days:=14);
+ PERFORM pg_temp.check_lease(r->>'success'='false','Invite creation rejects reversed dates');
+ UPDATE public."Home" SET security_state='frozen' WHERE id=h;
+ r:=public.decide_home_lease('invite',a,p_authority_id:=au,p_home_id:=h,p_token_hash:=proof,p_user_email:='lease-contract-2@example.invalid',p_dates:=dates,p_validity_days:=14);
+ PERFORM pg_temp.check_lease(r->>'success'='false','Frozen Home cannot issue an invitation');
+ UPDATE public."Home" SET security_state='normal',home_type='multi_unit' WHERE id=h;
+ r:=public.decide_home_lease('invite',a,p_authority_id:=au,p_home_id:=h,p_token_hash:=proof,p_user_email:='lease-contract-2@example.invalid',p_dates:=dates,p_validity_days:=14);
+ PERFORM pg_temp.check_lease(r->>'success'='false' AND NOT EXISTS(SELECT FROM public."HomeLeaseInvite" WHERE home_id=h),'Parent building cannot issue an invitation; invalid attempts write nothing');
+ UPDATE public."Home" SET home_type='apartment' WHERE id=h;
+ r:=public.decide_home_lease('invite',a,p_authority_id:=au,p_home_id:=h,p_token_hash:=proof,p_user_email:=' LEASE-CONTRACT-2@EXAMPLE.INVALID ',p_dates:=dates,p_validity_days:=14);
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND r->>'replayed'='false' AND r->'invite'->>'token_hash'=proof
+   AND r->'invite'->>'invitee_user_id'='f3190000-0000-4000-8000-000000000002'
+   AND r->'invite'->>'invitee_email'='lease-contract-2@example.invalid'
+   AND (r->'invite'->>'expires_at')::timestamptz BETWEEN now()+interval '14 days' AND clock_timestamp()+interval '14 days'
+   AND NOT EXISTS(SELECT FROM public."HomeLease" WHERE home_id=h),'Creation binds recipient/dates and14-day expiry without granting membership');
+ again:=public.decide_home_lease('invite',a,p_authority_id:=au,p_home_id:=h,p_token_hash:=proof,p_user_email:='lease-contract-2@example.invalid',p_dates:=dates,p_validity_days:=14);
+ PERFORM pg_temp.check_lease(again->>'replayed'='true' AND again->'invite'=r->'invite'
+   AND (SELECT count(*)=1 FROM public."HomeAuditLog" WHERE home_id=h AND action='TENANT_INVITED'),'Lost creation reply recovers the same row and audit');
+ again:=public.decide_home_lease('invite',a,p_authority_id:=au,p_home_id:=h,p_token_hash:=proof,p_user_email:='different@example.invalid',p_dates:=dates,p_validity_days:=14);
+ PERFORM pg_temp.check_lease(again->>'status'='409','A retained proof cannot silently change invitation details');
+ again:=public.decide_home_lease('invite',a,p_authority_id:='f3190000-0000-4000-8000-000000000020',p_home_id:='f3190000-0000-4000-8000-000000000010',p_token_hash:=proof,p_user_email:='lease-contract-2@example.invalid',p_dates:=dates,p_validity_days:=14);
+ PERFORM pg_temp.check_lease(again->>'status'='409','An invitation proof cannot be reused for a different Home');
+ again:=public.decide_home_lease('invite',a,p_authority_id:=au,p_home_id:=h,p_token_hash:=md5('second-proof')||md5('second-proof'),p_user_email:='LEASE-CONTRACT-2@example.invalid',p_dates:=dates,p_validity_days:=14);
+ PERFORM pg_temp.check_lease(again->>'status'='409' AND (SELECT count(*)=1 FROM public."HomeLeaseInvite" WHERE home_id=h),'Another proof cannot create a duplicate live pending invite');
+ UPDATE public."HomeAuthority" SET status='revoked' WHERE id=au;
+ again:=public.decide_home_lease('invite',a,p_authority_id:=au,p_home_id:=h,p_token_hash:=proof,p_user_email:='lease-contract-2@example.invalid',p_dates:=dates,p_validity_days:=14);
+ PERFORM pg_temp.check_lease(again->>'status'='403','Revoked authority cannot issue or recover invitation data');
+ UPDATE public."HomeAuthority" SET status='verified' WHERE id=au;
+ UPDATE public."HomeLeaseInvite" SET expires_at=now()-interval '1 second' WHERE home_id=h;
+ again:=public.decide_home_lease('invite',a,p_authority_id:=au,p_home_id:=h,p_token_hash:=proof,p_user_email:='lease-contract-2@example.invalid',p_dates:=dates,p_validity_days:=14);
+ PERFORM pg_temp.check_lease(again->>'status'='410','An expired proof cannot create a replacement silently');
+ again:=public.decide_home_lease('invite',a,p_authority_id:=au,p_home_id:=h,p_token_hash:=md5('second-proof')||md5('second-proof'),p_user_email:='lease-contract-2@example.invalid',p_dates:=dates,p_validity_days:=14);
+ PERFORM pg_temp.check_lease(again->>'success'='true' AND again->>'replayed'='false'
+   AND (SELECT count(*)=2 FROM public."HomeLeaseInvite" WHERE home_id=h),'Expired pending history does not block an explicit fresh invitation');
+END $$;
+RESET ROLE;
+
 SET LOCAL ROLE service_role;
 DO $$
 DECLARE
@@ -453,12 +506,17 @@ DROP TRIGGER contract_lease_end_fault ON public."HomeAuditLog";
 -- Fail the final audit write. Every preceding lease/resident/occupancy/invite
 -- mutation must roll back, and the same request must work after recovery.
 CREATE FUNCTION pg_temp.fail_lease_audit() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN IF NEW.action IN ('LEASE_APPROVED','LEASE_INVITE_ACCEPTED','LEASE_REQUEST_CANCELED','TENANT_REQUEST_SUBMITTED') THEN RAISE EXCEPTION 'contract audit failure'; END IF; RETURN NEW; END $$;
+BEGIN IF NEW.action IN ('LEASE_APPROVED','LEASE_INVITE_ACCEPTED','LEASE_REQUEST_CANCELED','TENANT_REQUEST_SUBMITTED','TENANT_INVITED') THEN RAISE EXCEPTION 'contract audit failure'; END IF; RETURN NEW; END $$;
 CREATE TRIGGER contract_lease_audit_failure BEFORE INSERT ON public."HomeAuditLog"
  FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_lease_audit();
 SET LOCAL ROLE service_role;
 DO $$ DECLARE l uuid; before_occ jsonb; after_occ jsonb; r jsonb;
 BEGIN
+ BEGIN
+   PERFORM public.decide_home_lease('invite','f3190000-0000-4000-8000-000000000001',p_authority_id:='f3190000-0000-4000-8000-000000000029',p_home_id:='f3190000-0000-4000-8000-000000000019',p_token_hash:=md5('rollback-create')||md5('rollback-create'),p_user_email:='rollback@example.invalid',p_dates:=jsonb_build_object('start_at',now()+interval '1 day'),p_validity_days:=14);
+   RAISE EXCEPTION 'Expected invite creation audit fault was not reached';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'contract audit failure' THEN RAISE; END IF; END;
+ PERFORM pg_temp.check_lease(NOT EXISTS(SELECT FROM public."HomeLeaseInvite" WHERE token_hash=md5('rollback-create')||md5('rollback-create')),'Invite audit failure rolls back the invitation and retry identity');
  BEGIN
    PERFORM public.decide_home_lease('request','f3190000-0000-4000-8000-000000000002',p_home_id:='f3190000-0000-4000-8000-000000000011');
    RAISE EXCEPTION 'Expected request audit fault was not reached';
@@ -505,6 +563,10 @@ BEGIN
  SELECT id INTO l FROM public."HomeLease" WHERE home_id='f3190000-0000-4000-8000-000000000010' AND state='pending' ORDER BY created_at DESC LIMIT 1;
  r:=public.decide_home_lease('approve','f3190000-0000-4000-8000-000000000001',l,'f3190000-0000-4000-8000-000000000020');
  PERFORM pg_temp.check_lease(r->>'success'='true','Rolled-back approval must remain retryable');
+ r:=public.decide_home_lease('invite','f3190000-0000-4000-8000-000000000001',p_authority_id:='f3190000-0000-4000-8000-000000000029',p_home_id:='f3190000-0000-4000-8000-000000000019',p_token_hash:=md5('rollback-create')||md5('rollback-create'),p_user_email:='rollback@example.invalid',p_dates:=jsonb_build_object('start_at',now()+interval '1 day'),p_validity_days:=14);
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND r->>'replayed'='false'
+   AND (SELECT count(*)=1 FROM public."HomeLeaseInvite" WHERE token_hash=md5('rollback-create')||md5('rollback-create')),
+   'Rolled-back invitation must remain retryable with its original proof');
  RAISE NOTICE 'Lease decision rollback and retry assertions passed';
 END $$;
 RESET ROLE;

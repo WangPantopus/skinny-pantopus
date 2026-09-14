@@ -1278,9 +1278,53 @@ candidate tests, SQL/lint and exact HTTP/browser state. Earlier API18113 is stop
 and cleaned; owned API18114/Next18110 remain active. Both folders are mirrored in
 the existing private recovery audit. Source40866ab85 is pushed and its own
 [CI34831886732](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34831886732)
-is running; this sharing/building follow-up needs its own CI after push.
+passes all15 applicable checks with one unchanged Seeder skip; the sharing/building follow-up requires its own CI after push.
 
 Next: existing invitation-creation recovery/current-authority/date boundaries,
 then bulk unit controls through the existing canonical-address/Home-creation path.
 Private attachments, provider delivery, installed Android acceptance, combined
 adoption/rollout and the R05 row remain open. The inventory stays8/72/80.
+
+
+### Existing lease invitation creation boundaries
+
+Actual HTTP/SQL reproduced three defects in the existing creation path: reversed
+lease dates saved an invitation; a saved response hidden by timeout could not
+recover its sharing link because retry returned a duplicate error; authority
+revoked after the service read still permitted creation. These are demonstrated
+repairs to HomeLeaseInvite, not a replacement invitation system.
+
+The existing service-only decide_home_lease transaction now handles creation as
+well. The same Home/current-authority locks protect validation, normalized
+recipient binding, invitation insert and audit. The caller can retain a random
+proof whose hash is stored in the existing token_hash column; matching retries
+return the original invitation, while changed details/Home, expired proof and
+another pending invitation are rejected. A proof lock also serializes concurrent
+reuse across different Homes. The real authenticated actor is checked inside SQL
+and recorded in the audit. Invalid calendar/range dates cannot write; rollback of
+the final audit leaves the original proof retryable. Existing business proofs and
+parent-building/address boundaries are reused. No table, column, new file or
+second migration was added; this extends the existing unmerged function.
+
+The existing web modal retains the original payload/proof after an unknown reply,
+locks its fields, and retries that exact invitation. Definite initial validation
+failures permit correction; a later error cannot discard an uncertain original.
+Recognized success exposes the same sharing/copy controls. Actual Chrome confirms
+saved-but-503 → Retry Original Invite → Copy Link: two POSTs have the same proof
+hash, one pending invitation, zero leases/occupancies and one intercepted notice.
+This is same-modal recovery only; closing/reloading the form is the next boundary.
+Older callers can omit the proof, but cannot recover a lost creation link this way.
+
+Validation:140 selected backend tests,61 existing rendered web tests, standalone
+TypeScript/scoped lint, the full SQL lease contract and application-function lint
+pass (266 functions/85 trigger bindings, zero errors/eight existing warnings).
+Thirteen actual HTTP/SQL cases cover invalid dates, failed saved replies, exact
+and changed retries, route-check → authority revocation → transaction, identical
+and distinct concurrent proofs, proof reuse across Homes, older callers and leap
+dates. The final-audit fault and successful original-proof retry also pass real
+SQL. Prior invitation acceptance/end/native evidence is reused where unchanged.
+Notification attempts are intercepted; RPC-reply loss before notification, actual
+provider delivery, retained recovery after departure and native link acceptance
+remain open. Synthetic authentication and the private browser shell do not prove
+hosted/provider behavior. Evidence is in lease-invitation-create-r1 under the
+existing private recovery audit, with source hashes and result files.

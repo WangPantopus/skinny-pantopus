@@ -115,64 +115,8 @@ function seedPendingLease(overrides = {}) {
 // 1. Invite → accept → occupancy created
 // ============================================================
 
-// Admission persistence is verified by the real home-lease-decisions SQL contract.
-describe('invitation creation', () => {
-  test('invite token expires after 14 days', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-
-    const inviteResult = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    const expiry = new Date(inviteResult.invite.expires_at);
-    const minExpiry = Date.now() + 13.5 * 24 * 60 * 60 * 1000;
-    const maxExpiry = Date.now() + 14.5 * 24 * 60 * 60 * 1000;
-    expect(expiry.getTime()).toBeGreaterThan(minExpiry);
-    expect(expiry.getTime()).toBeLessThan(maxExpiry);
-  });
-  test('invite triggers notification for existing user', async () => {
-    seedHome();
-    seedVerifiedAuthority();
-    seedTable('User', [{ id: 'tenant-user-1', email: 'tenant@example.com' }]);
-
-    await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(notificationService.createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'tenant-user-1',
-        type: 'lease_invite',
-      }),
-    );
-  });
-});
-
-// Lease end/withdrawal now uses the real SQL lifecycle contract.
-
-describe('invitation authority', () => {
-  test('unverified authority cannot invite tenants', async () => {
-    seedHome();
-    seedTable('HomeAuthority', [{
-      id: 'auth-pending',
-      home_id: 'home-1',
-      subject_type: 'user',
-      subject_id: 'landlord-1',
-      role: 'owner',
-      status: 'pending',
-      verification_tier: 'weak',
-      added_via: 'landlord_portal',
-    }]);
-
-    const result = await service.inviteTenant(
-      'auth-pending', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('must be verified');
-  });
-});
+// Invitation creation/expiry/authority now execute the actual SQL contract.
+// Proof transport and notification replay are covered in landlordAuthorityService.test.js.
 
 describe('authority request → verification', () => {
   test('request creates pending authority, verify activates it', async () => {

@@ -181,7 +181,7 @@ scoped lint pass. Household codes reuse the existing protected invitation page.
 No new screen/file/schema; designs remain unchanged. See [invitation evidence](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-landing-and-acceptance).
 Unit checkpoint19369aa40 and the invitation follow-up are saved together for PR#38;
 the current follow-up requires its own remote CI.
-Owned unit API18111 is stopped/cleaned; invitation API18112 and Next18110 are active.
+Owned unit API18111 and invitation API18112 are stopped and their exact fixtures cleaned.
 
 **Landlord sharing and building admission follow-up:** the existing modal now
 retains a copyable invitation link, truthful delivery status, form errors and
@@ -193,12 +193,24 @@ preserving valid apartment admission and ending an older parent lease. All145
 backend tests, full lease SQL contract and application-function lint (zero errors)
 pass, plus7 rejection/3 apartment HTTP cases. No new file/table/screen or second
 migration. See [current evidence](VERIFICATION_FIRST_2026-09-13.md#existing-landlord-sharing-and-parent-building-admission).
-Source40866ab85 is pushed; [CI34831886732](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34831886732) is running.
-The current follow-up requires its own CI after push. API18113 is stopped/cleaned;
-owned API18114 and Next18110 are active.
+Source40866ab85 is pushed and passes all15 applicable [CI34831886732 checks](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34831886732), with one unchanged Seeder skip.
+The later sharing/building and creation follow-ups require CI after push.
+Owned API18113/18114 are stopped and their exact fixtures cleaned.
 
-**Next:** verify existing invitation-creation recovery/current-authority/date
-boundaries, then connect bulk unit controls through existing canonical-address/
+**Invitation creation follow-up:** actual reversed-date, lost-response and stale-
+authority defects are repaired through the same existing service-only transaction.
+Creation/audit are atomic, current authority is rechecked under locks, and retained
+proof retries return the same invitation without another notification attempt.
+140 backend/61 rendered tests, full SQL contract/rollback retry, types/scoped lint,
+application-function lint (zero errors) and13 HTTP/SQL cases pass. Actual Chrome
+recovers and copies the saved invitation after503 with one row and identical proof
+hashes. See [creation evidence](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-creation-boundaries).
+No new table, file or second migration. Recovery currently survives only within
+the mounted modal; older callers without a retained proof keep their older limit.
+Owned API18115 and Next18110 are active under the existing private lease.
+
+**Next:** verify retained invitation recovery after closing/reloading using the
+existing protected storage, then connect bulk unit controls through existing canonical-address/
 Home-creation implementations. Complete remaining R05 private-attachment/provider acceptance
 through existing implementations, and installed Android recovery/foreground when
 computer control is reliable. The earlier APK installed in the owned AVD, but
@@ -246,12 +258,12 @@ auth/shell and actual tenant routes/SQL. Android installed lease/foreground
 acceptance and provider identity/delivery remain open.
 Accepted native Leave Home source is unchanged and its evidence is reused. Actual
 provider delivery, combined populated adoption and hosted rollout remain open.
-The owned native API18109 and iOS test device are active under the existing private
-lease; Next18110, the owned Android AVD and Android Studio are stopped. The temporary
+The owned native API18109 is stopped/cleaned and the iOS test device is shut down.
+Next18110 and invitation API18115 are active under the private lease; the owned
+Android AVD and Android Studio are stopped. The temporary
 Android Studio AVD registration was removed; private AVD data and shared SDK remain.
-The previous pause completed exact
-synthetic-row cleanup; the current native fixture is active and needs exact cleanup
-after its journeys. Source, compiled products and result bundles are copied outside the
+Prior native fixtures are exactly cleaned; the active invitation fixture needs
+its own exact cleanup after acceptance. Source, compiled products and result bundles are copied outside the
 temporary worktree. The schema-only lease DB and REST18089 remain reserved to
 `/private/tmp/pantopus-lease-transaction-r1` for resume; inspect its current private
 runtime lease before reuse. Docker control calls currently stall, but the owned REST18089 and direct database64522 respond. The private direct-SQL helper verifies the exact database before use; avoid repeated stalled Docker exec calls or a global restart. Synthetic fixtures are cleaned after checks. No provider/production

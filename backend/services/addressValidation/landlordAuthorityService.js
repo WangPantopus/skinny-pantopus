@@ -282,133 +282,27 @@ class LandlordAuthorityService {
    * @param {string} inviteeEmail
    * @param {string} startAt  - proposed lease start (ISO string)
    * @param {string} [endAt]  - proposed lease end (ISO string)
+   * @param {string} actorId - authenticated actor, rechecked inside the transaction
+   * @param {string} [retainedToken] - random client proof retained for exact retry
    * @returns {Promise<{success: boolean, error?: string, invite?: object, token?: string}>}
    */
-  async inviteTenant(authorityId, homeId, inviteeEmail, startAt, endAt) {
-    // ── 1. Verify authority is verified + active ──────────────
-    const { data: authority } = await supabaseAdmin
-      .from('HomeAuthority')
-      .select('*')
-      .eq('id', authorityId)
-      .maybeSingle();
-
-    if (!authority) {
-      return { success: false, error: 'Authority record not found' };
-    }
-
-    if (authority.status !== 'verified') {
-      return { success: false, error: 'Authority must be verified to invite tenants' };
-    }
-
-    if (authority.home_id !== homeId) {
-      return { success: false, error: 'Authority does not match home' };
-    }
-
-    // ── 2. Verify home exists and is a unit (not building) ───
-    const { data: home } = await supabaseAdmin
-      .from('Home')
-      .select('id, name, home_type')
-      .eq('id', homeId)
-      .maybeSingle();
-
-    if (!home) {
-      return { success: false, error: 'Home not found' };
-    }
-
-    if (['multi_unit', 'building'].includes(home.home_type)) {
-      return { success: false, error: 'Cannot invite tenants to a building — use a unit' };
-    }
-
-    // ── 3. Check for existing pending invite ──────────────────
-    const { data: existingInvite } = await supabaseAdmin
-      .from('HomeLeaseInvite')
-      .select('id')
-      .eq('home_id', homeId)
-      .eq('invitee_email', inviteeEmail)
-      .eq('status', 'pending')
-      .maybeSingle();
-
-    if (existingInvite) {
-      return { success: false, error: 'Pending invite already exists for this email' };
-    }
-
-    // ── 4. Generate invite token + hash ───────────────────────
-    const token = crypto.randomBytes(32).toString('hex');
+  async inviteTenant(authorityId, homeId, inviteeEmail, startAt, endAt, actorId, retainedToken) {
+    const token = retainedToken || crypto.randomBytes(32).toString('hex');
+    if (!/^[a-f0-9]{64}$/.test(token)) return { success: false, status: 400, error: 'Invalid invitation proof' };
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-    const expiresAt = new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
-
-    // ── 5. Create HomeLeaseInvite ─────────────────────────────
-    const { data: invite, error: inviteErr } = await supabaseAdmin
-      .from('HomeLeaseInvite')
-      .insert({
-        home_id: homeId,
-        landlord_subject_type: authority.subject_type,
-        landlord_subject_id: authority.subject_id,
-        invitee_email: inviteeEmail,
-        token_hash: tokenHash,
-        proposed_start: startAt,
-        proposed_end: endAt || null,
-        status: 'pending',
-        expires_at: expiresAt.toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (inviteErr) {
-      logger.error('LandlordAuthorityService.inviteTenant: invite insert failed', {
-        authorityId, homeId, error: inviteErr.message,
-      });
-      return { success: false, error: 'Failed to create invite' };
+    const result = await this._decideLease({ p_action: 'invite', p_actor_id: actorId,
+      p_authority_id: authorityId, p_home_id: homeId, p_user_email: inviteeEmail,
+      p_token_hash: tokenHash, p_dates: { start_at: startAt, end_at: endAt || null },
+      p_validity_days: INVITE_EXPIRY_DAYS });
+    if (!result.success) return result;
+    const invite = result.invite;
+    if (!result.replayed && invite.invitee_user_id) {
+      await this._notifyLeaseDecision({ userId: invite.invitee_user_id, type: 'lease_invite',
+        title: "You've been invited to a home",
+        body: `You have been invited to live at ${result.home?.name || 'a verified home'}. Review the invitation using the account it was sent to.`,
+        icon: '🏠', link: `/invite/lease/${token}`, metadata: { home_id: homeId, invite_id: invite.id } });
     }
-
-    // ── 6. Send notification ──────────────────────────────────
-    try {
-      // Look up invitee by email to send in-app notification
-      const { data: invitee } = await supabaseAdmin
-        .from('User')
-        .select('id')
-        .eq('email', inviteeEmail)
-        .maybeSingle();
-
-      if (invitee) {
-        // Link invite to user
-        await supabaseAdmin
-          .from('HomeLeaseInvite')
-          .update({ invitee_user_id: invitee.id })
-          .eq('id', invite.id);
-
-        const notificationService = require('../notificationService');
-        notificationService.createNotification({
-          userId: invitee.id,
-          type: 'lease_invite',
-          title: 'You\'ve been invited to a home',
-          body: `You have been invited to live at ${home.name || 'a verified home'}. Accept the invite to set up your account.`,
-          icon: '🏠',
-          link: `/invite/lease/${token}`,
-          metadata: { home_id: homeId, invite_id: invite.id },
-        });
-      }
-    } catch (notifErr) {
-      logger.warn('LandlordAuthorityService.inviteTenant: notification failed (non-fatal)', {
-        error: notifErr.message,
-      });
-    }
-
-    // ── 7. Audit log ──────────────────────────────────────────
-    await writeAuditLog(homeId, authority.subject_id, 'TENANT_INVITED', 'HomeLeaseInvite', invite.id, {
-      invitee_email: inviteeEmail,
-      proposed_start: startAt,
-      proposed_end: endAt || null,
-    });
-
-    logger.info('LandlordAuthorityService.inviteTenant: created', {
-      inviteId: invite.id, homeId, inviteeEmail,
-    });
-
-    return { success: true, invite, token };
+    return { ...result, token };
   }
 
   // ================================================================
@@ -521,22 +415,24 @@ class LandlordAuthorityService {
     if (!params.p_actor_id) return { success: false, error: 'Authenticated actor required' };
     try {
       const { data, error } = await supabaseAdmin.rpc('decide_home_lease', {
-        ...params, p_validity_days: require('../../utils/verificationAge').validityDays(),
+        ...params, p_validity_days: params.p_validity_days ?? require('../../utils/verificationAge').validityDays(),
       });
       if (error || !data || typeof data.success !== 'boolean'
         || (!data.success && typeof data.error !== 'string')
-        || (data.success && (!data.lease || (['approve', 'accept'].includes(params.p_action) && !data.occupancy)))) {
+        || (data.success && (params.p_action === 'invite'
+          ? !data.invite?.id || data.invite.home_id !== params.p_home_id || data.invite.token_hash !== params.p_token_hash
+          : !data.lease || (['approve', 'accept'].includes(params.p_action) && !data.occupancy)))) {
         logger.error('LandlordAuthorityService: lease transaction unavailable', {
           action: params.p_action, leaseId: params.p_lease_id, code: error?.code,
         });
-        return { success: false, error: 'Unable to complete lease decision. Please retry.' };
+        return { success: false, ...(params.p_action === 'invite' ? { status: 503 } : {}), error: 'Unable to complete lease decision. Please retry.' };
       }
       return data;
     } catch (error) {
       logger.error('LandlordAuthorityService: lease transaction interrupted', {
         action: params.p_action, leaseId: params.p_lease_id, code: error.code,
       });
-      return { success: false, error: 'Unable to complete lease decision. Please retry.' };
+      return { success: false, ...(params.p_action === 'invite' ? { status: 503 } : {}), error: 'Unable to complete lease decision. Please retry.' };
     }
   }
 

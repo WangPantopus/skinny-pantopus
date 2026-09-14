@@ -322,164 +322,53 @@ describe('verifyAuthority', () => {
 // inviteTenant
 // ============================================================
 
-describe('inviteTenant', () => {
+// State, dates, authority, expiry and rollback execute the actual SQL contract.
+// These tests cover the adapter's proof handling and notification orchestration.
+describe('inviteTenant transaction adapter', () => {
+  let rpc;
+  const create = (token, actor = 'landlord-1') => service.inviteTenant('auth-1', 'home-1', 'Tenant@example.com', '2026-02-31', null, actor, token);
   beforeEach(() => {
-    seedHome();
-    seedAuthority({ status: 'verified' });
+    rpc = jest.fn(async (_name, args) => ({ data: { success: true, replayed: false,
+      invite: { id: 'invite-1', home_id: args.p_home_id, token_hash: args.p_token_hash,
+        invitee_user_id: 'tenant-1', status: 'pending' }, home: { name: 'Test Home' } }, error: null }));
+    setRpcMock(rpc);
   });
-
-  test('creates invite with token hash', async () => {
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com',
-      '2026-04-01T00:00:00.000Z',
-    );
-
-    expect(result.success).toBe(true);
-    expect(result.invite).toBeDefined();
-    expect(result.invite.status).toBe('pending');
-    expect(result.invite.invitee_email).toBe('tenant@example.com');
-    expect(result.invite.token_hash).toBeTruthy();
-    expect(result.token).toBeTruthy();
-    expect(result.token.length).toBe(64); // 32 bytes hex
+  test('passes actual actor, raw dates, hashed retained proof and14-day expiry', async () => {
+    const token = 'a'.repeat(64); expect((await create(token)).token).toBe(token);
+    expect(rpc).toHaveBeenCalledWith('decide_home_lease', { p_action: 'invite', p_actor_id: 'landlord-1',
+      p_authority_id: 'auth-1', p_home_id: 'home-1', p_user_email: 'Tenant@example.com',
+      p_token_hash: crypto.createHash('sha256').update(token).digest('hex'), p_dates: { start_at: '2026-02-31', end_at: null }, p_validity_days: 14 });
+    expect(writeAuditLog).not.toHaveBeenCalled(); expect(getTable('HomeLeaseInvite')).toHaveLength(0);
   });
-
-  test('token hash matches SHA-256 of raw token', async () => {
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    const expectedHash = crypto.createHash('sha256').update(result.token).digest('hex');
-    expect(result.invite.token_hash).toBe(expectedHash);
+  test('older callers receive a random server proof', async () => {
+    const result = await create(); expect(result.token).toMatch(/^[a-f0-9]{64}$/);
+    expect(rpc.mock.calls[0][1].p_token_hash).toBe(crypto.createHash('sha256').update(result.token).digest('hex'));
   });
-
-  test('sets expires_at to 14 days', async () => {
-    const before = Date.now();
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-    const after = Date.now();
-
-    const expiry = new Date(result.invite.expires_at).getTime();
-    const expectedMin = before + 14 * 24 * 60 * 60 * 1000;
-    const expectedMax = after + 14 * 24 * 60 * 60 * 1000;
-    expect(expiry).toBeGreaterThanOrEqual(expectedMin);
-    expect(expiry).toBeLessThanOrEqual(expectedMax);
+  test('invalid actor/proof cannot call SQL', async () => {
+    expect((await create(undefined, null)).success).toBe(false); expect((await create('bad-proof')).success).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
   });
-
-  test('stores proposed_start and proposed_end', async () => {
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com',
-      '2026-04-01', '2027-03-31',
-    );
-
-    expect(result.invite.proposed_start).toBe('2026-04-01');
-    expect(result.invite.proposed_end).toBe('2027-03-31');
+  test('only a newly committed invite notifies; replay sends no second notice', async () => {
+    await create(); expect(notificationService.createNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 'tenant-1', type: 'lease_invite' }));
+    const original = rpc.getMockImplementation();
+    rpc.mockImplementation(async (...args) => { const reply = await original(...args); reply.data.replayed = true; return reply; });
+    await create(); expect(notificationService.createNotification).toHaveBeenCalledTimes(1);
   });
-
-  test('sends notification to existing user', async () => {
-    seedTable('User', [{ id: 'tenant-user-1', email: 'tenant@example.com' }]);
-
-    await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(notificationService.createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'tenant-user-1',
-        type: 'lease_invite',
-      }),
-    );
+  test('RPC failure stays uncertain without a token', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: 'timeout' } });
+    expect(await create()).toEqual({ success: false, status: 503, error: expect.any(String) });
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
-
-  test('links invite to existing user', async () => {
-    seedTable('User', [{ id: 'tenant-user-1', email: 'tenant@example.com' }]);
-
-    await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    const invites = getTable('HomeLeaseInvite');
-    expect(invites[0].invitee_user_id).toBe('tenant-user-1');
+  test.each(['home_id', 'token_hash'])('mismatched %s cannot claim a saved invite', async field => {
+    const original = rpc.getMockImplementation();
+    rpc.mockImplementation(async (...args) => { const reply = await original(...args); reply.data.invite[field] = 'other'; return reply; });
+    expect(await create()).toEqual({ success: false, status: 503, error: expect.any(String) });
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
-
-  test('does not crash when invitee not in system', async () => {
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'unknown@example.com', '2026-04-01',
-    );
-
-    expect(result.success).toBe(true);
-  });
-
-  test('writes audit log', async () => {
-    await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(writeAuditLog).toHaveBeenCalledWith(
-      'home-1', 'landlord-1', 'TENANT_INVITED', 'HomeLeaseInvite',
-      expect.any(String),
-      expect.objectContaining({ invitee_email: 'tenant@example.com' }),
-    );
-  });
-
-  test('returns error when authority not verified', async () => {
-    getTable('HomeAuthority')[0].status = 'pending';
-
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('must be verified');
-  });
-
-  test('returns error when authority not found', async () => {
-    const result = await service.inviteTenant(
-      'missing-auth', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('not found');
-  });
-
-  test('returns error when authority does not match home', async () => {
-    const result = await service.inviteTenant(
-      'auth-1', 'other-home', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('does not match');
-  });
-
-  test.each(['multi_unit', 'building'])('returns error when home is a building (%s)', async homeType => {
-    getTable('Home')[0].home_type = homeType;
-
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('building');
-  });
-
-  test('returns error when pending invite already exists', async () => {
-    seedTable('HomeLeaseInvite', [{
-      id: 'existing-invite',
-      home_id: 'home-1',
-      invitee_email: 'tenant@example.com',
-      token_hash: 'hash',
-      status: 'pending',
-      expires_at: new Date(Date.now() + 86400000).toISOString(),
-      landlord_subject_type: 'user',
-      landlord_subject_id: 'landlord-1',
-    }]);
-
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('Pending invite already exists');
+  test('current-authority rejection returns no token or notice', async () => {
+    const failure = { success: false, status: 403, error: 'Current verified authority required' };
+    rpc.mockResolvedValueOnce({ data: failure, error: null }); expect(await create()).toEqual(failure);
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 });
 
