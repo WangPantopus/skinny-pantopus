@@ -81,7 +81,7 @@ class MeViewModelTest {
 
     private fun home(): MyHome =
         MyHome(
-            id = "h1",
+            id = "00000000-0000-4000-8000-000000000001",
             name = "412 Birch Ln",
             address = "412 Birch Ln",
             city = "Cambridge",
@@ -97,6 +97,7 @@ class MeViewModelTest {
             verificationTier = null,
             isPrimaryOwner = true,
             pendingClaimId = null,
+            accessKind = "shared", hasHomeAccess = true, roleBase = "owner", canDeleteHome = true,
         )
 
     private fun stats(): UserStatsDto =
@@ -148,6 +149,9 @@ class MeViewModelTest {
 
             assertEquals("412 Birch Ln", loaded.home.displayName)
             assertFalse(loaded.home.isUnbound)
+            assertFalse(loaded.home.verified)
+            assertEquals("Ownership verified", loaded.home.handle)
+            assertEquals("—", loaded.home.stats.first { it.id == "members" }.value)
             assertEquals(7, loaded.home.actionTiles.size)
             // T6.2b/T6.3b home action grid adds maintenance after bills.
             assertEquals(
@@ -156,7 +160,7 @@ class MeViewModelTest {
             )
             // Home tiles carry the primary home id so the host can build
             // BillsListScreen / PetsListScreen without re-introspecting the VM.
-            assertEquals("h1", loaded.home.actionTiles.first().routeArgs["homeId"])
+            assertEquals("00000000-0000-4000-8000-000000000001", loaded.home.actionTiles.first().routeArgs["homeId"])
             assertEquals(listOf("bills", "tasks", "members"), loaded.home.stats.map { it.id })
 
             assertTrue(loaded.business.isUnbound)
@@ -171,7 +175,7 @@ class MeViewModelTest {
             vm.load()
             val loaded = vm.state.value as MeUiState.Loaded
             assertTrue(loaded.home.isUnbound)
-            assertEquals("Claim a home", loaded.home.displayName)
+            assertEquals("Your Homes", loaded.home.displayName)
         }
 
     @Test fun select_identity_flips_active_without_refetch() =

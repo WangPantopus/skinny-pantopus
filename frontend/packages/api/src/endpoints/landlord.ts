@@ -36,6 +36,8 @@ export type PropertyUnit = {
   id: string;
   name: string;
   home_type: string;
+  /** Child lease status is visible to the property's verified authority subject. */
+  lease_status_available?: boolean;
 };
 
 export type LeaseResident = {
@@ -69,6 +71,7 @@ export type HomeOccupant = {
 };
 
 export type PropertyDetail = {
+  actor_id: string;
   home: {
     id: string;
     name: string;
@@ -157,6 +160,8 @@ export async function getPropertyRequests(homeId: string): Promise<{ requests: T
 
 /** Invite a tenant to a unit */
 export async function inviteTenant(data: {
+  invite_token?: string;
+  expected_actor_id?: string;
   home_id: string;
   authority_id: string;
   invitee_email: string;
@@ -167,11 +172,15 @@ export async function inviteTenant(data: {
 }
 
 /** Approve a pending tenant lease request */
-export async function approveLease(leaseId: string, authorityId: string): Promise<{
+export async function approveLease(
+  leaseId: string,
+  authorityId: string,
+  dates: { start_at?: string; end_at?: string | null } = {},
+): Promise<{
   lease: HomeLease;
   occupancy: any;
 }> {
-  return post(`/api/v1/landlord/lease/${leaseId}/approve`, { authority_id: authorityId });
+  return post(`/api/v1/landlord/lease/${leaseId}/approve`, { authority_id: authorityId, ...dates });
 }
 
 /** Deny a pending tenant lease request */
@@ -235,23 +244,26 @@ export async function removeStaff(homeId: string, staffId: string): Promise<{ su
 
 // ── Units (bulk) ────────────────────────────────────────────
 
-/** Import units from CSV */
-export async function importUnits(homeId: string, data: {
-  units: Array<{ label: string }>;
-}): Promise<{ created: number; units: PropertyUnit[] }> {
-  return post(`/api/v1/landlord/properties/${homeId}/units/import`, data);
+export type UnitBatchIdentity = { request_id: string; expected_actor_id: string };
+export type ImportUnitsInput = UnitBatchIdentity & { units: Array<{ label: string }> };
+export type GenerateUnitsInput = UnitBatchIdentity & { prefix: string; start: number; end: number };
+export type UnitBatchResult = {
+  state: 'completed' | 'pending' | 'rejected';
+  request_id: string;
+  actor_id: string;
+  home_id: string;
+  total: number;
+  requires_verification: true;
+  results: Array<{ label: string; request_id: string; state: 'completed' | 'existing' | 'pending' | 'rejected' | 'cancelled';
+    home_id?: string; code?: string; message?: string }>;
+};
+
+/** Import private unit setup through the existing Home creation boundary. */
+export async function importUnits(homeId: string, data: ImportUnitsInput): Promise<UnitBatchResult> {
+  return post(`/api/homes/${homeId}/units/import`, data);
 }
 
-/** Generate a range of units */
-export async function generateUnits(homeId: string, data: {
-  prefix: string;
-  start: number;
-  end: number;
-}): Promise<{ created: number; units: PropertyUnit[] }> {
-  return post(`/api/v1/landlord/properties/${homeId}/units/generate`, data);
-}
-
-/** Mark a unit as vacant */
-export async function markUnitVacant(homeId: string, unitId: string): Promise<{ success: boolean }> {
-  return post(`/api/v1/landlord/properties/${homeId}/units/${unitId}/mark-vacant`);
+/** Generate private unit setup; retries retain the original batch identity. */
+export async function generateUnits(homeId: string, data: GenerateUnitsInput): Promise<UnitBatchResult> {
+  return post(`/api/homes/${homeId}/units/generate`, data);
 }

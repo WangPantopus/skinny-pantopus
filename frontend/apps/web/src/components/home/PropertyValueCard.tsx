@@ -90,7 +90,7 @@ export default function PropertyValueCard({ data, loading }: PropertyValueCardPr
             Property insights coming soon
           </p>
           <p className="text-xs text-app-text-secondary text-center">
-            We&apos;ll show your home&apos;s estimated value once your address is fully verified.
+            Property value information is not available for this home yet.
           </p>
         </div>
       </div>

@@ -1,8 +1,9 @@
 // @ts-nocheck
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import * as api from '@pantopus/api';
 import { ChevronLeft, Wallet, Package, Users, AlertCircle, Home, ClipboardList, AlertTriangle, Hammer, Clock, Building2 } from 'lucide-react';
 import { confirmStore } from '@/components/ui/confirm-store';
@@ -13,6 +14,7 @@ import { MembersSecurityTab as MembersSecurityTabComponent } from '@/components/
 import { HomeSettingsTab } from '@/components/home/settings';
 
 import TaskSlidePanel from '@/components/home/TaskSlidePanel';
+import { useHomeTaskActions } from '@/components/home/tasks/useHomeTaskActions';
 import IssueSlidePanel from '@/components/home/IssueSlidePanel';
 import BillSlidePanel from '@/components/home/BillSlidePanel';
 import PackageSlidePanel from '@/components/home/PackageSlidePanel';
@@ -42,7 +44,8 @@ import {
   PollsCard, PollsCardPreview,
 } from '@/components/home/cards';
 
-import { useHomeData } from '@/hooks/useHomeData';
+import { useHomeData, type UseHomeDataReturn } from '@/hooks/useHomeData';
+import { homeAccessFingerprint } from '@/components/home/homeAccessFingerprint';
 import { useHomePanels } from '@/hooks/useHomePanels';
 import { useHomeIntelligence } from '@/hooks/useHomeIntelligence';
 
@@ -51,6 +54,7 @@ import SeasonalChecklist from '@/components/home/SeasonalChecklist';
 import PropertyValueCard from '@/components/home/PropertyValueCard';
 import BillTrendChart from '@/components/home/BillTrendChart';
 import HomeTimeline from '@/components/home/HomeTimeline';
+import HomeSummaryBoundary from '@/components/home/HomeSummaryBoundary';
 
 type HighLevelTab = 'dashboard' | 'share' | 'security' | 'settings';
 
@@ -71,7 +75,8 @@ export default function HomeDashboardPage() {
   const homeId = params.id as string;
 
   return (
-    <HomePermissionsProvider homeId={homeId}>
+    <HomePermissionsProvider key={homeId} homeId={homeId}>
+      <div className="mb-3 flex justify-end"><Link href={`/app/homes/${homeId}/invitations`} className="text-sm text-blue-600 underline">Manage invitations and recovery</Link></div>
       <HomeDashboardContent />
     </HomePermissionsProvider>
   );
@@ -79,20 +84,64 @@ export default function HomeDashboardPage() {
 
 function HomeDashboardContent() {
   const router = useRouter();
-  const params = useParams();
+  const homeId = useParams().id as string;
+  const { access, error: permissionsError, needsVerification, loading: permissionsLoading, reload: reloadPermissions } = useHomePermissions();
+  const data = useHomeData(homeId);
+  const { loading, error } = data;
+  const accessError = error || permissionsError || (!loading && !permissionsLoading &&
+    (!access || (!access.hasAccess && !access.verification_required) || homeAccessFingerprint(access) !== data.accessFingerprint)
+    ? 'Home access changed while loading. Reload to check current access.' : null);
+
+  if (loading || permissionsLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto" />
+          <p className="mt-4 text-app-secondary">Loading home dashboard…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (accessError) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center">
+          <div className="mb-3 flex justify-center"><AlertCircle className="w-10 h-10 text-red-500" /></div>
+          <p role="alert" className="text-red-600 font-medium">{accessError}</p>
+          <button onClick={() => void Promise.all([data.refresh(), reloadPermissions()])} className="mt-4 mr-3 rounded-lg border border-app-border px-4 py-2 text-sm">Reload current home access</button>
+          <button
+            onClick={() => router.push('/app')}
+            className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm hover:bg-slate-800"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!permissionsLoading && needsVerification) {
+    return <VerificationCenter homeId={homeId} onRefresh={async () => { await Promise.all([data.refresh(), reloadPermissions()]); }} />;
+  }
+
+  // Unmount private panels, deferred summaries and local edits whenever authority retires.
+  return <HomeDashboardReady key={homeId} homeId={homeId} data={data} />;
+}
+
+function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDataReturn }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const homeId = params.id as string;
-
-  const { needsVerification, loading: permissionsLoading } = useHomePermissions();
-
   const {
     home, members, tasks, issues, bills, packages, documents, events,
     secrets, emergencies, nearbyGigs, homeGigs, pets, polls,
-    loading, error, currentUserId, myAccess, can, refresh,
-    setTasks, setIssues, setBills, setPackages, setMembers, setSecrets,
-  } = useHomeData(homeId);
+    currentUserId, taskSession, myAccess, can, refresh,
+    setTasks, setIssues, setBills, setPackages, setSecrets,
+  } = data;
 
-  const intelligence = useHomeIntelligence(homeId);
+  const { reload: reloadPermissions } = useHomePermissions();
+  const reloadAccess = useCallback(() => { void Promise.all([refresh(), reloadPermissions()]); }, [refresh, reloadPermissions]);
+  const intelligence = useHomeIntelligence(homeId, can, reloadAccess);
   const [selectedBillType, setSelectedBillType] = useState<string | null>(null);
 
   // Show toast when the season transitions
@@ -152,83 +201,45 @@ function HomeDashboardContent() {
     }
   }, [tab, intelligence.ensureTimeline]);
 
+  const currentTaskAction = useHomeTaskActions(homeId, taskSession);
+  const taskActionBusy = useRef(false);
+
   // ── Task handlers ──
 
-  const handleTaskSave = useCallback(
-    async (data: Record<string, any>) => {
-      const mediaFiles: File[] | undefined = data._mediaFiles;
-      delete data._mediaFiles;
+  const handleTaskSaved = useCallback((saved: import('@/components/home/tasks/homeTaskModel').HomeTask) => {
+    setTasks(previous => previous.some(task => task.id === saved.id)
+      ? previous.map(task => task.id === saved.id ? { ...task, ...saved } : task) : [saved, ...previous]);
+  }, [setTasks]);
 
-      if (taskPanel.task) {
-        const result = await api.homeProfile.updateHomeTask(homeId, taskPanel.task.id, data);
-        setTasks((prev) => prev.map((t) => (t.id === taskPanel.task.id ? { ...t, ...result.task } : t)));
+  const handleTaskStatusChange = useCallback(async (taskId: string, newStatus: string) => {
+    if (taskActionBusy.current) return;
+    taskActionBusy.current = true;
+    try {
+      const client = currentTaskAction(); const revision = client.revision;
+      const saved = await client.edit(taskId, { status: newStatus });
+      client.requireCurrent(revision);
+      if (currentTaskAction() === client) handleTaskSaved(saved);
+    } catch (failure) {
+      toast.error(failure instanceof Error ? failure.message : 'Task update was not confirmed. Reload before retrying.');
+    } finally { taskActionBusy.current = false; }
+  }, [currentTaskAction, handleTaskSaved]);
 
-        if (mediaFiles && mediaFiles.length > 0) {
-          try {
-            await api.upload.uploadHomeTaskMedia(homeId, taskPanel.task.id, mediaFiles);
-          } catch (err) {
-            console.error('Media upload failed:', err);
-          }
-        }
-      } else {
-        const result = await api.homeProfile.createHomeTask(homeId, data);
-        setTasks((prev) => [result.task, ...prev]);
-
-        if (mediaFiles && mediaFiles.length > 0 && result.task?.id) {
-          try {
-            await api.upload.uploadHomeTaskMedia(homeId, result.task.id, mediaFiles);
-          } catch (err) {
-            console.error('Media upload failed:', err);
-          }
-        }
-      }
-    },
-    [homeId, taskPanel.task, setTasks]
-  );
-
-  const handleTaskStatusChange = useCallback(
-    async (taskId: string, newStatus: string) => {
-      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
-      try {
-        await api.homeProfile.updateHomeTask(homeId, taskId, { status: newStatus });
-      } catch (err: unknown) {
-        console.error('Failed to update task status:', err);
-        refresh();
-      }
-    },
-    [homeId, refresh, setTasks]
-  );
-
-  const handleTaskDelete = useCallback(
-    async (taskId: string) => {
+  const handleTaskDelete = useCallback(async (taskId: string) => {
+    if (taskActionBusy.current) return;
+    taskActionBusy.current = true;
+    try {
+      const client = currentTaskAction(); const revision = client.revision;
       const yes = await confirmStore.open({ title: 'Delete this task?', confirmLabel: 'Delete', variant: 'destructive' });
       if (!yes) return;
-      try {
-        await api.homeProfile.deleteHomeTask(homeId, taskId);
-        setTasks((prev) => prev.filter((t) => t.id !== taskId));
-      } catch (err: unknown) {
-        console.error('Failed to delete task:', err);
-      }
-    },
-    [homeId, setTasks]
-  );
-
-  // ── Member / Invite handler ──
-
-  const handleInvite = useCallback(
-    async (data: { email?: string; user_id?: string; username?: string; relationship: string; preset_key?: string; message?: string; start_at?: string; end_at?: string }) => {
-      await api.homes.inviteToHome(homeId, data);
-      try {
-        const membersData = await api.homes.getHomeOccupants(homeId);
-        const activeMembers = (membersData as Record<string, any>).occupants as Record<string, any>[] || [];
-        const pending = (membersData as Record<string, any>).pendingInvites as Record<string, any>[] || [];
-        setMembers(() => [...activeMembers, ...pending]);
-      } catch {
-        // occupants may not reflect invite immediately
-      }
-    },
-    [homeId, setMembers]
-  );
+      client.requireCurrent(revision);
+      if (currentTaskAction() !== client) return;
+      await client.delete(taskId);
+      client.requireCurrent(revision);
+      if (currentTaskAction() === client) setTasks(previous => previous.filter(task => task.id !== taskId));
+    } catch (failure) {
+      toast.error(failure instanceof Error ? failure.message : 'Task deletion was not confirmed. Reload before retrying.');
+    } finally { taskActionBusy.current = false; }
+  }, [currentTaskAction, setTasks]);
 
   // ── Issue handler ──
 
@@ -323,11 +334,10 @@ function HomeDashboardContent() {
 
   // ── Stat helpers ──
 
-  const activeTasks = tasks.filter((t) => t.status === 'open' || t.status === 'in_progress').length;
-  const openIssues = issues.filter((i) => i.status !== 'resolved' && i.status !== 'canceled').length;
-  const unpaidBills = bills.filter((b) => b.status === 'due' || b.status === 'overdue');
-  const totalDue = unpaidBills.reduce((s, b) => s + Number(b.amount || 0), 0);
-  const pendingPkgs = packages.filter((p) => p.status !== 'picked_up' && p.status !== 'returned').length;
+  const activeTasks = data.summaryCounts?.tasks_open ?? 0;
+  const openIssues = data.summaryCounts?.issues_open ?? 0;
+  const billsDueCount = data.summaryCounts?.bills_due ?? 0;
+  const pendingPkgs = data.summaryCounts?.packages_expected ?? 0;
 
   // ── Tab navigation ──
 
@@ -340,47 +350,15 @@ function HomeDashboardContent() {
     setExpandedCard(null);
   };
 
-  // ── Render ──
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto" />
-          <p className="mt-4 text-app-secondary">Loading home dashboard…</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-center">
-          <div className="mb-3 flex justify-center"><AlertCircle className="w-10 h-10 text-red-500" /></div>
-          <p className="text-red-600 font-medium">{error}</p>
-          <button
-            onClick={() => router.push('/app')}
-            className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm hover:bg-slate-800"
-          >
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!permissionsLoading && needsVerification) {
-    return <VerificationCenter homeId={homeId} />;
-  }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="max-w-5xl mx-auto px-4 py-6 pb-32 md:pr-24">
       {/* Slide-over Panels */}
       <TaskSlidePanel
         open={taskPanel.open}
         onClose={closeTaskPanel}
-        onSave={handleTaskSave}
+        onSaved={handleTaskSaved}
+        openingScope={taskSession}
         task={taskPanel.task}
         members={members}
         homeId={homeId}
@@ -408,16 +386,15 @@ function HomeDashboardContent() {
       <InviteMemberModal
         open={inviteModal}
         onClose={closeInviteModal}
-        onInvite={handleInvite}
         homeId={homeId}
       />
 
       {/* Header with High-Level Tabs */}
       <HomeHeader
-        homeName={home?.name || home?.address_line1 || 'Home Dashboard'}
-        homeAddress={home?.address_line1 && home?.name ? home.address_line1 : undefined}
+        homeName={home?.name || home?.address || home?.address_line1 || 'Home Dashboard'}
+        homeAddress={home?.name ? (home.address || home.address_line1) : undefined}
         roleBadge={myAccess.role_base}
-        isOwner={myAccess.isOwner || home?.owner_id === currentUserId}
+        isOwner={myAccess.isOwner}
         homeId={homeId}
         activeTab={tab}
         onTabChange={setHighLevelTab}
@@ -430,7 +407,7 @@ function HomeDashboardContent() {
           homeId={homeId}
           activeTasks={activeTasks}
           openIssues={openIssues}
-          totalDue={totalDue}
+          billsDueCount={billsDueCount}
           pendingPkgs={pendingPkgs}
           tasks={tasks}
           issues={issues}
@@ -465,6 +442,8 @@ function HomeDashboardContent() {
           intelligence={intelligence}
           selectedBillType={selectedBillType}
           onBillTypeChange={setSelectedBillType}
+          entityErrors={data.entityErrors}
+          onReloadData={() => void refresh()}
         />
       )}
 
@@ -486,7 +465,6 @@ function HomeDashboardContent() {
           members={members}
           can={can}
           currentUserId={currentUserId}
-          onInvite={handleInvite}
           onMembersChange={refresh}
         />
       )}
@@ -506,11 +484,11 @@ function HomeDashboardContent() {
       {tab === 'dashboard' && (
         <UnifiedFAB
           contextActions={[
-            { key: 'add-task', icon: QuickCreateIcons.task, label: 'Add Task', iconColor: 'text-emerald-600', onAction: () => openTaskPanel() },
-            { key: 'report-issue', icon: QuickCreateIcons.issue, label: 'Report Issue', iconColor: 'text-amber-600', onAction: () => openIssuePanel() },
-            { key: 'track-bill', icon: QuickCreateIcons.bill, label: 'Track Bill', iconColor: 'text-red-600', onAction: () => openBillPanel() },
-            { key: 'track-package', icon: QuickCreateIcons.package, label: 'Track Package', iconColor: 'text-violet-600', onAction: () => openPackagePanel() },
-            { key: 'invite-member', icon: QuickCreateIcons.member, label: 'Invite Member', iconColor: 'text-orange-600', onAction: openInviteModal },
+            ...(can('tasks.edit') || can('tasks.manage') ? [{ key: 'add-task', icon: QuickCreateIcons.task, label: 'Add Task', iconColor: 'text-emerald-600', onAction: () => openTaskPanel() }] : []),
+            ...(can('maintenance.edit') || can('maintenance.manage') ? [{ key: 'report-issue', icon: QuickCreateIcons.issue, label: 'Report Issue', iconColor: 'text-amber-600', onAction: () => openIssuePanel() }] : []),
+            ...(can('finance.manage') ? [{ key: 'track-bill', icon: QuickCreateIcons.bill, label: 'Track Bill', iconColor: 'text-red-600', onAction: () => openBillPanel() }] : []),
+            ...(can('packages.edit') || can('packages.manage') ? [{ key: 'track-package', icon: QuickCreateIcons.package, label: 'Track Package', iconColor: 'text-violet-600', onAction: () => openPackagePanel() }] : []),
+            ...(can('members.manage') ? [{ key: 'invite-member', icon: QuickCreateIcons.member, label: 'Invite Member', iconColor: 'text-orange-600', onAction: openInviteModal }] : []),
             { key: 'post-home-task', icon: QuickCreateIcons.gig, label: 'Post Home Task', iconColor: 'text-primary-600', onAction: () => router.push(`/app/gigs/new?home_id=${homeId}`) },
           ]}
         />
@@ -526,7 +504,7 @@ function DashboardTab({
   homeId,
   activeTasks,
   openIssues,
-  totalDue,
+  billsDueCount,
   pendingPkgs,
   tasks,
   issues,
@@ -561,12 +539,14 @@ function DashboardTab({
   intelligence,
   selectedBillType,
   onBillTypeChange,
+  entityErrors,
+  onReloadData,
 }: {
   home: Record<string, any>;
   homeId: string;
   activeTasks: number;
   openIssues: number;
-  totalDue: number;
+  billsDueCount: number;
   pendingPkgs: number;
   tasks: Record<string, any>[];
   issues: Record<string, any>[];
@@ -601,9 +581,26 @@ function DashboardTab({
   intelligence: ReturnType<typeof useHomeIntelligence>;
   selectedBillType: string | null;
   onBillTypeChange: (type: string) => void;
+  entityErrors: UseHomeDataReturn['entityErrors'];
+  onReloadData: () => void;
 }) {
   const router = useRouter();
   const onBack = () => onExpandCard(null);
+
+  const cardPermissions: Record<string, string> = {
+    tasks: 'tasks.view', bills: 'finance.view', calendar: 'calendar.view', deliveries: 'packages.view',
+    maintenance: 'maintenance.view', documents: 'docs.view', emergency: 'sensitive.view',
+  };
+  const cardEntities: Record<string, keyof UseHomeDataReturn['entityErrors']> = {
+    homehelp: 'homeGigs', access: 'secrets', emergency: 'emergencies', pets: 'pets', polls: 'polls',
+  };
+  if (expandedCard && ((cardPermissions[expandedCard] && !can(cardPermissions[expandedCard]))
+    || (expandedCard === 'access' && !can('access.view_wifi') && !can('access.view_codes')))) {
+    return <div role="status"><p>This Home section is not available with your current access.</p><button onClick={onBack} className="mt-3 rounded-lg border px-3 py-2">Back to overview</button></div>;
+  }
+  const expandedError = expandedCard === 'homehelp' ? entityErrors.homeGigs || entityErrors.nearbyGigs
+    : expandedCard ? entityErrors[cardEntities[expandedCard]] : undefined;
+  if (expandedCard && expandedError) return <div><button onClick={onBack} className="mb-3 rounded-lg border px-3 py-2">Back to overview</button><HomeSummaryBoundary title="Home records" error={expandedError} loading={false} onRetry={onReloadData}>{null}</HomeSummaryBoundary></div>;
 
   // If a card is expanded, show its full-view detail component
   if (expandedCard) {
@@ -638,6 +635,7 @@ function DashboardTab({
             onAddBill={onAddBill}
             onMarkBillPaid={onMarkBillPaid}
             onBack={onBack}
+            canManage={can('finance.manage')}
             highlightBillId={linkedType === 'bill' ? linkedId : undefined}
           />
         )}
@@ -646,7 +644,7 @@ function DashboardTab({
             tasks={can('tasks.view') ? tasks : []}
             bills={can('finance.view') ? bills : []}
             events={events}
-            packages={can('mailbox.view') ? packages : []}
+            packages={can('packages.view') ? packages : []}
             onBack={onBack}
           />
         )}
@@ -669,6 +667,7 @@ function DashboardTab({
             onAddIssue={onAddIssue}
             onViewIssue={onViewIssue}
             onBack={onBack}
+            canManage={can('maintenance.edit') || can('maintenance.manage')}
           />
         )}
         {expandedCard === 'documents' && (
@@ -714,7 +713,8 @@ function DashboardTab({
 
   // Empty state
   const isEmpty = tasks.length === 0 && issues.length === 0 && bills.length === 0 &&
-    packages.length === 0 && documents.length === 0 && homeGigs.length === 0;
+    packages.length === 0 && documents.length === 0 && homeGigs.length === 0 &&
+    events.length === 0 && pets.length === 0 && polls.length === 0 && Object.keys(entityErrors).length === 0;
 
   return (
     <div className="space-y-4">
@@ -722,60 +722,51 @@ function DashboardTab({
       <TodayCard
         activeTasks={activeTasks}
         openIssues={openIssues}
-        totalDue={totalDue}
+        billsDueCount={billsDueCount}
         pendingPkgs={pendingPkgs}
-        memberCount={members.length}
+        memberCount={can('members.view') ? members.length : null}
         events={events}
         onNavigateTab={(t) => onExpandCard(t)}
       />
 
-      {/* Home Intelligence Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="flex flex-col items-center">
-          <HealthScoreRing
-            score={intelligence.healthScore?.score ?? 0}
-            topIssue={intelligence.healthScore?.topIssue ?? null}
-            topAction={intelligence.healthScore?.topAction ?? null}
-            loading={intelligence.healthLoading}
-            isNewHome={!intelligence.healthLoading && intelligence.healthScore == null}
-            homeId={homeId}
-            onActionPress={(route) => router.push(route)}
-          />
-        </div>
-        <SeasonalChecklist
-          checklist={intelligence.checklist}
-          loading={intelligence.checklistLoading}
-          onComplete={(itemId) => intelligence.completeChecklistItem(itemId)}
-          onSkip={(itemId) => intelligence.skipChecklistItem(itemId)}
-          onHireHelp={(item) =>
-            router.push(`/app/gigs/new?initialText=${encodeURIComponent(item.gig_title_suggestion || item.title)}`)
-          }
-          onGenerate={() => intelligence.generateChecklist()}
-        />
+      {/* Home summaries keep unavailable reads separate from valid empty data. */}
+      <div className={`grid grid-cols-1 ${intelligence.canReadHealth ? 'md:grid-cols-2' : ''} gap-4`}>
+        {intelligence.canReadHealth && <HomeSummaryBoundary title="Home health" error={intelligence.errors.health} loading={intelligence.healthLoading} onRetry={() => void intelligence.reloadSummary('health')}>
+          <div className="flex flex-col items-center">
+            <HealthScoreRing score={intelligence.healthScore?.score ?? 0} topIssue={intelligence.healthScore?.topIssue ?? null}
+              topAction={intelligence.healthScore?.topAction ?? null} loading={intelligence.healthLoading}
+              isNewHome={false} homeId={homeId}
+              onActionPress={(route) => {
+                const prefix = `/homes/${homeId}/`;
+                const target = route.startsWith(prefix) ? route.slice(prefix.length) : '';
+                const tab = ({ maintenance: 'issues', bills: 'bills', emergency: 'emergency', members: 'members', documents: 'documents', dashboard: 'dashboard' } as Record<string, string>)[target];
+                if (tab) router.push(`/app/homes/${homeId}/dashboard?tab=${tab}`);
+              }} />
+          </div>
+        </HomeSummaryBoundary>}
+        <HomeSummaryBoundary title="Seasonal checklist" error={intelligence.errors.checklist} loading={intelligence.checklistLoading} onRetry={() => void intelligence.reloadSummary('checklist')}>
+          <SeasonalChecklist checklist={intelligence.checklist} loading={intelligence.checklistLoading}
+            canEdit={can('home.edit')} busy={intelligence.checklistBusy}
+            onComplete={(itemId) => void intelligence.completeChecklistItem(itemId)}
+            onSkip={(itemId) => void intelligence.skipChecklistItem(itemId)}
+            onHireHelp={(item) => router.push(`/app/gigs/new?initialText=${encodeURIComponent(item.gig_title_suggestion || item.title)}`)}
+            onGenerate={() => void intelligence.generateChecklist()} />
+        </HomeSummaryBoundary>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <PropertyValueCard
-          data={intelligence.propertyValue}
-          loading={intelligence.propertyValueLoading}
-        />
-        <BillTrendChart
-          data={intelligence.billTrends}
-          selectedType={selectedBillType}
-          onTypeChange={onBillTypeChange}
-          loading={intelligence.billTrendsLoading}
-          onAddBill={onAddBill}
-          onOptInChange={(optedIn) => intelligence.setBillBenchmarkOptIn(optedIn)}
-        />
+      <div className={`grid grid-cols-1 ${intelligence.canReadBills ? 'md:grid-cols-2' : ''} gap-4`}>
+        <HomeSummaryBoundary title="Property information" error={intelligence.errors.property} loading={intelligence.propertyValueLoading} onRetry={() => void intelligence.reloadSummary('property')}>
+          <PropertyValueCard data={intelligence.propertyValue} loading={intelligence.propertyValueLoading} />
+        </HomeSummaryBoundary>
+        {intelligence.canReadBills && <HomeSummaryBoundary title="Bill trends" error={intelligence.errors.bills} loading={intelligence.billTrendsLoading} onRetry={() => void intelligence.reloadSummary('bills')}>
+          <BillTrendChart data={intelligence.billTrends} selectedType={selectedBillType} onTypeChange={onBillTypeChange}
+            loading={intelligence.billTrendsLoading} onAddBill={can('finance.manage') ? onAddBill : undefined}
+            savingPreference={intelligence.benchmarkBusy} onCurrencyChange={intelligence.setBillCurrency} onOptInChange={can('home.edit') ? (optedIn) => void intelligence.setBillBenchmarkOptIn(optedIn) : undefined} />
+        </HomeSummaryBoundary>}
       </div>
-
-      {/* Timeline */}
-      <HomeTimeline
-        items={intelligence.timeline}
-        loading={intelligence.timelineLoading}
-        hasMore={intelligence.timelineHasMore}
-        onLoadMore={intelligence.loadMoreTimeline}
-      />
+      {intelligence.canReadTimeline && <HomeSummaryBoundary title="Home activity" error={intelligence.errors.timeline} loading={intelligence.timelineLoading} onRetry={() => void intelligence.reloadSummary('timeline')}>
+        <HomeTimeline items={intelligence.timeline} loading={intelligence.timelineLoading}
+          hasMore={intelligence.timelineHasMore} onLoadMore={() => void intelligence.loadMoreTimeline()} />
+      </HomeSummaryBoundary>}
 
       {/* Card grid */}
       {!isEmpty ? (
@@ -789,17 +780,17 @@ function DashboardTab({
             <TasksCardPreview tasks={tasks} members={members} activeTasks={activeTasks} onExpand={() => onExpandCard('tasks')} />
           )}
 
-          {(homeGigs.length > 0 || nearbyGigs.length > 0) && (
-            <HomeHelpCardPreview homeGigs={homeGigs} nearbyGigs={nearbyGigs} onExpand={() => onExpandCard('homehelp')} />
+          {(homeGigs.length > 0 || nearbyGigs.length > 0 || entityErrors.homeGigs || entityErrors.nearbyGigs) && (
+            <HomeSummaryBoundary title="Home help" error={entityErrors.homeGigs || entityErrors.nearbyGigs || null} loading={false} onRetry={onReloadData}><HomeHelpCardPreview homeGigs={homeGigs} nearbyGigs={nearbyGigs} onExpand={() => onExpandCard('homehelp')} /></HomeSummaryBoundary>
           )}
 
           {can('finance.view') && (
-            <BillsBudgetCardPreview bills={bills} totalDue={totalDue} onExpand={() => onExpandCard('bills')} />
+            <BillsBudgetCardPreview bills={bills} billsDueCount={billsDueCount} onExpand={() => onExpandCard('bills')} />
           )}
 
-          <CalendarCardPreview events={events} onExpand={() => onExpandCard('calendar')} />
+          {can('calendar.view') && <CalendarCardPreview events={events} onExpand={() => onExpandCard('calendar')} />}
 
-          {can('mailbox.view') && (
+          {can('packages.view') && (
             <DeliveriesCardPreview packages={packages} pendingPkgs={pendingPkgs} onExpand={() => onExpandCard('deliveries')} />
           )}
 
@@ -807,35 +798,34 @@ function DashboardTab({
             <MaintenanceCardPreview issues={issues} onExpand={() => onExpandCard('maintenance')} />
           )}
 
-          {can('mailbox.view') && (
+          {can('docs.view') && (
             <DocsCardPreview documents={documents} onExpand={() => onExpandCard('documents')} />
           )}
 
           {(can('access.view_wifi') || can('access.view_codes')) && (
-            <AccessCardPreview secrets={secrets} onExpand={() => onExpandCard('access')} />
+            <HomeSummaryBoundary title="Access information" error={entityErrors.secrets || null} loading={false} onRetry={onReloadData}><AccessCardPreview secrets={secrets} onExpand={() => onExpandCard('access')} /></HomeSummaryBoundary>
           )}
 
-          <EmergencyCardPreview emergencies={emergencies} onExpand={() => onExpandCard('emergency')} />
+          {can('sensitive.view') && <HomeSummaryBoundary title="Emergency information" error={entityErrors.emergencies || null} loading={false} onRetry={onReloadData}><EmergencyCardPreview emergencies={emergencies} onExpand={() => onExpandCard('emergency')} /></HomeSummaryBoundary>}
 
-          <PetsCardPreview pets={pets} onExpand={() => onExpandCard('pets')} />
+          <HomeSummaryBoundary title="Pets" error={entityErrors.pets || null} loading={false} onRetry={onReloadData}><PetsCardPreview pets={pets} onExpand={() => onExpandCard('pets')} /></HomeSummaryBoundary>
 
-          <PollsCardPreview polls={polls} onExpand={() => onExpandCard('polls')} />
+          <HomeSummaryBoundary title="Polls" error={entityErrors.polls || null} loading={false} onRetry={onReloadData}><PollsCardPreview polls={polls} onExpand={() => onExpandCard('polls')} /></HomeSummaryBoundary>
         </div>
       ) : (
         <div className="bg-surface rounded-xl border border-app p-8 text-center">
           <div className="mb-3 flex justify-center"><Home className="w-12 h-12 text-app-muted" /></div>
           <div className="text-lg font-semibold text-app mb-1">Welcome to your home dashboard!</div>
           <p className="text-sm text-app-secondary max-w-sm mx-auto">
-            This is your household command center. Start by adding tasks, tracking bills, or inviting household
-            members to collaborate.
+            Your household’s shared details and activity appear here.
           </p>
           <div className="flex items-center justify-center gap-3 mt-5 flex-wrap">
             <ActionPill icon={<Building2 className="w-4 h-4" />} label="Property Details" onClick={() => router.push(`/app/homes/${homeId}/property-details`)} />
-            <ActionPill icon={<ClipboardList className="w-4 h-4" />} label="Add Task" onClick={onAddTask} />
-            <ActionPill icon={<AlertTriangle className="w-4 h-4" />} label="Report Issue" onClick={onAddIssue} />
-            <ActionPill icon={<Wallet className="w-4 h-4" />} label="Track Bill" onClick={onAddBill} />
-            <ActionPill icon={<Package className="w-4 h-4" />} label="Track Package" onClick={onAddPackage} />
-            <ActionPill icon={<Users className="w-4 h-4" />} label="Invite Member" onClick={onInviteMember} />
+            {(can('tasks.edit') || can('tasks.manage')) && <ActionPill icon={<ClipboardList className="w-4 h-4" />} label="Add Task" onClick={onAddTask} />}
+            {(can('maintenance.edit') || can('maintenance.manage')) && <ActionPill icon={<AlertTriangle className="w-4 h-4" />} label="Report Issue" onClick={onAddIssue} />}
+            {(can('finance.manage')) && <ActionPill icon={<Wallet className="w-4 h-4" />} label="Track Bill" onClick={onAddBill} />}
+            {(can('packages.edit') || can('packages.manage')) && <ActionPill icon={<Package className="w-4 h-4" />} label="Track Package" onClick={onAddPackage} />}
+            {(can('members.manage')) && <ActionPill icon={<Users className="w-4 h-4" />} label="Invite Member" onClick={onInviteMember} />}
             <ActionPill icon={<Hammer className="w-4 h-4" />} label="Post Home Gig" onClick={() => router.push(`/app/gigs/new?home_id=${homeId}`)} />
           </div>
         </div>

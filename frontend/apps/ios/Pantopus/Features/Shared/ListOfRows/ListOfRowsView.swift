@@ -1050,7 +1050,8 @@ struct RowView: View {
                 .pantopusTextStyle(.body)
                 .foregroundStyle(Theme.Color.appText)
                 .fontWeight(row.highlight == .unread ? .bold : .semibold)
-                .lineLimit(2)
+                .lineLimit(row.titleLineLimit)
+                .fixedSize(horizontal: false, vertical: row.titleLineLimit == nil)
             if let chip = row.inlineChip {
                 ChipPill(chip: chip)
             }
@@ -1325,13 +1326,13 @@ private struct TrailingView: View {
                     variant: primary.variant,
                     size: .inlineAction,
                     action: primary.handler
-                )
+                ).accessibilityIdentifier(primary.identifier ?? "rowVerticalAction_" + primary.label)
                 CompactButton(
                     title: secondary.label,
                     variant: secondary.variant,
                     size: .inlineAction,
                     action: secondary.handler
-                )
+                ).accessibilityIdentifier(secondary.identifier ?? "rowVerticalAction_" + secondary.label)
             }
             .frame(width: 90)
         case let .priceStack(amount, sublabel):

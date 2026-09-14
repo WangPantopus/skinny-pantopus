@@ -42,6 +42,7 @@ function publish(event = 'notification:alert', value = note) {
 }
 beforeEach(() => {
   jest.useFakeTimers(); jest.clearAllMocks(); sockets.length = 0; authListeners.clear();
+  localStorage.clear();
   token = '__session__'; BrowserAlert.created = []; BrowserAlert.permission = 'granted';
   Object.defineProperty(window, 'Notification', { configurable: true, value: BrowserAlert });
   jest.spyOn(document, 'hasFocus').mockReturnValue(false);
@@ -93,4 +94,21 @@ test('logout closes the old connection without starting a replacement', () => {
 test('malformed navigation cannot execute an arbitrary browser location', () => {
   show(); publish('notification:alert', { ...note, link: 'javascript:alert(1)' });
   expect(BrowserAlert.created[0].onclick).toBeNull(); expect(push).not.toHaveBeenCalled();
+});
+
+test('exact task metadata overrides a dashboard link on the browser alert', () => {
+  show();
+  const home = 'ddf18400-0000-4000-8000-000000000100';
+  const task = 'ddf18400-0000-4000-8000-000000000200';
+  act(() => sockets[0].listeners.get('notification:alert')?.({ ...note, type: 'task_assigned',
+    link: `/app/homes/${home}/dashboard?tab=tasks`, metadata: { home_id: home, task_id: task } }));
+  act(() => BrowserAlert.created[0].onclick?.());
+  expect(push).toHaveBeenCalledWith(`/app/homes/${home}/tasks/${task}`);
+});
+test('a changed cookie session marker blocks an old alert and click before the storage event is delivered', () => {
+  show(); publish();
+  localStorage.setItem('pantopus_auth_session_change', 'replacement');
+  act(() => BrowserAlert.created[0].onclick?.());
+  publish('notification:alert', { ...note, id: 'late' });
+  expect(push).not.toHaveBeenCalled(); expect(BrowserAlert.created).toHaveLength(1);
 });

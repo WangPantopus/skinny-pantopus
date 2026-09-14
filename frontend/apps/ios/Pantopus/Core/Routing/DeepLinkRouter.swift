@@ -39,6 +39,7 @@ final class DeepLinkRouter {
         case listing(id: String)
         case homeDetail(id: String)
         case homeDashboard(id: String)
+        case homeTask(homeId: String, taskId: String)
         case homeMemberRequests(id: String)
         /// `pantopus://homes/:id/owners/transfer` — A13.4 Transfer Ownership
         /// form. Lands on the populated state; the form owns the Face ID
@@ -62,7 +63,7 @@ final class DeepLinkRouter {
         /// `pantopus://businesses/new` — open the A12.10 Create Business
         /// wizard inside the active tab's nav stack.
         case createBusiness
-        case invite(token: String)
+        case invite(token: String, leaseInvitation: Bool = false)
         /// P4.2 — A13.10 Edit Business Page (owner-only).
         /// `pantopus://businesses/:id/page-editor`.
         case editBusinessPage(businessId: String)
@@ -143,6 +144,7 @@ final class DeepLinkRouter {
         case viewAs
         /// `pantopus://homes/:id/waiting-room` — A18.4 persistent waiting room.
         case waitingRoom(id: String)
+        case homeResidency(id: String)
         /// `pantopus://hub-today?deliveryId=&kind=morning|evening` — the Hub
         /// "Today" briefing opened from a Morning/Evening Briefing push. The
         /// notification's metadata carries `briefing_delivery_id` +
@@ -160,7 +162,7 @@ final class DeepLinkRouter {
     }
 
     /// How a resolved destination should be handled relative to auth.
-    private enum RoutingKind {
+    private enum RoutingKind: String {
         /// OAuth callback / `.unknown` — never stash, never park as content.
         case discard
         /// `reset-password` / `verify-email` / `join/:code` — the auth stack
@@ -182,9 +184,16 @@ final class DeepLinkRouter {
     /// and opens the existing Login cover without disrupting the Place funnel.
     private(set) var prefersLoginPresentation = false
 
-    private let logger = Logger(label: "app.pantopus.ios.DeepLinkRouter")
+    private let onDiagnostic: @MainActor (String) -> Void
 
-    private init() {}
+    init(onDiagnostic: @escaping @MainActor (String) -> Void = { category in
+        Logger(label: "app.pantopus.ios.DeepLinkRouter").info("deeplink", metadata: [
+            "category": .string(category)
+        ])
+        Observability.shared.track("deeplink.received", properties: ["category": category])
+    }) {
+        self.onDiagnostic = onDiagnostic
+    }
 
     func handle(url: URL) {
         // Browser OAuth callbacks are owned by ASWebAuthenticationSession /
@@ -192,13 +201,10 @@ final class DeepLinkRouter {
         if AuthManager.isOAuthCallback(url) { return }
 
         let destination = resolve(url: url)
-        logger.info("deeplink", metadata: [
-            "url": .string(url.absoluteString),
-            "destination": .string("\(destination)")
-        ])
-        Observability.shared.track("deeplink.received", properties: [
-            "url": url.absoluteString
-        ])
+        // URLs and enum-associated values can contain reset tokens, invite
+        // secrets, addresses or account identifiers. Diagnostics receive only
+        // a fixed category; the original destination stays in the routing flow.
+        onDiagnostic(Self.routingKind(of: destination).rawValue)
         apply(destination: destination, persistencePath: Self.normalizedPath(for: url))
     }
 
@@ -219,6 +225,10 @@ final class DeepLinkRouter {
     /// Navigation consumes the in-memory link; load or departure finishes it.
     func completePostArrival(id: String) {
         completeArrival(.post(id: id))
+    }
+
+    func completeHomeTaskArrival(homeId: String, taskId: String) {
+        completeArrival(.homeTask(homeId: homeId, taskId: taskId))
     }
 
     func completeConversationArrival(id: String) {
@@ -278,7 +288,7 @@ final class DeepLinkRouter {
             // than dropping them. Do NOT treat them as "browse now without login".
             if let userID {
                 switch destination {
-                case .post, .conversation:
+                case .post, .conversation, .homeTask:
                     activeContentArrival = destination
                     PendingDeepLinkStore.stash(persistencePath, expectedUserID: userID)
                 default:
@@ -506,6 +516,11 @@ final class DeepLinkRouter {
         case "wallet":
             return .wallet
         case "invite":
+            if segments.dropFirst().first == "lease" {
+                guard segments.count == 3, let token = segments.last,
+                      token.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil else { return .unknown(url) }
+                return .invite(token: token, leaseInvitation: true)
+            }
             if let token = segments.dropFirst().first, !token.isEmpty {
                 return .invite(token: token)
             }
@@ -561,6 +576,15 @@ final class DeepLinkRouter {
     private func homeDestination(url: URL, segments: [String], tabQuery: String?) -> Destination {
         guard let id = segments.dropFirst().first else { return .unknown(url) }
         let trailing = Array(segments.dropFirst(2))
+        if trailing.first == "tasks" {
+            guard trailing.count == 2, UUID(uuidString: id) != nil,
+                  let taskId = trailing.last, UUID(uuidString: taskId) != nil else { return .unknown(url) }
+            return .homeTask(homeId: id.lowercased(), taskId: taskId.lowercased())
+        }
+        if trailing.first == "residency" {
+            guard trailing.count == 1, UUID(uuidString: id) != nil else { return .unknown(url) }
+            return .homeResidency(id: id.lowercased())
+        }
         if trailing.first == "dashboard" {
             return .homeDashboard(id: id)
         }

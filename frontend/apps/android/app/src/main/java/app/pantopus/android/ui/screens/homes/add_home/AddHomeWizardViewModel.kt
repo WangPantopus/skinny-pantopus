@@ -7,24 +7,37 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.data.api.models.geo.GeoResolveRequest
+import app.pantopus.android.data.api.models.geo.GeoSuggestion
+import app.pantopus.android.data.api.models.geo.NormalizedAddress
 import app.pantopus.android.data.api.models.homes.CheckAddressRequest
 import app.pantopus.android.data.api.models.homes.CheckAddressResponse
 import app.pantopus.android.data.api.models.homes.CreateAccessSecretRequest
 import app.pantopus.android.data.api.models.homes.CreateHomeRequest
-import app.pantopus.android.data.api.models.homes.NormalizedAddressDto
+import app.pantopus.android.data.api.models.homes.HomeAddressValidationRequest
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsFields
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsRequest
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsResponse
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.homediscovery.HomeDiscoveryRepository
+import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.api.services.GeoApi
+import app.pantopus.android.data.homes.HomeCreationLimits
+import app.pantopus.android.data.homes.HomeCreationOutcome
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.data.homes.PendingHomeCreation
+import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.wizard.WizardChrome
 import app.pantopus.android.ui.screens.shared.wizard.WizardLeadingControl
 import app.pantopus.android.ui.screens.shared.wizard.WizardModel
 import app.pantopus.android.ui.screens.shared.wizard.WizardProgressLabel
 import app.pantopus.android.ui.screens.shared.wizard.WizardSecondaryCta
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,11 +54,22 @@ data class AddHomeUiState(
     val form: AddHomeFormState = AddHomeFormState.EMPTY,
     val homeSearchQuery: String = "",
     val selectedHomeId: String? = null,
+    val searchResults: List<GeoSuggestion> = emptyList(),
+    val isFindingAddress: Boolean = false,
+    val addressSearchError: String? = null,
+    val canOpenLocationSettings: Boolean = false,
+    val isManualEntry: Boolean = false,
+    val validatedAddressId: String? = null,
+    val isSessionCurrent: Boolean = true,
     val addressCheck: CheckAddressResponse? = null,
     val geocodedAddress: AddHomeGeocodedAddress? = null,
     val isCheckingAddress: Boolean = false,
     val isSubmitting: Boolean = false,
     val createdHomeId: String? = null,
+    val pendingCreation: PendingHomeCreation? = null,
+    val creationOutcome: HomeCreationOutcome? = null,
+    val showsCreationRecovery: Boolean = false,
+    val creationStorageUnavailable: Boolean = false,
     val errorMessage: String? = null,
     /**
      * The address refusal behind [errorMessage], when that is what it is.
@@ -76,22 +100,19 @@ data class AddHomeUiState(
     val propertyLookupMessage: String = "",
     /** True while the suggestions call is in flight. */
     val isLoadingPropertySuggestions: Boolean = false,
-    /**
-     * Wi-Fi / gate / alarm secrets added while creating the home. POSTed
-     * to `POST /api/homes/:id/access` once the home row exists (RN
-     * `useHomeForm.ts:321-336`). Held off [form] so the secrets never
-     * reach `SavedStateHandle`.
-     */
+    /** Optional access joins the protected atomic command and never reaches SavedStateHandle. */
     val accessItems: List<AddHomeAccessItem> = listOf(AddHomeAccessItem(id = "access-0")),
     /** Non-null while the Wi-Fi QR scanner is open; carries the target row. */
     val scannerTargetItemId: String? = null,
-    /**
-     * Set when at least one access secret failed to save after the home
-     * was created. RN swallows these; we surface them because the home
-     * already exists and the user should know to re-add.
-     */
-    val accessSecretWarning: String? = null,
 ) {
+    val creationPrimaryLabel: String get() =
+        when {
+            creationStorageUnavailable || pendingCreation == null -> "Retry recovery"
+            creationOutcome?.state == "completed" -> "Open My Homes"
+            creationOutcome?.isTerminal == true -> "Edit details"
+            else -> "Try saving again"
+        }
+
     /**
      * Networks & codes are hidden when joining an existing home — RN
      * gates the whole block on `!isClaimingExistingHome`
@@ -106,7 +127,9 @@ data class AddHomeUiState(
      */
     val claimedAddressLabel: String
         get() =
-            addressCheck
+            addressCheck?.residencyAddress?.let {
+                listOf(it.line1, it.line2, it.city, it.state, it.postalCode).filter(String::isNotBlank).joinToString(", ")
+            } ?: addressCheck
                 ?.formattedAddress
                 ?.trim()
                 ?.takeIf { it.isNotEmpty() }
@@ -171,19 +194,29 @@ open class AddHomeWizardViewModel
     @Inject
     constructor(
         private val repository: HomesRepository,
-        private val discoveryRepository: HomeDiscoveryRepository,
         private val savedStateHandle: SavedStateHandle,
         private val networkMonitor: NetworkMonitor,
+        private val geoApi: GeoApi,
+        private val locationProvider: LocationProvider,
+        sessions: HomeClaimSessionScopeFactory,
+        creations: HomeCreationFactory,
     ) : ViewModel(),
         WizardModel {
+        private val session = sessions.create(viewModelScope)
+        private val requiredHomeId = savedStateHandle.get<String>("joinHome")?.lowercase()
+        private val creation = creations.create(session)
+        private var creationRevision = 0L
+        private var retainsDraft = true
+        private var addressRevision = 0L
+        private var addressJob: Job? = null
         private val _state =
             MutableStateFlow(
                 restoreFormState().let { form ->
-                    val candidate = AddHomeSampleData.candidateFor(form.address)
                     AddHomeUiState(
                         form = form,
-                        homeSearchQuery = candidate?.line1.orEmpty(),
-                        selectedHomeId = candidate?.id,
+                        homeSearchQuery = form.address.street,
+                        isManualEntry = form.address != AddHomeAddressFields(),
+                        isSessionCurrent = session.isCurrent,
                     )
                 },
             )
@@ -194,12 +227,21 @@ open class AddHomeWizardViewModel
         /** One-shot navigation events the screen reacts to. */
         val pendingEvent = MutableStateFlow<AddHomeOutboundEvent?>(null)
 
+        init {
+            viewModelScope.launch { session.invalidated.collect { if (it) retireSession() } }
+        }
+
         // MARK: - WizardModel
 
         override val chrome: WizardChrome
             get() = computeChrome(_state.value)
 
         override fun onLeading() {
+            if (_state.value.showsCreationRecovery) {
+                suspendCreation()
+                pendingEvent.value = AddHomeOutboundEvent.Dismiss
+                return
+            }
             val current = _state.value.form.currentStep
             when (leadingControl(current)) {
                 WizardLeadingControl.Back -> goBack()
@@ -208,11 +250,14 @@ open class AddHomeWizardViewModel
         }
 
         override fun onDiscard() {
+            finishDraft()
             pendingEvent.value = AddHomeOutboundEvent.Dismiss
         }
 
         override fun onPrimary() {
-            viewModelScope.launch { advance() }
+            viewModelScope.launch {
+                if (_state.value.showsCreationRecovery) creationPrimary() else advance()
+            }
         }
 
         override fun onSecondary() {
@@ -222,84 +267,192 @@ open class AddHomeWizardViewModel
             }
         }
 
-        // MARK: - Search updates
+        // MARK: - Actual address entry
 
-        val nearbyHomes: List<AddHomeAddressCandidate>
-            get() = AddHomeSampleData.nearbyHomes
+        val nearbyHomes: List<AddHomeAddressCandidate> get() = emptyList()
+        val autocompleteResults: List<AddHomeAddressCandidate> get() = emptyList()
+        val showsAutocomplete: Boolean get() = _state.value.searchResults.isNotEmpty() && !_state.value.isManualEntry
 
-        val autocompleteResults: List<AddHomeAddressCandidate>
-            get() =
-                if (_state.value.selectedHomeId == null) {
-                    AddHomeSampleData.autocompleteResults(_state.value.homeSearchQuery)
-                } else {
-                    emptyList()
-                }
+        fun suspendAddressEntry() {
+            if (_state.value.isSubmitting || _state.value.form.currentStep == AddHomeStep.Success) return
+            invalidateAddress()
+            _state.update { it.copy(searchResults = emptyList(), form = it.form.copy(step = AddHomeStep.Address.ordinal0)) }
+            persist()
+        }
 
-        val showsAutocomplete: Boolean
-            get() = _state.value.selectedHomeId == null && _state.value.homeSearchQuery.trim().isNotEmpty()
+        private fun invalidateAddress() {
+            addressRevision++
+            addressJob?.cancel()
+            addressJob = null
+            _state.update {
+                it.copy(
+                    validatedAddressId = null, addressCheck = null, geocodedAddress = null,
+                    existingHomeId = null, isClaimingExistingHome = false,
+                    showsClaimedModal = false, showsConfirmAddressSheet = false,
+                    isCheckingAddress = false, isFindingAddress = false, propertySuggestions = null,
+                    propertyLookupComplete = false, isLoadingPropertySuggestions = false,
+                    addressSearchError = null, canOpenLocationSettings = false, errorMessage = null,
+                )
+            }
+        }
+
+        private fun retireSession() {
+            suspendCreation()
+            invalidateAddress()
+            _state.value = AddHomeUiState(isSessionCurrent = false, errorMessage = "Your session changed. Reopen Add Home to continue.")
+            pendingEvent.value = null
+            savedStateHandle.keys().filter { it.startsWith("addHome.") }.forEach { savedStateHandle.remove<Any>(it) }
+        }
+
+        private fun addressIsCurrent(revision: Long) = session.isCurrent && _state.value.isSessionCurrent && addressRevision == revision
+
+        private fun <T> required(result: NetworkResult<T>): T =
+            when (result) {
+                is NetworkResult.Success -> result.data
+                is NetworkResult.Failure -> throw result.error
+            }
+
+        private suspend fun findAddress(
+            revision: Long,
+            failure: String,
+            action: suspend () -> Unit,
+        ) {
+            try {
+                session.requireCurrent()
+                action()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: NetworkError) {
+                if (addressIsCurrent(revision)) _state.update { it.copy(addressSearchError = failure) }
+            } catch (_: IllegalStateException) {
+                if (addressIsCurrent(revision)) _state.update { it.copy(addressSearchError = failure) }
+            } finally {
+                if (addressRevision == revision) _state.update { it.copy(isFindingAddress = false) }
+            }
+        }
 
         fun updateSearchQuery(query: String) {
+            invalidateAddress()
             _state.update {
                 it.copy(
                     homeSearchQuery = query,
                     selectedHomeId = null,
                     form = it.form.copy(address = AddHomeAddressFields()),
-                    addressCheck = null,
-                    geocodedAddress = null,
+                    searchResults = emptyList(),
+                    isManualEntry = false,
                 )
             }
             persist()
+            if (query.trim().length < MIN_SEARCH_CHARACTERS || !session.isCurrent) return
+            val revision = addressRevision
+            _state.update { it.copy(isFindingAddress = true) }
+            addressJob =
+                viewModelScope.launch {
+                    findAddress(revision, "Address search is unavailable. Try again or enter your address manually.") {
+                        delay(SEARCH_DEBOUNCE_MILLIS)
+                        val response = required(safeApiCall { geoApi.autocomplete(query.trim()) })
+                        if (!addressIsCurrent(revision)) return@findAddress
+                        check(
+                            response.suggestions.all { it.suggestionId.isNotBlank() && it.label.isNotBlank() } &&
+                                response.suggestions.distinctBy { it.suggestionId }.size == response.suggestions.size,
+                        )
+                        _state.update {
+                            it.copy(
+                                searchResults = response.suggestions,
+                                addressSearchError =
+                                    if (response.suggestions.isEmpty()) "No matching addresses. Enter your address manually." else null,
+                            )
+                        }
+                    }
+                }
         }
 
-        fun clearSearchQuery() {
-            _state.update {
-                it.copy(
-                    homeSearchQuery = "",
-                    selectedHomeId = null,
-                    form = it.form.copy(address = AddHomeAddressFields()),
-                    addressCheck = null,
-                    geocodedAddress = null,
-                )
-            }
-            persist()
+        fun retryAddressSearch() = updateSearchQuery(_state.value.homeSearchQuery)
+
+        fun clearSearchQuery() = updateSearchQuery("")
+
+        fun selectSearchResult(suggestion: GeoSuggestion) {
+            if (!session.isCurrent || _state.value.searchResults.none { it.suggestionId == suggestion.suggestionId }) return
+            invalidateAddress()
+            val revision = addressRevision
+            _state.update { it.copy(isFindingAddress = true) }
+            addressJob =
+                viewModelScope.launch {
+                    findAddress(revision, "Could not load that address. Try again or enter it manually.") {
+                        val response = required(safeApiCall { geoApi.resolve(GeoResolveRequest(suggestion.suggestionId)) })
+                        if (addressIsCurrent(revision)) {
+                            applyResolvedAddress(response.normalized)
+                            _state.update { it.copy(selectedHomeId = suggestion.suggestionId) }
+                        }
+                    }
+                }
         }
 
         fun useCurrentLocation() {
+            if (!session.isCurrent) return
+            invalidateAddress()
+            val revision = addressRevision
+            _state.update { it.copy(isFindingAddress = true) }
+            addressJob =
+                viewModelScope.launch {
+                    findAddress(revision, "Could not find your address here. Try again or enter it manually.") {
+                        val coordinate = required(safeApiCall { locationProvider.requestCurrent(timeoutMillis = 5000) })
+                        if (!addressIsCurrent(revision)) return@findAddress
+                        if (coordinate == null) {
+                            locationPermissionDenied()
+                            return@findAddress
+                        }
+                        val response = required(safeApiCall { geoApi.reverse(coordinate.latitude, coordinate.longitude) })
+                        if (addressIsCurrent(revision)) applyResolvedAddress(response.normalized)
+                    }
+                }
+        }
+
+        fun locationPermissionDenied() {
             _state.update {
                 it.copy(
-                    homeSearchQuery = "",
-                    selectedHomeId = null,
-                    form = it.form.copy(address = AddHomeAddressFields()),
-                    addressCheck = null,
-                    geocodedAddress = null,
+                    addressSearchError = "Location is unavailable. Check location access in Settings or enter your address manually.",
+                    canOpenLocationSettings = true,
+                )
+            }
+        }
+
+        private fun applyResolvedAddress(address: NormalizedAddress) {
+            val fields =
+                AddHomeAddressFields(
+                    street = address.address.orEmpty(),
+                    city = address.city.orEmpty(),
+                    state = address.state.orEmpty(),
+                    zipCode = address.zipcode.orEmpty(),
+                )
+            check(fields.isComplete)
+            _state.update {
+                it.copy(
+                    form = it.form.copy(address = fields),
+                    homeSearchQuery = fields.street,
+                    searchResults = emptyList(),
+                    isManualEntry = true,
                 )
             }
             persist()
         }
 
         fun selectAddressCandidate(candidate: AddHomeAddressCandidate) {
-            if (candidate.isClaimed) return
+            invalidateAddress()
             _state.update {
                 it.copy(
                     homeSearchQuery = candidate.line1,
                     selectedHomeId = candidate.id,
                     form = it.form.copy(address = candidate.addressFields),
-                    addressCheck = null,
-                    geocodedAddress = null,
+                    isManualEntry = true,
                 )
             }
             persist()
         }
 
         fun addManuallyTapped() {
-            _state.update {
-                it.copy(
-                    selectedHomeId = null,
-                    form = it.form.copy(address = AddHomeAddressFields()),
-                    addressCheck = null,
-                    geocodedAddress = null,
-                )
-            }
+            invalidateAddress()
+            _state.update { it.copy(selectedHomeId = null, searchResults = emptyList(), isManualEntry = true) }
             persist()
         }
 
@@ -322,6 +475,7 @@ open class AddHomeWizardViewModel
             field: AddressField,
             value: String,
         ) {
+            invalidateAddress()
             _state.update { current ->
                 val next =
                     when (field) {
@@ -331,11 +485,11 @@ open class AddHomeWizardViewModel
                         AddressField.State -> current.form.address.copy(state = value)
                         AddressField.Zip -> current.form.address.copy(zipCode = value)
                     }
-                val candidate = AddHomeSampleData.candidateFor(next)
                 current.copy(
                     form = current.form.copy(address = next),
-                    homeSearchQuery = candidate?.line1 ?: next.street,
-                    selectedHomeId = candidate?.id,
+                    homeSearchQuery = next.street,
+                    selectedHomeId = null,
+                    isManualEntry = true,
                     addressCheck = null,
                     geocodedAddress = null,
                 )
@@ -404,6 +558,7 @@ open class AddHomeWizardViewModel
 
         fun addAccessItem() {
             _state.update { current ->
+                if (current.accessItems.size >= HomeCreationLimits.MAX_ACCESS_RECORDS) return@update current
                 current.copy(
                     accessItems =
                         current.accessItems +
@@ -502,31 +657,27 @@ open class AddHomeWizardViewModel
             return true
         }
 
-        /**
-         * A row is invalid when exactly one of label / value is filled.
-         * Mirrors RN's `validateAccessItems` (`useHomeForm.ts:184-200`).
-         */
+        /** Validate the atomic command's optional records before showing Review. */
         fun validateAccessItems(): Boolean {
-            var isValid = true
+            var isValid = _state.value.accessItems.size <= HomeCreationLimits.MAX_ACCESS_RECORDS
             val validated =
                 _state.value.accessItems.map { item ->
-                    val hasLabel = item.label.isNotBlank()
-                    val hasSecret = item.secretValue.isNotBlank()
-                    if (hasLabel == hasSecret) {
-                        item.copy(labelError = null, valueError = null)
-                    } else {
-                        isValid = false
-                        item.copy(
-                            labelError =
-                                if (hasLabel) null else "Label is required when a value is entered.",
-                            valueError =
-                                if (hasSecret) {
-                                    null
-                                } else {
-                                    "Password/code is required when label is entered."
-                                },
-                        )
-                    }
+                    val label = item.label.trim()
+                    val secret = item.secretValue.trim()
+                    val labelError =
+                        when {
+                            label.isEmpty() && secret.isNotEmpty() -> "Label is required when a value is entered."
+                            label.length > HomeCreationLimits.MAX_LABEL_LENGTH -> "Use 200 characters or fewer for this label."
+                            else -> null
+                        }
+                    val valueError =
+                        when {
+                            secret.isEmpty() && label.isNotEmpty() -> "Password/code is required when label is entered."
+                            secret.length > HomeCreationLimits.MAX_VALUE_LENGTH -> "Use 2,048 characters or fewer for this value."
+                            else -> null
+                        }
+                    if (labelError != null || valueError != null) isValid = false
+                    item.copy(labelError = labelError, valueError = valueError)
                 }
             _state.update {
                 it.copy(
@@ -537,17 +688,16 @@ open class AddHomeWizardViewModel
             return isValid
         }
 
-        fun acknowledgeAccessSecretWarning() {
-            _state.update { it.copy(accessSecretWarning = null) }
-        }
-
         fun acknowledgeEvent() {
+            if (pendingEvent.value != null) finishDraft()
             pendingEvent.value = null
         }
 
         // MARK: - State machine
 
         private suspend fun advance() {
+            if (!session.isCurrent) return
+            if (_state.value.isSubmitting || _state.value.isFindingAddress || !primaryEnabled(_state.value)) return
             val current = _state.value.form.currentStep
             when (current) {
                 AddHomeStep.Address -> {
@@ -559,14 +709,29 @@ open class AddHomeWizardViewModel
                         _state.value.zipMismatch == null &&
                         !_state.value.showsClaimedModal
                     ) {
+                        val address = _state.value.geocodedAddress ?: return
+                        _state.update {
+                            it.copy(
+                                form =
+                                    it.form.copy(
+                                        address =
+                                            AddHomeAddressFields(
+                                                address.street,
+                                                address.unit,
+                                                address.city,
+                                                address.state,
+                                                address.zipCode,
+                                            ),
+                                    ),
+                            )
+                        }
                         transitionTo(AddHomeStep.Role)
                     }
                 }
-                AddHomeStep.Role -> transitionTo(AddHomeStep.Review)
+                AddHomeStep.Role -> if (_state.value.isClaimingExistingHome || validateAccessItems()) transitionTo(AddHomeStep.Review)
                 AddHomeStep.Review -> submit()
                 AddHomeStep.Success -> {
-                    val homeId = _state.value.createdHomeId ?: return
-                    pendingEvent.value = AddHomeOutboundEvent.OpenHomeDashboard(homeId)
+                    if (_state.value.createdHomeId != null) pendingEvent.value = AddHomeOutboundEvent.OpenHomes
                 }
             }
         }
@@ -577,6 +742,7 @@ open class AddHomeWizardViewModel
         }
 
         private fun transitionTo(step: AddHomeStep) {
+            if (step == AddHomeStep.Address) invalidateAddress()
             _state.update {
                 it.copy(form = it.form.copy(step = step.ordinal0), errorMessage = null)
             }
@@ -593,64 +759,124 @@ open class AddHomeWizardViewModel
 
         // MARK: - API calls
 
+        fun retryCheckAddress() {
+            if (_state.value.form.currentStep == AddHomeStep.Confirm) viewModelScope.launch { runCheckAddress() }
+        }
+
         private suspend fun runCheckAddress() {
+            if (!session.isCurrent || !_state.value.form.address.isComplete || _state.value.isCheckingAddress) return
+            invalidateAddress()
+            val revision = addressRevision
             val fields = _state.value.form.address
-            _state.update {
-                it.copy(
-                    isCheckingAddress = true,
-                    addressCheck = null,
-                    geocodedAddress = null,
-                    errorMessage = null,
-                    showsClaimedModal = false,
-                    showsConfirmAddressSheet = false,
-                    isClaimingExistingHome = false,
-                    existingHomeId = null,
+            _state.update { it.copy(isCheckingAddress = true) }
+            try {
+                session.requireCurrent()
+                val validation =
+                    required(
+                        repository.validateAddress(
+                            HomeAddressValidationRequest(
+                                line1 = fields.street,
+                                line2 = fields.unit.takeIf { it.isNotEmpty() },
+                                city = fields.city,
+                                state = fields.state.uppercase(),
+                                zip = fields.zipCode,
+                            ),
+                        ),
+                    )
+                if (!addressIsCurrent(revision)) return
+                if (validation.verdict.status !in listOf("OK", "MIXED_USE", "CONFLICT")) {
+                    _state.update { it.copy(errorMessage = addressValidationMessage(validation.verdict.status)) }
+                    return
+                }
+                val addressId = validation.addressId
+                val address = validation.verdict.normalized
+                check(validId(addressId) && address != null && address.isValid)
+                val response =
+                    required(
+                        repository.checkAddress(
+                            CheckAddressRequest(
+                                addressId = addressId,
+                                address = address.line1,
+                                unitNumber = address.line2,
+                                city = address.city,
+                                state = address.state,
+                                zipCode = address.zip,
+                            ),
+                        ),
+                    )
+                if (!addressIsCurrent(revision)) return
+                check(
+                    response.status in
+                        listOf(
+                            CheckAddressResponse.STATUS_NOT_FOUND, CheckAddressResponse.STATUS_FOUND_CLAIMED,
+                            CheckAddressResponse.STATUS_FOUND_UNCLAIMED,
+                        ),
                 )
-            }
-            val request =
-                CheckAddressRequest(
-                    address = fields.street,
-                    unitNumber = fields.unit.takeIf { it.isNotEmpty() },
-                    city = fields.city,
-                    state = fields.state,
-                    zipCode = fields.zipCode,
-                )
-            when (val result = repository.checkAddress(request)) {
-                is NetworkResult.Success ->
+                check(if (response.status == CheckAddressResponse.STATUS_NOT_FOUND) response.homeId == null else validId(response.homeId))
+                check(response.homeId == null || response.residencyAddress?.isValid() == true)
+                check(validation.verdict.status != "CONFLICT" || response.homeId != null)
+                if (!matchesRequiredHome(response.homeId)) {
+                    rejectDifferentHome()
+                } else {
                     _state.update {
                         it.copy(
-                            addressCheck = result.data,
-                            geocodedAddress = geocodedAddress(result.data, fields),
-                            isCheckingAddress = false,
-                            existingHomeId = result.data.homeId,
-                            // RN `useHomeForm.ts:611` — never advance;
-                            // the modal owns the next action.
-                            showsClaimedModal = result.data.isAlreadyClaimed,
-                            // A home row exists with no active occupants —
-                            // RN claims it instead of creating a duplicate
-                            // (`useHomeForm.ts:616`).
-                            isClaimingExistingHome =
-                                result.data.isFoundUnclaimed && result.data.homeId != null,
+                            addressCheck = response,
+                            validatedAddressId = addressId,
+                            geocodedAddress =
+                                AddHomeGeocodedAddress(
+                                    street = response.residencyAddress?.line1 ?: address.line1,
+                                    unit = response.residencyAddress?.line2 ?: address.line2.orEmpty(),
+                                    city = response.residencyAddress?.city ?: address.city,
+                                    state = response.residencyAddress?.state ?: address.state,
+                                    zipCode = response.residencyAddress?.postalCode ?: address.zip,
+                                    latitude = address.lat,
+                                    longitude = address.lng,
+                                    isMultiUnit = response.isMultiUnit,
+                                ),
+                            existingHomeId = response.homeId,
+                            showsClaimedModal = response.isAlreadyClaimed,
+                            isClaimingExistingHome = response.isFoundUnclaimed,
                         )
                     }
-                is NetworkResult.Failure ->
-                    _state.update {
-                        it.copy(
-                            isCheckingAddress = false,
-                            errorMessage =
-                                result.error.message
-                                    ?: "Couldn't verify that address. Try again.",
-                        )
-                    }
-            }
-            // RN runs the property lookup right after check-address and
-            // only for the create-a-new-home path (`useHomeForm.ts:625`);
-            // the claim paths skip straight to role selection.
-            val current = _state.value
-            if (!current.showsClaimedModal && !current.isClaimingExistingHome && current.errorMessage == null) {
-                loadPropertySuggestions()
+                    if (!response.isAlreadyClaimed && !response.isFoundUnclaimed) loadPropertySuggestions()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: NetworkError) {
+                addressCheckFailed(revision)
+            } catch (_: IllegalStateException) {
+                addressCheckFailed(revision)
+            } finally {
+                if (addressRevision == revision) _state.update { it.copy(isCheckingAddress = false) }
             }
         }
+
+        private fun addressCheckFailed(revision: Long) {
+            if (addressIsCurrent(revision)) {
+                _state.update {
+                    it.copy(
+                        validatedAddressId = null,
+                        geocodedAddress = null,
+                        errorMessage = "Could not check this address. Try again.",
+                    )
+                }
+            }
+        }
+
+        private fun addressValidationMessage(status: String): String =
+            when (status) {
+                "MISSING_UNIT" -> "Enter your unit or apartment number, then check this address again."
+                "MISSING_STREET_NUMBER", "UNVERIFIED_STREET_NUMBER" -> "Check the street number and try again."
+                "PO_BOX" -> "Enter a street address. A PO Box cannot be used as a Home."
+                "BUSINESS" -> "This appears to be a business address. Check your residential address."
+                "MULTIPLE_MATCHES" -> "More than one address matched. Enter the complete street and unit."
+                "UNDELIVERABLE", "LOW_CONFIDENCE" -> "We could not verify this address. Check the details and try again."
+                else -> "Address verification is unavailable. Try again."
+            }
+
+        private fun validId(value: String?): Boolean =
+            value != null &&
+                Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}").matches(value)
 
         /**
          * `POST /api/homes/property-suggestions` — route
@@ -661,6 +887,9 @@ open class AddHomeWizardViewModel
          * (`useHomeForm.ts:657-662`).
          */
         suspend fun loadPropertySuggestions() {
+            if (!session.isCurrent) return
+            val addressId = _state.value.validatedAddressId ?: return
+            val revision = addressRevision
             _state.update { it.copy(isLoadingPropertySuggestions = true) }
             val current = _state.value
             val source = current.geocodedAddress
@@ -673,8 +902,11 @@ open class AddHomeWizardViewModel
                     city = source?.city ?: fields.city,
                     state = (source?.state ?: fields.state).uppercase(),
                     zipCode = source?.zipCode ?: fields.zipCode,
+                    addressId = addressId,
                 )
-            when (val result = repository.propertySuggestions(request)) {
+            val result = repository.propertySuggestions(request)
+            if (!addressIsCurrent(revision)) return
+            when (result) {
                 is NetworkResult.Success ->
                     _state.update {
                         it.copy(
@@ -723,6 +955,7 @@ open class AddHomeWizardViewModel
 
         /** "This address is correct" → show the confirm page. */
         fun showConfirmAddressStep() {
+            if (!session.isCurrent || _state.value.validatedAddressId == null || _state.value.existingHomeId == null) return
             _state.update { it.copy(showsConfirmAddressSheet = true) }
         }
 
@@ -732,8 +965,14 @@ open class AddHomeWizardViewModel
          * (`useHomeForm.ts:700-705`).
          */
         fun confirmClaimedAddress() {
+            if (!session.isCurrent || _state.value.validatedAddressId == null || _state.value.existingHomeId == null) return
+            val address = _state.value.addressCheck?.residencyAddress?.takeIf { it.isValid() } ?: return
             _state.update {
                 it.copy(
+                    form =
+                        it.form.copy(
+                            address = AddHomeAddressFields(address.line1, address.line2, address.city, address.state, address.postalCode),
+                        ),
                     showsClaimedModal = false,
                     showsConfirmAddressSheet = false,
                     isClaimingExistingHome = true,
@@ -742,9 +981,33 @@ open class AddHomeWizardViewModel
             transitionTo(AddHomeStep.Role)
         }
 
+        private fun matchesRequiredHome(homeId: String?): Boolean =
+            requiredHomeId == null || (validId(requiredHomeId) && homeId?.lowercase() == requiredHomeId)
+
+        private fun rejectDifferentHome() {
+            _state.update {
+                it.copy(
+                    addressCheck = null,
+                    validatedAddressId = null,
+                    geocodedAddress = null,
+                    existingHomeId = null,
+                    isClaimingExistingHome = false,
+                    showsClaimedModal = false,
+                    showsConfirmAddressSheet = false,
+                    errorMessage =
+                        "This address does not match the Home you opened. Check its street and apartment, " +
+                            "or return to My Homes to choose a different Home.",
+                )
+            }
+        }
+
         private suspend fun submitExistingHomeClaim(role: AddHomeRole) {
+            if (!session.confirmCurrent()) {
+                retireSession()
+                return
+            }
             val homeId = _state.value.existingHomeId
-            if (homeId == null) {
+            if (homeId == null || !matchesRequiredHome(homeId)) {
                 _state.update {
                     it.copy(
                         errorMessage =
@@ -760,23 +1023,33 @@ open class AddHomeWizardViewModel
                 pendingEvent.value = AddHomeOutboundEvent.OpenClaimOwnership(homeId)
                 return
             }
-            _state.update { it.copy(isSubmitting = true, errorMessage = null) }
-            when (val result = discoveryRepository.submitResidencyClaim(homeId, role.claimedRole)) {
-                is NetworkResult.Success -> {
-                    _state.update { it.copy(isSubmitting = false) }
-                    pendingEvent.value = AddHomeOutboundEvent.OpenWaitingRoom(homeId)
+            val address = _state.value.addressCheck?.residencyAddress?.takeIf { it.isValid() }
+            if (address == null) {
+                _state.update { it.copy(errorMessage = "Confirm the complete street and apartment again before submitting.") }
+                return
+            }
+            _state.update { it.copy(showsCreationRecovery = true, isSubmitting = true, errorMessage = null) }
+            try {
+                creation.prepareResidency(homeId, address, _state.value.form.creationSnapshot())
+                _state.update { it.copy(pendingCreation = creation.pending, accessItems = emptyList()) }
+                resolveCreation(HomeCreationAction.Submit)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: IllegalStateException) {
+                if (session.isCurrent) {
+                    _state.update { it.copy(creationStorageUnavailable = creation.storageFailed, errorMessage = error.message) }
+                } else {
+                    retireSession()
                 }
-                is NetworkResult.Failure ->
-                    _state.update {
-                        it.copy(
-                            isSubmitting = false,
-                            errorMessage = result.error.message ?: "Failed to submit claim",
-                        )
-                    }
+            } finally {
+                _state.update { it.copy(isSubmitting = false) }
             }
         }
 
+        // Each asynchronous write must stop immediately after session retirement.
+        @Suppress("ReturnCount")
         private suspend fun submit() {
+            if (!session.isCurrent || _state.value.isSubmitting || _state.value.validatedAddressId == null) return
             val role = _state.value.form.role ?: return
             val fields = _state.value.form.address
             Analytics.track(AnalyticsEvent.CtaAddHomeSubmit)
@@ -791,6 +1064,11 @@ open class AddHomeWizardViewModel
             }
             // Existing-home flow: claim it rather than creating a
             // duplicate Home row (RN `useHomeForm.ts:456-473`).
+            if (requiredHomeId != null && (!_state.value.isClaimingExistingHome || !matchesRequiredHome(_state.value.existingHomeId))) {
+                rejectDifferentHome()
+                transitionTo(AddHomeStep.Address)
+                return
+            }
             if (_state.value.isClaimingExistingHome) {
                 submitExistingHomeClaim(role)
                 return
@@ -811,8 +1089,8 @@ open class AddHomeWizardViewModel
                     state = fields.state,
                     zipCode = fields.zipCode,
                     // `createHomeSchema` requires coordinates
-                    // (`backend/routes/home.js:120-124`); check-address
-                    // already resolved them.
+                    // (`backend/routes/home.js:120-124`); canonical validation supplied them.
+                    addressId = _state.value.validatedAddressId,
                     latitude = _state.value.geocodedAddress?.latitude,
                     longitude = _state.value.geocodedAddress?.longitude,
                     homeType = details.homeType.wireValue,
@@ -831,85 +1109,208 @@ open class AddHomeWizardViewModel
                     role = role.claimedRole,
                     attomPropertyDetail = _state.value.propertySuggestions?.attomPropertyDetail,
                 )
-            when (val result = repository.create(request)) {
-                is NetworkResult.Success -> {
-                    val homeId = result.data.home.id
-                    _state.update {
-                        it.copy(
-                            createdHomeId = homeId,
-                            isSubmitting = false,
-                            form = it.form.copy(step = AddHomeStep.Success.ordinal0),
-                        )
-                    }
-                    persistAccessSecrets(homeId)
-                    persist()
+            _state.update { it.copy(showsCreationRecovery = true) }
+            try {
+                session.requireCurrent()
+                creation.prepare(
+                    request.copy(
+                        accessSecrets =
+                            _state.value.accessItems.filter { it.isComplete }.map {
+                                CreateAccessSecretRequest(
+                                    it.accessType.wireValue,
+                                    it.label.trim(),
+                                    it.secretValue.trim(),
+                                    visibility = "members",
+                                )
+                            },
+                    ),
+                    _state.value.form.creationSnapshot(),
+                )
+                _state.update { it.copy(pendingCreation = creation.pending, accessItems = emptyList()) }
+                resolveCreation(HomeCreationAction.Submit)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: IllegalStateException) {
+                if (session.isCurrent) {
+                    _state.update { it.copy(creationStorageUnavailable = creation.storageFailed, errorMessage = error.message) }
+                } else {
+                    retireSession()
                 }
-                is NetworkResult.Failure -> {
-                    // UX-06: a 422 from address verification carries a `code`
-                    // saying exactly what is wrong. Without this the user
-                    // completed every step and got a generic networking string,
-                    // with no idea what to change.
-                    val addressError = AddressVerificationError.from(result.error)
+            } finally {
+                _state.update { it.copy(isSubmitting = false) }
+            }
+        }
+
+        fun resumeCreation() {
+            viewModelScope.launch { restoreCreation() }
+        }
+
+        fun cancelCreation() {
+            viewModelScope.launch { resolveCreation(HomeCreationAction.Cancel) }
+        }
+
+        fun suspendCreation() {
+            creationRevision++
+            creation.hide()
+            _state.update {
+                it.copy(
+                    pendingCreation = null,
+                    creationOutcome = null,
+                    accessItems = if (it.showsCreationRecovery) emptyList() else it.accessItems,
+                )
+            }
+        }
+
+        private suspend fun restoreCreation() {
+            if (!session.isCurrent || creation.isBusy) return
+            val revision = creationRevision
+            try {
+                creation.restore()
+                if (revision != creationRevision || !session.isCurrent) return
+                _state.update {
+                    it.copy(
+                        showsCreationRecovery = creation.pending != null,
+                        pendingCreation = creation.pending,
+                        creationOutcome = creation.outcome,
+                        creationStorageUnavailable = false,
+                        accessItems = if (creation.pending != null) emptyList() else it.accessItems,
+                    )
+                }
+                if (creation.pending != null) resolveCreation(HomeCreationAction.Check)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: IllegalStateException) {
+                if (revision == creationRevision && session.isCurrent) {
                     _state.update {
                         it.copy(
-                            isSubmitting = false,
-                            addressVerificationError = addressError,
-                            errorMessage =
-                                addressError?.displayMessage
-                                    ?: result.error.message
-                                    ?: "Couldn't add your home. Please try again.",
-                            form =
-                                if (addressError?.isFixableInAddressStep == true) {
-                                    // Send them back to the step that can fix it
-                                    // rather than stranding them on the last screen.
-                                    it.form.copy(step = AddHomeStep.Address.ordinal0)
-                                } else {
-                                    it.form
-                                },
+                            showsCreationRecovery = true,
+                            creationStorageUnavailable = true,
+                            errorMessage = error.message,
                         )
                     }
                 }
             }
         }
 
-        /**
-         * `POST /api/homes/:id/access` for every filled Setup row — route
-         * `backend/routes/home.js:5735`. Mirrors RN's
-         * `finalizeCreatedHome` (`useHomeForm.ts:321-336`): a failure here
-         * is non-fatal because the home already exists, but we tell the
-         * user which rows to re-add rather than dropping them silently.
-         */
-        private suspend fun persistAccessSecrets(homeId: String) {
-            val failedLabels = mutableListOf<String>()
-            for (item in _state.value.accessItems) {
-                if (!item.isComplete) continue
-                val label = item.label.trim()
-                val result =
-                    repository.createHomeAccessSecret(
-                        homeId = homeId,
-                        request =
-                            CreateAccessSecretRequest(
-                                accessType = item.accessType.wireValue,
-                                label = label,
-                                secretValue = item.secretValue.trim(),
-                            ),
+        private suspend fun resolveCreation(action: HomeCreationAction) {
+            if (!session.isCurrent || creation.isBusy) return
+            val revision = creationRevision
+            _state.update { it.copy(isSubmitting = true, errorMessage = null) }
+            try {
+                val result = creation.resolve(action)
+                if (revision != creationRevision || !session.isCurrent) return
+                _state.update {
+                    it.copy(
+                        pendingCreation = creation.pending,
+                        creationOutcome = result,
+                        showsCreationRecovery = true,
+                        creationStorageUnavailable = false,
+                        createdHomeId = result.residencyHomeId ?: result.home?.id,
                     )
-                if (result is NetworkResult.Failure) failedLabels.add(label)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: IllegalStateException) {
+                if (revision == creationRevision && session.isCurrent) {
+                    _state.update {
+                        it.copy(
+                            pendingCreation = creation.pending,
+                            creationOutcome = creation.outcome,
+                            creationStorageUnavailable = creation.storageFailed,
+                            errorMessage = error.message,
+                        )
+                    }
+                }
+            } finally {
+                _state.update { it.copy(isSubmitting = false) }
             }
-            if (failedLabels.isEmpty()) return
-            _state.update {
-                it.copy(
-                    accessSecretWarning =
-                        "Your home was created, but we couldn't save " +
-                            failedLabels.joinToString(", ") +
-                            ". Add them again from Access codes.",
-                )
+        }
+
+        private suspend fun creationPrimary() {
+            if (!session.isCurrent || _state.value.isSubmitting || creation.isBusy) return
+            if (_state.value.creationStorageUnavailable || creation.pending == null) {
+                restoreCreation()
+                return
+            }
+            val outcome = creation.outcome
+            if (outcome?.isTerminal != true) {
+                resolveCreation(HomeCreationAction.Submit)
+                return
+            }
+            try {
+                val original = checkNotNull(creation.pending)
+                val form = if (outcome.state == "completed") null else restoreHomeCreationForm(original.form)
+                val access =
+                    if (form == null || original.residencyHomeId != null) {
+                        emptyList()
+                    } else {
+                        creation.request(original).accessSecrets.orEmpty().mapIndexed { index, item ->
+                            AddHomeAccessItem(
+                                "recovered-$index",
+                                AddHomeAccessType.entries.first { it.wireValue == item.accessType },
+                                item.label,
+                                item.secretValue,
+                            )
+                        }
+                    }
+                creation.acknowledge()
+                _state.update {
+                    it.copy(
+                        showsCreationRecovery = false,
+                        pendingCreation = null,
+                        creationOutcome = null,
+                        creationStorageUnavailable = false,
+                        errorMessage = null,
+                    )
+                }
+                if (outcome.state == "completed") {
+                    pendingEvent.value = AddHomeOutboundEvent.OpenHomes
+                } else if (form != null) {
+                    invalidateAddress()
+                    _state.update {
+                        it.copy(
+                            form = form,
+                            isManualEntry = true,
+                            homeSearchQuery = form.address.street,
+                            accessItems = access.ifEmpty { listOf(AddHomeAccessItem("access-0")) },
+                        )
+                    }
+                    persist()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: IllegalStateException) {
+                if (session.isCurrent) {
+                    _state.update {
+                        it.copy(
+                            errorMessage = error.message,
+                            creationStorageUnavailable = creation.storageFailed,
+                        )
+                    }
+                }
+            } catch (_: IllegalArgumentException) {
+                if (session.isCurrent) {
+                    _state.update {
+                        it.copy(errorMessage = "The original Home details could not be restored. Keep this request and contact support.")
+                    }
+                }
             }
         }
 
         // MARK: - Persistence
 
+        private fun finishDraft() {
+            suspendCreation()
+            retainsDraft = false
+            invalidateAddress()
+            savedStateHandle.keys().filter { it.startsWith("addHome.") }.forEach { savedStateHandle.remove<Any>(it) }
+            _state.update { it.copy(form = AddHomeFormState.EMPTY, accessItems = emptyList()) }
+        }
+
         private fun persist() {
+            if (!retainsDraft) return
+            val identityHash = session.storageIdentityHash ?: return
+            savedStateHandle[KEY_SCOPE] = identityHash
             val form = _state.value.form
             savedStateHandle[KEY_STEP] = form.step
             savedStateHandle[KEY_STREET] = form.address.street
@@ -932,7 +1333,11 @@ open class AddHomeWizardViewModel
         }
 
         private fun restoreFormState(): AddHomeFormState {
-            val step: Int = savedStateHandle[KEY_STEP] ?: AddHomeStep.Address.ordinal0
+            if (session.storageIdentityHash == null || savedStateHandle.get<String>(KEY_SCOPE) != session.storageIdentityHash) {
+                savedStateHandle.keys().filter { it.startsWith("addHome.") }.forEach { savedStateHandle.remove<Any>(it) }
+                return AddHomeFormState.EMPTY
+            }
+            val step: Int = AddHomeStep.Address.ordinal0
             val street: String = savedStateHandle[KEY_STREET] ?: ""
             val unit: String = savedStateHandle[KEY_UNIT] ?: ""
             val city: String = savedStateHandle[KEY_CITY] ?: ""
@@ -968,7 +1373,18 @@ open class AddHomeWizardViewModel
 
         // MARK: - Chrome derivation
 
+        fun chromeFor(state: AddHomeUiState): WizardChrome = computeChrome(state)
+
         private fun computeChrome(state: AddHomeUiState): WizardChrome {
+            if (state.showsCreationRecovery) {
+                return WizardChrome(
+                    title = "Add Home", progressLabel = WizardProgressLabel.Hidden,
+                    progressFraction = null,
+                    leading = WizardLeadingControl.Close, primaryCtaLabel = state.creationPrimaryLabel,
+                    primaryCtaEnabled = state.isSessionCurrent && !state.isSubmitting && !creation.isBusy,
+                    isSubmitting = state.isSubmitting || creation.isBusy, dirty = false, showsProgressBar = false,
+                )
+            }
             val step = state.form.currentStep
             val progress = progressLabel(step)
             return WizardChrome(
@@ -978,7 +1394,7 @@ open class AddHomeWizardViewModel
                 leading = leadingControl(step),
                 primaryCtaLabel = primaryCtaLabel(step),
                 primaryCtaEnabled =
-                    primaryEnabled(state) &&
+                    state.isSessionCurrent && !state.isFindingAddress && primaryEnabled(state) &&
                         !state.isSubmitting &&
                         !state.isCheckingAddress &&
                         !state.isLoadingPropertySuggestions,
@@ -992,7 +1408,10 @@ open class AddHomeWizardViewModel
                         (
                             state.selectedHomeId != null ||
                                 state.homeSearchQuery.isNotEmpty() ||
-                                state.form.address.street.isNotEmpty()
+                                listOf(
+                                    state.form.address.street, state.form.address.unit, state.form.address.city,
+                                    state.form.address.state, state.form.address.zipCode,
+                                ).any { it.isNotEmpty() }
                         ),
                 showsProgressBar = step != AddHomeStep.Success,
             )
@@ -1036,18 +1455,22 @@ open class AddHomeWizardViewModel
 
         private fun primaryEnabled(state: AddHomeUiState): Boolean =
             when (state.form.currentStep) {
-                AddHomeStep.Address -> state.selectedHomeId != null
+                AddHomeStep.Address -> state.form.address.isComplete
                 AddHomeStep.Confirm ->
                     !state.isCheckingAddress &&
                         state.errorMessage == null &&
-                        state.zipMismatch == null &&
+                        state.isGeocodeResolved &&
+                        state.validatedAddressId != null &&
                         !state.showsClaimedModal
-                AddHomeStep.Role -> state.form.role != null
-                AddHomeStep.Review -> state.form.role != null
+                AddHomeStep.Role -> state.form.role != null && state.validatedAddressId != null
+                AddHomeStep.Review -> state.form.role != null && state.validatedAddressId != null
                 AddHomeStep.Success -> state.createdHomeId != null
             }
 
         companion object {
+            private const val MIN_SEARCH_CHARACTERS = 3
+            private const val SEARCH_DEBOUNCE_MILLIS = 300L
+            private const val KEY_SCOPE = "addHome.sessionScope"
             private const val KEY_STEP = "addHome.step"
             private const val KEY_STREET = "addHome.street"
             private const val KEY_UNIT = "addHome.unit"
@@ -1105,37 +1528,6 @@ open class AddHomeWizardViewModel
             /** "2.0" → "2", "2.5" → "2.5". */
             private fun trimTrailingZero(value: Double): String =
                 if (value == Math.floor(value)) value.toInt().toString() else value.toString()
-
-            private fun geocodedAddress(
-                response: CheckAddressResponse,
-                fallback: AddHomeAddressFields,
-            ): AddHomeGeocodedAddress? {
-                val normalized = response.normalizedAddress ?: return null
-                return AddHomeGeocodedAddress(
-                    street = normalized.streetValue() ?: fallback.street,
-                    unit = normalized.unitValue() ?: fallback.unit,
-                    city = normalized.city.takeUnlessBlank() ?: fallback.city,
-                    state = normalized.state.takeUnlessBlank() ?: fallback.state,
-                    zipCode = normalized.zipValue() ?: fallback.zipCode,
-                    latitude = normalized.latitude ?: normalized.lat,
-                    longitude = normalized.longitude ?: normalized.lng,
-                    isMultiUnit = normalized.isMultiUnit ?: fallback.unit.isNotEmpty(),
-                )
-            }
-
-            private fun NormalizedAddressDto.streetValue(): String? =
-                street.takeUnlessBlank() ?: address.takeUnlessBlank() ?: addressLine1.takeUnlessBlank()
-
-            private fun NormalizedAddressDto.unitValue(): String? = unit.takeUnlessBlank() ?: unitNumber.takeUnlessBlank()
-
-            private fun NormalizedAddressDto.zipValue(): String? =
-                zipCode.takeUnlessBlank()
-                    ?: zipCodeSnake.takeUnlessBlank()
-                    ?: zipcode.takeUnlessBlank()
-                    ?: postalCode.takeUnlessBlank()
-                    ?: postalCodeSnake.takeUnlessBlank()
-
-            private fun String?.takeUnlessBlank(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
         }
     }
 

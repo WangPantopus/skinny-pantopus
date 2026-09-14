@@ -4,6 +4,7 @@ import { useMemo, type ReactNode } from 'react';
 import { Home, Landmark, Zap, Flame, Droplets, Globe, Smartphone, ShieldCheck, Trash2, ShowerHead, Building2, Tv, FileText, Wallet, CheckCircle, ChevronLeft } from 'lucide-react';
 import DashboardCard from '../DashboardCard';
 import VisibilityChip from '../VisibilityChip';
+import { formatHomeBillAmount, formatHomeBillDate, parseHomeBillDate } from '../homeBillAmount';
 
 const BILL_ICON: Record<string, ReactNode> = {
   rent: <Home className="w-4 h-4" />, mortgage: <Landmark className="w-4 h-4" />, electric: <Zap className="w-4 h-4" />, gas: <Flame className="w-4 h-4" />, water: <Droplets className="w-4 h-4" />,
@@ -15,11 +16,11 @@ const BILL_ICON: Record<string, ReactNode> = {
 
 export function BillsBudgetCardPreview({
   bills,
-  totalDue,
+  billsDueCount,
   onExpand,
 }: {
   bills: Record<string, any>[];
-  totalDue: number;
+  billsDueCount: number;
   onExpand: () => void;
 }) {
   const nextBill = bills
@@ -30,9 +31,8 @@ export function BillsBudgetCardPreview({
     <DashboardCard
       title="Bills & Budget"
       icon={<Wallet className="w-5 h-5" />}
-      visibility="managers"
-      count={bills.filter((b) => b.status === 'due' || b.status === 'overdue').length}
-      badge={totalDue > 0 ? `$${totalDue.toFixed(0)} due` : undefined}
+      count={billsDueCount}
+      badge={billsDueCount > 0 ? `${billsDueCount} due` : undefined}
       onClick={onExpand}
     >
       {nextBill ? (
@@ -40,13 +40,13 @@ export function BillsBudgetCardPreview({
           <div className="flex items-center justify-between">
             <span className="text-xs text-app-text-secondary">Next due:</span>
             <span className="text-xs font-medium text-app-text-strong">
-              {new Date(nextBill.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              {formatHomeBillDate(nextBill.due_date)}
             </span>
           </div>
           <div className="flex items-center gap-2">
             <span>{BILL_ICON[nextBill.bill_type] || <FileText className="w-4 h-4" />}</span>
             <span className="text-sm font-medium text-app-text truncate">{nextBill.provider_name || nextBill.bill_type}</span>
-            <span className="text-sm font-bold text-app-text ml-auto">${Number(nextBill.amount).toFixed(0)}</span>
+            <span className="text-sm font-bold text-app-text ml-auto">{formatHomeBillAmount(nextBill.amount, nextBill.currency)}</span>
           </div>
           {bills.filter((b) => b.status === 'due' || b.status === 'overdue').length > 1 && (
             <p className="text-xs text-app-text-muted">
@@ -57,7 +57,7 @@ export function BillsBudgetCardPreview({
       ) : (
         <div className="text-center py-2">
           <div className="mb-1"><CheckCircle className="w-5 h-5 mx-auto text-app-text-muted" /></div>
-          <p className="text-xs text-app-text-muted">All bills paid</p>
+          <p className="text-xs text-app-text-muted">No bills due</p>
         </div>
       )}
     </DashboardCard>
@@ -74,6 +74,7 @@ export default function BillsBudgetCard({
   onMarkBillPaid,
   onBack,
   highlightBillId,
+  canManage = false,
 }: {
   bills: Record<string, any>[];
   homeId: string;
@@ -82,15 +83,19 @@ export default function BillsBudgetCard({
   onMarkBillPaid: (billId: string) => void;
   onBack: () => void;
   highlightBillId?: string;
+  canManage?: boolean;
 }) {
   const { dueSoon, allBills, subscriptions, now } = useMemo(() => {
-    const now = new Date();
+    const now = new Date(); now.setHours(0, 0, 0, 0);
     const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     return {
       dueSoon: bills
-        .filter((b) => (b.status === 'due' || b.status === 'overdue') && b.due_date && new Date(b.due_date) <= sevenDays)
+        .filter((b) => {
+          const dueDate = parseHomeBillDate(b.due_date);
+          return (b.status === 'due' || b.status === 'overdue') && dueDate !== null && dueDate <= sevenDays;
+        })
         .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()),
-      allBills: bills
+      allBills: [...bills]
         .sort((a, b) => {
           if (a.status === 'overdue' && b.status !== 'overdue') return -1;
           if (b.status === 'overdue' && a.status !== 'overdue') return 1;
@@ -107,7 +112,8 @@ export default function BillsBudgetCard({
   };
 
   const renderBillRow = (bill: Record<string, any>) => {
-    const isOverdue = bill.status === 'overdue' || (bill.status === 'due' && bill.due_date && new Date(bill.due_date) < now);
+    const dueDate = parseHomeBillDate(bill.due_date);
+    const isOverdue = bill.status === 'overdue' || (bill.status === 'due' && dueDate !== null && dueDate < now);
 
     return (
       <div
@@ -124,7 +130,7 @@ export default function BillsBudgetCard({
           <div className="flex items-center gap-2 mt-0.5">
             {bill.due_date && (
               <span className={`text-[10px] ${isOverdue ? 'text-red-600 font-semibold' : 'text-app-text-secondary'}`}>
-                Due {new Date(bill.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                Due {formatHomeBillDate(bill.due_date)}
               </span>
             )}
             {bill.responsible_member && (
@@ -135,7 +141,7 @@ export default function BillsBudgetCard({
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-sm font-bold text-app-text">${Number(bill.amount || 0).toFixed(2)}</span>
+          <span className="text-sm font-bold text-app-text">{formatHomeBillAmount(bill.amount, bill.currency)}</span>
           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full capitalize ${
             isOverdue ? 'bg-red-100 text-red-700' :
             bill.status === 'paid' ? 'bg-green-100 text-green-700' :
@@ -144,7 +150,7 @@ export default function BillsBudgetCard({
           }`}>
             {isOverdue ? 'overdue' : bill.status}
           </span>
-          {(bill.status === 'due' || bill.status === 'overdue') && (
+          {canManage && (bill.status === 'due' || bill.status === 'overdue') && (
             <button
               onClick={(e) => { e.stopPropagation(); onMarkBillPaid(bill.id); }}
               className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-600 text-white hover:bg-green-700 transition"
@@ -164,12 +170,12 @@ export default function BillsBudgetCard({
           <button onClick={onBack} className="text-sm text-app-text-secondary hover:text-app-text-strong transition flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Back</button>
           <h2 className="text-lg font-semibold text-app-text flex items-center gap-2"><Wallet className="w-5 h-5" /> Bills & Budget</h2>
         </div>
-        <button
+        {canManage && <button
           onClick={onAddBill}
           className="px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition"
         >
           + Add Bill
-        </button>
+        </button>}
       </div>
 
       {/* Bills Due Soon */}

@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import app.pantopus.android.data.homes.HomeCreationLimits
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -87,7 +88,7 @@ internal fun AddHomeAccessSetupSection(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .clickable(onClick = vm::addAccessItem)
+                    .clickable(enabled = state.accessItems.size < HomeCreationLimits.MAX_ACCESS_RECORDS, onClick = vm::addAccessItem)
                     .testTag("addHome_addAccessItem"),
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
             verticalAlignment = Alignment.CenterVertically,
@@ -98,7 +99,12 @@ internal fun AddHomeAccessSetupSection(
                 tint = PantopusColors.primary600,
             )
             Text(
-                text = "Add another network or code",
+                text =
+                    if (state.accessItems.size < HomeCreationLimits.MAX_ACCESS_RECORDS) {
+                        "Add another network or code"
+                    } else {
+                        "Maximum 20 networks or codes"
+                    },
                 style = PantopusTextStyle.body,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.primary600,

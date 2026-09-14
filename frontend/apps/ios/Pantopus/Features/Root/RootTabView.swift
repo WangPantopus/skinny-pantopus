@@ -91,7 +91,7 @@ public struct RootTabView: View {
     @State private var model = RootTabModel()
     private let chatBadgeStore = ChatBadgeStore.shared
     @State private var router = DeepLinkRouter.shared
-    @State private var pendingInviteToken: String?
+    @State private var pendingInviteToken: InviteSheetToken?
     @State private var showProfile = false
     /// Set by the `monthly_receipt` push deep link so the profile opens with
     /// the Monthly Receipt card already expanded (RN parity —
@@ -137,15 +137,11 @@ public struct RootTabView: View {
         .fullScreenCover(isPresented: $showProfile) {
             YouTabRoot(expandMonthlyReceipt: expandMonthlyReceipt)
         }
-        .fullScreenCover(
-            item: Binding<InviteSheetToken?>(
-                get: { pendingInviteToken.map(InviteSheetToken.init(token:)) },
-                set: { pendingInviteToken = $0?.token }
-            )
-        ) { item in
+        .fullScreenCover(item: $pendingInviteToken) { item in
             TokenAcceptView(
                 viewModel: TokenAcceptViewModel(
                     token: item.token,
+                    leaseInvitation: item.leaseInvitation,
                     onAccepted: { _ in pendingInviteToken = nil },
                     onDeclined: { pendingInviteToken = nil }
                 )
@@ -162,11 +158,11 @@ public struct RootTabView: View {
         // pending so the selected tab can push them into its own
         // NavigationStack.
         switch pending {
-        case let .invite(token):
-            pendingInviteToken = token
+        case let .invite(token, leaseInvitation):
+            pendingInviteToken = InviteSheetToken(token: token, leaseInvitation: leaseInvitation)
             _ = router.consume()
         case let .joinInvite(code):
-            pendingInviteToken = code
+            pendingInviteToken = InviteSheetToken(token: code)
             _ = router.consume()
         // Pulse / Tasks / Marketplace present as sheets from the
         // Neighborhood door; the door mounts the surface's tab root,
@@ -187,7 +183,7 @@ public struct RootTabView: View {
             model.selected = .mail
         case .supportTrain, .supportTrainManage, .user, .beaconProfile,
              .connections, .beacons, .discoverHub,
-             .homeDetail, .homeDashboard, .homeMemberRequests,
+             .homeDetail, .homeDashboard, .homeTask, .homeMemberRequests, .homeResidency,
              .homeOwnersTransfer,
              .verifyLandlord, .postcardVerification,
              .notifications, .createBusiness, .businessProfile, .businessPage,
@@ -353,8 +349,9 @@ public struct MailTabRoot: View {
 /// the token string is non-nil.
 private struct InviteSheetToken: Identifiable, Equatable {
     let token: String
+    var leaseInvitation = false
     var id: String {
-        token
+        "\(leaseInvitation):\(token)"
     }
 }
 

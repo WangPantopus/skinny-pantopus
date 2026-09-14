@@ -18,6 +18,7 @@ public enum HubRoute: Hashable {
     /// T6.5e (P19.5) Mailbox Vault — saved mail list. Personal pillar.
     case mailboxVault
     case addHome
+    case joinHome(homeId: String)
     /// A12.1 — "Find or Add Home" discovery. Search public-preview
     /// homes, start a claim on one, add a missing address, or paste an
     /// invite code. Mirrors RN `src/app/homes/find.tsx`.
@@ -28,6 +29,7 @@ public enum HubRoute: Hashable {
     /// tax-bill document set (RN
     /// `homes/[id]/claim-owner/evidence.tsx?verificationType=residency`).
     case verifyResidency(homeId: String)
+    case residencyStatus(homeId: String)
     /// A12.5 / A12.6 — Verify landlord wizard. Pushed when the
     /// dashboard's ownership claim resolves to the "verify via
     /// landlord" branch (rental detected, owner-claim path not
@@ -69,6 +71,7 @@ public enum HubRoute: Hashable {
     /// (T6.3c / P11). Distinct from `.myBids` / `.myTasks` (the gig
     /// surfaces in the You tab).
     case homeTasks(homeId: String)
+    case householdTaskDetail(homeId: String, taskId: String)
     /// P2.4 — Add a new household task. Reached from the household
     /// tasks list FAB.
     case addHouseholdTask(homeId: String)
@@ -102,7 +105,7 @@ public enum HubRoute: Hashable {
     /// (`GET/PATCH /api/homes/:id/security`). Reached from the per-home
     /// Settings `Ownership & Security` row.
     case homeOwnershipSecurity(homeId: String)
-    /// Leave this home (`POST /api/homes/:id/move-out`).
+    /// Review and recover a protected original self-removal.
     case leaveHome(homeId: String)
     /// Cancel ownership claim (`DELETE …/ownership-claims/:claimId`).
     case cancelClaim(homeId: String)
@@ -860,6 +863,9 @@ public struct HubTabRoot: View {
         case let .homeDetail(id), let .homeDashboard(id):
             path.append(.homeDashboard(homeId: id))
             _ = router.consume()
+        case let .homeTask(homeId, taskId):
+            path.append(.householdTaskDetail(homeId: homeId, taskId: taskId))
+            _ = router.consume()
         case let .homeMemberRequests(id):
             path.append(.homeMembers(homeId: id))
             _ = router.consume()
@@ -872,6 +878,9 @@ public struct HubTabRoot: View {
             _ = router.consume()
         case let .verifyLandlord(id):
             path.append(.verifyLandlord(homeId: id))
+            _ = router.consume()
+        case let .homeResidency(id):
+            path.append(.residencyStatus(homeId: id))
             _ = router.consume()
         case let .postcardVerification(id):
             path.append(.postcardVerification(homeId: id))
@@ -1093,7 +1102,9 @@ public struct HubTabRoot: View {
             case .openRecentActivity: path.append(.recentActivity)
             }
         }
-        .overlay(alignment: .topLeading) { debugTapTarget }
+        #if DEBUG
+        .simultaneousGesture(debugTapGesture)
+        #endif
     }
 
     /// Project an `InboxConversationDestination.Mode` onto the
@@ -1186,22 +1197,17 @@ public struct HubTabRoot: View {
         return segment?.isEmpty == false ? segment : nil
     }
 
-    /// 44pt invisible 5-tap target in the top-leading safe area — the
-    /// production hub hides its nav bar so there's no visible title to
-    /// tap. Hidden from accessibility so VoiceOver users can't trip
-    /// the debug menu by accident. No-op in release.
-    @ViewBuilder
-    private var debugTapTarget: some View {
-        #if DEBUG
-        Color.clear
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
-            .onTapGesture(count: 5) { debugSheet = .tokenGallery }
-            .accessibilityHidden(true)
-        #else
-        EmptyView()
-        #endif
+    #if DEBUG
+    /// Observe the developer gesture without covering the Profile button.
+    /// An invisible overlay here consumed ordinary avatar taps.
+    private var debugTapGesture: some Gesture {
+        SpatialTapGesture(count: 5).onEnded { value in
+            if value.location.x < 44, value.location.y < 44 {
+                debugSheet = .tokenGallery
+            }
+        }
     }
+    #endif
 
     @ViewBuilder
     private func destination(
@@ -1213,13 +1219,14 @@ public struct HubTabRoot: View {
             MyHomesListView(
                 viewModel: MyHomesListViewModel(
                     onOpenHome: { homeId in Task { @MainActor in push(.homeDashboard(homeId: homeId)) } },
+                    onOpenTasks: { homeId in Task { @MainActor in push(.homeTasks(homeId: homeId)) } },
                     onAddHome: { Task { @MainActor in push(.addHome) } },
                     onFindHome: { Task { @MainActor in push(.findHome) } },
                     onUploadOwnershipEvidence: { homeId in
                         Task { @MainActor in push(.claimOwnership(homeId: homeId)) }
                     },
                     onVerifyResidency: { homeId in
-                        Task { @MainActor in push(.verifyResidency(homeId: homeId)) }
+                        Task { @MainActor in push(.residencyStatus(homeId: homeId)) }
                     }
                 )
             )
@@ -1243,20 +1250,7 @@ public struct HubTabRoot: View {
                 )
             )
         case let .claimStatus(claimId):
-            StatusWaitingView(
-                content: .underReview(homeName: nil),
-                onAction: { card in
-                    if card.id == "addEvidence", !path.isEmpty {
-                        path.removeLast()
-                    }
-                },
-                onPrimary: { _ in pop() },
-                onSecondary: { _ in
-                    if !claimId.isEmpty {
-                        pop()
-                    }
-                }
-            )
+            ClaimEvidenceDestinationView(claimId: claimId)
         case let .homeDashboard(homeId):
             HomeDashboardView(
                 homeId: homeId,
@@ -1681,29 +1675,21 @@ public struct HubTabRoot: View {
             HouseholdTasksListView(
                 viewModel: HouseholdTasksListViewModel(
                     homeId: homeId,
-                    onOpenTask: { taskId in
-                        Task { @MainActor in
-                            push(.editHouseholdTask(homeId: homeId, taskId: taskId))
-                        }
-                    },
-                    onAddTask: {
-                        Task { @MainActor in push(.addHouseholdTask(homeId: homeId)) }
-                    },
-                    onEditRecurring: { taskId in
-                        Task { @MainActor in
-                            push(.editHouseholdTask(homeId: homeId, taskId: taskId))
-                        }
-                    }
+                    onOpenTask: { taskId in push(.householdTaskDetail(homeId: homeId, taskId: taskId)) },
+                    onAddTask: { push(.addHouseholdTask(homeId: homeId)) }
                 )
             )
+        case let .householdTaskDetail(homeId, taskId):
+            HouseholdTaskDetailView(homeId: homeId, taskId: taskId) {
+                push(.editHouseholdTask(homeId: homeId, taskId: taskId))
+            }
         case let .addHouseholdTask(homeId):
             AddHouseholdTaskFormView(
                 homeId: homeId,
-                onClose: { Task { @MainActor in pop() } },
-                onCreated: { _ in
-                    // Pop back to the tasks list; the list refreshes
-                    // on `.refreshable` / next visit.
+                onClose: { pop() },
+                onCreated: { taskId in
                     if !path.isEmpty { path.removeLast() }
+                    push(.householdTaskDetail(homeId: homeId, taskId: taskId))
                 }
             )
         case let .editHouseholdTask(homeId, taskId):
@@ -1740,8 +1726,8 @@ public struct HubTabRoot: View {
                 viewModel: LeaveHomeViewModel(homeId: homeId),
                 onBack: { pop() },
                 onLeft: {
-                    // Move-out revokes membership, so the dashboard for this
-                    // home now 403s — drop it along with the settings stack.
+                    // Leave old Home screens after acknowledging the original.
+                    // A later Home entry must establish current access again.
                     path.removeAll { route in
                         switch route {
                         case let .leaveHome(id) where id == homeId: true
@@ -1792,6 +1778,15 @@ public struct HubTabRoot: View {
                     path.append(.findHome)
                 }
             )
+        case let .residencyStatus(homeId):
+            HomeResidencyProgressView(viewModel: HomeResidencyProgressViewModel(homeId: homeId)) { destination in
+                switch destination {
+                case .home: push(.homeDashboard(homeId: homeId))
+                case .mail: push(.postcardVerification(homeId: homeId))
+                case .ownership: push(.claimOwnership(homeId: homeId))
+                case .addHome: push(.joinHome(homeId: homeId))
+                }
+            }
         case let .verifyResidency(homeId):
             ClaimOwnershipWizardView(
                 homeId: homeId,
@@ -1832,13 +1827,18 @@ public struct HubTabRoot: View {
                 }
             )
         case let .postcardVerification(homeId):
-            PostcardVerificationView(
-                homeId: homeId,
+            HomePostalVerificationView(
+                viewModel: .live(homeId: homeId),
                 onClose: { if !path.isEmpty { path.removeLast() } },
-                onVerified: { _ in
-                    // Pop the tracker — the underlying home dashboard
-                    // refreshes its verification status on next visit.
+                onNavigate: { destination in
                     if !path.isEmpty { path.removeLast() }
+                    switch destination {
+                    case .home: path.append(.homeDashboard(homeId: homeId))
+                    case .residency:
+                        if path.last != .residencyStatus(homeId: homeId) { path.append(.residencyStatus(homeId: homeId)) }
+                    case .ownership: path.append(.claimOwnership(homeId: homeId))
+                    case .addHome: path.append(.joinHome(homeId: homeId))
+                    }
                 }
             )
         case let .mailItemDetail(mailId):
@@ -2993,20 +2993,19 @@ public struct HubTabRoot: View {
                 onBack: { pop() },
                 onNav: { nav in handleWaitingRoomNav(nav, homeId: homeId) }
             )
-        case .addHome:
+        case .addHome, .joinHome:
             AddHomeWizardView(
-                onOpenHomeDashboard: { homeId in
-                    // Replace the wizard with the dashboard so Back goes to
-                    // MyHomes, not the success screen.
-                    path.removeAll { $0 == .addHome }
-                    path.append(.homeDashboard(homeId: homeId))
+                viewModel: AddHomeWizardViewModel(requiredHomeId: route.homeEntryTarget),
+                onOpenHomes: {
+                    path.removeAll { $0.isHomeEntry || $0 == .myHomes }
+                    path.append(.myHomes)
                 },
                 onOpenClaimOwnership: { homeId in
-                    path.removeAll { $0 == .addHome }
+                    path.removeAll { $0.isHomeEntry }
                     path.append(.claimOwnership(homeId: homeId))
                 },
                 onOpenWaitingRoom: { homeId in
-                    path.removeAll { $0 == .addHome }
+                    path.removeAll { $0.isHomeEntry }
                     path.append(.waitingRoom(homeId: homeId))
                 }
             )
@@ -3116,8 +3115,8 @@ public struct HubTabRoot: View {
         guard let response: MyHomesResponse = try? await APIClient.shared.request(
             HomesEndpoints.myHomes()
         ) else { return nil }
-        return response.homes.first { $0.isPrimaryOwner == true }?.id
-            ?? response.homes.first?.id
+        return response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
+            ?? response.sharedHomes.first?.id
     }
 
     private static func billsListViewModel(
@@ -3226,4 +3225,19 @@ private struct BusinessProfileDestination: View {
 
 #Preview {
     HubTabRoot()
+}
+
+/// The selected Home survives address editing and original-request recovery.
+extension HubRoute {
+    var homeEntryTarget: String? {
+        if case let .joinHome(homeId) = self { return homeId }
+        return nil
+    }
+
+    var isHomeEntry: Bool {
+        switch self {
+        case .addHome, .joinHome: true
+        default: false
+        }
+    }
 }

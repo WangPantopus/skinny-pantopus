@@ -1,0 +1,256 @@
+// Production residency router/Joi/service + actual isolated SQL. Synthetic auth
+// and notification transport only; never accepts a hosted database or provider.
+module.exports = function(container, { summary = false, place = false, dashboard = false, invitations = false, postcard = false, tasks = false } = {}) {
+  const assert = require('node:assert/strict');
+  const { execFileSync } = require('node:child_process');
+  const Module = require('node:module');
+  const path = require('node:path');
+  const root = path.resolve(__dirname, '../..');
+  assert.match(container || '', /^supabase_db_pantopus-home-gig-[a-z0-9_-]+$/);
+  const id = n => `ddc23600-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const actor = id(1), home = id(100), claims = [id(202), id(203), id(204), id(205)];
+  const users = Array.from({ length: 6 }, (_, i) => id(i + 1));
+  const q = v => `'${String(v).replaceAll("'", "''")}'`;
+  function sql(query) {
+    return execFileSync('docker', ['exec', '-i', container, 'psql', '-X', '-qAt', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
+      { input: query, encoding: 'utf8', timeout: 20000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+  }
+  let databaseClient = null;
+  let rpcFailure = null; const rpcCalls = [];
+  let loseReply = false, notificationFailure = false, calls = 0;
+  const notifications = [], queryCalls = [], queryDetails = [], queryHooks = [], diagnostics = []; let queryFailure = null;
+  const postcardDeliveries = [];
+  const invitationEmailAttempts = [];
+  let invitationEmailResult = { success:false, preview:true };
+  let invitationNotificationSaved = false;
+  let postcardResult = { success: false, deliveryUnknown: true };
+  let propertyResult = { profile: null, source: 'fallback' };
+  let propertyDetailResult = { attomPayload: null, source: 'unavailable', unavailableReason: 'ATTOM_NOT_CONFIGURED' };
+  const db = { rpc: async (name, args) => {
+    assert(['get_home_residency_review', 'decide_home_residency_review', ...(postcard ? ['admit_home_postcard', 'confirm_home_postcard', 'begin_home_postcard_request', 'get_home_postcard_request', 'cancel_home_postcard_request', 'get_home_postcard_current_status', 'claim_home_postcard_current_dispatch', 'record_home_postcard_current_dispatch', 'verify_home_postcard_current', 'get_home_postcard_verification', 'cancel_home_postcard_verification', 'promote_home_postcard_review', 'challenge_home_postcard_review'] : []), ...(invitations ? ['write_home_invitation', 'act_on_home_invitation', 'list_home_household_requests', 'prepare_home_invitation_decision', 'get_home_invitation_decision', 'resolve_home_invitation_decision', 'prepare_home_invitation_sender','list_home_invitation_sender', 'get_home_invitation_sender', 'resolve_home_invitation_sender', 'claim_home_invitation_sender_delivery', 'record_home_invitation_sender_delivery'] : []), ...(tasks ? ['create_home_task_with_receipt','mutate_home_record','get_home_task_recurrence','get_home_task_gig_publication','get_home_task_media'] : []), ...(dashboard ? ['home_record_context', 'get_home_records', 'home_delete_eligibility', 'list_home_invitations'] : []), ...(summary ? ['home_record_context', 'update_home_seasonal_item', 'update_home_settings', 'get_home_bill_comparison', 'read_bill_peer_months'] : [])].includes(name));
+    rpcCalls.push(name);
+    if (databaseClient) return databaseClient.rpc(name, args);
+    if (rpcFailure?.name === name) { const failure = rpcFailure; rpcFailure = null;
+      if (failure.reject) throw new Error('Synthetic unavailable RPC transport');
+      return { data: null, error: { message: 'Synthetic unavailable RPC' } }; }
+    const params = Object.entries(args).map(([key, value]) => {
+      assert.match(key, /^p_[a-z_]+$/); return `${key} => ${value == null ? 'NULL' : q(typeof value === 'object' ? JSON.stringify(value) : value)}`;
+    });
+    const mutation = ['decide_home_residency_review', 'update_home_seasonal_item', 'update_home_settings'].includes(name);
+    if (mutation) calls++;
+    const data = JSON.parse(sql(`SET ROLE service_role; SELECT public.${name}(${params.join(',')})::text; RESET ROLE;`));
+    if (mutation && data.ok && loseReply) {
+      loseReply = false; throw new Error('Synthetic lost committed reply');
+    }
+    return { data, error: null };
+  } };
+  // Supabase query adapter for production reads and isolated summary preference/audit writes.
+  db.from = table => {
+    if (databaseClient) return databaseClient.from(table);
+    assert(['Home', 'HomeOccupancy', 'HomeOwner', 'HomeRolePermission', 'HomePermissionOverride',
+      'HomePostcardCode', 'HomeOwnershipClaim', ...(dashboard ? ['Mail', 'HomeGuestPass', 'HomePackage', 'HomePet'] : []), ...(summary ? ['HomeSeasonalChecklistItem', 'HomeIssue', 'HomeBill', 'HomeEmergency', 'HomeDocument', 'HomeAuditLog', 'PropertyIntelligenceCache', 'HomePreference', 'BillBenchmark', 'HomePrivacy'] : [])].includes(table));
+    const filters = []; let columns = '*', order = '', limit = '', single = false, count = false, head = false, writes = null, conflict = null;
+    const column = name => { assert.match(name, /^[a-z_][a-z0-9_]*$/); return `"${name}"`; };
+    const query = {
+      select(value, options = {}) {
+        count = options.count === 'exact'; head = options.head === true;
+        if (table === 'HomeOccupancy' && value.includes('user:user_id')) {
+          columns = dashboard
+            ? value.split('user:user_id')[0].split(',').map(v => v.trim()).filter(Boolean).map(column).join(',') + `, (SELECT jsonb_build_object(${value.split('user:user_id')[1].replace(/[()]/g, '').split(',').map(v => v.trim()).map(name => q(name) + ',' + column(name)).join(',')}) FROM public."User" WHERE id=user_id) AS "user"`
+            : `user_id, jsonb_build_object('id',user_id,'profile_picture_url',(SELECT profile_picture_url FROM public."User" WHERE id=user_id)) AS "user"`;
+        } else columns = value === '*' ? '*' : value.split(',').map(v => column(v.trim())).join(',');
+        return query;
+      },
+      insert(value) { assert(summary && ['HomeAuditLog', 'HomeSeasonalChecklistItem'].includes(table)); writes = Array.isArray(value) ? value : [value]; return query; },
+      upsert(value, options) { assert(summary && table === 'HomePreference' && options.onConflict === 'home_id,key'); writes = value; conflict = ['home_id', 'key']; return query; },
+      gt(key, value) { filters.push(`${column(key)}>${q(value)}`); return query; },
+      lte(key, value) { filters.push(`${column(key)}<=${q(value)}`); return query; },
+      neq(key, value) { filters.push(`${column(key)}<>${q(value)}`); return query; },
+      is(key, value) { assert.equal(value, null); filters.push(`${column(key)} IS NULL`); return query; },
+      or(expression) {
+        assert(dashboard);
+        function split(value) {
+          let depth = 0, start = 0; const parts = [];
+          for (let i = 0; i < value.length; i++) {
+            if (value[i] === '(') depth++;
+            if (value[i] === ')') depth--;
+            assert(depth >= 0);
+            if (value[i] === ',' && depth === 0) { parts.push(value.slice(start, i)); start = i + 1; }
+          }
+          assert.equal(depth, 0); return [...parts, value.slice(start)];
+        }
+        function predicate(value) {
+          const group = /^(and|or)\((.*)\)$/.exec(value);
+          if (group) return '(' + split(group[2]).map(predicate).join(group[1] === 'and' ? ' AND ' : ' OR ') + ')';
+          const match = /^([a-z_]+)\.(eq|neq|gt|gte|lte|is|in)\.(.+)$/.exec(value); assert(match);
+          const [, key, op, operand] = match;
+          if (op === 'is') { assert.equal(operand, 'null'); return column(key) + ' IS NULL'; }
+          if (op === 'in') { assert(operand.startsWith('(') && operand.endsWith(')')); return column(key) + ' IN (' + split(operand.slice(1, -1)).map(q).join(',') + ')'; }
+          return column(key) + ({ eq: '=', neq: '<>', gt: '>', gte: '>=', lte: '<=' })[op] + q(operand);
+        }
+        filters.push('(' + split(expression).map(predicate).join(' OR ') + ')'); return query;
+      },
+      gte(key, value) { filters.push(`${column(key)}>=${q(value)}`); return query; },
+      not(key, operator, value) { assert(operator === 'is' && value === null); filters.push(`${column(key)} IS NOT NULL`); return query; },
+      eq(key, value) { filters.push(`${column(key)}=${q(value)}`); return query; },
+      in(key, values) { assert(Array.isArray(values) && values.length); filters.push(`${column(key)} IN (${values.map(q)})`); return query; },
+      range(start, end) { assert(Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end >= start); limit = ` LIMIT ${end-start+1} OFFSET ${start}`; return query; },
+      order(key, options) { order += `${order ? ',' : ' ORDER BY'} ${column(key)} ${options?.ascending === false ? 'DESC' : 'ASC'}`; return query; },
+      limit(value) { assert(Number.isInteger(value) && value > 0); limit = ` LIMIT ${value}`; return query; },
+      maybeSingle() { single = true; return query; }, single() { single = true; return query; },
+      then(resolve, reject) { return Promise.resolve().then(async () => {
+        queryCalls.push(table);
+        const detail = { table, columns, head, filters: [...filters] }; queryDetails.push(detail);
+        if (queryFailure?.table === table) { const failure = queryFailure; queryFailure = null;
+          if (failure.reject) throw new Error('Synthetic summary database transport failure');
+          return { data: null, count: null, error: { message: 'Synthetic summary database failure' } }; }
+        if (writes) {
+          assert(writes.length && writes.every(row => row.home_id === home));
+          const keys = Object.keys(writes[0]);
+          const literal = value => value == null ? 'NULL' : q(typeof value === 'object' ? JSON.stringify(value) : value);
+          const inserted = JSON.parse(sql(`WITH written AS (INSERT INTO public."${table}" (${keys.map(column)}) VALUES ${writes.map(row => '(' + keys.map(key => literal(row[key])).join(',') + ')').join(',')}${conflict ? ` ON CONFLICT (${conflict.map(column)}) DO UPDATE SET ${keys.filter(key => !conflict.includes(key)).map(key => `${column(key)}=EXCLUDED.${column(key)}`).join(',')}` : ''} RETURNING *) SELECT coalesce(jsonb_agg(to_jsonb(written)),'[]') FROM written;`));
+          if (table === 'HomePreference' && loseReply) { loseReply = false; throw new Error('Synthetic lost committed preference reply'); }
+          return { data: single ? inserted[0] || null : inserted, error: null };
+        }
+        const rows = JSON.parse(sql(`SELECT coalesce(jsonb_agg(to_jsonb(r)),'[]') FROM (SELECT ${columns} FROM public."${table}"${filters.length ? ' WHERE ' + filters.join(' AND ') : ''}${order}${limit}) r;`));
+        if (single && rows.length > 1) throw new Error('Fixture expected a single IAM record');
+        const result = { data: head ? null : single ? rows[0] || null : rows, ...(count ? { count: rows.length } : {}), error: null };
+        const hookIndex = queryHooks.findIndex(hook => hook.table === table && hook.match(detail));
+        if (hookIndex >= 0) { const [hook] = queryHooks.splice(hookIndex, 1); return (await hook.handler(result, detail)) ?? result; }
+        return result;
+      }).then(resolve, reject); },
+    };
+    return query;
+  };
+  const transport = { createNotification: async value => {
+    notifications.push(value);
+    if (notificationFailure) { notificationFailure = false; throw new Error('Synthetic unavailable notification transport'); }
+  } };
+  const load = Module._load;
+  const express = require(path.join(root, 'backend/node_modules/express'));
+  const scope = require(path.join(root, 'backend/utils/requestSessionScope'));
+  Module._load = function(request, parent, isMain) {
+    if (postcard && ['/services/homePostcardService.js', '/services/homePostcardRequestService.js', '/services/homePostcardVerificationService.js'].some(suffix => parent?.filename.endsWith(suffix)) && request === '../utils/postcardDispatch') {
+      const actual = load.call(this, request, parent, isMain);
+      return { ...actual, dispatchPostcardCode: async (destination, code, cardId, homeId) => {
+        assert(homeId.startsWith('ddc23600-')); assert.match(code, /^\d{6}$/);
+        postcardDeliveries.push({ destination, code, cardId, homeId });
+        return { ...postcardResult, ...(postcardResult.success ? { vendorJobId: 'psc_fixture_' + cardId } : {}) };
+      } };
+    }
+    if ((postcard || tasks) && parent?.filename.endsWith('/routes/homeOwnership.js')) {
+      if (request === '../middleware/verifyToken') return (req, _res, next) => {
+        const userId = req.headers['x-fixture-actor'] || actor; assert(users.includes(userId)); req.user = { id: userId };
+        req.session = { id: req.headers['x-fixture-session'] || 'local-residency-review' }; next();
+      };
+      if (request === '../middleware/rateLimiter') return new Proxy({}, { get: () => (_req, _res, next) => next() });
+    }
+    if (invitations && parent?.filename.endsWith('/services/homeInvitationService.js')) {
+      if (request === './emailService') return { sendHomeInviteEmail: async value => { invitationEmailAttempts.push({kind:'controlled_email_attempt',role:value.role}); return invitationEmailResult; } };
+      if (request === './notificationService') return {
+        notifyHomeInvite: async value => { notifications.push({ kind:'controlled_invitation' }); return invitationNotificationSaved ? { id:id(900), user_id:value.inviteeUserId } : null; },
+        notifyHomeInviteAccepted: async () => { notifications.push({ kind: 'controlled_acceptance' }); },
+      };
+    }
+    if (parent?.filename.startsWith(path.join(root, 'backend/'))) {
+      if (request.endsWith('/config/supabaseAdmin')) return db;
+      if (request === '../services/notificationService' || request === './notificationService') return transport;
+      if (request.endsWith('/utils/logger')) return { info() {}, warn() {}, error(message, details) { diagnostics.push({ message, details }); } };
+    }
+    if (place && parent?.filename.endsWith('/services/placeIntelligenceService.js')) {
+      if (!['../utils/geohash', '../serializers/placeIntelligenceSerializer', './homePrivacyService', './homeBillComparisonService'].includes(request)) return {};
+    }
+    if (place && parent?.filename.endsWith('/routes/placeIntelligence.js')) {
+      if (request === '../middleware/verifyToken') return (req, _res, next) => { req.user = { id: req.headers['x-fixture-actor'] || actor }; next(); };
+      if (request === '../services/homeSystemsService') return {};
+    }
+    if (parent?.filename.endsWith('/routes/homeIam.js') && ['../services/homeAuthorityService', '../services/homeExternalShareService'].includes(request)) return {};
+    if (parent?.filename.endsWith('/routes/homeIam.js') && request === '../middleware/verifyToken') return (req, _res, next) => { req.user = { id: req.headers['x-fixture-actor'] || actor }; next(); };
+    if (summary && ((parent?.filename.endsWith('/routes/home.js') && request === '../services/ai/propertyIntelligenceService')
+      || (parent?.filename.endsWith('/services/homeDetailService.js') && request === './ai/propertyIntelligenceService'))) return {
+      getProfile: async homeId => typeof propertyResult === 'function' ? propertyResult(homeId) : propertyResult,
+      getHomeAttomPropertyDetail: async home => typeof propertyDetailResult === 'function' ? propertyDetailResult(home) : propertyDetailResult,
+    };
+    if (parent?.filename.endsWith('/routes/home.js')) {
+      if (request === '../middleware/verifyToken') return (req, _res, next) => {
+        req.user = { id: req.headers['x-fixture-actor'] || actor };
+        req.session = { id: req.headers['x-fixture-session'] || 'local-residency-review' }; next();
+      };
+      if (request === '../middleware/rateLimiter') return new Proxy({}, { get: () => (_req, _res, next) => next() });
+      if (request === '../services/addressValidation') return { AddressVerdictStatus: {} };
+      // The native review queue uses the route's lazy permission check. Keep
+      // that actual IAM read when exercising dashboard-backed navigation.
+      if (dashboard && request === '../utils/homePermissions') return load.call(this, request, parent, isMain);
+      if (!dashboard && request === '../utils/homeDocumentAccess') return { HOME_DOCUMENT_TYPES: ['other'], HOME_DOCUMENT_VISIBILITIES: ['members'] };
+      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../services/homeResidencyReviewService', '../services/homePostcardVerificationService', '../utils/requestSessionScope', ...(invitations ? ['../services/homeInvitationService', '../services/homeInvitationDecisionService', '../services/homeInvitationSenderService'] : []), ...(tasks ? ['../services/homeTaskRecurrenceService','../services/homeTaskGigService'] : []), ...(dashboard ? ['../config/householdClaims', '../services/homeClaimRoutingService', '../services/homeListService', '../services/homeResidencyProgressService', '../services/homeDetailService', '../services/homeDashboardService', '../utils/homeDocumentAccess', '../services/homeAuthorityService', '../services/homeRecordService'] : []), ...(summary ? ['../services/homeDashboardService', '../utils/homePermissions', '../services/homeHealthService', '../services/seasonalChecklistService', '../services/ai/seasonalEngine', '../utils/geohash', '../utils/geo', '../services/homeBillComparisonService'] : [])].includes(request)) return {};
+    }
+    return load.call(this, request, parent, isMain);
+  };
+  const router = require(path.join(root, 'backend/routes/home'));
+  const app = express(); app.use(express.json());
+  if (postcard) app.use('/api/homes', require(path.join(root, 'backend/routes/homeOwnership')));
+  else if (tasks) {
+    const ownershipRouter = require(path.join(root, 'backend/routes/homeOwnership'));
+    // My Homes reads the actor's real claim inventory independently of cards.
+    // Keep the production static route ahead of home.js's dynamic /:id route;
+    // this mode exposes no ownership or provider mutation routes.
+    app.use('/api/homes', (req,res,next) => req.method==='GET' && req.path==='/my-ownership-claims'
+      ? ownershipRouter(req,res,next) : next());
+  }
+  if (place) app.use('/api/homes', require(path.join(root, 'backend/routes/placeIntelligence')));
+  if (tasks) {
+    const mediaRouter=express.Router();
+    require(path.join(root,'backend/routes/homeTaskMediaRoutes'))(mediaRouter,{
+      verifyToken(req,_res,next){const userId=req.headers['x-fixture-actor'];assert(users.includes(userId));req.user={id:userId};req.session={id:req.headers['x-fixture-session']||'local-residency-review'};next();},
+      uploadLimiter(_req,_res,next){next();},
+    });
+    // Task detail reads actual media/current capabilities. Provider storage
+    // writes and downloads are outside ordinary first-use acceptance.
+    app.use('/api/upload',(req,res,next)=>req.method==='GET'&&
+      (req.path===`/home-task-media-session/${home}`||new RegExp(`^/home-task-media/${home}/[a-f0-9-]{36}$`).test(req.path))
+      ?mediaRouter(req,res,next):next());
+  }
+  app.use('/api/homes', router); app.use('/api/homes', require(path.join(root, 'backend/routes/homeIam')));
+  function setup() {
+    assert.equal(sql(`SELECT (SELECT count(*) FROM auth.users WHERE id IN (${users.map(q)}))+(SELECT count(*) FROM public."Home" WHERE id=${q(home)});`), '0');
+    sql(`BEGIN;
+      INSERT INTO auth.users(id,email,email_confirmed_at) VALUES ${users.map((u, i) => `(${q(u)},'residency-http-${i + 1}@example.invalid',now())`).join(',')};
+      INSERT INTO public."User"(id,email,username,name,role) SELECT id,email,'residency_http_'||right(id::text,2),'Residency fixture','user'
+        FROM auth.users WHERE id IN (${users.map(q)});
+      INSERT INTO public."Home"(id,owner_id,created_by_user_id,address,city,state,zipcode)
+        VALUES(${q(home)},${q(actor)},${q(actor)},'Private residency fixture','Test','WA','98607');
+      INSERT INTO public."HomeOwner"(home_id,subject_id,owner_status,is_primary_owner,verification_tier)
+        VALUES(${q(home)},${q(actor)},'verified',true,'strong');
+      INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,age_band,verification_status,start_at,access_end_at)
+        SELECT ${q(home)}::uuid,u,CASE WHEN u=${q(actor)}::uuid THEN 'owner' ELSE 'member' END,
+        (CASE WHEN u=${q(actor)}::uuid THEN 'owner' ELSE 'member' END)::public.home_role_base,
+        'adult',CASE WHEN u=${q(actor)}::uuid THEN 'verified' ELSE 'pending_doc' END,now()-interval '1 day',now()+interval '2 days'
+        FROM unnest(ARRAY[${users.slice(0, 5).map(q)}]::uuid[]) u;
+      INSERT INTO public."HomeResidencyClaim"(id,home_id,user_id,claimed_address,claimed_role)
+        VALUES ${claims.map((c, i) => `(${q(c)},${q(home)},${q(users[i + 1])},'Private residency fixture','member')`).join(',')};
+      COMMIT;`);
+  }
+  function cleanup() {
+    sql(`BEGIN; DROP TRIGGER IF EXISTS residency_http_receipt_failure ON public."HomeResidencyReviewReceipt";
+      DROP FUNCTION IF EXISTS public.residency_http_receipt_failure();
+      ${invitations ? `DELETE FROM public."HomeInvite" WHERE home_id=${q(home)};` : ''}
+      DELETE FROM public."HomeAuditLog" WHERE home_id=${q(home)};
+      DELETE FROM public."HomePermissionOverride" WHERE home_id=${q(home)};
+      DELETE FROM public."HomeResidencyClaim" WHERE home_id=${q(home)};
+      DELETE FROM public."HomeOwner" WHERE home_id=${q(home)}; DELETE FROM public."HomeOccupancy" WHERE home_id=${q(home)};
+      DELETE FROM public."Home" WHERE id=${q(home)};
+      DELETE FROM public."User" WHERE id IN (${users.map(q)}); DELETE FROM auth.users WHERE id IN (${users.map(q)}); COMMIT;`);
+    assert.equal(sql(`SELECT (SELECT count(*) FROM public."HomeResidencyReviewReceipt" WHERE home_id=${q(home)})+
+      (SELECT count(*) FROM public."Home" WHERE id=${q(home)})+(SELECT count(*) FROM auth.users WHERE id IN (${users.map(q)}));`), '0');
+  }
+  return { app, actor, home, claims, users, id, q, sql, scope, setup, cleanup, notifications, invitationEmailAttempts,
+    setInvitationDelivery(email, saved = false) { assert(invitations); invitationEmailResult = email; invitationNotificationSaved = saved; },
+    postcardDeliveries, setPostcardResult(value) { assert(postcard); postcardResult = value; },
+    useDatabaseClient(client) { const url = new URL(client.supabaseUrl); assert.equal(url.hostname, '127.0.0.1'); assert.equal(url.protocol, 'http:'); assert.equal(url.port, '64521'); databaseClient = client; },
+    rpcCalls, failNextRpc: (name, reject = false) => { rpcFailure = { name, reject }; },
+    queryCalls, queryDetails, diagnostics, interceptNextQuery: (table, handler, match = () => true) => queryHooks.push({ table, handler, match }), failNextQuery: (table, reject = false) => { queryFailure = { table, reject }; },
+    setPropertyResult: value => { propertyResult = value; },
+    setPropertyDetailResult: value => { propertyDetailResult = value; },
+    get calls() { return calls; }, loseNextReply: () => { loseReply = true; },
+    failNextNotification: () => { notificationFailure = true; }, restoreModules: () => { Module._load = load; } };
+};

@@ -2,16 +2,26 @@
 
 package app.pantopus.android.ui.screens.homes.claims
 
+import app.pantopus.android.data.api.models.homes.HomeEvidenceSessionDto
+import app.pantopus.android.data.api.models.homes.HomePrivateEvidenceDto
+import app.pantopus.android.data.api.models.homes.HomePrivateEvidenceList
 import app.pantopus.android.data.api.models.homes.MyOwnershipClaimsResponse
 import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceAccess
+import app.pantopus.android.ui.screens.homes.claim_evidence.HomePrivateEvidenceAccessFactory
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
+import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -27,9 +37,12 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class MyClaimsListViewModelTest {
     private val repo: HomesRepository = mockk()
+    private val evidence = mockk<HomePrivateEvidenceAccessFactory>(relaxed = true)
+    private lateinit var opening: HomeClaimSessionScope
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        every { evidence.session(any()) } answers { claimScopeFactory().create(firstArg<CoroutineScope>()).also { opening = it } }
     }
 
     @After fun tearDown() {
@@ -53,7 +66,7 @@ class MyClaimsListViewModelTest {
         runTest {
             coEvery { repo.myOwnershipClaims() } returns
                 NetworkResult.Success(MyOwnershipClaimsResponse(claims = emptyList()))
-            val vm = MyClaimsListViewModel(repo)
+            val vm = MyClaimsListViewModel(repo, evidence)
             vm.load()
             val state = vm.state.value
             assertTrue(state is ListOfRowsUiState.Empty)
@@ -64,7 +77,7 @@ class MyClaimsListViewModelTest {
         runTest {
             coEvery { repo.myOwnershipClaims() } returns
                 NetworkResult.Success(MyOwnershipClaimsResponse(claims = listOf(makeClaim())))
-            val vm = MyClaimsListViewModel(repo)
+            val vm = MyClaimsListViewModel(repo, evidence)
             vm.load()
             val state = vm.state.value
             assertTrue(state is ListOfRowsUiState.Loaded)
@@ -83,7 +96,7 @@ class MyClaimsListViewModelTest {
         runTest {
             coEvery { repo.myOwnershipClaims() } returns
                 NetworkResult.Success(MyOwnershipClaimsResponse(listOf(makeClaim(status = "verified"))))
-            val vm = MyClaimsListViewModel(repo)
+            val vm = MyClaimsListViewModel(repo, evidence)
             vm.load()
             val state = vm.state.value as ListOfRowsUiState.Loaded
             val trailing = state.sections[0].rows[0].trailing as RowTrailing.Status
@@ -95,7 +108,7 @@ class MyClaimsListViewModelTest {
         runTest {
             coEvery { repo.myOwnershipClaims() } returns
                 NetworkResult.Success(MyOwnershipClaimsResponse(listOf(makeClaim(status = "rejected"))))
-            val vm = MyClaimsListViewModel(repo)
+            val vm = MyClaimsListViewModel(repo, evidence)
             vm.load()
             val state = vm.state.value as ListOfRowsUiState.Loaded
             val trailing = state.sections[0].rows[0].trailing as RowTrailing.Status
@@ -107,8 +120,38 @@ class MyClaimsListViewModelTest {
         runTest {
             coEvery { repo.myOwnershipClaims() } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
-            val vm = MyClaimsListViewModel(repo)
+            val vm = MyClaimsListViewModel(repo, evidence)
             vm.load()
             assertTrue(vm.state.value is ListOfRowsUiState.Error)
+        }
+
+    @Test fun withdrawn_row_reopens_exact_private_documents_and_current_cleanup_action() =
+        runTest {
+            val claim = makeClaim(status = "withdrawn")
+            coEvery { repo.myOwnershipClaims() } returns NetworkResult.Success(MyOwnershipClaimsResponse(listOf(claim)))
+            val access = mockk<HomePrivateEvidenceAccess>()
+            every { evidence.create(any(), claim.homeId, claim.id, false) } returns access
+            every { access.session } answers { opening }
+            val record =
+                HomePrivateEvidenceDto(
+                    "upload", claim.homeId, claim.id, "deed", "deed.pdf", 3,
+                    "application/pdf", "pending", "ready", true, false,
+                )
+            coEvery {
+                access.list()
+            } returns
+                HomePrivateEvidenceList(
+                    listOf(record), HomeEvidenceSessionDto("user-1", "a".repeat(64), claim.homeId, claim.id), false, null,
+                )
+            coEvery { access.remove("upload") } returns record.copy(state = "retired", available = false)
+            val vm = MyClaimsListViewModel(repo, evidence)
+            vm.load()
+            val row = (vm.state.value as ListOfRowsUiState.Loaded).sections.single().rows.single()
+            assertEquals("Withdrawn", (row.trailing as RowTrailing.Status).text)
+            row.onTap?.invoke()
+            val panel = requireNotNull(vm.evidencePanel.value)
+            assertEquals(listOf(record), panel.state.value.documents)
+            panel.remove(record)
+            coVerify(exactly = 1) { access.remove("upload") }
         }
 }

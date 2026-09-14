@@ -48,23 +48,19 @@ object HomeDashboardProjection {
         )
 
     /**
-     * Permission-gated tab strip. Mirrors RN's
-     * `src/app/homes/[id]/dashboard.tsx:169-176`, which gates on the five
-     * navigation booleans from `GET /api/homes/:id/me`
-     * (`backend/routes/homeIam.js:51`) and never on role strings.
-     * A null access record (403 / offline) leaves the strip ungated so a
-     * failed side-read can't blank the screen — the same fallback RN
-     * takes at `src/app/homes/[id]/index.tsx:124`.
+     * Reading a section requires its effective view permission. Overview
+     * remains reachable while access is unavailable, without granting actions.
      */
     fun gatedTabs(access: HomeAccessDto?): List<GridTabsTab> {
-        if (access == null) return tabs
         return tabs.filter { tab ->
             when (tab.id) {
-                "tasks" -> access.canManageTasks
-                "bills" -> access.canManageFinance
-                "members" -> access.canManageAccess
-                "ownership" -> access.isOwner || access.canManageHome
-                else -> true
+                "overview" -> true
+                "tasks" -> access?.can("tasks.view") == true
+                "bills" -> access?.can("finance.view") == true
+                "packages" -> access?.can("packages.view") == true
+                "members" -> access?.can("members.view") == true
+                "ownership" -> access?.can("ownership.view") == true
+                else -> false
             }
         }
     }
@@ -89,7 +85,7 @@ object HomeDashboardProjection {
      * number has no server-side source).
      */
     fun stats(counts: HomeDashboardCountsDto?): List<HomeHeroStat> {
-        val safe = counts ?: HomeDashboardCountsDto()
+        val safe = counts ?: HomeDashboardCountsDto.empty()
         return listOf(
             HomeHeroStat("packages", safe.packagesExpected.toString(), "Packages"),
             HomeHeroStat("bills", safe.billsDue.toString(), "Bills"),
@@ -100,20 +96,15 @@ object HomeDashboardProjection {
     // ── Quick actions ───────────────────────────────────────────────
 
     /**
-     * Quick-action tiles, permission-gated the same way RN gates its
-     * dashboard cards (`src/app/homes/[id]/index.tsx:324`, `:353`,
-     * `:374`) using the IAM permission strings from
-     * `GET /api/homes/:id/me`. A null access record leaves every tile in
-     * place — RN's `can()` also falls through to "allow" when it has no
-     * permission list to test.
+     * Quick actions use confirmed effective permissions from the access read.
      */
     fun quickActions(
         counts: HomeDashboardCountsDto?,
         access: HomeAccessDto? = null,
     ): List<QuickActionTile> {
-        val safe = counts ?: HomeDashboardCountsDto()
+        val safe = counts ?: HomeDashboardCountsDto.empty()
 
-        fun allowed(permission: String): Boolean = access?.can(permission) ?: true
+        fun allowed(permission: String): Boolean = access?.can(permission) == true
         return buildList {
             if (allowed("tasks.view")) {
                 add(tile("view_tasks", "Tasks", PantopusIcon.ListChecks, QuickActionTone.Warning, safe.tasksOpen))
@@ -121,7 +112,7 @@ object HomeDashboardProjection {
             if (allowed("finance.view")) {
                 add(tile("view_bills", "Bills", PantopusIcon.Receipt, QuickActionTone.Error, safe.billsDue))
             }
-            if (allowed("mailbox.view")) {
+            if (allowed("packages.view")) {
                 add(
                     tile(
                         "view_packages",
@@ -132,19 +123,21 @@ object HomeDashboardProjection {
                     ),
                 )
             }
-            if (access?.hasAccess == true && (access.isOwner || "docs.view" in access.permissions)) {
-                add(tile("view_docs", "Documents", PantopusIcon.FileText, QuickActionTone.Home, safe.documents))
+            if (allowed("docs.view")) {
+                add(tile("view_docs", "Docs", PantopusIcon.FileText, QuickActionTone.Home, safe.documents))
             }
-            add(
-                tile(
-                    "add_member",
-                    "Members",
-                    PantopusIcon.Users,
-                    QuickActionTone.Home,
-                    safe.membersActive,
-                    showsBadge = false,
-                ),
-            )
+            if (allowed("members.view")) {
+                add(
+                    tile(
+                        "add_member",
+                        "Members",
+                        PantopusIcon.Users,
+                        QuickActionTone.Home,
+                        safe.membersActive,
+                        showsBadge = false,
+                    ),
+                )
+            }
         }
     }
 
@@ -228,7 +221,7 @@ object HomeDashboardProjection {
                     icon = PantopusIcon.Package,
                     tone = QuickActionTone.Business,
                     title = if (count == 1) "1 package on the way" else "$count packages on the way",
-                    subtitle = "Ordered, shipped, or out for delivery",
+                    subtitle = "Expected to arrive today",
                     trailing = null,
                 )
         }
@@ -242,7 +235,13 @@ object HomeDashboardProjection {
             dashboard.members
                 .mapNotNull { member ->
                     val id = member.user?.id ?: member.userId ?: return@mapNotNull null
-                    val name = firstNonEmpty(member.user?.name, member.user?.username) ?: return@mapNotNull null
+                    val name =
+                        firstNonEmpty(
+                            member.user?.displayName,
+                            member.user?.handle,
+                            member.user?.name,
+                            member.user?.username,
+                        ) ?: return@mapNotNull null
                     id to name
                 }
                 .toMap()
@@ -268,11 +267,14 @@ object HomeDashboardProjection {
      * emergency contacts set").
      */
     fun emergency(health: HomeHealthScoreDto?): HomeDashboardEmergencyInfo {
-        val configured = (health?.breakdown?.get("emergency")?.score ?: 0) > 0
+        val dimension = health?.breakdown?.get("emergency")
+        val configured = (dimension?.score ?: 0) > 0
         return HomeDashboardEmergencyInfo(
             title = "Emergency info",
             body =
-                if (configured) {
+                if (dimension == null) {
+                    "Current emergency information could not be confirmed. Open Emergency info to check."
+                } else if (configured) {
                     "Tap to access shut-off valves, landlord contacts, insurance."
                 } else {
                     "Add shut-off valves, landlord contacts, insurance - for when it matters."
@@ -317,13 +319,16 @@ object HomeDashboardProjection {
 
     /** "Overdue" / "Today 4 PM" / "Tomorrow" / "Fri" / "Mar 3". */
     fun whenLabel(iso: String?): String? {
-        val instant = parseInstant(iso) ?: return null
-        val zoned = ZonedDateTime.ofInstant(instant, ZoneId.systemDefault())
+        val dateOnly =
+            iso?.takeIf { it.matches(Regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) }
+                ?.let { runCatching { java.time.LocalDate.parse(it).atStartOfDay(ZoneId.systemDefault()) }.getOrNull() }
+        val zoned = dateOnly ?: ZonedDateTime.ofInstant(parseInstant(iso) ?: return null, ZoneId.systemDefault())
         val now = ZonedDateTime.now(ZoneId.systemDefault())
         val isToday = zoned.toLocalDate() == now.toLocalDate()
         val days = ChronoUnit.DAYS.between(now.toLocalDate(), zoned.toLocalDate())
         return when {
             zoned.isBefore(now) && !isToday -> "Overdue"
+            isToday && dateOnly != null -> "Today"
             isToday -> "Today ${DateTimeFormatter.ofPattern("h a", Locale.US).format(zoned)}"
             days == 1L -> "Tomorrow"
             days < WEEK_DAYS -> DateTimeFormatter.ofPattern("EEE", Locale.US).format(zoned)

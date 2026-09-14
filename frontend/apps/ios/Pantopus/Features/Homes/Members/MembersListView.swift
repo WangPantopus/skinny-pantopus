@@ -11,17 +11,15 @@
 
 import SwiftUI
 
-/// Pushed onto the Hub / You stack from `HomeDashboardView`. Reaches
-/// `GET /api/homes/:id/occupants` (members + pending invites in one
-/// call), `GET /api/homes/:id/me`,
-/// `GET /api/homes/:id/household-access-requests`,
-/// `POST /api/homes/:id/invite`, `POST …/members/:userId/role`,
-/// `POST …/household-access-requests/:requestId/(approve|reject)`, and
-/// `DELETE …/members/:userId`.
+/// Current Home occupants plus the sender invitation queue. Invitation actions
+/// use protected reviewed sender commands; membership actions remain separate.
 public struct MembersListView: View {
     @State private var viewModel: MembersListViewModel
-    @State private var showingInvite = false
-    @State private var removeConfirm: RemoveTarget?
+    @State private var invitationTarget: HomeInvitationSenderTarget?
+    @State private var invitationResult: String?
+    @State private var showingResidencyReview = false
+    @State private var removalPresentation: HomeMemberRemovalPresentation?
+    @State private var removalResult: String?
     @State private var actionsTarget: MemberActionTarget?
     @State private var roleTarget: MemberActionTarget?
     @State private var approveTarget: RequestTarget?
@@ -37,70 +35,108 @@ public struct MembersListView: View {
     }
 
     public var body: some View {
-        ListOfRowsView(dataSource: viewModel)
-            .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-            .accessibilityIdentifier("membersList")
-            .onAppear { Analytics.track(.screenMembersListViewed) }
-            .task { await viewModel.load() }
-            .refreshable { await viewModel.refresh() }
-            .onChange(of: viewModel.pendingEvent) { _, event in
-                handle(event)
+        VStack(spacing: Spacing.s0) {
+            if let invitationResult {
+                Text(invitationResult)
+                    .pantopusTextStyle(.caption)
+                    .padding(Spacing.s3)
+                    .accessibilityIdentifier("membersListInvitationResult")
             }
-            .sheet(isPresented: $showingInvite) {
-                InviteMemberWizardView(homeId: homeId) { invitation in
-                    showingInvite = false
-                    if let invitation { viewModel.handleInvited(invitation) }
+            Button("Invitation recovery") { invitationTarget = .init(action: .create, invitationId: nil) }
+                .frame(minHeight: 44).accessibilityIdentifier("membersListInvitationRecovery")
+            Button("Member removal recovery") { removalPresentation = .init(target: nil) }
+                .frame(minHeight: 44).accessibilityIdentifier("membersListRemovalRecovery")
+            if let removalResult {
+                Text(removalResult)
+                    .pantopusTextStyle(.caption)
+                    .padding(Spacing.s3)
+                    .accessibilityIdentifier("membersListRemovalResult")
+            }
+            ListOfRowsView(dataSource: viewModel)
+        }
+        .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("membersList")
+        .onAppear { Analytics.track(.screenMembersListViewed) }
+        .onChange(of: viewModel.isCurrent) { _, current in if !current { viewModel.retire() } }
+        .task { await viewModel.load() }
+        .refreshable { await viewModel.refresh() }
+        .onChange(of: viewModel.pendingEvent) { _, event in
+            handle(event)
+        }
+        .sheet(item: $invitationTarget) { target in
+            InviteMemberWizardView(homeId: homeId, target: target) { original in
+                invitationTarget = nil
+                if let original {
+                    invitationResult = original.outcome?.state == "completed"
+                        ? "Your invitation action was saved. The member list shows the most recent successful refresh."
+                        : "Your original invitation result was acknowledged."
+                    Task { await viewModel.refresh() }
                 }
             }
-            .modifier(MemberActionsDialogs(
-                viewModel: viewModel,
-                actionsTarget: $actionsTarget,
-                roleTarget: $roleTarget,
-                removeConfirm: $removeConfirm
-            ))
-            .modifier(AccessRequestDialogs(
-                viewModel: viewModel,
-                approveTarget: $approveTarget,
-                declineTarget: $declineTarget
-            ))
-            .alert(
-                "Something went wrong",
-                isPresented: Binding(
-                    get: { viewModel.actionError != nil },
-                    set: { if !$0 { viewModel.actionError = nil } }
-                )
-            ) {
-                Button("OK", role: .cancel) { viewModel.actionError = nil }
-            } message: {
-                Text(viewModel.actionError ?? "")
+        }
+        .sheet(isPresented: $showingResidencyReview, onDismiss: { Task { await viewModel.refresh() } }, content: {
+            NavigationStack {
+                HomeClaimReviewView(homeId: homeId, initialTab: .residency) { showingResidencyReview = false }
             }
+        })
+        .onChange(of: removalPresentation?.id) { _, id in
+            if id != nil { viewModel.suspend() }
+        }
+        .sheet(item: $removalPresentation, onDismiss: { Task { await viewModel.refresh() } }, content: { presentation in
+            HomeMemberRemovalView(target: presentation.target) { original in
+                removalPresentation = nil
+                if original != nil {
+                    removalResult = "Original removal result acknowledged. The list checks current membership separately."
+                }
+            }
+        })
+        .modifier(MemberActionsDialogs(
+            viewModel: viewModel,
+            actionsTarget: $actionsTarget,
+            roleTarget: $roleTarget
+        ))
+        .modifier(AccessRequestDialogs(
+            viewModel: viewModel,
+            approveTarget: $approveTarget,
+            declineTarget: $declineTarget
+        ))
+        .alert(
+            "Something went wrong",
+            isPresented: Binding(
+                get: { viewModel.actionError != nil },
+                set: { if !$0 { viewModel.actionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { viewModel.actionError = nil }
+        } message: {
+            Text(viewModel.actionError ?? "")
+        }
     }
 
     private func handle(_ event: MembersListEvent?) {
         guard let event else { return }
         switch event {
+        case .openResidencyReview:
+            showingResidencyReview = true
         case .openInvite:
-            showingInvite = true
+            invitationTarget = .init(action: .create, invitationId: nil)
+        case let .openInvitationSender(target):
+            invitationTarget = target
+        case let .openMemberRemoval(target):
+            removalPresentation = .init(target: target)
         case .openAddGuest:
             onAddGuest()
         case let .openMemberActions(target):
             actionsTarget = target
-        case let .confirmRemove(userId, name):
-            removeConfirm = RemoveTarget(userId: userId, name: name)
+        case let .confirmRemove(userId, _):
+            removalPresentation = .init(target: .init(homeId: homeId, userId: userId))
         case let .confirmApproveRequest(requestId, name):
             approveTarget = RequestTarget(requestId: requestId, name: name, identity: nil)
         case let .confirmDeclineRequest(requestId, name, identity):
             declineTarget = RequestTarget(requestId: requestId, name: name, identity: identity)
         }
         viewModel.pendingEvent = nil
-    }
-
-    struct RemoveTarget: Identifiable, Equatable {
-        let userId: String
-        let name: String
-        var id: String {
-            userId
-        }
     }
 
     struct RequestTarget: Identifiable, Equatable {
@@ -121,7 +157,6 @@ private struct MemberActionsDialogs: ViewModifier {
     let viewModel: MembersListViewModel
     @Binding var actionsTarget: MemberActionTarget?
     @Binding var roleTarget: MemberActionTarget?
-    @Binding var removeConfirm: MembersListView.RemoveTarget?
 
     func body(content: Content) -> some View {
         content
@@ -144,10 +179,7 @@ private struct MemberActionsDialogs: ViewModifier {
                 if target.canRemove {
                     Button("Remove from home", role: .destructive) {
                         actionsTarget = nil
-                        removeConfirm = MembersListView.RemoveTarget(
-                            userId: target.userId,
-                            name: target.name
-                        )
+                        Task { await viewModel.remove(userId: target.userId) }
                     }
                     .accessibilityIdentifier("membersList_removeAction")
                 }
@@ -172,23 +204,6 @@ private struct MemberActionsDialogs: ViewModifier {
                 Button("Cancel", role: .cancel) { roleTarget = nil }
             } message: { target in
                 Text("Current role: \(MemberRole.parse(target.currentRole).label)")
-            }
-            .alert(
-                "Remove member?",
-                isPresented: Binding(
-                    get: { removeConfirm != nil },
-                    set: { if !$0 { removeConfirm = nil } }
-                ),
-                presenting: removeConfirm
-            ) { target in
-                Button("Remove \(target.name)", role: .destructive) {
-                    Task { await viewModel.remove(userId: target.userId) }
-                    removeConfirm = nil
-                }
-                .accessibilityIdentifier("membersList_removeConfirm")
-                Button("Cancel", role: .cancel) { removeConfirm = nil }
-            } message: { target in
-                Text("\(target.name) will lose access to this home. They can be re-invited later.")
             }
     }
 }

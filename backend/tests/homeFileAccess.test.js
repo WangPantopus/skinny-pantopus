@@ -3,7 +3,10 @@ const request = require('supertest');
 const db = require('./__mocks__/supabaseAdmin');
 
 jest.mock('../utils/homePermissions', () => ({ checkHomePermission: jest.fn() }));
-jest.mock('../services/s3Service', () => ({}));
+jest.mock('../services/s3Service', () => ({
+  uploadToS3: jest.fn(), generateS3Key: jest.fn(), deleteFromS3: jest.fn(),
+}));
+const s3 = require('../services/s3Service');
 
 const { checkHomePermission } = require('../utils/homePermissions');
 const router = require('../routes/files');
@@ -151,4 +154,50 @@ test('the legacy Home listing excludes byte-contract documents with separate vis
   const response = await request(app).get(`/api/files/home/${homeId}?visibility=private`);
   expect(response.status).toBe(200);
   expect(response.body.files.map(file => file.id)).toEqual(['legacy-private']);
+});
+
+
+describe('Existing standalone upload types', () => {
+  beforeEach(() => {
+    s3.generateS3Key.mockImplementation((folder, name, actor) => `${folder}/${actor}/${name}`);
+    s3.uploadToS3.mockImplementation(async (_bytes, key) => ({ key, url: `https://storage.example/${key}` }));
+    s3.deleteFromS3.mockResolvedValue(true);
+  });
+
+  test.each([
+    [null, 'other', 'general', 'text/plain', 'file.txt'],
+    ['general', 'other', 'general', 'text/plain', 'file.txt'],
+    ['voice_postscript', 'other', 'voice_postscript', 'audio/m4a', 'voice.m4a'],
+    ['gig_photo', 'gig_attachment', 'gig_photo', 'image/jpeg', 'gig.jpg'],
+    ['gig_completion', 'gig_attachment', 'gig_completion', 'image/jpeg', 'proof.jpg'],
+    ['mailbox_unboxing', 'mailbox_attachment', 'mailbox_unboxing', 'image/jpeg', 'mail.jpg'],
+    ['business_verification', 'other', 'business_verification', 'application/pdf', 'proof.pdf'],
+    ['gig_attachment', 'gig_attachment', null, 'image/jpeg', 'existing.jpg'],
+    ['other', 'other', null, 'application/msword', 'existing.doc'],
+  ])('stores existing caller type %s within the existing File schema', async (requested, stored, context, mime, name) => {
+    let req = request(app).post('/api/files/upload');
+    if (requested) req = req.field('file_type', requested);
+    const response = await req.attach('file', Buffer.from('synthetic standalone attachment'), { filename: name, contentType: mime });
+    expect(response.status).toBe(201);
+    expect(db.getTable('File').at(-1)).toMatchObject({
+      user_id: userId, file_type: stored, ...(context ? { file_context: context } : {}), visibility: 'private', processing_status: 'completed',
+    });
+    expect(s3.generateS3Key).toHaveBeenCalledWith(requested === 'voice_postscript' ? 'voice-postscripts' : 'uploads', name, userId);
+    expect(response.body.file).toMatchObject({ id: expect.any(String), url: expect.any(String) });
+  });
+
+  test.each([
+    { file_type: 'unknown' }, { visibility: 'shared' }, { file_type: ['other', 'gig_photo'] },
+    { visibility: ['private', 'public'] }, { file_type: '__proto__' },
+  ])('rejects invalid standalone metadata before provider writes: %j', async fields => {
+    const before = structuredClone(db.getTable('File'));
+    let req = request(app).post('/api/files/upload');
+    for (const [key, value] of Object.entries(fields)) {
+      for (const entry of Array.isArray(value) ? value : [value]) req = req.field(key, entry);
+    }
+    const result = await req.attach('file', Buffer.from('synthetic standalone attachment'), 'file.txt');
+    expect(result.status).toBe(400);
+    expect(s3.uploadToS3).not.toHaveBeenCalled();
+    expect(db.getTable('File')).toEqual(before);
+  });
 });

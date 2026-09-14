@@ -8,6 +8,8 @@ import app.pantopus.android.data.api.models.token_accept.GenericAcknowledgement
 import app.pantopus.android.data.api.models.token_accept.GuestPassResponse
 import app.pantopus.android.data.api.models.token_accept.HomeAcceptResponse
 import app.pantopus.android.data.api.models.token_accept.HomeInviteResponse
+import app.pantopus.android.data.api.models.token_accept.LeaseInviteAcceptanceResponse
+import app.pantopus.android.data.api.models.token_accept.LeaseInvitePreviewResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -19,6 +21,17 @@ import retrofit2.http.Query
  * parallel; whichever 200s decides the invite type.
  */
 interface TokenAcceptApi {
+    // Lease proofs remain in authenticated bodies, never unrelated URL probes.
+    @POST("api/v1/tenant/preview-invite")
+    suspend fun leaseInvite(
+        @Body body: BusinessSeatDeclineBody,
+    ): LeaseInvitePreviewResponse
+
+    @POST("api/v1/tenant/accept-invite")
+    suspend fun acceptLeaseInvite(
+        @Body body: BusinessSeatDeclineBody,
+    ): LeaseInviteAcceptanceResponse
+
     /** `GET /api/homes/invitations/token/:token`. Route
      *  `backend/routes/home.js:1793`. */
     @GET("api/homes/invitations/token/{token}")

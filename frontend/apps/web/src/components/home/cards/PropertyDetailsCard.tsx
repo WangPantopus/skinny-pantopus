@@ -26,7 +26,6 @@ export function PropertyDetailsCardPreview({
       title="Property Details"
       icon={<Building2 className="w-5 h-5" />}
       visibility="members"
-      badge="ATTOM"
       onClick={onOpen}
     >
       <div className="space-y-2">

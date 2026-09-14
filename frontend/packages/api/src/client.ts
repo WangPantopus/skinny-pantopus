@@ -196,6 +196,15 @@ let _onUnauthorized: (() => void | Promise<void>) | null = null;
 let _onAuthEvent: ((event: AuthClientEvent) => void) | null = null;
 const isDev = process.env.NODE_ENV !== 'production';
 
+// Home requests can contain private addresses, access records and postal codes,
+// including JSON strings retained for exact retries. Keep the entire exchange
+// out of development diagnostics; recursive field redaction cannot cover it.
+function isPrivateHomeRequest(url?: string): boolean {
+  try { return /^\/api\/homes(?:\/|$)/.test(new URL(url || '', 'http://localhost').pathname); }
+  catch { return true; }
+}
+
+
 function redactSensitive(value: any): any {
   if (!value || typeof value !== 'object') return value;
 
@@ -418,7 +427,7 @@ apiClient.interceptors.request.use(
       }
     }
 
-    if (isDev) {
+    if (isDev && !isPrivateHomeRequest(config.url)) {
       console.info('[API request]', {
         method: config.method?.toUpperCase(),
         url: `${config.baseURL || ''}${config.url || ''}`,
@@ -541,7 +550,7 @@ export async function refreshAuthSession(options?: { trigger?: string }): Promis
 
 apiClient.interceptors.response.use(
   (response) => {
-    if (isDev) {
+    if (isDev && !isPrivateHomeRequest(response.config.url)) {
       console.info('[API response]', {
         status: response.status,
         url: `${response.config.baseURL || ''}${response.config.url || ''}`,
@@ -674,7 +683,10 @@ apiClient.interceptors.response.use(
     const status = error.response?.status;
     const requestUrl = `${error.config?.baseURL || ''}${error.config?.url || ''}`;
     const isNetworkError = !error.response;
-    const errorCode = typeof responseData?.error === 'string' ? responseData.error : error.code;
+    // Newer endpoints separate their stable recovery code from human copy.
+    // Keep the legacy error-field fallback for older response envelopes.
+    const errorCode = typeof responseData?.code === 'string' ? responseData.code
+      : typeof responseData?.error === 'string' ? responseData.error : error.code;
     const userFacingMessage = typeof responseData?.message === 'string' ? responseData.message : '';
     const machineError = typeof responseData?.error === 'string' ? responseData.error : '';
     const errorMessage = isValidationError && validationErrors.length > 0
@@ -687,7 +699,7 @@ apiClient.interceptors.response.use(
           'An error occurred'
         );
 
-    if (isDev) {
+    if (isDev && !isPrivateHomeRequest(error.config?.url)) {
       let responseSafe: unknown;
       try {
         responseSafe = redactSensitive(error.response?.data);
@@ -805,7 +817,8 @@ export async function patch<T = any>(
 export async function uploadFile<T = any>(
   url: string,
   file: File,
-  additionalData?: Record<string, any>
+  additionalData?: Record<string, any>,
+  config?: ApiRequestConfig
 ): Promise<T> {
   const formData = new FormData();
   formData.append('file', file);
@@ -832,8 +845,10 @@ export async function uploadFile<T = any>(
   }
 
   const response = await apiClient.post<T>(url, formData, {
+    ...config,
     headers: {
       'Content-Type': 'multipart/form-data',
+      ...config?.headers,
     },
   });
 

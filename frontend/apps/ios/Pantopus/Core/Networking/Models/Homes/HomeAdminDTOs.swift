@@ -83,23 +83,16 @@ public struct HomeAccessDTO: Decodable, Sendable, Hashable {
         canViewSensitive = try container.decodeIfPresent(Bool.self, forKey: .canViewSensitive) ?? false
     }
 
-    /// Mirrors `canReviewHouseholdAccessRequests`
-    /// (`backend/routes/home.js:219`) and the `members.manage` gate on
-    /// `POST /:id/members/:userId/role` (`homeIam.js:218`).
+    /// The server's effective member-management permission includes current
+    /// role, age, time-window and explicit-denial checks.
     public var canManageMembers: Bool {
-        isOwner || permissions.contains("members.manage")
+        can("members.manage")
     }
 
-    /// RN's `can(perm)` helper (`src/app/homes/[id]/index.tsx:122`):
-    /// owners and admins see everything; a viewer whose record carries no
-    /// `permissions[]` at all falls through to "allow" so a partial
-    /// payload can't blank the dashboard; otherwise the IAM string list
-    /// decides. Permission vocabulary is the `home_permission` enum
-    /// (`backend/database/schema.sql:227-251`).
+    /// `GET /api/homes/:id/me` returns effective permissions. Recorded roles
+    /// and ownership cannot restore a permission omitted from that response.
     public func can(_ permission: String) -> Bool {
-        if isOwner || roleBase == "owner" || roleBase == "admin" { return true }
-        if permissions.isEmpty { return true }
-        return permissions.contains(permission)
+        hasAccess && permissions.contains(permission)
     }
 
     private enum CodingKeys: String, CodingKey {

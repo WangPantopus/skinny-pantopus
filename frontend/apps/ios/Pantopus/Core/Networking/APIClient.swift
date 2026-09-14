@@ -134,7 +134,7 @@ final class APIClient: @unchecked Sendable {
         _ endpoint: Endpoint,
         as _: Response.Type = Response.self
     ) async throws -> Response {
-        let data = try await executeWithRetry(endpoint)
+        let data = try await executeWithRetry(endpoint).data
         if Response.self == EmptyResponse.self, data.isEmpty {
             // swiftlint:disable:next force_cast
             return EmptyResponse() as! Response
@@ -160,7 +160,20 @@ final class APIClient: @unchecked Sendable {
     /// Perform a request and return the raw response body — for binary
     /// artifacts (e.g. the residency-letter PDF), not JSON.
     func requestData(_ endpoint: Endpoint) async throws -> Data {
-        try await executeWithRetry(endpoint)
+        try await executeWithRetry(endpoint).data
+    }
+
+    /// Binary artifacts may carry a receipt in their response headers. Keep
+    /// the same authentication, refresh and cache handling as typed requests.
+    func requestDataResponse(
+        _ endpoint: Endpoint, includingForbidden: Bool = false, includingNotFound: Bool = false
+    ) async throws -> DataResponse {
+        try await executeWithRetry(endpoint, includingForbidden: includingForbidden, includingNotFound: includingNotFound)
+    }
+
+    struct DataResponse {
+        let data: Data
+        let response: HTTPURLResponse
     }
 
     /// `Result`-returning variant for call sites that prefer explicit
@@ -246,7 +259,9 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Retry loop
 
     // swiftlint:disable:next cyclomatic_complexity
-    private func executeWithRetry(_ endpoint: Endpoint) async throws -> Data {
+    private func executeWithRetry(
+        _ endpoint: Endpoint, includingForbidden: Bool = false, includingNotFound: Bool = false
+    ) async throws -> DataResponse {
         let shouldRetry = endpoint.method.isIdempotent
         var attempt = 0
         // One silent token refresh per request. On a 401 for an authenticated
@@ -279,7 +294,9 @@ final class APIClient: @unchecked Sendable {
                 extraHeaders: stepUpToken.map { [Self.stepUpHeader: $0] } ?? [:]
             )
             do {
-                return try await executeOnce(request, endpoint: endpoint)
+                return try await executeOnce(
+                    request, endpoint: endpoint, includingForbidden: includingForbidden, includingNotFound: includingNotFound
+                )
             } catch let signal as StepUpRequiredSignal {
                 guard endpoint.authenticated, !didAttemptStepUp else { throw APIError.forbidden }
                 didAttemptStepUp = true
@@ -341,7 +358,9 @@ final class APIClient: @unchecked Sendable {
         let methods: [String]
     }
 
-    private func executeOnce(_ request: URLRequest, endpoint: Endpoint) async throws -> Data {
+    private func executeOnce(
+        _ request: URLRequest, endpoint: Endpoint, includingForbidden: Bool, includingNotFound: Bool
+    ) async throws -> DataResponse {
         let data: Data
         let response: URLResponse
         do {
@@ -368,7 +387,7 @@ final class APIClient: @unchecked Sendable {
 
         switch http.statusCode {
         case 200..<300, 304:
-            return data
+            return DataResponse(data: data, response: http)
         case 401:
             // Refresh + sign-out decisions are made in executeWithRetry.
             throw APIError.unauthorized
@@ -379,8 +398,16 @@ final class APIClient: @unchecked Sendable {
             if let body = AuthErrorBody.decode(data), body.code == "STEP_UP_REQUIRED" {
                 throw StepUpRequiredSignal(purpose: body.purpose, methods: body.methods ?? [])
             }
+            // An explicit caller may inspect a denied application's context
+            // (e.g. pending residency). Authentication/step-up still run above;
+            // callers must inspect the status before interpreting any payload.
+            if includingForbidden { return DataResponse(data: data, response: http) }
             throw APIError.forbidden
-        case 404: throw APIError.notFound
+        case 404:
+            // Atomic command recovery may carry a bound rejected receipt on
+            // 404. Opt-in callers must validate its actor, Home and original
+            // command; authentication and step-up retain their normal behavior.
+            return try notFoundResponse(data, response: http, includeBody: includingNotFound)
         case 400..<500:
             let message = String(data: data, encoding: .utf8)
             throw APIError.clientError(status: http.statusCode, message: message)
@@ -392,6 +419,11 @@ final class APIClient: @unchecked Sendable {
             let body = String(data: data, encoding: .utf8) ?? ""
             throw APIError.server(status: http.statusCode, body: body)
         }
+    }
+
+    private func notFoundResponse(_ data: Data, response: HTTPURLResponse, includeBody: Bool) throws -> DataResponse {
+        guard includeBody else { throw APIError.notFound }
+        return DataResponse(data: data, response: response)
     }
 
     // MARK: - Building requests
@@ -453,7 +485,9 @@ final class APIClient: @unchecked Sendable {
             request.setValue(proof, forHTTPHeaderField: Self.dpopHeader)
         }
 
-        if let body = endpoint.body {
+        if let bodyData = endpoint.bodyData {
+            request.httpBody = bodyData
+        } else if let body = endpoint.body {
             request.httpBody = try encoder.encode(AnyEncodable(body))
         }
 
@@ -511,6 +545,8 @@ public struct Endpoint: Sendable {
     public let path: String
     public let query: [String: String]
     public let body: (any Encodable & Sendable)?
+    /// Exact protected command bytes, retained before the first submission.
+    public let bodyData: Data?
     public let headers: [String: String]
     public let authenticated: Bool
     public let cachePolicy: URLRequest.CachePolicy
@@ -537,6 +573,7 @@ public struct Endpoint: Sendable {
         path: String,
         query: [String: String] = [:],
         body: (any Encodable & Sendable)? = nil,
+        bodyData: Data? = nil,
         headers: [String: String] = [:],
         authenticated: Bool = true,
         cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy,
@@ -548,6 +585,7 @@ public struct Endpoint: Sendable {
         self.path = path
         self.query = query
         self.body = body
+        self.bodyData = bodyData
         self.headers = headers
         self.authenticated = authenticated
         self.cachePolicy = cachePolicy

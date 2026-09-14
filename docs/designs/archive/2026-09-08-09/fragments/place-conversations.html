@@ -1,0 +1,113 @@
+<div id="pantopus-place-concept" aria-label="Pantopus place conversation design">
+  <style>
+    #pantopus-place-concept{--pc-paper:light-dark(#fcfbf7,#19251f);--pc-ink:light-dark(#203c31,#eff2e6);--pc-muted:light-dark(#52635a,#bdc9be);--pc-line:light-dark(#dce3d7,#3b4b40);--pc-soft:light-dark(#eef1e7,#26372d);--pc-green:light-dark(#244f3c,#b6d7aa);--pc-on-green:light-dark(#fbfbea,#173624);--pc-gold:light-dark(#f5edda,#3a3527);color-scheme:light dark;font-family:ui-sans-serif,system-ui,sans-serif;color:var(--pc-ink);max-width:736px;margin:auto;font-size:15px;line-height:1.55}
+    #pantopus-place-concept *{box-sizing:border-box}
+    #pantopus-place-concept .pc-caption{color:var(--pc-muted);font-size:12px;margin:0 0 9px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+    #pantopus-place-concept .pc-window{background:var(--pc-paper);border:1px solid var(--pc-line);border-radius:22px;overflow:clip}
+    #pantopus-place-concept .pc-top{display:flex;justify-content:space-between;align-items:center;padding:15px 24px;border-bottom:1px solid var(--pc-line);gap:8px;flex-wrap:wrap;font-size:13px}
+    #pantopus-place-concept .pc-wordmark{display:flex;align-items:center;gap:7px;font-weight:500}
+    #pantopus-place-concept .pc-header{padding:26px 28px 18px}
+    #pantopus-place-concept .pc-kind{color:var(--pc-muted);font-size:12px;letter-spacing:.1em;text-transform:uppercase}
+    #pantopus-place-concept h2{font-family:Georgia,serif;font-size:34px;line-height:1.12;font-weight:400;margin:7px 0 9px;letter-spacing:-.7px}
+    #pantopus-place-concept p{margin:6px 0 12px}
+    #pantopus-place-concept .pc-location{color:var(--pc-muted);font-size:14px}
+    #pantopus-place-concept button{font:inherit;font-weight:500;color:var(--pc-ink);background:var(--pc-paper);border:1px solid var(--pc-line);border-radius:10px;min-height:44px;padding:9px 13px;cursor:pointer;max-width:100%;white-space:normal}
+    #pantopus-place-concept button:hover{background:var(--pc-soft)}
+    #pantopus-place-concept .pc-primary{background:var(--pc-green);color:var(--pc-on-green);border-color:var(--pc-green)}
+    #pantopus-place-concept .pc-primary:hover{background:var(--pc-green);filter:brightness(.96)}
+    #pantopus-place-concept .pc-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+    #pantopus-place-concept .pc-minor{font-size:12px;color:var(--pc-muted)}
+    #pantopus-place-concept .pc-tabs{display:flex;padding:0 24px;border-bottom:1px solid var(--pc-line);gap:3px;flex-wrap:wrap}
+    #pantopus-place-concept .pc-tabs button{border:0;border-radius:8px 8px 0 0;background:transparent;color:var(--pc-muted);padding:12px;min-height:47px}
+    #pantopus-place-concept .pc-tabs button[aria-pressed=true]{color:var(--pc-green);background:var(--pc-soft);box-shadow:inset 0 -2px var(--pc-green)}
+    #pantopus-place-concept .pc-panel{padding:22px 28px 26px;min-width:0}
+    #pantopus-place-concept .pc-banner{border-radius:12px;padding:13px 16px;background:var(--pc-gold);margin-bottom:18px;font-size:14px}
+    #pantopus-place-concept .pc-banner strong{display:block;font-weight:500}
+    #pantopus-place-concept .pc-section{display:flex;justify-content:space-between;gap:8px;align-items:center;margin:0 0 12px;flex-wrap:wrap}
+    #pantopus-place-concept .pc-section h3{font-size:15px;font-weight:500;margin:0}
+    #pantopus-place-concept .pc-quiet{background:var(--pc-soft);padding:22px;border-radius:16px}
+    #pantopus-place-concept .pc-quiet h3{font:400 25px/1.2 Georgia,serif;margin:0 0 10px}
+    #pantopus-place-concept .pc-thread{padding:18px 0;border-bottom:1px solid var(--pc-line)}
+    #pantopus-place-concept .pc-thread:first-of-type{padding-top:6px}
+    #pantopus-place-concept .pc-author{font-size:12px;color:var(--pc-muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    #pantopus-place-concept .pc-avatar{background:var(--pc-soft);color:var(--pc-ink);border-radius:50%;width:28px;height:28px;display:grid;place-items:center;flex:none}
+    #pantopus-place-concept .pc-thread-button{display:block;text-align:left;border:0;background:transparent;padding:8px 0 3px;width:100%;font-size:17px;line-height:1.4;border-radius:5px}
+    #pantopus-place-concept .pc-thread-button:hover{background:transparent;text-decoration:underline;text-underline-offset:4px}
+    #pantopus-place-concept .pc-thread p{font-size:14px;color:var(--pc-muted);margin:4px 0 8px}
+    #pantopus-place-concept .pc-thread-foot{font-size:12px;display:flex;gap:12px;flex-wrap:wrap;color:var(--pc-muted)}
+    #pantopus-place-concept .pc-text-button{border:0;background:transparent;color:var(--pc-green);padding:7px 0;font-size:13px}
+    #pantopus-place-concept .pc-bottom{padding:16px 28px;border-top:1px solid var(--pc-line);display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--pc-soft);flex-wrap:wrap}
+    #pantopus-place-concept .pc-event{display:flex;gap:16px;padding:18px;background:var(--pc-soft);border-radius:14px;align-items:flex-start}
+    #pantopus-place-concept .pc-date{text-align:center;min-width:48px;font-size:12px;color:var(--pc-muted)}
+    #pantopus-place-concept .pc-date span{display:block;font:400 32px/1.1 Georgia,serif;color:var(--pc-ink)}
+    #pantopus-place-concept .pc-event h3{font:400 23px/1.2 Georgia,serif;margin:0 0 7px}
+    #pantopus-place-concept .pc-event p{font-size:14px}
+    #pantopus-place-concept .pc-facts{margin:0}
+    #pantopus-place-concept .pc-facts div{padding:13px 0;border-bottom:1px solid var(--pc-line)}
+    #pantopus-place-concept .pc-facts dt{font-size:12px;color:var(--pc-muted)}
+    #pantopus-place-concept .pc-facts dd{margin:4px 0 0}
+    #pantopus-place-concept .pc-reply{margin:16px 0;padding:16px;border-left:2px solid var(--pc-line);background:var(--pc-soft)}
+    #pantopus-place-concept textarea{display:block;width:100%;resize:vertical;min-height:88px;background:var(--pc-paper);color:var(--pc-ink);border:1px solid var(--pc-line);border-radius:10px;padding:12px;font:inherit;font-size:16px;margin:8px 0}
+    #pantopus-place-concept .pc-inline-status{font-size:12px;color:var(--pc-muted);margin:8px 0;min-height:18px;overflow-wrap:anywhere}
+    #pantopus-place-concept .pc-post-quote{font:400 26px/1.35 Georgia,serif;overflow-wrap:anywhere}
+    #pantopus-place-concept .pc-reply-preview{overflow-wrap:anywhere;white-space:pre-wrap}
+    @media(max-width:460px){#pantopus-place-concept .pc-header,#pantopus-place-concept .pc-panel{padding:20px}#pantopus-place-concept .pc-top{padding:13px 20px}#pantopus-place-concept .pc-tabs{padding:0 10px}#pantopus-place-concept h2{font-size:29px}#pantopus-place-concept .pc-bottom{padding:16px 20px}#pantopus-place-concept .pc-tabs button{font-size:14px;padding:11px 9px}#pantopus-place-concept .pc-event{gap:11px;padding:14px}}
+  </style>
+  <div class="pc-caption"><span>Place-page concept · fictional place and posts</span><span id="pc-scenario-label">Everyday activity</span></div>
+  <section class="pc-window" aria-label="Cedar House Cafe place page">
+    <div class="pc-top"><span class="pc-wordmark"><i data-lucide="asterisk" aria-hidden="true"></i> Pantopus</span><span>Nearby / Places</span></div>
+    <header class="pc-header">
+      <div class="pc-kind">Cafe · public place</div>
+      <h2>Cedar House Cafe</h2>
+      <div class="pc-location">18 Market Street · illustrative location</div>
+      <div class="pc-actions"><button type="button" class="pc-primary" id="pc-follow" aria-pressed="false">Follow place</button><button type="button" id="pc-save" aria-pressed="false">Save privately</button></div>
+      <div class="pc-inline-status" id="pc-follow-status" aria-live="polite">Your follows stay private. Phone alerts are off.</div>
+    </header>
+    <nav class="pc-tabs" aria-label="Place views"><button type="button" data-pc-tab="conversations" aria-pressed="true">Conversations</button><button type="button" data-pc-tab="upcoming" aria-pressed="false">Upcoming</button><button type="button" data-pc-tab="about" aria-pressed="false">About</button></nav>
+    <div class="pc-panel" id="pc-panel"></div>
+    <div class="pc-bottom"><span class="pc-minor">People post. The place connects the conversation.</span><button type="button" id="pc-compose">Start a conversation</button></div>
+  </section>
+  <script>
+    (()=>{
+      const root=document.getElementById('pantopus-place-concept');
+      const panel=root.querySelector('#pc-panel');
+      const settings={activity:'Everyday',organization:'Conversations'};
+      const ui={tab:'conversations',followed:false,saved:false,thread:null,composing:false,newer:false,eventDetail:false};
+      const threads=[
+        {author:'Maya',initial:'M',kind:'Moment',time:'Yesterday',title:'Anyone else sketch the places they spend time in?',body:'I started drawing this corner while waiting for the rain to stop. I would love to see what you notice here.',replies:'6 replies',replyAuthor:'Elena',reply:'The window seats are my favorite. I have a drawing from last winter — I will find it.'},
+        {author:'Dev',initial:'D',kind:'Question',time:'2 days ago',title:'Which entrance has a step-free route?',body:'Planning a visit with my dad. Is the Market Street entrance the best approach?',replies:'3 replies',replyAuthor:'Jo',reply:'I used the side entrance last week. Conditions can change, so it is worth checking with the cafe before your visit.'},
+        {author:'Cedar House',initial:'C',kind:'Cafe team',time:'Sep 8',title:'An evening of sketches, September 19',body:'Bring a notebook and join our public drawing evening. Details and questions are in this conversation.',replies:'4 replies',replyAuthor:'Maya',reply:'Is it okay to come if I have never tried this before?'}
+      ];
+      const event=()=>'<div class="pc-event"><div class="pc-date">SEP<span>19</span></div><div><h3>An evening of sketches</h3><p>6:30 PM · America/Chicago<br>From Cedar House Cafe · example event</p>'+(settings.activity==='Quiet'?'<button type="button" class="pc-text-button" data-pc-event="true">View event details →</button>':'<button type="button" class="pc-text-button" data-pc-thread="2">Read the conversation →</button>')+'</div></div>';
+      function list(){
+        if(settings.activity==='Quiet')return '<div class="pc-quiet"><h3>A place for the first conversation.</h3><p>No public conversations here yet.</p><span class="pc-minor">You can still explore a documented event or keep this place privately.</span></div><div class="pc-section" style="margin-top:24px"><h3>From the cafe’s public calendar</h3></div>'+event();
+        const group=settings.activity==='Surge'&&settings.organization==='Conversations'?'<div class="pc-banner"><strong>Drawing evening · related conversations</strong>Explore people’s posts together. Each keeps its own replies.</div>':'';
+        const burst=settings.activity==='Surge'?'<div class="pc-section"><h3>Conversations about this place</h3><button type="button" class="pc-text-button" data-pc-newer="true">'+(ui.newer?'You’re viewing the latest example':'New conversations available ↓')+'</button></div>':'<div class="pc-section"><h3>Conversations about this place</h3></div>';
+        return group+burst+threads.map((t,i)=>'<article class="pc-thread"><div class="pc-author"><span class="pc-avatar">'+t.initial+'</span><span>'+t.author+' · '+t.kind+' · '+t.time+'</span></div><button type="button" class="pc-thread-button" data-pc-thread="'+i+'">'+t.title+'</button><p>'+t.body+'</p><div class="pc-thread-foot"><span>'+t.replies+'</span><span>Public · About this place</span></div></article>').join('')+'<button type="button" class="pc-text-button" data-pc-recent="true">'+(settings.organization==='Recent'?'Recent view selected':'Browse recent conversations')+'</button>';
+      }
+      function render(){
+        root.querySelector('#pc-scenario-label').textContent={Quiet:'Quiet place',Everyday:'Everyday activity',Surge:'Sudden surge'}[settings.activity];
+        root.querySelectorAll('[data-pc-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.pcTab===ui.tab)));
+        if(ui.composing){panel.innerHTML='<button type="button" class="pc-text-button" data-pc-back="true">← Back to conversations</button><h3>Start with something you want to share.</h3><label for="pc-draft">Your post</label><textarea id="pc-draft" maxlength="500" placeholder="A moment, a question, or a plan…"></textarea><p class="pc-minor">Posting as you · Public<br>About Cedar House Cafe · 18 Market Street</p><label><input type="checkbox" id="pc-discover"> Show in this place’s public conversations</label><div class="pc-actions"><button type="button" class="pc-primary" data-pc-preview="true">Preview post</button></div><div id="pc-preview" class="pc-inline-status" aria-live="polite"></div>';return;}
+        if(ui.eventDetail){panel.innerHTML='<button type="button" class="pc-text-button" data-pc-back="true">← Back to conversations</button><div class="pc-kind">From a public calendar · example source</div><h3>An evening of sketches</h3><p>September 19, 2026 · 6:30 PM<br>America/Chicago · Cedar House Cafe</p><p>Bring a notebook for an informal drawing evening.</p><p class="pc-minor">An illustrative source listing, not a community post. Booking conditions and availability have not been checked.</p>';return;}
+        if(ui.thread!==null){const t=threads[ui.thread];panel.innerHTML='<button type="button" class="pc-text-button" data-pc-back="true">← Back to conversations</button><div class="pc-author">'+t.author+' · '+t.kind+' · '+t.time+' · Public</div><p class="pc-post-quote">'+t.title+'</p><p>'+t.body+'</p><div class="pc-reply"><div class="pc-author">'+t.replyAuthor+' · Reply</div><p>'+t.reply+'</p></div><label for="pc-reply">Join the conversation</label><textarea id="pc-reply" maxlength="500" placeholder="Write a reply…"></textarea><button type="button" class="pc-primary" data-pc-reply="true">Preview reply</button><div id="pc-reply-preview" class="pc-reply-preview pc-inline-status" aria-live="polite"></div><p class="pc-minor">Original post and replies · Nothing is sent from this concept.</p>';return;}
+        panel.innerHTML=ui.tab==='conversations'?list():ui.tab==='upcoming'?'<div class="pc-section"><h3>Upcoming at this place</h3></div>'+event()+'<p class="pc-minor">A private plan save would not reserve a place or announce attendance.</p>':'<dl class="pc-facts"><div><dt>Public identity</dt><dd>Cedar House Cafe · Market Street branch</dd></div><div><dt>Public program</dt><dd>Drawing evenings · example cafe calendar</dd></div><div><dt>Source status</dt><dd>Fictional details for this concept. Hours and live availability are not verified.</dd></div><div><dt>Community conversation</dt><dd>Written by people and publishers. A place tag does not show who is here.</dd></div></dl>';
+      }
+      root.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+        if(b.dataset.pcTab){ui.tab=b.dataset.pcTab;ui.thread=null;ui.composing=false;ui.eventDetail=false;render();}
+        if(b.id==='pc-follow'){ui.followed=!ui.followed;b.setAttribute('aria-pressed',String(ui.followed));b.textContent=ui.followed?'Following place':'Follow place';root.querySelector('#pc-follow-status').textContent=ui.followed?'Following in this concept only. Private · phone alerts off.':'Your follows stay private. Phone alerts are off.';}
+        if(b.id==='pc-save'){ui.saved=!ui.saved;b.setAttribute('aria-pressed',String(ui.saved));b.textContent=ui.saved?'Saved · Only you':'Save privately';root.querySelector('#pc-follow-status').textContent=ui.saved?'Saved in this concept session only. No public post or reservation.':'Private save removed from this concept.';}
+        if(b.dataset.pcThread!==undefined){ui.thread=Number(b.dataset.pcThread);ui.composing=false;ui.eventDetail=false;render();panel.querySelector('button')?.focus({preventScroll:true});}
+        if(b.dataset.pcEvent){ui.eventDetail=true;ui.thread=null;render();panel.querySelector('button')?.focus({preventScroll:true});}
+        if(b.dataset.pcBack){ui.thread=null;ui.composing=false;ui.eventDetail=false;ui.tab='conversations';render();root.querySelector('[data-pc-tab="conversations"]').focus({preventScroll:true});}
+        if(b.dataset.pcNewer){ui.newer=true;render();panel.querySelector('[data-pc-newer]')?.focus({preventScroll:true});}
+        if(b.dataset.pcRecent){settings.organization='Recent';render();panel.querySelector('[data-pc-recent]')?.focus({preventScroll:true});}
+        if(b.id==='pc-compose'){ui.composing=true;ui.thread=null;ui.eventDetail=false;ui.tab='conversations';render();panel.querySelector('textarea').focus({preventScroll:true});}
+        if(b.dataset.pcReply){const value=root.querySelector('#pc-reply').value.trim();root.querySelector('#pc-reply-preview').textContent=value?'Your reply preview: '+value+'\nNothing has been published.':'Write a reply to preview it.';}
+        if(b.dataset.pcPreview){const value=root.querySelector('#pc-draft').value.trim();const indexed=root.querySelector('#pc-discover').checked;root.querySelector('#pc-preview').textContent=value?'Preview only: '+value+' — Public'+(indexed?' · Shown at Cedar House Cafe.':' · Excluded from place discovery.')+' Nothing has been published.':'Write something to preview it.';}
+      });
+      render();
+      if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:()=>{ui.thread=null;ui.composing=false;ui.eventDetail=false;ui.newer=false;render();}});tweak.addSelect(settings,'activity',{label:'Conversation volume',options:['Quiet','Everyday','Surge']});tweak.addSelect(settings,'organization',{label:'Busy-place organization',options:['Conversations','Recent']});}
+    })();
+  </script>
+</div>

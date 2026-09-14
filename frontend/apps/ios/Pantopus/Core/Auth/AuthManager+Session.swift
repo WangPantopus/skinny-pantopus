@@ -482,7 +482,7 @@ extension AuthManager {
     /// one coalesced refresh fails; only the first fires the side effects
     /// (no suspension points, so the @MainActor serializes the reads).
     @discardableResult
-    func clearLocalSession(preservingContentArrival: Bool = false) -> Bool {
+    func clearLocalSession(preservingContentArrival: Bool = false, preservingLoginArrival: String? = nil) -> Bool {
         let hadSession = accessToken != nil || store.get(SecureStoreKey.accessToken) != nil
         if preservingContentArrival {
             // Concurrent terminal responses after the first teardown must not
@@ -495,6 +495,9 @@ extension AuthManager {
                 }
                 PendingDeepLinkStore.retainForReauthentication(userID: userID)
             }
+        } else if let preservingLoginArrival, PendingDeepLinkStore.peek() == preservingLoginArrival {
+            // Explicit account switching has already saved this unbound link.
+            // Preserve only that exact handoff before publishing signedOut.
         } else {
             PendingDeepLinkStore.clear()
         }

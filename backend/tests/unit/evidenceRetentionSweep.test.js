@@ -30,27 +30,18 @@ function seed() {
   ]);
 }
 
-it('purges every live object of a decided (or vanished) claim and leaves open claims alone', async () => {
-  seed();
+it('quarantines decided legacy refs without deleting caller-selected objects or claiming purge', async () => {
+  seed(); const before = JSON.parse(JSON.stringify(getTable('HomeVerificationEvidence')));
   const out = await sweep();
-  expect(out).toMatchObject({ live_objects: 5, claims_checked: 5, claims_purged: 4, objects_purged: 4, failed: 0, dry_run: false });
-  const keys = s3.deleteFromS3.mock.calls.map(([k]) => k).sort();
-  expect(keys).toEqual([
-    'ownership-evidence/h/approved/a.pdf',
-    'ownership-evidence/h/expired/c.pdf',
-    'ownership-evidence/h/gone/e.pdf',
-    'ownership-evidence/h/rejected/b.pdf',
-  ]);
-  const rows = Object.fromEntries(getTable('HomeVerificationEvidence').map((r) => [r.id, r]));
-  expect(rows.e1.metadata.purge_reason).toBe('retention');
-  expect(rows.e4.storage_ref).toBe('ownership-evidence/h/open/d.pdf'); // still under review
-  expect(rows.e7.storage_ref).toBe('https://example.com/theirs.pdf'); // not our object
+  expect(out).toMatchObject({ live_objects: 5, claims_checked: 5, candidate_claims: 4, claims_purged: 0, objects_purged: 0, quarantined: 4, failed: 0 });
+  expect(s3.deleteFromS3).not.toHaveBeenCalled(); expect(getTable('HomeVerificationEvidence')).toEqual(before);
 });
 
 it('dry run counts but deletes nothing', async () => {
   seed();
   const out = await sweep({ dryRun: true });
-  expect(out.claims_purged).toBe(4);
+  expect(out.candidate_claims).toBe(4);
+  expect(out.claims_purged).toBe(0);
   expect(out.objects_purged).toBe(0);
   expect(s3.deleteFromS3).not.toHaveBeenCalled();
 });

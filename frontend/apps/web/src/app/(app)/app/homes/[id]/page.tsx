@@ -7,7 +7,6 @@ import Link from 'next/link';
 import * as api from '@pantopus/api';
 import type { HomeDashboard } from '@pantopus/types';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
-import { toast } from '@/components/ui/toast-store';
 
 export default function HomePublicProfilePage() {
   const params = useParams();
@@ -16,7 +15,6 @@ export default function HomePublicProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [data, setData] = useState<HomeDashboard | null>(null);
-  const [claimLoading, setClaimLoading] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -35,18 +33,6 @@ export default function HomePublicProfilePage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [homeId]);
-
-  const submitClaim = async () => {
-    setClaimLoading(true);
-    try {
-      await api.homes.submitResidencyClaim(homeId, data?.home?.address || undefined);
-      await load();
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Failed to submit claim');
-    } finally {
-      setClaimLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -101,23 +87,17 @@ export default function HomePublicProfilePage() {
               {data.is_member ? (
                 <span className="rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-sm text-green-700">Member</span>
               ) : claimStatus === 'pending' ? (
-                <span className="rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-1.5 text-sm text-yellow-700">Claim Pending</span>
-              ) : claimStatus === 'rejected' ? (
-                <button
-                  onClick={submitClaim}
-                  disabled={claimLoading}
-                  className="rounded-lg border border-app-border px-3 py-1.5 text-sm text-app-text-strong disabled:opacity-50"
-                >
-                  {claimLoading ? '...' : 'Claim Again'}
-                </button>
+                <Link href={`/app/homes/new?joinHome=${encodeURIComponent(homeId)}`}
+                  className="rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-1.5 text-sm text-yellow-700">
+                  Review residency request
+                </Link>
+              ) : claimStatus === 'rejected' || canClaim ? (
+                <Link href={`/app/homes/new?joinHome=${encodeURIComponent(homeId)}`}
+                  className="rounded-lg border border-app-border px-3 py-1.5 text-sm text-app-text-strong">
+                  {claimStatus === 'rejected' ? 'Review and submit again' : 'Request residency'}
+                </Link>
               ) : (
-                <button
-                  onClick={submitClaim}
-                  disabled={!canClaim || claimLoading}
-                  className="rounded-lg border border-app-border px-3 py-1.5 text-sm text-app-text-strong disabled:opacity-50"
-                >
-                  {claimLoading ? '...' : 'Claim Residency'}
-                </button>
+                <Link href="/app/homes" className="text-sm text-primary-700">Check My Homes</Link>
               )}
             </div>
           </div>

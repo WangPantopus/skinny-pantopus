@@ -8,6 +8,8 @@ import app.pantopus.android.data.api.models.token_accept.GenericAcknowledgement
 import app.pantopus.android.data.api.models.token_accept.GuestPassResponse
 import app.pantopus.android.data.api.models.token_accept.HomeAcceptResponse
 import app.pantopus.android.data.api.models.token_accept.HomeInviteResponse
+import app.pantopus.android.data.api.models.token_accept.LeaseInviteAcceptanceResponse
+import app.pantopus.android.data.api.models.token_accept.LeaseInvitePreviewResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.TokenAcceptApi
@@ -22,6 +24,12 @@ class TokenAcceptRepository
     constructor(
         private val api: TokenAcceptApi,
     ) {
+        suspend fun leaseInvite(token: String): NetworkResult<LeaseInvitePreviewResponse> =
+            safeApiCall { api.leaseInvite(BusinessSeatDeclineBody(token)) }
+
+        suspend fun acceptLeaseInvite(token: String): NetworkResult<LeaseInviteAcceptanceResponse> =
+            safeApiCall { api.acceptLeaseInvite(BusinessSeatDeclineBody(token)) }
+
         suspend fun homeInvite(token: String): NetworkResult<HomeInviteResponse> = safeApiCall { api.homeInvite(token) }
 
         suspend fun businessSeatInvite(token: String): NetworkResult<BusinessSeatInviteResponse> =

@@ -3,6 +3,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
+const homeRecordService = require('../services/homeRecordService');
 const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -1202,46 +1203,13 @@ const createHomePackageFanoutTarget = async ({
   return data?.id || null;
 };
 
-const createHomeTaskFanoutTarget = async ({
-  mail,
-  homeId,
-  senderId
-}) => {
-  const title = mail.display_title || mail.subject || 'Task from mail';
-  const description = mail.preview_text || mail.content_excerpt || null;
-  const dueDate = pickExtractedDate(mail, ['due_date', 'dueDate', 'due_at', 'dueAt']);
-  const priority = mail.priority === 'urgent' ? 'urgent' : (mail.priority === 'high' ? 'high' : 'medium');
-
-  const { data, error } = await supabaseAdmin
-    .from('HomeTask')
-    .insert({
-      home_id: homeId,
-      task_type: 'reminder',
-      title,
-      description,
-      due_at: dueDate,
-      priority,
-      status: 'open',
-      mail_id: mail.id,
-      details: {
-        source: 'mailbox_fanout',
-        sourceMailId: mail.id,
-        sourceMailType: mail.type,
-        sourceObjectId: mail.object_id || null,
-      },
-      created_by: senderId
-    })
-    .select('id')
-    .single();
-
-  if (error) {
-    if (isMissingTableError(error, 'HomeTask')) {
-      return null;
-    }
-    throw error;
-  }
-
-  return data?.id || null;
+const createHomeTaskFanoutTarget = async ({ mail, homeId, senderId }) => {
+  const result = await homeRecordService.mutate({ homeId, actorId: senderId, kind: 'task', action: 'create',
+    sourceMailId: mail.id, payload: { task_type: 'reminder', title: mail.display_title || mail.subject || 'Task from mail',
+      description: mail.preview_text || mail.content_excerpt || null,
+      due_at: pickExtractedDate(mail, ['due_date', 'dueDate', 'due_at', 'dueAt']),
+      priority: mail.priority === 'urgent' ? 'urgent' : mail.priority === 'high' ? 'high' : 'medium', status: 'open' } });
+  return result.record.id;
 };
 
 const autoFanoutMailTargets = async ({

@@ -55,7 +55,7 @@ fun HomeHeroHeader(
                 .background(PantopusColors.homeBg)
                 .padding(Spacing.s5)
                 .semantics {
-                    contentDescription = "${if (verified) "Verified home" else "Unverified home"}, $address"
+                    contentDescription = "${if (verified) "Ownership verified" else "Shared Home"}, $address"
                 },
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
@@ -67,7 +67,7 @@ fun HomeHeroHeader(
                 tint = PantopusColors.home,
             )
             Text(
-                text = if (verified) "VERIFIED HOME" else "UNVERIFIED HOME",
+                text = if (verified) "OWNERSHIP VERIFIED" else "SHARED HOME",
                 style = PantopusTextStyle.overline,
                 color = PantopusColors.home,
             )

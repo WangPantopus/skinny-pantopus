@@ -25,7 +25,18 @@
 // Express router and calling them with mock req/res.
 // ============================================================
 
-const { resetTables, seedTable, getTable } = require('../__mocks__/supabaseAdmin');
+const { resetTables, seedTable, getTable, setRpcMock } = require('../__mocks__/supabaseAdmin');
+
+// These handlers exercise the service adapter; SQL lifecycle/security assertions
+// run in the real home-lease-decisions contract, not a second JS implementation.
+let leaseRpc;
+function decisionReply(data = { success: true, replayed: false,
+  lease: { id: 'lease-1', home_id: 'home-1', primary_resident_user_id: 'tenant-1', state: 'active',
+    start_at: '2026-08-01T00:00:00.000Z', end_at: null, approved_by_subject_id: 'test-user-id' },
+  occupancy: { id: 'occ-1' } }) {
+  leaseRpc = jest.fn().mockResolvedValue({ data, error: null });
+  setRpcMock(leaseRpc);
+}
 
 // ── Mock writeAuditLog ──────────────────────────────────────
 jest.mock('../../utils/homePermissions', () => ({
@@ -94,7 +105,7 @@ jest.mock('../../utils/authorityResolution', () => ({
 
 // ── Mock validate (pass-through — we test validation separately) ─
 jest.mock('../../middleware/validate', () => {
-  return () => (req, res, next) => next();
+  return schema => Object.assign((req, res, next) => next(), { schema });
 });
 
 const { writeAuditLog } = require('../../utils/homePermissions');
@@ -130,6 +141,7 @@ const denyLeaseHandler = findHandler('POST', '/landlord/lease/:leaseId/deny');
 const endLeaseHandler = findHandler('POST', '/landlord/lease/:leaseId/end');
 const listRequestsHandler = findHandler('GET', '/landlord/properties/:homeId/requests');
 const tenantRequestHandler = findHandler('POST', '/tenant/request-approval');
+const tenantStatusHandler = findHandler('GET', '/tenant/home/:homeId/status');
 const acceptInviteHandler = findHandler('POST', '/tenant/accept-invite');
 const moveOutHandler = findHandler('POST', '/tenant/move-out');
 const disputeHandler = findHandler('POST', '/home/:homeId/dispute');
@@ -155,6 +167,8 @@ function mockRes() {
   const res = {
     _status: 200,
     _json: null,
+    _headers: {},
+    set(name, value) { res._headers[name] = value; return res; },
     status(code) { res._status = code; return res; },
     json(data) { res._json = data; return res; },
   };
@@ -385,6 +399,19 @@ describe('GET /landlord/properties', () => {
 // ============================================================
 
 describe('GET /landlord/properties/:homeId', () => {
+  test('existing request cards receive the saved message and File ID without private decision or storage metadata', async () => {
+    seedHome();
+    const fileId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    seedLease({ state: 'pending', source: 'tenant_request', metadata: {
+      message: 'Please review the attached file', lease_file_id: fileId,
+      storage_bucket: 'private', upload_sha256: 'hidden', landlord_decision: { intent: { actor_id: 'hidden' } },
+    } });
+    const res = mockRes();
+    await propertyDetailHandler(mockReq({ params: { homeId: 'home-1' }, method: 'GET' }), res);
+    expect(res._json.pending_requests[0].metadata).toEqual({ message: 'Please review the attached file', lease_file_id: fileId });
+    expect(res._json.leases[0].metadata).toEqual(res._json.pending_requests[0].metadata);
+  });
+
   test('returns property detail with leases, occupants', async () => {
     seedHome();
     seedLease({ state: 'active' });
@@ -405,6 +432,7 @@ describe('GET /landlord/properties/:homeId', () => {
     expect(res._status).toBe(200);
     expect(res._json.home).toBeDefined();
     expect(res._json.home.id).toBe('home-1');
+    expect(res._json.actor_id).toBe('test-user-id');
     expect(res._json.leases).toBeDefined();
     expect(res._json.occupants).toBeDefined();
     expect(res._json.authority).toBeDefined();
@@ -438,6 +466,8 @@ describe('GET /landlord/properties/:homeId', () => {
     seedTable('HomeLease', [
       { id: 'lease-active', home_id: 'home-1', state: 'active', source: 'landlord_invite', primary_resident_user_id: 't1' },
       { id: 'lease-pending', home_id: 'home-1', state: 'pending', source: 'tenant_request', primary_resident_user_id: 't2' },
+      { id: 'lease-ended', home_id: 'home-1', state: 'ended', source: 'tenant_request', primary_resident_user_id: 't3' },
+      { id: 'lease-canceled', home_id: 'home-1', state: 'canceled', source: 'tenant_request', primary_resident_user_id: 't4' },
     ]);
 
     const req = mockReq({ params: { homeId: 'home-1' }, method: 'GET' });
@@ -446,6 +476,47 @@ describe('GET /landlord/properties/:homeId', () => {
 
     expect(res._json.pending_requests).toHaveLength(1);
     expect(res._json.pending_requests[0].id).toBe('lease-pending');
+    expect(res._json.leases.map(lease => lease.id).sort()).toEqual(['lease-active', 'lease-canceled', 'lease-ended', 'lease-pending']);
+  });
+
+  test.each(['user', 'business'])('child leases require the same verified %s authority subject as the property', async subjectType => {
+    seedTable('Home', [
+      { id: 'home-1', home_type: 'building' },
+      ...['owned-unit', 'other-unit', 'revoked-unit'].map(id => ({ id, name: id, home_type: 'unit', parent_home_id: 'home-1' })),
+    ]);
+    seedTable('HomeAuthority', [
+      { home_id: 'owned-unit', subject_type: subjectType, subject_id: 'property-subject', status: 'verified' },
+      { home_id: 'other-unit', subject_type: subjectType, subject_id: 'another-subject', status: 'verified' },
+      { home_id: 'revoked-unit', subject_type: subjectType, subject_id: 'property-subject', status: 'revoked' },
+    ]);
+    seedTable('HomeLease', ['owned-unit', 'other-unit', 'revoked-unit'].map(home_id => ({
+      id: `${home_id}-lease`, home_id, state: 'active', source: 'landlord_invite',
+    })));
+    const req = mockReq({ params: { homeId: 'home-1' }, method: 'GET',
+      authority: { subject_type: subjectType, subject_id: 'property-subject', status: 'verified' } });
+    const res = mockRes(); await propertyDetailHandler(req, res);
+    expect(res._status).toBe(200);
+    expect(res._json.leases.map(lease => lease.id)).toEqual(['owned-unit-lease']);
+    expect(res._json.units.map(unit => [unit.id, unit.lease_status_available])).toEqual([
+      ['owned-unit', true], ['other-unit', false], ['revoked-unit', false],
+    ]);
+  });
+
+  test.each(['HomeAuthority', 'HomeLease'])('a failed %s read cannot produce an apparently vacant building', async failedTable => {
+    seedTable('Home', [{ id: 'home-1', home_type: 'multi_unit' }, { id: 'unit-1', home_type: 'apartment', parent_home_id: 'home-1' }]);
+    const db = require('../../config/supabaseAdmin'), original = db.from;
+    const from = jest.spyOn(db, 'from').mockImplementation(table => {
+      if (table !== failedTable) return original(table);
+      const query = { select: () => query, eq: () => query, in: () => query, order: () => query,
+        then: done => Promise.resolve({ data: null, error: new Error('Controlled property read failure') }).then(done) };
+      return query;
+    });
+    try {
+      const req = mockReq({ params: { homeId: 'home-1' }, method: 'GET', authority: { subject_type: 'user', subject_id: 'test-user-id' } });
+      const res = mockRes(); await propertyDetailHandler(req, res);
+      expect(res._status).toBe(500);
+      expect(res._json).toEqual({ error: 'Failed to fetch property details' });
+    } finally { from.mockRestore(); }
   });
 });
 
@@ -454,42 +525,28 @@ describe('GET /landlord/properties/:homeId', () => {
 // ============================================================
 
 describe('POST /landlord/lease/invite', () => {
-  test('returns 201 with invite and token', async () => {
-    seedHome();
-    seedAuthority();
-
-    const req = mockReq({
-      authority: { id: 'auth-1', home_id: 'home-1', subject_type: 'user', subject_id: 'test-user-id', status: 'verified' },
-      body: {
-        home_id: 'home-1',
-        invitee_email: 'tenant@example.com',
-        start_at: '2026-04-01T00:00:00.000Z',
-      },
-    });
+  test('a retained invitation cannot send under a different authenticated actor', async () => {
     const res = mockRes();
-    await inviteTenantHandler(req, res);
-
-    expect(res._status).toBe(201);
-    expect(res._json.invite).toBeDefined();
-    expect(res._json.token).toBeTruthy();
+    await inviteTenantHandler(mockReq({ body: { home_id: 'home-1', expected_actor_id: 'another-account', invitee_email: 'tenant@example.com', start_at: '2026-10-01' } }), res);
+    expect(res._status).toBe(409);
+    expect(res._json.error).toContain('Your account changed');
   });
 
-  test('returns 400 when authority not verified', async () => {
-    seedHome();
-    seedAuthority({ status: 'pending' });
-
-    const req = mockReq({
-      authority: { id: 'auth-1', home_id: 'home-1', subject_type: 'user', subject_id: 'test-user-id', status: 'pending' },
-      body: {
-        home_id: 'home-1',
-        invitee_email: 'tenant@example.com',
-        start_at: '2026-04-01',
-      },
-    });
+  test('forwards the authenticated actor and retained proof and returns the sharing envelope', async () => {
+    const proof = 'b'.repeat(64);
+    const rpc = jest.fn(async (_name, args) => ({ data: { success: true, replayed: false,
+      invite: { id: 'invite-1', home_id: args.p_home_id, token_hash: args.p_token_hash, status: 'pending' } }, error: null }));
+    setRpcMock(rpc); const res = mockRes();
+    await inviteTenantHandler(mockReq({ authority: { id: 'auth-1' }, body: { home_id: 'home-1', invitee_email: 'tenant@example.com',
+      start_at: '2026-10-01', invite_token: proof, actor_id: 'other-user' } }), res);
+    expect(res._status).toBe(201); expect(res._json.token).toBe(proof);
+    expect(rpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({ p_action: 'invite', p_actor_id: 'test-user-id', p_authority_id: 'auth-1' }));
+  });
+  test.each([400, 403, 409, 410, 503])('preserves failure status %i with no token', async status => {
+    setRpcMock(jest.fn().mockResolvedValue({ data: { success: false, status, error: 'Creation failed' }, error: null }));
     const res = mockRes();
-    await inviteTenantHandler(req, res);
-
-    expect(res._status).toBe(400);
+    await inviteTenantHandler(mockReq({ authority: { id: 'auth-1' }, body: { home_id: 'home-1', invitee_email: 'tenant@example.com', start_at: '2026-10-01' } }), res);
+    expect(res._status).toBe(status); expect(res._json).toEqual({ error: 'Creation failed' });
   });
 });
 
@@ -498,6 +555,25 @@ describe('POST /landlord/lease/invite', () => {
 // ============================================================
 
 describe('POST /landlord/lease/:leaseId/approve', () => {
+  beforeEach(() => decisionReply());
+  test('forwards reviewed dates while resolving authority from the actor', async () => {
+    seedHome(); seedAuthority(); seedLease({ state: 'pending', end_at: '2027-09-01' });
+    const req = mockReq({ params: { leaseId: 'lease-1' }, body: {
+      authority_id: 'untrusted-authority', start_at: '2026-08-01', end_at: null,
+    } });
+    const res = mockRes();
+    await approveLeaseHandler(req, res);
+
+    expect(res._status).toBe(200);
+    expect(res._json.lease.start_at).toBe('2026-08-01T00:00:00.000Z');
+    expect(res._json.lease.end_at).toBeNull();
+    expect(res._json.lease.approved_by_subject_id).toBe('test-user-id');
+    expect(leaseRpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_actor_id: 'test-user-id', p_authority_id: 'auth-1',
+      p_dates: { start_at: '2026-08-01', end_at: null },
+    }));
+  });
+
   test('returns lease and occupancy on success', async () => {
     seedHome();
     seedAuthority();
@@ -517,6 +593,7 @@ describe('POST /landlord/lease/:leaseId/approve', () => {
   });
 
   test('returns 400 when lease not pending', async () => {
+    decisionReply({ success: false, error: 'Cannot decide: lease is active' });
     seedHome();
     seedAuthority();
     seedLease({ state: 'active' });
@@ -640,6 +717,7 @@ describe('POST /landlord/lease/:leaseId/approve', () => {
 // ============================================================
 
 describe('POST /landlord/lease/:leaseId/deny', () => {
+  beforeEach(() => decisionReply());
   test('returns success on denial', async () => {
     seedHome();
     seedAuthority();
@@ -733,6 +811,7 @@ describe('POST /landlord/lease/:leaseId/deny', () => {
 // ============================================================
 
 describe('POST /landlord/lease/:leaseId/end', () => {
+  beforeEach(() => decisionReply());
   test('returns success on lease end', async () => {
     seedHome();
     seedLease({ state: 'active' });
@@ -754,7 +833,8 @@ describe('POST /landlord/lease/:leaseId/end', () => {
     expect(res._json.success).toBe(true);
   });
 
-  test('returns 400 when lease already ended', async () => {
+  test('returns 400 for a historical ended lease without a receipt', async () => {
+    decisionReply({ success: false, error: 'Cannot end: lease is ended' });
     seedLease({ state: 'ended' });
 
     const req = mockReq({
@@ -920,134 +1000,40 @@ describe('GET /landlord/properties/:homeId/requests', () => {
 // ============================================================
 
 describe('POST /tenant/request-approval', () => {
-  test('creates pending lease and returns 201', async () => {
-    seedHome();
-    seedAuthority();
-
-    const req = mockReq({
-      body: {
-        home_id: 'home-1',
-        start_at: '2026-04-01T00:00:00.000Z',
-        message: 'Looking to rent this unit',
-      },
-    });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    expect(res._status).toBe(201);
-    expect(res._json.lease).toBeDefined();
-    expect(res._json.lease.state).toBe('pending');
-    expect(res._json.lease.source).toBe('tenant_request');
+  const saved = { id: 'lease-1', home_id: 'home-1', primary_resident_user_id: 'test-user-id',
+    state: 'pending', source: 'tenant_request', metadata: { message: 'Please approve me' } };
+  test('forwards own request and returns only the saved lease after the atomic decision', async () => {
+    decisionReply({ success: true, lease: saved, authority: { subject_type: 'user', subject_id: 'landlord-1' } });
+    const res = mockRes(); await tenantRequestHandler(mockReq({ body: { home_id: 'home-1', start_at: null, message: 'Please approve me' } }), res);
+    expect(res._status).toBe(201); expect(res._json).toEqual({ lease: saved });
+    expect(leaseRpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_action: 'request', p_home_id: 'home-1', p_actor_id: 'test-user-id', p_dates: { start_at: null }, p_message: 'Please approve me',
+    }));
+    expect(notificationService.createNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 'landlord-1', type: 'tenant_request' }));
+    expect(writeAuditLog).not.toHaveBeenCalled();
   });
-
-  test('returns 404 when home not found', async () => {
-    const req = mockReq({
-      body: { home_id: 'nonexistent' },
+  test.each([[404, 'Home not found'], [400, 'This property has no verified landlord'], [409, 'You already have a pending request for this home']])(
+    'preserves transaction error status %i without notifying', async (status, error) => {
+      decisionReply({ success: false, status, error });
+      const res = mockRes(); await tenantRequestHandler(mockReq({ body: { home_id: 'home-1' } }), res);
+      expect(res._status).toBe(status); expect(res._json).toEqual({ error });
+      expect(notificationService.createNotification).not.toHaveBeenCalled();
     });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    expect(res._status).toBe(404);
+  test('does not report malformed transaction success as saved', async () => {
+    decisionReply({ success: true });
+    const res = mockRes(); await tenantRequestHandler(mockReq({ body: { home_id: 'home-1' } }), res);
+    expect(res._status).toBe(400); expect(res._json.error).toMatch(/Unable to complete/);
   });
-
-  test('returns 400 when home is a building', async () => {
-    seedHome({ home_type: 'building' });
-
-    const req = mockReq({
-      body: { home_id: 'home-1' },
-    });
+  test('forwards the observed context while keeping the authenticated actor authoritative', async () => {
+    const context = { home_id: 'home-1', actor_id: 'previous-account', lease_id: 'canceled-lease', lease_state: 'canceled' };
+    decisionReply({ success: false, status: 409, error: 'Your lease request status changed.' });
     const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    expect(res._status).toBe(400);
-    expect(res._json.error).toContain('building');
-  });
-
-  test('returns 400 when no verified landlord authority exists', async () => {
-    seedHome();
-    // No authority seeded
-
-    const req = mockReq({
-      body: { home_id: 'home-1' },
-    });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    expect(res._status).toBe(400);
-    expect(res._json.error).toContain('no verified landlord');
-  });
-
-  test('returns 409 when tenant already has pending request', async () => {
-    seedHome();
-    seedAuthority();
-    seedTable('HomeLease', [{
-      id: 'lease-existing',
-      home_id: 'home-1',
-      primary_resident_user_id: 'test-user-id',
-      state: 'pending',
-    }]);
-
-    const req = mockReq({
-      body: { home_id: 'home-1' },
-    });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
+    await tenantRequestHandler(mockReq({ body: { home_id: 'home-1', request_context: context } }), res);
+    expect(leaseRpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_actor_id: 'test-user-id', p_request_context: context,
+    }));
     expect(res._status).toBe(409);
-  });
-
-  test('returns 409 when tenant already has active lease', async () => {
-    seedHome();
-    seedAuthority();
-    seedTable('HomeLease', [{
-      id: 'lease-active',
-      home_id: 'home-1',
-      primary_resident_user_id: 'test-user-id',
-      state: 'active',
-    }]);
-
-    const req = mockReq({
-      body: { home_id: 'home-1' },
-    });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    expect(res._status).toBe(409);
-  });
-
-  test('sends notification to landlord and creates lease successfully', async () => {
-    seedHome();
-    seedAuthority({ subject_type: 'user', subject_id: 'landlord-1' });
-
-    const req = mockReq({
-      body: { home_id: 'home-1', message: 'Please approve me' },
-    });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    // Verify the lease was created (notification is in try/catch and non-fatal)
-    expect(res._status).toBe(201);
-    expect(res._json.lease).toBeDefined();
-    expect(res._json.lease.state).toBe('pending');
-    expect(res._json.lease.source).toBe('tenant_request');
-    expect(res._json.lease.metadata.message).toBe('Please approve me');
-  });
-
-  test('writes audit log', async () => {
-    seedHome();
-    seedAuthority();
-
-    const req = mockReq({
-      body: { home_id: 'home-1' },
-    });
-    const res = mockRes();
-    await tenantRequestHandler(req, res);
-
-    expect(writeAuditLog).toHaveBeenCalledWith(
-      'home-1', 'test-user-id', 'TENANT_REQUEST_SUBMITTED', 'HomeLease',
-      expect.any(String),
-      expect.objectContaining({ source: 'tenant_request' }),
-    );
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 });
 
@@ -1056,6 +1042,7 @@ describe('POST /tenant/request-approval', () => {
 // ============================================================
 
 describe('POST /tenant/accept-invite', () => {
+  beforeEach(() => decisionReply());
   let rawToken;
 
   beforeEach(() => {
@@ -1064,6 +1051,7 @@ describe('POST /tenant/accept-invite', () => {
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
     seedHome();
+    seedAuthority({ subject_id: 'landlord-1' });
     seedTable('HomeLeaseInvite', [{
       id: 'invite-1',
       home_id: 'home-1',
@@ -1091,7 +1079,23 @@ describe('POST /tenant/accept-invite', () => {
     expect(res._json.occupancy).toBeDefined();
   });
 
+  test('refuses a revoked issuer without consuming the invite or creating access', async () => {
+    decisionReply({ success: false, error: 'Current verified authority required' });
+    getTable('HomeAuthority')[0].status = 'revoked';
+    const req = mockReq({ body: { token: rawToken } });
+    const res = mockRes();
+    await acceptInviteHandler(req, res);
+
+    expect(res._status).toBe(400);
+    expect(res._json.error).toContain('verified authority');
+    expect(getTable('HomeLeaseInvite')[0].status).toBe('pending');
+    expect(getTable('HomeLease')).toHaveLength(0);
+    expect(getTable('HomeLeaseResident')).toHaveLength(0);
+    expect(getTable('HomeOccupancy')).toHaveLength(0);
+  });
+
   test('returns 404 when token invalid', async () => {
+    decisionReply({ success: false, error: 'Invite not found' });
     const req = mockReq({
       body: { token: 'a'.repeat(64) },
     });
@@ -1102,6 +1106,7 @@ describe('POST /tenant/accept-invite', () => {
   });
 
   test('returns 410 when invite expired', async () => {
+    decisionReply({ success: false, error: 'Invite has expired' });
     getTable('HomeLeaseInvite')[0].expires_at = new Date(Date.now() - 1000).toISOString();
 
     const req = mockReq({
@@ -1114,6 +1119,7 @@ describe('POST /tenant/accept-invite', () => {
   });
 
   test('returns 400 when invite already accepted', async () => {
+    decisionReply({ success: false, error: 'Invite already completed' });
     getTable('HomeLeaseInvite')[0].status = 'accepted';
 
     const req = mockReq({
@@ -1130,7 +1136,49 @@ describe('POST /tenant/accept-invite', () => {
 // POST /tenant/move-out
 // ============================================================
 
+describe('existing tenant status projection', () => {
+  const homeId = 'f3190000-0000-4000-8000-000000000010';
+  beforeEach(() => { seedHome({ id: homeId }); seedAuthority({ home_id: homeId }); });
+  test('returns only own request fields and maps the stored denial reason', async () => {
+    seedLease({ home_id: homeId, primary_resident_user_id: 'test-user-id', state: 'canceled',
+      metadata: { message: 'Own message', denial_reason: 'Reviewed reason', private_field: 'do-not-return', landlord_decision: { secret: 'hidden' } } });
+    const res = mockRes(); await tenantStatusHandler(mockReq({ params: { homeId } }), res);
+    expect(res._status).toBe(200);
+    expect(res._headers['Cache-Control']).toBe('private, no-store');
+    expect(res._json.lease.state).toBe('denied');
+    expect(res._json.lease.lease.metadata).toEqual({ message: 'Own message', denied_reason: 'Reviewed reason' });
+    expect(res._json.landlord).not.toHaveProperty('subject_id');
+    expect(JSON.stringify(res._json)).not.toMatch(/private_field|landlord_decision|primary_resident_user_id/);
+  });
+  test('does not disclose another resident lease or a self-cancellation receipt', async () => {
+    seedLease({ home_id: homeId, primary_resident_user_id: 'someone-else' });
+    let res = mockRes(); await tenantStatusHandler(mockReq({ params: { homeId } }), res);
+    expect(res._json.lease).toEqual({ state: 'none', lease: null });
+    expect(res._json.request_context).toEqual({ home_id: homeId, actor_id: 'test-user-id', lease_id: null, lease_state: null });
+    seedLease({ home_id: homeId, primary_resident_user_id: 'test-user-id', state: 'canceled', metadata: { tenant_cancellation: { actor_id: 'test-user-id' } } });
+    res = mockRes(); await tenantStatusHandler(mockReq({ params: { homeId } }), res);
+    expect(res._json.lease).toEqual({ state: 'none', lease: null });
+    expect(res._json.request_context).toEqual({ home_id: homeId, actor_id: 'test-user-id', lease_id: 'lease-1', lease_state: 'canceled' });
+  });
+  test('expired lease selects the existing ended/request state without rewriting history', async () => {
+    seedLease({ home_id: homeId, primary_resident_user_id: 'test-user-id', state: 'active', end_at: '2000-01-01T00:00:00Z' });
+    const res = mockRes(); await tenantStatusHandler(mockReq({ params: { homeId } }), res);
+    expect(res._json.lease.state).toBe('ended');
+    expect(getTable('HomeLease')[0].state).toBe('active');
+  });
+  test('does not turn a failed database read into no landlord or no lease', async () => {
+    const db = require('../../config/supabaseAdmin');
+    const from = jest.spyOn(db, 'from').mockImplementationOnce(() => { throw Object.assign(new Error('private database detail'), { code: 'XX000' }); });
+    try {
+      const res = mockRes(); await tenantStatusHandler(mockReq({ params: { homeId } }), res);
+      expect(res._status).toBe(503);
+      expect(res._json).toEqual({ error: 'Could not load landlord status. Please retry.' });
+    } finally { from.mockRestore(); }
+  });
+});
+
 describe('POST /tenant/move-out', () => {
+  beforeEach(() => decisionReply());
   test('ends lease and returns success', async () => {
     seedHome();
     seedLease({ state: 'active', primary_resident_user_id: 'test-user-id' });
@@ -1162,6 +1210,7 @@ describe('POST /tenant/move-out', () => {
   });
 
   test('returns 403 when user is not on the lease', async () => {
+    decisionReply({ success: false, error: 'Only a lease resident can move out', status: 403 });
     seedLease({ state: 'active', primary_resident_user_id: 'someone-else' });
 
     const req = mockReq({
@@ -1198,7 +1247,8 @@ describe('POST /tenant/move-out', () => {
     expect(res._json.success).toBe(true);
   });
 
-  test('returns 400 when lease not active', async () => {
+  test('returns 400 when the transaction refuses a historical ended lease', async () => {
+    decisionReply({ success: false, error: 'Cannot end: lease is ended' });
     seedLease({ state: 'ended', primary_resident_user_id: 'test-user-id' });
 
     const req = mockReq({
@@ -1210,26 +1260,32 @@ describe('POST /tenant/move-out', () => {
     expect(res._status).toBe(400);
   });
 
-  test('writes move-out audit log', async () => {
-    seedHome();
+  test('sends the move-out reason to the atomic audit owner', async () => {
     seedLease({ state: 'active', primary_resident_user_id: 'test-user-id' });
-    seedTable('HomeOccupancy', [{
-      id: 'occ-1',
-      home_id: 'home-1',
-      user_id: 'test-user-id',
-      is_active: true,
-    }]);
+    const req = mockReq({ body: { lease_id: 'lease-1', reason: 'Moving to another city' } });
+    const res = mockRes();await moveOutHandler(req,res);
+    expect(res._status).toBe(200);
+    expect(leaseRpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_action: 'move_out', p_actor_id: 'test-user-id', p_reason: 'Moving to another city',
+    }));
+    expect(writeAuditLog).not.toHaveBeenCalled();
+  });
 
-    const req = mockReq({
-      body: { lease_id: 'lease-1', reason: 'New job' },
-    });
-    const res = mockRes();
-    await moveOutHandler(req, res);
+  test('replays a departed co-resident after the transaction removed the edge', async () => {
+    seedLease({ state: 'active', primary_resident_user_id: 'primary-tenant' });
+    decisionReply({ success: true, replayed: true, lease: { id: 'lease-1', state: 'active' } });
+    const res = mockRes(); await moveOutHandler(mockReq({ body: { lease_id: 'lease-1' } }), res);
+    expect(res._status).toBe(200);
+    expect(leaseRpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({ p_actor_id: 'test-user-id', p_action: 'move_out' }));
+  });
 
-    expect(writeAuditLog).toHaveBeenCalledWith(
-      'home-1', 'test-user-id', 'TENANT_MOVE_OUT', 'HomeLease', 'lease-1',
-      expect.objectContaining({ reason: 'New job', initiated_by: 'tenant' }),
-    );
+  test('lets the transaction replay an already-ended move-out', async () => {
+    seedLease({ state: 'ended', primary_resident_user_id: 'test-user-id' });
+    decisionReply({ success: true, replayed: true, lease: { id: 'lease-1', state: 'ended' } });
+    const res = mockRes();await moveOutHandler(mockReq({ body: { lease_id: 'lease-1' } }),res);
+    expect(res._status).toBe(200);
+    expect(leaseRpc).toHaveBeenCalledTimes(1);
+    expect(writeAuditLog).not.toHaveBeenCalled();
   });
 });
 
@@ -1357,6 +1413,31 @@ describe('POST /home/:homeId/dispute', () => {
 // Route registration (smoke test)
 // ============================================================
 
+describe.each([
+  ['/tenant/request-approval', { home_id: 'f518ec13-0000-4000-8000-000000000100' }],
+  ['/landlord/lease/invite', { home_id: 'f518ec13-0000-4000-8000-000000000100', invitee_email: 'tenant@example.com' }],
+  ['/landlord/lease/:leaseId/approve', {}],
+])('existing calendar validation for %s', (path, fields) => {
+  test('preserves submitted dates so SQL can reject impossible days instead of admitting a different date', () => {
+    const route = router.stack.find(layer => layer.route?.path === path && layer.route.methods.post);
+    const schema = route.route.stack.find(layer => layer.handle.schema).handle.schema;
+    const validate = jest.requireActual('../../middleware/validate')(schema);
+    for (const date of ['2026-02-31', '2026-02-31T00:00:00.000Z', '2026-04-31T09:00:00Z',
+      '2028-02-29', '2026-09-01T09:30:00.123-07:00', '2026-09-01T23:30:00+14:00']) {
+      const body = { ...fields, start_at: date, end_at: date };
+      const req = mockReq({ body }); const res = mockRes(); const next = jest.fn();
+      validate(req, res, next);
+      expect(res._json).toBeNull();
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(req.body).toEqual(body);
+    }
+    const req = mockReq({ body: { ...fields, start_at: '2026-09-01', end_at: null } });
+    const next = jest.fn(); validate(req, mockRes(), next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.body.end_at).toBeNull();
+  });
+});
+
 describe('Route registration', () => {
   test('exports an Express router', () => {
     expect(router).toBeDefined();
@@ -1384,4 +1465,26 @@ describe('Route registration', () => {
     expect(routes).toContain('POST /tenant/move-out');
     expect(routes).toContain('POST /home/:homeId/dispute');
   });
+});
+
+test('lease preview uses the authenticated recipient and marks the response private/no-store', async () => {
+  const service = require('../../services/addressValidation/landlordAuthorityService');
+  const preview = jest.spyOn(service, 'previewInvite').mockResolvedValue({ success: true,
+    home: { id: 'home-1', name: 'Synthetic Home' }, invitation: { status: 'pending' }, account_email: 'test@example.com' });
+  try {
+    const res = mockRes();
+    await findHandler('POST', '/tenant/preview-invite')(mockReq({ body: { token: 'a'.repeat(64), user_id: 'other' } }), res);
+    expect(preview).toHaveBeenCalledWith('a'.repeat(64), 'test-user-id', 'test@example.com');
+    expect(res._headers['Cache-Control']).toBe('private, no-store');
+    expect(res._json).toEqual({ home: { id: 'home-1', name: 'Synthetic Home' }, invitation: { status: 'pending' }, account_email: 'test@example.com' });
+  } finally { preview.mockRestore(); }
+});
+
+test.each([404, 410, 403])('lease preview preserves its %i failure without leaking data', async status => {
+  const service = require('../../services/addressValidation/landlordAuthorityService');
+  const preview = jest.spyOn(service, 'previewInvite').mockResolvedValue({ success: false, status, error: 'Not available' });
+  try {
+    const res = mockRes(); await findHandler('POST', '/tenant/preview-invite')(mockReq({ body: { token: 'a'.repeat(64) } }), res);
+    expect(res._status).toBe(status); expect(res._json).toEqual({ error: 'Not available' });
+  } finally { preview.mockRestore(); }
 });

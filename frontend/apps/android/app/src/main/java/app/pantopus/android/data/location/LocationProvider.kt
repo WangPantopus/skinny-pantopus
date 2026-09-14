@@ -27,11 +27,9 @@ interface LocationProvider {
     fun cachedCoordinate(): UserCoordinate?
 
     /**
-     * Request a fresh coordinate. Returns the cached value (or null) if
-     * permission is denied or the OS doesn't return within
-     * [timeoutMillis]. The real production wiring should swap this for
-     * a FusedLocationProviderClient-backed implementation once the
-     * permission flow lands.
+     * Request a fresh coordinate within [timeoutMillis]. A recent cached
+     * coordinate may be used while permission remains granted. Denied
+     * permission returns null and clears the provider's cache.
      */
     suspend fun requestCurrent(timeoutMillis: Long = 4_000L): UserCoordinate?
 }

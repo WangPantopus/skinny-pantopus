@@ -1,0 +1,191 @@
+-- Actual shipped permissions, service transactions and direct-client closure.
+-- Every account, record and explicit local override is rolled back.
+BEGIN;
+SET LOCAL lock_timeout='5s';
+SET LOCAL statement_timeout='30s';
+CREATE TEMP TABLE record_roles_before AS SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) rows FROM public."HomeRolePermission" r;
+INSERT INTO auth.users(id,email) SELECT ('ddf60000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+  'record-'||n||'@example.invalid' FROM generate_series(1,8)n;
+INSERT INTO public."User"(id,email,username,name) SELECT id,email,'record_fixture_'||right(id::text,1),'Record fixture'
+  FROM auth.users WHERE id::text LIKE 'ddf60000-0000-4000-8000-%';
+INSERT INTO public."Home"(id,owner_id,created_by_user_id,address,city,state,zipcode) VALUES
+ ('ddf60000-0000-4000-8000-000000000100','ddf60000-0000-4000-8000-000000000001','ddf60000-0000-4000-8000-000000000001','Record 100','Test','WA','98607'),
+ ('ddf60000-0000-4000-8000-000000000200',NULL,'ddf60000-0000-4000-8000-000000000008','Record 200','Test','WA','98607');
+INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,age_band,verification_status)
+ SELECT 'ddf60000-0000-4000-8000-000000000100',('ddf60000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+  role,role::public.home_role_base,age::public.home_age_band,status FROM
+  (VALUES(1,'owner','adult','verified'),(2,'member','adult','verified'),(3,'member',NULL,'verified'),
+    (4,'member','adult','pending_doc'),(5,'restricted_member','child','verified'),(6,NULL,'adult','verified'),(7,'member','teen','verified'))f(n,role,age,status);
+INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,verification_status) VALUES
+ ('ddf60000-0000-4000-8000-000000000200','ddf60000-0000-4000-8000-000000000008','admin','admin','pending_doc');
+INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed)
+ SELECT 'ddf60000-0000-4000-8000-000000000100',('ddf60000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,p::public.home_permission,true
+ FROM generate_series(2,7)n CROSS JOIN unnest(ARRAY['tasks.view','tasks.edit','calendar.view','calendar.edit'])p;
+CREATE FUNCTION pg_temp.record_ok(r jsonb) RETURNS jsonb LANGUAGE plpgsql AS $$ BEGIN
+ IF r->>'ok' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Expected success, got %',r; END IF; RETURN r; END $$;
+CREATE FUNCTION pg_temp.record_code(r jsonb,c text) RETURNS void LANGUAGE plpgsql AS $$ BEGIN
+ IF r->>'ok' IS DISTINCT FROM 'false' OR r->>'code' IS DISTINCT FROM c THEN RAISE EXCEPTION 'Expected %, got %',c,r; END IF; END $$;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE h uuid:='ddf60000-0000-4000-8000-000000000100'; ph uuid:='ddf60000-0000-4000-8000-000000000200';
+ o uuid:='ddf60000-0000-4000-8000-000000000001'; a uuid:='ddf60000-0000-4000-8000-000000000002';
+ b uuid:='ddf60000-0000-4000-8000-000000000003'; priv uuid:='ddf60000-0000-4000-8000-000000000008';
+ r jsonb; t uuid; e uuid; pt uuid; pe uuid; mt uuid; m uuid; orig jsonb; state text; n integer;
+BEGIN
+ r:=pg_temp.record_ok(public.mutate_home_record(h,o,'task','create',NULL,jsonb_build_object('title','Assigned task','assigned_to',a)));
+ t:=(r->'record'->>'id')::uuid;
+ PERFORM pg_temp.record_ok(public.get_home_records(h,a,'task',t));
+ PERFORM pg_temp.record_ok(public.mutate_home_record(h,a,'task','update',t,'{"status":"done","completed_at":"2000-01-01"}'));
+ IF NOT EXISTS(SELECT FROM public."HomeTask" WHERE id=t AND completed_at>now()-interval '1 minute') THEN RAISE EXCEPTION 'Client backdated completion'; END IF;
+ PERFORM pg_temp.record_ok(public.mutate_home_record(h,a,'task','update',t,'{"status":"open"}'));
+ IF EXISTS(SELECT FROM public."HomeTask" WHERE id=t AND completed_at IS NOT NULL) THEN RAISE EXCEPTION 'Reopened completion not cleared'; END IF;
+ PERFORM pg_temp.record_code(public.mutate_home_record(h,a,'task','update',t,'{"title":"Escaped assignment"}'),'HOME_RECORD_WRITE_DENIED');
+ PERFORM pg_temp.record_code(public.mutate_home_record(h,a,'task','delete',t),'HOME_RECORD_WRITE_DENIED');
+ PERFORM pg_temp.record_code(public.mutate_home_task_by_id(a,t,'authorize_publication'),'HOME_RECORD_WRITE_DENIED');
+ PERFORM pg_temp.record_code(public.mutate_home_task_by_id(o,t,'authorize_publication'),'HOME_TASK_GIG_FLOW_REQUIRED');
+ PERFORM pg_temp.record_code(public.mutate_home_record(h,o,'task','authorize_attachment',t),'HOME_TASK_PRIVATE_STORAGE_REQUIRED');
+ PERFORM pg_temp.record_code(public.mutate_home_record(ph,o,'task','update',t,'{"title":"Wrong Home"}'),'HOME_RECORD_NOT_FOUND');
+ r:=pg_temp.record_ok(public.mutate_home_record(h,a,'task','create',NULL,'{"title":"Own task","description":"Clear me","due_at":"2030-01-01"}'));
+ mt:=(r->'record'->>'id')::uuid;
+ r:=pg_temp.record_ok(public.mutate_home_record(h,a,'task','update',mt,'{"description":null,"due_at":null,"assigned_to":null}'));
+ IF r->'record'->>'description' IS NOT NULL OR r->'record'->>'due_at' IS NOT NULL THEN RAISE EXCEPTION 'Explicit null did not clear'; END IF;
+ PERFORM pg_temp.record_ok(public.mutate_home_record(h,a,'task','delete',mt));
+ PERFORM pg_temp.record_code(public.mutate_home_record(h,o,'task','create',NULL,jsonb_build_object('title','Foreign target','assigned_to',priv)),'HOME_RECORD_RECIPIENT_DENIED');
+ PERFORM pg_temp.record_code(public.mutate_home_record(h,o,'task','create',NULL,'{"title":"Fake source","details":{"sourceMailId":"fake"}}'),'HOME_RECORD_INVALID');
+ INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(h,o,'sensitive.view',false);
+ INSERT INTO public."HomeTask"(home_id,created_by,title,task_type,visibility,assigned_to,viewer_user_ids)
+  VALUES(h,o,'Sensitive own task','chore','sensitive',o,ARRAY[o]);
+ r:=pg_temp.record_ok(public.get_home_records(h,o,'task'));
+ IF r::text LIKE '%Sensitive own task%' THEN RAISE EXCEPTION 'Creator/assignee/viewer bypassed sensitive deny'; END IF;
+ DELETE FROM public."HomePermissionOverride" WHERE home_id=h AND user_id=o;
+ UPDATE public."HomePermissionOverride" SET allowed=false WHERE home_id=h AND user_id=a AND permission='tasks.view';
+ PERFORM pg_temp.record_code(public.get_home_records(h,a,'task',t),'HOME_RECORD_DENIED');
+ PERFORM pg_temp.record_code(public.mutate_home_record(h,a,'task','update',t,'{"status":"done"}'),'HOME_RECORD_DENIED');
+ UPDATE public."HomePermissionOverride" SET allowed=true WHERE home_id=h AND user_id=a AND permission='tasks.view';
+ FOREACH state IN ARRAY ARRAY['pending_doc','revoked','suspended',NULL] LOOP
+  UPDATE public."HomeOccupancy" SET verification_status=state WHERE home_id=h AND user_id=a;
+  PERFORM pg_temp.record_code(public.get_home_records(h,a,'task'),'HOME_RECORD_DENIED');
+ END LOOP;
+ UPDATE public."HomeOccupancy" SET verification_status='verified',access_end_at=now()-interval '1 second' WHERE home_id=h AND user_id=a;
+ PERFORM pg_temp.record_code(public.get_home_records(h,a,'task'),'HOME_RECORD_DENIED');
+ UPDATE public."HomeOccupancy" SET access_end_at=NULL WHERE home_id=h AND user_id=a;
+ PERFORM pg_temp.record_code(public.get_home_records(h,'ddf60000-0000-4000-8000-000000000006','task'),'HOME_RECORD_DENIED');
+ PERFORM pg_temp.record_ok(public.get_home_records(h,'ddf60000-0000-4000-8000-000000000005','task',t));
+ PERFORM pg_temp.record_code(public.mutate_home_record(h,'ddf60000-0000-4000-8000-000000000005','task','create',NULL,'{"title":"Child write"}'),'HOME_RECORD_WRITE_DENIED');
+ PERFORM pg_temp.record_ok(public.mutate_home_record(h,'ddf60000-0000-4000-8000-000000000007','task','create',NULL,'{"title":"Teen own task"}'));
+ PERFORM pg_temp.record_ok(public.mutate_home_record(h,b,'task','create',NULL,'{"title":"Historical null-age own task"}'));
+ PERFORM pg_temp.record_code(public.mutate_home_record(h,o,'task','create',NULL,'{"title":"Infinite due","due_at":"infinity"}'),'HOME_RECORD_INVALID');
+ r:=pg_temp.record_ok(public.mutate_home_record(h,o,'event','create',NULL,jsonb_build_object('title','Exact event','start_at','2030-01-01',
+  'end_at','2030-01-02','request_rsvp',true,'assigned_to',jsonb_build_array(a)))); e:=(r->'record'->>'id')::uuid;
+ PERFORM pg_temp.record_ok(public.mutate_home_record(h,a,'event','rsvp',e,'{"status":"going"}'));
+ PERFORM pg_temp.record_ok(public.mutate_home_record(h,a,'event','rsvp',e,'{"status":"maybe"}'));
+ IF (SELECT count(*) FROM public."HomeCalendarEventAttendee" WHERE event_id=e AND user_id=a)<>1 THEN RAISE EXCEPTION 'Duplicate RSVP'; END IF;
+ PERFORM pg_temp.record_code(public.mutate_home_record(h,a,'event','update',e,'{"title":"Other author"}'),'HOME_RECORD_WRITE_DENIED');
+ PERFORM pg_temp.record_code(public.mutate_home_record(h,a,'event','rsvp',e,jsonb_build_object('status','going','user_id',b)),'HOME_RECORD_INVALID');
+ UPDATE public."HomePermissionOverride" SET allowed=false WHERE home_id=h AND user_id=a AND permission='calendar.view';
+ PERFORM pg_temp.record_code(public.get_home_records(h,a,'event',e),'HOME_RECORD_DENIED');
+ PERFORM pg_temp.record_code(public.mutate_home_record(h,a,'event','rsvp',e,'{"status":"going"}'),'HOME_RECORD_DENIED');
+ UPDATE public."HomePermissionOverride" SET allowed=true WHERE home_id=h AND user_id=a AND permission='calendar.view';
+ -- Exact private creator setup survives subsequent own records and WiFi use.
+ r:=pg_temp.record_ok(public.mutate_home_record(ph,priv,'task','create',NULL,'{"title":"Private own task"}')); pt:=(r->'record'->>'id')::uuid;
+ r:=pg_temp.record_ok(public.mutate_home_record(ph,priv,'event','create',NULL,'{"title":"Private own event","start_at":"2030-01-01"}')); pe:=(r->'record'->>'id')::uuid;
+ PERFORM pg_temp.record_ok(public.get_home_records(ph,priv,'task',pt));
+ PERFORM pg_temp.record_ok(public.get_home_access_secrets(ph,priv));
+ PERFORM pg_temp.record_ok(public.mutate_home_record(ph,priv,'event','update',pe,'{"request_rsvp":true}'));
+ PERFORM pg_temp.record_ok(public.mutate_home_record(ph,priv,'event','rsvp',pe,'{"status":"going"}'));
+ IF public.home_secret_context(ph,priv)->>'private'<>'true' OR public.home_delete_eligibility(ph,priv)->>'allowed'<>'true' THEN RAISE EXCEPTION 'Own record setup broke private cleanup/WiFi'; END IF;
+ PERFORM pg_temp.record_code(public.mutate_home_record(ph,priv,'task','update',pt,'{"visibility":"public"}'),'HOME_RECORD_DENIED');
+ PERFORM pg_temp.record_code(public.mutate_home_record(ph,priv,'task','update',pt,jsonb_build_object('assigned_to',a)),'HOME_RECORD_RECIPIENT_DENIED');
+ UPDATE public."HomeOccupancy" SET verified_at=now() WHERE home_id=ph AND user_id=priv;
+ PERFORM pg_temp.record_code(public.get_home_records(ph,priv,'task'),'HOME_RECORD_DENIED');
+ UPDATE public."HomeOccupancy" SET verified_at=NULL WHERE home_id=ph AND user_id=priv;
+ -- An unbound personal Mail may be copied only by its exact recipient into
+ -- their independently authorized Home. Household membership never shares it.
+ INSERT INTO public."Mail"(recipient_user_id,type,content,subject) VALUES(a,'letter','Synthetic personal','Personal source') RETURNING id INTO m;
+ r:=pg_temp.record_ok(public.mutate_home_record(h,a,'task','create',NULL,'{"title":"Personal derived"}',m)); mt:=(r->'record'->>'id')::uuid;
+ r:=pg_temp.record_ok(public.get_home_records(h,a,'task',mt,NULL,NULL,true));
+ IF r->'records'->0->>'mail_preview'<>'Personal source' THEN RAISE EXCEPTION 'Exact source preview missing'; END IF;
+ PERFORM pg_temp.record_code(public.get_home_records(h,b,'task',mt),'HOME_RECORD_NOT_FOUND');
+ IF public.home_external_share_resource(h,o,NULL,'HomeTask',mt) IS NOT NULL THEN RAISE EXCEPTION 'Personal source escaped external DTO'; END IF;
+ UPDATE public."Mail" SET recipient_user_id=NULL,recipient_home_id=h,privacy='shared_household',recipient_type='user',recipient_id=a WHERE id=m;
+ IF public.home_external_share_resource(h,o,NULL,'HomeTask',mt) IS NOT NULL THEN RAISE EXCEPTION 'Contradictory user destination escaped external DTO'; END IF;
+ UPDATE public."Mail" SET recipient_user_id=a,recipient_home_id=NULL,privacy='private_to_person',recipient_type=NULL,recipient_id=NULL WHERE id=m;
+ SELECT count(*) INTO n FROM public."HomeTask" WHERE home_id=h;
+ r:=pg_temp.record_ok(public.mutate_home_record(h,a,'task','create',NULL,'{"title":"Retry"}',m));
+ IF r->>'replayed'<>'true' OR (SELECT count(*) FROM public."HomeTask" WHERE home_id=h)<>n THEN RAISE EXCEPTION 'Duplicate source task'; END IF;
+ UPDATE public."Mail" SET attn_user_id=b,delivery_visibility='attn_only' WHERE id=m;
+ PERFORM pg_temp.record_code(public.get_home_records(h,a,'task',mt),'HOME_RECORD_NOT_FOUND');
+ UPDATE public."Mail" SET attn_user_id=NULL,delivery_visibility=NULL,recipient_home_id=ph WHERE id=m;
+ PERFORM pg_temp.record_code(public.get_home_records(h,a,'task',mt),'HOME_RECORD_NOT_FOUND');
+ UPDATE public."Mail" SET recipient_home_id=NULL,expires_at=now() WHERE id=m;
+ PERFORM pg_temp.record_code(public.get_home_records(h,a,'task',mt),'HOME_RECORD_NOT_FOUND');
+ UPDATE public."Mail" SET expires_at=NULL,access_count_max=1 WHERE id=m;
+ PERFORM pg_temp.record_code(public.get_home_records(h,a,'task',mt),'HOME_RECORD_NOT_FOUND');
+ UPDATE public."Mail" SET access_count_max=NULL WHERE id=m;
+ DELETE FROM public."Mail" WHERE id=m;
+ IF NOT EXISTS(SELECT FROM public."HomeTask" WHERE id=mt AND mail_id IS NULL AND source_mail_id=m) THEN RAISE EXCEPTION 'Mail deletion discarded provenance'; END IF;
+ PERFORM pg_temp.record_code(public.get_home_records(h,a,'task',mt),'HOME_RECORD_NOT_FOUND');
+ BEGIN UPDATE public."HomeTask" SET home_id=ph WHERE id=t; RAISE EXCEPTION 'Task moved across Homes'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."HomeTask" SET created_by=a WHERE id=t; RAISE EXCEPTION 'Task author rewritten'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."HomeCalendarEvent" SET home_id=ph WHERE id=e; RAISE EXCEPTION 'Event moved across Homes'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN INSERT INTO public."HomeTaskMedia"(home_id,task_id,uploaded_by,file_url,file_key,file_type) VALUES(ph,t,o,'synthetic-public','synthetic-key','image');
+  RAISE EXCEPTION 'Cross-Home media inserted'; EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+ INSERT INTO public."HomeTaskMedia"(home_id,task_id,uploaded_by,file_url,file_key,file_type,thumbnail_url)
+  VALUES(h,t,o,'synthetic-public','synthetic-key','image','synthetic-thumb');
+ r:=pg_temp.record_ok(public.get_home_records(h,o,'task',t));
+ IF r::text LIKE '%synthetic-public%' OR r::text LIKE '%synthetic-key%' OR r::text LIKE '%synthetic-thumb%'
+  OR r->'records'->0->'media'->0->>'availability_code'<>'HOME_TASK_MEDIA_REUPLOAD_REQUIRED' THEN RAISE EXCEPTION 'Legacy public media escaped'; END IF;
+ PERFORM pg_temp.record_code(public.mutate_home_record(h,o,'task','delete',t),'HOME_TASK_MEDIA_CLEANUP_REQUIRED');
+ IF public.home_delete_eligibility(h,o)->>'code'<>'HOME_DELETE_STORAGE_CLEANUP_REQUIRED' THEN
+  RAISE EXCEPTION 'Whole Home deletion bypassed task attachment retirement'; END IF;
+ -- Exact direct deletion clears the current backlink and permits reconversion.
+ INSERT INTO public."Mail"(recipient_user_id,type,content) VALUES(a,'letter','Source deletion fixture') RETURNING id INTO m;
+ r:=pg_temp.record_ok(public.mutate_home_record(h,a,'task','create',NULL,'{"title":"Delete source task"}',m)); mt:=(r->'record'->>'id')::uuid;
+ PERFORM pg_temp.record_ok(public.mutate_home_record(h,a,'task','delete',mt));
+ IF EXISTS(SELECT FROM public."Mail" WHERE id=m AND linked_task_id IS NOT NULL) THEN RAISE EXCEPTION 'Deleted source task left stale Mail link'; END IF;
+ r:=pg_temp.record_ok(public.mutate_home_record(h,a,'task','create',NULL,'{"title":"Recreated source task"}',m));
+ IF r->'record'->>'id'=mt::text OR r->>'replayed'='true' THEN RAISE EXCEPTION 'Source reconversion did not create a new task'; END IF;
+ -- The backlink also clears when an authorized whole-Home delete cascades.
+ INSERT INTO public."Home"(id,owner_id,address,city,state,zipcode)
+  VALUES('ddf60000-0000-4000-8000-000000000300',o,'Record cascade','Test','WA','98607');
+ INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,age_band,verification_status)
+  VALUES('ddf60000-0000-4000-8000-000000000300',o,'owner','owner','adult','verified');
+ INSERT INTO public."Mail"(recipient_user_id,type,content) VALUES(o,'letter','Home cascade source') RETURNING id INTO m;
+ PERFORM pg_temp.record_ok(public.mutate_home_record('ddf60000-0000-4000-8000-000000000300',o,'task','create',NULL,'{"title":"Cascade task"}',m));
+ r:=public.delete_home_authorized('ddf60000-0000-4000-8000-000000000300',o);
+ IF r->>'deleted'<>'true' OR NOT EXISTS(SELECT FROM public."Mail" WHERE id=m AND linked_task_id IS NULL) THEN
+  RAISE EXCEPTION 'Whole Home deletion left an unusable source link: %',r; END IF;
+END $$;
+RESET ROLE;
+DO $$ DECLARE rel text; BEGIN
+ FOREACH rel IN ARRAY ARRAY['HomeTask','HomeCalendarEvent','HomeCalendarEventAttendee','HomeTaskMedia'] LOOP
+  IF has_table_privilege('authenticated','public.'||quote_ident(rel),'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_table_privilege('anon','public.'||quote_ident(rel),'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN RAISE EXCEPTION 'Direct client access remains: %',rel; END IF;
+ END LOOP;
+ IF has_function_privilege('authenticated','public.get_home_records(uuid,uuid,text,uuid,timestamptz,timestamptz,boolean)','EXECUTE')
+  OR has_function_privilege('anon','public.mutate_home_record(uuid,uuid,text,text,uuid,jsonb,uuid)','EXECUTE')
+  OR NOT has_function_privilege('service_role','public.mutate_home_record(uuid,uuid,text,text,uuid,jsonb,uuid)','EXECUTE') THEN RAISE EXCEPTION 'Unsafe RPC grant'; END IF;
+ IF (SELECT rows FROM record_roles_before) IS DISTINCT FROM (SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) FROM public."HomeRolePermission" r) THEN RAISE EXCEPTION 'Role defaults changed'; END IF;
+END $$;
+INSERT INTO public."Mail"(id,recipient_user_id,type,content)
+ VALUES('ddf60000-0000-4000-8000-000000000501','ddf60000-0000-4000-8000-000000000002','letter','Audit rollback source');
+INSERT INTO public."HomeTask"(id,home_id,created_by,title,task_type,mail_id)
+ VALUES('ddf60000-0000-4000-8000-000000000502','ddf60000-0000-4000-8000-000000000100','ddf60000-0000-4000-8000-000000000002',
+  'Audit rollback task','chore','ddf60000-0000-4000-8000-000000000501');
+UPDATE public."Mail" SET linked_task_id='ddf60000-0000-4000-8000-000000000502' WHERE id='ddf60000-0000-4000-8000-000000000501';
+CREATE FUNCTION pg_temp.fail_record_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ IF NEW.action IN ('home_task_created','home_task_deleted') THEN RAISE EXCEPTION 'Synthetic audit unavailable'; END IF; RETURN NEW; END $$;
+CREATE TRIGGER record_audit_failure BEFORE INSERT ON public."HomeAuditLog" FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_record_audit();
+SET LOCAL ROLE service_role;
+DO $$ DECLARE n integer; BEGIN
+ SELECT count(*) INTO n FROM public."HomeTask";
+ BEGIN PERFORM public.mutate_home_record('ddf60000-0000-4000-8000-000000000100','ddf60000-0000-4000-8000-000000000001','task','create',NULL,'{"title":"Rollback fixture"}');
+  RAISE EXCEPTION 'Audit unexpectedly succeeded'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'Synthetic audit unavailable' THEN RAISE; END IF; END;
+ IF (SELECT count(*) FROM public."HomeTask")<>n THEN RAISE EXCEPTION 'Audit failure left partial task'; END IF;
+ BEGIN PERFORM public.mutate_home_record('ddf60000-0000-4000-8000-000000000100','ddf60000-0000-4000-8000-000000000002','task','delete','ddf60000-0000-4000-8000-000000000502');
+  RAISE EXCEPTION 'Delete audit unexpectedly succeeded'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'Synthetic audit unavailable' THEN RAISE; END IF; END;
+ IF NOT EXISTS(SELECT FROM public."HomeTask" WHERE id='ddf60000-0000-4000-8000-000000000502')
+  OR NOT EXISTS(SELECT FROM public."Mail" WHERE id='ddf60000-0000-4000-8000-000000000501' AND linked_task_id='ddf60000-0000-4000-8000-000000000502') THEN
+  RAISE EXCEPTION 'Delete audit failure left partial task/link deletion'; END IF;
+END $$;
+RESET ROLE;
+ROLLBACK;

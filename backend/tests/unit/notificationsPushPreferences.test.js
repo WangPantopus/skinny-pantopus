@@ -63,3 +63,21 @@ describe.each([
     }));
   });
 });
+
+
+test('an invitation event key uses the existing notification idempotency column', async () => {
+  db.seedTable('MailPreferences', [{ user_id: userId, push_notifications: false }]);
+  await notifications.createNotification({ userId, type: 'lease_invite', title: 'Existing invitation', idempotencyKey: 'lease-invite:synthetic-1' });
+  expect(db.getTable('Notification')).toEqual([expect.objectContaining({ idempotency_key: 'lease-invite:synthetic-1', user_id: userId })]);
+});
+
+test('an already-persisted event cannot repeat push emission or reset its read state', async () => {
+  const existing = { id: 'notice-1', user_id: userId, type: 'lease_invite', idempotency_key: 'lease-invite:synthetic-1', is_read: true };
+  db.seedTable('Notification', [existing]);
+  const from = jest.spyOn(db, 'from').mockReturnValueOnce({ insert: () => ({ select: () => ({ single: async () => ({ data: null, error: { code: '23505' } }) }) }) });
+  try {
+    expect(await notifications.createNotification({ userId, type: 'lease_invite', title: 'Existing invitation', idempotencyKey: 'lease-invite:synthetic-1' })).toBeNull();
+    await new Promise(setImmediate);
+    expect(push.sendToUser).not.toHaveBeenCalled(); expect(db.getTable('Notification')).toEqual([existing]);
+  } finally { from.mockRestore(); }
+});

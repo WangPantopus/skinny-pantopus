@@ -28,6 +28,8 @@ import app.pantopus.android.data.api.models.homes.GetHomePackagesResponse
 import app.pantopus.android.data.api.models.homes.GetHomePollsResponse
 import app.pantopus.android.data.api.models.homes.HomeAccessSecretResponse
 import app.pantopus.android.data.api.models.homes.HomeAccessSecretsResponse
+import app.pantopus.android.data.api.models.homes.HomeAddressValidationRequest
+import app.pantopus.android.data.api.models.homes.HomeAddressValidationResponse
 import app.pantopus.android.data.api.models.homes.HomeBillResponse
 import app.pantopus.android.data.api.models.homes.HomeDetailResponse
 import app.pantopus.android.data.api.models.homes.HomeEventDetailResponse
@@ -117,6 +119,11 @@ interface HomesApi {
         @Body body: PropertySuggestionsRequest,
     ): PropertySuggestionsResponse
 
+    @POST("api/v1/address/validate")
+    suspend fun validateAddress(
+        @Body body: HomeAddressValidationRequest,
+    ): HomeAddressValidationResponse
+
     /** `POST /api/homes/check-address` — route `backend/routes/home.js:555`. */
     @POST("api/homes/check-address")
     suspend fun checkAddress(
@@ -177,6 +184,7 @@ interface HomesApi {
     suspend fun submitClaim(
         @Path("id") homeId: String,
         @Body body: SubmitClaimRequest,
+        @retrofit2.http.Header("x-pantopus-session-scope") expectedSession: String? = null,
     ): SubmitClaimResponse
 
     /**

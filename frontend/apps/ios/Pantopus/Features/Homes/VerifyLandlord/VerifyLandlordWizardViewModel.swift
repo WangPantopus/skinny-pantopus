@@ -5,20 +5,12 @@
 //  Drives the A12.5 / A12.6 wizard state machine:
 //
 //    .start → .details → submit ─┬─ 201  → .sent (landlord now has it)
-//                                ├─ 409  → .sent (existing pending/active lease)
-//                                └─ 400  → openPostcardVerification(homeId)
+//                                ├─ known duplicate → .sent (existing pending/active lease)
+//                                └─ verified no-landlord error → openPostcardVerification(homeId)
 //
-//  Submit posts a real tenant approval request to
-//  `POST /api/v1/tenant/request-approval` (route
-//  `backend/routes/landlordTenant.js:483`, mounted at `/api/v1` in
-//  `backend/app.js:397`) carrying the move-in date + message the user
-//  entered, with the landlord / PM details appended to the message
-//  (`tenantRequestSchema` has no structured column for them). When the
-//  home has no verified landlord authority the backend answers 400 —
-//  that is RN's "no landlord on file" branch, and we fall back to the
-//  mailed-code path: `POST /api/homes/:id/request-postcard` (route
-//  `backend/routes/homeOwnership.js:2452`) followed by the outbound
-//  `openPostcardVerification` event.
+//  Sends dates, contact details and an optional private File reference through
+//  the existing tenant approval route. An explicit no-landlord response opens
+//  the existing address review before any protected mail command.
 //
 
 import Foundation
@@ -44,18 +36,18 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     /// `.sent` step's content — every field comes off the wire.
     private(set) var approvalResult: VerifyLandlordApprovalResult?
     var pendingEvent: VerifyLandlordOutboundEvent?
+    let attachment: VerifyLandlordLeaseAttachment
 
     // MARK: - Init
 
     private let homeId: String
     private let submitDelayNanos: UInt64
     private let api: APIClient
-
-    /// Test/offline seam for the postcard request. When non-nil,
-    /// `submit()` calls this instead of
-    /// `POST /api/homes/:id/request-postcard`.
-    typealias PostcardRequester = @MainActor () async -> Result<Void, any Error>
-    private let postcardRequester: PostcardRequester?
+    private let sessionScope: HomeClaimSessionScope
+    private var isLoadingStatus = false
+    private var statusNeedsRetry = false
+    @ObservationIgnored private var pendingWork: Task<Void, Never>?
+    @ObservationIgnored private var requestGeneration = 0
 
     /// Test/offline seam for the tenant approval request. When non-nil,
     /// `submit()` calls this instead of
@@ -69,28 +61,25 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         startContent: VerifyLandlordStartContent? = nil,
         form: VerifyLandlordForm? = nil,
         api: APIClient = .shared,
+        uploader: MultipartUploader = .shared,
         submitDelayNanos: UInt64 = 800_000_000,
-        postcardRequester: PostcardRequester? = nil,
+        sessionIdentity: (() -> String?)? = nil,
         approvalRequester: ApprovalRequester? = nil
     ) {
         self.homeId = homeId
-        self.startContent = startContent
-            ?? VerifyLandlordSampleData.startContent(for: homeId)
-        self.form = form ?? VerifyLandlordSampleData.formSeed(for: homeId)
+        self.startContent = startContent ?? .selectedHome
+        self.form = form ?? VerifyLandlordForm()
         self.api = api
+        attachment = VerifyLandlordLeaseAttachment(homeId: homeId, api: api, uploader: uploader, identity: sessionIdentity)
+        sessionScope = HomeClaimSessionScope(api: api, identity: sessionIdentity)
         self.submitDelayNanos = submitDelayNanos
-        self.postcardRequester = postcardRequester
         self.approvalRequester = approvalRequester
     }
 
     // MARK: - WizardModel
 
     var chrome: WizardChrome {
-        let dirty = !form.ownerName.isEmpty
-            || !form.contactName.isEmpty
-            || !form.email.isEmpty
-            || form.lease != nil
-            || form.pmEnabled
+        let dirty = form != VerifyLandlordForm(registeredUnit: form.registeredUnit) || attachment.hasDraft
         switch currentStep {
         case .start:
             return WizardChrome(
@@ -98,22 +87,22 @@ final class VerifyLandlordWizardViewModel: WizardModel {
                 progressLabel: .stepOf(current: 1, total: 3),
                 progressFraction: 1.0 / 3.0,
                 leading: .close,
-                primaryCTALabel: "Start verification",
-                primaryCTAEnabled: true,
+                primaryCTALabel: statusNeedsRetry ? "Retry status" : "Start verification",
+                primaryCTAEnabled: !isSubmitting,
                 secondaryCTA: nil,
-                isSubmitting: false,
+                isSubmitting: isSubmitting,
                 dirty: dirty,
                 showsProgressBar: true
             )
         case .details:
             let live = form.validate()
-            let blocked = (errors != nil && !live.isEmpty) || isSubmitting
+            let blocked = (errors != nil && !live.isEmpty && !statusNeedsRetry && !attachment.needsRetry) || isSubmitting
             return WizardChrome(
                 title: "Verify landlord",
                 progressLabel: .stepOf(current: 2, total: 3),
                 progressFraction: 2.0 / 3.0,
                 leading: .back,
-                primaryCTALabel: "Submit",
+                primaryCTALabel: statusNeedsRetry ? "Retry status" : (attachment.needsRetry ? attachment.retryLabel : "Submit"),
                 primaryCTAEnabled: !blocked,
                 secondaryCTA: nil,
                 isSubmitting: isSubmitting,
@@ -126,10 +115,10 @@ final class VerifyLandlordWizardViewModel: WizardModel {
                 progressLabel: .stepOf(current: 3, total: 3),
                 progressFraction: 1.0,
                 leading: .close,
-                primaryCTALabel: "Done",
+                primaryCTALabel: statusNeedsRetry ? "Retry status" : "Done",
                 primaryCTAEnabled: !isSubmitting,
                 secondaryCTA: WizardSecondaryCTA(
-                    label: "Mail me a code",
+                    label: "Review mail verification",
                     identifier: "verifyLandlordMailCodeCTA"
                 ),
                 isSubmitting: isSubmitting,
@@ -140,11 +129,13 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     }
 
     var isSubmitting: Bool {
+        if isLoadingStatus || attachment.isBusy { return true }
         if case .submitting = submitState { return true }
         return false
     }
 
     func leadingTapped() {
+        retirePendingWork()
         switch currentStep {
         case .start, .sent:
             pendingEvent = .dismiss
@@ -155,28 +146,26 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     }
 
     func discardConfirmed() {
+        retirePendingWork()
         pendingEvent = .dismiss
     }
 
-    func primaryTapped() {
-        switch currentStep {
-        case .start:
-            currentStep = .details
-        case .details:
-            Task { await submit() }
-        case .sent:
-            pendingEvent = .dismiss
-        }
-    }
-
-    func secondaryTapped() {
-        // Only the `.sent` step carries a secondary — the mailed-code
-        // fallback (RN's "Verify with a mailed code" alternative path).
-        guard currentStep == .sent else { return }
-        Task { await startPostcardFallback() }
+    func retirePendingWork() {
+        requestGeneration &+= 1
+        pendingWork?.cancel()
+        pendingWork = nil
+        if isSubmitting { submitState = .idle }
+        isLoadingStatus = false
+        attachment.retirePendingWork()
     }
 
     // MARK: - Form mutations
+
+    func attachLeaseTapped() {
+        guard isCurrentSession, !isSubmitting else { return }
+        errors = nil
+        attachment.choose()
+    }
 
     func setOwnerName(_ value: String) {
         form.ownerName = value
@@ -238,7 +227,14 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     // MARK: - Submit
 
     func submit() async {
-        if isSubmitting { return }
+        guard isCurrentSession else { sessionChanged()
+            return
+        }
+        guard currentStep == .details, !isSubmitting, !Task.isCancelled else { return }
+        guard !attachment.needsRetry else { attachment.retry()
+            return
+        }
+        let generation = requestGeneration
         let live = form.validate()
         errors = live
         if !live.isEmpty {
@@ -254,7 +250,12 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         // tenancy. Everything the user typed travels with it — the
         // move-in date as `start_at`, and the note + landlord / PM
         // details folded into `message`.
-        switch await requestApproval() {
+        let result = await requestApproval(generation: generation)
+        guard isCurrentSession else { sessionChanged()
+            return
+        }
+        guard requestGeneration == generation, !Task.isCancelled else { return }
+        switch result {
         case let .success(lease):
             approvalResult = VerifyLandlordApprovalResult(
                 kind: .submitted,
@@ -269,8 +270,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         }
     }
 
-    /// Branches the `request-approval` non-2xx answers into the states
-    /// we can observe without a tenant status endpoint.
+    /// Only explicit lease/no-landlord responses establish these alternate states.
     private func handleApprovalFailure(_ error: any Error) async {
         guard let apiError = error as? APIError else {
             submitState = .error(message: "Couldn't send the request. Try again.")
@@ -279,85 +279,76 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         let message = apiError.errorDescription
         var status: Int?
         if case let .clientError(code, _) = apiError { status = code }
-        if case .notFound = apiError { status = 404 }
-
-        switch status {
-        case 409:
-            // Duplicate request — the server just told us the real
-            // state, so render it instead of failing the wizard.
-            let isActive = message?.localizedCaseInsensitiveContains("active lease") == true
+        let existingKind: VerifyLandlordApprovalResult.Kind? = switch message {
+        case "You already have a pending request for this home": .alreadyPending
+        case "You already have an active lease at this home": .alreadyActive
+        default: nil
+        }
+        if status == 409, let existingKind {
             approvalResult = VerifyLandlordApprovalResult(
-                kind: isActive ? .alreadyActive : .alreadyPending,
+                kind: existingKind,
                 serverMessage: message
             )
             submitState = .submitted
             currentStep = .sent
-        case 400, 404:
-            // "This property has no verified landlord…" — RN's
-            // no-landlord branch. Fall back to the mailed-code path so
-            // the tenant still has a way through.
+        } else if status == 400,
+                  message == "This property has no verified landlord. Cannot submit a lease request." {
             await startPostcardFallback()
-        default:
+        } else {
             submitState = .error(
                 message: message ?? "Couldn't send the request. Try again."
             )
         }
     }
 
-    /// Mails the verification postcard and hands the user off to the
-    /// A12.7 tracker. Used both as the no-landlord fallback and as the
-    /// `.sent` step's secondary CTA.
+    /// Opens address review without admitting a mail request. The postal
+    /// screen owns confirmation, the protected original and failure recovery.
     func startPostcardFallback() async {
-        submitState = .submitting
-        switch await requestPostcard() {
-        case .success:
-            submitState = .submitted
-            pendingEvent = .openPostcardVerification(homeId: homeId)
-        case let .failure(error):
-            submitState = .error(
-                message: (error as? APIError)?.errorDescription
-                    ?? "Couldn't request the verification postcard. Try again."
-            )
+        guard isCurrentSession else { sessionChanged()
+            return
         }
+        pendingEvent = .openPostcardVerification(homeId: homeId)
+        submitState = approvalResult == nil ? .idle : .submitted
     }
 
     /// Submits the tenant approval request. Uses the injected
     /// `approvalRequester` seam when present (previews/tests); otherwise
     /// calls `POST /api/v1/tenant/request-approval`.
-    private func requestApproval() async -> Result<TenantLeaseDTO, any Error> {
+    private func requestApproval(generation: Int) async -> Result<TenantLeaseDTO, any Error> {
         let request = TenantRequestApprovalRequest(
             homeId: homeId,
             startAt: form.startAtISO,
             message: form.composedMessage
         )
-        if let approvalRequester {
-            try? await Task.sleep(nanoseconds: submitDelayNanos)
-            return await approvalRequester(request)
-        }
         do {
+            if attachment.hasDraft {
+                let lease = try await attachment.requestApproval(request)
+                return .success(lease)
+            }
+            if let approvalRequester {
+                try await Task.sleep(nanoseconds: submitDelayNanos)
+                try Task.checkCancellation()
+                guard requestGeneration == generation, isCurrentSession else { throw CancellationError() }
+                return await approvalRequester(request)
+            }
+            let status: TenantHomeStatusResponse = try await api.request(TenantEndpoints.homeStatus(homeId: homeId))
+            let context = status.requestContext
+            guard status.matches(homeId: homeId) else {
+                return .failure(APIError.invalidResponse)
+            }
+            try Task.checkCancellation()
+            guard requestGeneration == generation, isCurrentSession else { throw CancellationError() }
+            let observedRequest = TenantRequestApprovalRequest(
+                homeId: request.homeId,
+                startAt: request.startAt,
+                endAt: request.endAt,
+                message: request.message,
+                requestContext: context
+            )
             let response: TenantRequestApprovalResponse = try await api.request(
-                TenantEndpoints.requestApproval(request)
+                TenantEndpoints.requestApproval(observedRequest)
             )
             return .success(response.lease)
-        } catch {
-            return .failure(error)
-        }
-    }
-
-    /// Mails the verification postcard. Uses the injected
-    /// `postcardRequester` seam when present (previews/tests); otherwise
-    /// calls `POST /api/homes/:id/request-postcard`.
-    private func requestPostcard() async -> Result<Void, any Error> {
-        if let postcardRequester {
-            try? await Task.sleep(nanoseconds: submitDelayNanos)
-            return await postcardRequester()
-        }
-        do {
-            _ = try await api.request(
-                HomesEndpoints.requestPostcard(homeId: homeId),
-                as: RequestPostcardResponse.self
-            )
-            return .success(())
         } catch {
             return .failure(error)
         }
@@ -387,5 +378,121 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     private func refreshErrorsIfShown() {
         guard errors != nil else { return }
         errors = form.validate()
+    }
+}
+
+extension VerifyLandlordWizardViewModel {
+    func primaryTapped() {
+        guard isCurrentSession else { sessionChanged()
+            return
+        }
+        guard !isSubmitting else { return }
+        if statusNeedsRetry { resume()
+            return
+        }
+        switch currentStep {
+        case .start:
+            currentStep = .details
+        case .details:
+            guard !isSubmitting else { return }
+            pendingWork?.cancel()
+            let generation = requestGeneration
+            pendingWork = Task { [weak self] in
+                guard let self, !Task.isCancelled, requestGeneration == generation else { return }
+                await submit()
+            }
+        case .sent:
+            retirePendingWork()
+            pendingEvent = .dismiss
+        }
+    }
+
+    func secondaryTapped() {
+        // Only the `.sent` step carries a secondary — the mailed-code
+        // fallback (RN's "Verify with a mailed code" alternative path).
+        guard isCurrentSession else { sessionChanged()
+            return
+        }
+        guard currentStep == .sent else { return }
+        pendingWork?.cancel()
+        let generation = requestGeneration
+        pendingWork = Task { [weak self] in
+            guard let self, !Task.isCancelled, requestGeneration == generation else { return }
+            await startPostcardFallback()
+        }
+    }
+
+    var isCurrentSession: Bool {
+        sessionScope.isCurrent
+    }
+
+    func sessionChanged() {
+        guard !isCurrentSession else { return }
+        retirePendingWork()
+        form = VerifyLandlordForm()
+        attachment.clear()
+        approvalResult = nil
+        errors = nil
+        submitState = .idle
+        currentStep = .start
+        pendingEvent = .dismiss
+    }
+
+    /// Own the foreground read so backgrounding can retire it with other work.
+    func resume() {
+        guard isCurrentSession else { sessionChanged()
+            return
+        }
+        guard !isSubmitting, pendingEvent == nil else { return }
+        pendingWork?.cancel()
+        let generation = requestGeneration
+        pendingWork = Task { [weak self] in
+            guard let self, !Task.isCancelled, requestGeneration == generation else { return }
+            await restoreSavedRequest()
+        }
+    }
+
+    /// Recover the actor's existing request without creating another request.
+    func restoreSavedRequest() async {
+        guard isCurrentSession else { sessionChanged()
+            return
+        }
+        guard !isSubmitting, !Task.isCancelled else { return }
+        let generation = requestGeneration
+        isLoadingStatus = true
+        defer { if requestGeneration == generation { isLoadingStatus = false } }
+        do {
+            let status: TenantHomeStatusResponse = try await api.request(TenantEndpoints.homeStatus(homeId: homeId))
+            guard isCurrentSession else { sessionChanged()
+                return
+            }
+            guard requestGeneration == generation, !Task.isCancelled else { return }
+            guard status.matches(homeId: homeId), let saved = status.lease else { throw APIError.invalidResponse }
+            if saved.state == .pending || saved.state == .active {
+                guard let lease = saved.lease, lease.homeId == homeId,
+                      lease.id == status.requestContext.leaseId, lease.state == saved.state,
+                      lease.state.rawValue == status.requestContext.leaseState else { throw APIError.invalidResponse }
+                approvalResult = VerifyLandlordApprovalResult(
+                    kind: saved.state == .active ? .alreadyActive : .alreadyPending,
+                    submittedAt: lease.createdAt,
+                    requestedStartAt: lease.startAt,
+                    message: lease.metadata?.message
+                )
+                currentStep = .sent
+                submitState = .submitted
+            } else {
+                approvalResult = nil
+                if currentStep != .details { currentStep = .start }
+                submitState = .idle
+            }
+            statusNeedsRetry = false
+        } catch {
+            guard isCurrentSession else { sessionChanged()
+                return
+            }
+            guard requestGeneration == generation, !Task.isCancelled else { return }
+            statusNeedsRetry = true
+            submitState = .error(message: "Couldn't check your saved request. Retry before continuing.")
+        }
     }
 }

@@ -2,13 +2,12 @@
 /**
  * Place — bill-benchmark read helper (W0.4)
  *
- * Reads the per-(geohash-6, bill_type) neighborhood bill aggregates written
- * by the `billBenchmarkRefresh` job (BillBenchmark table) and returns a
+ * Reads current same-currency household/month aggregates from SQL and returns a
  * peer-relative view, gated by the same k-anon display floor the existing
  * `/api/homes/:id/bill-trends` endpoint uses:
  *   household_count >= 10  → shown (aggregates safe to reveal)
  *   household_count 3 .. 9 → insufficient_data (no amounts revealed)
- *   < 3 (never written)    → unavailable
+ *   < 3 (not returned)    → unavailable
  *
  * "Peer-relative": given the resident's own amount, it expresses where they
  * sit relative to the neighborhood (signed percent + a relation enum),
@@ -19,10 +18,10 @@
  * @module services/place/billBenchmarkReader
  */
 
-const supabaseAdmin = require('../../config/supabaseAdmin');
+const { getPeerBillMonths } = require('../homeBillComparisonService');
 const logger = require('../../utils/logger');
 
-// Mirrors billBenchmarkRefresh: rows with < 3 households are never written;
+// Matches read_bill_peer_months: rows with < 3 households are not returned;
 // the display floor for revealing aggregates is 10 households.
 const BENCHMARK_DISPLAY_MIN = 10;
 // Dead-band around the peer average: a resident within ±TYPICAL_PCT reads as
@@ -53,8 +52,8 @@ function relativeToPeers(userAmountCents, peerAvgCents) {
 /**
  * Read the peer-relative bill benchmark for a geohash-6 cell + bill type.
  *
- * Uses the most recent month that meets the display floor. Fails closed to
- * `unavailable` on bad input or read error so composers always get a valid
+ * Uses the most recent month; an insufficient latest cohort is not replaced
+ * by an older one. Bad input is unavailable and read errors remain errors so composers always get a valid
  * shape.
  *
  * @param {string} geohash   geohash-6 prefix
@@ -69,7 +68,8 @@ function relativeToPeers(userAmountCents, peerAvgCents) {
  *   { geohash, bill_type, status: 'unavailable' }
  */
 async function getBillBenchmark(geohash, billType, opts = {}) {
-  const displayMin = opts.displayMin != null ? opts.displayMin : BENCHMARK_DISPLAY_MIN;
+  const requestedMin = Number(opts.displayMin);
+  const displayMin = Number.isFinite(requestedMin) ? Math.max(BENCHMARK_DISPLAY_MIN, Math.ceil(requestedMin)) : BENCHMARK_DISPLAY_MIN;
   const userAmountCents = opts.userAmountCents != null ? opts.userAmountCents : null;
   const base = { geohash: geohash || null, bill_type: billType || null };
 
@@ -78,20 +78,7 @@ async function getBillBenchmark(geohash, billType, opts = {}) {
   }
 
   try {
-    const { data: rows, error } = await supabaseAdmin
-      .from('BillBenchmark')
-      .select('month, year, avg_amount_cents, median_amount_cents, household_count')
-      .eq('geohash', geohash)
-      .eq('bill_type', billType);
-
-    if (error) {
-      logger.warn('placeBillBenchmarkReader: BillBenchmark read error', {
-        geohash,
-        billType,
-        error: error.message,
-      });
-      return { ...base, status: 'unavailable' };
-    }
+    const rows = (await getPeerBillMonths(geohash, 'USD')).filter(row => row.bill_type === billType);
 
     if (!rows || rows.length === 0) {
       return { ...base, status: 'unavailable' };
@@ -100,9 +87,9 @@ async function getBillBenchmark(geohash, billType, opts = {}) {
     // Most recent period first (year, then month).
     const sorted = rows
       .slice()
-      .sort((a, b) => (b.year - a.year) || (b.month - a.month));
+      .sort((a, b) => b.month.localeCompare(a.month));
 
-    const displayable = sorted.find((r) => (r.household_count || 0) >= displayMin);
+    const displayable = sorted[0].household_count >= displayMin ? sorted[0] : null;
 
     if (!displayable) {
       // Below the display floor: signal "almost there" using the most recent
@@ -116,17 +103,18 @@ async function getBillBenchmark(geohash, billType, opts = {}) {
     }
 
     const comparison = userAmountCents != null
-      ? relativeToPeers(userAmountCents, displayable.avg_amount_cents)
+      ? relativeToPeers(userAmountCents, Math.round(displayable.avg_amount * 100))
       : null;
 
     return {
       ...base,
       status: 'ok',
-      period: { month: displayable.month, year: displayable.year },
+      period: { month: Number(displayable.month.slice(5)), year: Number(displayable.month.slice(0, 4)) },
+      currency: 'USD',
       household_count: displayable.household_count,
-      avg_amount_cents: displayable.avg_amount_cents,
-      median_amount_cents: displayable.median_amount_cents != null
-        ? displayable.median_amount_cents
+      avg_amount_cents: Math.round(displayable.avg_amount * 100),
+      median_amount_cents: displayable.median_amount != null
+        ? Math.round(displayable.median_amount * 100)
         : null,
       comparison,
     };
@@ -136,7 +124,7 @@ async function getBillBenchmark(geohash, billType, opts = {}) {
       billType,
       error: err.message,
     });
-    return { ...base, status: 'unavailable' };
+    return { ...base, status: 'error' };
   }
 }
 

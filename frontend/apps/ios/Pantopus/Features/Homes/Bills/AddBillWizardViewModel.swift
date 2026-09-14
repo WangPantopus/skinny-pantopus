@@ -102,6 +102,11 @@ final class AddBillWizardViewModel: WizardModel {
     /// mode. The shell renders the form chrome with disabled inputs
     /// underneath; the VM keeps the CTA off until hydration lands.
     private(set) var isLoadingExisting: Bool = false
+    private(set) var isCheckingAccess = true
+    var canManageFinance: Bool {
+        financeAccess.canManage
+    }
+
     /// Surface for the rare case the parent list 404s the row — the
     /// review step renders this instead of the normal submit error.
     private(set) var loadError: String?
@@ -112,6 +117,7 @@ final class AddBillWizardViewModel: WizardModel {
     /// PUT instead of POST, "Save changes" CTA, updated event).
     let billId: String?
     private let api: APIClient
+    private let financeAccess: HomeFinanceAccess
     /// Snapshot of the hydrated values. Used to detect dirtiness in
     /// edit mode so a clean re-open doesn't show the discard sheet.
     private var hydratedSnapshot: Snapshot?
@@ -127,10 +133,11 @@ final class AddBillWizardViewModel: WizardModel {
         billId != nil
     }
 
-    init(homeId: String, billId: String? = nil, api: APIClient = .shared) {
+    init(homeId: String, billId: String? = nil, api: APIClient = .shared, financeAccess: HomeFinanceAccess? = nil) {
         self.homeId = homeId
         self.billId = billId
         self.api = api
+        self.financeAccess = financeAccess ?? HomeFinanceAccess(homeId: homeId, api: api)
         if billId != nil {
             // Lift the loading flag immediately so the first chrome
             // snapshot reflects the spinner state — `load()` is fired
@@ -141,23 +148,29 @@ final class AddBillWizardViewModel: WizardModel {
 
     // MARK: - Lifecycle
 
-    /// Hydrate the wizard from an existing bill. No-op in create mode.
+    /// Verify the direct entry point before exposing a create or edit form.
     func load() async {
-        guard let billId else { return }
-        isLoadingExisting = true
+        isCheckingAccess = true
+        isLoadingExisting = billId != nil
         loadError = nil
-        defer { isLoadingExisting = false }
+        defer {
+            isCheckingAccess = false
+            isLoadingExisting = false
+        }
         do {
+            try await financeAccess.refresh(managing: true)
+            guard let billId else { return }
             let response: GetHomeBillsResponse = try await api.request(
                 HomesEndpoints.bills(homeId: homeId)
             )
-            guard let bill = response.bills.first(where: { $0.id == billId }) else {
+            try financeAccess.require(managing: true)
+            guard let bill = response.bills.first(where: { $0.id == billId && $0.homeId == homeId }) else {
                 loadError = "This bill is no longer available."
                 return
             }
             apply(existing: bill)
         } catch {
-            loadError = (error as? APIError)?.errorDescription
+            loadError = (error as? LocalizedError)?.errorDescription
                 ?? "Couldn't load this bill."
         }
     }
@@ -193,7 +206,7 @@ final class AddBillWizardViewModel: WizardModel {
                 progressFraction: 1.0 / 3.0,
                 leading: .close,
                 primaryCTALabel: "Next",
-                primaryCTAEnabled: detailsValid && !isLoadingExisting,
+                primaryCTAEnabled: detailsValid && !isLoadingExisting && canManageFinance && loadError == nil,
                 isSubmitting: false,
                 dirty: isDirty,
                 showsProgressBar: true
@@ -205,7 +218,7 @@ final class AddBillWizardViewModel: WizardModel {
                 progressFraction: 2.0 / 3.0,
                 leading: .back,
                 primaryCTALabel: "Next",
-                primaryCTAEnabled: true,
+                primaryCTAEnabled: canManageFinance && loadError == nil,
                 isSubmitting: false,
                 dirty: isDirty,
                 showsProgressBar: true
@@ -217,7 +230,7 @@ final class AddBillWizardViewModel: WizardModel {
                 progressFraction: 3.0 / 3.0,
                 leading: .back,
                 primaryCTALabel: creating ? "Add bill" : "Save changes",
-                primaryCTAEnabled: !isSubmitting,
+                primaryCTAEnabled: !isSubmitting && canManageFinance && loadError == nil,
                 isSubmitting: isSubmitting,
                 dirty: isDirty,
                 showsProgressBar: true
@@ -256,6 +269,7 @@ final class AddBillWizardViewModel: WizardModel {
     }
 
     func primaryTapped() {
+        guard financeAccess.isCurrentScope, chrome.primaryCTAEnabled else { return }
         switch currentStep {
         case .details:
             currentStep = .schedule
@@ -310,7 +324,7 @@ final class AddBillWizardViewModel: WizardModel {
     // MARK: - Submit
 
     func submit() async {
-        guard let amountValue = parsedAmount(), !isSubmitting else { return }
+        guard detailsValid, let amountValue = parsedAmount(), !isSubmitting, loadError == nil else { return }
         if !NetworkMonitor.shared.isOnline {
             submitError = "You're offline. Try again when you're back online."
             return
@@ -320,6 +334,7 @@ final class AddBillWizardViewModel: WizardModel {
         defer { isSubmitting = false }
 
         do {
+            try await financeAccess.refresh(managing: true)
             let response: HomeBillResponse
             let details = Self.buildDetails(schedule: schedule)
             if let billId {
@@ -332,7 +347,6 @@ final class AddBillWizardViewModel: WizardModel {
                 response = try await api.request(
                     HomesEndpoints.updateBill(homeId: homeId, billId: billId, request: request)
                 )
-                Analytics.track(.ctaAddBillSubmit(result: .success))
             } else {
                 let request = CreateBillRequest(
                     billType: "other",
@@ -344,13 +358,16 @@ final class AddBillWizardViewModel: WizardModel {
                 response = try await api.request(
                     HomesEndpoints.createBill(homeId: homeId, request: request)
                 )
-                createdBillId = response.bill.id
-                Analytics.track(.ctaAddBillSubmit(result: .success))
             }
+            try financeAccess.require(managing: true)
+            guard response.bill.homeId == homeId, billId == nil || response.bill.id == billId else { throw APIError.invalidResponse }
+            if billId == nil { createdBillId = response.bill.id }
+            Analytics.track(.ctaAddBillSubmit(result: .success))
             currentStep = .success
         } catch {
-            submitError = (error as? APIError)?.errorDescription
+            submitError = (error as? LocalizedError)?.errorDescription
                 ?? (isEditing ? "Couldn't save these changes." : "Couldn't add this bill.")
+            if !canManageFinance { loadError = submitError }
             Analytics.track(.ctaAddBillSubmit(result: .error))
         }
     }

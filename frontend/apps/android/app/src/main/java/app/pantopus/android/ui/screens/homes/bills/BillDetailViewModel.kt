@@ -11,6 +11,8 @@ import app.pantopus.android.data.api.models.homes.UpdateBillRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +34,7 @@ sealed interface BillDetailUiState {
         val splits: List<BillSplitDto>,
         val saving: Boolean = false,
         val saveError: String? = null,
+        val splitError: String? = null,
     ) : BillDetailUiState
 
     data class Error(val message: String) : BillDetailUiState
@@ -40,11 +43,15 @@ sealed interface BillDetailUiState {
 /** ViewModel backing [BillDetailScreen]. */
 @HiltViewModel
 class BillDetailViewModel
-    @Inject
-    constructor(
+    internal constructor(
         private val repo: HomesRepository,
         savedStateHandle: SavedStateHandle,
+        createAccess: (String, CoroutineScope) -> HomeFinanceAccess,
     ) : ViewModel() {
+        @Inject
+        constructor(repo: HomesRepository, savedStateHandle: SavedStateHandle, finance: HomeFinanceAccessFactory) :
+            this(repo, savedStateHandle, finance::create)
+
         private val homeId: String =
             checkNotNull(savedStateHandle[BILL_DETAIL_HOME_ID_KEY]) {
                 "BillDetailViewModel requires a $BILL_DETAIL_HOME_ID_KEY nav argument"
@@ -53,6 +60,10 @@ class BillDetailViewModel
             checkNotNull(savedStateHandle[BILL_DETAIL_BILL_ID_KEY]) {
                 "BillDetailViewModel requires a $BILL_DETAIL_BILL_ID_KEY nav argument"
             }
+
+        private val finance = createAccess(homeId, viewModelScope)
+        val financeRights = finance.rights
+        private var generation = 0
 
         private val _state = MutableStateFlow<BillDetailUiState>(BillDetailUiState.Loading)
         val state: StateFlow<BillDetailUiState> = _state.asStateFlow()
@@ -68,30 +79,60 @@ class BillDetailViewModel
             this.onClose = onClose
         }
 
+        init {
+            viewModelScope.launch {
+                financeRights.collect { rights ->
+                    if (rights.invalidated) {
+                        generation++
+                        _state.value = BillDetailUiState.Error(FINANCE_SESSION_CHANGED)
+                    }
+                }
+            }
+        }
+
         fun load() {
+            val revision = ++generation
             _state.value = BillDetailUiState.Loading
             viewModelScope.launch {
-                // Backend has no GET-by-id for bills today (see parity
-                // audit). Fall back to the list endpoint + a parallel
-                // splits fetch. Lists are small.
-                val billsDeferred = async { repo.getHomeBills(homeId) }
-                val splitsDeferred = async { repo.getHomeBillSplits(homeId, billId) }
-                val billsResult = billsDeferred.await()
-                val splitsResult = splitsDeferred.await()
-
-                when (billsResult) {
-                    is NetworkResult.Failure ->
-                        _state.value = BillDetailUiState.Error(billsResult.error.message)
-                    is NetworkResult.Success -> {
-                        val bill = billsResult.data.bills.firstOrNull { it.id == billId }
-                        if (bill == null) {
-                            _state.value = BillDetailUiState.Error("This bill is no longer available.")
-                        } else {
-                            val splits =
-                                (splitsResult as? NetworkResult.Success)?.data?.splits.orEmpty()
-                            _state.value = BillDetailUiState.Loaded(bill, splits)
+                try {
+                    finance.refresh()
+                    val billsDeferred = async { repo.getHomeBills(homeId) }
+                    val splitsDeferred = async { repo.getHomeBillSplits(homeId, billId) }
+                    val billsResult = billsDeferred.await()
+                    val splitsResult = splitsDeferred.await()
+                    finance.require()
+                    if (revision != generation) return@launch
+                    when (billsResult) {
+                        is NetworkResult.Failure -> error(billsResult.error.message)
+                        is NetworkResult.Success -> {
+                            check(billsResult.data.bills.all { it.homeId == homeId }) { "Bill response could not be verified." }
+                            val bill = billsResult.data.bills.singleOrNull { it.id == billId && it.homeId == homeId }
+                            checkNotNull(bill) { "This bill is no longer available." }
+                            val splits = (splitsResult as? NetworkResult.Success)?.data?.splits.orEmpty()
+                            check(splits.all { it.billId == billId }) { "Bill split response could not be verified." }
+                            val splitError = (splitsResult as? NetworkResult.Failure)?.error?.message
+                            _state.value = BillDetailUiState.Loaded(bill, splits, splitError = splitError)
                         }
                     }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: IllegalStateException) {
+                    if (revision == generation) _state.value = BillDetailUiState.Error(error.message ?: "Couldn't load this bill.")
+                }
+            }
+        }
+
+        fun edit(action: () -> Unit) {
+            val current = _state.value as? BillDetailUiState.Loaded ?: return
+            if (current.saving) return
+            viewModelScope.launch {
+                try {
+                    finance.require(managing = true)
+                    action()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    // Permission loss keeps editing closed.
                 }
             }
         }
@@ -120,22 +161,39 @@ class BillDetailViewModel
         ) {
             val current = _state.value as? BillDetailUiState.Loaded ?: return
             if (current.saving) return
+            val revision = ++generation
             _state.value = current.copy(saving = true, saveError = null)
             viewModelScope.launch {
-                when (val result = repo.updateHomeBill(homeId, billId, request)) {
-                    is NetworkResult.Success -> {
-                        onChanged()
-                        _state.value =
-                            current.copy(
-                                bill = result.data.bill,
-                                saving = false,
-                                saveError = null,
-                            )
-                        if (dismissOnSuccess) onClose()
+                try {
+                    finance.refresh(managing = true)
+                    if (revision != generation) return@launch
+                    val result = repo.updateHomeBill(homeId, billId, request)
+                    finance.require(managing = true)
+                    if (revision != generation) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            check(
+                                result.data.bill.id == billId && result.data.bill.homeId == homeId &&
+                                    (request.status == null || result.data.bill.status == request.status),
+                            ) { "Bill change could not be verified." }
+                            _state.value = current.copy(bill = result.data.bill, saving = false, saveError = null)
+                            onChanged()
+                            if (dismissOnSuccess) onClose()
+                        }
+                        is NetworkResult.Failure -> error(result.error.message)
                     }
-                    is NetworkResult.Failure ->
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: IllegalStateException) {
+                    if (revision == generation) {
+                        val message = error.message ?: "Couldn't update this bill."
                         _state.value =
-                            current.copy(saving = false, saveError = result.error.message)
+                            if (financeRights.value.canView) {
+                                current.copy(saving = false, saveError = message)
+                            } else {
+                                BillDetailUiState.Error(message)
+                            }
+                    }
                 }
             }
         }

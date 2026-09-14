@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Pantopus — a useful place to land · Design concept</title>
+  <style>
+    :root{--paper:#f2f1eb;--surface:#fffefa;--soft:#f5f5ef;--ink:#24382f;--muted:#626d64;--line:#dddfd5;--green:#214b3c;--green-ink:#f5f9e9;--mint:#e8eedc;--violet:#eee8f6;--violet-ink:#624a7e;--gold:#f2e5b7;--gold-ink:#68521d;--blue:#d9e5f2;--blue-ink:#365979;--focus:#9460d1;--shadow:0 28px 80px -40px #29453166;--radius:22px;--sans:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--serif:Georgia,"Times New Roman",serif}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}button,input,textarea,select{font:inherit}button,a,input,textarea,select{-webkit-tap-highlight-color:transparent}button{cursor:pointer}button{color:inherit}button:disabled{cursor:default}a{color:inherit;text-underline-offset:4px}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline-offset:4px}button{border:0}button svg{flex-shrink:0}svg{display:block}button:active{transform:translateY(1px)}[hidden]{display:none!important}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.skip{position:fixed;left:20px;top:-100px;z-index:20;background:var(--surface);padding:12px}.skip:focus{top:20px}
+    .site-header{max-width:1232px;margin:auto;padding:30px 28px 0;display:flex;justify-content:space-between;gap:20px;align-items:center}.wordmark{display:flex;align-items:center;gap:9px;font-weight:740;font-size:22px;letter-spacing:-.8px}.mark{width:28px;height:28px;color:var(--green)}.eyebrow{font-size:12px;font-weight:730;letter-spacing:1.6px;text-transform:uppercase}.concept-label{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}.concept-label .dot{width:6px;height:6px;border-radius:50%;background:var(--green)}.doc-link{font-size:12px;font-weight:600}.intro{max-width:1232px;padding:40px 28px 28px;margin:auto;display:grid;grid-template-columns:1fr 400px;align-items:end;gap:32px}.intro h1{font-family:var(--serif);font-weight:400;font-size:clamp(32px,3.6vw,46px);letter-spacing:-1.6px;line-height:1.12;margin:10px 0 12px}.intro p{margin:0;color:var(--muted);max-width:540px;font-size:13px}.review-controls{display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-end;align-items:center}.control-group{display:grid;gap:6px}.control-group>span{font-size:12px;color:var(--muted);letter-spacing:.5px}.segmented{display:flex;padding:4px;border:1px solid var(--line);border-radius:12px;gap:3px;background:var(--soft)}.segmented button{padding:7px 12px;border-radius:8px;background:transparent;font-size:12px;white-space:nowrap;font-weight:600}.segmented button[aria-pressed=true]{background:var(--surface);box-shadow:0 1px 4px #203e2310;color:var(--ink)}.icon-button{background:transparent;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:1px solid var(--line)}.icon-button:hover{background:var(--mint)}.controls-foot{width:100%;font-size:12px;color:var(--muted);text-align:right}
+    .app-wrap{max-width:1176px;margin:0 auto;border:1px solid var(--line);border-radius:24px;overflow:hidden;box-shadow:var(--shadow);background:var(--surface)}.preview-strip{min-height:30px;background:var(--soft);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:7px 20px;color:var(--muted);font-size:12px;gap:10px}.preview-strip strong{font-weight:600}.app{display:grid;grid-template-columns:185px 1fr;min-height:795px}.sidebar{border-right:1px solid var(--line);padding:28px 16px 20px;display:flex;flex-direction:column;background:var(--surface)}.sidebar .wordmark{font-size:20px;padding:0 10px 34px}.sidebar .mark{width:25px;height:25px}.nav{display:grid;gap:8px}.nav button{position:relative;display:flex;gap:12px;align-items:center;padding:13px 14px;border-radius:12px;background:transparent;font-weight:560;font-size:13px;text-align:left;color:var(--muted)}.nav button:hover{background:var(--soft)}.nav button[aria-current=page]{background:var(--mint);color:var(--green);font-weight:730}.nav .count{margin-left:auto;display:flex;align-items:center;justify-content:center;min-width:18px;height:18px;font-size:12px;background:var(--green);color:var(--green-ink);border-radius:6px}.sidebar-bottom{margin-top:auto;padding:36px 10px 0}.avatar{width:31px;height:31px;border-radius:50%;background:var(--violet);color:var(--violet-ink);display:grid;place-items:center;font-family:var(--serif);font-size:16px}.account{display:flex;align-items:center;gap:9px}.account strong{font-size:12px;display:block}.account span{color:var(--muted);font-size:12px}.private-label{font-size:12px;color:var(--muted);display:flex;gap:5px;align-items:center;margin-top:20px}.content{min-width:0}.product-topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:24px 34px 18px;border-bottom:1px solid var(--line)}.scope{font-size:12px;display:flex;align-items:center;gap:8px;color:var(--muted)}.scope strong{font-size:12px;color:var(--ink)}.scope .divider{color:var(--line);padding:0 5px}.text-button{background:transparent;padding:5px 0;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:650;color:var(--green);text-align:left}.text-button:hover{text-decoration:underline;text-underline-offset:4px}.screen{padding:30px 34px 36px;animation:appear .2s ease}.screen:focus{outline:none}.section-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px}.section-heading h3{font-size:13px;font-weight:700;margin:0;letter-spacing:-.2px}.section-heading span{font-size:12px;color:var(--muted)}.welcome{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;margin-bottom:24px}.welcome h2,.page-title{font-family:var(--serif);font-weight:400;font-size:34px;line-height:1.15;letter-spacing:-1px;margin:8px 0 10px}.welcome p,.page-lead{color:var(--muted);font-size:12px;margin:0}.date-mark{width:44px;padding:5px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);text-align:center;margin-top:5px}.date-mark strong{display:block;font-family:var(--serif);font-size:23px;font-weight:400}.date-mark span{font-size:12px;letter-spacing:1px;text-transform:uppercase}.intake{display:flex;align-items:center;gap:13px;width:100%;padding:16px 18px;text-align:left;border:1px solid var(--line);border-radius:15px;background:var(--soft);margin-bottom:28px}.intake:hover{border-color:var(--green);background:var(--mint)}.intake .plus{width:33px;height:33px;border:1px solid var(--line);background:var(--surface);border-radius:10px;display:grid;place-items:center}.intake strong{display:block;font-size:12px}.intake span{font-size:12px;color:var(--muted)}.push-right{margin-left:auto}.hero-card{display:grid;grid-template-columns:1.4fr 1fr;border-radius:var(--radius);overflow:hidden;background:var(--green);color:var(--green-ink);min-height:242px;position:relative}.hero-copy{padding:24px 0 25px 24px;position:relative;z-index:1}.hero-copy .eyebrow{font-size:12px;letter-spacing:1.1px;color:#c2d3b3;display:flex;align-items:center;gap:6px}.hero-copy h3{font-family:var(--serif);font-weight:400;font-size:28px;letter-spacing:-.6px;line-height:1.15;max-width:280px;margin:16px 0 12px}.hero-copy p{font-size:12px;line-height:1.6;color:#d1ddc8;max-width:255px;margin:0 0 20px}.light-button{background:#eff3dc;color:#214b3c;border-radius:9px;font-size:12px;font-weight:740;padding:11px 13px;display:inline-flex;align-items:center;gap:10px}.light-button:hover{background:white}.hero-art{min-width:0;display:flex;align-items:center;justify-content:center;padding:14px 22px 14px 4px;position:relative;isolation:isolate}.hero-art:before{content:"";position:absolute;width:175px;height:175px;border-radius:50%;background:#a5bc7830;z-index:-1}.ticket-art{width:162px;height:196px;transform:rotate(8deg);background:#e7e9bf;border-radius:11px;color:#254c3d;padding:18px 17px;box-shadow:0 12px 26px #05281530;display:flex;flex-direction:column;position:relative}.ticket-art:before,.ticket-art:after{content:"";position:absolute;top:138px;width:16px;height:16px;border-radius:50%;background:var(--green)}.ticket-art:before{left:-8px}.ticket-art:after{right:-8px}.ticket-art small{font-size:12px;letter-spacing:1.3px;font-weight:700;text-transform:uppercase}.ticket-art strong{font-family:var(--serif);font-size:24px;font-weight:400;line-height:1.06;margin-top:12px}.ticket-art .book-mark{margin:10px auto 0;width:64px;height:43px}.ticket-art footer{border-top:1px dashed #65775277;padding-top:10px;margin-top:auto;display:flex;justify-content:space-between;font-size:12px;letter-spacing:1px}.hero-caption{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:12px;padding:9px 2px 0;margin-bottom:24px}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:15px}.card{border:1px solid var(--line);border-radius:17px;padding:18px;background:var(--surface)}.card .eyebrow{font-size:12px;letter-spacing:1px;color:var(--muted)}.card h3{font-size:14px;letter-spacing:-.2px;margin:11px 0 7px;line-height:1.35}.card p{color:var(--muted);font-size:12px;line-height:1.6;margin:0 0 13px}.bill-mini{height:35px;display:flex;align-items:end;gap:4px;margin:15px 0 10px}.bill-mini span{height:100%;display:block;border-radius:4px}.bill-mini .base{background:#a2bcb0;flex:130}.bill-mini .usage{background:#d8b275;flex:32.4}.bill-mini .rate{background:#a99ac7;flex:15.6}.bill-mini .fee{background:#627e94;flex:2}.mini-labels{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:12px}.mini-labels strong{font-size:12px;color:var(--ink)}.event-mini{display:flex;gap:12px;align-items:center;margin:18px 0 15px}.calendar-tile{width:42px;border:1px solid var(--line);border-radius:8px;overflow:hidden;text-align:center;flex:none}.calendar-tile small{display:block;background:var(--violet);color:var(--violet-ink);font-size:12px;letter-spacing:.5px;padding:2px}.calendar-tile strong{display:block;padding:3px;font-size:18px;font-weight:600}.event-mini p{margin:0}.time-change{font-size:13px!important;color:var(--ink)!important;font-weight:650}.time-change del{font-weight:400;color:var(--muted);padding-right:5px}.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;font-size:12px;font-weight:650;border-radius:5px;background:var(--violet);color:var(--violet-ink);white-space:nowrap}.badge.neutral{background:var(--soft);color:var(--muted)}.badge.gold{background:var(--gold);color:var(--gold-ink)}.badge.green{background:var(--mint);color:var(--green)}.saved-entry{display:flex;align-items:center;width:100%;border:1px solid var(--line);padding:14px 17px;border-radius:14px;margin-top:16px;background:var(--soft);text-align:left;gap:12px}.saved-entry strong{display:block;font-size:12px}.saved-entry span{font-size:12px;color:var(--muted)}.icon-tile{width:35px;height:35px;background:var(--violet);color:var(--violet-ink);border-radius:10px;display:grid;place-items:center;flex:none}.hint-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;margin:20px 0 0}.page-title{font-size:32px;margin-top:0}.page-lead{max-width:490px;margin-bottom:24px;line-height:1.7}.area-banner{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;background:var(--soft);padding:12px 14px;font-size:12px;margin-bottom:24px}.area-banner small{font-size:12px;color:var(--muted);display:block}.chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:19px}.chips span{font-size:12px;border:1px solid var(--line);padding:6px 10px;border-radius:20px;color:var(--muted)}.quiet-card{margin-top:18px;background:var(--soft);border:1px dashed var(--line);padding:20px;border-radius:15px}.quiet-card h3{font-size:13px;margin:0 0 7px}.quiet-card p{font-size:12px;color:var(--muted);margin:0;max-width:480px}.source-row{display:flex;align-items:center;gap:12px;padding:17px 0;border-bottom:1px solid var(--line)}.source-row .source-copy{flex:1;min-width:0}.source-row strong{font-size:12px;display:block}.source-row p{margin:3px 0 0;color:var(--muted);font-size:12px}.secondary-button,.primary-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 14px;border-radius:9px;font-size:12px;font-weight:680;line-height:1.4}.secondary-button{border:1px solid var(--line);background:var(--surface)}.secondary-button:hover{background:var(--soft)}.primary-button{background:var(--green);color:var(--green-ink)}.primary-button:hover{filter:brightness(1.13)}.activity{display:flex;align-items:start;gap:13px;padding:18px;border:1px solid var(--line);border-radius:16px;margin-top:20px}.activity .activity-copy{flex:1}.activity h3{font-size:13px;margin:0 0 7px}.activity p{font-size:12px;color:var(--muted);margin:0 0 12px}.setting{display:flex;align-items:center;gap:14px;padding:16px 0;border-bottom:1px solid var(--line);font-size:12px}.setting .setting-text{flex:1}.setting strong{display:block}.setting small{font-size:12px;color:var(--muted)}.switch{position:relative;display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}.switch input{width:18px;height:18px;accent-color:var(--green);cursor:pointer}.back-row{margin-bottom:18px}.notes{max-width:1176px;margin:46px auto 0;padding:0 0 45px}.notes-heading{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:20px}.notes h2{font-family:var(--serif);font-size:27px;font-weight:400;letter-spacing:-.6px;margin:8px 0 0}.notes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}.note{border-top:1px solid var(--line);padding:18px 0}.note .number{font-size:12px;color:var(--muted);letter-spacing:1px}.note h3{font-size:12px;margin:9px 0}.note p{font-size:12px;color:var(--muted);line-height:1.8;margin:0}.scenarios{margin-top:14px;border:1px solid var(--line);border-radius:15px;padding:17px 20px;display:flex;gap:18px;align-items:baseline}.scenarios strong{font-size:12px;white-space:nowrap}.scenarios p{font-size:12px;color:var(--muted);margin:0;line-height:1.7}.footer{max-width:1176px;margin:0 auto 26px;border-top:1px solid var(--line);padding-top:16px;display:flex;justify-content:space-between;font-size:12px;color:var(--muted);gap:16px}
+    dialog{border:1px solid var(--line);border-radius:23px;background:var(--surface);color:var(--ink);padding:0;width:min(610px,calc(100% - 28px));max-height:90dvh;box-shadow:0 24px 100px #061e3670}dialog::backdrop{background:#142c255c;backdrop-filter:blur(5px)}.dialog-head{position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:15px;padding:16px 23px;background:var(--surface);border-bottom:1px solid var(--line)}.dialog-head span{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}.dialog-head .icon-button{width:29px;height:29px}.dialog-body{padding:24px 28px 28px}.dialog-body h2{font-family:var(--serif);font-size:31px;letter-spacing:-.8px;font-weight:400;margin:9px 0 12px;line-height:1.16}.dialog-body .lead{font-size:12px;color:var(--muted);margin:0 0 20px;line-height:1.7}.dialog-body h3{font-size:12px;margin:22px 0 10px}.detail-art{background:var(--mint);border-radius:14px;height:108px;display:flex;align-items:center;justify-content:space-between;padding:22px;color:var(--green);margin:18px 0}.detail-art strong{font-family:var(--serif);font-size:23px;line-height:1.05;font-weight:400}.detail-art small{font-size:12px;letter-spacing:.7px;display:block;margin-top:9px}.detail-art svg{width:85px;height:64px}.evidence-list{margin:20px 0;padding:0;list-style:none;border-top:1px solid var(--line)}.evidence-list li{display:grid;grid-template-columns:30px 1fr;padding:12px 0;border-bottom:1px solid var(--line);align-items:start;gap:5px}.evidence-list svg{margin-top:2px}.evidence-list strong{font-size:12px;display:block}.evidence-list p{font-size:12px;color:var(--muted);margin:3px 0 0}.callout{padding:13px 15px;border-radius:10px;background:var(--soft);font-size:12px;color:var(--muted);line-height:1.65}.callout.gold{background:var(--gold);color:var(--gold-ink)}.dialog-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:22px}.dialog-actions>*{flex:1}.source-foot{font-size:12px;color:var(--muted);margin-top:18px;line-height:1.7}.bill-total{display:flex;justify-content:space-between;align-items:center;margin:23px 0}.bill-total .amount{font-size:42px;letter-spacing:-2px;font-weight:560;line-height:1.1}.bill-total .caption{font-size:12px;color:var(--muted);margin-top:6px}.delta{text-align:right}.delta strong{font-size:17px;font-weight:600;display:block}.delta span{font-size:12px;color:var(--muted)}.chart{border:1px solid var(--line);padding:17px;border-radius:14px;margin:18px 0;background:var(--soft)}.chart-row{display:grid;grid-template-columns:56px 1fr 49px;align-items:center;gap:10px;margin:14px 0}.chart-row>span{font-size:12px;color:var(--muted)}.chart-row>strong{font-size:12px;text-align:right}.bar-track{height:29px;display:flex;gap:2px}.bar{height:100%;border-radius:4px;min-width:0;background:#83a797}.bar.usage{background:#d8b275}.bar.rate{background:#a99ac7}.bar.fee{background:#627e94}.chart-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;font-size:12px;color:var(--muted)}.chart-legend span{display:flex;align-items:center;gap:5px}.swatch{width:8px;height:8px;border-radius:2px;background:#83a797}.swatch.usage{background:#d8b275}.swatch.rate{background:#a99ac7}.swatch.fee{background:#627e94}.bill-table{width:100%;border-collapse:collapse;font-size:12px}.bill-table th,.bill-table td{padding:9px 3px;text-align:left;border-bottom:1px solid var(--line)}.bill-table th{font-size:12px;font-weight:600;color:var(--muted)}.bill-table td:last-child,.bill-table th:last-child{text-align:right}.math-list{font-size:12px;padding:0;margin:15px 0;list-style:none}.math-list li{display:flex;justify-content:space-between;gap:20px;padding:7px 0}.math-list span{color:var(--muted)}.math-list strong{font-weight:600;white-space:nowrap}.review-comparison{display:grid;grid-template-columns:1fr 24px 1fr;align-items:center;gap:10px;margin:20px 0}.time-box{padding:17px;background:var(--soft);border:1px solid var(--line);border-radius:13px}.time-box.changed{background:var(--violet)}.time-box small{font-size:12px;color:var(--muted);display:block}.time-box strong{font-size:26px;font-weight:500;letter-spacing:-1px;display:block;margin:9px 0}.time-box p{font-size:12px;margin:0;color:var(--muted)}.form-label{display:block;font-weight:650;font-size:12px;margin:20px 0 8px}textarea{display:block;width:100%;min-height:135px;resize:vertical;border:1px solid var(--line);padding:13px;border-radius:11px;color:var(--ink);background:var(--soft);font-size:12px;line-height:1.7}textarea:focus{border-color:var(--green)}.field-note{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);gap:10px;margin-top:7px}.review-note{padding:17px;border:1px solid var(--line);border-radius:12px;background:var(--soft);white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.8}.success-mark{width:47px;height:47px;background:var(--mint);color:var(--green);display:grid;place-items:center;border-radius:50%;margin-bottom:18px}.saved-list{display:grid;gap:10px;margin-top:22px}.saved-row{width:100%;display:flex;gap:12px;align-items:center;text-align:left;border:1px solid var(--line);border-radius:13px;background:var(--surface);padding:14px}.saved-row .row-copy{flex:1;min-width:0}.saved-row strong{display:block;font-size:12px;overflow-wrap:anywhere}.saved-row small{font-size:12px;color:var(--muted)}.saved-row:hover{background:var(--soft)}.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);max-width:calc(100% - 30px);width:max-content;background:var(--ink);color:var(--surface);padding:12px 20px;border-radius:12px;font-size:12px;box-shadow:0 8px 30px #152a2522;z-index:10;pointer-events:none}.toast:empty{display:none}
+    body.dark{--paper:#141c18;--surface:#1c2821;--soft:#233128;--ink:#e7ecdf;--muted:#b1bdac;--line:#3b4a3e;--green:#bdd29f;--green-ink:#183025;--mint:#314734;--violet:#3a3349;--violet-ink:#d6c7ee;--gold:#4a4129;--gold-ink:#ebd28e;--blue:#2f4150;--blue-ink:#c0d9ec;--focus:#d8b6ff;--shadow:0 28px 80px -40px #0009}.dark .hero-card{background:#284d3d;color:#f3f5e1}.dark .hero-art .ticket-art:before,.dark .hero-art .ticket-art:after{background:#284d3d}.dark .nav button[aria-current=page]{color:#daecc5}.dark .hero-caption{color:#b1bdac}.dark .toast{background:#dbe7cb;color:#19291f}
+    @keyframes appear{from{opacity:.4;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation:none!important;transition:none!important}}
+    @media(max-width:1220px){.app-wrap,.notes,.footer{margin-left:28px;margin-right:28px}}@media(max-width:950px){.intro{grid-template-columns:1fr 340px;gap:20px}.app{grid-template-columns:154px 1fr}.sidebar{padding-left:10px;padding-right:10px}.screen{padding:25px}.product-topbar{padding:22px 25px 17px}.hero-copy h3{font-size:25px}.ticket-art{width:139px;height:181px}.hero-art{padding-right:14px}.ticket-art strong{font-size:21px}.hero-copy{padding:22px 0 22px 21px}.hero-copy p{font-size:12px}.hero-art:before{width:146px;height:146px}.two-col{gap:12px}.card{padding:15px}.nav button{padding:12px 11px;gap:9px}.notes-grid{gap:18px}}
+    @media(max-width:760px){.site-header{padding:20px 20px 0}.site-header .wordmark{font-size:19px}.site-header .doc-link{font-size:12px}.intro{grid-template-columns:1fr;padding:28px 20px 21px;gap:21px}.intro h1{font-size:36px;max-width:430px}.intro p{font-size:12px}.review-controls{justify-content:flex-start;gap:10px}.controls-foot{text-align:left;font-size:12px}.control-group>span{font-size:12px}.app-wrap{margin:0 12px;border-radius:19px}.app{display:flex;flex-direction:column;min-height:0;position:relative}.sidebar{order:2;border-right:0;border-top:1px solid var(--line);padding:7px 6px 10px;position:sticky;bottom:0;z-index:4}.sidebar>.wordmark,.sidebar-bottom{display:none}.nav{display:grid;grid-template-columns:repeat(4,1fr);gap:0}.nav button{display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;border-radius:10px;font-size:12px;padding:9px 3px;min-height:56px}.nav button svg{width:18px;height:18px}.nav .count{position:absolute;margin:0;top:4px;right:calc(50% - 24px);font-size:12px;min-width:13px;height:13px}.content{order:1;min-height:640px}.preview-strip{font-size:12px;padding:8px 12px}.product-topbar{padding:17px 19px 13px}.scope{font-size:12px;gap:5px;flex-wrap:wrap}.scope strong{font-size:12px}.scope .divider{padding:0 2px}.screen{padding:24px 19px 26px}.welcome h2{font-size:31px}.welcome p{font-size:12px}.date-mark{width:38px}.intake{margin-bottom:24px}.hero-card{min-height:239px;grid-template-columns:1.5fr 1fr}.hero-copy{padding:23px 0 23px 20px}.hero-copy h3{font-size:26px}.hero-copy p{font-size:12px}.hero-art{padding:10px 15px 10px 4px}.ticket-art{width:125px;height:173px;padding:17px 13px}.ticket-art strong{font-size:20px}.ticket-art:before,.ticket-art:after{top:126px}.ticket-art footer{font-size:12px;padding-top:8px}.ticket-art .book-mark{width:49px;height:35px}.hero-art:before{width:135px;height:135px}.hero-copy .eyebrow{font-size:12px}.hero-caption{font-size:12px;align-items:start}.hero-caption svg{flex:none;margin-top:1px}.notes{margin:32px 22px 0;padding-bottom:26px}.notes-grid{grid-template-columns:1fr;gap:0}.notes-heading{align-items:start}.notes h2{font-size:26px}.notes .doc-link{font-size:12px}.note{padding:16px 0}.note h3{margin:6px 0}.scenarios{display:block;padding:16px}.scenarios p{margin-top:8px}.footer{margin:0 22px 24px;flex-direction:column;gap:7px}.dialog-body{padding:22px}.dialog-head{padding:15px 20px}.dialog-body h2{font-size:29px}.toast{bottom:90px;font-size:12px}.page-title{font-size:31px}}
+    @media(max-width:410px){.intro h1{font-size:33px}.site-header .doc-link{display:none}.two-col{grid-template-columns:1fr}.card{padding:18px}.bill-mini{height:24px;margin-top:13px}.card h3{margin:9px 0 6px}.event-mini{margin:12px 0}.hero-card{grid-template-columns:1.6fr 1fr}.hero-art{padding-right:8px}.ticket-art{width:104px;height:154px;padding:14px 11px}.ticket-art strong{font-size:18px}.ticket-art small{font-size:12px}.ticket-art:before,.ticket-art:after{top:111px}.ticket-art footer{font-size:12px}.ticket-art .book-mark{height:27px}.hero-art:before{width:109px;height:109px}.hero-copy h3{font-size:24px}.hero-copy{padding-left:17px}.hero-copy p{font-size:12px}.light-button{padding:10px;font-size:12px}.welcome h2{font-size:29px}.product-topbar>.text-button{font-size:12px}.scope .divider{display:none}.scope{max-width:180px}.dialog-actions{flex-direction:column}.bill-total .amount{font-size:36px}.time-box{padding:13px}.time-box strong{font-size:23px}}
+
+    /* Reading and touch ergonomics apply across every preview viewport. */
+    button, .doc-link { min-height:44px; }
+    .doc-link { display:inline-flex;align-items:center;font-size:14px; }
+    .icon-button, .dialog-head .icon-button { width:44px;height:44px;flex:none; }
+    .segmented button, .primary-button, .secondary-button, .light-button,
+    .text-button, .product-topbar>.text-button { font-size:14px;min-height:44px; }
+    .segmented button { white-space:normal; }
+    .nav button { font-size:14px;min-height:52px; }
+    .nav .count { min-width:20px;height:20px;font-size:12px; }
+    .scope, .scope strong { font-size:14px; }
+    .scope { flex-wrap:wrap; }
+    .account strong { font-size:14px; }
+    .account span, .private-label { font-size:12px; }
+    .welcome p, .page-lead, .dialog-body .lead { font-size:16px;line-height:1.65; }
+    .section-heading { flex-wrap:wrap; }
+    .section-heading h3, .intake strong { font-size:16px; }
+    .section-heading span, .eyebrow, .card .eyebrow, .hero-copy .eyebrow { font-size:12px; }
+    .intake span { font-size:14px; }
+    .intake .plus { width:40px;height:40px;flex:none; }
+    .intake .push-right { flex:none; }
+    .hero-card { min-height:300px;grid-template-columns:1.45fr 1fr; }
+    .hero-copy { padding:28px 0 28px 26px; }
+    .hero-copy h3 { font-size:31px;max-width:340px; }
+    .hero-copy p { font-size:14px;max-width:330px;line-height:1.7; }
+    .hero-caption { font-size:12px;line-height:1.65;align-items:flex-start; }
+    .hero-caption svg { flex:none;margin-top:3px; }
+    .ticket-art { width:176px;height:218px; }
+    .ticket-art small { font-size:8px; }
+    .ticket-art strong { font-size:27px; }
+    .ticket-art footer { font-size:8px; }
+    .ticket-art:before,.ticket-art:after { top:165px; }
+    .card { padding:22px; }
+    .card h3 { font-size:18px; }
+    .card p { font-size:14px; }
+    .mini-labels { font-size:12px;gap:10px;flex-wrap:wrap; }
+    .mini-labels strong { font-size:14px; }
+    .time-change { font-size:16px!important; }
+    .calendar-tile { width:46px; }
+    .calendar-tile small { font-size:12px; }
+    .saved-entry strong, .source-row strong, .quiet-card h3,
+    .activity h3, .saved-row strong { font-size:16px; }
+    .saved-entry span, .source-row p, .saved-row small { font-size:12px; }
+    .quiet-card p, .activity p, .area-banner, .setting { font-size:14px; }
+    .setting small, .switch, .area-banner small { font-size:12px; }
+    .switch { min-width:64px;min-height:44px;cursor:pointer; }
+    .switch input { width:22px;height:22px;flex:none; }
+    .source-row { flex-wrap:wrap; }
+    .source-row .source-copy { min-width:150px; }
+    .hint-line { font-size:12px;align-items:flex-start; }
+    .hint-line svg { flex:none;margin-top:3px; }
+    .dialog-head span { font-size:12px; }
+    .dialog-body { padding:28px; }
+    .dialog-body h3, .evidence-list strong { font-size:16px; }
+    .evidence-list p, .callout, .math-list, .bill-table, .form-label { font-size:14px; }
+    .evidence-list li { grid-template-columns:25px 1fr;gap:10px;padding:16px 0; }
+    .source-foot, .detail-art small, .bill-total .caption, .delta span,
+    .chart-row>span, .chart-legend, .bill-table th, .time-box small,
+    .time-box p, .field-note { font-size:12px; }
+    .bill-table th[scope=row], .chart-row>strong { font-size:14px; }
+    .chart-row { grid-template-columns:65px 1fr 64px;gap:10px; }
+    .bar-track, .bill-mini { gap:0;border-radius:5px;overflow:hidden; }
+    .bar-track .bar, .bill-mini span { border-radius:0;min-width:0; }
+    .math-list { line-height:1.65; }
+    .math-list li { gap:15px; }
+    .review-note, textarea { font-size:16px; }
+    .field-note { flex-wrap:wrap; }
+    .toast { font-size:14px; }
+    .date-mark { width:62px;flex:none; }
+    .date-mark span { font-size:12px;letter-spacing:.2px; }
+    .preview-strip { font-size:12px;flex-wrap:wrap;padding:10px 20px; }
+    .notes .doc-link { font-size:14px; }
+    .note p, .note .number, .scenarios p, .footer, .controls-foot,
+    .control-group>span, .concept-label { font-size:12px; }
+    .note h3, .scenarios strong { font-size:14px; }
+    @media(max-width:1050px) {
+      .hero-copy { padding:26px 0 26px 22px; }
+      .hero-copy h3 { font-size:29px; }
+      .hero-art { padding-right:18px;padding-left:14px; }
+      .ticket-art { width:150px;height:207px; }
+      .ticket-art strong { font-size:24px; }
+      .ticket-art:before,.ticket-art:after { top:155px; }
+      .two-col { grid-template-columns:1fr; }
+      .card { padding:22px; }
+      .welcome { gap:12px; }
+      .date-mark { display:none; }
+    }
+    @media(max-width:760px) {
+      .intro { padding-left:22px;padding-right:22px; }
+      .intro p { font-size:14px; }
+      .desktop-break { display:none; }
+      .review-controls { gap:12px; }
+      .preview-strip { font-size:12px;padding:11px 18px;gap:3px; }
+      .product-topbar { padding:15px 20px;align-items:flex-start; }
+      .scope { max-width:70%;gap:5px 7px; }
+      .scope .divider { display:none; }
+      .scope strong { width:calc(100% - 25px); }
+      .scope>span:last-child { padding-left:21px; }
+      .nav button { font-size:14px;min-height:62px; }
+      .nav .count { top:3px;right:calc(50% - 27px); }
+      .screen { padding:27px 20px 30px; }
+      .welcome h2, .page-title { font-size:33px; }
+      .hero-copy h3 { font-size:30px; }
+      .hero-copy p { font-size:14px; }
+      .hero-copy .eyebrow { font-size:12px; }
+      .hero-art { padding-right:20px;padding-left:16px; }
+      .hero-caption { font-size:12px; }
+      .dialog-body { padding:24px; }
+      .dialog-head { padding:14px 20px; }
+      .dialog-body h2 { font-size:31px; }
+      .setting { align-items:flex-start; }
+      .notes-heading { flex-wrap:wrap;gap:9px; }
+      .dialog-actions { flex-direction:column; }
+    }
+    @media(max-width:550px) {
+      .hero-card { display:flex;flex-direction:column; }
+      .hero-copy { padding:26px 24px 8px; }
+      .hero-copy h3 { max-width:none;margin:16px 0; }
+      .hero-copy p { max-width:none; }
+      .hero-art { justify-content:flex-end;padding:5px 25px 25px;min-height:155px; }
+      .hero-art:before { width:160px;height:140px;right:38px; }
+      .ticket-art { width:174px;height:116px;transform:rotate(5deg);padding:15px 17px; }
+      .ticket-art strong { font-size:23px;margin-top:8px; }
+      .ticket-art .book-mark { position:absolute;right:14px;top:39px;width:30px;height:30px; }
+      .ticket-art .book-mark svg { width:28px;height:28px; }
+      .ticket-art footer { display:none; }
+      .ticket-art:before,.ticket-art:after { top:85px; }
+      .hero-art .ticket-art strong { padding-right:25px; }
+      .hero-art small { font-size:8px; }
+      .intake { gap:11px;padding:18px 15px; }
+      .intake strong { font-size:16px; }
+      .intake span { font-size:14px; }
+      .intake .push-right { display:none; }
+      .section-heading span { font-size:12px; }
+      .card { padding:20px; }
+      .badge { white-space:normal; }
+      .saved-entry { padding:16px 14px; }
+      .area-banner { align-items:flex-start; }
+      .area-banner svg { flex:none;margin-top:4px; }
+      .activity { padding:17px 14px;gap:10px; }
+      .bill-total { align-items:flex-start;gap:15px; }
+      .bill-total .amount { font-size:39px; }
+      .bill-total>div:first-child { flex:1;min-width:0; }
+      .bill-total .delta { flex:none;max-width:100px; }
+      .bill-total .caption { line-height:1.6; }
+      .chart { padding:14px 10px; }
+      .chart-row { grid-template-columns:54px minmax(0,1fr) 60px;gap:7px; }
+      .chart-legend { gap:10px 13px; }
+      .bill-table { font-size:14px; }
+      .bill-table th[scope=row] { max-width:92px; }
+      .review-comparison { grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr);gap:8px; }
+      .time-box { padding:15px 12px; }
+      .time-box strong { font-size:25px; }
+      .dialog-body { padding:23px 20px; }
+      .dialog-body .segmented { flex-direction:column; }
+      .source-row .secondary-button { margin-left:47px; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#product-content">Skip to product preview</a>
+  <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden" xmlns="http://www.w3.org/2000/svg"><defs><symbol id="pantopus-mark" viewBox="0 0 32 32"><path d="M16 2v28M2 16h28M6.1 6.1l19.8 19.8M6.1 25.9 25.9 6.1" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><circle cx="16" cy="16" r="5" fill="currentColor"/></symbol></defs></svg>
+  <header class="site-header">
+    <div class="wordmark"><svg class="mark" aria-hidden="true"><use href="#pantopus-mark"/></svg>Pantopus</div>
+    <div class="concept-label"><span class="dot"></span> Product design / 01</div>
+    <a class="doc-link" href="../pantopus-nationwide-product-design-2026-09-08.html">Read the product document ↗</a>
+  </header>
+  <section class="intro" aria-labelledby="concept-title">
+    <div><div class="eyebrow">A useful place to land</div><h1>More possibility.<br>Less life admin.</h1><p>A private starting point for the things you have, the places around you,<br class="desktop-break"> and the small opportunities you might otherwise miss.</p></div>
+    <div class="review-controls" aria-label="Design review controls, outside the product">
+      <div class="control-group"><span>Browse-area fixture</span><div class="segmented" aria-label="Local source density"><button type="button" data-action="density" data-value="city" aria-pressed="true">City</button><button type="button" data-action="density" data-value="rural" aria-pressed="false">Rural</button></div></div>
+      <div class="control-group"><span>Appearance</span><div class="segmented" aria-label="Color theme"><button type="button" data-action="theme" data-value="light" aria-pressed="true">Light</button><button type="button" data-action="theme" data-value="dark" aria-pressed="false">Dark</button></div></div>
+      <div class="control-group"><span>Start again</span><button class="icon-button" type="button" data-action="reset" aria-label="Reset all prototype session state"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6"/></svg></button></div>
+      <div class="controls-foot">Changes the source mix, never household access.</div>
+    </div>
+  </section>
+  <div class="app-wrap">
+    <div class="preview-strip"><strong>Design concept • fictional examples • session only</strong><span>No live sources, reservations or notifications</span></div>
+    <div class="app">
+      <aside class="sidebar" aria-label="Product navigation">
+        <div class="wordmark"><svg class="mark" aria-hidden="true"><use href="#pantopus-mark"/></svg>Pantopus</div>
+        <nav class="nav" aria-label="Main destinations" id="main-nav"></nav>
+        <div class="sidebar-bottom"><div class="account"><div class="avatar" aria-hidden="true">J</div><div><strong>Jamie’s space</strong><span>Personal account</span></div></div><div class="private-label" id="sidebar-private"></div></div>
+      </aside>
+      <div class="content"><div class="product-topbar" id="product-topbar"></div><main class="screen" id="product-content" tabindex="-1"></main></div>
+    </div>
+  </div>
+  <section class="notes" aria-labelledby="design-notes-heading">
+    <div class="notes-heading"><div><div class="eyebrow">Behind the experience</div><h2 id="design-notes-heading">Useful before it is social.</h2></div><a class="doc-link" href="../pantopus-nationwide-product-design-2026-09-08.md">Full product specification ↗</a></div>
+    <div class="notes-grid"><article class="note"><span class="number">01 / START WITH SOMETHING REAL</span><h3>One useful finding. One next step.</h3><p>Intake makes a reviewed private note. A source-backed discovery earns the next tap. The bill view shows reproducible arithmetic with explicit inputs; it does not invent a reason for higher usage.</p></article><article class="note"><span class="number">02 / KEEP THE BOUNDARIES VISIBLE</span><h3>Your home is not your browsing radius.</h3><p>Home is private to Jamie. Nearby can explore another area without claiming residency or gaining household access. Public source information, personal eligibility and live availability remain separate facts.</p></article><article class="note"><span class="number">03 / RETURN FOR A REAL CHANGE</span><h3>Saved should mean dependable.</h3><p>The event source changes from 6 PM to 7 PM. Jamie’s saved time stays at 6 PM until accepted. Turning phone notifications off never removes the change from Inbox. Nothing is sent to a device.</p></article></div>
+    <div class="scenarios"><strong>Try the full journey</strong><p>1. Review a discovery and save it. &nbsp; 2. Compare the bill at its previous rate. &nbsp; 3. Keep an event’s saved time, then accept the source change. &nbsp; 4. Save a private note and find it in Saved items. &nbsp; 5. Switch City → Rural: private records stay put.</p></div>
+  </section>
+  <footer class="footer"><span>Pantopus / Nationwide experience / September 8, 2026</span><span>Local interactive design document. Reloading or Reset clears all changes.</span></footer>
+  <dialog id="detail-dialog" aria-labelledby="dialog-title"><div id="dialog-content"></div></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  <script>
+    'use strict';
+    const $ = (s, root = document) => root.querySelector(s);
+    const iconPaths = {
+      home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>',
+      nearby:'<circle cx="12" cy="12" r="9"/><path d="m16 8-2.5 5.5L8 16l2.5-5.5Z"/>',
+      following:'<path d="M5 18a11 11 0 0 1 11-11M5 12a5 5 0 0 1 5-5M5 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM5 1a17 17 0 0 1 17 17"/>',
+      inbox:'<path d="M4 4h16l2 11v5H2v-5Z"/><path d="M2 15h6l2 3h4l2-3h6"/>',
+      lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>',
+      arrow:'<path d="M4 12h15m-6-6 6 6-6 6"/>',
+      upRight:'<path d="M6 18 18 6M6 6h12v12"/>',
+      plus:'<path d="M12 5v14M5 12h14"/>',
+      bookmark:'<path d="M6 3h12v18l-6-4-6 4Z"/>',
+      check:'<path d="m5 12 4 4L19 6"/>',
+      info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
+      clock:'<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
+      calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18M7 14h3M14 14h3"/>',
+      bolt:'<path d="m13 2-8 12h6l-1 8 9-12h-6Z"/>',
+      book:'<path d="M12 6C8 3 4 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-2-1-6-1-10 2ZM12 6v15"/>',
+      mountain:'<path d="m2 20 8-15 5 9 3-5 4 11ZM7 11l3 2 3-3"/><path d="M17 3h.01"/>',
+      bell:'<path d="M5 16c2-2 2-3 2-6a5 5 0 0 1 10 0c0 3 0 4 2 6H5ZM9 20h6"/>',
+      close:'<path d="m6 6 12 12M6 18 18 6"/>',
+      note:'<path d="M5 3h10l4 4v14H5Z"/><path d="M15 3v5h4M8 12h8M8 16h6"/>',
+      back:'<path d="M20 12H5m6-6-6 6 6 6"/>'
+    };
+    const icon = (name, size = 18) => '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(iconPaths[name]||iconPaths.info)+'</svg>';
+    const escapeHTML = value => String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const initial = () => ({page:'home',density:'city',theme:'light',savedOpportunity:{city:false,rural:false},followed:{city:false,rural:false},notes:[],draft:'',eventAccepted:false,eventKept:false,notifications:false,billMode:'current',modal:null,modalArea:null});
+    let state = initial();
+    let toastTimer;
+    const dialog = $('#detail-dialog');
+    let modalInvoker = null;
+    function focusReference(element, root = document){
+      if(!element || !root.contains(element))return null;
+      const scope=element.closest('#product-content, #product-topbar, #main-nav');
+      const reference={element,id:element.id,scopeId:scope?scope.id:null,action:element.dataset.action,value:element.dataset.value,area:element.dataset.area,index:element.dataset.index};
+      const container=scope||root;
+      reference.position=Array.from(container.querySelectorAll('button, input, textarea, [tabindex]')).filter(candidate=>matchesFocusReference(candidate,reference)).indexOf(element);
+      return reference;
+    }
+    function matchesFocusReference(element,reference){
+      if(reference.id)return element.id===reference.id;
+      return Boolean(reference.action) && element.dataset.action===reference.action && element.dataset.value===reference.value && element.dataset.area===reference.area && element.dataset.index===reference.index;
+    }
+    function resolveFocusReference(reference, root = document){
+      if(!reference)return null;
+      if(reference.element.isConnected && root.contains(reference.element))return reference.element;
+      const scope=reference.scopeId?document.getElementById(reference.scopeId):root;
+      if(!scope || !root.contains(scope))return null;
+      const matches=Array.from(scope.querySelectorAll('button, input, textarea, [tabindex]')).filter(element=>matchesFocusReference(element,reference));
+      return matches[reference.position]||matches[0]||null;
+    }
+    function focusDialog(reference = null){
+      if(!dialog.open)return;
+      const heading=$('#dialog-title',dialog);
+      if(heading)heading.tabIndex=-1;
+      const target=resolveFocusReference(reference,dialog)||heading||$('.dialog-head button',dialog);
+      if(target)target.focus({preventScroll:true});
+    }
+    const fixture = (area = state.density) => area === 'city' ? {
+      area:'Sample city',region:'City library + cultural programs',source:'Example Public Library',title:'Your library card has a little more to give.',short:'A museum afternoon, through your library',copy:'A local library program offers museum entry passes. See what is included before you make a plan.',action:'Explore the possibility',pass:'An afternoon<br>well spent.',passLabel:'Library · cultural pass',icon:'book',detail:'A museum day may already be within reach.',benefit:'The fictional library program offers one museum admission pass for two people.',eligibility:'An active card with the participating library is required. Your eligibility has not been checked.',steps:'Check the participating library, valid dates, admission terms and available passes before planning a visit.',sourceMix:'Library programs · civic facilities · publisher updates'
+    } : {
+      area:'Sample rural county',region:'Public lands + county programs',source:'Example County Nature Center',title:'There is more to an evening outside.',short:'A guided evening under the stars',copy:'A public nature center lists a guided astronomy evening. Explore the details and what you would need.',action:'Explore the possibility',pass:'A little room<br>to wonder.',passLabel:'Public lands · night sky',icon:'mountain',detail:'Make a little space for a night outside.',benefit:'The fictional nature center lists a free, guided astronomy evening with shared telescopes.',eligibility:'Registration and age guidance need to be checked with the organizer. No household membership is required to browse.',steps:'Check the official date, registration, accessibility, weather and travel details before setting out.',sourceMix:'Public recreation · county programs · regional publishers'
+    };
+    function notify(message){clearTimeout(toastTimer);$('#toast').textContent=message;toastTimer=setTimeout(()=>{$('#toast').textContent='';},5500);}
+    function ticketArt(area = state.density){const f=fixture(area);return '<div class="hero-art" aria-hidden="true"><div class="ticket-art"><small>'+f.passLabel+'</small><strong>'+f.pass+'</strong><div class="book-mark">'+icon(f.icon,45)+'</div><footer><span>ONE POSSIBILITY</span><span>↗</span></footer></div></div>';}
+    function hero(){const f=fixture();return '<article class="hero-card"><div class="hero-copy"><div class="eyebrow">'+icon(f.icon,12)+' A possibility near you</div><h3>'+f.title+'</h3><p>'+f.copy+'</p><button type="button" class="light-button" data-action="open-opportunity">'+f.action+icon('arrow',13)+'</button></div>'+ticketArt()+'</article><div class="hero-caption">'+icon('info',11)+'<span>'+f.source+' · Program offered; eligibility and availability still to check.</span></div>';}
+    function billCard(){return '<article class="card"><div class="eyebrow">From your saved bill</div><h3>A $50 change, made clearer.</h3><p>See the numbers behind the difference.</p><div class="bill-mini" role="img" aria-label="Current illustrative bill: $130 prior baseline, $32.40 usage difference, $15.60 rate difference and $2 fee difference"><span class="base"></span><span class="usage"></span><span class="rate"></span><span class="fee"></span></div><div class="mini-labels"><span>Previous <strong>$130</strong></span><span>Current <strong>$180</strong></span></div><button type="button" class="text-button" data-action="open-bill">Understand this bill '+icon('arrow',13)+'</button></article>';}
+    function eventCard(){return '<article class="card"><div class="section-heading"><div class="eyebrow">Coming up · Sep 12</div><span class="badge '+(state.eventAccepted?'green':'')+'">'+(state.eventAccepted?'Change accepted':'Source changed')+'</span></div><h3>Night-sky walk</h3><div class="event-mini"><div class="calendar-tile" aria-hidden="true"><small>SEP</small><strong>12</strong></div><div><p class="time-change">'+(state.eventAccepted?'7:00 PM':'6:00 PM')+'</p><p>Your saved time'+(state.eventAccepted?' · updated':' · unchanged')+'</p></div></div><p>'+(state.eventAccepted?'The new start time is saved in your space.':'The organizer now lists 7:00 PM. Review before changing your plan.')+'</p><button type="button" class="text-button" data-action="open-event">'+(state.eventAccepted?'View saved event':'Review the change')+' '+icon('arrow',13)+'</button></article>';}
+    function savedCount(){return 2+state.notes.length+Number(state.savedOpportunity.city)+Number(state.savedOpportunity.rural);}
+    function savedEntry(){return '<button type="button" class="saved-entry" data-action="open-saved"><div class="icon-tile">'+icon('bookmark',17)+'</div><div><strong>Saved items</strong><span>'+savedCount()+' private items · bills, plans and things to come back to</span></div><span class="push-right">'+icon('arrow',17)+'</span></button>';}
+    function render(){
+      const focused=document.activeElement;
+      const focusKey=focused && focused.dataset ? {id:focused.id,action:focused.dataset.action,area:focused.dataset.area,value:focused.dataset.value} : null;
+      const navItems=[['home','Home'],['nearby','Nearby'],['following','Following'],['inbox','Inbox']];
+      $('#main-nav').innerHTML=navItems.map(([id,name])=>'<button type="button" data-action="navigate" data-value="'+id+'" '+(state.page===id?'aria-current="page"':'')+'>'+icon(id,18)+'<span>'+name+'</span>'+(id==='inbox'&&!state.eventAccepted?'<span class="count" aria-label="1 source change to review">1</span>':'')+'</button>').join('');
+      $('#sidebar-private').innerHTML=icon('lock',11)+'Private by default';
+      $('#product-topbar').innerHTML='<div class="scope">'+icon(state.page==='nearby'?'nearby':'lock',14)+(state.page==='nearby'?'<strong>Browsing · '+fixture().area+'</strong><span class="divider">/</span><span>Public information</span>':'<strong>Jamie’s space</strong><span class="divider">/</span><span>Private · Only you</span>')+'</div><button class="text-button" type="button" data-action="open-saved">'+icon('bookmark',14)+'Saved</button>';
+      let content='';
+      if(state.page==='home')content='<div class="welcome"><div><div class="eyebrow">Your place to begin</div><h2>Make room for something good.</h2><p>A useful find. A clearer bill. A plan that stays yours.</p></div><div class="date-mark" aria-label="Fictional fixture date September 8"><span>September</span><strong>08</strong></div></div><button type="button" class="intake" data-action="open-intake"><div class="plus">'+icon('plus',19)+'</div><div><strong>Show Pantopus something</strong><span>A note, a bill, a link, a little thing to sort out.</span></div><div class="push-right">'+icon('arrow',17)+'</div></button><div class="section-heading"><h3>Worth a look</h3><span>Browsing '+fixture().area.toLowerCase()+'</span></div>'+hero()+'<div class="two-col">'+billCard()+eventCard()+'</div>'+savedEntry()+'<p class="hint-line">'+icon('lock',11)+'Your records stay private. Browsing an area does not join a household.</p>';
+      if(state.page==='nearby')content='<h2 class="page-title">A little more around you.</h2><p class="page-lead">Public places, programs and possibilities. Start with one that fits your day.</p><div class="area-banner">'+icon('nearby',21)+'<div><strong>'+fixture().area+'</strong><small>Browsing only · no home address or local membership claimed</small></div></div><div class="chips" aria-label="Source categories"><span>'+ (state.density==='city'?'Library programs':'Public recreation')+'</span><span>'+ (state.density==='city'?'Cultural places':'County programs')+'</span><span>Official updates</span></div>'+hero()+'<div class="quiet-card"><h3>'+(state.density==='city'?'A source with something useful to say.':'Some good things are a little farther out.')+'</h3><p>'+(state.density==='city'?'Follow the library’s public updates and review the ones relevant to your plans.':'Regional and public-land sources can be useful without a busy neighborhood feed. Distance and travel details would be checked before planning.')+'</p></div>'+sourceRow(state.density)+'<p class="hint-line">'+icon('info',11)+'This preview illustrates a source mix, not an exhaustive local search.</p>';
+      if(state.page==='following'){
+        const total=Number(state.followed.city)+Number(state.followed.rural);
+        content='<h2 class="page-title">Good sources. Less noise.</h2><p class="page-lead">Choose who you hear from. Following a public source does not publish your private records or join its community.</p><div class="section-heading"><h3>Your sources</h3><span>'+total+' following</span></div>';
+        content+=(total?['city','rural'].filter(a=>state.followed[a]).map(sourceRow).join(''):'<div class="quiet-card" style="margin-top:0"><h3>You have not followed a source yet.</h3><p>You can still save a discovery or use your private Home. Follow when there is a source you want to return to.</p></div>');
+        content+='<div class="section-heading" style="margin-top:30px"><h3>From your browse area</h3><span>'+fixture().area+'</span></div>'+sourceRow(state.density)+'<div class="activity"><div class="icon-tile">'+icon('book',18)+'</div><div class="activity-copy"><h3>'+fixture().short+'</h3><p>An illustrative public program from '+fixture().source+'.</p><button type="button" class="text-button" data-action="open-opportunity">Read the details '+icon('arrow',13)+'</button></div></div>';
+      }
+      if(state.page==='inbox')content='<h2 class="page-title">The things worth returning to.</h2><p class="page-lead">Changes to saved plans and useful follow-ups. Your choices stay in your hands.</p><div class="section-heading"><h3>Updates</h3><span>Prototype subview</span></div><p class="page-lead">Only Updates is interactive here. Messages and Mail are specified in the full product document; their views are not shown in this prototype.</p><div class="setting"><div class="setting-text"><strong>Phone notifications</strong><small>Preview setting only. In-app changes remain available when off.</small></div><label class="switch"><input id="notification-setting" type="checkbox" '+(state.notifications?'checked':'')+'><span>'+(state.notifications?'On':'Off')+'</span></label></div><div class="activity"><div class="icon-tile">'+icon('calendar',19)+'</div><div class="activity-copy"><span class="badge '+(state.eventAccepted?'green':'')+'">'+(state.eventAccepted?'Saved change':'Source changed')+'</span><h3 style="margin-top:11px">Night-sky walk has a new start time.</h3><p>'+(state.eventAccepted?'You accepted 7:00 PM. Your saved plan now matches this source update.':state.eventKept?'You kept 6:00 PM. The source lists 7:00 PM; you can still review it.':'The example organizer moved the start from 6:00 PM to 7:00 PM. Your saved time is still 6:00 PM.')+'</p><button type="button" class="text-button" data-action="open-event">'+(state.eventAccepted?'View saved plan':'Review change')+' '+icon('arrow',13)+'</button></div></div><div class="quiet-card"><h3>'+(state.notifications?'Only meaningful changes would reach your phone.':'Phone notifications are off. You have not missed this change.')+'</h3><p>This concept does not request device permission or send notifications. A production setting would be saved separately from device permission and delivery status.</p></div>'+(state.notes.length?'<div class="activity"><div class="icon-tile">'+icon('check',18)+'</div><div class="activity-copy"><h3>Your private note is saved.</h3><p>'+state.notes.length+' note'+(state.notes.length===1?'':'s')+' saved in this prototype session.</p><button type="button" class="text-button" data-action="open-saved">Open Saved items '+icon('arrow',13)+'</button></div></div>':'');
+      $('#product-content').innerHTML=content;
+      document.querySelectorAll('[data-action="density"]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.value===state.density)));
+      document.querySelectorAll('[data-action="theme"]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.value===state.theme)));
+      document.body.classList.toggle('dark',state.theme==='dark');
+      if(focusKey && focused && !focused.isConnected){
+        const target=focusKey.id?document.getElementById(focusKey.id):Array.from(document.querySelectorAll('button[data-action]')).find(el=>el.dataset.action===focusKey.action && el.dataset.area===focusKey.area && el.dataset.value===focusKey.value);
+        if(target)target.focus({preventScroll:true});
+      }
+    }
+    function sourceRow(area){const f=fixture(area);return '<div class="source-row"><div class="icon-tile">'+icon(f.icon,18)+'</div><div class="source-copy"><strong>'+f.source+'</strong><p>Public source · '+(area==='city'?'library programs':'regional recreation')+'</p></div><button type="button" class="secondary-button" data-action="follow" data-area="'+area+'" aria-pressed="'+state.followed[area]+'">'+(state.followed[area]?icon('check',13)+'Following':'Follow')+'</button></div>';}
+    function openModal(type, area=state.density){
+      const wasOpen=dialog.open;
+      if(!wasOpen)modalInvoker=focusReference(document.activeElement);
+      state.modal=type;state.modalArea=area;
+      renderModal({retainControl:false});
+      if(!wasOpen)dialog.showModal();
+      dialog.scrollTop=0;
+      focusDialog();
+    }
+    function closeModal(){dialog.close();state.modal=null;}
+    function modalShell(label,content){return '<div class="dialog-head"><span>'+icon('lock',12)+label+'</span><button type="button" class="icon-button" data-action="close" aria-label="Close detail">'+icon('close',15)+'</button></div><div class="dialog-body">'+content+'</div>';}
+    function renderModal({retainControl=true}={}){
+      const retainedFocus=retainControl?focusReference(document.activeElement,dialog):null;
+      let body='',label='Private · Only you';const area=state.modalArea||state.density,f=fixture(area);
+      if(state.modal==='opportunity'){
+        label='Public source information · private save';
+        body='<div class="eyebrow">'+f.source+'</div><h2 id="dialog-title">'+f.detail+'</h2><p class="lead">An opportunity to explore. Your next step is to check the source, with the important details already in view.</p><div class="detail-art" aria-hidden="true"><div><strong>'+f.pass+'</strong><small>'+f.passLabel+'</small></div>'+icon(f.icon,75)+'</div><ul class="evidence-list"><li>'+icon('check',17)+'<div><strong>Source offers this program</strong><p>'+f.benefit+'</p></div></li><li>'+icon('info',17)+'<div><strong>Your eligibility is unconfirmed</strong><p>'+f.eligibility+'</p></div></li><li>'+icon('clock',17)+'<div><strong>Live availability is unknown</strong><p>No inventory, reservation or current opening has been checked.</p></div></li></ul><h3>Before you make a plan</h3><p class="lead">'+f.steps+'</p><div class="dialog-actions"><button type="button" class="primary-button" data-action="official-options">Check official options '+icon('upRight',14)+'</button><button type="button" class="secondary-button" data-action="save-opportunity">'+icon(state.savedOpportunity[area]?'check':'bookmark',14)+(state.savedOpportunity[area]?'Saved · remove':'Save privately')+'</button></div><p class="source-foot">Fictional source record for this design. No verified program, eligibility, booking or external action. A real item would retain its official URL, extracted terms and last-checked time.</p>';
+      }
+      if(state.modal==='official')body='<div class="eyebrow">Simulated handoff</div><h2 id="dialog-title">The source has the final word.</h2><p class="lead">In the product, this would open the official program or reservation page so you could check the current terms and available dates.</p><div class="callout">This example has no real official link. No page was opened, no availability was checked, and no reservation or request was made.</div><h3>What you would check</h3><ul class="evidence-list"><li>'+icon('check',17)+'<div><strong>Does the program apply to you?</strong><p>Confirm membership, age, location and other relevant rules.</p></div></li><li>'+icon('calendar',17)+'<div><strong>Is there a date that works?</strong><p>Confirm current availability with the source before saving a plan.</p></div></li></ul><div class="dialog-actions"><button type="button" class="primary-button" data-action="back-opportunity">Back to the opportunity '+icon('back',14)+'</button></div>';
+      if(state.modal==='bill')body=billDetail();
+      if(state.modal==='event')body=eventDetail();
+      if(state.modal==='intake')body='<div class="eyebrow">Show Pantopus something</div><h2 id="dialog-title">Start with what is on your mind.</h2><p class="lead">A little context can become something useful. In this concept, type a note and review it before saving.</p><form id="intake-form"><label class="form-label" for="intake-text">Your note</label><textarea id="intake-text" name="note" maxlength="800" required placeholder="For example: Check whether my library has a pass for a museum afternoon.">'+escapeHTML(state.draft)+'</textarea><div class="field-note"><span>Text only in this prototype · no upload or AI extraction</span><span id="char-count">'+state.draft.length+'/800</span></div><button type="button" class="text-button" data-action="sample-note" style="margin-top:11px">Use the example note</button><div class="callout" style="margin-top:20px">'+icon('lock',14)+' Saved to Jamie’s private space after review. This does not post to Nearby or share with a household.</div><div class="dialog-actions"><button type="submit" class="primary-button">Review before saving '+icon('arrow',14)+'</button></div></form>';
+      if(state.modal==='review-note')body='<div class="eyebrow">Review your private save</div><h2 id="dialog-title">A good place to come back to.</h2><p class="lead">Check the content and destination. Saving a note does not complete the task described in it.</p><div class="review-note">'+escapeHTML(state.draft)+'</div><ul class="evidence-list"><li>'+icon('lock',17)+'<div><strong>Jamie’s space → Saved items</strong><p>Private · Only you · Note</p></div></li><li>'+icon('info',17)+'<div><strong>No reminder or public post</strong><p>This save stores your note in the current prototype session only.</p></div></li></ul><div class="dialog-actions"><button type="button" class="secondary-button" data-action="edit-note">Edit note</button><button type="button" class="primary-button" data-action="confirm-note">Save private note '+icon('check',14)+'</button></div>';
+      if(state.modal==='saved-note')body='<div class="success-mark">'+icon('check',25)+'</div><div class="eyebrow">Saved privately</div><h2 id="dialog-title">One less thing to hold in your head.</h2><p class="lead">Your note is in Saved items, inside Jamie’s space.</p><div class="callout">Saved in this session. No task completed, reminder scheduled, phone notification sent or public content created.</div><div class="dialog-actions"><button type="button" class="primary-button" data-action="open-saved">View Saved items '+icon('arrow',14)+'</button><button type="button" class="secondary-button" data-action="close">Back to my space</button></div>';
+      if(state.modal==='saved'){
+        body='<div class="eyebrow">Jamie’s space · Private</div><h2 id="dialog-title">Keep the useful things close.</h2><p class="lead">'+savedCount()+' saved items. Your records are separate from the area you browse.</p><div class="saved-list"><button type="button" class="saved-row" data-action="open-bill"><div class="icon-tile">'+icon('bolt',18)+'</div><div class="row-copy"><strong>September electricity bill</strong><small>Bill · illustrative $180 total</small></div>'+icon('arrow',16)+'</button><button type="button" class="saved-row" data-action="open-event"><div class="icon-tile">'+icon('calendar',18)+'</div><div class="row-copy"><strong>Night-sky walk</strong><small>Sep 12 · '+(state.eventAccepted?'7:00 PM · change accepted':'6:00 PM · source lists 7:00 PM')+'</small></div>'+icon('arrow',16)+'</button>';
+        ['city','rural'].filter(a=>state.savedOpportunity[a]).forEach(a=>{body+='<button type="button" class="saved-row" data-action="open-opportunity" data-area="'+a+'"><div class="icon-tile">'+icon(fixture(a).icon,18)+'</div><div class="row-copy"><strong>'+fixture(a).short+'</strong><small>Saved possibility · eligibility and availability unconfirmed</small></div>'+icon('arrow',16)+'</button>';});
+        state.notes.forEach((n,i)=>{body+='<button type="button" class="saved-row" data-action="view-note" data-index="'+i+'"><div class="icon-tile">'+icon('note',18)+'</div><div class="row-copy"><strong>'+escapeHTML(n.length>65?n.slice(0,65)+'…':n)+'</strong><small>Private note · saved this session</small></div>'+icon('arrow',16)+'</button>';});
+        body+='</div><p class="source-foot">The bill and event are fictional starter records. Additional saves clear when the page reloads or the prototype is reset.</p>';
+      }
+      if(state.modal==='view-note')body='<div class="eyebrow">Saved item · private note</div><h2 id="dialog-title">Your words, kept here.</h2><div class="review-note">'+escapeHTML(state.notes[state.noteIndex]||'')+'</div><p class="source-foot">This note is saved only in this prototype session. It is not a public post or a completed task.</p><div class="dialog-actions"><button type="button" class="primary-button" data-action="open-saved">Back to Saved items</button></div>';
+      $('#dialog-content').innerHTML=modalShell(label,body);
+      focusDialog(retainedFocus);
+    }
+    function billDetail(){
+      const actual=state.billMode==='current',total=actual?180:164.4,delta=total-130;
+      return '<div class="eyebrow">Electricity bill · illustrative fixture</div><h2 id="dialog-title">See where the difference comes from.</h2><p class="lead">Reproducible arithmetic from two simplified bills. This does not infer why your household used more electricity.</p><div class="segmented" aria-label="Bill comparison mode"><button type="button" data-action="bill-mode" data-value="current" aria-pressed="'+actual+'">Current bill</button><button type="button" data-action="bill-mode" data-value="previous-rate" aria-pressed="'+!actual+'">At previous rate</button></div><div class="bill-total"><div><div class="amount">$'+total.toFixed(2)+'</div><div class="caption">'+(actual?'Current usage × current rate + current fee':'Current usage × previous rate + current fee')+'</div></div><div class="delta"><strong>+$'+delta.toFixed(2)+'</strong><span>vs. previous $130 bill</span></div></div><div class="chart" role="img" aria-label="Previous bill 130 dollars. '+(actual?'Current bill 180 dollars, composed of prior baseline 130, usage difference 32 dollars 40 cents, rate difference 15 dollars 60 cents and fee difference 2 dollars.':'At the previous rate the current bill would be 164 dollars 40 cents, composed of prior baseline 130, usage difference 32 dollars 40 cents and fee difference 2 dollars.')+'"><div class="chart-row"><span>Previous</span><div class="bar-track"><div class="bar" style="width:72.222%"></div></div><strong>$130</strong></div><div class="chart-row"><span>'+(actual?'Current':'What if')+'</span><div class="bar-track"><div class="bar" style="flex:130"></div><div class="bar usage" style="flex:32.4"></div>'+(actual?'<div class="bar rate" style="flex:15.6"></div>':'')+'<div class="bar fee" style="flex:2"></div>'+(actual?'':'<div style="flex:15.6"></div>')+'</div><strong>$'+total.toFixed(actual?0:2)+'</strong></div><div class="chart-legend"><span><i class="swatch"></i>Prior baseline</span><span><i class="swatch usage"></i>Usage</span><span><i class="swatch rate"></i>Rate</span><span><i class="swatch fee"></i>Fee</span></div></div><table class="bill-table"><caption class="sr-only">The exact input values for the two illustrative bills</caption><thead><tr><th scope="col">Input</th><th scope="col">Previous</th><th scope="col">Current</th></tr></thead><tbody><tr><th scope="row">Electricity used</th><td>600 kWh</td><td>780 kWh</td></tr><tr><th scope="row">Unit rate</th><td>$0.18 / kWh</td><td>$0.20 / kWh</td></tr><tr><th scope="row">Fixed fee</th><td>$22.00</td><td>$24.00</td></tr></tbody></table><h3>'+(actual?'The $50 difference, step by step':'What changes when the rate stays at $0.18?')+'</h3><ul class="math-list"><li><span>Usage: (780 − 600) × $0.18</span><strong>+$32.40</strong></li><li><span>Rate: 780 × '+(actual?'($0.20 − $0.18)':'($0.18 − $0.18)')+'</span><strong>+$'+(actual?'15.60':'0.00')+'</strong></li><li><span>Fee: $24 − $22</span><strong>+$2.00</strong></li></ul><div class="callout">'+(actual?'$130 + $32.40 + $15.60 + $2.00 = $180.00. Usage is valued at the previous rate; the rate difference is applied to current usage.':'780 kWh × $0.18 + $24 = $164.40. This is a hypothetical comparison, not an available tariff or a promised saving.')+'</div><p class="source-foot">Fixture: previous 600 × $0.18 + $22 = $130; current 780 × $0.20 + $24 = $180. No taxes, tiering, billing-period adjustment or other charges. A production comparison would extract and confirm those details first.</p>';
+    }
+    function eventDetail(){return '<div class="eyebrow">Saved event · source update</div><h2 id="dialog-title">A later start. Your choice to change.</h2><p class="lead">Night-sky walk · Saturday, September 12, 2026<br>America/Chicago (Central time) · both saved and source<br>Example Nature Center · fictional source and event</p><div class="review-comparison"><div class="time-box"><small>Your saved plan</small><strong>'+(state.eventAccepted?'7:00':'6:00')+' PM</strong><p>'+(state.eventAccepted?'Updated by you':'Still unchanged')+'</p></div>'+icon('arrow',20)+'<div class="time-box changed"><small>Source now says</small><strong>7:00 PM</strong><p>Changed from 6:00 PM</p></div></div>'+(state.eventAccepted?'<div class="callout">You accepted this change. Your saved event now starts at 7:00 PM in this session.</div>':'<div class="callout gold">'+(state.eventKept?'You kept your saved time at 6:00 PM. You can review and accept the source’s 7:00 PM time whenever you choose.':'Nothing in your saved plan changes until you accept. Keeping the current time preserves your 6:00 PM record.')+'</div>')+'<ul class="evidence-list"><li>'+icon('calendar',17)+'<div><strong>Only the saved start time would change</strong><p>Date, event identity and timezone remain the same: September 12, 2026 · America/Chicago (Central time). No external calendar is connected.</p></div></li><li>'+icon('bell',17)+'<div><strong>Phone notifications are '+(state.notifications?'on in the preview':'off')+'</strong><p>This source change is still available in Inbox. No device notification has been sent.</p></div></li></ul><div class="dialog-actions">'+(state.eventAccepted?'<button type="button" class="primary-button" data-action="close">Done '+icon('check',14)+'</button>':'<button type="button" class="secondary-button" data-action="keep-event">Keep my version · 6 PM</button><button type="button" class="primary-button" data-action="accept-event">Update my saved item · 7 PM '+icon('check',14)+'</button>')+'</div><p class="source-foot">Illustrative source update, not a live event. Accepting saves the time locally for this session; it does not reserve a place, contact an organizer or change a device calendar.</p>';}
+    document.addEventListener('click',event=>{
+      const b=event.target.closest('button[data-action]');if(!b)return;const a=b.dataset.action;
+      if(a==='navigate'){state.page=b.dataset.value;render();$('#product-content').focus({preventScroll:true});}
+      if(a==='density'){state.density=b.dataset.value;render();notify('Browsing '+fixture().area.toLowerCase()+'. Your private records are unchanged.');}
+      if(a==='theme'){state.theme=b.dataset.value;render();}
+      if(a==='reset'){if(dialog.open)dialog.close();state=initial();render();notify('Prototype reset. All session changes cleared.');}
+      if(a==='close')closeModal();
+      if(a==='open-opportunity')openModal('opportunity',b.dataset.area||state.density);
+      if(a==='official-options')openModal('official',state.modalArea);
+      if(a==='back-opportunity')openModal('opportunity',state.modalArea);
+      if(a==='save-opportunity'){const area=state.modalArea;state.savedOpportunity[area]=!state.savedOpportunity[area];render();renderModal();notify(state.savedOpportunity[area]?'Saved privately in this session. No reservation made.':'Removed the possibility from your session saves.');}
+      if(a==='follow'){const area=b.dataset.area;state.followed[area]=!state.followed[area];render();notify(state.followed[area]?'Following this example source in the prototype session.':'Unfollowed this example source. Private saves remain.');}
+      if(a==='open-bill')openModal('bill');
+      if(a==='bill-mode'){state.billMode=b.dataset.value;renderModal();}
+      if(a==='open-event')openModal('event');
+      if(a==='keep-event'){state.eventKept=true;closeModal();render();notify('Kept your saved 6:00 PM time. The source’s 7:00 PM change remains in Inbox.');}
+      if(a==='accept-event'){state.eventAccepted=true;state.eventKept=false;render();renderModal();notify('Accepted. Your saved event is now 7:00 PM in this session.');}
+      if(a==='open-saved')openModal('saved');
+      if(a==='open-intake')openModal('intake');
+      if(a==='sample-note'){state.draft='Check whether my library has a pass for a museum afternoon.';$('#intake-text').value=state.draft;$('#char-count').textContent=state.draft.length+'/800';$('#intake-text').focus();}
+      if(a==='edit-note')openModal('intake');
+      if(a==='confirm-note'){if(state.draft.trim()){state.notes.push(state.draft.trim());state.draft='';render();openModal('saved-note');}}
+      if(a==='view-note'){state.noteIndex=Number(b.dataset.index);openModal('view-note');}
+    });
+    document.addEventListener('input',event=>{if(event.target.id==='intake-text'){state.draft=event.target.value;$('#char-count').textContent=state.draft.length+'/800';}});
+    document.addEventListener('change',event=>{if(event.target.id==='notification-setting'){state.notifications=event.target.checked;render();notify('Preview phone notifications '+(state.notifications?'on':'off')+'. No permission requested or device notification sent.');}});
+    document.addEventListener('submit',event=>{if(event.target.id==='intake-form'){event.preventDefault();state.draft=$('#intake-text').value.trim();if(!state.draft){$('#intake-text').setCustomValidity('Enter a note before reviewing.');$('#intake-text').reportValidity();return;}openModal('review-note');}});
+    document.addEventListener('input',event=>{if(event.target.id==='intake-text')event.target.setCustomValidity('');});
+    dialog.addEventListener('cancel',()=>{state.modal=null;});
+    dialog.addEventListener('close',()=>{
+      if(dialog.open)return;
+      state.modal=null;
+      const target=resolveFocusReference(modalInvoker)||$('#product-content');
+      modalInvoker=null;
+      if(target)target.focus({preventScroll:true});
+    });
+    render();
+  </script>
+</body>
+</html>

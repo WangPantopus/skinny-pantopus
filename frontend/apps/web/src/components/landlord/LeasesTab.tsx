@@ -8,11 +8,13 @@
 import { useState, useCallback, useMemo } from 'react';
 import * as api from '@pantopus/api';
 import type { landlord } from '@pantopus/api';
+import { extractApiError } from '@pantopus/ui-utils';
 
 type Props = {
   homeId: string;
   leases: landlord.HomeLease[];
   onRefresh: () => void;
+  isCurrent: () => boolean;
 };
 
 // ── Lease categorization ────────────────────────────────────
@@ -69,7 +71,7 @@ const FILTER_OPTIONS: { key: FilterOption; label: string }[] = [
 
 // ── Main component ──────────────────────────────────────────
 
-export default function LeasesTab({ homeId: _homeId, leases, onRefresh }: Props) {
+export default function LeasesTab({ homeId: _homeId, leases, onRefresh, isCurrent }: Props) {
   const [filter, setFilter] = useState<FilterOption>('all');
   const [endingId, setEndingId] = useState<string | null>(null);
 
@@ -94,19 +96,21 @@ export default function LeasesTab({ homeId: _homeId, leases, onRefresh }: Props)
   }, [categorized]);
 
   const handleEndLease = useCallback(async (leaseId: string) => {
+    if (!isCurrent()) return;
     setEndingId(leaseId);
     try {
       await api.landlord.endLease(leaseId);
-      onRefresh();
+      if (isCurrent()) onRefresh();
     } catch (err: unknown) {
-      console.error('End lease failed:', err);
+      if (isCurrent()) alert(extractApiError(err, 'Could not end the lease. Please retry.'));
     } finally {
-      setEndingId(null);
+      if (isCurrent()) setEndingId(null);
     }
-  }, [onRefresh]);
+  }, [onRefresh, isCurrent]);
 
   const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    // Match the calendar date shown by the existing UTC-based lease editor.
+    new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
   if (leases.length === 0) {
     return (

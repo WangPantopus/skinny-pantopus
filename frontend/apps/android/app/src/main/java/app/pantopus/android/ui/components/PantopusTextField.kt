@@ -77,6 +77,7 @@ fun PantopusTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     fieldTestTag: String? = null,
     containerColor: Color = PantopusColors.appSurface,
+    keyboardOptions: KeyboardOptions = KeyboardOptions(keyboardType = keyboardType),
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -144,7 +145,7 @@ fun PantopusTextField(
                 interactionSource = interactionSource,
                 visualTransformation =
                     if (isSecure) PasswordVisualTransformation() else VisualTransformation.None,
-                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                keyboardOptions = keyboardOptions,
                 // Test tag must land directly on BasicTextField — that's the
                 // node that owns the editable's RequestFocus / SetText
                 // semantic actions. Putting it on the outer wrapper meant

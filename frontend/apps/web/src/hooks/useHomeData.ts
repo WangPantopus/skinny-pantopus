@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useReducer } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
+import { homeAccessFingerprint, readCurrentHomeAccess } from '@/components/home/homeAccessFingerprint';
 
 // ── Types ──
 
@@ -34,7 +35,11 @@ export interface UseHomeDataReturn extends HomeDataEntities {
   loading: boolean;
   error: string | null;
   currentUserId: string | null;
+  taskSession: api.HomeTaskSessionScope | null;
   myAccess: HomeAccessState;
+  accessFingerprint: string | null;
+  summaryCounts: api.homeProfile.HomeDashboardCounts | null;
+  entityErrors: Partial<Record<keyof HomeDataEntities, string>>;
   can: (perm: string) => boolean;
   refresh: () => Promise<void>;
   refreshEntity: (entity: keyof HomeDataEntities) => Promise<void>;
@@ -53,7 +58,11 @@ type State = HomeDataEntities & {
   loading: boolean;
   error: string | null;
   currentUserId: string | null;
+  taskSession: api.HomeTaskSessionScope | null;
   myAccess: HomeAccessState;
+  accessFingerprint: string | null;
+  summaryCounts: api.homeProfile.HomeDashboardCounts | null;
+  entityErrors: Partial<Record<keyof HomeDataEntities, string>>;
 };
 
 type Action =
@@ -87,21 +96,34 @@ const initialState: State = {
   loading: true,
   error: null,
   currentUserId: null,
+  taskSession: null,
+  accessFingerprint: null,
+  summaryCounts: null,
+  entityErrors: {},
   myAccess: { permissions: [], role_base: null, isOwner: false },
 };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'LOAD_START':
-      return { ...state, loading: true, error: null };
+      return { ...initialState, loading: true, error: null };
     case 'LOAD_ERROR':
-      return { ...state, loading: false, error: action.error };
+      return { ...initialState, loading: false, error: action.error };
     case 'LOAD_COMPLETE':
       return { ...state, ...action.data, loading: false, error: null };
     case 'SET_ENTITY':
       return { ...state, [action.entity]: action.data };
-    case 'UPDATE_ENTITY':
-      return { ...state, [action.entity]: action.updater(state[action.entity] as Record<string, any>[]) };
+    case 'UPDATE_ENTITY': {
+      const data = action.updater(state[action.entity] as Record<string, any>[]);
+      const counts = state.summaryCounts ? { ...state.summaryCounts } : null;
+      if (counts) {
+        if (action.entity === 'tasks') counts.tasks_open = data.filter(row => ['open', 'in_progress'].includes(row.status)).length;
+        if (action.entity === 'issues') counts.issues_open = data.filter(row => ['open', 'scheduled', 'in_progress'].includes(row.status)).length;
+        if (action.entity === 'bills') counts.bills_due = data.filter(row => ['due', 'overdue'].includes(row.status)).length;
+        if (action.entity === 'packages') counts.packages_expected = data.filter(row => ['expected', 'out_for_delivery'].includes(row.status)).length;
+      }
+      return { ...state, [action.entity]: data, summaryCounts: counts };
+    }
     case 'SET_ACCESS':
       return { ...state, myAccess: action.access };
     case 'SET_CURRENT_USER':
@@ -123,57 +145,57 @@ const ENTITY_FETCHERS: Record<
   },
   members: async (homeId) => {
     const res = await api.homes.getHomeOccupants(homeId);
-    const active = (res as Record<string, any>).occupants as Record<string, any>[] || [];
-    const pending = (res as Record<string, any>).pendingInvites as Record<string, any>[] || [];
+    const active = (res as Record<string, any>).occupants as Record<string, any>[];
+    const pending = (res as Record<string, any>).pendingInvites as Record<string, any>[];
     return { key: 'members', data: [...active, ...pending] };
   },
   tasks: async (homeId) => {
     const res = await api.homeProfile.getHomeTasks(homeId);
-    return { key: 'tasks', data: (res as Record<string, any>).tasks as Record<string, any>[] || [] };
+    return { key: 'tasks', data: (res as Record<string, any>).tasks as Record<string, any>[] };
   },
   issues: async (homeId) => {
     const res = await api.homeProfile.getHomeIssues(homeId);
-    return { key: 'issues', data: (res as Record<string, any>).issues as Record<string, any>[] || [] };
+    return { key: 'issues', data: (res as Record<string, any>).issues as Record<string, any>[] };
   },
   bills: async (homeId) => {
     const res = await api.homeProfile.getHomeBills(homeId);
-    return { key: 'bills', data: (res as Record<string, any>).bills as Record<string, any>[] || [] };
+    return { key: 'bills', data: (res as Record<string, any>).bills as Record<string, any>[] };
   },
   packages: async (homeId) => {
     const res = await api.homeProfile.getHomePackages(homeId);
-    return { key: 'packages', data: (res as Record<string, any>).packages as Record<string, any>[] || [] };
+    return { key: 'packages', data: (res as Record<string, any>).packages as Record<string, any>[] };
   },
   documents: async (homeId) => {
     const res = await api.homeProfile.getHomeDocuments(homeId);
-    return { key: 'documents', data: (res as Record<string, any>).documents as Record<string, any>[] || [] };
+    return { key: 'documents', data: (res as Record<string, any>).documents as Record<string, any>[] };
   },
-  events: async (_homeId) => {
-    // Events may come from tasks/bills or a dedicated endpoint — we handle both in aggregate
-    return { key: 'events', data: [] };
+  events: async (homeId) => {
+    const res = await api.homeProfile.getHomeEvents(homeId);
+    return { key: 'events', data: res.events };
   },
   secrets: async (homeId) => {
     const res = await api.homeProfile.getHomeAccessSecrets(homeId);
-    return { key: 'secrets', data: (res as Record<string, any>).secrets as Record<string, any>[] || [] };
+    return { key: 'secrets', data: (res as Record<string, any>).secrets as Record<string, any>[] };
   },
   emergencies: async (homeId) => {
     const res = await api.homeProfile.getHomeEmergencies(homeId);
-    return { key: 'emergencies', data: (res as Record<string, any>).emergencies as Record<string, any>[] || [] };
+    return { key: 'emergencies', data: (res as Record<string, any>).emergencies as Record<string, any>[] };
   },
   nearbyGigs: async (homeId) => {
     const res = await api.homeProfile.getNearbyGigs(homeId, { limit: 10 });
-    return { key: 'nearbyGigs', data: (res as Record<string, any>).gigs as Record<string, any>[] || [] };
+    return { key: 'nearbyGigs', data: (res as Record<string, any>).gigs as Record<string, any>[] };
   },
   homeGigs: async (homeId) => {
     const res = await api.homeProfile.getHomeGigs(homeId, { limit: 20 });
-    return { key: 'homeGigs', data: (res as Record<string, any>).gigs as Record<string, any>[] || [] };
+    return { key: 'homeGigs', data: (res as Record<string, any>).gigs as Record<string, any>[] };
   },
   pets: async (homeId) => {
     const res = await api.homeProfile.getHomePets(homeId);
-    return { key: 'pets', data: (res as Record<string, any>).pets as Record<string, any>[] || [] };
+    return { key: 'pets', data: (res as Record<string, any>).pets as Record<string, any>[] };
   },
   polls: async (homeId) => {
     const res = await api.homeProfile.getHomePolls(homeId);
-    return { key: 'polls', data: (res as Record<string, any>).polls as Record<string, any>[] || [] };
+    return { key: 'polls', data: (res as Record<string, any>).polls as Record<string, any>[] };
   },
 };
 
@@ -182,11 +204,21 @@ const ENTITY_FETCHERS: Record<
 export function useHomeData(homeId: string): UseHomeDataReturn {
   const router = useRouter();
   const [state, dispatch] = useReducer(reducer, initialState);
+  const generation = useRef(0);
+  const scopeHome = useRef(homeId);
+  const ready = useRef<(() => boolean) | null>(null);
+  const retireGeneration = useCallback(() => { generation.current++; ready.current = null; }, []);
 
   const loadDashboard = useCallback(async () => {
+    const revision = ++generation.current;
+    scopeHome.current = homeId; ready.current = null;
+    const token = getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => revision === generation.current && token === getAuthToken()
+      && origin === api.getApiBaseUrl() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)
+      && document.visibilityState !== 'hidden';
     dispatch({ type: 'LOAD_START' });
     try {
-      const token = getAuthToken();
       if (!token) {
         router.push('/login');
         return;
@@ -198,187 +230,162 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
         const userData = await api.users.getMyProfile() as Record<string, any>;
         const u = userData?.user ?? userData;
         userId = u?.id || null;
+        if (!current()) return;
         dispatch({ type: 'SET_CURRENT_USER', userId });
       } catch {
         // Non-critical
       }
 
-      // Load IAM permissions
-      let access: HomeAccessState = { permissions: [], role_base: null, isOwner: false };
-      try {
-        const accessRes = await api.homeIam.getMyHomeAccess(homeId);
-        access = {
-          permissions: accessRes.permissions || [],
-          role_base: accessRes.role_base || null,
-          isOwner: accessRes.isOwner || false,
-        };
-      } catch {
-        // IAM endpoint not deployed yet — gracefully default
+      if (!current()) return;
+      // An unavailable authority read cannot authorize stale dashboard data.
+      const accessRes = await readCurrentHomeAccess(homeId);
+      if (!current()) return;
+      if (accessRes.verification_required === true && !accessRes.hasAccess) {
+        ready.current = current;
+        dispatch({ type: 'LOAD_COMPLETE', data: { accessFingerprint: homeAccessFingerprint(accessRes) } });
+        return;
       }
+      if (accessRes.hasAccess !== true || !Array.isArray(accessRes.permissions)) {
+        throw new Error('Current access to this home could not be confirmed. Reload to check access.');
+      }
+      const access: HomeAccessState = {
+        permissions: accessRes.permissions, role_base: accessRes.effective_role_base ?? accessRes.role_base ?? null, isOwner: accessRes.isOwner === true,
+      };
 
-      // Try the aggregate endpoint first, fall back to individual calls
-      const result: Partial<State> = { myAccess: access };
-      try {
-        const dash = await api.homeProfile.getHomeDashboard(homeId) as Record<string, any>;
-        result.home = dash.home;
-        result.members = dash.members || [];
-        result.tasks = dash.tasks || [];
-        result.issues = dash.issues || [];
-        result.bills = dash.bills || [];
-        result.packages = dash.packages || [];
-        result.documents = dash.documents || [];
-        result.events = dash.events || [];
 
-        if (dash.nearbyGigs || dash.nearby_gigs) result.nearbyGigs = dash.nearbyGigs || dash.nearby_gigs || [];
-        if (dash.homeGigs || dash.home_gigs) result.homeGigs = dash.homeGigs || dash.home_gigs || [];
-
-        if (dash.myAccess) {
-          const dm = dash.myAccess as {
-            permissions?: string[];
-            role_base?: string | null;
-            isOwner?: boolean;
-          };
-          const mergedRole = dm.role_base ?? access.role_base ?? null;
-          // Dashboard getUserAccess must align with GET /api/homes/:id/me; if either says owner-like, keep it.
-          const ownerLike =
-            !!dm.isOwner ||
-            mergedRole === 'owner' ||
-            access.isOwner ||
-            access.role_base === 'owner';
-          result.myAccess = {
-            permissions: dm.permissions || access.permissions || [],
-            role_base: mergedRole,
-            isOwner: ownerLike,
-          };
+      // The aggregate supplies counts/today, not the full record collections.
+      // A failed aggregate is unavailable; independent best-effort reads cannot
+      // turn it into an apparently confirmed empty Home.
+      const dash = await api.homeProfile.getHomeDashboard(homeId);
+      if (!current()) return;
+      const countKeys: (keyof api.homeProfile.HomeDashboardCounts)[] = [
+        'tasks_open', 'issues_open', 'bills_due', 'packages_expected', 'documents',
+        'events_upcoming', 'members_active', 'pets',
+      ];
+      if (dash.home?.id !== homeId || !Array.isArray(dash.members) || !dash.counts
+        || countKeys.some(key => !Number.isSafeInteger(dash.counts[key]) || dash.counts[key] < 0)
+        || !Array.isArray(dash.today?.next_events) || !Array.isArray(dash.today?.tasks_due)
+        || !Array.isArray(dash.myAccess?.permissions)
+        || JSON.stringify([...dash.myAccess.permissions].sort()) !== JSON.stringify([...access.permissions].sort())) {
+        throw new Error('The current Home summary could not be confirmed. Reload to try again.');
+      }
+      const allowed = (permission: string) => access.permissions.includes(permission);
+      const result: Partial<State> = { home: dash.home, members: allowed('members.view') ? dash.members : [],
+        myAccess: access, accessFingerprint: homeAccessFingerprint(accessRes), summaryCounts: dash.counts,
+        taskSession: dash.task_session?.home_id === homeId ? dash.task_session : null, entityErrors: {} };
+      const required: [keyof HomeDataEntities, string][] = [
+        ['tasks', 'tasks.view'], ['issues', 'maintenance.view'], ['bills', 'finance.view'],
+        ['packages', 'packages.view'], ['documents', 'docs.view'], ['events', 'calendar.view'],
+      ];
+      await Promise.all(required.map(async ([entity, permission]) => {
+        if (!allowed(permission)) return;
+        const response = await ENTITY_FETCHERS[entity](homeId);
+        if (!Array.isArray(response.data) || response.data.some(row => !row || typeof row.id !== 'string' || row.home_id !== homeId)) {
+          throw new Error(`Current ${entity} could not be confirmed. Reload to try again.`);
         }
-      } catch {
-        // Fallback: load individually
-        const [homeRes, membersRes] = await Promise.allSettled([
-          api.homes.getHome(homeId),
-          api.homes.getHomeOccupants(homeId),
-        ]);
-
-        if (homeRes.status === 'fulfilled') result.home = (homeRes.value as Record<string, any>).home as Record<string, any>;
-        if (membersRes.status === 'fulfilled') {
-          const membersData = membersRes.value as Record<string, any>;
-          result.members = [...((membersData.occupants as Record<string, any>[]) || []), ...((membersData.pendingInvites as Record<string, any>[]) || [])];
-        }
-
-        const [tasksRes, issuesRes, billsRes, pkgRes, docsRes] = await Promise.allSettled([
-          api.homeProfile.getHomeTasks(homeId),
-          api.homeProfile.getHomeIssues(homeId),
-          api.homeProfile.getHomeBills(homeId),
-          api.homeProfile.getHomePackages(homeId),
-          api.homeProfile.getHomeDocuments(homeId),
-        ]);
-
-        if (tasksRes.status === 'fulfilled') result.tasks = (tasksRes.value as Record<string, any>).tasks as Record<string, any>[] || [];
-        if (issuesRes.status === 'fulfilled') result.issues = (issuesRes.value as Record<string, any>).issues as Record<string, any>[] || [];
-        if (billsRes.status === 'fulfilled') result.bills = (billsRes.value as Record<string, any>).bills as Record<string, any>[] || [];
-        if (pkgRes.status === 'fulfilled') result.packages = (pkgRes.value as Record<string, any>).packages as Record<string, any>[] || [];
-        if (docsRes.status === 'fulfilled') result.documents = (docsRes.value as Record<string, any>).documents as Record<string, any>[] || [];
-
+        Object.assign(result, { [entity]: response.data });
+      }));
+      if (!current()) return;
+      // Ancillary failures retain an explicit card error. No failed list is
+      // presented as "no records", and denied sections do not issue requests.
+      const optional: [keyof HomeDataEntities, boolean][] = [
+        ['secrets', allowed('access.view_wifi') || allowed('access.view_codes')],
+        ['emergencies', allowed('sensitive.view')], ['pets', allowed('home.view')],
+        ['polls', allowed('home.view')], ['nearbyGigs', allowed('home.view')], ['homeGigs', allowed('home.view')],
+      ];
+      await Promise.all(optional.map(async ([entity, permitted]) => {
+        if (!permitted) return;
         try {
-          const [nearbyRes, homeGigsRes] = await Promise.allSettled([
-            api.homeProfile.getNearbyGigs(homeId, { limit: 10 }),
-            api.homeProfile.getHomeGigs(homeId, { limit: 20 }),
-          ]);
-          if (nearbyRes.status === 'fulfilled') result.nearbyGigs = (nearbyRes.value as Record<string, any>).gigs as Record<string, any>[] || [];
-          if (homeGigsRes.status === 'fulfilled') result.homeGigs = (homeGigsRes.value as Record<string, any>).gigs as Record<string, any>[] || [];
+          const response = await ENTITY_FETCHERS[entity](homeId);
+          if (!Array.isArray(response.data)) throw new Error('Invalid collection');
+          Object.assign(result, { [entity]: response.data });
         } catch {
-          result.nearbyGigs = [];
-          result.homeGigs = [];
+          result.entityErrors![entity] = `Current ${entity === 'secrets' ? 'access information' : entity} could not be loaded. Retry to check current information.`;
         }
+      }));
+      if (!current()) return;
+      const finalAccess = await readCurrentHomeAccess(homeId);
+      if (!current()) return;
+      if (finalAccess.hasAccess !== true || homeAccessFingerprint(finalAccess) !== result.accessFingerprint) {
+        throw new Error('Home access changed while loading. Reload to check current access.');
       }
-
-      // Load sensitive data separately
-      try {
-        const [secretsRes, emergRes] = await Promise.allSettled([
-          api.homeProfile.getHomeAccessSecrets(homeId),
-          api.homeProfile.getHomeEmergencies(homeId),
-        ]);
-        if (secretsRes.status === 'fulfilled') result.secrets = (secretsRes.value as Record<string, any>).secrets as Record<string, any>[] || [];
-        if (emergRes.status === 'fulfilled') result.emergencies = (emergRes.value as Record<string, any>).emergencies as Record<string, any>[] || [];
-      } catch {
-        // permission denied — fine
-      }
-
-      // Load pets and polls
-      try {
-        const [petsRes, pollsRes] = await Promise.allSettled([
-          api.homeProfile.getHomePets(homeId),
-          api.homeProfile.getHomePolls(homeId),
-        ]);
-        if (petsRes.status === 'fulfilled') result.pets = (petsRes.value as Record<string, any>).pets as Record<string, any>[] || [];
-        if (pollsRes.status === 'fulfilled') result.polls = (pollsRes.value as Record<string, any>).polls as Record<string, any>[] || [];
-      } catch {
-        // endpoints not available yet
-      }
-
+      if (result.home?.id !== homeId) throw new Error('The requested home could not be confirmed.');
+      ready.current = current;
       dispatch({ type: 'LOAD_COMPLETE', data: result });
     } catch (e: unknown) {
+      if (!current()) return;
+      ready.current = null;
       dispatch({
         type: 'LOAD_ERROR',
-        error: e instanceof Error ? e.message : 'Failed to load home dashboard',
+        error: e instanceof Error ? e.message : 'Current home access could not be confirmed. Reload to try again.',
       });
     }
   }, [homeId, router]);
 
   useEffect(() => {
-    loadDashboard();
+    void loadDashboard();
+    const invalidate = () => { retireGeneration(); dispatch({ type: 'LOAD_START' }); };
+    const changed = () => { invalidate(); if (document.visibilityState !== 'hidden') void loadDashboard(); };
+    const visibility = () => { if (document.visibilityState === 'hidden') invalidate(); else changed(); };
+    const focus = () => { if (document.visibilityState !== 'hidden') changed(); };
+    const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed(); };
+    const unsubscribe = api.onTokenChange(changed);
+    window.addEventListener('storage', storage); window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', visibility);
+    return () => { retireGeneration(); unsubscribe(); window.removeEventListener('storage', storage);
+      window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', visibility); };
+  }, [loadDashboard, retireGeneration]);
+
+  // A record refresh also refreshes current grants and aggregate counts; a
+  // partial reply cannot revive an earlier session or leave old summary totals.
+  const refreshEntity = useCallback(async (_entity: keyof HomeDataEntities) => {
+    await loadDashboard();
   }, [loadDashboard]);
 
-  const refreshEntity = useCallback(
-    async (entity: keyof HomeDataEntities) => {
-      const fetcher = ENTITY_FETCHERS[entity];
-      if (!fetcher) return;
-      try {
-        const { data } = await fetcher(homeId);
-        dispatch({ type: 'SET_ENTITY', entity, data });
-      } catch {
-        // silently fail for individual refresh
-      }
-    },
-    [homeId]
-  );
-
+  const openingAccess = ready.current;
   const can = useCallback(
     (perm: string): boolean => {
-      if (state.myAccess.isOwner || state.home?.owner_id === state.currentUserId) return true;
-      if (state.myAccess.permissions.length === 0 && !state.myAccess.role_base) return true;
-      return state.myAccess.permissions.includes(perm);
+      return openingAccess !== null && openingAccess === ready.current && openingAccess() && state.myAccess.permissions.includes(perm);
     },
-    [state.myAccess, state.home?.owner_id, state.currentUserId]
+    [state.myAccess, openingAccess]
   );
 
   const makeEntityUpdater = useCallback(
-    (entity: keyof HomeDataEntities) => (updater: (prev: Record<string, any>[]) => Record<string, any>[]) => {
-      dispatch({ type: 'UPDATE_ENTITY', entity, updater });
+    (entity: keyof HomeDataEntities) => {
+      const opening = ready.current;
+      return (updater: (prev: Record<string, any>[]) => Record<string, any>[]) => {
+        if (opening && ready.current === opening && opening()) dispatch({ type: 'UPDATE_ENTITY', entity, updater });
+      };
     },
     []
   );
 
+  const visibleState = scopeHome.current === homeId ? state : initialState;
   return {
     // Entities
-    home: state.home,
-    members: state.members,
-    tasks: state.tasks,
-    issues: state.issues,
-    bills: state.bills,
-    packages: state.packages,
-    documents: state.documents,
-    events: state.events,
-    secrets: state.secrets,
-    emergencies: state.emergencies,
-    nearbyGigs: state.nearbyGigs,
-    homeGigs: state.homeGigs,
-    pets: state.pets,
-    polls: state.polls,
+    home: visibleState.home,
+    members: visibleState.members,
+    tasks: visibleState.tasks,
+    issues: visibleState.issues,
+    bills: visibleState.bills,
+    packages: visibleState.packages,
+    documents: visibleState.documents,
+    events: visibleState.events,
+    secrets: visibleState.secrets,
+    emergencies: visibleState.emergencies,
+    nearbyGigs: visibleState.nearbyGigs,
+    homeGigs: visibleState.homeGigs,
+    pets: visibleState.pets,
+    polls: visibleState.polls,
     // Meta
-    loading: state.loading,
-    error: state.error,
-    currentUserId: state.currentUserId,
-    myAccess: state.myAccess,
+    loading: visibleState.loading,
+    error: visibleState.error,
+    currentUserId: visibleState.currentUserId,
+    taskSession: visibleState.taskSession,
+    myAccess: visibleState.myAccess,
+    accessFingerprint: visibleState.accessFingerprint,
+    summaryCounts: visibleState.summaryCounts,
+    entityErrors: visibleState.entityErrors,
     can,
     refresh: loadDashboard,
     refreshEntity,

@@ -23,6 +23,7 @@ const { writeAuditLog } = require('../utils/homePermissions');
 const { ownershipClaimLimiter } = require('../middleware/rateLimiter');
 const landlordAuthorityService = require('../services/addressValidation/landlordAuthorityService');
 const { assertCallerOwnsLease, resolveVerifiedAuthorityForActor } = require('../utils/authorityResolution');
+const { requireExpectedSessionScope } = require('../utils/requestSessionScope');
 
 // ============================================================
 // VALIDATION SCHEMAS
@@ -44,13 +45,18 @@ const requestAuthoritySchema = Joi.object({
 });
 
 const inviteTenantSchema = Joi.object({
+  invite_token: Joi.string().hex().lowercase().length(64),
+  expected_actor_id: Joi.string().uuid(),
   home_id: Joi.string().uuid().required(),
   invitee_email: Joi.string().email().required(),
-  start_at: Joi.string().isoDate().required(),
-  end_at: Joi.string().isoDate().allow(null),
+  start_at: Joi.string().isoDate().raw().required(),
+  end_at: Joi.string().isoDate().raw().allow(null),
 });
 
-const approveDenySchema = Joi.object({});
+const approveDenySchema = Joi.object({
+  start_at: Joi.string().isoDate().raw(),
+  end_at: Joi.string().isoDate().raw().allow(null),
+});
 
 const denySchema = Joi.object({
   reason: Joi.string().max(500).allow(null, ''),
@@ -59,9 +65,19 @@ const denySchema = Joi.object({
 const endLeaseSchema = Joi.object({});
 
 const tenantRequestSchema = Joi.object({
-  home_id: Joi.string().uuid().required(),
-  start_at: Joi.string().isoDate().allow(null),
-  end_at: Joi.string().isoDate().allow(null),
+  home_id: Joi.string().uuid().lowercase().required(),
+  lease_file_id: Joi.string().uuid().lowercase(),
+  request_context: Joi.object({
+    home_id: Joi.string().uuid().lowercase().required(),
+    actor_id: Joi.string().uuid().lowercase().required(),
+    // Native encoders omit nil fields; normalize the no-lease observation.
+    lease_id: Joi.string().uuid().lowercase().allow(null).default(null),
+    lease_state: Joi.string().valid('pending', 'active', 'ended', 'canceled').allow(null).default(null),
+  }),
+  // Keep the original calendar date for PostgreSQL's existing strict check.
+  // Joi otherwise turns an impossible February 31 into a valid March 3.
+  start_at: Joi.string().isoDate().raw().allow(null),
+  end_at: Joi.string().isoDate().raw().allow(null),
   message: Joi.string().max(1000).allow(null, ''),
 });
 
@@ -190,12 +206,21 @@ router.get(
 );
 
 // ──────────────────────────────────────────────────────────────
+function leaseRequestMetadata(metadata) {
+  return {
+    message: typeof metadata?.message === 'string' ? metadata.message : null,
+    ...(Joi.string().uuid().required().validate(metadata?.lease_file_id).error
+      ? {} : { lease_file_id: metadata.lease_file_id }),
+  };
+}
+
 // GET /landlord/properties/:homeId
 // Property detail with units, active leases, pending requests.
 // ──────────────────────────────────────────────────────────────
 
 router.get(
   '/landlord/properties/:homeId',
+  (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); },
   verifyToken,
   requireAuthority,
   async (req, res) => {
@@ -214,24 +239,42 @@ router.get(
       }
 
       // Fetch child units (if this is a building)
-      const { data: units } = await supabaseAdmin
+      const { data: units, error: unitsErr } = await supabaseAdmin
         .from('Home')
         .select('id, name, home_type')
         .eq('parent_home_id', homeId);
+      if (unitsErr) throw unitsErr;
 
-      // Fetch active leases
-      const { data: leases } = await supabaseAdmin
+      // A building relationship alone does not grant access to a unit's tenants.
+      // Restrict child leases to the subject already verified by requireAuthority.
+      const managedUnitIds = new Set();
+      if (units?.length && req.authority?.subject_id) {
+        const { data: unitAuthorities, error: unitAuthErr } = await supabaseAdmin
+          .from('HomeAuthority')
+          .select('home_id')
+          .in('home_id', units.map(unit => unit.id))
+          .eq('subject_type', req.authority.subject_type)
+          .eq('subject_id', req.authority.subject_id)
+          .eq('status', 'verified');
+        if (unitAuthErr) throw unitAuthErr;
+        for (const authority of unitAuthorities || []) managedUnitIds.add(authority.home_id);
+      }
+
+      // Include the history consumed by the existing Ended filter.
+      const { data: leases, error: leasesErr } = await supabaseAdmin
         .from('HomeLease')
         .select(`
-          id, home_id, state, source, start_at, end_at, created_at,
+          id, home_id, state, source, start_at, end_at, created_at, metadata,
           primary_resident:primary_resident_user_id(id, username, name, email)
         `)
-        .eq('home_id', homeId)
-        .in('state', ['active', 'pending'])
+        .in('home_id', [homeId, ...managedUnitIds])
+        .in('state', ['active', 'pending', 'ended', 'canceled'])
         .order('created_at', { ascending: false });
+      if (leasesErr) throw leasesErr;
+      const displayLeases = (leases || []).map(lease => ({ ...lease, metadata: leaseRequestMetadata(lease.metadata) }));
 
       // Fetch pending tenant requests (leases sourced from tenant)
-      const pendingRequests = (leases || []).filter(
+      const pendingRequests = displayLeases.filter(
         (l) => l.state === 'pending' && l.source === 'tenant_request',
       );
 
@@ -243,9 +286,10 @@ router.get(
         .eq('is_active', true);
 
       res.json({
+        actor_id: req.user.id,
         home,
-        units: units || [],
-        leases: leases || [],
+        units: (units || []).map(unit => ({ ...unit, lease_status_available: managedUnitIds.has(unit.id) })),
+        leases: displayLeases,
         pending_requests: pendingRequests,
         occupants: occupants || [],
         authority: req.authority,
@@ -270,16 +314,19 @@ router.post(
   async (req, res) => {
     try {
       const { home_id, invitee_email, start_at, end_at } = req.body;
+      if (req.body.expected_actor_id && req.body.expected_actor_id !== req.user.id) {
+        return res.status(409).json({ error: 'Your account changed. Reopen the property before inviting.' });
+      }
 
       // Use middleware-verified authority — never trust caller-supplied authority_id (AUTH-2.1)
       const authority_id = req.authority.id;
 
       const result = await landlordAuthorityService.inviteTenant(
-        authority_id, home_id, invitee_email, start_at, end_at || undefined,
+        authority_id, home_id, invitee_email, start_at, end_at || undefined, req.user.id, req.body.invite_token,
       );
 
       if (!result.success) {
-        const status = result.error.includes('not found') ? 404 : 400;
+        const status = result.status || (result.error.includes('not found') ? 404 : 400);
         return res.status(status).json({ error: result.error });
       }
 
@@ -327,7 +374,10 @@ router.post(
         return res.status(403).json({ error: 'No verified authority for this property' });
       }
 
-      const result = await landlordAuthorityService.approveTenantRequest(leaseId, authResult.authority.id);
+      const result = await landlordAuthorityService.approveTenantRequest(leaseId, authResult.authority.id, {
+        start_at: req.body.start_at,
+        end_at: req.body.end_at,
+      }, userId);
 
       if (!result.success) {
         const status = result.error.includes('not found') ? 404 : 400;
@@ -380,7 +430,7 @@ router.post(
       }
 
       const result = await landlordAuthorityService.denyTenantRequest(
-        leaseId, authResult.authority.id, reason || undefined,
+        leaseId, authResult.authority.id, reason || undefined, userId,
       );
 
       if (!result.success) {
@@ -418,7 +468,14 @@ router.post(
         return res.status(403).json({ error: authCheck.reason || 'Not authorized to end this lease' });
       }
 
-      const result = await landlordAuthorityService.endLease(leaseId, userId);
+      // Co-residency authorizes self move-out, not ending everybody's lease.
+      let authority = authCheck.authority;
+      if (authCheck.lease.primary_resident_user_id !== userId && !authority) {
+        const resolved = await resolveVerifiedAuthorityForActor({ userId, homeId: authCheck.lease.home_id });
+        if (!resolved.found) return res.status(403).json({ error: 'Only the primary resident or verified landlord can end this lease' });
+        authority = resolved.authority;
+      }
+      const result = await landlordAuthorityService.endLease(leaseId, userId, { authorityId: authority?.id });
 
       if (!result.success) {
         const status = result.error.includes('not found') ? 404 : 400;
@@ -460,7 +517,7 @@ router.get(
 
       if (error) throw error;
 
-      res.json({ requests: requests || [] });
+      res.json({ requests: (requests || []).map(lease => ({ ...lease, metadata: leaseRequestMetadata(lease.metadata) })) });
     } catch (err) {
       logger.error('GET /landlord/properties/:homeId/requests failed', { error: err.message });
       res.status(500).json({ error: 'Failed to fetch requests' });
@@ -474,6 +531,60 @@ router.get(
 // ═══════════════════════════════════════════════════════════════
 // ============================================================
 
+// The existing tenant screen needs its own request state before admission.
+// Return only landlord availability and this actor's lease; never expose the
+// authority identity, another resident, raw metadata or household permissions.
+router.get('/tenant/home/:homeId/status', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  const { homeId } = req.params;
+  if (Joi.string().uuid().required().validate(homeId).error) {
+    return res.status(400).json({ error: 'Invalid home ID' });
+  }
+  try {
+    const { data: home, error: homeError } = await supabaseAdmin.from('Home')
+      .select('id, home_status').eq('id', homeId).maybeSingle();
+    if (homeError) throw homeError;
+    if (!home || ['archived', 'merged'].includes(home.home_status)) return res.status(404).json({ error: 'Home not found' });
+    const { data: authority, error: authorityError } = await supabaseAdmin.from('HomeAuthority')
+      .select('subject_type, verification_tier').eq('home_id', homeId).eq('status', 'verified')
+      .order('id', { ascending: true }).limit(1).maybeSingle();
+    if (authorityError) throw authorityError;
+    const { data: lease, error: leaseError } = await supabaseAdmin.from('HomeLease')
+      .select('id, home_id, state, source, start_at, end_at, created_at, metadata')
+      .eq('home_id', homeId).eq('primary_resident_user_id', req.user.id)
+      .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(1).maybeSingle();
+    if (leaseError) throw leaseError;
+    const denied = lease?.state === 'canceled' && (lease.metadata?.landlord_decision?.intent?.action === 'deny'
+      || Object.hasOwn(lease.metadata || {}, 'denial_reason'));
+    const expired = lease?.state === 'active' && lease.end_at && Date.parse(lease.end_at) <= Date.now();
+    const state = !lease || (lease.state === 'canceled' && !denied) ? 'none' : denied ? 'denied' : expired ? 'ended' : lease.state;
+    const ownLease = lease && state !== 'none' ? {
+      id: lease.id, home_id: lease.home_id, state, source: lease.source,
+      start_at: lease.start_at, end_at: lease.end_at, created_at: lease.created_at,
+      metadata: {
+        ...leaseRequestMetadata(lease.metadata),
+        ...(denied ? { denied_reason: typeof lease.metadata?.denial_reason === 'string' ? lease.metadata.denial_reason : null } : {}),
+      },
+    } : null;
+    return res.json({ home_id: homeId,
+      request_context: { home_id: homeId, actor_id: req.user.id, lease_id: lease?.id || null, lease_state: lease?.state || null },
+      landlord: authority ? { has_landlord: true, landlord_entity_type: authority.subject_type, verification_tier: authority.verification_tier }
+        : { has_landlord: false },
+      lease: { state, lease: ownLease },
+    });
+  } catch (error) {
+    logger.error('GET tenant home status failed', { code: error.code });
+    return res.status(503).json({ error: 'Could not load landlord status. Please retry.' });
+  }
+});
+
+router.post('/tenant/request/:leaseId/cancel', verifyToken, validate(endLeaseSchema), async (req, res) => {
+  if (Joi.string().uuid().required().validate(req.params.leaseId).error) return res.status(400).json({ error: 'Invalid lease ID' });
+  const result = await landlordAuthorityService.cancelLeaseRequest(req.params.leaseId, req.user.id);
+  if (!result.success) return res.status(result.status || 400).json({ error: result.error });
+  return res.json({ success: true });
+});
+
 // ──────────────────────────────────────────────────────────────
 // POST /tenant/request-approval
 // Create a lease request to a landlord-managed home.
@@ -486,104 +597,15 @@ router.post(
   async (req, res) => {
     try {
       const userId = req.user.id;
-      const { home_id, start_at, end_at, message } = req.body;
+      const { home_id, start_at, end_at, message, request_context, lease_file_id } = req.body;
+      if (lease_file_id && !requireExpectedSessionScope(req, res)) return;
 
-      // Verify home exists
-      const { data: home } = await supabaseAdmin
-        .from('Home')
-        .select('id, name, home_type')
-        .eq('id', home_id)
-        .maybeSingle();
-
-      if (!home) {
-        return res.status(404).json({ error: 'Home not found' });
-      }
-
-      if (home.home_type === 'building') {
-        return res.status(400).json({ error: 'Cannot request lease on a building — use a unit' });
-      }
-
-      // Check that a landlord authority exists for this home
-      const { data: authority } = await supabaseAdmin
-        .from('HomeAuthority')
-        .select('id, subject_type, subject_id')
-        .eq('home_id', home_id)
-        .eq('status', 'verified')
-        .limit(1)
-        .maybeSingle();
-
-      if (!authority) {
-        return res.status(400).json({ error: 'This property has no verified landlord. Cannot submit a lease request.' });
-      }
-
-      // Check for existing pending request
-      const { data: existing } = await supabaseAdmin
-        .from('HomeLease')
-        .select('id')
-        .eq('home_id', home_id)
-        .eq('primary_resident_user_id', userId)
-        .eq('state', 'pending')
-        .maybeSingle();
-
-      if (existing) {
-        return res.status(409).json({ error: 'You already have a pending request for this home' });
-      }
-
-      // Check for existing active lease
-      const { data: activeLease } = await supabaseAdmin
-        .from('HomeLease')
-        .select('id')
-        .eq('home_id', home_id)
-        .eq('primary_resident_user_id', userId)
-        .eq('state', 'active')
-        .maybeSingle();
-
-      if (activeLease) {
-        return res.status(409).json({ error: 'You already have an active lease at this home' });
-      }
-
-      // Create pending lease
-      const { data: lease, error: leaseErr } = await supabaseAdmin
-        .from('HomeLease')
-        .insert({
-          home_id,
-          primary_resident_user_id: userId,
-          start_at: start_at || new Date().toISOString(),
-          end_at: end_at || null,
-          state: 'pending',
-          source: 'tenant_request',
-          metadata: { message: message || null },
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (leaseErr) throw leaseErr;
-
-      // Notify the landlord
-      try {
-        const notificationService = require('../services/notificationService');
-        if (authority.subject_type === 'user') {
-          notificationService.createNotification({
-            userId: authority.subject_id,
-            type: 'tenant_request',
-            title: 'New tenant request',
-            body: `A tenant has requested to live at ${home.name || 'your property'}.`,
-            icon: '📋',
-            link: `/landlord/properties/${home_id}/requests`,
-            metadata: { home_id, lease_id: lease.id },
-          });
-        }
-      } catch (notifErr) {
-        logger.warn('Tenant request notification failed (non-fatal)', { error: notifErr.message });
-      }
-
-      await writeAuditLog(home_id, userId, 'TENANT_REQUEST_SUBMITTED', 'HomeLease', lease.id, {
-        source: 'tenant_request',
-        message: message || null,
-      });
-
+      const dates = {};
+      if (start_at !== undefined) dates.start_at = start_at;
+      if (end_at !== undefined) dates.end_at = end_at;
+      const result = await landlordAuthorityService.requestLease(home_id, userId, dates, message || null, request_context, lease_file_id);
+      if (!result.success) return res.status(result.status || 400).json({ error: result.error });
+      const lease = result.lease;
       res.status(201).json({ lease });
     } catch (err) {
       logger.error('POST /tenant/request-approval failed', { error: err.message });
@@ -596,6 +618,20 @@ router.post(
 // POST /tenant/accept-invite
 // Accept a lease invite by token.
 // ──────────────────────────────────────────────────────────────
+
+// Body keeps the raw invitation proof out of request URLs/access logs.
+// This preview never changes the invitation, lease or membership.
+router.post('/tenant/preview-invite', verifyToken, validate(acceptInviteSchema), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const result = await landlordAuthorityService.previewInvite(req.body.token, req.user.id, req.user.email);
+    if (!result.success) return res.status(result.status || 400).json({ error: result.error });
+    res.json({ home: result.home, invitation: result.invitation, account_email: result.account_email });
+  } catch (err) {
+    logger.error('POST /tenant/preview-invite failed', { error: err.message });
+    res.status(500).json({ error: 'Failed to check invitation. Please retry.' });
+  }
+});
 
 router.post(
   '/tenant/accept-invite',
@@ -659,38 +695,16 @@ router.post(
         return res.status(404).json({ error: 'Lease not found' });
       }
 
-      if (lease.primary_resident_user_id !== userId) {
-        // Also check if user is a co-resident
-        const { data: resident } = await supabaseAdmin
-          .from('HomeLeaseResident')
-          .select('id')
-          .eq('lease_id', lease_id)
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (!resident) {
-          logger.warn('auth.denied', { event: 'move_out_denied', actor_id: userId, target_id: lease_id, reason: 'not_resident', ip: req.ip });
-          return res.status(403).json({ error: 'Not authorized to end this lease' });
-        }
-      }
-
-      if (lease.state !== 'active') {
-        return res.status(400).json({ error: `Cannot move out: lease is ${lease.state}` });
-      }
-
-      const result = await landlordAuthorityService.endLease(lease_id, userId);
+      // The transaction checks the current resident edge or its completed
+      // departure receipt under locks, so a lost-reply retry still works after
+      // the departing co-resident's edge was removed.
+      const result = await landlordAuthorityService.endLease(lease_id, userId, { moveOut: true, reason });
 
       if (!result.success) {
-        return res.status(400).json({ error: result.error });
+        return res.status(result.status || 400).json({ error: result.error });
       }
 
-      // Log the move-out reason
-      await writeAuditLog(lease.home_id, userId, 'TENANT_MOVE_OUT', 'HomeLease', lease_id, {
-        reason: reason || null,
-        initiated_by: 'tenant',
-      });
-
-      logger.info('auth.action', { event: 'lease_ended', actor_id: userId, target_id: lease_id, initiated_by: 'tenant' });
+      logger.info('auth.action', { event: 'tenant_moved_out', actor_id: userId, target_id: lease_id, initiated_by: 'tenant' });
       res.json({ success: true });
     } catch (err) {
       logger.error('POST /tenant/move-out failed', { error: err.message });
@@ -775,5 +789,7 @@ router.post(
     }
   },
 );
+
+router.use(require('./homeLeaseEvidenceFiles'));
 
 module.exports = router;

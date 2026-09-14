@@ -17,7 +17,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +36,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -336,6 +340,7 @@ fun SeasonalChecklistCard(
     onHireHelp: (SeasonalChecklistItemDto) -> Unit,
     onGenerate: () -> Unit,
     onRetry: () -> Unit,
+    canEdit: Boolean = true,
 ) {
     var carryoverExpanded by remember { mutableStateOf(false) }
 
@@ -369,6 +374,7 @@ fun SeasonalChecklistCard(
                 } else {
                     SeasonalLoaded(
                         checklist = state.value,
+                        canEdit = canEdit,
                         pendingItemIds = pendingItemIds,
                         carryoverExpanded = carryoverExpanded,
                         onToggleCarryover = { carryoverExpanded = !carryoverExpanded },
@@ -441,6 +447,7 @@ private fun SeasonalEmpty(onGenerate: () -> Unit) {
 @Composable
 private fun SeasonalLoaded(
     checklist: SeasonalChecklistDto,
+    canEdit: Boolean,
     pendingItemIds: Set<String>,
     carryoverExpanded: Boolean,
     onToggleCarryover: () -> Unit,
@@ -482,6 +489,7 @@ private fun SeasonalLoaded(
             SeasonalRow(
                 item = item,
                 isPending = pendingItemIds.contains(item.id),
+                canEdit = canEdit,
                 onComplete = onComplete,
                 onSkip = onSkip,
                 onHireHelp = onHireHelp,
@@ -528,6 +536,7 @@ private fun SeasonalLoaded(
                     SeasonalRow(
                         item = item,
                         isPending = pendingItemIds.contains(item.id),
+                        canEdit = canEdit,
                         onComplete = onComplete,
                         onSkip = onSkip,
                         onHireHelp = onHireHelp,
@@ -542,6 +551,7 @@ private fun SeasonalLoaded(
 private fun SeasonalRow(
     item: SeasonalChecklistItemDto,
     isPending: Boolean,
+    canEdit: Boolean,
     onComplete: (String) -> Unit,
     onSkip: (String) -> Unit,
     onHireHelp: (SeasonalChecklistItemDto) -> Unit,
@@ -556,7 +566,7 @@ private fun SeasonalRow(
             modifier =
                 Modifier
                     .size(44.dp)
-                    .clickable(enabled = !done && !isPending) { onComplete(item.id) }
+                    .clickable(enabled = canEdit && !done && !isPending) { onComplete(item.id) }
                     .testTag("homeDashboard_seasonalItemToggle_${item.id}")
                     .semantics {
                         role = Role.Button
@@ -578,7 +588,6 @@ private fun SeasonalRow(
                 style = PantopusTextStyle.small,
                 color = if (done) PantopusColors.appTextSecondary else PantopusColors.appText,
                 textDecoration = if (done) TextDecoration.LineThrough else null,
-                maxLines = 1,
             )
             val description = item.description
             if (!done && !description.isNullOrEmpty()) {
@@ -586,7 +595,6 @@ private fun SeasonalRow(
                     text = description,
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
-                    maxLines = 1,
                 )
             }
         }
@@ -596,7 +604,7 @@ private fun SeasonalRow(
                 modifier =
                     Modifier
                         .size(44.dp)
-                        .clickable(enabled = !isPending) { onSkip(item.id) }
+                        .clickable(enabled = canEdit && !isPending) { onSkip(item.id) }
                         .testTag("homeDashboard_seasonalItemSkip_${item.id}")
                         .semantics {
                             role = Role.Button
@@ -618,7 +626,7 @@ private fun SeasonalRow(
                             .heightIn(min = 32.dp)
                             .clip(RoundedCornerShape(Radii.md))
                             .background(PantopusColors.primary600)
-                            .clickable { onHireHelp(item) }
+                            .clickable(enabled = canEdit && !isPending) { onHireHelp(item) }
                             .padding(horizontal = Spacing.s3)
                             .testTag("homeDashboard_seasonalItemHire_${item.id}")
                             .semantics {
@@ -752,13 +760,13 @@ private fun PropertyValueUnavailable() {
             tint = PantopusColors.primary600,
         )
         Text(
-            text = "Property insights coming soon",
+            text = "No estimate available",
             style = PantopusTextStyle.small,
             fontWeight = FontWeight.SemiBold,
             color = PantopusColors.appText,
         )
         Text(
-            text = "We'll show your home's estimated value once your address is fully verified.",
+            text = "No property estimate is available for this Home right now.",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,
@@ -847,14 +855,31 @@ private fun trendMeta(trend: String?): Triple<PantopusIcon, Color, String>? =
 fun BillTrendsCard(
     state: HomeIntelligenceCardState<HomeBillTrendsDto>,
     onRetry: () -> Unit,
+    currency: String = "USD",
+    currencies: List<String> = listOf("USD"),
+    onCurrencyChange: (String) -> Unit = {},
 ) {
     if (state is HomeIntelligenceCardState.Forbidden) return
+    var currencyMenu by remember { mutableStateOf(false) }
 
     DashboardCard(
         title = "Bill trends",
         accent = PantopusColors.warning,
         modifier = Modifier.testTag("homeDashboard_billTrendsCard"),
     ) {
+        Box {
+            TextButton(onClick = { currencyMenu = true }, modifier = Modifier.testTag("homeDashboard_billCurrency")) {
+                Text("Currency: $currency")
+            }
+            DropdownMenu(expanded = currencyMenu, onDismissRequest = { currencyMenu = false }) {
+                currencies.forEach { code ->
+                    DropdownMenuItem(text = { Text(code) }, onClick = {
+                        currencyMenu = false
+                        onCurrencyChange(code)
+                    })
+                }
+            }
+        }
         when (state) {
             HomeIntelligenceCardState.Loading ->
                 Column(
@@ -873,8 +898,15 @@ fun BillTrendsCard(
                     onRetry = onRetry,
                 )
             is HomeIntelligenceCardState.Loaded ->
-                if (state.value.billsByType.isEmpty()) {
-                    CardNote("Mark a bill as paid to start tracking your monthly trend.")
+                if (!HomeBillPresentation.isCurrent(state.value, currency)) {
+                    CardError(
+                        headline = "Current bill information is unavailable",
+                        message = "Retry to check the current format and amounts.",
+                        retryTag = "homeDashboard_billTrendsRetry",
+                        onRetry = onRetry,
+                    )
+                } else if (state.value.billsByType.isEmpty()) {
+                    CardNote("No paid $currency bills with a period start in the last 24 months.")
                 } else {
                     state.value.billsByType.keys.sorted().forEach { key ->
                         state.value.billsByType[key]?.let { series ->
@@ -882,6 +914,7 @@ fun BillTrendsCard(
                                 billType = key,
                                 series = series,
                                 benchmark = state.value.benchmarks[key],
+                                currency = state.value.currency ?: "USD",
                             )
                         }
                     }
@@ -895,6 +928,55 @@ private fun BillTrendRow(
     billType: String,
     series: HomeBillTrendSeriesDto,
     benchmark: HomeBillBenchmarkDto?,
+    currency: String,
+) {
+    var expanded by remember(billType, currency) { mutableStateOf(false) }
+    Column {
+        BillTrendSummary(billType, series, benchmark, currency)
+        TextButton(onClick = { expanded = !expanded }, modifier = Modifier.testTag("homeDashboard_billMonths_$billType")) {
+            Text(if (expanded) "Hide monthly totals" else "Monthly totals")
+        }
+        if (expanded) {
+            series.months.indices.forEach { index ->
+                val month = series.months[index]
+                val amount = HomeBillPresentation.amount(series.amounts[index], currency)
+                val comparison = monthlyBillComparison(month, benchmark, currency)
+                Column(
+                    modifier =
+                        Modifier.fillMaxWidth().padding(vertical = Spacing.s2)
+                            .clearAndSetSemantics {
+                                contentDescription = "Monthly total for $month. Your home: $amount. $comparison"
+                            },
+                ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(month, style = PantopusTextStyle.caption)
+                        Text(amount, style = PantopusTextStyle.caption, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text(comparison, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
+                }
+            }
+        }
+    }
+}
+
+private fun monthlyBillComparison(
+    month: String,
+    benchmark: HomeBillBenchmarkDto?,
+    currency: String,
+): String {
+    val index = benchmark?.months?.indexOf(month) ?: -1
+    if (benchmark == null || benchmark.insufficientData || index !in benchmark.avgAmounts.indices) {
+        return "No comparison for this month"
+    }
+    return "Neighborhood average: ${HomeBillPresentation.amount(benchmark.avgAmounts[index], currency)}"
+}
+
+@Composable
+private fun BillTrendSummary(
+    billType: String,
+    series: HomeBillTrendSeriesDto,
+    benchmark: HomeBillBenchmarkDto?,
+    currency: String,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.s3),
@@ -908,44 +990,22 @@ private fun BillTrendRow(
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,
             )
-            benchmarkNote(series, benchmark)?.let { note ->
+            HomeBillPresentation.note(series, benchmark, currency)?.let { note ->
                 Text(
                     text = note,
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
-                    maxLines = 2,
                 )
             }
         }
-        series.amounts.firstOrNull()?.let { latest ->
+        series.amounts.lastOrNull()?.let { latest ->
             Text(
-                text = HomeDashboardProjection.fullCurrency(latest),
+                text = HomeBillPresentation.amount(latest, currency),
                 style = PantopusTextStyle.small,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,
             )
         }
-    }
-}
-
-private fun benchmarkNote(
-    series: HomeBillTrendSeriesDto,
-    benchmark: HomeBillBenchmarkDto?,
-): String? {
-    val fallback = series.months.firstOrNull()
-    if (benchmark == null) return fallback
-    if (benchmark.insufficientData) {
-        return benchmark.message ?: "Not enough neighbors for comparison yet"
-    }
-    val neighborCents = benchmark.avgAmounts.firstOrNull()
-    val mine = series.amounts.firstOrNull()
-    if (neighborCents == null || mine == null) return fallback
-    val neighbors = HomeDashboardProjection.centsToDollars(neighborCents)
-    val label = HomeDashboardProjection.fullCurrency(neighbors)
-    return when {
-        mine > neighbors -> "Above the $label neighborhood average"
-        mine < neighbors -> "Below the $label neighborhood average"
-        else -> "In line with the $label neighborhood average"
     }
 }
 

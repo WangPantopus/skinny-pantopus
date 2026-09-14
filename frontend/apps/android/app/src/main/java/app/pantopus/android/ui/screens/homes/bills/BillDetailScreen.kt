@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +63,7 @@ fun BillDetailScreen(
     onChanged: () -> Unit = {},
     viewModel: BillDetailViewModel = hiltViewModel(),
 ) {
+    val financeRights by viewModel.financeRights.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
         viewModel.configureNavigation(onChanged = onChanged, onClose = onBack)
@@ -74,16 +76,15 @@ fun BillDetailScreen(
             is BillDetailUiState.Error -> ErrorShell(current.message, onBack) { viewModel.load() }
             is BillDetailUiState.Loaded ->
                 LoadedShell(
-                    bill = current.bill,
-                    splits = current.splits,
-                    saving = current.saving,
-                    saveError = current.saveError,
+                    current = current,
+                    canManage = financeRights.canManage,
                     actions =
                         BillDetailActions(
                             onBack = onBack,
-                            onEdit = onEdit,
+                            onEdit = { viewModel.edit(onEdit) },
                             onMarkPaid = viewModel::markPaid,
                             onRemove = viewModel::remove,
+                            onReload = viewModel::load,
                         ),
                 )
         }
@@ -142,12 +143,14 @@ private fun ErrorShell(
 
 @Composable
 private fun LoadedShell(
-    bill: BillDto,
-    splits: List<BillSplitDto>,
-    saving: Boolean,
-    saveError: String?,
+    current: BillDetailUiState.Loaded,
+    canManage: Boolean,
     actions: BillDetailActions,
 ) {
+    val bill = current.bill
+    val splits = current.splits
+    val saving = current.saving
+    val saveError = current.saveError
     val projection = BillsListViewModel.project(bill, Instant.now())
     val isPaid = bill.status == "paid"
     val autoPay = projection.status == BillChipStatus.Scheduled
@@ -175,6 +178,10 @@ private fun LoadedShell(
                 verticalArrangement = Arrangement.spacedBy(Spacing.s4),
             ) {
                 DetailGrid(bill = bill)
+                if (current.splitError != null) {
+                    Text("Bill splits are unavailable. ${current.splitError}", color = PantopusColors.error)
+                    TextButton(onClick = actions.onReload, enabled = !saving) { Text("Retry splits") }
+                }
                 if (splits.isNotEmpty()) {
                     SplitsSection(splits = splits)
                 }
@@ -185,62 +192,66 @@ private fun LoadedShell(
                         color = PantopusColors.error,
                     )
                 }
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(Radii.md))
-                            .background(PantopusColors.primary50)
-                            .clickable(enabled = !saving, onClick = actions.onEdit)
-                            .padding(Spacing.s3)
-                            .testTag("billDetail_edit"),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-                ) {
-                    PantopusIconImage(
-                        icon = PantopusIcon.Pencil,
-                        contentDescription = null,
-                        size = Radii.xl,
-                        tint = PantopusColors.primary600,
-                    )
-                    Text(
-                        text = "Edit bill",
-                        style = PantopusTextStyle.small,
-                        fontWeight = FontWeight.SemiBold,
-                        color = PantopusColors.primary600,
-                    )
-                }
-                Row(
-                    modifier =
-                        Modifier
-                            .clickable(enabled = !saving, onClick = actions.onRemove)
-                            .testTag("billDetail_remove"),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-                ) {
-                    PantopusIconImage(
-                        icon = PantopusIcon.Trash2,
-                        contentDescription = null,
-                        size = Radii.xl,
-                        tint = PantopusColors.error,
-                    )
-                    Text(
-                        text = "Remove bill",
-                        style = PantopusTextStyle.small,
-                        fontWeight = FontWeight.SemiBold,
-                        color = PantopusColors.error,
-                    )
+                if (canManage) {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(Radii.md))
+                                .background(PantopusColors.primary50)
+                                .clickable(enabled = !saving, onClick = actions.onEdit)
+                                .padding(Spacing.s3)
+                                .testTag("billDetail_edit"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                    ) {
+                        PantopusIconImage(
+                            icon = PantopusIcon.Pencil,
+                            contentDescription = null,
+                            size = Radii.xl,
+                            tint = PantopusColors.primary600,
+                        )
+                        Text(
+                            text = "Edit bill",
+                            style = PantopusTextStyle.small,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PantopusColors.primary600,
+                        )
+                    }
+                    Row(
+                        modifier =
+                            Modifier
+                                .clickable(enabled = !saving, onClick = actions.onRemove)
+                                .testTag("billDetail_remove"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                    ) {
+                        PantopusIconImage(
+                            icon = PantopusIcon.Trash2,
+                            contentDescription = null,
+                            size = Radii.xl,
+                            tint = PantopusColors.error,
+                        )
+                        Text(
+                            text = "Remove bill",
+                            style = PantopusTextStyle.small,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PantopusColors.error,
+                        )
+                    }
                 }
             }
         },
         cta = {
-            PrimaryButton(
-                title = if (isPaid) "Already paid" else "Mark paid",
-                isLoading = saving,
-                isEnabled = !isPaid && !saving,
-                onClick = actions.onMarkPaid,
-                modifier = Modifier.testTag("billDetail_markPaid"),
-            )
+            if (canManage) {
+                PrimaryButton(
+                    title = if (isPaid) "Already paid" else "Mark paid",
+                    isLoading = saving,
+                    isEnabled = !isPaid && !saving,
+                    onClick = actions.onMarkPaid,
+                    modifier = Modifier.testTag("billDetail_markPaid"),
+                )
+            }
         },
     )
 }
@@ -250,6 +261,7 @@ private data class BillDetailActions(
     val onEdit: () -> Unit,
     val onMarkPaid: () -> Unit,
     val onRemove: () -> Unit,
+    val onReload: () -> Unit,
 )
 
 private data class BillHeaderModel(

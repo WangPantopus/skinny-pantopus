@@ -54,6 +54,8 @@ public struct ClaimOwnershipWizardView: View {
             Analytics.track(.screenClaimOwnershipStepViewed(stepName: viewModel.currentStep.rawValue))
         }
         .task { await viewModel.load() }
+        .onDisappear { viewModel.retire() }
+        .onChange(of: viewModel.hasCurrentSession) { _, current in if !current { viewModel.retire() } }
         .alert(
             "Request sent",
             isPresented: Binding(

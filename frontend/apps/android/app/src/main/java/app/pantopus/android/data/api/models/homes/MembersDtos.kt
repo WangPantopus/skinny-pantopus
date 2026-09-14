@@ -56,6 +56,7 @@ data class PendingInviteDto(
     val name: String = "Invited user",
     @Json(name = "invited_by") val invitedBy: String? = null,
     @Json(name = "created_at") val createdAt: String? = null,
+    @Json(name = "expires_at") val expiresAt: String? = null,
 )
 
 /** Envelope for `GET /api/homes/:id/occupants`. */

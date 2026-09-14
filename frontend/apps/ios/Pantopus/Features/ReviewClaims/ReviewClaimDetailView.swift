@@ -17,6 +17,7 @@ public struct ReviewClaimDetailView: View {
     @State private var showRejectSheet = false
     @State private var rejectNote: String = ""
     @State private var showChallengeSheet = false
+    @State private var evidenceTarget: PrivateClaimEvidenceViewModel?
     private let onClose: @MainActor () -> Void
 
     public init(
@@ -41,6 +42,9 @@ public struct ReviewClaimDetailView: View {
         .accessibilityIdentifier("reviewClaimDetail")
         .navigationBarBackButtonHidden(true)
         .task { await viewModel.load() }
+        .sheet(item: $evidenceTarget, onDismiss: { Task { await viewModel.load() } }, content: { target in
+            PrivateClaimEvidenceView(model: target)
+        })
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
                 ToastView(message: toast)
@@ -54,7 +58,7 @@ public struct ReviewClaimDetailView: View {
         .sheet(isPresented: $showRejectSheet) {
             ReviewClaimNoteCaptureSheet(
                 title: "Reject claim",
-                prompt: "Optionally include a reason — the claimant sees this in their notification.",
+                prompt: "Optionally include a reason to save with this review.",
                 placeholder: "e.g. The deed doesn't match the address.",
                 primaryTitle: "Reject claim",
                 primaryRole: .destructive,
@@ -153,7 +157,7 @@ public struct ReviewClaimDetailView: View {
 
     @ViewBuilder
     private func loadedShell(_ detail: AdminClaimDetailResponse) -> some View {
-        let isReviewable = Self.reviewableStates.contains(detail.claim.state)
+        let isReviewable = Self.reviewableStates.contains(detail.claim.state) && !detail.claim.requiresDisputeReview
         ContentDetailShell(
             title: "Review claim",
             onBack: onClose,
@@ -171,9 +175,11 @@ public struct ReviewClaimDetailView: View {
                     OverlineSection(title: evidenceOverline(detail.evidence.count)) {
                         evidenceContent(detail.evidence)
                             .accessibilityIdentifier("reviewClaimDetail_evidence")
+                        Button("Review private documents") { evidenceTarget = viewModel.makeEvidenceViewModel() }
+                            .disabled(viewModel.reviewingAction != nil || detail.claim.requiresDisputeReview)
                     }
                     if let statement = ReviewClaimMap.statement(for: detail.claim) {
-                        OverlineSection(title: "Claim statement") {
+                        OverlineSection(title: "Review note") {
                             StatementBlock(
                                 statement: statement,
                                 attribution: ReviewClaimMap.statementAttribution(detail)
@@ -181,7 +187,10 @@ public struct ReviewClaimDetailView: View {
                             .accessibilityIdentifier("reviewClaimDetail_statement")
                         }
                     }
-                    if !isReviewable {
+                    if detail.claim.requiresDisputeReview {
+                        Text("This disputed claim needs the dedicated dispute review flow.")
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                    } else if !isReviewable {
                         TerminalStateBanner(state: detail.claim.state)
                             .accessibilityIdentifier("reviewClaimDetail_terminal")
                     }
@@ -218,23 +227,25 @@ public struct ReviewClaimDetailView: View {
             .clipShape(RoundedRectangle(cornerRadius: Radii.xl))
         } else {
             VStack(alignment: .leading, spacing: Spacing.s2) {
-                EvidenceStrip(
-                    items: ReviewClaimMap.evidenceItems(evidence),
-                    extraCount: ReviewClaimMap.evidenceExtraCount(evidence)
-                )
-                HStack(alignment: .top, spacing: 6) {
-                    Icon(.shieldCheck, size: 12, color: Theme.Color.success)
-                    Text("County recorder cross-check ran on these files. Tap any file to open.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                    Spacer(minLength: Spacing.s0)
+                ForEach(ReviewClaimMap.evidenceItems(evidence)) { item in
+                    VStack(alignment: .leading, spacing: Spacing.s1) {
+                        Text(item.title).font(.headline)
+                        Text(item.meta).font(.caption).foregroundStyle(Theme.Color.appTextSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Spacing.s3)
+                    .background(Theme.Color.appSurfaceMuted)
+                    .clipShape(RoundedRectangle(cornerRadius: Radii.md))
                 }
+                Text("Evidence metadata is shown here. Legacy documents require a private re-upload.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
             }
         }
     }
 
     private func evidenceOverline(_ count: Int) -> String {
-        "Evidence · \(count) \(count == 1 ? "file" : "files")"
+        "Evidence · \(count) \(count == 1 ? "item" : "items")"
     }
 
     private static let reviewableStates: Set<String> = [
@@ -278,8 +289,8 @@ enum ReviewClaimMap {
         return "Pending \(days)d"
     }
 
-    static func shareValue(for claim: AdminClaimRecordDTO) -> String {
-        claim.claimType == "owner" ? "25%" : "—"
+    static func shareValue(for _: AdminClaimRecordDTO) -> String {
+        "—"
     }
 
     static func shareDescriptor(for claim: AdminClaimRecordDTO) -> String {
@@ -290,16 +301,15 @@ enum ReviewClaimMap {
         }
     }
 
-    static func trustChips(for _: AdminClaimRecordDTO, evidenceCount _: Int) -> [TrustChipModel] {
-        [
-            TrustChipModel(icon: .badgeCheck, label: "Verified ID", tone: .success),
-            TrustChipModel(icon: .phone, label: "Phone verified", tone: .success),
-            TrustChipModel(icon: .shieldAlert, label: "No mutual owners", tone: .warn)
-        ]
+    static func trustChips(for claim: AdminClaimRecordDTO, evidenceCount _: Int) -> [TrustChipModel] {
+        if claim.identityStatus == "verified" {
+            return [TrustChipModel(icon: .badgeCheck, label: "Identity confirmed", tone: .success)]
+        }
+        return [TrustChipModel(icon: .shieldAlert, label: "Identity not confirmed", tone: .warn)]
     }
 
     static func evidenceItems(_ evidence: [AdminClaimEvidenceDTO]) -> [EvidenceItemModel] {
-        evidence.prefix(4).map { item in
+        evidence.map { item in
             EvidenceItemModel(
                 id: item.id,
                 kind: kind(for: item),
@@ -316,16 +326,11 @@ enum ReviewClaimMap {
 
     static func statement(for claim: AdminClaimRecordDTO) -> String? {
         let note = claim.reviewNote?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return note?.isEmpty == false
-            ? note
-            : "I bought a 25% stake from Mateo when he moved out in 2018. " +
-            "We never got around to recording the transfer on Pantopus, " +
-            "but the deed is on file with Kings County and ConEd has been in my name since."
+        return note?.isEmpty == false ? note : nil
     }
 
-    static func statementAttribution(_ detail: AdminClaimDetailResponse) -> String? {
-        guard let name = detail.claimant?.name else { return nil }
-        return "Signed · \(name)"
+    static func statementAttribution(_: AdminClaimDetailResponse) -> String? {
+        nil
     }
 
     // MARK: Private
@@ -343,7 +348,14 @@ enum ReviewClaimMap {
     }
 
     private static func evidenceMeta(_ item: AdminClaimEvidenceDTO) -> String {
-        var parts: [String] = [fileTypeLabel(item)]
+        let eligibility: String = if item.eligibleForReview == true {
+            "Eligible verified evidence"
+        } else if item.availabilityCode == "CLAIM_EVIDENCE_PRIVATE_REUPLOAD_REQUIRED" {
+            "Private re-upload required"
+        } else {
+            "Not verified for approval"
+        }
+        var parts: [String] = [eligibility]
         if let size = item.fileSize, size > 0 {
             parts.append(sizeLabel(size))
         }

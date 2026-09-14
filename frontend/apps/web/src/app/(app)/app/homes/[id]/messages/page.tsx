@@ -27,7 +27,7 @@ export default function HomeMessagesPage() {
         api.homes.getHomeOccupants(homeId),
       ]);
 
-      const home = homeRes.status === 'fulfilled' ? (homeRes.value as { home?: { owner_id?: string } })?.home : null;
+      const home = homeRes.status === 'fulfilled' ? (homeRes.value as { home?: { owner?: { id: string } | null } })?.home : null;
       const occupants = occupantsRes.status === 'fulfilled'
         ? (occupantsRes.value as { occupants?: Array<{ user_id: string; role?: string; can_manage_home?: boolean }> })?.occupants
         ?? (occupantsRes.value as { members?: Array<{ user_id: string; role_base?: string }> })?.members
@@ -35,8 +35,8 @@ export default function HomeMessagesPage() {
 
       const list = Array.isArray(occupants) ? occupants : [];
 
-      // Prefer owner_id from home, then find owner/admin from occupants
-      let targetUserId = home?.owner_id || null;
+      // Prefer the permitted verified primary owner, then a current owner/admin.
+      let targetUserId = home?.owner?.id || null;
 
       if (!targetUserId && list.length > 0) {
         // Find first owner, admin, or someone who can manage home
@@ -48,9 +48,6 @@ export default function HomeMessagesPage() {
         );
         if (ownerOrAdmin) {
           targetUserId = (ownerOrAdmin as { user_id: string }).user_id;
-        } else {
-          // Fallback: first member
-          targetUserId = (list[0] as { user_id: string }).user_id;
         }
       }
 

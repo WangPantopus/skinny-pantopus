@@ -136,6 +136,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     });
 
     nextSocket.on('connect_error', (err) => {
+      if (socketRef.current !== nextSocket) return;
       console.warn('[Socket] Connection retry:', err.message);
       setConnected(false);
     });

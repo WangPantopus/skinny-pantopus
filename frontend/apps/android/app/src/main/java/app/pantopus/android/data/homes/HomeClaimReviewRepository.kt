@@ -1,7 +1,9 @@
 package app.pantopus.android.data.homes
 
 import app.pantopus.android.data.api.models.homes.HomeClaimComparisonDto
+import app.pantopus.android.data.api.models.homes.HomeClaimDecisionReceipt
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimActionResponse
+import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimDetailResponse
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimResolveRelationshipRequest
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimReviewRequest
 import app.pantopus.android.data.api.models.homes.HomeOwnershipClaimsResponse
@@ -38,18 +40,24 @@ open class HomeClaimReviewRepository
         open suspend fun ownershipClaimComparison(homeId: String): NetworkResult<HomeClaimComparisonDto> =
             safeApiCall { api.ownershipClaimComparison(homeId) }
 
+        open suspend fun ownershipClaimDetail(
+            homeId: String,
+            claimId: String,
+        ): NetworkResult<HomeOwnershipClaimDetailResponse> = safeApiCall { api.ownershipClaimDetail(homeId, claimId) }
+
         /** `POST /api/homes/:id/ownership-claims/:claimId/review`. */
         open suspend fun reviewOwnershipClaim(
             homeId: String,
             claimId: String,
             action: String,
+            reviewToken: String,
             note: String? = null,
-        ): NetworkResult<HomeOwnershipClaimActionResponse> =
+        ): NetworkResult<HomeClaimDecisionReceipt> =
             safeApiCall {
                 api.reviewOwnershipClaim(
                     homeId,
                     claimId,
-                    HomeOwnershipClaimReviewRequest(action = action, note = note),
+                    HomeOwnershipClaimReviewRequest(action = action, reviewToken = reviewToken, note = note),
                 )
             }
 

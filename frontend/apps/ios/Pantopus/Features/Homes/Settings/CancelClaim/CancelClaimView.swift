@@ -64,7 +64,8 @@ public struct CancelClaimView: View {
                             .foregroundStyle(Theme.Color.appText)
                             .accessibilityAddTraits(.isHeader)
                         Text(
-                            "Your pending claim will be withdrawn. You can start a new claim later if you still need to verify ownership."
+                            "Your pending claim will be withdrawn. Its verification and audit history will be retained. "
+                                + "You can start a new claim later if needed."
                         )
                         .pantopusTextStyle(.small)
                         .foregroundStyle(Theme.Color.appTextSecondary)

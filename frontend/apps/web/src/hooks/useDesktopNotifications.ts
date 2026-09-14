@@ -45,9 +45,16 @@ export function useDesktopNotifications() {
     const openingToken = getAuthToken();
     const openingApi = getApiBaseUrl();
     let active = true;
+    let openingMarker: string | null | undefined;
+    try { openingMarker = localStorage.getItem(AUTH_SESSION_CHANGE_KEY); } catch { active = false; }
     const alerts = new Map<Notification, ReturnType<typeof setTimeout>>();
-    const current = () => active && openingToken !== null
-      && getAuthToken() === openingToken && getApiBaseUrl() === openingApi;
+    const current = () => {
+      if (!active || !openingToken || openingMarker === undefined) return false;
+      try {
+        return getAuthToken() === openingToken && getApiBaseUrl() === openingApi
+          && localStorage.getItem(AUTH_SESSION_CHANGE_KEY) === openingMarker;
+      } catch { return false; }
+    };
     const closeAlerts = () => {
       for (const [alert, timer] of alerts) { clearTimeout(timer); alert.close(); }
       alerts.clear();
@@ -82,7 +89,7 @@ export function useDesktopNotifications() {
         alerts.set(n, setTimeout(() => { n.close(); alerts.delete(n); }, 5000));
 
         // Navigate on click
-        const path = resolveWebNotificationPath(notif.link);
+        const path = resolveWebNotificationPath(notif.link, notif);
         if (path?.startsWith('/') && !path.startsWith('//') && !path.includes('\\')) {
           n.onclick = () => {
             if (!current()) { n.close(); return; }

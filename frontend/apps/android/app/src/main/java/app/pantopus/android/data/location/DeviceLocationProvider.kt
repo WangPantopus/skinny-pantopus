@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
@@ -14,77 +15,89 @@ import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Production location provider backed by Google Play services fused
- * location. Returns the device's best-known coordinate when runtime
- * permission is granted.
- */
+/** Current device permission and one acquisition budget cover both Fused reads. */
 @Singleton
-class DeviceLocationProvider
+class DeviceLocationProvider internal constructor(
+    private val fusedClient: FusedLocationProviderClient,
+    private val permissionGranted: () -> Boolean,
+    private val currentMillis: () -> Long,
+) : LocationProvider {
     @Inject
     constructor(
-        @ApplicationContext private val context: Context,
-    ) : LocationProvider {
-        private val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+        @ApplicationContext context: Context,
+    ) : this(
+        LocationServices.getFusedLocationProviderClient(context),
+        { hasLocationPermission(context) },
+        System::currentTimeMillis,
+    )
 
-        @Volatile
-        private var cached: UserCoordinate? = null
+    private data class CachedCoordinate(val coordinate: UserCoordinate, val recordedAt: Long)
 
-        override fun cachedCoordinate(): UserCoordinate? = cached
+    @Volatile
+    private var cached: CachedCoordinate? = null
 
-        override suspend fun requestCurrent(timeoutMillis: Long): UserCoordinate? {
-            if (!hasLocationPermission()) return cached
-
-            val fresh =
-                withTimeoutOrNull(timeoutMillis) {
-                    try {
-                        fusedClient
-                            .getCurrentLocation(
-                                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                                CancellationTokenSource().token,
-                            ).await()
-                            ?.toUserCoordinate()
-                    } catch (_: SecurityException) {
-                        null
-                    }
-                }
-
-            if (fresh != null) {
-                cached = fresh
-                return fresh
-            }
-
-            val lastKnown =
-                try {
-                    fusedClient.lastLocation.await()?.toUserCoordinate()
-                } catch (_: SecurityException) {
-                    null
-                }
-
-            if (lastKnown != null) {
-                cached = lastKnown
-            }
-            return lastKnown ?: cached
+    override fun cachedCoordinate(): UserCoordinate? {
+        if (!permissionGranted()) {
+            cached = null
+            return null
         }
-
-        private fun hasLocationPermission(): Boolean {
-            val fine =
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                ) == PackageManager.PERMISSION_GRANTED
-            val coarse =
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                ) == PackageManager.PERMISSION_GRANTED
-            return fine || coarse
-        }
-
-        private fun Location.toUserCoordinate(): UserCoordinate =
-            UserCoordinate(
-                latitude = latitude,
-                longitude = longitude,
-                accuracyMeters = maxOf(accuracy.toDouble(), 0.0),
-            )
+        return cached?.takeIf { isRecent(it.recordedAt) }?.coordinate
     }
+
+    override suspend fun requestCurrent(timeoutMillis: Long): UserCoordinate? {
+        if (!permissionGranted()) {
+            cached = null
+            return null
+        }
+        if (timeoutMillis <= 0) return null
+        val cancellation = CancellationTokenSource()
+        val result =
+            try {
+                withTimeoutOrNull(timeoutMillis) {
+                    // Explicit user acquisition must also work when GPS is the only source.
+                    val fresh =
+                        fusedClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellation.token)
+                            .await()?.validated()
+                    if (!permissionGranted()) return@withTimeoutOrNull null
+                    fresh ?: fusedClient.lastLocation.await()?.validated()
+                }
+            } catch (_: SecurityException) {
+                cached = null
+                null
+            } finally {
+                // Task.await cancellation alone does not cancel the Fused request.
+                cancellation.cancel()
+            }
+        if (!permissionGranted()) {
+            cached = null
+            return null
+        }
+        if (result != null) cached = result
+        return cachedCoordinate()
+    }
+
+    private fun isRecent(recordedAt: Long): Boolean = currentMillis() - recordedAt in -CLOCK_SKEW_MILLIS..MAX_AGE_MILLIS
+
+    private fun Location.validated(): CachedCoordinate? {
+        val validPosition =
+            latitude.isFinite() && latitude in -LATITUDE_LIMIT..LATITUDE_LIMIT &&
+                longitude.isFinite() && longitude in -LONGITUDE_LIMIT..LONGITUDE_LIMIT
+        val validAccuracy = hasAccuracy() && accuracy.isFinite() && accuracy >= 0
+        if (!isRecent(time) || !validPosition || !validAccuracy) {
+            return null
+        }
+        return CachedCoordinate(UserCoordinate(latitude, longitude, accuracy.toDouble()), time)
+    }
+
+    private companion object {
+        const val MAX_AGE_MILLIS = 120_000L
+        const val CLOCK_SKEW_MILLIS = 5_000L
+        const val LATITUDE_LIMIT = 90.0
+        const val LONGITUDE_LIMIT = 180.0
+
+        fun hasLocationPermission(context: Context): Boolean =
+            listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION).any {
+                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+            }
+    }
+}

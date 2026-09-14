@@ -11,10 +11,11 @@
  *  5. denied           — Request denied, show reason + alternate options
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { tenant } from '@pantopus/api';
+import { extractApiError } from '@pantopus/ui-utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 
 // ── Tier badge config ───────────────────────────────────────
@@ -44,25 +45,53 @@ export default function LandlordVerificationFlow({ homeId, onApproved, onBack }:
   const [error, setError] = useState('');
   const [status, setStatus] = useState<tenant.TenantHomeStatus | null>(null);
 
+  const lifetime = useRef({ active: true, generation: 0 });
+  const [statusGeneration, setStatusGeneration] = useState(0);
   const loadStatus = useCallback(async () => {
-    setLoading(true);
-    setError('');
+    const generation = ++lifetime.current.generation;
+    const current = () => lifetime.current.active && lifetime.current.generation === generation;
+    if (!current()) return;
+    setLoading(true); setStatus(null); setError('');
     try {
       const res = await api.tenant.getTenantHomeStatus(homeId);
-      setStatus(res);
+      if (!current()) return;
+      if (!res || res.home_id !== homeId || typeof res.landlord?.has_landlord !== 'boolean'
+        || !['none', 'pending', 'active', 'denied', 'ended'].includes(res.lease?.state)
+        || (res.lease.state !== 'none' && !res.lease.lease)
+        || (res.landlord.has_landlord && ['none', 'ended'].includes(res.lease.state)
+          && (res.request_context?.home_id !== homeId || typeof res.request_context.actor_id !== 'string'
+            || (res.request_context.lease_id !== null && typeof res.request_context.lease_id !== 'string')
+            || (res.request_context.lease_id === null ? res.request_context.lease_state !== null
+              : !['pending', 'active', 'ended', 'canceled'].includes(res.request_context.lease_state || ''))))) {
+        throw new Error('Could not confirm this home’s lease status. Please retry.');
+      }
+      setStatus(res); setStatusGeneration(generation);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load landlord status');
+      if (current()) setError(extractApiError(err, 'Failed to load landlord status'));
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }, [homeId]);
 
   useEffect(() => {
-    loadStatus();
+    lifetime.current.active = true;
+    void loadStatus();
+    const changed = () => { void loadStatus(); };
+    const storage = (event: StorageEvent) => {
+      if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed();
+    };
+    const unsubscribe = api.onTokenChange(changed);
+    window.addEventListener('storage', storage);
+    return () => {
+      lifetime.current.active = false; ++lifetime.current.generation;
+      unsubscribe(); window.removeEventListener('storage', storage);
+    };
   }, [loadStatus]);
+  const isCurrent = () => lifetime.current.active && lifetime.current.generation === statusGeneration
+    && status?.home_id === homeId;
 
   // ── Loading ─────────────────────────────────────────────
-  if (loading) {
+  if (loading || (status !== null && status.home_id !== homeId)) {
     return (
       <div className="max-w-lg mx-auto px-4 py-12">
         <div className="flex flex-col items-center justify-center py-16">
@@ -98,9 +127,11 @@ export default function LandlordVerificationFlow({ homeId, onApproved, onBack }:
   if (lease.state === 'active' && lease.lease) {
     return (
       <ApprovedState
+        key={statusGeneration}
         lease={lease.lease}
         homeId={homeId}
         onContinue={() => {
+          if (!isCurrent()) return;
           onApproved?.();
           router.refresh();
         }}
@@ -125,6 +156,8 @@ export default function LandlordVerificationFlow({ homeId, onApproved, onBack }:
   if (lease.state === 'pending' && lease.lease) {
     return (
       <PendingApprovalState
+        key={statusGeneration}
+        isCurrent={isCurrent}
         lease={lease.lease}
         landlord={landlord}
         homeId={homeId}
@@ -138,8 +171,11 @@ export default function LandlordVerificationFlow({ homeId, onApproved, onBack }:
   if (landlord.has_landlord) {
     return (
       <LandlordExistsState
+        key={statusGeneration}
+        isCurrent={isCurrent}
         landlord={landlord}
         homeId={homeId}
+        requestContext={status.request_context}
         onRequested={loadStatus}
       />
     );
@@ -165,33 +201,65 @@ function LandlordExistsState({
   landlord,
   homeId,
   onRequested,
+  isCurrent,
+  requestContext,
 }: {
   landlord: tenant.LandlordInfo;
   homeId: string;
   onRequested: () => void;
+  isCurrent: () => boolean;
+  requestContext: tenant.TenantHomeStatus['request_context'];
 }) {
   const [message, setMessage] = useState('');
   const [startDate, setStartDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showDetails, setShowDetails] = useState(false);
+  const observedContext = useRef(requestContext);
 
   const tier = TIER_BADGE[landlord.verification_tier || 'weak'] || TIER_BADGE.weak;
 
   const handleRequest = async () => {
+    if (!isCurrent()) return;
     setLoading(true);
     setError('');
     try {
       await api.tenant.requestApproval({
         home_id: homeId,
+        request_context: observedContext.current,
         start_at: startDate || null,
         message: message.trim() || null,
       });
-      onRequested();
+      if (isCurrent()) onRequested();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to submit request');
+      if (!isCurrent()) return;
+      // A reply can be lost after saving. Read the existing own-request status
+      // before offering another submission, and retain edits if it is unavailable
+      // or represents a different pending request.
+      try {
+        const latest = await api.tenant.getTenantHomeStatus(homeId);
+        if (!isCurrent()) return;
+        if (latest.home_id !== homeId || latest.request_context?.home_id !== homeId
+          || latest.request_context.actor_id !== observedContext.current.actor_id) {
+          throw new Error('Could not confirm the current request.');
+        }
+        const saved = latest.lease.lease;
+        if (['none', 'ended'].includes(latest.lease.state)
+          && (latest.request_context.lease_id === null ? latest.request_context.lease_state === null
+            : typeof latest.request_context.lease_id === 'string'
+              && ['pending', 'active', 'ended', 'canceled'].includes(latest.request_context.lease_state || ''))) {
+          observedContext.current = latest.request_context;
+        }
+        if (saved && ['pending', 'active'].includes(saved.state)
+          && (saved.metadata?.message || '') === message.trim()
+          && (saved.state === 'active' || !startDate || saved.start_at.slice(0, 10) === startDate)) {
+          onRequested();
+          return;
+        }
+      } catch { /* Keep the existing form and its edits for retry. */ }
+      if (isCurrent()) setError(extractApiError(err, 'Failed to submit request'));
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   };
 
@@ -315,7 +383,7 @@ function LandlordExistsState({
       </button>
 
       <p className="text-center text-xs text-app-text-muted mt-4">
-        Your landlord will be notified and can approve or deny your request.
+        The property owner can review your saved request and approve or deny it.
       </p>
     </div>
   );
@@ -438,12 +506,14 @@ function PendingApprovalState({
   homeId: _homeId,
   onCanceled,
   onRefresh,
+  isCurrent,
 }: {
   lease: tenant.TenantLease;
   landlord: tenant.LandlordInfo;
   homeId: string;
   onCanceled: () => void;
   onRefresh: () => void;
+  isCurrent: () => boolean;
 }) {
   const [canceling, setCanceling] = useState(false);
   const [cancelError, setCancelError] = useState('');
@@ -457,17 +527,18 @@ function PendingApprovalState({
   });
 
   const handleCancel = async () => {
+    if (!isCurrent()) return;
     const yes = await confirmStore.open({ title: 'Cancel approval request', description: 'You can submit a new one later.', confirmLabel: 'Cancel request', variant: 'destructive' });
-    if (!yes) return;
+    if (!yes || !isCurrent()) return;
     setCanceling(true);
     setCancelError('');
     try {
       await api.tenant.cancelRequest(lease.id);
-      onCanceled();
+      if (isCurrent()) onCanceled();
     } catch (err: unknown) {
-      setCancelError(err instanceof Error ? err.message : 'Failed to cancel request');
+      if (isCurrent()) setCancelError(extractApiError(err, 'Failed to cancel request'));
     } finally {
-      setCanceling(false);
+      if (isCurrent()) setCanceling(false);
     }
   };
 
@@ -496,7 +567,7 @@ function PendingApprovalState({
         Waiting for approval
       </h2>
       <p className="text-app-text-secondary text-center text-[15px] leading-relaxed mb-8 max-w-sm mx-auto">
-        Your request has been sent to the landlord. They&apos;ll review and approve your tenancy.
+        Your request is saved and waiting for review. The property owner can approve or deny it.
       </p>
 
       {/* Status badge */}
@@ -523,7 +594,7 @@ function PendingApprovalState({
           <div className="flex items-center justify-between text-sm">
             <span className="text-app-text-secondary">Requested start</span>
             <span className="font-medium text-app-text">
-              {new Date(lease.start_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              {new Date(lease.start_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
             </span>
           </div>
         )}
@@ -587,13 +658,13 @@ function ApprovedState({
   const startDate = new Date(lease.start_at).toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
-    year: 'numeric',
+    year: 'numeric', timeZone: 'UTC',
   });
   const endDate = lease.end_at
     ? new Date(lease.end_at).toLocaleDateString('en-US', {
         month: 'long',
         day: 'numeric',
-        year: 'numeric',
+        year: 'numeric', timeZone: 'UTC',
       })
     : null;
 
@@ -618,7 +689,7 @@ function ApprovedState({
         Welcome home!
       </h2>
       <p className="text-app-text-secondary text-center text-[15px] leading-relaxed mb-8 max-w-sm mx-auto">
-        Your landlord has approved your tenancy. You now have full access to your home.
+        Your landlord has approved your tenancy. Your Home permissions determine which features you can use.
       </p>
 
       {/* Verified badge */}
@@ -627,7 +698,7 @@ function ApprovedState({
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
           </svg>
-          Verified Tenant
+          Lease Approved
         </span>
       </div>
 

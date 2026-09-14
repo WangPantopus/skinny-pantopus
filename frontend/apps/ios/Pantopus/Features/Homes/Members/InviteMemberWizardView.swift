@@ -1,242 +1,292 @@
-//
-//  InviteMemberWizardView.swift
-//  Pantopus
-//
-//  T6.3a / P9 — UI for the Invite Member wizard. Composes WizardShell
-//  with three step bodies and dispatches the VM's `pendingEvent` to
-//  the caller via `onClose`.
-//
-
 import SwiftUI
+import UIKit
 
-/// Presented as a sheet from `MembersListView`. Calls `onClose` with
-/// the newly-created invitation (or nil on dismiss without submit).
-public struct InviteMemberWizardView: View {
-    @State private var viewModel: InviteMemberWizardViewModel
-    private let onClose: (InvitationDTO?) -> Void
+/// Review, save and recover ordinary Home invitation sender commands.
+@MainActor
+struct InviteMemberWizardView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var model: InviteMemberWizardViewModel
+    @State private var visible = false
+    @State private var confirmation: Confirmation?
+    @State private var sharing: Sharing?
+    private struct Sharing: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
 
-    public init(
+    private let onClose: (PendingHomeInvitationSender?) -> Void
+    private struct Confirmation: Identifiable {
+        let id = UUID()
+        let token: String
+        let requestId: String?
+        let lifetime: Int
+    }
+
+    init(
         homeId: String,
-        onClose: @escaping (InvitationDTO?) -> Void
+        target: HomeInvitationSenderTarget = .init(action: .create, invitationId: nil),
+        onClose: @escaping (PendingHomeInvitationSender?) -> Void
     ) {
-        _viewModel = State(initialValue: InviteMemberWizardViewModel(homeId: homeId))
+        _model = State(initialValue: InviteMemberWizardViewModel(homeId: homeId, target: target))
         self.onClose = onClose
     }
 
-    public var body: some View {
-        WizardShell(model: viewModel) {
-            stepBody
-            if let error = viewModel.errorMessage {
-                InviteMemberErrorBanner(message: error)
-            }
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                Text(title).pantopusTextStyle(.h2).accessibilityIdentifier("homeInvitationSenderHeading")
+                Text("Signed in as \(model.accountLabel)")
+                    .pantopusTextStyle(.body)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .accessibilityIdentifier("homeInvitationSenderAccount")
+                if let error = model.errorMessage {
+                    Text(error).foregroundStyle(Theme.Color.error).accessibilityIdentifier("homeInvitationSenderError")
+                }
+                if let original = model.pending {
+                    recovery(original)
+                } else if let context = model.context {
+                    review(context)
+                } else if model.canPrepare && model.target.action == .create {
+                    form
+                }
+                if model.isWorking { ProgressView("Checking invitation…").accessibilityIdentifier("homeInvitationSenderLoading") }
+                if model.errorMessage != nil || !model.opened {
+                    control("Reopen invitation recovery", "homeInvitationSenderReopen") { await model.open() }
+                }
+                Button("Close") { onClose(nil) }.frame(minHeight: 44).accessibilityIdentifier("homeInvitationSenderClose")
+                Text("An invitation offers household access under its role and dates. It does not verify residency or ownership. "
+                    + "Saved invitation actions and message delivery are separate.")
+                    .pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextSecondary)
+            }.padding(Spacing.s5).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .onChange(of: viewModel.pendingEvent) { _, event in
-            handle(event)
-        }
-        .onAppear {
-            Analytics.track(
-                .screenMembersWizardStepViewed(
-                    stepNumber: viewModel.currentStep.stepNumber,
-                    stepName: String(describing: viewModel.currentStep)
-                )
-            )
-        }
+        .background(Theme.Color.appBg)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("inviteMemberWizard")
-    }
-
-    @ViewBuilder
-    private var stepBody: some View {
-        switch viewModel.currentStep {
-        case .role:
-            RoleStep(viewModel: viewModel)
-        case .identify:
-            IdentifyStep(viewModel: viewModel)
-        case .review:
-            ReviewStep(viewModel: viewModel)
+        .task { visible = true
+            await model.open()
         }
-    }
-
-    private func handle(_ event: InviteMemberEvent?) {
-        guard let event else { return }
-        switch event {
-        case .dismiss:
-            onClose(nil)
-        case let .submitted(invitation):
-            onClose(invitation)
+        .task(id: model.sharingExpiresAt) {
+            guard let expiry = model.sharingExpiresAt else { return }
+            do { try await Task.sleep(for: .seconds(max(0, expiry.timeIntervalSinceNow))) } catch { return }
+            model.retireSharing()
         }
-        viewModel.pendingEvent = nil
-    }
-}
-
-// MARK: - Step 1: Role
-
-private struct RoleStep: View {
-    @Bindable var viewModel: InviteMemberWizardViewModel
-
-    var body: some View {
-        HeadlineBlock(InviteMemberStep.role.title)
-        SubcopyBlock(InviteMemberStep.role.subcopy)
-        VStack(spacing: Spacing.s2) {
-            ForEach([MemberRole.member, MemberRole.guest], id: \.self) { role in
-                RoleTile(
-                    role: role,
-                    isSelected: viewModel.form.role == role
+        .onDisappear { visible = false
+            confirmation = nil
+            model.suspend()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard visible else { return }
+            confirmation = nil
+            if phase == .active { Task { await model.open() } } else { model.suspend() }
+        }
+        .onChange(of: model.isCurrent) { _, current in
+            if !current { confirmation = nil
+                model.suspend()
+            }
+        }
+        .onChange(of: model.sharingChecked) { _, checked in if !checked { sharing = nil } }
+        .sheet(item: $sharing) { item in HomeInvitationSenderActivity(url: item.url) }
+        .confirmationDialog(
+            confirmation?.requestId == nil ? confirmationTitle : "Cancel the original attempt?",
+            isPresented: Binding(get: { confirmation != nil }, set: { if !$0 { confirmation = nil } }),
+            titleVisibility: .visible,
+            presenting: confirmation
+        ) { selected in
+            if let requestId = selected.requestId {
+                Button("Confirm cancellation", role: .destructive) {
+                    Task { await model.recover(.cancel, requestId: requestId, lifetime: selected.lifetime) }
+                }.accessibilityIdentifier("homeInvitationSenderConfirmCancel")
+            } else {
+                Button(
+                    "Confirm \(model.target.action == .withdraw ? "withdrawal" : model.target.action == .resend ? "resend" : "invitation")",
+                    role: model.target.action == .withdraw ? .destructive : nil
                 ) {
-                    viewModel.setRole(role)
-                }
+                    Task { await model.submit(reviewedToken: selected.token, lifetime: selected.lifetime) }
+                }.accessibilityIdentifier("homeInvitationSenderConfirm")
             }
+        } message: { selected in
+            Text(selected.requestId == nil ? confirmationMessage : cancellationMessage)
         }
     }
-}
 
-private struct RoleTile: View {
-    let role: MemberRole
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        let palette = role.palette
-        Button(action: onTap) {
-            HStack(spacing: Spacing.s3) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                        .fill(palette.background)
-                    Icon(role.icon, size: 22, color: palette.foreground)
+    private var title: String {
+        if let original = model.pending {
+            switch original.outcome?.state {
+            case "completed":
+                switch original.action {
+                case .withdraw: return "Invitation withdrawn"
+                case .resend: return "Resend saved"
+                default: return "Invitation saved"
                 }
-                .frame(width: 44, height: 44)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(role.label)
-                        .pantopusTextStyle(.body)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Theme.Color.appText)
-                    Text(role.tileSubcopy)
-                        .pantopusTextStyle(.caption)
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                }
-                Spacer()
-                if isSelected {
-                    Icon(.checkCircle, size: 20, color: Theme.Color.home)
-                }
+            case "cancelled": return "Attempt cancelled"
+            case "rejected": return "Action did not proceed"
+            default: return "Recover original invitation action"
             }
-            .padding(Spacing.s3)
-            .background(Theme.Color.appSurface)
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
-                    .stroke(
-                        isSelected ? Theme.Color.home : Theme.Color.appBorder,
-                        lineWidth: isSelected ? 2 : 1
-                    )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("inviteMember_role_\(role.rawValue)")
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        switch model.target.action {
+        case .withdraw: return "Withdraw invitation"
+        case .resend: return "Resend invitation"
+        case .create: return "Invite member"
+        }
     }
-}
 
-// MARK: - Step 2: Identify
+    private var confirmationTitle: String {
+        switch model.target.action {
+        case .withdraw: "Withdraw this invitation?"
+        case .resend: "Resend this invitation?"
+        case .create: "Create this invitation?"
+        }
+    }
 
-private struct IdentifyStep: View {
-    @Bindable var viewModel: InviteMemberWizardViewModel
+    private var confirmationMessage: String {
+        switch model.target.action {
+        case .create: "The recipient can accept the reviewed household access. Delivery will be reported separately."
+        case .resend: "This requests another delivery for the same invitation. "
+            + "Existing links and access dates remain valid; expiry is not extended."
+        case .withdraw: "This prevents future acceptance of this pending invitation. Existing membership is not removed."
+        }
+    }
 
-    var body: some View {
-        HeadlineBlock(InviteMemberStep.identify.title)
-        SubcopyBlock(InviteMemberStep.identify.subcopy)
-        FormFieldsBlock {
+    private var form: some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
             PantopusTextField(
                 "Email",
-                text: Binding(
-                    get: { viewModel.form.email },
-                    set: { viewModel.setEmail($0) }
-                ),
+                text: $model.email,
                 placeholder: "name@example.com",
                 keyboardType: .emailAddress,
                 contentType: .emailAddress,
                 identifier: "inviteMember_email"
             )
-            VStack(alignment: .leading, spacing: Spacing.s1) {
-                Text("Personal note (optional)")
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                TextEditor(text: Binding(
-                    get: { viewModel.form.message },
-                    set: { viewModel.setMessage($0) }
-                ))
-                .frame(minHeight: 80)
-                .padding(Spacing.s2)
-                .background(Theme.Color.appSurface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                        .stroke(Theme.Color.appBorder, lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+            Picker("Household role", selection: $model.role) {
+                Text("Member").tag("member")
+                Text("Guest").tag("guest")
+            }.pickerStyle(.segmented).accessibilityIdentifier("homeInvitationSenderRole")
+            Text("Access depends on the household's current permissions. Guest passes are issued separately from the Guests tab.")
+                .pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextSecondary)
+            Text("Personal note (optional)").pantopusTextStyle(.caption)
+            TextEditor(text: $model.message).frame(minHeight: 80)
                 .accessibilityIdentifier("inviteMember_message")
+            control("Review invitation", "homeInvitationSenderPrepare") { await model.prepare() }
+        }
+    }
+
+    private func review(_ context: HomeInvitationSenderContext) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            Text("Review current invitation details").pantopusTextStyle(.h3)
+            if model.target.action == .create, let payload = context.intent.dictValue?["payload"]?.dictValue {
+                Text(payload["email"]?.stringValue ?? "").accessibilityIdentifier("homeInvitationSenderRecipient")
+                Text("Role: \(payload["relationship"]?.stringValue ?? "")")
+                Text("Preset: \(HomeInvitationSenderValidation.presetLabel(payload["preset_key"]?.stringValue))")
+                if let note = payload["message"]?.stringValue { Text(note) }
+            } else {
+                Text(context.invitation["invitee"]?.dictValue.map(HomeInvitationSenderValidation.profileLabel)
+                    ?? context.invitation["invitee_email"]?.stringValue ?? "Selected account")
+                    .accessibilityIdentifier("homeInvitationSenderRecipient")
+                let role = HomeInvitationSenderValidation.effectiveRole(context.invitation) ?? "Invitation access"
+                Text("Role: \(role)")
+                Text("Preset: \(HomeInvitationSenderValidation.presetLabel(context.invitation["proposed_preset_key"]?.stringValue))")
+                ForEach(["expires_at", "access_start_at", "access_end_at"], id: \.self) { key in
+                    if let raw = context.invitation[key]?.stringValue, let date = HomeInvitationValidation.date(raw) {
+                        Text("\(dateLabel(key)): \(date.formatted(date: .abbreviated, time: .shortened))")
+                    }
+                }
+            }
+            Text(confirmationMessage).foregroundStyle(Theme.Color.appTextSecondary)
+            Button(submitLabel) {
+                confirmation = Confirmation(token: context.token, requestId: nil, lifetime: model.generation)
+            }.frame(minHeight: 44).disabled(!model.canSubmit).accessibilityIdentifier("homeInvitationSenderSubmit")
+            if model.target.action == .create {
+                Button("Edit invitation") { model.edit() }.frame(minHeight: 44).accessibilityIdentifier("homeInvitationSenderEdit")
             }
         }
     }
-}
 
-// MARK: - Step 3: Review
-
-private struct ReviewStep: View {
-    @Bindable var viewModel: InviteMemberWizardViewModel
-
-    var body: some View {
-        HeadlineBlock(InviteMemberStep.review.title)
-        SubcopyBlock(InviteMemberStep.review.subcopy)
-        ReviewSummaryBlock([
-            ReviewSummaryRow(label: "Role", value: viewModel.form.role.label),
-            ReviewSummaryRow(label: "Email", value: viewModel.form.email.trimmingCharacters(in: .whitespacesAndNewlines))
-        ])
-        if !viewModel.form.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            VStack(alignment: .leading, spacing: Spacing.s1) {
-                Text("Personal note")
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                Text(viewModel.form.message)
-                    .pantopusTextStyle(.body)
-                    .foregroundStyle(Theme.Color.appText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(Spacing.s3)
-                    .background(Theme.Color.appSurfaceSunken)
-                    .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+    private func recovery(_ original: PendingHomeInvitationSender) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            Text("Original action: \(original.action?.rawValue ?? "invitation")")
+                .accessibilityIdentifier("homeInvitationSenderOriginalAction")
+            Text(original.recipient).accessibilityIdentifier("homeInvitationSenderOriginalRecipient")
+            if original.homeId != model.homeId {
+                Text("This retained original belongs to another Home. It must be resolved before starting an action for this Home.")
+            }
+            if let outcome = original.outcome, outcome.isTerminal {
+                if outcome.state == "completed" {
+                    Text(original.action == .withdraw ? "The invitation was withdrawn. Existing membership was not changed."
+                        : "The invitation action is saved. A member-list refresh cannot change that result.")
+                    if original.action != .withdraw {
+                        Text(outcome.deliveryMessage).accessibilityIdentifier("homeInvitationSenderDelivery")
+                        control("Check link for sharing", "homeInvitationSenderCheckSharing") {
+                            await model.checkSharing(requestId: original.requestId)
+                        }
+                        if model.shareURL != nil {
+                            control("Share invitation link", "homeInvitationSenderShare") {
+                                if let url = await model.prepareShare(requestId: original.requestId, lifetime: model.generation) {
+                                    sharing = Sharing(url: url)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text(
+                        outcome.state == "cancelled" ? cancelledMessage : HomeInvitationSenderError.message(outcome.code)
+                    )
+                }
+                control("Acknowledge result", "homeInvitationSenderAcknowledge") {
+                    if let acknowledged = await model.acknowledge(requestId: original.requestId) { onClose(acknowledged) }
+                }
+            } else {
+                Text(
+                    "Keep this original until its saved result or cancellation is confirmed. "
+                        + "A retry uses the same request and cannot resend delivery."
+                )
+                control("Check original result", "homeInvitationSenderCheck") {
+                    await model.recover(.check, requestId: original.requestId, lifetime: model.generation)
+                }
+                control("Retry original action", "homeInvitationSenderRetry") {
+                    await model.recover(.retry, requestId: original.requestId, lifetime: model.generation)
+                }
+                Button("Cancel original attempt", role: .destructive) {
+                    confirmation = Confirmation(token: "", requestId: original.requestId, lifetime: model.generation)
+                }.frame(minHeight: 44).disabled(model.isWorking).accessibilityIdentifier("homeInvitationSenderCancel")
             }
         }
     }
-}
 
-// MARK: - Helpers
-
-private struct InviteMemberErrorBanner: View {
-    let message: String
-
-    var body: some View {
-        HStack(spacing: Spacing.s2) {
-            Icon(.alertCircle, size: 18, color: Theme.Color.error)
-            Text(message)
-                .pantopusTextStyle(.caption)
-                .foregroundStyle(Theme.Color.error)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(Spacing.s3)
-        .background(Theme.Color.errorBg)
-        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-        .accessibilityIdentifier("inviteMemberErrorBanner")
+    private func control(_ label: String, _ identifier: String, action: @escaping () async -> Void) -> some View {
+        Button(label) { Task { await action() } }.frame(minHeight: 44).disabled(model.isWorking).accessibilityIdentifier(identifier)
     }
-}
 
-private extension MemberRole {
-    /// Sub-line copy for the Role-step tiles.
-    var tileSubcopy: String {
-        switch self {
-        case .member: "Full access — tasks, bills, calendar, codes."
-        case .guest: "Short-term — sitters, visitors, contractors."
-        default: ""
+    private var cancellationMessage: String {
+        "A saved result wins if this action already completed. "
+            + "Cancelling an attempt does not withdraw an invitation or change membership."
+    }
+
+    private var cancelledMessage: String {
+        "The original attempt was cancelled. The invitation and existing membership were not changed."
+    }
+
+    private var submitLabel: String {
+        switch model.target.action {
+        case .withdraw: "Withdraw invitation"
+        case .resend: "Request resend"
+        case .create: "Create invitation"
+        }
+    }
+
+    private func dateLabel(_ key: String) -> String {
+        switch key {
+        case "expires_at": "Invitation expires"
+        case "access_start_at": "Access begins"
+        default: "Access ends"
         }
     }
 }
 
-#Preview {
-    InviteMemberWizardView(homeId: "preview-home") { _ in }
+private struct HomeInvitationSenderActivity: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context _: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_: UIActivityViewController, context _: Context) {}
 }

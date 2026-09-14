@@ -251,6 +251,7 @@ public enum RowPillTone: Sendable, Hashable {
 /// Single action description for `RowTrailing.verticalActions` (Connections
 /// pending-request Accept / Ignore stack).
 public struct VerticalAction: Sendable {
+    public let identifier: String?
     public let label: String
     public let variant: CompactButtonVariant
     public let handler: @Sendable () -> Void
@@ -258,8 +259,10 @@ public struct VerticalAction: Sendable {
     public init(
         label: String,
         variant: CompactButtonVariant,
+        identifier: String? = nil,
         handler: @escaping @Sendable () -> Void
     ) {
+        self.identifier = identifier
         self.label = label
         self.variant = variant
         self.handler = handler
@@ -540,6 +543,8 @@ public enum RowHighlight: Sendable, Hashable {
 public struct RowModel: Identifiable, Sendable {
     public let id: String
     public let title: String
+    /// Nil permits full recipient identities to wrap; other rows retain two lines.
+    public let titleLineLimit: Int?
     public let subtitle: String?
     public let template: RowTemplate
     public let leading: RowLeading
@@ -660,10 +665,12 @@ public struct RowModel: Identifiable, Sendable {
         bidderStack: BidderStackData? = nil,
         splitWith: SplitStackData? = nil,
         archetypeOverline: String? = nil,
-        destructiveAction: RowDestructiveAction? = nil
+        destructiveAction: RowDestructiveAction? = nil,
+        titleLineLimit: Int? = 2
     ) {
         self.id = id
         self.title = title
+        self.titleLineLimit = titleLineLimit
         self.subtitle = subtitle
         self.template = template
         self.leading = leading

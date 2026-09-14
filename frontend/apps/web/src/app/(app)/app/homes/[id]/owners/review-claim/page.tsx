@@ -1,17 +1,15 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { ArrowLeft, CheckCircle, Check, Flag, Shield, User, UserPlus, X } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
-
-const ROLE_LABELS: Record<string, string> = {
-  owner: 'Owner', renter: 'Renter', household: 'Household',
-  property_manager: 'Property Mgr', guest: 'Guest', member: 'Member',
-};
+import { useResidencyQueue } from '@/components/home/residency/queue/useResidencyQueue';
+import { ResidencyQueueContent } from '@/components/home/residency/queue/ResidencyQueueContent';
 
 type ClaimTab = 'ownership' | 'residency';
 
@@ -21,40 +19,64 @@ function ReviewClaimContent() {
 
   const [claims, setClaims] = useState<any[]>([]);
   const [comparison, setComparison] = useState<any | null>(null);
-  const [residencyClaims, setResidencyClaims] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<ClaimTab>('ownership');
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<ClaimTab>(searchParams.get('tab') === 'residency' ? 'residency' : 'ownership');
+  const residencyQueue = useResidencyQueue(homeId, activeTab === 'residency');
+  const [loadError, setLoadError] = useState('');
+  const [reload, setReload] = useState(0);
+  const generation = useRef(0);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
   const fetchClaims = useCallback(async () => {
     if (!homeId) return;
-    const [ownershipRes, residencyRes, comparisonRes] = await Promise.allSettled([
+    const request = ++generation.current;
+    const token = getAuthToken();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const [ownershipRes, comparisonRes] = await Promise.allSettled([
       api.homeOwnership.getHomeOwnershipClaims(homeId),
-      api.homes.getHomeClaims(homeId),
       api.homeOwnership.getOwnershipClaimComparison(homeId),
     ]);
-    if (ownershipRes.status === 'fulfilled') setClaims(ownershipRes.value.claims || []);
-    if (residencyRes.status === 'fulfilled') setResidencyClaims(residencyRes.value.claims || []);
+    if (request !== generation.current || token !== getAuthToken() || marker !== localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)) return;
+    setClaims(ownershipRes.status === 'fulfilled' ? ownershipRes.value.claims || [] : []);
+    setLoadError(ownershipRes.status === 'rejected' ? 'Current ownership claims could not be loaded. Reload to check access.' : '');
     setComparison(comparisonRes.status === 'fulfilled' ? comparisonRes.value : null);
   }, [homeId]);
 
-  useEffect(() => { setLoading(true); fetchClaims().finally(() => setLoading(false)); }, [fetchClaims]);
+  useEffect(() => {
+    let active = true;
+    setLoading(true); setClaims([]); setComparison(null); setLoadError('');
+    void fetchClaims().catch(() => { if (active) setLoadError('Current ownership claims could not be loaded.'); })
+      .finally(() => { if (active) setLoading(false); });
+    const retireGeneration = () => { generation.current++; };
+    const invalidate = () => { retireGeneration(); setClaims([]); setComparison(null); setActionLoading(null); };
+    const changed = () => { invalidate(); setReload(n => n + 1); };
+    const visibility = () => { if (document.visibilityState === 'hidden') { invalidate(); setLoading(true); } else changed(); };
+    const focus = () => { if (document.visibilityState !== 'hidden') changed(); };
+    const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed(); };
+    const unsubscribe = api.onTokenChange(changed);
+    window.addEventListener('storage', storage); window.addEventListener('focus', focus); document.addEventListener('visibilitychange', visibility);
+    return () => { active = false; retireGeneration(); unsubscribe(); window.removeEventListener('storage', storage);
+      window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', visibility); };
+  }, [fetchClaims, reload]);
 
   const handleOwnershipReview = useCallback(async (claimId: string, action: 'approve' | 'reject' | 'flag') => {
-    const labels = { approve: 'Approve', reject: 'Reject', flag: 'Flag as suspicious' };
-    const yes = await confirmStore.open({
-      title: labels[action],
-      description: `Are you sure you want to ${action} this ownership claim?`,
-      confirmLabel: labels[action],
-      variant: action === 'approve' ? 'primary' : 'destructive',
-    });
-    if (!yes) return;
-
     setActionLoading(claimId);
     try {
-      await api.homeOwnership.reviewOwnershipClaim(homeId!, claimId, { action });
+      const { claim } = await api.homeOwnership.getOwnershipClaimDetail(homeId!, claimId);
+      if (!claim.review_token) throw new Error('Reopen the claim before reviewing it.');
+      const labels = { approve: 'Approve', reject: 'Reject', flag: 'Flag for review' };
+      const verifiedCount = claim.evidence.filter(e => e.eligible_for_review === true).length;
+      const yes = await confirmStore.open({
+        title: labels[action],
+        description: `This is a ${claim.claim_type} claim with ${verifiedCount} verified evidence record(s). ${labels[action]} this claim?`,
+        confirmLabel: labels[action],
+        variant: action === 'approve' ? 'primary' : 'destructive',
+      });
+      if (!yes) return;
+      await api.homeOwnership.reviewOwnershipClaim(homeId!, claimId, { action, review_token: claim.review_token });
       toast.success(`Claim ${action === 'flag' ? 'flagged' : action + 'd'}`);
       await fetchClaims();
     } catch (err: any) { toast.error(err?.message || 'Failed to review claim'); }
@@ -65,6 +87,11 @@ function ReviewClaimContent() {
     claim: any,
     action: 'invite_to_household' | 'decline_relationship' | 'flag_unknown_person',
   ) => {
+    if (action !== 'invite_to_household') {
+      router.push(`/app/homes/${homeId}/owners/review-claim/relationship?claimId=${encodeURIComponent(claim.id)}&action=${action}`);
+      return;
+    }
+    const opening = generation.current;
     const claimId = claim.id;
     const isOwnerClaim = (claim.claim_type || 'owner') === 'owner';
     const actionMeta = {
@@ -76,57 +103,22 @@ function ReviewClaimContent() {
         confirmLabel: isOwnerClaim ? 'Invite as owner' : 'Send invite',
         variant: 'primary' as const,
       },
-      decline_relationship: {
-        title: 'Let review continue',
-        description: 'This keeps the claimant on the normal review path without changing their evidence.',
-        confirmLabel: 'Continue review',
-        variant: 'primary' as const,
-      },
-      flag_unknown_person: {
-        title: 'Flag unknown claimant',
-        description: 'This marks the claimant for admin review.',
-        confirmLabel: 'Flag claimant',
-        variant: 'destructive' as const,
-      },
     };
 
     const yes = await confirmStore.open(actionMeta[action]);
-    if (!yes) return;
+    if (!yes || opening !== generation.current) return;
 
     setActionLoading(claimId);
     try {
       await api.homeOwnership.resolveOwnershipClaimRelationship(homeId!, claimId, { action });
-      toast.success(action === 'invite_to_household' ? 'Invitation sent.' : 'Claim updated.');
+      toast.success('Invitation sent.');
       await fetchClaims();
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update claimant relationship');
     } finally {
       setActionLoading(null);
     }
-  }, [homeId, fetchClaims]);
-
-  const handleResidencyReview = useCallback(async (claimId: string, action: 'approve' | 'reject') => {
-    const labels = { approve: 'Approve', reject: 'Deny' };
-    const yes = await confirmStore.open({
-      title: labels[action],
-      description: `Are you sure you want to ${action} this residency claim?`,
-      confirmLabel: labels[action],
-      variant: action === 'approve' ? 'primary' : 'destructive',
-    });
-    if (!yes) return;
-
-    setActionLoading(claimId);
-    try {
-      if (action === 'approve') {
-        await api.homes.approveResidencyClaim(homeId!, claimId);
-      } else {
-        await api.homes.rejectResidencyClaim(homeId!, claimId);
-      }
-      toast.success(`Claim ${action === 'approve' ? 'approved' : 'denied'}`);
-      await fetchClaims();
-    } catch (err: any) { toast.error(err?.message || `Failed to ${action} claim`); }
-    finally { setActionLoading(null); }
-  }, [homeId, fetchClaims]);
+  }, [homeId, fetchClaims, router]);
 
   const pendingClaims = comparison?.claims?.length
     ? comparison.claims.filter((claim: any) =>
@@ -135,10 +127,6 @@ function ReviewClaimContent() {
     : claims.filter((c: any) =>
       ['submitted', 'pending_review', 'pending_challenge_window', 'needs_more_info'].includes(c.state)
     );
-  const pendingResidency = residencyClaims.filter((c: any) => c.status === 'pending');
-
-  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-3 border-emerald-600 border-t-transparent rounded-full" /></div>;
-
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
       <div className="flex items-center gap-3 mb-6">
@@ -148,23 +136,38 @@ function ReviewClaimContent() {
         <h1 className="text-xl font-bold text-app-text">Review Claims</h1>
       </div>
 
+      <div className="mb-5 flex flex-wrap gap-x-4 gap-y-2">
+        <Link href={`/app/homes/${homeId}/owners/review-claim/relationship`} prefetch={false}
+          className="inline-flex min-h-11 items-center text-sm underline">Relationship decisions and recovery</Link>
+        <Link href={`/app/homes/${homeId}/owners/review-claim/residency`} prefetch={false}
+          className="inline-flex min-h-11 items-center text-sm underline">Residency decisions and recovery</Link>
+        <Link href={`/app/homes/${homeId}/owners/review-claim/history`} prefetch={false}
+          className="inline-flex min-h-11 items-center text-sm underline">Your past residency decisions</Link>
+      </div>
+
       {/* Tabs */}
       <div className="flex gap-2 mb-5">
         {(['ownership', 'residency'] as ClaimTab[]).map((tab) => {
-          const count = tab === 'ownership' ? pendingClaims.length : pendingResidency.length;
+          const count = tab === 'ownership' ? (!loading && !loadError ? pendingClaims.length : null)
+            : residencyQueue.phase === 'ready' ? residencyQueue.claims.length : null;
           return (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`flex-1 py-2.5 rounded-lg text-sm font-semibold capitalize transition ${
                 activeTab === tab ? 'bg-emerald-600 text-white' : 'bg-app-surface-sunken text-app-text-secondary'
               }`}>
-              {tab} {count > 0 ? `(${count})` : ''}
+              {tab} {count !== null && count > 0 ? `(${count})` : ''}
             </button>
           );
         })}
       </div>
 
+      {activeTab === 'ownership' && loadError && <div role="alert" className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <p>{loadError}</p><button className="underline" onClick={() => setReload(n => n + 1)}>Reload claims</button>
+      </div>}
+
       {/* Ownership Claims */}
-      {activeTab === 'ownership' && (
+      {activeTab === 'ownership' && loading && <p role="status">Checking current ownership claims…</p>}
+      {activeTab === 'ownership' && !loading && !loadError && (
         pendingClaims.length === 0 ? (
           <div className="text-center py-16">
             <CheckCircle className="w-10 h-10 mx-auto text-app-text-muted mb-3" />
@@ -270,59 +273,9 @@ function ReviewClaimContent() {
         )
       )}
 
-      {/* Residency Claims */}
-      {activeTab === 'residency' && (
-        pendingResidency.length === 0 ? (
-          <div className="text-center py-16">
-            <CheckCircle className="w-10 h-10 mx-auto text-app-text-muted mb-3" />
-            <p className="text-sm text-app-text-secondary">No pending residency claims</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {pendingResidency.map((claim: any) => {
-              const daysAgo = claim.created_at ? Math.floor((Date.now() - new Date(claim.created_at).getTime()) / 86400000) : null;
-              return (
-                <div key={claim.id} className="bg-app-surface border border-app-border rounded-xl p-4">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-9 h-9 rounded-full bg-app-surface-sunken flex items-center justify-center flex-shrink-0">
-                      <User className="w-4 h-4 text-app-text-secondary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-app-text">
-                        {claim.claimant?.name || claim.claimant?.username || 'User'}
-                      </p>
-                      <p className="text-xs text-app-text-secondary">
-                        Requesting: {ROLE_LABELS[claim.claimed_role] || 'Member'}
-                      </p>
-                    </div>
-                    {daysAgo != null && <span className="text-xs text-app-text-muted">{daysAgo}d ago</span>}
-                  </div>
-                  {claim.claimed_address && (
-                    <p className="text-xs text-app-text-secondary mb-3 truncate">{claim.claimed_address}</p>
-                  )}
-
-                  {actionLoading === claim.id ? (
-                    <div className="flex justify-center py-3">
-                      <div className="animate-spin h-5 w-5 border-2 border-emerald-600 border-t-transparent rounded-full" />
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => handleResidencyReview(claim.id, 'approve')}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-500 text-white rounded-lg text-sm font-semibold hover:bg-green-600 transition">
-                        <Check className="w-4 h-4" /> Approve
-                      </button>
-                      <button onClick={() => handleResidencyReview(claim.id, 'reject')}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-red-200 bg-red-50 text-red-600 rounded-lg text-sm font-semibold hover:bg-red-100 transition">
-                        <X className="w-4 h-4" /> Deny
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )
-      )}
+      {activeTab === 'residency' && <section aria-label="Current residency claims">
+        <ResidencyQueueContent homeId={homeId} queue={residencyQueue} />
+      </section>}
     </div>
   );
 }

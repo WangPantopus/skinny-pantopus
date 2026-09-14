@@ -121,7 +121,7 @@ public final class MeViewModel {
         }
 
         let personal = Self.buildPersonal(profile: profile.user, stats: stats)
-        let home = Self.buildHome(homes: homes?.homes ?? [], profileLocality: Self.localityString(profile.user))
+        let home = Self.buildHome(homes: homes?.sharedHomes ?? [], profileLocality: Self.localityString(profile.user))
         let business = Self.buildBusiness(profile: profile.user)
         state = .loaded(personal: personal, home: home, business: business)
         await fetchInsights()
@@ -282,11 +282,11 @@ private extension MeViewModel {
         guard let primary = homes.first(where: { $0.isPrimaryOwner == true }) ?? homes.first else {
             return MeIdentityContent(
                 identity: .home,
-                displayName: "Claim a home",
+                displayName: "Your Homes",
                 initials: "H",
-                handle: "No home yet",
+                handle: "No shared Home",
                 locality: profileLocality,
-                tagline: "Add a home from the Hub to unlock household tools.",
+                tagline: "Open My homes for private tasks, invitations and verification progress.",
                 verified: false,
                 stats: [
                     MeStat(id: "bills", value: "—", label: "Bills due"),
@@ -302,7 +302,6 @@ private extension MeViewModel {
         let address = home.address ?? "Your home"
         let displayName = home.name?.isEmpty == false ? home.name ?? address : address
         let locality = [home.city, home.state].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        let memberCount = homes.count
         // Only surface the address as a tagline when the display name is
         // a separate household name (e.g. "Cozy Hideout") — otherwise
         // the tagline would just repeat the title.
@@ -311,14 +310,14 @@ private extension MeViewModel {
             identity: .home,
             displayName: displayName,
             initials: initials(from: displayName),
-            handle: "Household · \(memberCount) member\(memberCount == 1 ? "" : "s")",
+            handle: primary.ownershipStatus == "verified" ? "Ownership verified" : "Shared Home",
             locality: locality.isEmpty ? profileLocality : locality,
             tagline: homeTagline,
-            verified: primary.ownershipStatus == "verified",
+            verified: false,
             stats: [
                 MeStat(id: "bills", value: "—", label: "Bills due"),
                 MeStat(id: "tasks", value: "—", label: "Open tasks"),
-                MeStat(id: "members", value: "\(memberCount)", label: "Members")
+                MeStat(id: "members", value: "—", label: "Members")
             ],
             actionTiles: homeActionTiles(homeId: home.id),
             sections: withDebug(homeSections(

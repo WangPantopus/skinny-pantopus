@@ -23,7 +23,7 @@ const express = require('express');
 const router = express.Router();
 
 const verifyToken = require('../middleware/verifyToken');
-const { checkHomePermission } = require('../utils/homePermissions');
+const { checkHomePermission, getHomePersonalContext } = require('../utils/homePermissions');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const unlistedService = require('../services/unlistedService');
 const logger = require('../utils/logger');
@@ -41,7 +41,7 @@ router.get('/:id/unlisted', verifyToken, async (req, res) => {
     if (access.readFailed) {
       return res.status(500).json({ error: 'Could not load your removal list.' });
     }
-    if (!access.hasAccess) {
+    if (!access.hasAccess && !(await getHomePersonalContext(id, userId))) {
       return res.status(403).json({ error: 'You do not have access to this place.' });
     }
 
@@ -94,7 +94,7 @@ router.put('/:id/unlisted/removals/:brokerId', verifyToken, async (req, res) => 
     if (access.readFailed) {
       return res.status(500).json({ error: 'Could not load your removal list.' });
     }
-    if (!access.hasAccess) {
+    if (!access.hasAccess && !(await getHomePersonalContext(id, userId))) {
       return res.status(403).json({ error: 'You do not have access to this place.' });
     }
     const removal = await unlistedService.setRemovalStatus({

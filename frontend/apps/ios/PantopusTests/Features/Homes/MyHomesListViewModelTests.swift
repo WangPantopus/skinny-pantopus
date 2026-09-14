@@ -1,16 +1,3 @@
-//
-//  MyHomesListViewModelTests.swift
-//  PantopusTests
-//
-//  T6.3f / P14 — covers the refreshed `MyHomesListViewModel`. Validates:
-//    - load → loaded / empty / error transitions
-//    - row projection (title, subtitle assembly, role label, "Active
-//      home" chip on the primary-owner row, .home identity ring,
-//      ringProgress reflects ownership_status)
-//    - banner appears only when rows are loaded
-//    - FAB tinted `.home` with .secondaryCreate variant
-//
-
 import XCTest
 @testable import Pantopus
 
@@ -30,15 +17,15 @@ final class MyHomesListViewModelTests: XCTestCase {
     }
 
     func testLoadEmptyTransitionsToEmpty() async {
-        SequencedURLProtocol.sequence = [.status(200, body: "{\"homes\":[]}")]
-        let vm = MyHomesListViewModel(api: makeAPI())
+        SequencedURLProtocol.sequence = [.status(200, body: "{\"homes\":[]}"), .status(200, body: "{\"requests\":[],\"next_cursor\":null}")]
+        let vm = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
         await vm.load()
         guard case let .empty(content) = vm.state else {
             XCTFail("Expected .empty, got \(vm.state)")
             return
         }
-        XCTAssertEqual(content.headline, "You don\u{2019}t belong to any homes yet")
-        XCTAssertEqual(content.ctaTitle, "Claim a home")
+        XCTAssertEqual(content.headline, "No saved Homes yet")
+        XCTAssertEqual(content.ctaTitle, "Add a home")
         XCTAssertNil(vm.banner, "Banner is suppressed when there are no homes")
     }
 
@@ -46,18 +33,21 @@ final class MyHomesListViewModelTests: XCTestCase {
         SequencedURLProtocol.sequence = [
             .status(200, body: """
             {"homes":[
-              {"id":"h1","name":"Birch Lane","address":"412 Birch Ln","city":"Elm Park","state":"NY",
+              {"id":"00000000-0000-4000-8000-000000000001","name":"Birch Lane","address":"412 Birch Ln","city":"Elm Park","state":"NY",
                "ownership_status":"verified","is_primary_owner":true,
+               "access_kind":"shared","has_home_access":true,"role_base":"owner","can_delete_home":true,
                "occupancy":{"id":"o1","role":"owner","role_base":"owner","is_active":true,
                             "verification_status":"verified"}},
-              {"id":"h2","name":null,"address":"88 Greenwood Ave","city":"Sellwood","state":"OR",
+              {"id":"00000000-0000-4000-8000-000000000002","name":null,"address":"88 Greenwood Ave","city":"Sellwood","state":"OR",
                "ownership_status":null,
+               "access_kind":"shared","has_home_access":true,"role_base":"lease_resident","can_delete_home":false,
                "occupancy":{"id":"o2","role":"lease_resident","role_base":"lease_resident",
                             "is_active":true,"verification_status":"verified"}}
             ]}
-            """)
+            """),
+            .status(200, body: "{\"requests\":[],\"next_cursor\":null}")
         ]
-        let vm = MyHomesListViewModel(api: makeAPI())
+        let vm = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
         await vm.load()
         guard case let .loaded(sections, _) = vm.state,
               let rows = sections.first?.rows else {
@@ -65,36 +55,56 @@ final class MyHomesListViewModelTests: XCTestCase {
             return
         }
         XCTAssertEqual(rows.count, 2)
-        // Primary-owner row carries Active-home chip + nickname title.
-        XCTAssertEqual(rows[0].id, "h1")
+        // Role, independently verified ownership and household access are distinct.
+        XCTAssertEqual(rows[0].id, "00000000-0000-4000-8000-000000000001")
         XCTAssertEqual(rows[0].title, "Birch Lane")
-        XCTAssertEqual(rows[0].subtitle, "Owner · Elm Park, NY")
-        XCTAssertEqual(rows[0].chips?.count, 1)
-        XCTAssertEqual(rows[0].chips?.first?.text, "Active home")
-        if case let .avatar(_, _, identity, ringProgress) = rows[0].leading {
-            XCTAssertEqual(identity, .home)
-            XCTAssertEqual(ringProgress, 1.0)
-        } else {
-            XCTFail("Expected .avatar leading on primary row")
-        }
-        // Tenant row drops to address title + tenant role + lower ring.
+        XCTAssertEqual(rows[0].subtitle, "Owner role · Elm Park, NY")
+        XCTAssertEqual(rows[0].chips?.map(\.text), ["Ownership verified", "Household access"])
+        if case .typeIcon = rows[0].leading {} else { XCTFail("Expected Home icon without fabricated progress") }
+        // A lease-resident role and verified occupancy do not invent ownership.
         XCTAssertEqual(rows[1].title, "88 Greenwood Ave")
         XCTAssertEqual(rows[1].subtitle, "Tenant · Sellwood, OR")
-        XCTAssertNil(rows[1].chips, "Active-home chip is primary-only")
-        if case let .avatar(_, _, _, ringProgress) = rows[1].leading {
-            XCTAssertEqual(ringProgress, 0.3)
-        } else {
-            XCTFail("Expected .avatar leading on tenant row")
-        }
+        XCTAssertEqual(rows[1].chips?.map(\.text), ["Household access"])
+        if case .typeIcon = rows[1].leading {} else { XCTFail("Expected Home icon") }
         // Banner shows count + tap hint when populated.
         XCTAssertNotNil(vm.banner)
-        XCTAssertEqual(vm.banner?.title, "2 homes you belong to")
+        XCTAssertEqual(vm.banner?.title, "2 saved Homes")
+        let renderedSource: any ListOfRowsDataSource = vm
+        XCTAssertEqual(renderedSource.banner?.title, "2 saved Homes")
         XCTAssertEqual(vm.banner?.tint, .home)
+    }
+
+    func testVerifiedMemberAdmissionDoesNotInventResidencyOrOwnershipProof() async {
+        SequencedURLProtocol.sequence = [
+            .status(200, body: """
+            {"homes":[
+              {"id":"00000000-0000-4000-8000-000000000001","name":"Invited household",
+               "access_kind":"shared","has_home_access":true,"role_base":"member","can_delete_home":false,
+               "ownership_status":null,"verification_tier":null,
+               "occupancy":{"id":"membership","role":"member","role_base":"member","is_active":true,
+                            "verification_status":"verified"}},
+              {"id":"00000000-0000-4000-8000-000000000002","name":"Independent owner proof",
+               "access_kind":"shared","has_home_access":true,"role_base":"owner","can_delete_home":true,
+               "ownership_status":"verified","verification_tier":"legal","occupancy":null}
+            ]}
+            """),
+            .status(200, body: "{\"requests\":[],\"next_cursor\":null}")
+        ]
+        let vm = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
+        await vm.load()
+        guard case let .loaded(sections, _) = vm.state, let rows = sections.first?.rows else {
+            return XCTFail("Expected current household identities")
+        }
+        XCTAssertEqual(rows[0].subtitle, "Member")
+        XCTAssertEqual(rows[0].chips?.map(\.text), ["Household access"])
+        XCTAssertFalse(rows[0].chips?.contains { $0.text.contains("verified") } ?? true)
+        XCTAssertEqual(rows[1].subtitle, "Owner role")
+        XCTAssertEqual(rows[1].chips?.map(\.text), ["Ownership verified"])
     }
 
     func testLoadFailureTransitionsToErrorWhenCold() async {
         SequencedURLProtocol.sequence = [.status(500, body: "{\"error\":\"boom\"}")]
-        let vm = MyHomesListViewModel(api: makeAPI())
+        let vm = MyHomesListViewModel(api: makeAPI(), identity: { "list-tests" }, onOpenHome: { _ in })
         await vm.load()
         guard case .error = vm.state else {
             XCTFail("Expected .error, got \(vm.state)")
@@ -109,7 +119,7 @@ final class MyHomesListViewModelTests: XCTestCase {
             return
         }
         XCTAssertEqual(fab.tint, .home)
-        XCTAssertEqual(fab.accessibilityLabel, "Claim a home")
+        XCTAssertEqual(fab.accessibilityLabel, "Add a home")
         if case .secondaryCreate = fab.variant {} else {
             XCTFail("Expected .secondaryCreate variant, got \(fab.variant)")
         }

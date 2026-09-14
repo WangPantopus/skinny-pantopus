@@ -39,6 +39,15 @@ function assertSameUpload(record, { homeId, userId, fingerprint }, kind) {
   }
 }
 
+async function allowedVisibilities(homeId, userId, permission) {
+  const access = await checkHomePermission(homeId, userId, permission);
+  if (access.readFailed) throw fail('DOCUMENT_ACCESS_UNAVAILABLE', 'Could not check home access. Try again.');
+  if (!access.hasAccess) throw fail('DOCUMENT_ACCESS_DENIED', 'No access to this home document operation.', 403);
+  const visibility = await homeDocumentVisibilities(homeId, userId, access);
+  if (visibility.readFailed) throw fail('DOCUMENT_ACCESS_UNAVAILABLE', 'Could not check document access. Try again.');
+  return visibility.allowed;
+}
+
 function gate(permission) {
   return async (req, _res, next) => {
     try {
@@ -47,12 +56,7 @@ function gate(permission) {
       }
       req.params.homeId = req.params.homeId.toLowerCase();
       if (req.params.documentId) req.params.documentId = req.params.documentId.toLowerCase();
-      const access = await checkHomePermission(req.params.homeId, req.user.id, permission);
-      if (access.readFailed) throw fail('DOCUMENT_ACCESS_UNAVAILABLE', 'Could not check home access. Try again.');
-      if (!access.hasAccess) throw fail('DOCUMENT_ACCESS_DENIED', 'No access to this home document operation.', 403);
-      const visibility = await homeDocumentVisibilities(req.params.homeId, req.user.id, access);
-      if (visibility.readFailed) throw fail('DOCUMENT_ACCESS_UNAVAILABLE', 'Could not check document access. Try again.');
-      req.documentVisibilities = visibility.allowed;
+      req.documentVisibilities = await allowedVisibilities(req.params.homeId, req.user.id, permission);
       next();
     } catch (error) { next(error); }
   };
@@ -163,20 +167,35 @@ router.post('/:homeId/documents/upload', verifyToken, homeDocumentUploadLimiter,
   } catch (error) { next(error); }
 });
 
+async function downloadRecord(homeId, documentId, visibilities) {
+  const document = await row('HomeDocument', documentId);
+  if (!document || document.home_id !== homeId) throw fail('DOCUMENT_NOT_FOUND', 'Document not found.', 404);
+  if (!visibilities.includes(document.visibility)) throw fail('DOCUMENT_ACCESS_DENIED', 'No access to this document.', 403);
+  const file = document.file_id && await row('File', document.file_id);
+  if (!file || file.is_deleted || file.home_id !== homeId || file.id !== documentId || file.user_id !== document.created_by || file.metadata?.storage_contract !== 'home_document_v1') {
+    throw fail('DOCUMENT_NOT_FOUND', 'The document file is unavailable.', 404);
+  }
+  const sha256 = file.metadata.upload_sha256;
+  const keyId = file.metadata.storage_key_id || documentId;
+  if (file.file_path !== storage.documentKey(homeId, keyId, sha256)) throw fail('DOCUMENT_NOT_FOUND', 'The document file is unavailable.', 404);
+  return { file, reference: { homeId, documentId: keyId, sha256, bucketName: file.metadata.storage_bucket },
+    version: JSON.stringify([document.file_id, document.created_by, document.details?.upload_version || document.id,
+      file.metadata.upload_fingerprint, file.file_path, file.mime_type, file.file_size, file.original_filename]) };
+}
+
 router.get('/:homeId/documents/:documentId/content', verifyToken, gate('docs.view'), async (req, res, next) => {
   try {
     const { homeId, documentId } = req.params;
-    const document = await row('HomeDocument', documentId);
-    if (!document || document.home_id !== homeId) throw fail('DOCUMENT_NOT_FOUND', 'Document not found.', 404);
-    if (!req.documentVisibilities.includes(document.visibility)) throw fail('DOCUMENT_ACCESS_DENIED', 'No access to this document.', 403);
-    const file = document.file_id && await row('File', document.file_id);
-    if (!file || file.is_deleted || file.home_id !== homeId || file.id !== documentId || file.user_id !== document.created_by || file.metadata?.storage_contract !== 'home_document_v1') {
-      throw fail('DOCUMENT_NOT_FOUND', 'The document file is unavailable.', 404);
+    const before = await downloadRecord(homeId, documentId, req.documentVisibilities);
+    const bytes = await storage.download(before.reference);
+    // Provider reads can outlive a membership, visibility change, deletion or
+    // replacement. Re-read current authorization and identity before sending.
+    const after = await downloadRecord(homeId, documentId, await allowedVisibilities(homeId, req.user.id, 'docs.view'));
+    if (before.version !== after.version || before.reference.sha256 !== after.reference.sha256
+      || before.reference.bucketName !== after.reference.bucketName) {
+      throw fail('DOCUMENT_CHANGED', 'This document changed while opening. Open it again.', 409);
     }
-    const sha256 = file.metadata.upload_sha256;
-    const keyId = file.metadata.storage_key_id || documentId;
-    if (file.file_path !== storage.documentKey(homeId, keyId, sha256)) throw fail('DOCUMENT_NOT_FOUND', 'The document file is unavailable.', 404);
-    const bytes = await storage.download({ homeId, documentId: keyId, sha256, bucketName: file.metadata.storage_bucket });
+    const file = after.file;
     res.set({
       'Cache-Control': 'private, no-store',
       'Pragma': 'no-cache',

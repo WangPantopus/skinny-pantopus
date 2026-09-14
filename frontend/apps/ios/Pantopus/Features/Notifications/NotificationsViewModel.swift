@@ -297,6 +297,8 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
     // MARK: - Dependencies
 
     private let api: APIClient
+    private let taskScope: HomeClaimSessionScope
+    private let taskActorId: String?
     private let onSelect: @MainActor (NotificationDTO) -> Void
     private let now: @Sendable () -> Date
     private let calendar: Calendar
@@ -324,9 +326,19 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
         onSelect: @escaping @MainActor (NotificationDTO) -> Void = { _ in },
         now: @escaping @Sendable () -> Date = { Date() },
         calendar: Calendar = .current,
-        timeZone: TimeZone = .current
+        timeZone: TimeZone = .current,
+        taskScope: HomeClaimSessionScope? = nil,
+        taskActorId: String? = nil
     ) {
         self.api = api
+        self.taskScope = taskScope ?? HomeClaimSessionScope(api: api)
+        if let taskActorId {
+            self.taskActorId = taskActorId
+        } else if case let .signedIn(user) = (api.authProvider ?? AuthManager.shared).state {
+            self.taskActorId = user.id
+        } else {
+            self.taskActorId = nil
+        }
         let requested = NotificationsZone(rawValue: initialContext ?? "")
         hasExplicitZone = requested != nil
         zone = requested ?? .personal
@@ -652,13 +664,21 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
         }
     }
 
+    private func mayOpenTaskNotification(_ dto: NotificationDTO) -> Bool {
+        !HomeTaskNotificationRoute.isTask(dto.type) || (taskScope.isCurrent && taskActorId != nil
+            && dto.userId == taskActorId && (dto.context == nil || dto.context == "personal"))
+    }
+
     private func handleTap(dto: NotificationDTO) {
+        guard mayOpenTaskNotification(dto) else { return }
         if dto.isRead != true {
-            Task { @MainActor in await markRead(id: dto.id) }
+            Task { @MainActor in
+                guard mayOpenTaskNotification(dto) else { return }
+                await markRead(id: dto.id)
+            }
         }
-        if let link = dto.link, !link.isEmpty {
-            DeepLinkRouter.shared.handle(path: link)
-        }
+        let link = HomeTaskNotificationRoute.path(type: dto.type, homeId: dto.metadata?.homeId, taskId: dto.metadata?.taskId) ?? dto.link
+        if let link, !link.isEmpty { DeepLinkRouter.shared.handle(path: link) }
         onSelect(dto)
     }
 
@@ -828,7 +848,8 @@ private extension NotificationDTO {
             link: link,
             isRead: true,
             createdAt: createdAt,
-            context: context
+            context: context,
+            metadata: metadata
         )
     }
 }

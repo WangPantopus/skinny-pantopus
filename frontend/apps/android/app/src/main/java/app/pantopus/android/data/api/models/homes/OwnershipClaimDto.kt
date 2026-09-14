@@ -26,6 +26,13 @@ data class OwnershipClaimDto(
 @JsonClass(generateAdapter = true)
 data class MyOwnershipClaimsResponse(
     val claims: List<OwnershipClaimDto>,
+    @Json(name = "upload_session") val uploadSession: HomeClaimUploadSessionDto? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class HomeClaimUploadSessionDto(
+    @Json(name = "actor_id") val actorId: String,
+    @Json(name = "session_scope") val sessionScope: String,
 )
 
 /**

@@ -6,9 +6,9 @@ import { ClipboardList, Wrench, Wallet, Package, Users, CheckCircle, Calendar } 
 interface TodayCardProps {
   activeTasks: number;
   openIssues: number;
-  totalDue: number;
+  billsDueCount: number;
   pendingPkgs: number;
-  memberCount: number;
+  memberCount: number | null;
   events: Record<string, any>[];
   onNavigateTab: (tab: string) => void;
 }
@@ -16,7 +16,7 @@ interface TodayCardProps {
 export default function TodayCard({
   activeTasks,
   openIssues,
-  totalDue,
+  billsDueCount,
   pendingPkgs,
   memberCount,
   events,
@@ -31,6 +31,7 @@ export default function TodayCard({
 
   const upcomingEvents = events
     .filter((e) => new Date(e.start_at) >= today)
+    .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
     .slice(0, 3);
 
   // Build summary items
@@ -40,16 +41,16 @@ export default function TodayCard({
     summaryItems.push({ icon: <ClipboardList className="w-5 h-5" />, label: 'Active tasks', value: activeTasks, accent: 'text-blue-600', tab: 'tasks' });
   }
   if (openIssues > 0) {
-    summaryItems.push({ icon: <Wrench className="w-5 h-5" />, label: 'Open issues', value: openIssues, accent: 'text-red-600', tab: 'issues' });
+    summaryItems.push({ icon: <Wrench className="w-5 h-5" />, label: 'Open issues', value: openIssues, accent: 'text-red-600', tab: 'maintenance' });
   }
-  if (totalDue > 0) {
-    summaryItems.push({ icon: <Wallet className="w-5 h-5" />, label: 'Bills due', value: `$${totalDue.toFixed(0)}`, accent: 'text-amber-600', tab: 'bills' });
+  if (billsDueCount > 0) {
+    summaryItems.push({ icon: <Wallet className="w-5 h-5" />, label: 'Bills due', value: billsDueCount, accent: 'text-amber-600', tab: 'bills' });
   }
   if (pendingPkgs > 0) {
-    summaryItems.push({ icon: <Package className="w-5 h-5" />, label: 'Pending packages', value: pendingPkgs, accent: 'text-purple-600', tab: 'packages' });
+    summaryItems.push({ icon: <Package className="w-5 h-5" />, label: 'Pending packages', value: pendingPkgs, accent: 'text-purple-600', tab: 'deliveries' });
   }
 
-  const allClear = summaryItems.length === 0;
+  const allClear = summaryItems.length === 0 && upcomingEvents.length === 0;
 
   return (
     <div className="rounded-xl border border-app-border bg-app-surface shadow-sm p-5">
@@ -59,10 +60,10 @@ export default function TodayCard({
           <h2 className="text-lg font-bold text-app-text">Today</h2>
           <p className="text-xs text-app-text-secondary">{dateStr}</p>
         </div>
-        <div className="flex items-center gap-1 text-xs text-app-text-secondary">
+        {memberCount !== null && <div className="flex items-center gap-1 text-xs text-app-text-secondary">
           <Users className="w-4 h-4" />
           <span>{memberCount} member{memberCount !== 1 ? 's' : ''}</span>
-        </div>
+        </div>}
       </div>
 
       {/* Summary items */}
@@ -70,7 +71,7 @@ export default function TodayCard({
         <div className="text-center py-3">
           <div className="mb-1"><CheckCircle className="w-6 h-6 mx-auto text-green-500" /></div>
           <p className="text-sm font-medium text-app-text-strong">All clear!</p>
-          <p className="text-xs text-app-text-muted">No pending items today</p>
+          <p className="text-xs text-app-text-muted">No pending items in the Home sections you can view</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2">

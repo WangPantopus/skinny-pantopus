@@ -27,6 +27,8 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.homes.claim_review.CLAIM_SESSION_CHANGED
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.form.FormShell
 import app.pantopus.android.ui.screens.shared.form.FormShellLeading
 import app.pantopus.android.ui.theme.PantopusColors
@@ -59,6 +61,7 @@ class CancelClaimViewModel
     constructor(
         private val repo: HomesRepository,
         savedStateHandle: SavedStateHandle,
+        scopeFactory: HomeClaimSessionScopeFactory,
     ) : ViewModel() {
         val homeId: String = requireNotNull(savedStateHandle[CANCEL_CLAIM_HOME_ID_KEY])
 
@@ -72,14 +75,32 @@ class CancelClaimViewModel
         val completed: StateFlow<Boolean> = _completed.asStateFlow()
 
         private var claimId: String? = null
+        private val session = scopeFactory.create(viewModelScope)
+        private var generation = 0
+
+        init {
+            viewModelScope.launch {
+                session.invalidated.collect { if (it) _state.value = CancelClaimUiState.Error(CLAIM_SESSION_CHANGED) }
+            }
+        }
 
         fun load() {
+            if (_state.value is CancelClaimUiState.Submitting) return
+            if (!session.isCurrent) {
+                _state.value = CancelClaimUiState.Error(CLAIM_SESSION_CHANGED)
+                return
+            }
+            val revision = ++generation
+            claimId = null
             _state.value = CancelClaimUiState.Loading
             _submitError.value = null
             viewModelScope.launch {
-                when (val result = repo.myOwnershipClaims()) {
+                if (!session.confirmCurrent()) return@launch
+                val result = repo.myOwnershipClaims()
+                if (revision != generation || !session.confirmCurrent()) return@launch
+                when (result) {
                     is NetworkResult.Success -> {
-                        val claim = result.data.claims.firstOrNull { it.homeId == homeId }
+                        val claim = result.data.claims.firstOrNull { it.homeId == homeId && it.status in setOf("under_review", "rejected") }
                         if (claim == null) {
                             _state.value = CancelClaimUiState.NoClaim
                         } else {
@@ -94,7 +115,7 @@ class CancelClaimViewModel
         }
 
         fun submit() {
-            if (_completed.value || _state.value is CancelClaimUiState.Submitting) return
+            if (_completed.value || _state.value is CancelClaimUiState.Submitting || !session.isCurrent) return
             val id = claimId
             if (id == null) {
                 // Load failed previously — retry fetch.
@@ -105,9 +126,19 @@ class CancelClaimViewModel
             _state.value = CancelClaimUiState.Submitting
             _submitError.value = null
             viewModelScope.launch {
-                when (val result = repo.deleteOwnershipClaim(homeId, id)) {
+                if (!session.confirmCurrent()) return@launch
+                val result = repo.deleteOwnershipClaim(homeId, id)
+                if (!session.confirmCurrent()) return@launch
+                when (result) {
                     // Stay in Submitting until the host pops.
-                    is NetworkResult.Success -> _completed.value = true
+                    is NetworkResult.Success -> {
+                        if (result.data.matches(homeId, id)) {
+                            _completed.value = true
+                        } else {
+                            _submitError.value = "Could not confirm the withdrawal. Please retry."
+                            _state.value = CancelClaimUiState.Ready
+                        }
+                    }
                     is NetworkResult.Failure -> {
                         _submitError.value = result.error.message
                         _state.value = CancelClaimUiState.Ready
@@ -205,8 +236,8 @@ private fun CancelClaimBody(
                 )
                 Text(
                     text =
-                        "Your pending claim will be withdrawn. You can start a new claim " +
-                            "later if you still need to verify ownership.",
+                        "Your pending claim will be withdrawn. Its verification and audit history will be retained. " +
+                            "You can start a new claim later if needed.",
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
                     color = PantopusColors.appTextSecondary,

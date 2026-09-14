@@ -331,6 +331,9 @@ public protocol ListOfRowsDataSource: AnyObject, Observable {
     var selectedTab: String { get set }
     /// Optional FAB. Nil = no FAB.
     var fab: FABAction? { get }
+    /// Optional banner supplied by the concrete screen. Keep it a protocol
+    /// requirement so generic renderers dispatch to the observed data source.
+    var banner: BannerConfig? { get }
     /// Observed UI state.
     var state: ListOfRowsState { get }
 

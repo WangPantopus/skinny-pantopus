@@ -82,6 +82,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   const isAssigned = gigStatus === 'assigned';
   const isInProgress = gigStatus === 'in_progress';
   const isCompleted = gigStatus === 'completed';
+  const canCancel = (isOwner || isWorker) && ['open', 'assigned', 'in_progress'].includes(gigStatus);
   const isPaidGig = Number(gig?.price || 0) > 0;
   const acceptedBy = gig?.accepted_by ?? gig?.acceptedBy ?? null;
   const completionPhotos = gig.completion_photos ?? [];
@@ -131,7 +132,9 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
     checkNoShowEligibility();
   }, [gigId, gigStatus, currentUserId]);
 
-  const openCancelModal = () => setStopAction(isOwner && gigStatus === 'open' ? 'close' : 'cancel');
+  const openCancelModal = () => {
+    if (canCancel) setStopAction(isOwner && gigStatus === 'open' ? 'close' : 'cancel');
+  };
 
   const handleReportNoShow = async () => {
     setReportingNoShow(true);
@@ -253,12 +256,12 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
                 Reopen Bidding
               </button>
             )}
-            <button
+            {canCancel && <button
               onClick={openCancelModal}
               className="w-full bg-app-surface text-red-600 py-2 rounded-lg hover:bg-red-50 font-medium"
             >
               Close Gig
-            </button>
+            </button>}
           </div>
           {/* Poster report worker no-show */}
           {noShowCheck?.can_report && isOwner && (isAssigned || isInProgress) && (
@@ -678,7 +681,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
         </div>
       )}
 
-      {stopAction && currentUserId && <GigStopDialog
+      {stopAction && currentUserId && canCancel && <GigStopDialog
         key={`${currentUserId}:${gigId}:${stopAction}`} actorId={currentUserId}
         gigId={gigId} action={stopAction} isOwner={isOwner}
         onClose={() => setStopAction(null)} onCompleted={onStatusChange}

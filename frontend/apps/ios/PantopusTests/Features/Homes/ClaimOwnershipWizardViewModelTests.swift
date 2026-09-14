@@ -1,337 +1,241 @@
-//
-//  ClaimOwnershipWizardViewModelTests.swift
-//  PantopusTests
-//
-//  Covers the claim wizard state machine: navigation between steps,
-//  slot gating on submit, the 2-step submit-then-evidence flow, retry
-//  preservation on failure, and the success transition.
-//
-
 import Foundation
 import XCTest
 @testable import Pantopus
 
 @MainActor
 final class ClaimOwnershipWizardViewModelTests: XCTestCase {
+    private let f = PrivateEvidenceFixture()
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
     }
 
-    private func makeAPI() -> APIClient {
-        APIClient(
-            environment: .current,
-            session: SequencedURLProtocol.makeSession(),
-            retryPolicy: .none
-        )
+    private var requests: [URLRequest] {
+        SequencedURLProtocol.capturedRequests
     }
 
-    private func makeUploader() -> MultipartUploader {
-        MultipartUploader(
-            environment: .current,
-            session: SequencedURLProtocol.makeSession()
-        )
-    }
-
-    private func makeVM() -> ClaimOwnershipWizardViewModel {
+    private func makeVM(
+        identity: @escaping () -> String? = { "opening" },
+        type: ClaimVerificationType = .owner
+    ) -> ClaimOwnershipWizardViewModel {
         ClaimOwnershipWizardViewModel(
-            homeId: "home-1",
-            api: makeAPI(),
-            uploader: makeUploader()
-        ) { true }
+            homeId: f.home,
+            api: f.api(),
+            verificationType: type,
+            evidenceClient: f.client(identity: identity),
+            makeUploadId: { self.f.upload },
+            isOnlineProvider: { true }
+        )
     }
 
-    private func waitFor(
-        _ description: String = "predicate",
-        timeout: TimeInterval = 15.0,
-        _ predicate: @MainActor () -> Bool
-    ) async {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if predicate() { return }
-            try? await Task.sleep(nanoseconds: 25_000_000)
-        }
-        XCTFail("Timed out waiting for \(description)")
+    private func loaded() async -> ClaimOwnershipWizardViewModel {
+        f.routes()
+        let vm = makeVM()
+        await vm.load()
+        vm.primaryTapped()
+        return vm
     }
 
-    func testInitialStateIsStartStep() {
+    func testInitialAndUploadStepsRemainDisabledUntilAuthenticatedScopeLoads() async {
         let vm = makeVM()
         XCTAssertEqual(vm.currentStep, .start)
-        XCTAssertFalse(vm.bothSlotsHaveFiles)
-        XCTAssertEqual(vm.chrome.primaryCTALabel, "Start claim")
-    }
-
-    func testPrimaryFromStartAdvancesToUpload() {
-        let vm = makeVM()
+        XCTAssertFalse(vm.canPick)
         vm.primaryTapped()
-        XCTAssertEqual(vm.currentStep, .upload)
-        XCTAssertEqual(vm.chrome.primaryCTALabel, "Submit claim")
-        XCTAssertFalse(vm.chrome.primaryCTAEnabled)
-    }
-
-    func testSubmitBlockedWhenSlotsEmpty() async {
-        let vm = makeVM()
-        vm.primaryTapped() // → upload
+        vm.picked(.ownership, file: f.file)
         await vm.submit()
-        // Without slots filled, no requests should fire.
-        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 0)
-        XCTAssertEqual(vm.currentStep, .upload)
+        XCTAssertFalse(vm.canSubmit)
+        XCTAssertTrue(requests.isEmpty)
     }
 
-    func testFillingSlotsEnablesSubmit() {
-        let vm = makeVM()
-        vm.primaryTapped()
-        vm.picked(.identity, file: ClaimPickedFile(filename: "id.jpg", mimeType: "image/jpeg", data: Data([1, 2, 3])))
-        XCTAssertFalse(vm.bothSlotsHaveFiles)
-        vm.picked(.ownership, file: ClaimPickedFile(filename: "deed.pdf", mimeType: "application/pdf", data: Data([9, 9])))
-        XCTAssertTrue(vm.bothSlotsHaveFiles)
-        XCTAssertTrue(vm.chrome.primaryCTAEnabled)
+    func testOneManualPropertyDocumentEnablesSubmissionWithoutIdentityAttestation() async {
+        let vm = await loaded()
+        vm.picked(.identity, file: f.file)
+        XCTAssertFalse(vm.canSubmit)
+        vm.picked(.ownership, file: f.file)
+        XCTAssertTrue(vm.canSubmit)
+        XCTAssertEqual(vm.activeSlots, [.ownership])
+        XCTAssertFalse(vm.documentOptions.contains { ["idv", "title_match", "escrow_attestation"].contains($0.id) })
+        XCTAssertTrue(vm.addressMatches.isEmpty)
     }
 
-    func testRemoveSlotResetsToEmpty() {
-        let vm = makeVM()
-        vm.primaryTapped()
-        vm.picked(.identity, file: ClaimPickedFile(filename: "id.jpg", mimeType: "image/jpeg", data: Data([1])))
-        XCTAssertTrue(vm.slots[.identity]?.hasFile == true)
-        vm.remove(.identity)
-        XCTAssertFalse(vm.slots[.identity]?.hasFile == true)
-    }
-
-    func testSubmitFailureKeepsFilesAndShowsError() async {
-        // Submit endpoint returns 500 → wizard stays on upload, slots remain.
-        SequencedURLProtocol.sequence = [
-            .status(500, body: "{\"error\":\"server\"}")
-        ]
-        let vm = makeVM()
-        vm.primaryTapped() // → upload
-        vm.picked(.identity, file: ClaimPickedFile(filename: "id.jpg", mimeType: "image/jpeg", data: Data([1])))
-        vm.picked(.ownership, file: ClaimPickedFile(filename: "deed.pdf", mimeType: "application/pdf", data: Data([2])))
+    func testSuccessfulPrivateUploadReturnsPendingStatusAndNeverRegistersGenericURL() async {
+        let vm = await loaded()
+        vm.picked(.ownership, file: f.file)
         await vm.submit()
-        XCTAssertEqual(vm.currentStep, .upload)
-        XCTAssertNotNil(vm.submitError)
-        XCTAssertTrue(vm.slots[.identity]?.hasFile == true)
-        XCTAssertTrue(vm.slots[.ownership]?.hasFile == true)
-    }
-
-    func testSubmitHappyPathAdvancesToSuccess() async {
-        // Sequence: create-claim → upload file #1 → evidence #1 → upload file #2 → evidence #2
-        SequencedURLProtocol.sequence = [
-            .status(201, body: """
-            {"message":"ok","claim":{"id":"claim-1","status":"under_review"},"next_step":"upload_evidence"}
-            """),
-            .status(200, body: """
-            {"message":"uploaded","file":{"id":"f-1","url":"https://files/pantopus/x1"}}
-            """),
-            .status(201, body: """
-            {"evidence":{"id":"e-1","evidence_type":"idv"},"verification_tier":null}
-            """),
-            .status(200, body: """
-            {"message":"uploaded","file":{"id":"f-2","url":"https://files/pantopus/x2"}}
-            """),
-            .status(201, body: """
-            {"evidence":{"id":"e-2","evidence_type":"deed"},"verification_tier":null}
-            """)
-        ]
-        let vm = makeVM()
-        vm.primaryTapped()
-        vm.picked(.identity, file: ClaimPickedFile(filename: "id.jpg", mimeType: "image/jpeg", data: Data([1])))
-        vm.picked(.ownership, file: ClaimPickedFile(filename: "deed.pdf", mimeType: "application/pdf", data: Data([2])))
-        await vm.submit()
-        await waitFor("currentStep == .success") { vm.currentStep == .success }
-        XCTAssertNil(vm.submitError)
-        // The success step chrome should hide the progress bar.
-        XCTAssertFalse(vm.chrome.showsProgressBar)
-        XCTAssertEqual(vm.chrome.primaryCTALabel, "View status")
-    }
-
-    func testNoteCarriedAsMetadataOnFirstEvidence() async {
-        SequencedURLProtocol.sequence = [
-            .status(201, body: """
-            {"message":"ok","claim":{"id":"claim-2","status":"under_review"}}
-            """),
-            .status(200, body: """
-            {"message":"uploaded","file":{"id":"f-1","url":"https://files/pantopus/n1"}}
-            """),
-            .status(201, body: """
-            {"evidence":{"id":"e-1"},"verification_tier":null}
-            """),
-            .status(200, body: """
-            {"message":"uploaded","file":{"id":"f-2","url":"https://files/pantopus/n2"}}
-            """),
-            .status(201, body: """
-            {"evidence":{"id":"e-2"},"verification_tier":null}
-            """)
-        ]
-        let vm = makeVM()
-        vm.primaryTapped()
-        vm.note = "Inherited from grandparents"
-        vm.picked(.identity, file: ClaimPickedFile(filename: "id.jpg", mimeType: "image/jpeg", data: Data([1])))
-        vm.picked(.ownership, file: ClaimPickedFile(filename: "deed.pdf", mimeType: "application/pdf", data: Data([2])))
-        await vm.submit()
-        await waitFor("currentStep == .success") { vm.currentStep == .success }
-        // Captured requests: 0=createClaim, 1=upload, 2=evidence#1, 3=upload, 4=evidence#2.
-        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 5)
-        let evidence1 = SequencedURLProtocol.capturedRequests[2]
-        guard let body = evidence1.httpBody ?? bodyData(from: evidence1) else {
-            XCTFail("Expected body on evidence request")
-            return
-        }
-        let json = String(data: body, encoding: .utf8) ?? ""
-        XCTAssertTrue(json.contains("\"note\":\"Inherited from grandparents\""))
-        let evidence2 = SequencedURLProtocol.capturedRequests[4]
-        if let body2 = evidence2.httpBody ?? bodyData(from: evidence2) {
-            let json2 = String(data: body2, encoding: .utf8) ?? ""
-            XCTAssertFalse(json2.contains("\"note\""))
-        }
-    }
-
-    /// `URLSession.upload(for:from:)` sometimes drops the buffered body
-    /// from `URLRequest` and exposes it on `httpBodyStream`. Drain that
-    /// stream if needed so the assertion above can read the JSON.
-    private func bodyData(from request: URLRequest) -> Data? {
-        guard let stream = request.httpBodyStream else { return nil }
-        stream.open()
-        defer { stream.close() }
-        var data = Data()
-        let bufferSize = 4096
-        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-        defer { buffer.deallocate() }
-        while stream.hasBytesAvailable {
-            let read = stream.read(buffer, maxLength: bufferSize)
-            if read <= 0 { break }
-            data.append(buffer, count: read)
-        }
-        return data
-    }
-
-    func testDuplicateClaimNilIdSurfacesFriendlyError() async {
-        SequencedURLProtocol.sequence = [
-            // Opaque-handshake duplicate: claim.id is nil.
-            .status(200, body: """
-            {"message":"ok","claim":{"id":null,"status":"under_review"}}
-            """)
-        ]
-        let vm = makeVM()
-        vm.primaryTapped()
-        vm.picked(.identity, file: ClaimPickedFile(filename: "id.jpg", mimeType: "image/jpeg", data: Data([1])))
-        vm.picked(.ownership, file: ClaimPickedFile(filename: "deed.pdf", mimeType: "application/pdf", data: Data([2])))
-        await vm.submit()
-        XCTAssertEqual(vm.currentStep, .upload)
-        // A nil claim id on the opaque-handshake path means a duplicate already
-        // exists — the same user-visible outcome as a 409. It now raises the
-        // blocked prompt (which offers "Search homes", matching RN's
-        // `claim-owner/evidence.tsx:194-212`) rather than a bare error string.
+        XCTAssertEqual(vm.currentStep, .success)
         XCTAssertNil(vm.submitError)
         XCTAssertEqual(
-            vm.blockedByOtherClaimPrompt?.contains("verification is already in progress"),
-            true
+            requests.filter { $0.httpMethod == "POST" }.compactMap { $0.url?.path },
+            ["/api/homes/\(f.home)/ownership-claims", f.uploadPath]
         )
-    }
-
-    func testBackOnUploadReturnsToStart() {
-        let vm = makeVM()
+        XCTAssertTrue(vm.submissionOutcomeNote?.contains("pending evidence") == true)
+        XCTAssertFalse(vm.chrome.showsProgressBar)
         vm.primaryTapped()
-        XCTAssertEqual(vm.currentStep, .upload)
-        vm.leadingTapped()
-        XCTAssertEqual(vm.currentStep, .start)
+        XCTAssertEqual(vm.pendingEvent, .openClaimsList)
     }
 
-    func testStartChromeDirtyAfterFilesPickedThenBack() {
-        // Regression: when the user picks files on Upload then backs to
-        // Start, tapping X must still trigger the discard-confirm
-        // sheet — otherwise the in-memory bytes are dumped silently.
-        let vm = makeVM()
-        vm.primaryTapped() // → upload
-        vm.picked(.identity, file: ClaimPickedFile(filename: "id.jpg", mimeType: "image/jpeg", data: Data([1])))
-        XCTAssertTrue(vm.chrome.dirty, "Upload chrome should be dirty after picking a file")
-        vm.leadingTapped() // back to start
-        XCTAssertEqual(vm.currentStep, .start)
-        XCTAssertTrue(
-            vm.chrome.dirty,
-            "Start chrome should stay dirty so X tap triggers discard-confirm"
-        )
-    }
-
-    func testRetrySkipsClaimCreationAndCachedSlot() async {
-        // First attempt: claim + slot1 round-trip succeed; slot2 upload
-        // succeeds; slot2 evidence registration fails. The wizard
-        // remains on Upload with .failed slot2.
-        SequencedURLProtocol.sequence = [
-            // 1. Create claim
-            .status(201, body: """
-            {"message":"ok","claim":{"id":"claim-r","status":"under_review"}}
-            """),
-            // 2. Upload slot 1
-            .status(200, body: """
-            {"message":"ok","file":{"id":"f-1","url":"https://files/pantopus/r1"}}
-            """),
-            // 3. Evidence slot 1
-            .status(201, body: """
-            {"evidence":{"id":"e-1"},"verification_tier":null}
-            """),
-            // 4. Upload slot 2
-            .status(200, body: """
-            {"message":"ok","file":{"id":"f-2","url":"https://files/pantopus/r2"}}
-            """),
-            // 5. Evidence slot 2 — fails
-            .status(500, body: "{\"error\":\"server\"}")
-        ]
-        let vm = makeVM()
-        vm.primaryTapped()
-        vm.picked(.identity, file: ClaimPickedFile(filename: "id.jpg", mimeType: "image/jpeg", data: Data([1])))
-        vm.picked(.ownership, file: ClaimPickedFile(filename: "deed.pdf", mimeType: "application/pdf", data: Data([2])))
+    func testLostUploadRetryKeepsClaimAndUploadIdentity() async {
+        let vm = await loaded()
+        vm.picked(.ownership, file: f.file)
+        SequencedURLProtocol.routeResponses[f.uploadPath] = [.status(503, body: "{}"), .status(200, body: f.json(["evidence": f.record()]))]
         await vm.submit()
         XCTAssertEqual(vm.currentStep, .upload)
         XCTAssertNotNil(vm.submitError)
-        let firstAttemptCount = SequencedURLProtocol.capturedRequests.count
-        XCTAssertEqual(firstAttemptCount, 5)
-
-        // Retry: only the evidence call for slot 2 should fly. No new
-        // claim, no new uploads (slot 1 is .uploaded, slot 2 has a
-        // cached URL).
-        SequencedURLProtocol.capturedRequests = []
-        SequencedURLProtocol.sequence = [
-            .status(201, body: """
-            {"evidence":{"id":"e-2"},"verification_tier":null}
-            """)
-        ]
+        XCTAssertEqual(vm.slots[.ownership]?.pickedFile, f.file)
         await vm.submit()
-        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 1)
         XCTAssertEqual(vm.currentStep, .success)
+        XCTAssertEqual(requests.filter { $0.url?.path == "/api/homes/\(f.home)/ownership-claims" }.count, 1)
+        let uploads = requests.filter { $0.url?.path == f.uploadPath }
+        XCTAssertEqual(uploads.count, 2)
+        for upload in uploads {
+            XCTAssertEqual(upload.value(forHTTPHeaderField: "X-Pantopus-Session-Scope"), f.scope)
+        }
     }
 
-    func testFileTooLargeSetsInlineError() {
-        let vm = makeVM()
-        vm.primaryTapped()
-        vm.fileTooLarge(for: .identity)
-        XCTAssertEqual(vm.submitError, "That file is over 10 MB. Try a smaller photo.")
-    }
-
-    func testSuccessPrimaryDispatchesOpenClaimsList() async {
-        SequencedURLProtocol.sequence = [
-            .status(201, body: """
-            {"message":"ok","claim":{"id":"claim-3","status":"under_review"}}
-            """),
-            .status(200, body: """
-            {"message":"uploaded","file":{"id":"f-1","url":"https://files/pantopus/s1"}}
-            """),
-            .status(201, body: """
-            {"evidence":{"id":"e-1"},"verification_tier":null}
-            """),
-            .status(200, body: """
-            {"message":"uploaded","file":{"id":"f-2","url":"https://files/pantopus/s2"}}
-            """),
-            .status(201, body: """
-            {"evidence":{"id":"e-2"},"verification_tier":null}
-            """)
+    func testUnknownUploadCannotDiscardOrReplaceItsFileTypeOrRetryIdentity() async throws {
+        let vm = await loaded()
+        vm.picked(.ownership, file: f.file)
+        SequencedURLProtocol.routeResponses[f.uploadPath] = [
+            .status(503, body: "{}"), .status(200, body: f.json(["evidence": f.record()]))
         ]
-        let vm = makeVM()
-        vm.primaryTapped()
-        vm.picked(.identity, file: ClaimPickedFile(filename: "id.jpg", mimeType: "image/jpeg", data: Data([1])))
-        vm.picked(.ownership, file: ClaimPickedFile(filename: "deed.pdf", mimeType: "application/pdf", data: Data([2])))
         await vm.submit()
-        await waitFor("step is success") { vm.currentStep == .success }
-        vm.primaryTapped()
+        XCTAssertTrue(vm.needsUploadRecovery)
+        XCTAssertFalse(vm.canPick)
+        XCTAssertTrue(vm.canSubmit)
+        vm.remove(.ownership)
+        vm.selectDocumentType("tax_bill")
+        vm.picked(.ownership, file: .init(filename: "replacement.txt", mimeType: "text/plain", data: Data("replacement".utf8)))
+        XCTAssertEqual(vm.slots[.ownership]?.pickedFile, f.file)
+        XCTAssertEqual(vm.selectedDocumentType, "deed")
+        vm.manageSavedDocuments()
         XCTAssertEqual(vm.pendingEvent, .openClaimsList)
+        vm.acknowledgePendingEvent()
+        await vm.submit()
+        XCTAssertEqual(vm.currentStep, .success)
+        let uploads = requests.filter { $0.url?.path == f.uploadPath }
+        XCTAssertEqual(uploads.count, 2)
+        for request in uploads {
+            let body = try XCTUnwrap(String(data: XCTUnwrap(request.authTestBodyData()), encoding: .utf8))
+            XCTAssertTrue(body.contains(f.upload))
+            XCTAssertTrue(body.contains("exact private proof"))
+            XCTAssertTrue(body.contains("deed"))
+            XCTAssertFalse(body.contains("replacement"))
+            XCTAssertFalse(body.contains("tax_bill"))
+        }
+    }
+
+    func testExistingClaimIsRediscoveredWithoutDuplicateCreation() async {
+        let vm = await loaded()
+        vm.picked(.ownership, file: f.file)
+        SequencedURLProtocol.routeResponses["/api/homes/my-ownership-claims"] = [.status(200, body: f.claims(existing: true))]
+        await vm.submit()
+        XCTAssertEqual(vm.currentStep, .success)
+        XCTAssertEqual(requests.filter { $0.httpMethod == "POST" }.count, 1)
+    }
+
+    func testMalformedCreateReceiptCannotStartUpload() async {
+        let vm = await loaded()
+        vm.picked(.ownership, file: f.file)
+        SequencedURLProtocol.routeResponses["/api/homes/\(f.home)/ownership-claims"] = [
+            .status(
+                200,
+                body: "{\"message\":\"Saved\",\"claim\":{\"id\":null,\"status\":\"under_review\"}}"
+            )
+        ]
+        await vm.submit()
+        XCTAssertEqual(vm.currentStep, .upload)
+        XCTAssertNotNil(vm.submitError)
+        XCTAssertFalse(requests.contains { $0.url?.path == f.uploadPath })
+    }
+
+    func testChangedAccountAndLatePickerCannotMutateOldWizard() async {
+        var session: String? = "first"
+        f.routes()
+        let vm = makeVM { session }
+        await vm.load()
+        vm.primaryTapped()
+        session = "second"
+        vm.picked(.ownership, file: f.file)
+        await vm.submit()
+        XCTAssertFalse(vm.canPick)
+        XCTAssertFalse(vm.anySlotHasFile)
+        XCTAssertFalse(requests.contains { $0.httpMethod == "POST" })
+    }
+
+    func testRetiredUploadResponseCannotNavigateToSuccess() async {
+        let vm = await loaded()
+        vm.picked(.ownership, file: f.file)
+        SequencedURLProtocol.routeResponses[f.uploadPath] = [.status(200, body: f.json(["evidence": f.record()]), delay: 0.2)]
+        let task = Task { await vm.submit() }
+        for _ in 0..<100 where !requests.contains(where: { $0.url?.path == f.uploadPath }) {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        vm.retire()
+        await task.value
+        XCTAssertNotEqual(vm.currentStep, .success)
+        XCTAssertFalse(vm.anySlotHasFile)
+    }
+
+    func testChallengeRoutingIsUnavailableWithoutAutomaticProviderOrChallengeAction() async {
+        let vm = await loaded()
+        vm.picked(.ownership, file: f.file)
+        SequencedURLProtocol.routeResponses["/api/homes/\(f.home)/ownership-claims"] = [
+            .status(
+                201,
+                body: f.json([
+                    "message": "Saved",
+                    "claim": [
+                        "id": f.claim,
+                        "status": "under_review",
+                        "routing_classification": "challenge_claim"
+                    ]
+                ])
+            )
+        ]
+        await vm.submit()
+        XCTAssertNotNil(vm.submitError)
+        XCTAssertFalse(requests.contains { $0.url?.path == f.uploadPath || $0.url?.path.hasSuffix("/challenge") == true })
+    }
+
+    func testFileRemovalAndBackNavigationKeepAccurateDirtyState() async {
+        let vm = await loaded()
+        vm.picked(.ownership, file: f.file)
+        vm.leadingTapped()
+        XCTAssertEqual(vm.currentStep, .start)
+        XCTAssertTrue(vm.chrome.dirty)
+        vm.remove(.ownership)
+        XCTAssertFalse(vm.chrome.dirty)
+    }
+
+    func testResidencyUsesThePrivateLeaseUploadWithoutIdentityAttestation() async {
+        f.routes()
+        let vm = makeVM(type: .residency)
+        await vm.load()
+        XCTAssertEqual(vm.currentStep, .upload)
+        vm.selectDocumentType("lease")
+        vm.picked(.residency, file: f.file)
+        SequencedURLProtocol.routeResponses[f.uploadPath] = [
+            .status(
+                200,
+                body: f.json(["evidence": f.record(["evidence_type": "lease"])])
+            )
+        ]
+        await vm.submit()
+        XCTAssertEqual(vm.currentStep, .success)
+        XCTAssertEqual(vm.activeSlots, [.residency])
+        XCTAssertFalse(requests.contains { $0.url?.path == "/api/files/upload" })
+    }
+
+    func testSubmissionWaitHintAppearsOnlyDuringCurrentUpload() async {
+        let vm = await loaded()
+        vm.picked(.ownership, file: f.file)
+        SequencedURLProtocol.routeResponses[f.uploadPath] = [.status(200, body: f.json(["evidence": f.record()]), delay: 0.2)]
+        let task = Task { await vm.submit() }
+        for _ in 0..<100 where !vm.isSubmitting {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(vm.chrome.footerHint, "Waiting for upload to finish")
+        await task.value
+        XCTAssertNil(vm.chrome.footerHint)
     }
 }

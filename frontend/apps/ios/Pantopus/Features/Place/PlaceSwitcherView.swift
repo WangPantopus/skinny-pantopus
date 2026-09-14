@@ -57,7 +57,7 @@ final class PlaceSwitcherViewModel {
     func load() async {
         do {
             let response: MyHomesResponse = try await api.request(HomesEndpoints.myHomes())
-            state = .loaded(response.homes.map(Self.row(for:)))
+            state = .loaded(response.sharedHomes.map(Self.row(for:)))
         } catch let error as APIError {
             state = .error(message: error.errorDescription ?? "Couldn't load your places.")
         } catch {

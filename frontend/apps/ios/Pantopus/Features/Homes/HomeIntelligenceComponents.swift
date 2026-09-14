@@ -217,6 +217,7 @@ struct HealthScoreRingCard: View {
 struct SeasonalChecklistCard: View {
     let state: HomeIntelligenceCardState<SeasonalChecklistDTO>
     let pendingItemIds: Set<String>
+    var canEdit = true
     let onComplete: (String) -> Void
     let onSkip: (String) -> Void
     let onHireHelp: (SeasonalChecklistItemDTO) -> Void
@@ -381,7 +382,7 @@ struct SeasonalChecklistCard: View {
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
-            .disabled(done || pending)
+            .disabled(done || pending || !canEdit)
             .accessibilityIdentifier("homeDashboard_seasonalItemToggle_\(item.id)")
             .accessibilityLabel("Mark \(item.title) complete")
 
@@ -390,17 +391,17 @@ struct SeasonalChecklistCard: View {
                     .pantopusTextStyle(.small)
                     .foregroundStyle(done ? Theme.Color.appTextSecondary : Theme.Color.appText)
                     .strikethrough(done)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let description = item.description, !done, !description.isEmpty {
                     Text(description)
                         .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if item.status == "pending" {
+            if item.status == "pending", canEdit {
                 Button { onSkip(item.id) } label: {
                     Icon(.x, size: 16, color: Theme.Color.appTextSecondary)
                         .frame(width: 44, height: 44)
@@ -541,11 +542,11 @@ struct PropertyValueCard: View {
     private var unavailableBody: some View {
         VStack(spacing: Spacing.s2) {
             Icon(.trendingUp, size: 26, color: Theme.Color.primary600)
-            Text("Property insights coming soon")
+            Text("No estimate available")
                 .pantopusTextStyle(.small)
                 .fontWeight(.semibold)
                 .foregroundStyle(Theme.Color.appText)
-            Text("We'll show your home's estimated value once your address is fully verified.")
+            Text("No property estimate is available for this Home right now.")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
@@ -618,6 +619,9 @@ struct PropertyValueCard: View {
 /// permission — the card hides itself in that case.
 struct BillTrendsCard: View {
     let state: HomeIntelligenceCardState<HomeBillTrendsDTO>
+    var currency = "USD"
+    var currencies = ["USD"]
+    var onCurrencyChange: (String) -> Void = { _ in }
     let onRetry: () -> Void
 
     var body: some View {
@@ -627,8 +631,21 @@ struct BillTrendsCard: View {
                 EmptyView()
             default:
                 DashboardCard(title: "Bill trends", accent: Theme.Color.warning) {
+                    HStack {
+                        Text("Currency").pantopusTextStyle(.small)
+                        Spacer()
+                        Picker("Currency", selection: Binding(get: { currency }, set: onCurrencyChange)) {
+                            ForEach(currencies, id: \.self) { Text($0).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .fixedSize(horizontal: true, vertical: false)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("homeDashboard_billCurrency")
+                    }
                     content
                 }
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("homeDashboard_billTrendsCard")
             }
         }
@@ -667,8 +684,16 @@ struct BillTrendsCard: View {
             }
             .padding(.vertical, Spacing.s2)
         case let .loaded(trends):
-            if trends.billsByType.isEmpty {
-                Text("Mark a bill as paid to start tracking your monthly trend.")
+            if !HomeBillPresentation.isCurrent(trends, currency: currency) {
+                VStack(alignment: .leading, spacing: Spacing.s2) {
+                    Text("Current bill information is unavailable. Retry to check the current format and amounts.")
+                        .pantopusTextStyle(.caption)
+                    Button("Retry", action: onRetry)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("homeDashboard_billTrendsRetry")
+                }
+            } else if trends.billsByType.isEmpty {
+                Text("No paid \(currency) bills with a period start in the last 24 months.")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -680,7 +705,8 @@ struct BillTrendsCard: View {
                             BillTrendRow(
                                 billType: key,
                                 series: series,
-                                benchmark: trends.benchmarks[key]
+                                benchmark: trends.benchmarks[key],
+                                currency: trends.currency ?? "USD"
                             )
                         }
                     }
@@ -694,8 +720,42 @@ private struct BillTrendRow: View {
     let billType: String
     let series: HomeBillTrendSeriesDTO
     let benchmark: HomeBillBenchmarkDTO?
+    let currency: String
 
     var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            summary
+            DisclosureGroup("Monthly totals") {
+                HStack {
+                    Text("Month")
+                    Spacer()
+                    Text("Your home")
+                }
+                .font(Theme.Font.caption)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                ForEach(series.months.indices, id: \.self) { index in
+                    VStack(alignment: .leading, spacing: Spacing.s1) {
+                        HStack {
+                            Text(series.months[index])
+                            Spacer()
+                            Text(HomeBillPresentation.amount(series.amounts[index], currency: currency))
+                                .fontWeight(.semibold)
+                        }
+                        Text(monthlyComparison(index))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                    }
+                    .font(Theme.Font.caption)
+                    .padding(.vertical, Spacing.s2)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(monthlyLabel(index))
+                }
+            }
+            .font(Theme.Font.caption)
+            .accessibilityIdentifier("homeDashboard_billMonths_\(billType)")
+        }
+    }
+
+    private var summary: some View {
         HStack(spacing: Spacing.s3) {
             VStack(alignment: .leading, spacing: Spacing.s0) {
                 Text(HomeDashboardProjection.humanized(billType) ?? billType)
@@ -706,13 +766,12 @@ private struct BillTrendRow: View {
                     Text(note)
                         .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(2)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let latest = series.amounts.first {
-                Text(HomeDashboardProjection.fullCurrency(latest))
+            if let latest = series.amounts.last {
+                Text(HomeBillPresentation.amount(latest, currency: currency))
                     .pantopusTextStyle(.small)
                     .fontWeight(.semibold)
                     .foregroundStyle(Theme.Color.appText)
@@ -723,19 +782,19 @@ private struct BillTrendRow: View {
     }
 
     private var benchmarkNote: String? {
-        guard let benchmark else {
-            return series.months.first
-        }
-        if benchmark.insufficientData {
-            return benchmark.message ?? "Not enough neighbors for comparison yet"
-        }
-        guard let neighborCents = benchmark.avgAmounts.first, let mine = series.amounts.first else {
-            return series.months.first
-        }
-        let neighbors = neighborCents / 100
-        let label = HomeDashboardProjection.fullCurrency(neighbors)
-        if mine > neighbors { return "Above the \(label) neighborhood average" }
-        if mine < neighbors { return "Below the \(label) neighborhood average" }
-        return "In line with the \(label) neighborhood average"
+        HomeBillPresentation.note(series: series, benchmark: benchmark, currency: currency)
+    }
+
+    private func monthlyComparison(_ index: Int) -> String {
+        let month = series.months[index]
+        guard let benchmark, !benchmark.insufficientData,
+              let peerIndex = benchmark.months.firstIndex(of: month),
+              benchmark.avgAmounts.indices.contains(peerIndex) else { return "No comparison for this month" }
+        return "Neighborhood average: \(HomeBillPresentation.amount(benchmark.avgAmounts[peerIndex], currency: currency))"
+    }
+
+    private func monthlyLabel(_ index: Int) -> String {
+        let amount = HomeBillPresentation.amount(series.amounts[index], currency: currency)
+        return "Monthly total for \(series.months[index]). Your home: \(amount). \(monthlyComparison(index))"
     }
 }

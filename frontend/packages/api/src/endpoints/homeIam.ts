@@ -11,6 +11,11 @@ export interface HomeAccess {
   hasAccess: boolean;
   isOwner: boolean;
   role_base: string | null;
+  effective_role_base?: string | null;
+  verification_status?: string;
+  verification_required?: boolean;
+  verification_kind?: 'ownership' | 'residency';
+  age_band?: string | null;
   permissions: string[];
   occupancy: {
     id: string;

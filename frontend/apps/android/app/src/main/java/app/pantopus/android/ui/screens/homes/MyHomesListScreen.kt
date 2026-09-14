@@ -8,17 +8,26 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalDialog
+import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalTarget
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
@@ -37,10 +46,13 @@ const val MY_HOMES_LIST_TAG = "myHomesList"
  * Rows whose `can_delete_home` flag is set expose a kebab that opens the
  * destructive "Delete home" confirm (`DELETE /api/homes/:id`).
  */
+@Suppress("LongParameterList") // Each callback is a distinct authorized Home destination.
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun MyHomesListScreen(
     onOpenHome: (String) -> Unit,
     onAddHome: () -> Unit,
+    onOpenTasks: ((String) -> Unit)? = null,
     onBack: (() -> Unit)? = null,
     /**
      * A12.1 discovery entry point — mirrors RN's `/homes/find` route,
@@ -58,17 +70,42 @@ fun MyHomesListScreen(
     val pendingEvent by viewModel.pendingEvent.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
 
+    var removalRecovery by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.configureNavigation(
             onOpenHome = onOpenHome,
+            onOpenTasks = onOpenTasks,
             onAddHome = onAddHome,
             onUploadOwnershipEvidence = onUploadOwnershipEvidence,
             onVerifyResidency = onVerifyResidency,
         )
         viewModel.load()
         Analytics.track(AnalyticsEvent.ScreenMyHomesViewed)
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(viewModel, lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> viewModel.refresh()
+                    Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
+                        deleteTarget = null
+                        viewModel.suspendContent()
+                    }
+                    else -> Unit
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.suspendContent()
+        }
+    }
+    LaunchedEffect(state) {
+        if (state !is app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState.Loaded) deleteTarget = null
     }
 
     LaunchedEffect(pendingEvent) {
@@ -81,12 +118,17 @@ fun MyHomesListScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().testTag(MY_HOMES_LIST_TAG)) {
+    Box(modifier = Modifier.fillMaxSize().testTag(MY_HOMES_LIST_TAG).semantics { testTagsAsResourceId = true }) {
         ListOfRowsScreen(
             title = "My homes",
+            customHeader = {
+                TextButton(onClick = { removalRecovery = true }, modifier = Modifier.testTag("myHomes_removalRecovery")) {
+                    Text("Recover a member removal")
+                }
+            },
             state = state,
             onRefresh = { viewModel.refresh() },
-            onEndReached = { /* not paginated */ },
+            onEndReached = { /* Explicit history Load more avoids retry loops. */ },
             topBarAction =
                 onFindHome?.let {
                     TopBarAction(
@@ -98,13 +140,27 @@ fun MyHomesListScreen(
             fab =
                 FabAction(
                     icon = PantopusIcon.PlusCircle,
-                    contentDescription = "Claim a home",
+                    contentDescription = "Add a home",
                     variant = FabVariant.SecondaryCreate,
                     tint = FabTint.Home,
                     onClick = onAddHome,
                 ),
             onBack = onBack,
             banner = banner,
+        )
+    }
+
+    if (removalRecovery) {
+        HomeMemberRemovalDialog(
+            target = HomeMemberRemovalTarget(),
+            onClose = {
+                removalRecovery = false
+                viewModel.refresh()
+            },
+            onAcknowledged = {
+                removalRecovery = false
+                viewModel.refresh()
+            },
         )
     }
 

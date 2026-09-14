@@ -10,7 +10,7 @@
 // ============================================================
 
 const crypto = require('crypto');
-const { resetTables, seedTable, getTable } = require('../__mocks__/supabaseAdmin');
+const { resetTables, seedTable, getTable, setRpcMock } = require('../__mocks__/supabaseAdmin');
 
 // ── Mock writeAuditLog ──────────────────────────────────────
 jest.mock('../../utils/homePermissions', () => ({
@@ -64,7 +64,7 @@ function seedHome(overrides = {}) {
   seedTable('Home', [{
     id: 'home-1',
     name: 'Test Home',
-    home_type: 'unit',
+    home_type: 'apartment',
     address_id: 'addr-1',
     ...overrides,
   }]);
@@ -322,164 +322,60 @@ describe('verifyAuthority', () => {
 // inviteTenant
 // ============================================================
 
-describe('inviteTenant', () => {
+// State, dates, authority, expiry and rollback execute the actual SQL contract.
+// These tests cover the adapter's proof handling and notification orchestration.
+describe('inviteTenant transaction adapter', () => {
+  let rpc;
+  const create = (token, actor = 'landlord-1') => service.inviteTenant('auth-1', 'home-1', 'Tenant@example.com', '2026-02-31', null, actor, token);
   beforeEach(() => {
-    seedHome();
-    seedAuthority({ status: 'verified' });
+    rpc = jest.fn(async (_name, args) => ({ data: { success: true, replayed: false,
+      invite: { id: 'invite-1', home_id: args.p_home_id, token_hash: args.p_token_hash,
+        invitee_user_id: 'tenant-1', status: 'pending' }, home: { name: 'Test Home' } }, error: null }));
+    setRpcMock(rpc);
   });
-
-  test('creates invite with token hash', async () => {
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com',
-      '2026-04-01T00:00:00.000Z',
-    );
-
-    expect(result.success).toBe(true);
-    expect(result.invite).toBeDefined();
-    expect(result.invite.status).toBe('pending');
-    expect(result.invite.invitee_email).toBe('tenant@example.com');
-    expect(result.invite.token_hash).toBeTruthy();
-    expect(result.token).toBeTruthy();
-    expect(result.token.length).toBe(64); // 32 bytes hex
+  test('passes actual actor, raw dates, hashed retained proof and14-day expiry', async () => {
+    const token = 'a'.repeat(64); expect((await create(token)).token).toBe(token);
+    expect(rpc).toHaveBeenCalledWith('decide_home_lease', { p_action: 'invite', p_actor_id: 'landlord-1',
+      p_authority_id: 'auth-1', p_home_id: 'home-1', p_user_email: 'Tenant@example.com',
+      p_token_hash: crypto.createHash('sha256').update(token).digest('hex'), p_dates: { start_at: '2026-02-31', end_at: null }, p_validity_days: 14 });
+    expect(writeAuditLog).not.toHaveBeenCalled(); expect(getTable('HomeLeaseInvite')).toHaveLength(0);
   });
-
-  test('token hash matches SHA-256 of raw token', async () => {
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    const expectedHash = crypto.createHash('sha256').update(result.token).digest('hex');
-    expect(result.invite.token_hash).toBe(expectedHash);
+  test('older callers receive a random server proof', async () => {
+    const result = await create(); expect(result.token).toMatch(/^[a-f0-9]{64}$/);
+    expect(rpc.mock.calls[0][1].p_token_hash).toBe(crypto.createHash('sha256').update(result.token).digest('hex'));
   });
-
-  test('sets expires_at to 14 days', async () => {
-    const before = Date.now();
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-    const after = Date.now();
-
-    const expiry = new Date(result.invite.expires_at).getTime();
-    const expectedMin = before + 14 * 24 * 60 * 60 * 1000;
-    const expectedMax = after + 14 * 24 * 60 * 60 * 1000;
-    expect(expiry).toBeGreaterThanOrEqual(expectedMin);
-    expect(expiry).toBeLessThanOrEqual(expectedMax);
+  test('invalid actor/proof cannot call SQL', async () => {
+    expect((await create(undefined, null)).success).toBe(false); expect((await create('bad-proof')).success).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
   });
-
-  test('stores proposed_start and proposed_end', async () => {
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com',
-      '2026-04-01', '2027-03-31',
-    );
-
-    expect(result.invite.proposed_start).toBe('2026-04-01');
-    expect(result.invite.proposed_end).toBe('2027-03-31');
+  test('a pending invitation replay retries notification with the same existing event key', async () => {
+    await create(); expect(notificationService.createNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 'tenant-1', type: 'lease_invite', idempotencyKey: 'lease-invite:invite-1' }));
+    const original = rpc.getMockImplementation();
+    rpc.mockImplementation(async (...args) => { const reply = await original(...args); reply.data.replayed = true; return reply; });
+    await create(); expect(notificationService.createNotification).toHaveBeenCalledTimes(2);
+    expect(notificationService.createNotification.mock.calls[1][0].idempotencyKey).toBe('lease-invite:invite-1');
   });
-
-  test('sends notification to existing user', async () => {
-    seedTable('User', [{ id: 'tenant-user-1', email: 'tenant@example.com' }]);
-
-    await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(notificationService.createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'tenant-user-1',
-        type: 'lease_invite',
-      }),
-    );
+  test('an accepted invitation replay cannot send an obsolete pending invitation notice', async () => {
+    const original = rpc.getMockImplementation();
+    rpc.mockImplementation(async (...args) => { const reply = await original(...args); reply.data.replayed = true; reply.data.invite.status = 'accepted'; return reply; });
+    expect((await create()).success).toBe(true);
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
-
-  test('links invite to existing user', async () => {
-    seedTable('User', [{ id: 'tenant-user-1', email: 'tenant@example.com' }]);
-
-    await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    const invites = getTable('HomeLeaseInvite');
-    expect(invites[0].invitee_user_id).toBe('tenant-user-1');
+  test('RPC failure stays uncertain without a token', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: 'timeout' } });
+    expect(await create()).toEqual({ success: false, status: 503, error: expect.any(String) });
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
-
-  test('does not crash when invitee not in system', async () => {
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'unknown@example.com', '2026-04-01',
-    );
-
-    expect(result.success).toBe(true);
+  test.each(['home_id', 'token_hash'])('mismatched %s cannot claim a saved invite', async field => {
+    const original = rpc.getMockImplementation();
+    rpc.mockImplementation(async (...args) => { const reply = await original(...args); reply.data.invite[field] = 'other'; return reply; });
+    expect(await create()).toEqual({ success: false, status: 503, error: expect.any(String) });
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
-
-  test('writes audit log', async () => {
-    await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(writeAuditLog).toHaveBeenCalledWith(
-      'home-1', 'landlord-1', 'TENANT_INVITED', 'HomeLeaseInvite',
-      expect.any(String),
-      expect.objectContaining({ invitee_email: 'tenant@example.com' }),
-    );
-  });
-
-  test('returns error when authority not verified', async () => {
-    getTable('HomeAuthority')[0].status = 'pending';
-
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('must be verified');
-  });
-
-  test('returns error when authority not found', async () => {
-    const result = await service.inviteTenant(
-      'missing-auth', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('not found');
-  });
-
-  test('returns error when authority does not match home', async () => {
-    const result = await service.inviteTenant(
-      'auth-1', 'other-home', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('does not match');
-  });
-
-  test('returns error when home is a building', async () => {
-    getTable('Home')[0].home_type = 'building';
-
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('building');
-  });
-
-  test('returns error when pending invite already exists', async () => {
-    seedTable('HomeLeaseInvite', [{
-      id: 'existing-invite',
-      home_id: 'home-1',
-      invitee_email: 'tenant@example.com',
-      token_hash: 'hash',
-      status: 'pending',
-      expires_at: new Date(Date.now() + 86400000).toISOString(),
-      landlord_subject_type: 'user',
-      landlord_subject_id: 'landlord-1',
-    }]);
-
-    const result = await service.inviteTenant(
-      'auth-1', 'home-1', 'tenant@example.com', '2026-04-01',
-    );
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('Pending invite already exists');
+  test('current-authority rejection returns no token or notice', async () => {
+    const failure = { success: false, status: 403, error: 'Current verified authority required' };
+    rpc.mockResolvedValueOnce({ data: failure, error: null }); expect(await create()).toEqual(failure);
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 });
 
@@ -487,483 +383,123 @@ describe('inviteTenant', () => {
 // acceptInvite
 // ============================================================
 
-describe('acceptInvite', () => {
-  let rawToken;
+// Database state/authority/date/replay assertions now execute the real function
+// in scripts/db/contracts/home-lease-decisions.sql, instead of a mock gateway
+// that always granted occupancy even when the real gateway refused it.
+describe('lease decision adapter', () => {
+  let rpc;
+  const saved = { success: true, replayed: false,
+    lease: { id: 'lease-1', home_id: 'home-1', primary_resident_user_id: 'tenant-1', state: 'active' },
+    occupancy: { id: 'occ-1' } };
+  beforeEach(() => { rpc = jest.fn().mockResolvedValue({ data: saved, error: null }); setRpcMock(rpc); });
 
-  beforeEach(() => {
-    seedHome();
-    rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-
-    seedTable('HomeLeaseInvite', [{
-      id: 'invite-1',
-      home_id: 'home-1',
-      landlord_subject_type: 'user',
-      landlord_subject_id: 'landlord-1',
-      invitee_email: 'tenant@example.com',
-      token_hash: tokenHash,
-      proposed_start: '2026-04-01T00:00:00.000Z',
-      proposed_end: null,
-      status: 'pending',
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    }]);
+  test('hashes the invite token and passes authenticated identity to the transaction', async () => {
+    expect(await service.acceptInvite('raw-proof', 'tenant-1', 'Tenant@example.com')).toEqual(saved);
+    expect(rpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_action: 'accept', p_actor_id: 'tenant-1', p_user_email: 'Tenant@example.com',
+      p_token_hash: crypto.createHash('sha256').update('raw-proof').digest('hex'),
+    }));
+    expect(mockOccAttach).not.toHaveBeenCalled();
+    expect(writeAuditLog).not.toHaveBeenCalled(); // SQL owns the atomic audit.
   });
-
-  test('creates active lease from invite', async () => {
-    const result = await service.acceptInvite(rawToken, 'tenant-1', 'tenant@example.com');
-
-    expect(result.success).toBe(true);
-    expect(result.lease).toBeDefined();
-    expect(result.lease.state).toBe('active');
-    expect(result.lease.source).toBe('landlord_invite');
-    expect(result.lease.primary_resident_user_id).toBe('tenant-1');
+  test('passes reviewed dates, including explicit null, with the actual actor', async () => {
+    const dates = { start_at: '2026-10-01', end_at: null };
+    await service.approveTenantRequest('lease-1', 'auth-1', dates, 'landlord-1');
+    expect(rpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_action: 'approve', p_actor_id: 'landlord-1', p_lease_id: 'lease-1', p_authority_id: 'auth-1', p_dates: dates,
+    }));
+    expect(mockOccAttach).not.toHaveBeenCalled();
+    expect(notificationService.createNotification).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'tenant-1', type: 'lease_approved', body: expect.stringContaining('approved lease dates'),
+    }));
   });
-
-  test('creates HomeOccupancy with lease_resident role', async () => {
-    const result = await service.acceptInvite(rawToken, 'tenant-1', 'tenant@example.com');
-
-    expect(result.occupancy).toBeDefined();
-    expect(result.occupancy.role).toBe('lease_resident');
-    expect(result.occupancy.verification_status).toBe('verified');
-    expect(result.occupancy.is_active).toBe(true);
+  test('omitted dates remain omitted for stored-date handling in SQL', async () => {
+    await service.approveTenantRequest('lease-1', 'auth-1', undefined, 'landlord-1');
+    expect(rpc.mock.calls[0][1].p_dates).toEqual({});
   });
-
-  test('creates HomeLeaseResident record', async () => {
-    await service.acceptInvite(rawToken, 'tenant-1', 'tenant@example.com');
-
-    const residents = getTable('HomeLeaseResident');
-    expect(residents).toHaveLength(1);
-    expect(residents[0].user_id).toBe('tenant-1');
+  test('does not infer the authenticated actor from an authority id', async () => {
+    expect((await service.approveTenantRequest('lease-1', 'auth-1')).success).toBe(false);
+    expect((await service.denyTenantRequest('lease-1', 'auth-1')).success).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
   });
-
-  test('updates invite status to accepted', async () => {
-    await service.acceptInvite(rawToken, 'tenant-1', 'tenant@example.com');
-
-    const invites = getTable('HomeLeaseInvite');
-    expect(invites[0].status).toBe('accepted');
-    expect(invites[0].invitee_user_id).toBe('tenant-1');
+  test.each([null, {}, { success: true, lease: saved.lease, occupancy: null },
+    { success: true, occupancy: saved.occupancy }])('does not report success for incomplete RPC result %j', async (data) => {
+    rpc.mockResolvedValue({ data, error: null });
+    expect((await service.approveTenantRequest('lease-1', 'auth-1', {}, 'landlord-1')).success).toBe(false);
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
-
-  test('uses proposed_start from invite', async () => {
-    const result = await service.acceptInvite(rawToken, 'tenant-1', 'tenant@example.com');
-    expect(result.lease.start_at).toBe('2026-04-01T00:00:00.000Z');
-  });
-
-  test('writes audit log', async () => {
-    await service.acceptInvite(rawToken, 'tenant-1', 'tenant@example.com');
-
-    expect(writeAuditLog).toHaveBeenCalledWith(
-      'home-1', 'tenant-1', 'LEASE_INVITE_ACCEPTED', 'HomeLease',
-      expect.any(String),
-      expect.objectContaining({ invite_id: 'invite-1', source: 'landlord_invite' }),
-    );
-  });
-
-  test('returns error for invalid token', async () => {
-    const result = await service.acceptInvite('bad-token', 'tenant-1');
+  test.each(['transport', 'database'])('failure remains retryable without a success notification: %s', async (failure) => {
+    if (failure === 'transport') rpc.mockRejectedValueOnce(new Error('lost reply'));
+    else rpc.mockResolvedValueOnce({ data: null, error: { code: '40001' } });
+    const result = await service.approveTenantRequest('lease-1', 'auth-1', {}, 'landlord-1');
     expect(result.success).toBe(false);
-    expect(result.error).toContain('not found');
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
+    rpc.mockResolvedValueOnce({ data: { ...saved, replayed: true }, error: null });
+    expect((await service.approveTenantRequest('lease-1', 'auth-1', {}, 'landlord-1')).success).toBe(true);
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
-
-  test('returns error when invite already accepted', async () => {
-    getTable('HomeLeaseInvite')[0].status = 'accepted';
-
-    const result = await service.acceptInvite(rawToken, 'tenant-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('accepted');
+  test('returns SQL authorization/state errors without attempting local writes', async () => {
+    const rejected = { success: false, error: 'Current verified authority required' };
+    rpc.mockResolvedValue({ data: rejected, error: null });
+    expect(await service.acceptInvite('proof', 'tenant-1', 't@example.com')).toEqual(rejected);
+    expect(mockOccAttach).not.toHaveBeenCalled();
+    expect(getTable('HomeLease')).toHaveLength(0);
   });
-
-  test('returns error when invite revoked', async () => {
-    getTable('HomeLeaseInvite')[0].status = 'revoked';
-
-    const result = await service.acceptInvite(rawToken, 'tenant-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('revoked');
+  test.each([undefined, 'Background check failed'])('denial keeps its existing notification and reason: %s', async (reason) => {
+    await service.denyTenantRequest('lease-1', 'auth-1', reason, 'landlord-1');
+    expect(rpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_action: 'deny', p_actor_id: 'landlord-1', p_reason: reason || null,
+    }));
+    expect(notificationService.createNotification).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'lease_denied', body: reason ? `Your lease request was denied: ${reason}`
+        : 'Your lease request was denied by the property authority.',
+    }));
   });
-
-  test('marks invite expired when past expiry date', async () => {
-    getTable('HomeLeaseInvite')[0].expires_at = new Date(Date.now() - 1000).toISOString();
-
-    const result = await service.acceptInvite(rawToken, 'tenant-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('expired');
-
-    expect(getTable('HomeLeaseInvite')[0].status).toBe('expired');
-  });
-
-  // ── Email identity binding (AUTH-1.3) ──────────────────────
-
-  test('matching email can accept invite', async () => {
-    const result = await service.acceptInvite(rawToken, 'tenant-1', 'tenant@example.com');
-
-    expect(result.success).toBe(true);
-    expect(result.lease).toBeDefined();
-    expect(result.lease.state).toBe('active');
-  });
-
-  test('non-matching email is rejected', async () => {
-    const result = await service.acceptInvite(rawToken, 'tenant-1', 'intruder@evil.com');
-
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/different email/i);
-  });
-
-  test('case-insensitive email comparison works', async () => {
-    // Invite has invitee_email: 'tenant@example.com'
-    const result = await service.acceptInvite(rawToken, 'tenant-1', 'Tenant@EXAMPLE.COM');
-
-    expect(result.success).toBe(true);
-    expect(result.lease).toBeDefined();
-  });
-
-  test('expired invite is rejected regardless of matching email', async () => {
-    getTable('HomeLeaseInvite')[0].expires_at = new Date(Date.now() - 1000).toISOString();
-
-    const result = await service.acceptInvite(rawToken, 'tenant-1', 'tenant@example.com');
-
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/expired/i);
-  });
-
-  test('already-accepted invite is rejected regardless of matching email', async () => {
-    getTable('HomeLeaseInvite')[0].status = 'accepted';
-
-    const result = await service.acceptInvite(rawToken, 'tenant-1', 'tenant@example.com');
-
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/accepted/i);
-  });
-
-  test('updates existing occupancy instead of creating duplicate', async () => {
-    seedTable('HomeOccupancy', [{
-      id: 'occ-existing',
-      home_id: 'home-1',
-      user_id: 'tenant-1',
-      role: 'member',
-      role_base: 'member',
-      is_active: true,
-      verification_status: 'unverified',
-    }]);
-
-    // Mock returns upgraded result
-    mockOccAttach.mockResolvedValueOnce({
-      success: true,
-      occupancy: { id: 'occ-existing', role: 'lease_resident', verification_status: 'verified', is_active: true },
-      status: 'upgraded',
-    });
-
-    const result = await service.acceptInvite(rawToken, 'tenant-1', 'tenant@example.com');
-    expect(result.success).toBe(true);
-
-    // Verify delegation to occupancyAttachService with correct params
-    expect(mockOccAttach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        homeId: 'home-1',
-        userId: 'tenant-1',
-        method: 'landlord_invite',
-        roleOverride: 'lease_resident',
-      }),
-    );
-    expect(result.occupancy.role).toBe('lease_resident');
-    expect(result.occupancy.verification_status).toBe('verified');
+  test('asynchronous notification failure does not undo a committed decision', async () => {
+    notificationService.createNotification.mockRejectedValueOnce(new Error('delivery unavailable'));
+    expect(await service.approveTenantRequest('lease-1', 'auth-1', {}, 'landlord-1')).toEqual(saved);
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });
 
-// ============================================================
-// approveTenantRequest
-// ============================================================
-
-describe('approveTenantRequest', () => {
-  beforeEach(() => {
-    seedHome();
-    seedAuthority({ status: 'verified' });
-    seedLease({ state: 'pending' });
+// End/move-out persistence and generation checks execute the real SQL contract.
+describe('lease end adapter', () => {
+  let rpc;
+  const saved = { success: true, replayed: false,
+    lease: { id: 'lease-1', home_id: 'home-1', primary_resident_user_id: 'tenant-1', state: 'ended' } };
+  beforeEach(() => { rpc = jest.fn().mockResolvedValue({ data: saved, error: null }); setRpcMock(rpc); });
+  test('forwards the actor and authority and notifies after committed end', async () => {
+    expect(await service.endLease('lease-1', 'landlord-1', { authorityId: 'auth-1' })).toEqual(saved);
+    expect(rpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_action: 'end', p_actor_id: 'landlord-1', p_authority_id: 'auth-1', p_lease_id: 'lease-1',
+    }));
+    expect(mockOccDetach).not.toHaveBeenCalled();
+    expect(writeAuditLog).not.toHaveBeenCalled();
+    expect(notificationService.createNotification).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'lease_ended', userId: 'tenant-1', body: expect.stringContaining('retain your own content history'),
+    }));
   });
-
-  test('activates pending lease', async () => {
-    const result = await service.approveTenantRequest('lease-1', 'auth-1');
-
-    expect(result.success).toBe(true);
-    expect(result.lease.state).toBe('active');
-    expect(result.lease.approved_by_subject_type).toBe('user');
-    expect(result.lease.approved_by_subject_id).toBe('landlord-1');
+  test('move-out passes its reason into the same transaction', async () => {
+    await service.endLease('lease-1', 'co-resident', { moveOut: true, reason: 'Moving' });
+    expect(rpc).toHaveBeenCalledWith('decide_home_lease', expect.objectContaining({
+      p_action: 'move_out', p_actor_id: 'co-resident', p_authority_id: null, p_reason: 'Moving',
+    }));
+    expect(notificationService.createNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 'co-resident', title: 'You have moved out' }));
   });
-
-  test('creates HomeOccupancy', async () => {
-    const result = await service.approveTenantRequest('lease-1', 'auth-1');
-
-    expect(result.occupancy).toBeDefined();
-    expect(result.occupancy.role).toBe('lease_resident');
-    expect(result.occupancy.verification_status).toBe('verified');
-
-    // Verify delegation to occupancyAttachService
-    expect(mockOccAttach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        homeId: 'home-1',
-        userId: 'tenant-1',
-        method: 'landlord_approval',
-        roleOverride: 'lease_resident',
-      }),
-    );
+  test('failed end and completed replay send no success or duplicate notification', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: '40001' } });
+    expect((await service.endLease('lease-1', 'tenant-1')).success).toBe(false);
+    rpc.mockResolvedValueOnce({ data: { ...saved, replayed: true }, error: null });
+    expect((await service.endLease('lease-1', 'tenant-1')).success).toBe(true);
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
-
-  test('notifies tenant', async () => {
-    await service.approveTenantRequest('lease-1', 'auth-1');
-
-    expect(notificationService.createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'tenant-1',
-        type: 'lease_approved',
-      }),
-    );
-  });
-
-  test('writes audit log', async () => {
-    await service.approveTenantRequest('lease-1', 'auth-1');
-
-    expect(writeAuditLog).toHaveBeenCalledWith(
-      'home-1', 'landlord-1', 'LEASE_APPROVED', 'HomeLease', 'lease-1',
-      expect.objectContaining({ authority_id: 'auth-1', tenant_user_id: 'tenant-1' }),
-    );
-  });
-
-  test('returns error when authority not verified', async () => {
-    getTable('HomeAuthority')[0].status = 'pending';
-
-    const result = await service.approveTenantRequest('lease-1', 'auth-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('verified authority');
-  });
-
-  test('returns error when lease not found', async () => {
-    const result = await service.approveTenantRequest('missing-lease', 'auth-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('Lease not found');
-  });
-
-  test('returns error when lease not pending', async () => {
-    getTable('HomeLease')[0].state = 'active';
-
-    const result = await service.approveTenantRequest('lease-1', 'auth-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('active');
-  });
-
-  test('returns error when authority does not match home', async () => {
-    getTable('HomeAuthority')[0].home_id = 'other-home';
-
-    const result = await service.approveTenantRequest('lease-1', 'auth-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('does not match');
+  test('reports ambiguous historical linkage without an end notification', async () => {
+    const rejected = { success: false, error: 'Historical lease membership requires review before ending access' };
+    rpc.mockResolvedValue({ data: rejected, error: null });
+    expect(await service.endLease('lease-1', 'tenant-1')).toEqual(rejected);
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 });
-
-// ============================================================
-// denyTenantRequest
-// ============================================================
-
-describe('denyTenantRequest', () => {
-  beforeEach(() => {
-    seedHome();
-    seedAuthority({ status: 'verified' });
-    seedLease({ state: 'pending' });
-  });
-
-  test('cancels pending lease', async () => {
-    const result = await service.denyTenantRequest('lease-1', 'auth-1', 'Not a valid tenant');
-
-    expect(result.success).toBe(true);
-
-    const leases = getTable('HomeLease');
-    expect(leases[0].state).toBe('canceled');
-  });
-
-  test('stores denial reason in metadata', async () => {
-    await service.denyTenantRequest('lease-1', 'auth-1', 'Background check failed');
-
-    const leases = getTable('HomeLease');
-    expect(leases[0].metadata.denial_reason).toBe('Background check failed');
-  });
-
-  test('notifies tenant with reason', async () => {
-    await service.denyTenantRequest('lease-1', 'auth-1', 'Insufficient income');
-
-    expect(notificationService.createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'tenant-1',
-        type: 'lease_denied',
-        body: expect.stringContaining('Insufficient income'),
-      }),
-    );
-  });
-
-  test('notifies tenant with generic message when no reason', async () => {
-    await service.denyTenantRequest('lease-1', 'auth-1');
-
-    expect(notificationService.createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: expect.stringContaining('denied by the property authority'),
-      }),
-    );
-  });
-
-  test('writes audit log', async () => {
-    await service.denyTenantRequest('lease-1', 'auth-1', 'Reason here');
-
-    expect(writeAuditLog).toHaveBeenCalledWith(
-      'home-1', 'landlord-1', 'LEASE_DENIED', 'HomeLease', 'lease-1',
-      expect.objectContaining({ reason: 'Reason here' }),
-    );
-  });
-
-  test('returns error when authority not verified', async () => {
-    getTable('HomeAuthority')[0].status = 'pending';
-
-    const result = await service.denyTenantRequest('lease-1', 'auth-1');
-    expect(result.success).toBe(false);
-  });
-
-  test('returns error when lease not pending', async () => {
-    getTable('HomeLease')[0].state = 'active';
-
-    const result = await service.denyTenantRequest('lease-1', 'auth-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('active');
-  });
-
-  test('returns error when authority home does not match', async () => {
-    getTable('HomeAuthority')[0].home_id = 'other-home';
-
-    const result = await service.denyTenantRequest('lease-1', 'auth-1');
-    expect(result.success).toBe(false);
-  });
-});
-
-// ============================================================
-// endLease
-// ============================================================
-
-describe('endLease', () => {
-  beforeEach(() => {
-    seedHome();
-    seedLease({ state: 'active' });
-    seedTable('HomeOccupancy', [{
-      id: 'occ-1',
-      home_id: 'home-1',
-      user_id: 'tenant-1',
-      role: 'lease_resident',
-      role_base: 'lease_resident',
-      is_active: true,
-      verification_status: 'verified',
-    }]);
-  });
-
-  test('ends active lease', async () => {
-    const result = await service.endLease('lease-1', 'landlord-1');
-
-    expect(result.success).toBe(true);
-
-    const leases = getTable('HomeLease');
-    expect(leases[0].state).toBe('ended');
-    expect(leases[0].end_at).toBeTruthy();
-  });
-
-  test('deactivates HomeOccupancy via occupancyAttachService', async () => {
-    await service.endLease('lease-1', 'landlord-1');
-
-    // Verify detach was called for the primary resident
-    expect(mockOccDetach).toHaveBeenCalledWith(
-      expect.objectContaining({
-        homeId: 'home-1',
-        userId: 'tenant-1',
-        reason: 'lease_ended',
-        actorId: 'landlord-1',
-      }),
-    );
-  });
-
-  test('deactivates co-resident occupancies via occupancyAttachService', async () => {
-    seedTable('HomeLeaseResident', [
-      { id: 'lr-1', lease_id: 'lease-1', user_id: 'tenant-1' },
-      { id: 'lr-2', lease_id: 'lease-1', user_id: 'co-resident-1' },
-    ]);
-    seedTable('HomeOccupancy', [{
-      id: 'occ-2',
-      home_id: 'home-1',
-      user_id: 'co-resident-1',
-      role: 'lease_resident',
-      role_base: 'lease_resident',
-      is_active: true,
-      verification_status: 'verified',
-    }]);
-
-    await service.endLease('lease-1', 'landlord-1');
-
-    // Primary resident detach
-    expect(mockOccDetach).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'tenant-1', reason: 'lease_ended' }),
-    );
-    // Co-resident detach
-    expect(mockOccDetach).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'co-resident-1', reason: 'lease_ended' }),
-    );
-  });
-
-  test('notifies tenant', async () => {
-    await service.endLease('lease-1', 'landlord-1');
-
-    expect(notificationService.createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'tenant-1',
-        type: 'lease_ended',
-        body: expect.stringContaining('retain your own content history'),
-      }),
-    );
-  });
-
-  test('writes audit log', async () => {
-    await service.endLease('lease-1', 'landlord-1');
-
-    expect(writeAuditLog).toHaveBeenCalledWith(
-      'home-1', 'landlord-1', 'LEASE_ENDED', 'HomeLease', 'lease-1',
-      expect.objectContaining({ tenant_user_id: 'tenant-1', initiated_by: 'landlord-1' }),
-    );
-  });
-
-  test('returns error when lease not found', async () => {
-    const result = await service.endLease('missing-lease', 'landlord-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('Lease not found');
-  });
-
-  test('returns error when lease is not active', async () => {
-    getTable('HomeLease')[0].state = 'ended';
-
-    const result = await service.endLease('lease-1', 'landlord-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('ended');
-  });
-
-  test('returns error when lease is pending', async () => {
-    getTable('HomeLease')[0].state = 'pending';
-
-    const result = await service.endLease('lease-1', 'landlord-1');
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('pending');
-  });
-
-  test('tenant can initiate end lease', async () => {
-    const result = await service.endLease('lease-1', 'tenant-1');
-
-    expect(result.success).toBe(true);
-    const leases = getTable('HomeLease');
-    expect(leases[0].state).toBe('ended');
-  });
-});
-
-// ============================================================
-// _tierRank (private helper)
-// ============================================================
 
 describe('_tierRank', () => {
   test('ranks weak < standard < strong < legal', () => {
@@ -992,5 +528,38 @@ describe('Constants', () => {
     expect(map.escrow_attestation).toBe('legal');
     expect(map.utility_bill).toBe('weak');
     expect(map.lease).toBe('standard');
+  });
+});
+
+describe('intended recipient lease preview', () => {
+  const token = 'b'.repeat(64);
+  beforeEach(() => {
+    seedHome({ home_type: 'apartment', city: 'Synthetic' }); seedAuthority();
+    seedTable('HomeLeaseInvite', [{ id: 'invite-1', home_id: 'home-1', token_hash: crypto.createHash('sha256').update(token).digest('hex'),
+      invitee_user_id: 'tenant-1', invitee_email: 'Tenant@example.com', status: 'pending',
+      proposed_start: '2026-09-01', proposed_end: null, expires_at: new Date(Date.now() + 86400000).toISOString(),
+      landlord_subject_type: 'user', landlord_subject_id: 'landlord-1' }]);
+  });
+  test('returns only the preview without accepting or exposing proof/authority fields', async () => {
+    const before = JSON.stringify(getTable('HomeLeaseInvite'));
+    const result = await service.previewInvite(token, 'tenant-1', 'tenant@example.com');
+    expect(result).toEqual({ success: true, home: { id: 'home-1', name: 'Test Home', city: 'Synthetic' }, account_email: 'tenant@example.com',
+      invitation: { status: 'pending', proposed_start: '2026-09-01', proposed_end: null, expires_at: expect.any(String) } });
+    expect(JSON.stringify(getTable('HomeLeaseInvite'))).toBe(before);
+    expect(getTable('HomeLease')).toHaveLength(0); expect(notificationService.createNotification).not.toHaveBeenCalled();
+  });
+  test.each([['other-user', 'tenant@example.com'], ['tenant-1', 'other@example.com'], ['tenant-1', '']])(
+    'does not reveal a Home to mismatched identity %s / %s', async (actor, email) => {
+      expect(await service.previewInvite(token, actor, email)).toEqual({ success: false, status: 404, error: expect.any(String) });
+    });
+  test('expired pending invites cannot be actionable; accepted ones remain recoverable', async () => {
+    getTable('HomeLeaseInvite')[0].expires_at = '2020-01-01';
+    expect(await service.previewInvite(token, 'tenant-1', 'tenant@example.com')).toEqual(expect.objectContaining({ success: false, status: 410 }));
+    getTable('HomeLeaseInvite')[0].status = 'accepted';
+    expect(await service.previewInvite(token, 'tenant-1', 'tenant@example.com')).toEqual(expect.objectContaining({ success: true }));
+  });
+  test('revoked authority cannot offer acceptance', async () => {
+    getTable('HomeAuthority')[0].status = 'revoked';
+    expect(await service.previewInvite(token, 'tenant-1', 'tenant@example.com')).toEqual(expect.objectContaining({ success: false, status: 403 }));
   });
 });

@@ -7,13 +7,12 @@ const request = require('supertest');
 
 jest.mock('../../config/supabaseAdmin', () => jest.requireActual('../__mocks__/supabaseAdmin'));
 jest.mock('../../utils/logger', () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }));
-jest.mock('../../utils/homePermissions', () => ({ checkHomePermission: jest.fn(async () => ({ hasAccess: true })) }));
 
 const { resetTables, seedTable, getTable, setRpcMock } = require('../__mocks__/supabaseAdmin');
-const { checkHomePermission } = require('../../utils/homePermissions');
 const svc = require('../../services/addressCalendarService');
 const router = require('../../routes/addressCalendar');
 
+const USER = 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa';
 const HOME = 'bbbbbbbb-bbbb-1bbb-8bbb-bbbbbbbbbbbb';
 const home = { id: HOME, city: 'Camas', state: 'WA', county: null, timezone: 'America/Los_Angeles' };
 const NOW = new Date('2026-09-03T18:00:00.000Z'); // Thu Sep 3, 11:00 Pacific
@@ -31,17 +30,26 @@ function seedCamas() {
   ]);
 }
 
-const pickupRpc = jest.fn(async (name, { p_home_id, p_rows }) => {
-  if (name !== 'set_home_pickup_rules') throw new Error(`Unexpected RPC: ${name}`);
+const contextRpc = jest.fn();
+const pickupRpc = jest.fn(async (name, { p_home_id, p_rows, p_user_id }) => {
+  if (name !== 'mutate_home_pickup_calendar') throw new Error(`Unexpected RPC: ${name}`);
+  if (!p_user_id) throw new Error('Missing authenticated pickup actor');
   const retained = getTable('AddressCalendarRule').filter((r) =>
     !(r.scope_type === 'home' && r.scope_key === p_home_id && ['garbage', 'recycling', 'yard_waste'].includes(r.kind)));
-  seedTable('AddressCalendarRule', [...retained, ...p_rows.map((r) => ({ ...r, id: `${p_home_id}-${r.kind}`, scope_type: 'home', scope_key: p_home_id }))]);
-  return { data: p_rows.length, error: null };
+  seedTable('AddressCalendarRule', [...retained, ...(p_rows || []).map((r) => ({ ...r, id: `${p_home_id}-${r.kind}`, scope_type: 'home', scope_key: p_home_id }))]);
+  return { data: { allowed: true, count: p_rows?.length || 0 }, error: null };
 });
 
 beforeEach(() => {
-  resetTables(); jest.clearAllMocks(); setRpcMock(pickupRpc);
-  checkHomePermission.mockResolvedValue({ hasAccess: true });
+  resetTables(); jest.clearAllMocks();
+  contextRpc.mockImplementation(async ({ p_home_id, p_user_id }) => {
+    if (!p_user_id) throw new Error('Missing authenticated pickup actor');
+    const selected = getTable('Home').find(row => row.id === p_home_id);
+    const scopes = svc.scopeKeysFor(selected || {});
+    return { data: { allowed: !!selected, home: selected,
+      rules: getTable('AddressCalendarRule').filter(rule => scopes.some(scope => scope.scope_type === rule.scope_type && scope.scope_key === rule.scope_key)) }, error: null };
+  });
+  setRpcMock((name, args) => name === 'get_home_pickup_calendar' ? contextRpc(args) : pickupRpc(name, args));
 });
 
 describe('composeForHome', () => {
@@ -83,7 +91,7 @@ describe('composeForHome', () => {
 
   it('a household pickup day replaces the city default (narrowest scope wins per kind)', async () => {
     seedCamas();
-    const result = await svc.setPickupDay(home, { weekday: 'th', recyclingFrequency: 'biweekly', recyclingNextDate: '2026-09-03', userId: 'u-1', now: NOW });
+    const result = await svc.setPickupDay(home, { userId: USER, weekday: 'th', recyclingFrequency: 'biweekly', recyclingNextDate: '2026-09-03', now: NOW });
     expect(result).toMatchObject({ weekday: 'TH', dtstart: '2026-09-03', rules: 2 });
     const cal = await svc.composeForHome(home, { now: NOW });
     expect(cal.needs_pickup_day).toBe(false);
@@ -96,7 +104,7 @@ describe('composeForHome', () => {
 
   it('rejects a bad weekday and skips a malformed rrule without failing the rest', async () => {
     seedCamas();
-    await expect(svc.setPickupDay(home, { weekday: 'XX', now: NOW })).rejects.toThrow(/weekday/);
+    await expect(svc.setPickupDay(home, { userId: USER, weekday: 'XX', now: NOW })).rejects.toThrow(/weekday/);
     getTable('AddressCalendarRule').push({ id: 'r-bad', scope_type: 'city', scope_key: 'WA:Camas', kind: 'other', title: 'Broken', rrule: 'NOT-A-RULE', dtstart: '2026-09-01', confidence: 'unverified' });
     const cal = await svc.composeForHome(home, { now: NOW });
     expect(cal.upcoming.some((e) => e.title === 'Broken')).toBe(false);
@@ -105,8 +113,8 @@ describe('composeForHome', () => {
 
   it('clearing the pickup day restores the city default', async () => {
     seedCamas();
-    await svc.setPickupDay(home, { weekday: 'TH', now: NOW });
-    await svc.clearPickupDay(home);
+    await svc.setPickupDay(home, { userId: USER, weekday: 'TH', now: NOW });
+    await svc.clearPickupDay(home, USER);
     const cal = await svc.composeForHome(home, { now: NOW });
     expect(cal.needs_pickup_day).toBe(true);
     expect(getTable('AddressCalendarRule').filter((r) => r.scope_type === 'home')).toHaveLength(0);
@@ -114,7 +122,7 @@ describe('composeForHome', () => {
 
   it('saves garbage only when recycling is unknown, without a guessed city fallback', async () => {
     seedCamas();
-    await svc.setPickupDay(home, { weekday: 'TH', now: NOW });
+    await svc.setPickupDay(home, { userId: USER, weekday: 'TH', now: NOW });
     const cal = await svc.composeForHome(home, { now: NOW });
     expect(cal.pickup_schedule).toEqual({ weekday: 'TH', recycling_frequency: 'not_set', recycling_next_date: null });
     expect(cal.upcoming.some((e) => e.kind === 'recycling')).toBe(false);
@@ -123,12 +131,12 @@ describe('composeForHome', () => {
 
   it('keeps the specified recycling week and separate weekday through reload and replacement', async () => {
     seedCamas();
-    await svc.setPickupDay(home, { weekday: 'TH', recyclingFrequency: 'biweekly', recyclingNextDate: '2026-09-11', now: NOW });
+    await svc.setPickupDay(home, { userId: USER, weekday: 'TH', recyclingFrequency: 'biweekly', recyclingNextDate: '2026-09-11', now: NOW });
     const cal = await svc.composeForHome(home, { now: NOW, windowDays: 35 });
     expect(cal.upcoming.filter((e) => e.kind === 'recycling').map((e) => e.date)).toEqual(['2026-09-11', '2026-09-25']);
     const later = await svc.composeForHome(home, { now: new Date('2026-09-12T18:00:00Z') });
     expect(later.pickup_schedule.recycling_next_date).toBe('2026-09-25');
-    await svc.setPickupDay(home, { weekday: 'MO', recyclingFrequency: 'weekly', recyclingNextDate: '2026-09-05', now: NOW });
+    await svc.setPickupDay(home, { userId: USER, weekday: 'MO', recyclingFrequency: 'weekly', recyclingNextDate: '2026-09-05', now: NOW });
     const weekly = await svc.composeForHome(home, { now: NOW });
     expect(weekly.upcoming.filter((e) => e.kind === 'recycling').map((e) => e.date)).toEqual(['2026-09-05', '2026-09-12']);
     expect(getTable('AddressCalendarRule').filter((r) => r.scope_type === 'home')).toHaveLength(2);
@@ -138,14 +146,14 @@ describe('composeForHome', () => {
     ['biweekly', null], ['biweekly', '2026-02-30'], ['biweekly', '2026-09-02'],
     ['biweekly', '2026-09-17'], ['weekly', '2026-09-10'], ['not_set', '2026-09-03'],
   ])('rejects invalid or ambiguous recycling input (%s, %s) before writing', async (recyclingFrequency, recyclingNextDate) => {
-    await expect(svc.setPickupDay(home, { weekday: 'TH', recyclingFrequency, recyclingNextDate, now: NOW })).rejects.toMatchObject({ code: 'INVALID_PICKUP' });
+    await expect(svc.setPickupDay(home, { userId: USER, weekday: 'TH', recyclingFrequency, recyclingNextDate, now: NOW })).rejects.toMatchObject({ code: 'INVALID_PICKUP' });
     expect(pickupRpc).not.toHaveBeenCalled();
   });
 
   it('keeps dates on the home calendar across UTC midnight and daylight saving changes', async () => {
     seedCamas();
     const now = new Date('2026-11-01T01:00:00Z'); // still Saturday at home
-    await svc.setPickupDay(home, { weekday: 'SA', recyclingFrequency: 'biweekly', recyclingNextDate: '2026-10-31', now });
+    await svc.setPickupDay(home, { userId: USER, weekday: 'SA', recyclingFrequency: 'biweekly', recyclingNextDate: '2026-10-31', now });
     const cal = await svc.composeForHome(home, { now, windowDays: 21 });
     expect(cal.today).toBe('2026-10-31');
     expect(cal.upcoming.filter((e) => e.kind === 'recycling').map((e) => e.date)).toEqual(['2026-10-31', '2026-11-14']);
@@ -154,14 +162,14 @@ describe('composeForHome', () => {
 
   it('retains the previous schedule when the atomic swap fails and isolates another home', async () => {
     seedCamas();
-    await svc.setPickupDay(home, { weekday: 'TH', now: NOW });
+    await svc.setPickupDay(home, { userId: USER, weekday: 'TH', now: NOW });
     const other = { ...home, id: 'other-home' };
-    await svc.setPickupDay(other, { weekday: 'FR', now: NOW });
+    await svc.setPickupDay(other, { userId: USER, weekday: 'FR', now: NOW });
     const before = structuredClone(getTable('AddressCalendarRule'));
     pickupRpc.mockResolvedValueOnce({ data: null, error: { message: 'transaction failed' } });
-    await expect(svc.setPickupDay(home, { weekday: 'MO', now: NOW })).rejects.toThrow('transaction failed');
+    await expect(svc.setPickupDay(home, { userId: USER, weekday: 'MO', now: NOW })).rejects.toMatchObject({ code: 'HOME_ACCESS_UNAVAILABLE' });
     expect(getTable('AddressCalendarRule')).toEqual(before);
-    await svc.clearPickupDay(home);
+    await svc.clearPickupDay(home, USER);
     expect((await svc.composeForHome(other, { now: NOW })).pickup_schedule.weekday).toBe('FR');
   });
 });
@@ -174,7 +182,7 @@ describe('/api/homes/:id/calendar', () => {
     const ok = await request(app()).get(`/api/homes/${HOME}/calendar`);
     expect(ok.status).toBe(200);
     expect(ok.body.calendar.upcoming.length).toBeGreaterThan(0);
-    checkHomePermission.mockResolvedValue({ hasAccess: false });
+    contextRpc.mockResolvedValue({ data: { allowed: false }, error: null });
     const no = await request(app()).get(`/api/homes/${HOME}/calendar`);
     expect(no.status).toBe(403);
   });
@@ -196,7 +204,7 @@ describe('/api/homes/:id/calendar', () => {
   it('rejects stranger writes and resets without modifying household data', async () => {
     seedCamas();
     const before = structuredClone(getTable('AddressCalendarRule'));
-    checkHomePermission.mockResolvedValue({ hasAccess: false });
+    contextRpc.mockResolvedValue({ data: { allowed: false }, error: null });
     expect((await request(app()).put(`/api/homes/${HOME}/calendar/pickup-day`).send({ weekday: 'MO' })).status).toBe(403);
     expect((await request(app()).delete(`/api/homes/${HOME}/calendar/pickup-day`)).status).toBe(403);
     expect(getTable('AddressCalendarRule')).toEqual(before);
@@ -205,7 +213,7 @@ describe('/api/homes/:id/calendar', () => {
 
   it('reports a failed permission read as temporary unavailability and never writes', async () => {
     seedCamas();
-    checkHomePermission.mockResolvedValue({ hasAccess: false, readFailed: true });
+    contextRpc.mockResolvedValue({ data: null, error: { message: 'unavailable' } });
     expect((await request(app()).put(`/api/homes/${HOME}/calendar/pickup-day`).send({ weekday: 'MO' })).status).toBe(503);
     expect(pickupRpc).not.toHaveBeenCalled();
   });
@@ -223,11 +231,38 @@ describe('/api/homes/:id/calendar', () => {
 
   it('returns a write failure with the previously saved calendar still readable', async () => {
     seedCamas();
-    await svc.setPickupDay(home, { weekday: 'TH', now: NOW });
+    await svc.setPickupDay(home, { userId: USER, weekday: 'TH', now: NOW });
     pickupRpc.mockResolvedValueOnce({ data: null, error: { message: 'transaction failed' } });
-    expect((await request(app()).put(`/api/homes/${HOME}/calendar/pickup-day`).send({ weekday: 'MO' })).status).toBe(500);
+    expect((await request(app()).put(`/api/homes/${HOME}/calendar/pickup-day`).send({ weekday: 'MO' })).status).toBe(503);
     const read = await request(app()).get(`/api/homes/${HOME}/calendar`);
     expect(read.body.calendar.pickup_schedule.weekday).toBe('TH');
+  });
+
+  it('binds read and mutation to the authenticated actor, never a submitted caller id', async () => {
+    seedCamas();
+    const result = await request(app()).put(`/api/homes/${HOME}/calendar/pickup-day`).send({ weekday: 'WE' });
+    expect(result.status).toBe(200);
+    expect(contextRpc).toHaveBeenCalledWith({ p_home_id: HOME, p_user_id: USER });
+    expect(pickupRpc).toHaveBeenCalledWith('mutate_home_pickup_calendar', expect.objectContaining({
+      p_home_id: HOME, p_user_id: USER, p_rows: [expect.objectContaining({ created_by: USER })],
+    }));
+  });
+
+  it('a mutation denial after an allowed read preserves the previous schedule', async () => {
+    seedCamas();
+    await svc.setPickupDay(home, { userId: USER, weekday: 'TH', now: NOW });
+    const before = structuredClone(getTable('AddressCalendarRule'));
+    pickupRpc.mockResolvedValueOnce({ data: { allowed: false }, error: null });
+    expect((await request(app()).delete(`/api/homes/${HOME}/calendar/pickup-day`)).status).toBe(403);
+    expect(getTable('AddressCalendarRule')).toEqual(before);
+  });
+
+  it('an inconsistent context response is retryable and exposes no foreign Home', async () => {
+    seedCamas();
+    contextRpc.mockResolvedValueOnce({ data: { allowed: true, home: { ...home, id: 'other-home' }, rules: [] }, error: null });
+    const result = await request(app()).get(`/api/homes/${HOME}/calendar`);
+    expect(result.status).toBe(503);
+    expect(result.body).not.toHaveProperty('calendar');
   });
 });
 

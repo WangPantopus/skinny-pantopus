@@ -49,10 +49,14 @@ class HouseholdAvailabilityViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { networkMonitor.isOnline } returns MutableStateFlow(true)
         every { prefs.getBool(any(), any()) } answers { secondArg<Boolean>() }
-        val home = mockk<MyHome>()
-        every { home.id } returns "home-1"
-        every { home.name } returns "Maple Street"
-        every { home.occupancy } returns null
+        val home =
+            MyHome(
+                id = "00000000-0000-4000-8000-000000000001", name = "Maple Street", address = null,
+                city = null, state = null, zipcode = null, homeType = null, visibility = null,
+                description = null, createdAt = null, updatedAt = null, occupancy = null,
+                ownershipStatus = null, verificationTier = null, isPrimaryOwner = null, pendingClaimId = null,
+                accessKind = "shared", hasHomeAccess = true, roleBase = "member", canDeleteHome = false,
+            )
         coEvery { homes.myHomes() } returns NetworkResult.Success(MyHomesResponse(homes = listOf(home), message = null))
     }
 

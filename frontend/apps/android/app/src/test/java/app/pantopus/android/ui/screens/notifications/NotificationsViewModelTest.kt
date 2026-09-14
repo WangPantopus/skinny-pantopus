@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowChip
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowHighlight
@@ -86,7 +87,7 @@ class NotificationsViewModelTest {
     fun load_empty_transitions_to_all_tab_empty_with_disabled_top_bar_action() =
         runTest {
             coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(emptyResponse)
-            val vm = NotificationsViewModel(repo)
+            val vm = NotificationsViewModel(repo, sessions = claimScopeFactory())
             vm.load()
             val state = vm.state.value
             assertTrue(state is ListOfRowsUiState.Empty)
@@ -101,7 +102,7 @@ class NotificationsViewModelTest {
     fun load_populated_transitions_to_loaded() =
         runTest {
             coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(twoUnread)
-            val vm = NotificationsViewModel(repo)
+            val vm = NotificationsViewModel(repo, sessions = claimScopeFactory())
             vm.load()
             val state = vm.state.value
             assertTrue(state is ListOfRowsUiState.Loaded)
@@ -117,7 +118,7 @@ class NotificationsViewModelTest {
         runTest {
             coEvery { repo.list(any(), any(), any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
-            val vm = NotificationsViewModel(repo)
+            val vm = NotificationsViewModel(repo, sessions = claimScopeFactory())
             vm.load()
             assertTrue(vm.state.value is ListOfRowsUiState.Error)
         }
@@ -128,7 +129,7 @@ class NotificationsViewModelTest {
     fun tabs_expose_all_and_unread_with_counts() =
         runTest {
             coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(twoUnread)
-            val vm = NotificationsViewModel(repo)
+            val vm = NotificationsViewModel(repo, sessions = claimScopeFactory())
             vm.load()
             val tabs = vm.tabs.value
             assertEquals(3, tabs.size)
@@ -158,7 +159,7 @@ class NotificationsViewModelTest {
                 NetworkResult.Success(twoUnread)
             coEvery { repo.list(any(), any(), unreadOnly = true) } returns
                 NetworkResult.Success(unreadOnly)
-            val vm = NotificationsViewModel(repo)
+            val vm = NotificationsViewModel(repo, sessions = claimScopeFactory())
             vm.load()
             vm.selectTab(NotificationsTab.UNREAD)
             assertEquals(NotificationsTab.UNREAD, vm.selectedTab.value)
@@ -176,7 +177,7 @@ class NotificationsViewModelTest {
                 NetworkResult.Success(twoUnread)
             coEvery { repo.list(any(), any(), unreadOnly = true) } returns
                 NetworkResult.Success(emptyResponse)
-            val vm = NotificationsViewModel(repo)
+            val vm = NotificationsViewModel(repo, sessions = claimScopeFactory())
             vm.load()
             vm.selectTab(NotificationsTab.UNREAD)
             val state = vm.state.value
@@ -194,7 +195,7 @@ class NotificationsViewModelTest {
         runTest {
             coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(twoUnread)
             coEvery { repo.markRead("n1") } returns NetworkResult.Success(NotificationActionEcho(ok = true))
-            val vm = NotificationsViewModel(repo)
+            val vm = NotificationsViewModel(repo, sessions = claimScopeFactory())
             vm.load()
             vm.markRead("n1")
             assertEquals(1, vm.unreadCount.value)
@@ -206,7 +207,7 @@ class NotificationsViewModelTest {
         runTest {
             coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(twoUnread)
             coEvery { repo.markRead("n1") } returns NetworkResult.Failure(NetworkError.Server(500, null))
-            val vm = NotificationsViewModel(repo)
+            val vm = NotificationsViewModel(repo, sessions = claimScopeFactory())
             vm.load()
             vm.markRead("n1")
             assertEquals(2, vm.unreadCount.value)
@@ -217,7 +218,7 @@ class NotificationsViewModelTest {
         runTest {
             coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(twoUnread)
             coEvery { repo.markAllRead() } returns NetworkResult.Success(NotificationActionEcho(count = 0))
-            val vm = NotificationsViewModel(repo)
+            val vm = NotificationsViewModel(repo, sessions = claimScopeFactory())
             vm.load()
             vm.markAllRead()
             assertEquals(0, vm.unreadCount.value)
@@ -229,7 +230,7 @@ class NotificationsViewModelTest {
         runTest {
             coEvery { repo.list(any(), any(), any()) } returns NetworkResult.Success(twoUnread)
             coEvery { repo.markAllRead() } returns NetworkResult.Failure(NetworkError.Server(500, null))
-            val vm = NotificationsViewModel(repo)
+            val vm = NotificationsViewModel(repo, sessions = claimScopeFactory())
             vm.load()
             vm.markAllRead()
             assertEquals(2, vm.unreadCount.value)
@@ -429,7 +430,7 @@ class NotificationsViewModelTest {
                     NetworkResult.Success(twoUnread),
                     NetworkResult.Success(emptyResponse),
                 )
-            val vm = NotificationsViewModel(repo)
+            val vm = NotificationsViewModel(repo, sessions = claimScopeFactory())
             vm.load()
             vm.refresh()
             assertTrue(vm.state.value is ListOfRowsUiState.Empty)

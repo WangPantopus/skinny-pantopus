@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.api.models.homes.BillDto
 import app.pantopus.android.data.api.models.homes.CreateBillRequest
 import app.pantopus.android.data.api.models.homes.GetHomeBillsResponse
+import app.pantopus.android.data.api.models.homes.HomeAccessDto
 import app.pantopus.android.data.api.models.homes.HomeBillResponse
 import app.pantopus.android.data.api.models.homes.UpdateBillRequest
 import app.pantopus.android.data.api.net.NetworkError
@@ -85,7 +86,21 @@ class AddBillWizardViewModelTest {
                     if (billId != null) put(ADD_BILL_BILL_ID_KEY, billId)
                 },
             )
-        return AddBillWizardViewModel(repo = repo, savedStateHandle = saved)
+        return AddBillWizardViewModel(
+            repo = repo,
+            savedStateHandle = saved,
+            createAccess = { _, scope ->
+                HomeFinanceAccess(
+                    scope,
+                    loadAccess = {
+                        NetworkResult.Success(
+                            HomeAccessDto(hasAccess = true, permissions = listOf("finance.view", "finance.manage")),
+                        )
+                    },
+                    identity = { HomeFinanceIdentity("viewer", "session", "https://test.invalid") },
+                )
+            },
+        )
     }
 
     // MARK: - Initial pose

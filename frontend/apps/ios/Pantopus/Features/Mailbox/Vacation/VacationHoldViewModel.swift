@@ -351,7 +351,7 @@ public final class VacationHoldViewModel {
         guard let api else { return nil }
         do {
             let response: MyHomesResponse = try await api.request(HomesEndpoints.myHomes())
-            return response.homes.first?.id
+            return response.sharedHomes.first?.id
         } catch {
             return nil
         }

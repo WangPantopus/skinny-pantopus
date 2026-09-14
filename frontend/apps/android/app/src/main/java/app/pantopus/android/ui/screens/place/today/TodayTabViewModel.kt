@@ -65,7 +65,7 @@ class TodayTabViewModel
         private suspend fun resolvePrimaryHome(): String? =
             when (val result = homesRepository.myHomes()) {
                 is NetworkResult.Success -> {
-                    val homes = result.data.homes
+                    val homes = result.data.sharedHomes
                     (homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull())?.id
                 }
                 is NetworkResult.Failure -> null

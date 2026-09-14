@@ -1033,6 +1033,7 @@ public final class GigDetailViewModel {
     /// bid-entry sheet.
     @discardableResult
     public func placeBid(amount: Double, message: String?, proposedTime: String? = nil) async -> Bool {
+        guard rawGig?.status?.lowercased() == "open", !viewerIsOwner, !viewerHasActiveBid else { return false }
         do {
             let _: PlaceBidResponse = try await api.request(
                 GigsEndpoints.placeBid(
@@ -1057,7 +1058,7 @@ public final class GigDetailViewModel {
     /// (gigs.js:4143). Returns `true` so the bid sheet can dismiss.
     @discardableResult
     public func updateViewerBid(amount: Double, message: String?, proposedTime: String? = nil) async -> Bool {
-        guard let bidId = viewerBid?.id, !viewerBidActionInFlight else { return false }
+        guard viewerCanEditBid, let bidId = viewerBid?.id, !viewerBidActionInFlight else { return false }
         viewerBidActionInFlight = true
         defer { viewerBidActionInFlight = false }
         do {
@@ -1823,7 +1824,7 @@ extension GigDetailViewModel {
         suppressBidsModule: Bool = false,
         viewerCanUpdateBid: Bool = false
     ) -> ContentDetailContent {
-        shouldProjectTaskV2(gig: gig)
+        let content = shouldProjectTaskV2(gig: gig)
             ? projectTaskV2(
                 gig: gig,
                 bids: bids,
@@ -1842,6 +1843,54 @@ extension GigDetailViewModel {
                 suppressBidsModule: suppressBidsModule,
                 viewerCanUpdateBid: viewerCanUpdateBid
             )
+        return ContentDetailContent(
+            kind: content.kind,
+            cover: content.cover,
+            statusPill: currentStatus(gig, fallback: content.statusPill),
+            hero: content.hero,
+            statStrip: content.statStrip,
+            counterparty: content.counterparty,
+            modules: content.modules,
+            trustCapsules: content.trustCapsules,
+            dock: currentDock(gig, content.dock, viewer: viewerUserId, canTip: canTip, canDeliver: canMarkDelivered)
+        )
+    }
+
+    /// Both detail layouts must render the current lifecycle, including unawarded
+    /// cancellations and completions. Missing/unknown status never means open.
+    private static func currentStatus(_ gig: GigDTO, fallback: ContentDetailPill?) -> ContentDetailPill {
+        switch gig.status?.lowercased() {
+        case "open": fallback ?? ContentDetailPill(label: "Open", icon: .circle, tone: .warning)
+        case "assigned": ContentDetailPill(label: "Assigned", icon: .check, tone: .success)
+        case "accepted", "awarded": ContentDetailPill(label: "Awarded", icon: .check, tone: .success)
+        case "in_progress": ContentDetailPill(label: "In progress", icon: .circle, tone: .warning)
+        case "completed": ContentDetailPill(label: "Completed", icon: .check, tone: .success)
+        case "cancelled", "canceled": ContentDetailPill(label: "Cancelled", icon: .ban, tone: .neutral)
+        default: ContentDetailPill(label: "Status unavailable", icon: .circle, tone: .neutral)
+        }
+    }
+
+    private static func currentDock(
+        _ gig: GigDTO, _ dock: ContentDetailDock, viewer: String?, canTip: Bool, canDeliver: Bool
+    ) -> ContentDetailDock {
+        let status = gig.status?.lowercased()
+        let owner = viewer != nil && viewer == gig.userId
+        let secondary = owner && (gig.acceptedBy ?? "").isEmpty ? nil : dock.secondary
+        if status == "completed", canTip {
+            return ContentDetailDock(secondary: secondary, primary: dock.primary)
+        }
+        if status == "in_progress", canDeliver {
+            return ContentDetailDock(
+                secondary: secondary,
+                primary: ContentDetailDockButton(label: "Mark as delivered", icon: .checkCheck)
+            )
+        }
+        if status == "open", !owner { return dock }
+        let label = status == "open" ? "Your task" : ["cancelled", "canceled"].contains(status ?? "") ? "Cancelled" : "Bidding closed"
+        return ContentDetailDock(
+            secondary: secondary,
+            primary: ContentDetailDockButton(label: label, icon: .lock, enabled: false)
+        )
     }
 
     /// Poster card for the "Posted By" section — avatar, name, @handle,
@@ -1936,15 +1985,18 @@ extension GigDetailViewModel {
         let bidCount = gig.bidCount ?? bids.count
         let metaPieces: [String] = [
             distanceLabel(gig.distanceMiles),
-            relativeAge(gig.createdAt).map { "posted \($0) ago" }
+            relativeAge(gig.createdAt).map { $0 == "now" ? "Just posted" : "posted \($0) ago" }
         ].compactMap { $0 }
         let priceLine = gig.price.map { gigPriceLabel($0, payType: gig.payType) }
         let hero = ContentDetailHero(
             title: gig.title,
-            categoryChip: ContentDetailCategoryChip(label: category.label, category: category),
+            categoryChip: ContentDetailCategoryChip(
+                label: (gig.category?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? category.label,
+                category: category
+            ),
             meta: metaPieces.isEmpty ? nil : metaPieces.joined(separator: " · "),
             priceLine: priceLine,
-            priceCaption: gig.price != nil ? "budget · cash or transfer" : nil
+            priceCaption: gig.price != nil ? "budget" : nil
         )
         var modules: [ContentDetailModule] = []
         if let body = gig.description, !body.isEmpty {
@@ -1966,10 +2018,6 @@ extension GigDetailViewModel {
         if let photos = photoStripModule(gig) {
             modules.append(photos)
         }
-        modules.append(.capsuleRow(ContentDetailCapsuleRow(capsules: [
-            ContentDetailPill(label: "Verified address", icon: .shieldCheck, tone: .info),
-            ContentDetailPill(label: "Local Pantopus job", icon: .check, tone: .success)
-        ])))
         // The interactive owner panel (scroll footer) supersedes the
         // read-only module on open gigs the viewer owns.
         if suppressBidsModule {
@@ -1980,7 +2028,7 @@ extension GigDetailViewModel {
                 sub: bidRangeSub(bids),
                 bids: bids.map { projectBid($0) }
             )))
-        } else {
+        } else if gig.status?.lowercased() == "open", viewerUserId == nil || viewerUserId != gig.userId {
             modules.append(.callout(ContentDetailCallout(
                 identifier: "be-first",
                 style: .empty,
@@ -1988,8 +2036,7 @@ extension GigDetailViewModel {
                 icon: .handCoins,
                 iconTone: .primary,
                 title: "Be the first to bid",
-                subtitle: "Fresh posts usually get a hire in the first hour. First three bids land at the top of the list.",
-                footerPill: "neighbors viewing"
+                subtitle: "Review the task and send an offer if you can help."
             )))
         }
         // The assigned worker viewing an in-progress task gets the

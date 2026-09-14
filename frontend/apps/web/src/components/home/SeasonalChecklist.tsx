@@ -7,20 +7,13 @@ import type { SeasonalChecklist as SeasonalChecklistData, SeasonalChecklistItem 
 interface SeasonalChecklistProps {
   checklist: SeasonalChecklistData | null;
   loading: boolean;
+  canEdit?: boolean;
+  busy?: boolean;
   onComplete: (itemId: string) => void;
   onSkip: (itemId: string) => void;
   onHireHelp: (item: SeasonalChecklistItem) => void;
   /** Called to generate a checklist for a new home with no existing items. */
   onGenerate?: () => void;
-}
-
-// ── Current season label ──────────────────────────────────────
-function currentSeasonLabel(): string {
-  const m = new Date().getMonth();
-  if (m >= 2 && m <= 4) return 'Spring';
-  if (m >= 5 && m <= 7) return 'Summer';
-  if (m >= 8 && m <= 10) return 'Fall';
-  return 'Winter';
 }
 
 // ── Season icon mapping ────────────────────────────────────────
@@ -51,12 +44,16 @@ function progressColor(percentage: number): string {
 function ChecklistItemRow({
   item,
   isCarryover,
+  canEdit,
+  busy,
   onComplete,
   onSkip,
   onHireHelp,
 }: {
   item: SeasonalChecklistItem;
   isCarryover?: boolean;
+  canEdit: boolean;
+  busy: boolean;
   onComplete: (id: string) => void;
   onSkip: (id: string) => void;
   onHireHelp: (item: SeasonalChecklistItem) => void;
@@ -69,7 +66,8 @@ function ChecklistItemRow({
       <button
         type="button"
         onClick={() => { if (!done) onComplete(item.id); }}
-        disabled={done}
+        disabled={done || !canEdit || busy}
+        aria-label={`${done ? item.status : 'Mark complete'}: ${item.title}`}
         className="flex-shrink-0 disabled:cursor-default"
       >
         {item.status === 'completed' ? (
@@ -102,10 +100,12 @@ function ChecklistItemRow({
       </div>
 
       {/* Action buttons for pending items */}
-      {item.status === 'pending' && (
+      {item.status === 'pending' && canEdit && (
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
             type="button"
+            disabled={busy}
+            aria-label={`Complete: ${item.title}`}
             onClick={() => onComplete(item.id)}
             className="p-1 rounded hover:bg-green-500/10 text-app-text-secondary hover:text-green-500 transition-colors"
             title="Mark done"
@@ -114,6 +114,8 @@ function ChecklistItemRow({
           </button>
           <button
             type="button"
+            disabled={busy}
+            aria-label={`Skip: ${item.title}`}
             onClick={() => onSkip(item.id)}
             className="p-1 rounded hover:bg-app-border/50 text-app-text-secondary hover:text-app-text transition-colors"
             title="Skip"
@@ -123,6 +125,7 @@ function ChecklistItemRow({
           {item.gig_category && (
             <button
               type="button"
+              disabled={busy}
               onClick={() => onHireHelp(item)}
               className="ml-1 flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-colors"
               title="Hire help"
@@ -142,6 +145,8 @@ function ChecklistItemRow({
 export default function SeasonalChecklist({
   checklist,
   loading,
+  canEdit = false,
+  busy = false,
   onComplete,
   onSkip,
   onHireHelp,
@@ -171,18 +176,17 @@ export default function SeasonalChecklist({
     );
   }
 
-  // ── Empty state with generate button ─────────────────────────
-  if (!checklist || checklist.items.length === 0) {
-    const seasonLabel = currentSeasonLabel();
+  // ── Confirmed empty state with refresh ─────────────────────────
+  if (!checklist || (checklist.items.length === 0 && !checklist.carryover?.items.length)) {
     return (
       <div className="rounded-xl border border-app-border bg-app-surface shadow-sm p-4">
         <div className="flex flex-col items-center gap-2 py-6">
           <Leaf className="h-8 w-8 text-primary" />
           <p className="text-sm font-semibold text-app-text mt-1">
-            Your {seasonLabel} checklist is ready
+            No seasonal tasks right now
           </p>
           <p className="text-xs text-app-text-secondary text-center">
-            Get personalized seasonal tasks for your home
+            There are no checklist items for this home in the current season.
           </p>
           {onGenerate && (
             <button
@@ -191,7 +195,7 @@ export default function SeasonalChecklist({
               className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Generate checklist
+              Refresh checklist
             </button>
           )}
         </div>
@@ -226,6 +230,8 @@ export default function SeasonalChecklist({
           <ChecklistItemRow
             key={item.id}
             item={item}
+            canEdit={canEdit}
+            busy={busy}
             onComplete={onComplete}
             onSkip={onSkip}
             onHireHelp={onHireHelp}
@@ -259,6 +265,8 @@ export default function SeasonalChecklist({
                 <ChecklistItemRow
                   key={item.id}
                   item={item}
+                  canEdit={canEdit}
+                  busy={busy}
                   isCarryover
                   onComplete={onComplete}
                   onSkip={onSkip}

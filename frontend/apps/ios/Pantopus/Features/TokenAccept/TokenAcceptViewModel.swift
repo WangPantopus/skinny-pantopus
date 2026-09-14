@@ -2,11 +2,9 @@
 //  TokenAcceptViewModel.swift
 //  Pantopus
 //
-//  Resolves an invite token into one of three offers, then drives
-//  accept / decline via the matching backend route. Resolution
-//  fires the three preview GETs in parallel and picks whichever
-//  succeeds first — only one of the three tables ever stores a
-//  given token hash so multiple-success is impossible.
+//  Resolves Home, business-seat and guest-pass links without treating
+//  unavailable reads as expired invitations. Home decisions recover their
+//  protected original before a newly opened token can replace the screen.
 //
 
 import Foundation
@@ -16,75 +14,127 @@ import Observation
 @MainActor
 public final class TokenAcceptViewModel {
     public private(set) var state: TokenAcceptState = .loading
+    private(set) var homeDecision: HomeInvitationDecisionViewModel?
+    private var generation = 0
+    private var session: HomeClaimSessionScope?
+    var sessionIsCurrent: Bool {
+        session?.isCurrent ?? true
+    }
+
+    func suspend() {
+        generation += 1
+        homeDecision?.suspend()
+        homeDecision = nil
+        leasePreview = nil
+        state = .loading
+    }
+
+    func close() {
+        suspend()
+        onDeclined()
+    }
 
     private let api: APIClient
     private let token: String
+    private let leaseInvitation: Bool
+    private var leasePreview: LeaseInvitePreviewResponse?
     private let auth: AuthManager
+    private let invitationStore: any PendingHomeInvitationDecisionStoring
     private let onAccepted: @MainActor (InviteType) -> Void
     private let onDeclined: @MainActor () -> Void
 
     init(
         token: String,
+        leaseInvitation: Bool = false,
         api: APIClient = .shared,
-        auth: AuthManager = .shared,
+        auth: AuthManager? = nil,
+        invitationStore: any PendingHomeInvitationDecisionStoring = PendingHomeInvitationDecisionStore(),
         onAccepted: @escaping @MainActor (InviteType) -> Void = { _ in },
         onDeclined: @escaping @MainActor () -> Void = {}
     ) {
         self.token = token
+        self.leaseInvitation = leaseInvitation
         self.api = api
-        self.auth = auth
+        self.auth = auth ?? api.authProvider ?? AuthManager.shared
+        self.invitationStore = invitationStore
         self.onAccepted = onAccepted
         self.onDeclined = onDeclined
     }
 
     public func load() async {
-        state = .loading
+        suspend()
+        let revision = generation
+        let lease = HomeClaimSessionScope(api: api)
+        session = lease
+        let scope = HomeInvitationDecisionViewModel.scope(api: api)
+        guard scope.isValid, lease.isCurrent else {
+            state = .error(message: "Sign in to review this invitation.")
+            return
+        }
+        do {
+            if try invitationStore.load(scope: scope) != nil {
+                homeDecision = HomeInvitationDecisionViewModel(token: token, api: api, store: invitationStore)
+                return
+            }
+        } catch {
+            // An unreadable protected slot must not be treated as empty.
+            homeDecision = HomeInvitationDecisionViewModel(token: token, api: api, store: invitationStore)
+            return
+        }
+        if leaseInvitation {
+            await loadLease(revision: revision, session: lease)
+            return
+        }
         let identity = identityChip()
-        // Try the three resolvers in parallel; first non-nil wins.
-        async let homeTask = tryDecode(HomeInviteResponse.self, endpoint: TokenAcceptEndpoints.homeInvite(token: token))
-        async let seatTask = tryDecode(BusinessSeatInviteResponse.self, endpoint: TokenAcceptEndpoints.businessSeatInvite(token: token))
-        async let guestTask = tryDecode(TokenAcceptGuestPassResponse.self, endpoint: TokenAcceptEndpoints.guestPass(token: token))
-
-        let home = await homeTask
-        let seat = await seatTask
-        let guest = await guestTask
-
-        if let home, let invitation = home.invitation {
-            if home.expired == true || invitation.status == "expired" {
-                state = .expired(message: "This invitation has expired. Ask the sender for a new link.")
+        async let homeTask = resolve(JSONValue.self, endpoint: TokenAcceptEndpoints.homeInvite(token: token))
+        async let seatTask = resolve(BusinessSeatInviteResponse.self, endpoint: TokenAcceptEndpoints.businessSeatInvite(token: token))
+        async let guestTask = resolve(TokenAcceptGuestPassResponse.self, endpoint: TokenAcceptEndpoints.guestPass(token: token))
+        let (home, seat, guest) = await (homeTask, seatTask, guestTask)
+        guard generation == revision, lease.isCurrent, !Task.isCancelled else { return }
+        if case let .success(value) = home {
+            guard HomeInvitationValidation.preview(value) else {
+                state = .error(message: "The invitation response could not be checked. Retry to review its current details.")
                 return
             }
-            if home.alreadyUsed == true || invitation.status == "accepted" {
-                state = .expired(message: "This invitation has already been used.")
-                return
-            }
-            state = .ready(Self.makeHomeOffer(home: home, invitation: invitation, identity: identity))
+            homeDecision = HomeInvitationDecisionViewModel(token: token, api: api, store: invitationStore)
             return
         }
-        if let seat, seat.seatId != nil {
-            state = .ready(Self.makeSeatOffer(seat: seat, identity: identity))
+        if case let .success(value) = seat, let id = value.seatId, HomePostalValidation.uuid(id) {
+            state = .ready(Self.makeSeatOffer(seat: value, identity: identity))
             return
         }
-        if let guest, let pass = guest.pass {
+        if case let .success(value) = guest, let pass = value.pass, pass.label != nil || pass.customTitle != nil {
             state = .ready(Self.makeGuestOffer(pass: pass, identity: identity))
             return
         }
-        state = .expired(message: "We couldn't find this invitation. It might have expired or been used.")
+        let allMissing = home.isMissing && seat.isMissing && guest.isMissing
+        state = allMissing ? .expired(message: "This invitation is unavailable. Check the complete link with the sender.")
+            : .error(message: "The invitation could not be checked right now. Retry to review its current status.")
     }
 
     public func accept() async {
-        guard case let .ready(offer) = state else { return }
+        guard case let .ready(offer) = state, sessionIsCurrent else { return }
+        let revision = generation
         state = .accepting(offer)
         do {
             switch offer.inviteType {
             case .homeInvite:
-                let _: HomeAcceptResponse = try await api.request(TokenAcceptEndpoints.acceptHomeInvite(token: token))
-                state = .accepted(offer, message: "You're now a member of \(offer.venue).")
-                onAccepted(.homeInvite)
+                homeDecision = HomeInvitationDecisionViewModel(token: token, api: api, store: invitationStore)
+            case .leaseInvite:
+                guard let preview = leasePreview, case let .signedIn(user) = auth.state else { throw APIError.invalidResponse }
+                let response: LeaseInviteAcceptanceResponse = try await api.request(TokenAcceptEndpoints.acceptLeaseInvite(token: token))
+                guard generation == revision, sessionIsCurrent, !Task.isCancelled else { return }
+                guard response.lease.homeId == preview.home.id, response.lease.primaryResidentUserId == user.id,
+                      response.lease.state == "active", HomePostalValidation.uuid(response.lease.id),
+                      response.occupancy.homeId == preview.home.id, response.occupancy.userId == user.id,
+                      HomePostalValidation.uuid(response.occupancy.id), response.occupancy.isActive,
+                      response.occupancy.verificationStatus == "verified" else { throw APIError.invalidResponse }
+                state = .accepted(offer, message: "Your lease acceptance is saved.")
             case .businessSeat:
                 let _: BusinessSeatAcceptResponse = try await api.request(
                     TokenAcceptEndpoints.acceptBusinessSeat(body: BusinessSeatAcceptBody(token: token))
                 )
+                guard generation == revision, sessionIsCurrent, !Task.isCancelled else { return }
                 state = .accepted(offer, message: "Welcome to \(offer.venue) — your seat is active.")
                 onAccepted(.businessSeat)
             case .guestPass:
@@ -95,63 +145,43 @@ public final class TokenAcceptViewModel {
                 onAccepted(.guestPass)
             }
         } catch {
-            state = .error(message: (error as? APIError)?.errorDescription ?? "Couldn't accept this invitation.")
+            guard generation == revision, sessionIsCurrent else { return }
+            state = .error(message: "Acceptance could not be confirmed. Retry to check the invitation’s current status.")
         }
     }
 
     public func decline() async {
-        guard case let .ready(offer) = state else { return }
+        guard case let .ready(offer) = state, sessionIsCurrent else { return }
+        if offer.inviteType == .leaseInvite {
+            suspend()
+            onDeclined()
+            return
+        }
+        let revision = generation
+        state = .accepting(offer)
         do {
             switch offer.inviteType {
+            case .leaseInvite: return
             case .homeInvite:
-                if let invitationId = offer.invitationId {
-                    let _: AnyDecodable? = try? await api.request(
-                        TokenAcceptEndpoints.declineHomeInvite(invitationId: invitationId)
-                    )
-                }
+                homeDecision = HomeInvitationDecisionViewModel(token: token, api: api, store: invitationStore)
+                return
             case .businessSeat:
-                let _: AnyDecodable? = try? await api.request(
+                let _: AnyDecodable = try await api.request(
                     TokenAcceptEndpoints.declineBusinessSeat(body: BusinessSeatDeclineBody(token: token))
                 )
             case .guestPass:
-                // Nothing to decline on the server side.
                 break
             }
+            guard generation == revision, sessionIsCurrent, !Task.isCancelled else { return }
             state = .declined
             onDeclined()
+        } catch {
+            guard generation == revision, sessionIsCurrent else { return }
+            state = .error(message: "The decline could not be confirmed. Retry to check the invitation's current status.")
         }
     }
 
     // MARK: - Projection
-
-    static func makeHomeOffer(
-        home: HomeInviteResponse,
-        invitation: HomeInviteDetailsDTO,
-        identity: IdentityChipContent
-    ) -> TokenAcceptOffer {
-        let homeName = home.home?.name ?? "this home"
-        let city = home.home?.city
-        let venue = [homeName, city].compactMap { $0?.isEmpty == false ? $0 : nil }.compactMap { $0 }.joined(separator: " · ")
-        let sender = home.inviter?.name ?? home.inviter?.username ?? "Someone"
-        let role = humanRole(invitation.proposedRole ?? "member")
-        return TokenAcceptOffer(
-            invitationId: invitation.id,
-            inviteType: .homeInvite,
-            title: "Join a home",
-            sender: "\(sender) invited you",
-            roleOffered: role,
-            venue: venue.isEmpty ? homeName : venue,
-            benefits: homeBenefits(role: invitation.proposedRole),
-            expiry: formatExpiry(invitation.expiresAt),
-            safetyBand: SafetyBand(
-                icon: .lock,
-                text: "Your email and personal account stay private — \(sender) only sees your accepted role."
-            ),
-            primaryCtaLabel: "Join \(homeName)",
-            secondaryCtaLabel: "Decline",
-            identityChip: identity
-        )
-    }
 
     static func makeSeatOffer(
         seat: BusinessSeatInviteResponse,
@@ -217,40 +247,21 @@ public final class TokenAcceptViewModel {
         return IdentityChipContent(label: "Accepting as guest")
     }
 
-    private func tryDecode<T: Decodable>(
-        _: T.Type,
-        endpoint: Endpoint
-    ) async -> T? {
-        try? await api.request(endpoint) as T
+    private enum Resolution<Value> {
+        case success(Value), missing, unavailable
+        var isMissing: Bool {
+            if case .missing = self { true } else { false }
+        }
+    }
+
+    private func resolve<T: Decodable>(_: T.Type, endpoint: Endpoint) async -> Resolution<T> {
+        do { return try await .success(api.request(endpoint)) } catch APIError.notFound { return .missing } catch { return .unavailable }
     }
 
     static func humanRole(_ raw: String) -> String {
         let normalized = raw.replacingOccurrences(of: "_", with: " ").trimmingCharacters(in: .whitespaces)
         guard !normalized.isEmpty else { return "Member" }
         return normalized.prefix(1).uppercased() + normalized.dropFirst()
-    }
-
-    static func homeBenefits(role: String?) -> [String] {
-        let lower = role?.lowercased() ?? ""
-        if lower.contains("owner") || lower.contains("co_owner") {
-            return [
-                "Co-manage occupants, ownership, and home settings",
-                "Share home docs, wi-fi, and entry info with guests",
-                "See all home activity in your Hub"
-            ]
-        }
-        if lower.contains("renter") || lower.contains("tenant") {
-            return [
-                "See house docs, wi-fi, and entry info",
-                "Get notified about home updates and tasks",
-                "Mark yourself as a resident in your local profile"
-            ]
-        }
-        return [
-            "See house docs, wi-fi, and entry info",
-            "Get home updates in your Hub",
-            "Privately label yourself a resident if you want"
-        ]
     }
 
     static func seatBenefits(role: String?) -> [String] {
@@ -292,6 +303,58 @@ public final class TokenAcceptViewModel {
         let seconds = date.timeIntervalSinceNow
         if seconds <= 0 { return nil }
         return Int((seconds / 86400).rounded(.up))
+    }
+}
+
+extension TokenAcceptViewModel {
+    private func loadLease(revision: Int, session: HomeClaimSessionScope) async {
+        do {
+            guard token.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil else { throw APIError.invalidResponse }
+            let preview: LeaseInvitePreviewResponse = try await api.request(TokenAcceptEndpoints.leaseInvite(token: token))
+            guard generation == revision, session.isCurrent, !Task.isCancelled else { return }
+            guard case let .signedIn(user) = auth.state,
+                  preview.accountEmail.lowercased() == user.email.lowercased(), HomePostalValidation.uuid(preview.home.id),
+                  ["pending", "accepted"].contains(preview.invitation.status),
+                  let start = HomeInvitationValidation.date(preview.invitation.proposedStart),
+                  let expiry = HomeInvitationValidation.date(preview.invitation.expiresAt),
+                  preview.invitation.status == "accepted" || expiry > Date() else { throw APIError.invalidResponse }
+            if let end = preview.invitation.proposedEnd {
+                guard let date = HomeInvitationValidation.date(end), date > start else { throw APIError.invalidResponse }
+            }
+            leasePreview = preview
+            state = .ready(Self.makeLeaseOffer(preview))
+        } catch {
+            guard generation == revision, session.isCurrent, !Task.isCancelled else { return }
+            leasePreview = nil
+            if case APIError.clientError(status: 410, message: _) = error {
+                state = .expired(message: "This lease invitation is closed or expired. Ask the landlord for a new invitation.")
+            } else {
+                state = .error(message: "This lease invitation could not be checked. Use the account it was sent to and retry.")
+            }
+        }
+    }
+
+    static func makeLeaseOffer(_ preview: LeaseInvitePreviewResponse) -> TokenAcceptOffer {
+        let invitation = preview.invitation
+        var dates = ["Starts: \(invitation.proposedStart.prefix(10))"]
+        if let end = invitation.proposedEnd { dates.append("Ends: \(end.prefix(10))") }
+        return TokenAcceptOffer(
+            invitationId: nil,
+            inviteType: .leaseInvite,
+            title: "Review your lease invitation",
+            sender: "Your landlord invited you",
+            roleOffered: "Tenant",
+            venue: [preview.home.name ?? "Your rental Home", preview.home.city].compactMap { $0 }.joined(separator: ", "),
+            benefits: dates,
+            expiry: formatExpiry(invitation.expiresAt),
+            safetyBand: SafetyBand(
+                icon: .shieldCheck,
+                text: "Review the Home and dates before accepting. Access is checked again when you accept."
+            ),
+            primaryCtaLabel: invitation.status == "accepted" ? "Check saved acceptance" : "Accept lease invitation",
+            secondaryCtaLabel: "Not now",
+            identityChip: IdentityChipContent(label: preview.accountEmail)
+        )
     }
 }
 

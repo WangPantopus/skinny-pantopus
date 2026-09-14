@@ -12,6 +12,7 @@
 #include "Pantopus.base.xcconfig"
 
 PANTOPUS_API_BASE_URL = https:/$()/api.pantopus.app
+PANTOPUS_PUBLIC_WEB_URL = https:/$()/pantopus.com
 PANTOPUS_SOCKET_URL = https:/$()/api.pantopus.app
 STRIPE_PUBLISHABLE_KEY = pk_live_REPLACE_ME
 APS_ENVIRONMENT = production

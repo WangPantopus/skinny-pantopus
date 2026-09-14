@@ -1,11 +1,12 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Send } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
+import { extractApiError } from '@pantopus/ui-utils';
 
 function DetailsContent() {
   const router = useRouter();
@@ -14,25 +15,56 @@ function DetailsContent() {
   const [message, setMessage] = useState('');
   const [startDate, setStartDate] = useState('');
   const [loading, setLoading] = useState(false);
+  const lifetime = useRef({ active: true, generation: 0 });
+
+  useEffect(() => {
+    const current = lifetime.current;
+    current.active = true;
+    const changed = () => {
+      ++current.generation;
+      setLoading(false); setMessage(''); setStartDate('');
+    };
+    changed();
+    const storage = (event: StorageEvent) => {
+      if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed();
+    };
+    const unsubscribe = api.onTokenChange(changed);
+    window.addEventListener('storage', storage);
+    return () => {
+      current.active = false; ++current.generation;
+      unsubscribe(); window.removeEventListener('storage', storage);
+    };
+  }, [homeId]);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
   const handleSubmit = useCallback(async () => {
-    if (!homeId) return;
+    if (!homeId || loading || !lifetime.current.active) return;
+    const generation = ++lifetime.current.generation;
+    const current = () => lifetime.current.active && lifetime.current.generation === generation;
     setLoading(true);
     try {
+      const status = await api.tenant.getTenantHomeStatus(homeId);
+      if (!current()) return;
+      const context = status.request_context;
+      if (status.home_id !== homeId || context?.home_id !== homeId || !context.actor_id
+        || (context.lease_id === null ? context.lease_state !== null
+          : typeof context.lease_id !== 'string' || !['pending', 'active', 'ended', 'canceled'].includes(context.lease_state || ''))) {
+        throw new Error('Could not confirm this home’s lease status. Please retry.');
+      }
       await api.tenant.requestApproval({
         home_id: homeId,
+        request_context: context,
         start_at: startDate || null,
         message: message.trim() || null,
       });
-      router.push(`/app/homes/${homeId}/verify-landlord/submitted`);
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to submit request');
+      if (current()) router.push(`/app/homes/${homeId}/verify-landlord/submitted`);
+    } catch (err: unknown) {
+      if (current()) toast.error(extractApiError(err, 'Failed to submit request'));
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
-  }, [homeId, message, startDate, router]);
+  }, [homeId, loading, message, startDate, router]);
 
   return (
     <div className="max-w-lg mx-auto px-4 py-6">

@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -1615,7 +1616,7 @@ private fun StickyDock(
                             .clip(RoundedCornerShape(Radii.lg))
                             .background(PantopusColors.appSurface)
                             .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
-                            .clickable { onSecondary?.invoke() }
+                            .clickable(enabled = secondary.enabled && onSecondary != null, role = Role.Button) { onSecondary?.invoke() }
                             .padding(horizontal = 18.dp)
                             .heightIn(min = 48.dp)
                             .testTag("contentDetailDockSecondary"),
@@ -1646,7 +1647,6 @@ private fun StickyDock(
                                 Modifier
                                     .background(PantopusColors.primary600)
                                     .shadow(elevation = 8.dp, shape = RoundedCornerShape(Radii.lg))
-                                    .clickable(onClick = onPrimary)
                             } else {
                                 Modifier
                                     .background(PantopusColors.appSurfaceSunken)
@@ -1654,7 +1654,8 @@ private fun StickyDock(
                             },
                         )
                         .heightIn(min = 48.dp)
-                        .testTag("contentDetailDockPrimary"),
+                        .testTag("contentDetailDockPrimary")
+                        .clickable(enabled = primaryEnabled, role = Role.Button, onClick = onPrimary),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {

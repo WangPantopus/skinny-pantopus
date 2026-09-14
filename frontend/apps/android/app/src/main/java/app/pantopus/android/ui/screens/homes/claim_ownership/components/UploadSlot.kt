@@ -69,13 +69,15 @@ sealed interface UploadSlotState {
 
     data class Uploading(val file: UploadSlotFile, val progress: Float) : UploadSlotState
 
+    data class Pending(val file: UploadSlotFile, val detail: String) : UploadSlotState
+
     data class Done(val file: UploadSlotFile, val detail: String) : UploadSlotState
 
     data class Warn(val file: UploadSlotFile, val detail: String) : UploadSlotState
 
     /** Whether the slot holds a confirmed (uploaded + checked) document. */
     val isAttached: Boolean
-        get() = this is Done || this is Warn
+        get() = this is Done || this is Warn || this is Pending
 
     companion object {
         /** Bold lead rendered before the OCR detail in the `Done` state. */
@@ -104,6 +106,14 @@ fun UploadSlot(
     when (state) {
         UploadSlotState.Empty -> EmptyTile(rooted, label, required, hint, onPick)
         is UploadSlotState.Uploading -> UploadingTile(rooted, id, label, state.file, state.progress, onRemove)
+        is UploadSlotState.Pending ->
+            Column(rooted.padding(Spacing.s3), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(state.file.name, modifier = Modifier.weight(1f), color = PantopusColors.appText)
+                    RemoveButton(id, label, PantopusIcon.Trash2, background = PantopusColors.appSurfaceSunken, onRemove = onRemove)
+                }
+                Text(state.detail, color = PantopusColors.appTextSecondary)
+            }
         is UploadSlotState.Done -> UploadedTile(rooted, id, label, state.file, state.detail, isWarn = false, onRemove)
         is UploadSlotState.Warn -> UploadedTile(rooted, id, label, state.file, state.detail, isWarn = true, onRemove)
     }

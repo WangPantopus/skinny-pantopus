@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import * as api from '@pantopus/api';
+import QRCode from '../../ui/QRCode';
 
 /**
  * ScopedShareModal — reusable modal for sharing a single resource
@@ -24,21 +25,18 @@ export default function ScopedShareModal({
 }) {
   const [durationHours, setDurationHours] = useState('24');
   const [passcode, setPasscode] = useState('');
-  const [canEdit, setCanEdit] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
 
   // Result
   const [token, setToken] = useState('');
   const [copied, setCopied] = useState(false);
-  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Reset on open
   useEffect(() => {
     if (open) {
       setDurationHours('24');
       setPasscode('');
-      setCanEdit(false);
       setCreating(false);
       setError('');
       setToken('');
@@ -48,54 +46,9 @@ export default function ScopedShareModal({
 
   const getShareUrl = (t: string) => {
     if (typeof window !== 'undefined') {
-      return `${window.location.origin}/shared/${resourceType}/${resourceId}?token=${t}`;
+      return `${window.location.origin}/shared/${encodeURIComponent(t)}`;
     }
-    return `/shared/${resourceType}/${resourceId}?token=${t}`;
-  };
-
-  const drawQR = (url: string) => {
-    const canvas = qrCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const size = 160;
-    canvas.width = size;
-    canvas.height = size;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, size, size);
-    ctx.fillStyle = '#000000';
-
-    const cellSize = 6;
-    const gridSize = Math.floor(size / cellSize);
-
-    let hash = 0;
-    for (let i = 0; i < url.length; i++) {
-      hash = ((hash << 5) - hash + url.charCodeAt(i)) | 0;
-    }
-
-    // Finder patterns
-    const drawFinder = (x: number, y: number) => {
-      const s = cellSize;
-      ctx.fillRect(x, y, 7 * s, 7 * s);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(x + s, y + s, 5 * s, 5 * s);
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(x + 2 * s, y + 2 * s, 3 * s, 3 * s);
-    };
-
-    drawFinder(0, 0);
-    drawFinder((gridSize - 7) * cellSize, 0);
-    drawFinder(0, (gridSize - 7) * cellSize);
-
-    for (let row = 8; row < gridSize - 8; row++) {
-      for (let col = 8; col < gridSize - 8; col++) {
-        const v = ((hash * (row + 1) * (col + 1)) >>> 0) % 3;
-        if (v === 0) {
-          ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-        }
-      }
-    }
+    return `/shared/${encodeURIComponent(t)}`;
   };
 
   const handleCreate = async () => {
@@ -107,10 +60,9 @@ export default function ScopedShareModal({
         resource_id: resourceId,
         duration_hours: Number(durationHours) || 24,
         passcode: passcode.trim() || undefined,
-        can_edit: canEdit,
+        can_edit: false,
       });
       setToken(res.token);
-      setTimeout(() => drawQR(getShareUrl(res.token)), 100);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create share link');
     }
@@ -215,17 +167,7 @@ export default function ScopedShareModal({
                   />
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={canEdit}
-                      onChange={(e) => setCanEdit(e.target.checked)}
-                      className="rounded border-app-border"
-                    />
-                    <span className="text-xs text-app-text-secondary">Allow editing</span>
-                  </label>
-                </div>
+                <p className="text-xs text-app-text-secondary">Recipients can view this item. Editing is not included.</p>
 
                 {/* Actions */}
                 <div className="flex gap-3 pt-2">
@@ -265,11 +207,7 @@ export default function ScopedShareModal({
                 {/* QR */}
                 <div className="flex justify-center">
                   <div className="bg-app-surface rounded-xl border border-app-border p-3">
-                    <canvas
-                      ref={qrCanvasRef}
-                      className="w-[160px] h-[160px]"
-                      style={{ imageRendering: 'pixelated' }}
-                    />
+                    <QRCode value={getShareUrl(token)} size={160} label="Resource share QR code" />
                   </div>
                 </div>
 
@@ -296,7 +234,7 @@ export default function ScopedShareModal({
                 <div className="flex items-center gap-3 text-[10px] text-app-text-muted justify-center">
                   <span>Expires in {durationHours}h</span>
                   {passcode && <span>· Passcode protected</span>}
-                  {canEdit && <span>· Editable</span>}
+                  <span>· View only</span>
                 </div>
               </>
             )}

@@ -52,7 +52,11 @@ public enum ChallengeReason: String, CaseIterable, Sendable, Hashable, Identifia
 @Observable
 @MainActor
 public final class ReviewClaimDetailViewModel {
-    public private(set) var state: ReviewClaimDetailState = .loading
+    private var contentState: ReviewClaimDetailState = .loading
+    public var state: ReviewClaimDetailState {
+        scope.isCurrent ? contentState : .error(message: HomeClaimReviewError.sessionChanged.localizedDescription)
+    }
+
     public private(set) var reviewingAction: AdminClaimReviewAction?
     public private(set) var toast: ToastMessage?
 
@@ -66,54 +70,103 @@ public final class ReviewClaimDetailViewModel {
     private let api: APIClient
     private let claimId: String
     private var loadedOnce = false
+    private let scope: HomeClaimSessionScope
+    private var loadGeneration = 0
+    private struct PendingDecision {
+        let claim: AdminClaimRecordDTO
+        let action: AdminClaimReviewAction
+        let note: String?
+    }
+
+    private var pendingDecision: PendingDecision?
 
     init(
         claimId: String,
-        api: APIClient = .shared
+        api: APIClient = .shared,
+        identity: (() -> String?)? = nil
     ) {
         self.claimId = claimId
         self.api = api
+        scope = HomeClaimSessionScope(api: api, identity: identity)
     }
 
     public func load() async {
-        // Same pattern as the queue VM — refetch on every appear so the
-        // admin always sees fresh state.
-        if !loadedOnce { state = .loading }
+        guard reviewingAction == nil, scope.isCurrent else { return }
+        loadGeneration += 1
+        let revision = loadGeneration
+        if !loadedOnce { contentState = .loading }
         do {
-            let response: AdminClaimDetailResponse = try await api.request(
-                AdminEndpoints.claimDetail(claimId: claimId)
-            )
-            state = .loaded(response)
+            let response: AdminClaimDetailResponse = try await api.request(AdminEndpoints.claimDetail(claimId: claimId))
+            try scope.requireCurrent()
+            guard revision == loadGeneration else { return }
+            guard response.claim.id == claimId, !response.claim.homeId.isEmpty,
+                  response.home?.id == response.claim.homeId,
+                  response.claimant?.id == response.claim.claimantUserId,
+                  HomeClaimReviewSnapshot.validToken(response.claim.reviewToken) else { throw APIError.invalidResponse }
+            contentState = .loaded(response)
+            pendingDecision = nil
             loadedOnce = true
         } catch {
-            state = .error(message: "Couldn't load claim details. Try again.")
+            guard revision == loadGeneration else { return }
+            contentState = .error(message: HomeClaimReviewError.message(for: error))
         }
     }
 
     /// Submit the reviewer decision. Surfaces a toast on success + sets
     /// the toast text on failure so the host can show the in-screen
     /// error without spawning a separate state.
-    public func review(
-        _ action: AdminClaimReviewAction,
-        note: String? = nil
-    ) async -> Bool {
+    func makeEvidenceViewModel() -> PrivateClaimEvidenceViewModel? {
+        guard scope.isCurrent, reviewingAction == nil, pendingDecision == nil,
+              case let .loaded(detail) = state, !detail.claim.requiresDisputeReview,
+              let token = detail.claim.reviewToken, HomeClaimReviewSnapshot.validToken(token) else { return nil }
+        return PrivateClaimEvidenceViewModel(
+            homeId: detail.claim.homeId,
+            claimId: claimId,
+            platform: true,
+            expectedReviewToken: token,
+            client: PrivateClaimEvidenceClient(api: api)
+        )
+    }
+
+    public func review(_ action: AdminClaimReviewAction, note: String? = nil) async -> Bool {
         guard reviewingAction == nil else { return false }
         reviewingAction = action
         defer { reviewingAction = nil }
-
         do {
-            let _: AdminClaimReviewResponse = try await api.request(
+            try scope.requireCurrent()
+            guard case let .loaded(detail) = state, detail.claim.id == claimId,
+                  let token = detail.claim.reviewToken, HomeClaimReviewSnapshot.validToken(token) else {
+                throw HomeClaimReviewError.snapshotChanged
+            }
+            guard !detail.claim.requiresDisputeReview else { throw HomeClaimReviewError.disputeReview }
+            if let pendingDecision,
+               pendingDecision.claim != detail.claim || pendingDecision.action != action || pendingDecision.note != note {
+                throw HomeClaimReviewError.pendingDecision
+            }
+            pendingDecision = PendingDecision(claim: detail.claim, action: action, note: note)
+            let receipt: AdminClaimReviewResponse = try await api.request(
                 AdminEndpoints.reviewClaim(
                     claimId: claimId,
-                    request: AdminClaimReviewRequest(action: action, note: note)
+                    request: AdminClaimReviewRequest(action: action, reviewToken: token, note: note)
                 )
             )
+            try scope.requireCurrent()
+            guard receipt.matches(
+                homeId: detail.claim.homeId,
+                claimId: claimId,
+                claimantId: detail.claim.claimantUserId,
+                action: action.rawValue
+            ) else {
+                throw APIError.invalidResponse
+            }
+            pendingDecision = nil
             toast = ToastMessage(text: Self.successCopy(for: action), kind: .success)
-            // Refresh detail so the body shows the new state.
+            reviewingAction = nil
             await load()
             return true
         } catch {
-            toast = ToastMessage(text: "Couldn't review this claim. Try again.", kind: .error)
+            if HomeClaimReviewError.isFinalClientFailure(error) || !scope.isCurrent { pendingDecision = nil }
+            toast = ToastMessage(text: HomeClaimReviewError.message(for: error), kind: .error)
             return false
         }
     }
@@ -184,9 +237,9 @@ public final class ReviewClaimDetailViewModel {
 
     private static func successCopy(for action: AdminClaimReviewAction) -> String {
         switch action {
-        case .approve: "Claim accepted. The claimant is now a verified owner."
-        case .reject: "Claim rejected. The claimant has been notified."
-        case .challenge: "Challenge sent. The claimant has 14 days to respond."
+        case .approve: "Claim approved."
+        case .reject: "Claim rejected."
+        case .challenge: "Request for more information saved."
         }
     }
 }

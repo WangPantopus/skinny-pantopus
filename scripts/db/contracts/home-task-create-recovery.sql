@@ -1,0 +1,136 @@
+-- Exact task creation recovery, current authority and atomic receipt storage.
+-- Fixtures use current shipped role defaults plus explicit local grants only.
+BEGIN;
+SET LOCAL lock_timeout='5s';
+SET LOCAL statement_timeout='30s';
+CREATE TEMP TABLE create_roles_before AS SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) rows FROM public."HomeRolePermission" r;
+INSERT INTO auth.users(id,email) SELECT ('ddf17000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+ 'create-recovery-'||n||'@example.invalid' FROM generate_series(1,4)n;
+INSERT INTO public."User"(id,email,username,name) SELECT id,email,'create_recovery_fixture_'||right(id::text,1),'Create recovery fixture'
+ FROM auth.users WHERE id::text LIKE 'ddf17000-0000-4000-8000-%';
+INSERT INTO public."Home"(id,owner_id,created_by_user_id,address,city,state,zipcode) VALUES
+ ('ddf17000-0000-4000-8000-000000000100','ddf17000-0000-4000-8000-000000000001','ddf17000-0000-4000-8000-000000000001','Recovery100','Test','WA','98607'),
+ ('ddf17000-0000-4000-8000-000000000200',NULL,'ddf17000-0000-4000-8000-000000000004','Recovery200','Test','WA','98607');
+INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,age_band,verification_status)
+ SELECT 'ddf17000-0000-4000-8000-000000000100',('ddf17000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+ role,role::public.home_role_base,age::public.home_age_band,'verified' FROM
+ (VALUES(1,'owner','adult'),(2,'member',NULL),(3,'restricted_member','child'))f(n,role,age);
+INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,verification_status) VALUES
+ ('ddf17000-0000-4000-8000-000000000200','ddf17000-0000-4000-8000-000000000004','admin','admin','pending_doc');
+INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed)
+ SELECT 'ddf17000-0000-4000-8000-000000000100',('ddf17000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,p::public.home_permission,true
+ FROM generate_series(2,3)n CROSS JOIN unnest(ARRAY['tasks.view','tasks.edit'])p;
+CREATE FUNCTION pg_temp.create_ok(r jsonb) RETURNS jsonb LANGUAGE plpgsql AS $$ BEGIN
+ IF r->>'ok' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Expected success, got %',r; END IF; RETURN r; END $$;
+CREATE FUNCTION pg_temp.create_code(r jsonb,c text) RETURNS void LANGUAGE plpgsql AS $$ BEGIN
+ IF r->>'ok' IS DISTINCT FROM 'false' OR r->>'code' IS DISTINCT FROM c THEN RAISE EXCEPTION 'Expected %, got %',c,r; END IF; END $$;
+CREATE FUNCTION pg_temp.create_count(h uuid) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_build_array((SELECT count(*) FROM public."HomeTask" WHERE home_id=h),
+ (SELECT count(*) FROM public."HomeTaskCreateReceipt" WHERE home_id=h),
+ (SELECT count(*) FROM public."HomeAuditLog" WHERE home_id=h)); $$;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE h uuid:='ddf17000-0000-4000-8000-000000000100'; ph uuid:='ddf17000-0000-4000-8000-000000000200';
+ o uuid:='ddf17000-0000-4000-8000-000000000001'; a uuid:='ddf17000-0000-4000-8000-000000000002';
+ child uuid:='ddf17000-0000-4000-8000-000000000003'; priv uuid:='ddf17000-0000-4000-8000-000000000004';
+ k uuid:='ddf17000-0000-4000-8000-000000000501'; k2 uuid:='ddf17000-0000-4000-8000-000000000502';
+ r jsonb; first jsonb; before jsonb; p jsonb; t uuid;
+BEGIN
+ p:=jsonb_build_object('title','  Exact original task  ','task_type','general','description',NULL,'assigned_to',a);
+ first:=pg_temp.create_ok(public.create_home_task_with_receipt(h,o,k,p)); t:=(first->'record'->>'id')::uuid;
+ IF first->>'replayed'<>'false' OR first->>'notify_user_id'<>a::text OR first->'record'->>'title'<>'Exact original task'
+  OR first->'record'->'capabilities'->>'can_edit'<>'true' OR first->'creation_receipt'->>'request_id'<>k::text
+  OR first->'creation_receipt'->>'actor_id'<>o::text OR first->'creation_receipt'->>'home_id'<>h::text
+  OR first->'creation_receipt'->>'task_id'<>t::text THEN RAISE EXCEPTION 'First receipt mismatch: %',first; END IF;
+ before:=pg_temp.create_count(h);
+ -- Object ordering, existing type aliases and title trimming are canonical.
+ r:=pg_temp.create_ok(public.create_home_task_with_receipt(h,o,k,jsonb_build_object('assigned_to',a,'description',NULL,'task_type','chore','title','Exact original task')));
+ IF r->>'replayed'<>'true' OR r->'record'->>'id'<>t::text OR r->'notify_user_id'<>'null'::jsonb
+  OR r->'creation_receipt' IS DISTINCT FROM first->'creation_receipt' OR pg_temp.create_count(h)<>before THEN RAISE EXCEPTION 'Replay created/notified/changed receipt'; END IF;
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(h,o,k,p-'description'),'HOME_TASK_CREATE_CONFLICT');
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(h,o,k,p||'{"title":"Changed input"}'),'HOME_TASK_CREATE_CONFLICT');
+ IF pg_temp.create_count(h)<>before THEN RAISE EXCEPTION 'Conflicting retry wrote records'; END IF;
+ -- Current record projection is returned without overwriting newer edits.
+ PERFORM pg_temp.create_ok(public.mutate_home_record(h,o,'task','update',t,'{"title":"Later task title"}'));
+ r:=pg_temp.create_ok(public.create_home_task_with_receipt(h,o,k,p));
+ IF r->'record'->>'title'<>'Later task title' THEN RAISE EXCEPTION 'Replay overwrote/reported stale current task'; END IF;
+ INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(h,o,'tasks.edit',false),(h,o,'tasks.manage',false);
+ before:=pg_temp.create_count(h);
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(h,o,k,p),'HOME_RECORD_WRITE_DENIED');
+ IF pg_temp.create_count(h)<>before THEN RAISE EXCEPTION 'Denied replay changed records'; END IF;
+ DELETE FROM public."HomePermissionOverride" WHERE home_id=h AND user_id=o;
+ -- Explicit child hard caps and an unbound foreign Home cannot mint receipts.
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(h,child,k,'{"title":"Child task"}'),'HOME_RECORD_WRITE_DENIED');
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(ph,o,k,p),'HOME_RECORD_DENIED');
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(h,o,NULL,p),'HOME_RECORD_INVALID');
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(h,o,k2,'[]'),'HOME_RECORD_INVALID');
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(h,o,k2,'{"title":"Spoof","created_by":"ddf17000-0000-4000-8000-000000000002"}'),'HOME_RECORD_INVALID');
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(h,o,k2,jsonb_build_object('title','Foreign recipient','assigned_to',priv)),'HOME_RECORD_RECIPIENT_DENIED');
+ -- The same UUID belongs to a different actor's separately authorized intent.
+ r:=pg_temp.create_ok(public.create_home_task_with_receipt(h,a,k,'{"title":"Historical own task"}'));
+ IF r->'record'->>'id'=t::text OR r->'creation_receipt'->>'actor_id'<>a::text THEN RAISE EXCEPTION 'Borrowed another actor receipt'; END IF;
+ UPDATE public."HomeOccupancy" SET role=NULL,role_base=NULL WHERE home_id=h AND user_id=a;
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(h,a,k,'{"title":"Historical own task"}'),'HOME_RECORD_DENIED');
+ UPDATE public."HomeOccupancy" SET role='member',role_base='member',access_end_at=clock_timestamp()-interval '1 second' WHERE home_id=h AND user_id=a;
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(h,a,k,'{"title":"Historical own task"}'),'HOME_RECORD_DENIED');
+ UPDATE public."HomeOccupancy" SET access_end_at=NULL WHERE home_id=h AND user_id=a;
+ -- A hidden or deleted original is a terminal receipt, never a new creation.
+ UPDATE public."HomeTask" SET visibility='sensitive' WHERE id=t;
+ INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(h,o,'sensitive.view',false);
+ before:=pg_temp.create_count(h);
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(h,o,k,p),'HOME_TASK_CREATE_RETIRED');
+ IF pg_temp.create_count(h)<>before THEN RAISE EXCEPTION 'Hidden task was recreated'; END IF;
+ DELETE FROM public."HomePermissionOverride" WHERE home_id=h AND user_id=o;
+ PERFORM pg_temp.create_ok(public.mutate_home_record(h,o,'task','delete',t)); before:=pg_temp.create_count(h);
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(h,o,k,p),'HOME_TASK_CREATE_RETIRED');
+ IF pg_temp.create_count(h)<>before OR NOT EXISTS(SELECT FROM public."HomeTaskCreateReceipt" WHERE task_id=t) THEN RAISE EXCEPTION 'Deleted task lost tombstone or was recreated'; END IF;
+ -- Own provisional setup remains private across first save and exact recovery.
+ r:=pg_temp.create_ok(public.create_home_task_with_receipt(ph,priv,k,'{"title":"Private first task"}')); t:=(r->'record'->>'id')::uuid;
+ r:=pg_temp.create_ok(public.create_home_task_with_receipt(ph,priv,k,'{"title":"Private first task"}'));
+ IF r->>'replayed'<>'true' OR r->'record'->>'id'<>t::text OR public.home_record_context(ph,priv)->>'private'<>'true'
+  OR public.home_delete_eligibility(ph,priv)->>'allowed'<>'true' THEN RAISE EXCEPTION 'Receipt broke private setup'; END IF;
+ -- Foreign or established-household receipt history is not private bootstrap.
+ UPDATE public."HomeTaskCreateReceipt" SET actor_user_id=o WHERE home_id=ph;
+ IF public.home_secret_context(ph,priv)->>'allowed'<>'false'
+  OR public.home_delete_eligibility(ph,priv)->>'code'<>'HOME_DELETE_ESTABLISHED_HOUSEHOLD' THEN RAISE EXCEPTION 'Foreign receipt bypassed private history policy'; END IF;
+ UPDATE public."HomeTaskCreateReceipt" SET actor_user_id=priv,private_setup=false WHERE home_id=ph;
+ IF public.home_secret_context(ph,priv)->>'allowed'<>'false'
+  OR public.home_delete_eligibility(ph,priv)->>'code'<>'HOME_DELETE_ESTABLISHED_HOUSEHOLD' THEN RAISE EXCEPTION 'Established receipt bypassed private history policy'; END IF;
+ UPDATE public."HomeTaskCreateReceipt" SET private_setup=true WHERE home_id=ph;
+ r:=public.delete_home_authorized(ph,priv);
+ IF r->>'deleted'<>'true' OR EXISTS(SELECT FROM public."Home" WHERE id=ph)
+  OR EXISTS(SELECT FROM public."HomeTaskCreateReceipt" WHERE home_id=ph)
+  OR EXISTS(SELECT FROM public."HomeTask" WHERE home_id=ph) THEN RAISE EXCEPTION 'Authorized private Home deletion did not cascade exact task receipt: %',r; END IF;
+END $$;
+RESET ROLE;
+-- Failure after task/audit insert must roll everything back, including a
+-- triggered authority change. This exercises the wrapper's final denial path.
+CREATE FUNCTION pg_temp.deny_created_task() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ IF NEW.title='Final denial fixture' THEN INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed)
+  VALUES(NEW.home_id,NEW.created_by,'tasks.view',false); END IF; RETURN NEW; END $$;
+CREATE TRIGGER create_recovery_test_deny AFTER INSERT ON public."HomeTask" FOR EACH ROW EXECUTE FUNCTION pg_temp.deny_created_task();
+SET LOCAL ROLE service_role;
+DO $$ DECLARE h uuid:='ddf17000-0000-4000-8000-000000000100'; a uuid:='ddf17000-0000-4000-8000-000000000001'; before jsonb; BEGIN
+ before:=pg_temp.create_count(h);
+ PERFORM pg_temp.create_code(public.create_home_task_with_receipt(h,a,'ddf17000-0000-4000-8000-000000000503','{"title":"Final denial fixture"}'),'HOME_RECORD_DENIED');
+ IF pg_temp.create_count(h)<>before OR EXISTS(SELECT FROM public."HomePermissionOverride" WHERE home_id=h AND user_id=a AND permission='tasks.view') THEN RAISE EXCEPTION 'Final denial left partial records'; END IF;
+END $$;
+RESET ROLE;
+CREATE FUNCTION pg_temp.fail_receipt_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture receipt store unavailable'; END $$;
+CREATE TRIGGER create_recovery_test_storage BEFORE INSERT ON public."HomeTaskCreateReceipt" FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_receipt_write();
+SET LOCAL ROLE service_role;
+DO $$ DECLARE h uuid:='ddf17000-0000-4000-8000-000000000100'; before jsonb; BEGIN
+ before:=pg_temp.create_count(h);
+ BEGIN PERFORM public.create_home_task_with_receipt(h,'ddf17000-0000-4000-8000-000000000001','ddf17000-0000-4000-8000-000000000504','{"title":"Receipt failure"}');
+  RAISE EXCEPTION 'Receipt failure did not abort'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'fixture receipt store unavailable' THEN RAISE; END IF; END;
+ IF pg_temp.create_count(h)<>before THEN RAISE EXCEPTION 'Receipt storage failure left partial records'; END IF;
+END $$;
+RESET ROLE;
+DO $$ DECLARE role_name text; BEGIN
+ FOREACH role_name IN ARRAY ARRAY['anon','authenticated'] LOOP
+  IF has_table_privilege(role_name,'public."HomeTaskCreateReceipt"','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+   OR has_function_privilege(role_name,'public.create_home_task_with_receipt(uuid,uuid,uuid,jsonb)','EXECUTE') THEN RAISE EXCEPTION 'Client can forge/erase/execute receipt'; END IF;
+ END LOOP;
+ IF NOT has_function_privilege('service_role','public.create_home_task_with_receipt(uuid,uuid,uuid,jsonb)','EXECUTE') THEN RAISE EXCEPTION 'Missing service transport'; END IF;
+ IF (SELECT rows FROM create_roles_before) IS DISTINCT FROM (SELECT jsonb_agg(to_jsonb(r) ORDER BY role_base,permission) FROM public."HomeRolePermission" r) THEN RAISE EXCEPTION 'Role defaults changed'; END IF;
+END $$;
+ROLLBACK;

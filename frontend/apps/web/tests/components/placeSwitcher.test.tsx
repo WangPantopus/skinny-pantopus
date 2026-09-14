@@ -62,8 +62,11 @@ beforeEach(() => {
   apiMock.homes.getPrimaryHome.mockResolvedValue({ home: { id: 'home-1' } });
   apiMock.homes.getMyHomes.mockResolvedValue({
     homes: [
-      { id: 'home-1', address: '1421 SE Oak St', city: 'Portland', state: 'OR', occupancy: { verification_status: 'verified' } },
-      { id: 'home-2', address: '88 Marine Dr', city: 'Astoria', state: 'OR', occupancy: { verification_status: 'pending' } },
+      { id: 'home-1', address: '1421 SE Oak St', city: 'Portland', state: 'OR', has_home_access: true, occupancy: { verification_status: 'verified' } },
+      // Current legacy owner authority need not include a residency record or
+      // ownership attestation. A pending residency alone is not shared access.
+      { id: 'home-2', address: '88 Marine Dr', city: 'Astoria', state: 'OR', has_home_access: true, occupancy: null },
+      { id: 'home-3', name: 'Home verification', address: null, has_home_access: false, occupancy: { verification_status: 'pending_doc' } },
     ],
   });
   apiMock.place.getPlaceIntelligence.mockImplementation((id: string) => Promise.resolve(makeIntel(id)));
@@ -93,6 +96,7 @@ describe('W2.4 — Place multi-home switcher', () => {
     // The active place is labelled, and the other place is offered.
     expect(within(sheet).getByText('Current place')).toBeInTheDocument();
     expect(within(sheet).getByText('88 Marine Dr')).toBeInTheDocument();
+    expect(within(sheet).queryByText('Home verification')).not.toBeInTheDocument();
     expect(within(sheet).getByText('Add a place')).toBeInTheDocument();
   });
 

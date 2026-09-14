@@ -36,6 +36,22 @@ test('a replaced version uses its retained unique storage key rather than its to
   expect(await recovery()).toMatchObject({ removed: 1 });
   expect(storage.remove).toHaveBeenCalledWith({ homeId: home, documentId: home, sha256: sha, bucketName: 'private-recovery-test' });
 });
+test('retired lease evidence retains its exact cleanup key after Home and applicant deletion', async () => {
+  file.home_id = null;
+  file.user_id = null;
+  file.metadata.storage_contract = 'home_lease_evidence_v1';
+  file.metadata.original_home_id = home;
+  expect(await recovery()).toMatchObject({ removed: 1 });
+  expect(storage.remove).toHaveBeenCalledWith({ homeId: home, documentId: id, sha256: sha, bucketName: 'private-recovery-test' });
+});
+test('lease evidence cannot redirect cleanup using a document replacement key', async () => {
+  file.metadata.storage_contract = 'home_lease_evidence_v1';
+  file.metadata.original_home_id = home;
+  file.metadata.storage_key_id = home;
+  file.file_path = `${home}/${home}/${sha}`;
+  expect(await recovery()).toMatchObject({ removed: 0, pending: 1 });
+  expect(storage.remove).not.toHaveBeenCalled();
+});
 test('selection failure performs no provider mutation', async () => {
   rpc.mockResolvedValue({ error: { message: 'private database error' } });
   await expect(recovery()).rejects.toThrow('Home document recovery selection unavailable');

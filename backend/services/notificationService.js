@@ -306,6 +306,7 @@ async function shouldSuppressAudienceNotification(userId, type, metadata) {
  * @param {string} [opts.icon] - emoji icon
  * @param {string} [opts.link] - in-app link to navigate to
  * @param {Object} [opts.metadata] - extra data (home_id, gig_id, etc.)
+ * @param {string} [opts.idempotencyKey] - stable event identity; existing notices are never re-emitted
  * @param {string} [opts.contextType] - 'personal' or 'business' (Identity Firewall)
  * @param {string} [opts.contextId] - business_user_id when contextType='business'
  * @param {string} [opts.context] - 'personal' | 'audience' | 'platform'
@@ -314,7 +315,7 @@ async function shouldSuppressAudienceNotification(userId, type, metadata) {
  *   pass `context: 'audience'` explicitly).
  * @returns {Promise<Object|null>} notification or null on error
  */
-async function createNotification({ userId, type, title, body, icon, link, metadata, contextType, contextId, context }) {
+async function createNotification({ userId, type, title, body, icon, link, metadata, contextType, contextId, context, idempotencyKey }) {
   if (!userId || !type || !title) {
     logger.warn('createNotification called with missing required fields', { userId, type, title });
     return null;
@@ -346,11 +347,15 @@ async function createNotification({ userId, type, title, body, icon, link, metad
         context_type: contextType || 'personal',
         context_id: contextId || null,
         context: resolvedContext,
+        ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
       })
       .select()
       .single();
 
     if (error) {
+      // The existing unique index is the concurrency boundary. A retry must
+      // preserve read state and cannot repeat badge, socket or push emission.
+      if (idempotencyKey && error.code === '23505') return null;
       logger.error('Failed to create notification', { error: error.message, userId, type });
       return null;
     }
@@ -1303,10 +1308,42 @@ async function deliverStoredGigNotification(notification) {
   return { ...result, suppressed };
 }
 
+/** Deliver an existing exact assignment notice; never insert a second one. */
+async function deliverStoredHomeTaskNotification(notification, { pushAllowedAtAssignment } = {}) {
+  if (!notification?.id || !notification.user_id || notification.type !== 'task_assigned'
+    || notification.context !== 'personal' || notification.context_type !== 'personal'
+    || notification.context_id != null || !notification.metadata?.assignment_event_id
+    || typeof pushAllowedAtAssignment !== 'boolean') {
+    throw new Error('Unsupported stored Home task notification');
+  }
+  const userId = notification.user_id;
+  const [global, granular] = await Promise.all([
+    supabaseAdmin.from('MailPreferences').select('push_notifications').eq('user_id', userId).maybeSingle(),
+    supabaseAdmin.from('UserNotificationPreferences').select('home_reminders_enabled').eq('user_id', userId).maybeSingle(),
+  ]);
+  if (global.error || granular.error) throw new Error('Home notification preferences unavailable');
+  // A notice created while disabled stays in-app even if push is later enabled.
+  const suppressed = !pushAllowedAtAssignment || global.data?.push_notifications !== true
+    || granular.data?.home_reminders_enabled === false;
+  if (!suppressed) emitDesktopAlert(notification);
+  const result = suppressed ? { acceptedCount: 0, unresolvedCount: 0 }
+    : await pushService.sendToUserWithReceipt(userId, {
+      title: notification.title, body: notification.body || '',
+      data: { ...notification.metadata, notificationId: notification.id,
+        type: notification.type, link: notification.link || null },
+    });
+  badgeService.emitBadgeUpdate(userId);
+  if (_io && _connectedUsers) {
+    for (const socketId of getUserSocketIds(userId)) _io.to(socketId).emit('notification:new', notification);
+  }
+  return { ...result, suppressed };
+}
+
 module.exports = {
   init,
   createNotification,
   deliverStoredGigNotification,
+  deliverStoredHomeTaskNotification,
   createBulkNotifications,
   notifyHomeInvite,
   notifyHomeInviteAccepted,
