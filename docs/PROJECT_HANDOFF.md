@@ -18,8 +18,11 @@ Combined checks pass5808 backend tests/16 existing skips,59 focused web tests,
 web TypeScript and scoped lint (seven pre-existing CompletionFlow warnings).
 There are62 distinct migration versions, zero collisions and64 synchronized SQL
 wrappers. This is not combined populated adoption, native acceptance or hosted
-readiness. PR34 remains draft; the Home chain is independently awaiting final
-Android CI on PR43 d18120a8c, run34879088468, before a normal master merge.
+readiness. PR34 remains draft. The Home chain merged through PR43 at
+0cb4f3c600 after all16 checks passed on d18120a8c in CI34879088468.
+This candidate now merges that actual master, preserving the three inspected
+Android screenshot references and both evidence reports. No product or schema
+conflict occurred; the sole conflict was two independently appended report sections.
 
 The existing TipModal now distinguishes PaymentIntent creation from paid status.
 It reuses refreshTipPaymentStatus, keeps the same payment/amount for further status
@@ -30,20 +33,21 @@ confirmation UI, durable recovery across closing/reload, current backend provide
 proof and installed/provider acceptance remain open. This is a bounded UI-status
 repair, not completion of tips or PR34. See [tip-status evidence](VERIFICATION_FIRST_2026-09-13.md#existing-web-tip-status-repair).
 
-**Next:** merge the actual new master into this candidate, preserving Home's
-inspected screenshot correction and reports, then finish the existing cancellation
+**Next:** finish the existing cancellation
 presentation/custom-reason and durable tip contracts before marking PR34 ready.
 Its tip proof helper remains an unwired draft. Keep paid services/provider
 activation in the final launch bundle. Preserve the [prior paid handoff](https://github.com/WangPantopus/skinny-pantopus/blob/e9ef2decbb7ec435589bb3b92639041cfc4618a6/docs/PROJECT_HANDOFF.md)
 and linked reports. Other worktrees and owner checkout are untouched. No hosted
-migration, deployment or provider operation ran. The Home sections below are
-inherited context and must be reconciled with the new master before reliance.
+migration, deployment or provider operation ran. The Home sections below retain pre-merge evidence history; their pending-merge
+wording is historical. PR32 and43 are merged, and PR38–42 are closed as incorporated.
+The separate file-picker repair and residency-letter expiry checks continue in
+their isolated worktrees. Fresh remote state takes precedence over old history.
 
 ## Current state and next action
 
 **Active worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/private-lease-evidence`, based on request-controls checkpoint
-`e16c0c499` on draft [PR42](https://github.com/WangPantopus/skinny-pantopus/pull/42). The private lease backend, existing iOS attachment controls and existing web landlord reader are locally verified and pushed at481c45b81 in draft [PR43](https://github.com/WangPantopus/skinny-pantopus/pull/43). CI34870041822 passes13 jobs/two skips. The Android attachment follow-up is locally verified and ready for its own commit/CI; see [Android evidence](VERIFICATION_FIRST_2026-09-13.md#existing-android-lease-attachment-controls). Web tenant entry and remaining native readers are next. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
+`e16c0c499` on draft [PR42](https://github.com/WangPantopus/skinny-pantopus/pull/42). The private lease backend, existing iOS attachment controls and existing web landlord reader are locally verified and pushed at481c45b81 in draft [PR43](https://github.com/WangPantopus/skinny-pantopus/pull/43). CI34870041822 passes13 jobs/two skips. The Android attachment follow-up is pushed at557a556db on the same PR; CI34875176418 passed every nonaggregate job except three Details screenshot comparisons. Their availability-text references are now visually reviewed and refreshed; corrected-source CI is required; see [Android evidence](VERIFICATION_FIRST_2026-09-13.md#existing-android-lease-attachment-controls). Web tenant entry and remaining native readers are next. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
 73 backend/90 rendered tests and actual browser/HTTP/SQL recovery checks pass.
 See [the unit evidence](VERIFICATION_FIRST_2026-09-13.md#existing-unit-import-and-range-generation). The preserved
 `codex/lease-approval-dates` branch backs draft [PR38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
@@ -86,7 +90,7 @@ had a stale generated SQL wrapper; CI34843214305 caught an immutable migration
 edit. Existing generator synchronization and the forward function update fix those
 issues. Before migration changes check the actual PR base; all54 wrappers synchronize.
 
-**Next:** checkpoint the verified Android Attach/file card and verify its CI; then inspect existing/archived web tenant attachment entry and remaining native landlord readers/R05 criteria. The existing iOS controls and web landlord reader are now locally verified within the [client evidence limits](VERIFICATION_FIRST_2026-09-13.md#existing-ios-lease-attachment-and-web-landlord-reader). Inspect each existing caller before editing; preserve screen design.
+**Next:** finish corrected-source CI and merge the reviewed Home chain through PR43 into master under the user’s September14 merge authorization. Master6a1013784 is an ancestor of all seven heads; its merge tree is exactly the accepted tip. PR43 now targets master and is ready for review; retain every commit/branch. PR34 remains a separate draft with its nine conflicts resolved only in /private/tmp/pantopus-paid-gig-integration, uncommitted and under integration review. Its cancellation presentation/custom reason and unfinished tip/provider gates remain. Then trace existing/archived web tenant attachment entry and native landlord readers before making changes; both web request forms already exist, while the existing web “Upload your lease” links use the separate residency-claim flow. Do not merge those contracts or add screens based solely on an open inventory row. The existing iOS controls and web landlord reader are now locally verified within the [client evidence limits](VERIFICATION_FIRST_2026-09-13.md#existing-ios-lease-attachment-and-web-landlord-reader). Inspect each existing caller before editing; preserve screen design.
 See [attachment evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-lease-file-storage-and-request-binding).
 The request-controls follow-up is verified on draft PR42. The previously open installed Android request journey is now verified
 within the [recorded limits](VERIFICATION_FIRST_2026-09-13.md#existing-native-lease-request-controls-and-calendar-validation).
