@@ -25,7 +25,8 @@ export default function VerificationCenter({ homeId, onRefresh }: VerificationCe
     checked: boolean;
     hasLandlord: boolean;
     hasLease: boolean;
-  }>({ checked: false, hasLandlord: false, hasLease: false });
+    failed: boolean;
+  }>({ checked: false, hasLandlord: false, hasLease: false, failed: false });
 
   const handleMoveOut = useCallback(() => {
     router.push(removalLink(homeId, 'self'));
@@ -53,11 +54,13 @@ export default function VerificationCenter({ homeId, onRefresh }: VerificationCe
           checked: true,
           hasLandlord: res.landlord.has_landlord,
           hasLease: res.lease.state !== 'none',
+          failed: false,
         });
       } catch {
-        // Endpoint not available — fall through to standard flow
+        // The existing landlord error/retry view owns unavailable status; a
+        // failed read does not establish that no landlord or lease exists.
         if (!canceled) {
-          setLandlordCheck({ checked: true, hasLandlord: false, hasLease: false });
+          setLandlordCheck({ checked: true, hasLandlord: false, hasLease: false, failed: true });
         }
       }
     })();
@@ -65,7 +68,7 @@ export default function VerificationCenter({ homeId, onRefresh }: VerificationCe
   }, [homeId]);
 
   // Show landlord flow when a landlord authority exists or tenant has a lease relationship
-  if (landlordCheck.checked && (landlordCheck.hasLandlord || landlordCheck.hasLease)) {
+  if (landlordCheck.checked && (landlordCheck.failed || landlordCheck.hasLandlord || landlordCheck.hasLease)) {
     return (
       <LandlordVerificationFlow
         homeId={homeId}

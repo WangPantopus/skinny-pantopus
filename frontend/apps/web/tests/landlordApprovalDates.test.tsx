@@ -1,12 +1,18 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { post } from '../../../packages/api/src/client';
+import { get, post } from '../../../packages/api/src/client';
 import { approveLease, type TenantRequest } from '../../../packages/api/src/endpoints/landlord';
 import RequestsTab from '@/components/landlord/RequestsTab';
+import LandlordVerificationFlow from '@/components/home/LandlordVerificationFlow';
+import VerificationCenter from '@/components/home/VerificationCenter';
 
-jest.mock('../../../packages/api/src/client', () => ({ post: jest.fn() }));
+jest.mock('../../../packages/api/src/client', () => ({ get: jest.fn(), post: jest.fn() }));
 jest.mock('@pantopus/api', () => ({
   landlord: jest.requireActual('../../../packages/api/src/endpoints/landlord'),
+  tenant: jest.requireActual('../../../packages/api/src/endpoints/tenant'),
 }));
+
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('@/components/home/useHomePermissions', () => ({ useHomePermissions: () => ({ access: null, reload: jest.fn() }) }));
 
 beforeEach(() => { jest.clearAllMocks(); jest.mocked(post).mockResolvedValue({}); });
 
@@ -92,4 +98,28 @@ test('canceling the denial prompt does not cancel the tenant lease', async () =>
     fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
     expect(post).not.toHaveBeenCalled();
   } finally { prompt.mockRestore(); }
+});
+
+
+test('existing tenant error view reports the SDK error without claiming no landlord', async () => {
+  jest.mocked(get).mockRejectedValue({ message: 'Status temporarily unavailable' });
+  render(<LandlordVerificationFlow homeId="home-1" />);
+  expect(await screen.findByText('Status temporarily unavailable')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+});
+
+test('existing verification entry does not treat a failed status read as no landlord', async () => {
+  jest.mocked(get).mockRejectedValue({ message: 'Status temporarily unavailable' });
+  render(<VerificationCenter homeId="home-1" />);
+  expect(await screen.findByText('Status temporarily unavailable')).toBeTruthy();
+});
+
+test('approved tenant view displays the reviewed calendar date without promising full access', async () => {
+  jest.mocked(get).mockResolvedValue({ home_id: 'home-1', landlord: { has_landlord: true }, lease: {
+    state: 'active', lease: { id: 'lease-1', start_at: '2099-10-01T00:00:00Z', end_at: null, state: 'active' },
+  } });
+  render(<LandlordVerificationFlow homeId="home-1" />);
+  expect(await screen.findByText('October 1, 2099')).toBeTruthy();
+  expect(screen.getByText('Lease Approved')).toBeTruthy();
+  expect(screen.queryByText(/You now have full access/)).toBeNull();
 });

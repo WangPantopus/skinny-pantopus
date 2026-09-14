@@ -141,6 +141,7 @@ const denyLeaseHandler = findHandler('POST', '/landlord/lease/:leaseId/deny');
 const endLeaseHandler = findHandler('POST', '/landlord/lease/:leaseId/end');
 const listRequestsHandler = findHandler('GET', '/landlord/properties/:homeId/requests');
 const tenantRequestHandler = findHandler('POST', '/tenant/request-approval');
+const tenantStatusHandler = findHandler('GET', '/tenant/home/:homeId/status');
 const acceptInviteHandler = findHandler('POST', '/tenant/accept-invite');
 const moveOutHandler = findHandler('POST', '/tenant/move-out');
 const disputeHandler = findHandler('POST', '/home/:homeId/dispute');
@@ -166,6 +167,8 @@ function mockRes() {
   const res = {
     _status: 200,
     _json: null,
+    _headers: {},
+    set(name, value) { res._headers[name] = value; return res; },
     status(code) { res._status = code; return res; },
     json(data) { res._json = data; return res; },
   };
@@ -1186,6 +1189,39 @@ describe('POST /tenant/accept-invite', () => {
 // ============================================================
 // POST /tenant/move-out
 // ============================================================
+
+describe('existing tenant status projection', () => {
+  const homeId = 'f3190000-0000-4000-8000-000000000010';
+  beforeEach(() => { seedHome({ id: homeId }); seedAuthority({ home_id: homeId }); });
+  test('returns only own request fields and maps the stored denial reason', async () => {
+    seedLease({ home_id: homeId, primary_resident_user_id: 'test-user-id', state: 'canceled',
+      metadata: { message: 'Own message', denial_reason: 'Reviewed reason', private_field: 'do-not-return', landlord_decision: { secret: 'hidden' } } });
+    const res = mockRes(); await tenantStatusHandler(mockReq({ params: { homeId } }), res);
+    expect(res._status).toBe(200);
+    expect(res._headers['Cache-Control']).toBe('private, no-store');
+    expect(res._json.lease.state).toBe('denied');
+    expect(res._json.lease.lease.metadata).toEqual({ message: 'Own message', denied_reason: 'Reviewed reason' });
+    expect(res._json.landlord).not.toHaveProperty('subject_id');
+    expect(JSON.stringify(res._json)).not.toMatch(/private_field|landlord_decision|primary_resident_user_id/);
+  });
+  test('does not disclose another resident lease or a self-cancellation receipt', async () => {
+    seedLease({ home_id: homeId, primary_resident_user_id: 'someone-else' });
+    let res = mockRes(); await tenantStatusHandler(mockReq({ params: { homeId } }), res);
+    expect(res._json.lease).toEqual({ state: 'none', lease: null });
+    seedLease({ home_id: homeId, primary_resident_user_id: 'test-user-id', state: 'canceled', metadata: { tenant_cancellation: { actor_id: 'test-user-id' } } });
+    res = mockRes(); await tenantStatusHandler(mockReq({ params: { homeId } }), res);
+    expect(res._json.lease).toEqual({ state: 'none', lease: null });
+  });
+  test('does not turn a failed database read into no landlord or no lease', async () => {
+    const db = require('../../config/supabaseAdmin');
+    const from = jest.spyOn(db, 'from').mockImplementationOnce(() => { throw Object.assign(new Error('private database detail'), { code: 'XX000' }); });
+    try {
+      const res = mockRes(); await tenantStatusHandler(mockReq({ params: { homeId } }), res);
+      expect(res._status).toBe(503);
+      expect(res._json).toEqual({ error: 'Could not load landlord status. Please retry.' });
+    } finally { from.mockRestore(); }
+  });
+});
 
 describe('POST /tenant/move-out', () => {
   beforeEach(() => decisionReply());

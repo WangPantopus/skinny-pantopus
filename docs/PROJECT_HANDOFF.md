@@ -45,18 +45,34 @@ follow-up requires CI against its pushed head. Home integration `7f2a5e6d6`
 passes all 16 checks in
 [CI34790255357](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34790255357).
 
-**Next: verify explicit legacy lease membership review/removal and end retry
-through the existing Home workflow, then reconcile the existing native Home
-move-out path and screen catalog.** Do not infer ambiguous historical lease
-bindings or create a new screen merely because a transport has no current UI
-caller. Keep #38 draft while these boundaries and current CI are reconciled.
-The browser evidence uses the actual property/requests/leases components and
-SDK/HTTP/SQL in an isolated renderer; full AppShell/login and installed-native
-lease journeys are not claimed. Provider delivery, combined populated adoption
-and hosted rollout remain open. R05 remains open; proposed renewal tables stay
-paused. The schema-only lease database and REST are exclusively leased to
-`/private/tmp/pantopus-lease-transaction-r1`; fixtures are cleaned after every
-check. Inspect the private runtime lease before reuse and preserve other runtimes.
+End source `1f526de0d` now passes all eight executed checks in
+[CI34796831599](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34796831599),
+with three unchanged scopes skipped. The legacy protected removal → end retry
+and later admission composition also passes four actual HTTP/SQL groups. Both
+native Leave Home screens already use the accepted removal controller; relevant
+native source is unchanged and its evidence is reused.
+
+**Current follow-up: connect the existing tenant status and cancellation flow.**
+Actual browser/HTTP verification found missing status/cancel routes behind the
+existing controls. The route module now projects only the actor's own lease and
+basic landlord availability; cancellation extends the same unmerged transaction
+and existing records. Six actual tenant browser/HTTP/SQL groups, two additional
+SQL cancellation/approval races, 128 backend tests, 13 rendered web tests, fresh
+TypeScript and application SQL lint pass. Existing error/retry views handle failed
+reads, denial reasons match saved data, and future approvals no longer promise
+full Home access. No table, additional migration or replacement screen was added.
+See [the source-specific evidence](VERIFICATION_FIRST_2026-09-13.md#existing-tenant-status-and-cancellation-follow-up).
+This follow-up requires CI against its pushed head; #38 remains draft.
+
+**Next: verify existing request submission and uncertain-reply recovery, then
+remaining native lease-verification consumers and stale-response/account
+boundaries.** The actual components/SDK/HTTP/SQL run in an isolated renderer;
+full AppShell/login and installed-native lease verification are not claimed.
+Provider delivery, combined populated adoption and hosted rollout remain open.
+R05 remains open and proposed renewal tables stay paused. The schema-only lease
+database and REST are exclusively leased to `/private/tmp/pantopus-lease-transaction-r1`;
+fixtures are cleaned after every check. Inspect the private runtime lease before
+reuse and preserve other runtimes.
 
 The integrated [PR #37](https://github.com/WangPantopus/skinny-pantopus/pull/37) repair checks the invitation
 issuer's current verified authority before writes. Baseline SQL granted access

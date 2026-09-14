@@ -15,6 +15,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { tenant } from '@pantopus/api';
+import { extractApiError } from '@pantopus/ui-utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 
 // ── Tier badge config ───────────────────────────────────────
@@ -51,7 +52,7 @@ export default function LandlordVerificationFlow({ homeId, onApproved, onBack }:
       const res = await api.tenant.getTenantHomeStatus(homeId);
       setStatus(res);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load landlord status');
+      setError(extractApiError(err, 'Failed to load landlord status'));
     } finally {
       setLoading(false);
     }
@@ -465,7 +466,7 @@ function PendingApprovalState({
       await api.tenant.cancelRequest(lease.id);
       onCanceled();
     } catch (err: unknown) {
-      setCancelError(err instanceof Error ? err.message : 'Failed to cancel request');
+      setCancelError(extractApiError(err, 'Failed to cancel request'));
     } finally {
       setCanceling(false);
     }
@@ -523,7 +524,7 @@ function PendingApprovalState({
           <div className="flex items-center justify-between text-sm">
             <span className="text-app-text-secondary">Requested start</span>
             <span className="font-medium text-app-text">
-              {new Date(lease.start_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              {new Date(lease.start_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
             </span>
           </div>
         )}
@@ -587,13 +588,13 @@ function ApprovedState({
   const startDate = new Date(lease.start_at).toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
-    year: 'numeric',
+    year: 'numeric', timeZone: 'UTC',
   });
   const endDate = lease.end_at
     ? new Date(lease.end_at).toLocaleDateString('en-US', {
         month: 'long',
         day: 'numeric',
-        year: 'numeric',
+        year: 'numeric', timeZone: 'UTC',
       })
     : null;
 
@@ -618,7 +619,7 @@ function ApprovedState({
         Welcome home!
       </h2>
       <p className="text-app-text-secondary text-center text-[15px] leading-relaxed mb-8 max-w-sm mx-auto">
-        Your landlord has approved your tenancy. You now have full access to your home.
+        Your landlord has approved your tenancy. Your Home permissions determine which features you can use.
       </p>
 
       {/* Verified badge */}
@@ -627,7 +628,7 @@ function ApprovedState({
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
           </svg>
-          Verified Tenant
+          Lease Approved
         </span>
       </div>
 

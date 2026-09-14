@@ -445,3 +445,65 @@ was stopped, so it is not recorded as passed. Git's diff against the actual
 Home integration base confirms only the new lease migration; applied baseline,
 archive, legacy migration and policy bytes are unchanged. Required CI still runs
 the original complete migration guard and full schema replay.
+
+
+### Existing tenant status and cancellation follow-up
+
+The end/move-out source `1f526de0dea0b2201218bcc7be4cc5b0955b19c3` passes all eight
+executed checks in [CI34796831599](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34796831599),
+including the original migration safeguards, complete database replay/contracts,
+web production build and backend privacy gates. Three unchanged native/Seeder
+scopes skip. Four additional actual HTTP/SQL legacy groups pass: ambiguous end
+makes no writes; the existing protected Home self-removal handles a lost reply
+and saved-command retry; landlord end then succeeds once; fresh admission survives
+both old removal and old end retries. Both existing native Leave Home screens use
+that already accepted removal controller; the relevant native source is unchanged.
+No installed product rebuild or new native screen was needed for that comparison.
+
+The existing `LandlordVerificationFlow` and its Verification Center entry called
+`GET /tenant/home/:homeId/status`, and the existing Cancel Request control called
+`POST /tenant/request/:leaseId/cancel`; neither route existed anywhere in the
+backend. The actual existing browser showed the status 404 and retry error.
+After connecting the status read, its pending state rendered correctly and the
+cancel API independently returned 404. The tenant's approved screen also promised
+full access before a future lease started; actual permission checks denied it.
+
+The same route module now returns a no-store projection of this actor's own
+primary lease and basic verified-landlord availability. It exposes no authority
+identity, another resident, private lease metadata or internal decision receipts.
+Stored landlord cancellation maps to the existing denial state/reason; a tenant's
+own withdrawal maps to no pending request. Database read errors remain retryable
+errors. The existing Verification Center previously treated them as no landlord;
+one rendered regression failed before that fallback was corrected to the existing
+landlord error/retry view. No replacement view was added.
+
+Tenant cancellation extends the same still-unmerged lease transaction migration:
+only the requesting primary tenant may withdraw a pending request, including in
+a frozen Home. It saves its completion in existing lease metadata and audits once.
+A completed retry cannot erase a landlord decision or grant membership. Withdrawal
+and approval serialize on the existing Home/lease locks. Final cancellation-audit
+failure rolls back the canceled state and completion receipt. No table or second
+migration was added. The iOS transport's historical comment that these routes are
+absent is now superseded by this server follow-up; its executable source is unchanged.
+
+The existing tenant UI uses the shared SDK error helper for status/cancel errors,
+retains its design, labels the recorded lease approval accurately, and displays
+the same UTC lease calendar day as the landlord editor. Markup, layout, classes
+and navigation remain unchanged; approval is no longer described as full Home
+access. Current checks: 128 backend tests; 13 rendered web/SDK tests; fresh
+standalone web TypeScript; scoped lint with zero errors/warnings; application
+SQL lint; expanded real SQL rollback contract and generated wrapper all pass.
+Two additional multi-session SQL races cover approval/cancellation in both queue
+orders. Six actual tenant browser/HTTP/SQL groups pass: own-only safe status,
+another actor's isolation, pending display, unauthorized/lost-reply/repeated
+cancellation, saved denial reason, and truthful future approval/calendar display.
+The inherited isolated-renderer/synthetic-auth/provider limits still apply.
+Renderer alias configuration and alert-dialog locator errors were corrected as
+fixture issues and are not counted as application failures.
+
+The status/cancellation source still requires CI after its checkpoint is pushed.
+Next: existing request submission and uncertain-reply recovery, then the remaining
+native lease-verification consumers and stale-response/account boundaries. R05
+remains open; these results do not close an entire acceptance row. The new private
+source binding and evidence are under the existing lease-transaction archive's
+`tenant-status-r1` directory; the end/legacy checkpoint is preserved separately.

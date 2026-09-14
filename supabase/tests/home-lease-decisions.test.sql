@@ -299,6 +299,32 @@ BEGIN
 END $$;
 RESET ROLE;
 
+-- Withdrawal is a decision on the same existing pending request. It grants no
+-- membership, and its completed receipt survives a lost response.
+SET LOCAL ROLE service_role;
+DO $$ DECLARE
+ h uuid:='f3190000-0000-4000-8000-000000000012';a uuid:='f3190000-0000-4000-8000-000000000001';
+ t uuid:='f3190000-0000-4000-8000-000000000002';au uuid:='f3190000-0000-4000-8000-000000000024';l uuid;r jsonb;
+BEGIN
+ l:=pg_temp.pending_lease(h);
+ PERFORM pg_temp.check_lease(public.decide_home_lease('cancel',a,l,au)->>'status'='403','Landlord cannot impersonate the requesting tenant to withdraw');
+ UPDATE public."Home" SET security_state='frozen' WHERE id=h;
+ r:=public.decide_home_lease('cancel',t,l);
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND r->'lease'->>'state'='canceled'
+   AND public.decide_home_lease('cancel',t,l)->>'replayed'='true'
+   AND (SELECT count(*)=1 FROM public."HomeAuditLog" WHERE target_id=l AND action='LEASE_REQUEST_CANCELED')
+   AND NOT EXISTS(SELECT FROM public."HomeOccupancy" WHERE home_id=h),'Self withdrawal in frozen Home commits once without admission');
+ UPDATE public."Home" SET security_state='normal' WHERE id=h;
+ PERFORM pg_temp.check_lease(public.decide_home_lease('approve',a,l,au)->>'success'='false','Approval cannot revive a withdrawn request');
+ l:=pg_temp.pending_lease(h);PERFORM public.decide_home_lease('deny',a,l,au,p_reason:='Denied');
+ PERFORM pg_temp.check_lease(public.decide_home_lease('cancel',t,l)->>'status'='409','Cancellation cannot erase a landlord denial');
+ l:=pg_temp.pending_lease(h);r:=public.decide_home_lease('approve',a,l,au);
+ PERFORM pg_temp.check_lease(r->>'success'='true' AND public.decide_home_lease('cancel',t,l)->>'status'='409'
+   AND public.home_effective_access(h,t)->>'has_access'='true','Cancellation cannot undo approved membership');
+ PERFORM public.decide_home_lease('end',a,l,au);DELETE FROM public."HomeOccupancy" WHERE home_id=h;
+END $$;
+RESET ROLE;
+
 -- Failure after every deactivation still rolls the entire end operation back.
 CREATE FUNCTION pg_temp.fail_lease_end_audit() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN IF NEW.action='LEASE_ENDED' THEN RAISE EXCEPTION 'contract end audit failure'; END IF; RETURN NEW; END $$;
@@ -330,7 +356,7 @@ DROP TRIGGER contract_lease_end_fault ON public."HomeAuditLog";
 -- Fail the final audit write. Every preceding lease/resident/occupancy/invite
 -- mutation must roll back, and the same request must work after recovery.
 CREATE FUNCTION pg_temp.fail_lease_audit() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN IF NEW.action IN ('LEASE_APPROVED','LEASE_INVITE_ACCEPTED') THEN RAISE EXCEPTION 'contract audit failure'; END IF; RETURN NEW; END $$;
+BEGIN IF NEW.action IN ('LEASE_APPROVED','LEASE_INVITE_ACCEPTED','LEASE_REQUEST_CANCELED') THEN RAISE EXCEPTION 'contract audit failure'; END IF; RETURN NEW; END $$;
 CREATE TRIGGER contract_lease_audit_failure BEFORE INSERT ON public."HomeAuditLog"
  FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_lease_audit();
 SET LOCAL ROLE service_role;
@@ -346,6 +372,12 @@ BEGIN
    IF SQLERRM<>'contract audit failure' THEN RAISE; END IF;
  END;
  SELECT to_jsonb(o) INTO after_occ FROM public."HomeOccupancy" o WHERE home_id='f3190000-0000-4000-8000-000000000010';
+ BEGIN
+   PERFORM public.decide_home_lease('cancel','f3190000-0000-4000-8000-000000000002',l);
+   RAISE EXCEPTION 'Expected cancellation audit fault was not reached';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'contract audit failure' THEN RAISE; END IF; END;
+ PERFORM pg_temp.check_lease((SELECT state='pending' AND metadata->'tenant_cancellation' IS NULL FROM public."HomeLease" WHERE id=l),
+   'Cancellation audit failure must restore the pending request without a completed receipt');
  PERFORM pg_temp.check_lease(before_occ=after_occ AND (SELECT state='pending' FROM public."HomeLease" WHERE id=l)
    AND NOT EXISTS(SELECT FROM public."HomeLeaseResident" WHERE lease_id=l),'Final-write failure must roll back all mutations');
  INSERT INTO public."HomeLeaseInvite"(home_id,landlord_subject_type,landlord_subject_id,token_hash,expires_at)

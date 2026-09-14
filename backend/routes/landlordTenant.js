@@ -487,6 +487,58 @@ router.get(
 // ═══════════════════════════════════════════════════════════════
 // ============================================================
 
+// The existing tenant screen needs its own request state before admission.
+// Return only landlord availability and this actor's lease; never expose the
+// authority identity, another resident, raw metadata or household permissions.
+router.get('/tenant/home/:homeId/status', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  const { homeId } = req.params;
+  if (Joi.string().uuid().required().validate(homeId).error) {
+    return res.status(400).json({ error: 'Invalid home ID' });
+  }
+  try {
+    const { data: home, error: homeError } = await supabaseAdmin.from('Home')
+      .select('id, home_status').eq('id', homeId).maybeSingle();
+    if (homeError) throw homeError;
+    if (!home || ['archived', 'merged'].includes(home.home_status)) return res.status(404).json({ error: 'Home not found' });
+    const { data: authority, error: authorityError } = await supabaseAdmin.from('HomeAuthority')
+      .select('subject_type, verification_tier').eq('home_id', homeId).eq('status', 'verified')
+      .order('id', { ascending: true }).limit(1).maybeSingle();
+    if (authorityError) throw authorityError;
+    const { data: lease, error: leaseError } = await supabaseAdmin.from('HomeLease')
+      .select('id, home_id, state, source, start_at, end_at, created_at, metadata')
+      .eq('home_id', homeId).eq('primary_resident_user_id', req.user.id)
+      .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(1).maybeSingle();
+    if (leaseError) throw leaseError;
+    const denied = lease?.state === 'canceled' && (lease.metadata?.landlord_decision?.intent?.action === 'deny'
+      || Object.hasOwn(lease.metadata || {}, 'denial_reason'));
+    const state = !lease || (lease.state === 'canceled' && !denied) ? 'none' : denied ? 'denied' : lease.state;
+    const ownLease = lease && state !== 'none' ? {
+      id: lease.id, home_id: lease.home_id, state, source: lease.source,
+      start_at: lease.start_at, end_at: lease.end_at, created_at: lease.created_at,
+      metadata: {
+        message: typeof lease.metadata?.message === 'string' ? lease.metadata.message : null,
+        ...(denied ? { denied_reason: typeof lease.metadata?.denial_reason === 'string' ? lease.metadata.denial_reason : null } : {}),
+      },
+    } : null;
+    return res.json({ home_id: homeId,
+      landlord: authority ? { has_landlord: true, landlord_entity_type: authority.subject_type, verification_tier: authority.verification_tier }
+        : { has_landlord: false },
+      lease: { state, lease: ownLease },
+    });
+  } catch (error) {
+    logger.error('GET tenant home status failed', { code: error.code });
+    return res.status(503).json({ error: 'Could not load landlord status. Please retry.' });
+  }
+});
+
+router.post('/tenant/request/:leaseId/cancel', verifyToken, validate(endLeaseSchema), async (req, res) => {
+  if (Joi.string().uuid().required().validate(req.params.leaseId).error) return res.status(400).json({ error: 'Invalid lease ID' });
+  const result = await landlordAuthorityService.cancelLeaseRequest(req.params.leaseId, req.user.id);
+  if (!result.success) return res.status(result.status || 400).json({ error: result.error });
+  return res.json({ success: true });
+});
+
 // ──────────────────────────────────────────────────────────────
 // POST /tenant/request-approval
 // Create a lease request to a landlord-managed home.

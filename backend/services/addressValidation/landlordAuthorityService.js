@@ -468,6 +468,10 @@ class LandlordAuthorityService {
     return result;
   }
 
+  async cancelLeaseRequest(leaseId, actorId) {
+    return this._decideLease({ p_action: 'cancel', p_actor_id: actorId, p_lease_id: leaseId });
+  }
+
   async _decideLease(params) {
     if (!params.p_actor_id) return { success: false, error: 'Authenticated actor required' };
     try {

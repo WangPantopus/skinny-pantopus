@@ -25,7 +25,7 @@ DECLARE
   v_end_receipt jsonb; v_other_lease boolean; v_departure jsonb; v_removal jsonb;
   v_resident public."HomeLeaseResident"%ROWTYPE; v_co_departure boolean:=false;
 BEGIN
-  IF p_actor_id IS NULL OR p_action NOT IN ('approve','deny','accept','end','move_out') OR p_action IS NULL
+  IF p_actor_id IS NULL OR p_action NOT IN ('approve','deny','accept','end','move_out','cancel') OR p_action IS NULL
     OR p_validity_days IS NULL OR p_validity_days<1 OR p_validity_days>36500
     OR p_dates IS NULL OR jsonb_typeof(p_dates)<>'object' THEN
     RETURN jsonb_build_object('success',false,'error','Invalid lease decision');
@@ -41,7 +41,7 @@ BEGIN
   -- Match the existing Home mutation lock order. Re-read proofs after waiting;
   -- authority revocation and competing lease decisions serialize on these rows.
   PERFORM id FROM public."HomeAuthority" WHERE home_id=v_home_id ORDER BY id FOR UPDATE;
-  IF p_action IN ('end','move_out') THEN
+  IF p_action IN ('end','move_out','cancel') THEN
     SELECT * INTO v_lease FROM public."HomeLease" WHERE id=p_lease_id AND home_id=v_home_id FOR UPDATE;
     PERFORM user_id FROM public."HomeLeaseResident" WHERE lease_id=p_lease_id ORDER BY user_id FOR UPDATE;
     SELECT * INTO v_resident FROM public."HomeLeaseResident" WHERE lease_id=p_lease_id AND user_id=p_actor_id;
@@ -49,6 +49,9 @@ BEGIN
     v_resident_actor:=v_lease.primary_resident_user_id=p_actor_id OR
       (p_action='move_out' AND (v_resident.id IS NOT NULL OR v_departure IS NOT NULL));
     v_co_departure:=p_action='move_out' AND v_lease.primary_resident_user_id IS DISTINCT FROM p_actor_id;
+    IF p_action='cancel' AND (v_lease.primary_resident_user_id IS DISTINCT FROM p_actor_id OR v_lease.source<>'tenant_request') THEN
+      RETURN jsonb_build_object('success',false,'status',403,'error','Only the requesting tenant can cancel this request');
+    END IF;
     IF p_action='move_out' AND NOT coalesce(v_resident_actor,false) THEN
       RETURN jsonb_build_object('success',false,'error','Only a lease resident can move out','status',403);
     END IF;
@@ -100,6 +103,20 @@ BEGIN
   END IF;
   v_now:=clock_timestamp();
   SELECT * INTO v_home FROM public."Home" WHERE id=v_home_id;
+  IF p_action='cancel' THEN
+    IF v_lease.state='canceled' AND v_lease.metadata->'tenant_cancellation'->>'actor_id'=p_actor_id::text THEN
+      RETURN jsonb_build_object('success',true,'lease',to_jsonb(v_lease),'replayed',true);
+    END IF;
+    IF v_lease.state<>'pending' THEN
+      RETURN jsonb_build_object('success',false,'status',409,'error','This request has already been decided. Refresh its status.');
+    END IF;
+    UPDATE public."HomeLease" SET state='canceled',updated_at=v_now,
+      metadata=coalesce(metadata,'{}')||jsonb_build_object('tenant_cancellation',
+        jsonb_build_object('actor_id',p_actor_id,'completed_at',v_now)) WHERE id=v_lease.id RETURNING * INTO v_lease;
+    INSERT INTO public."HomeAuditLog"(home_id,actor_user_id,action,target_type,target_id)
+      VALUES(v_home_id,p_actor_id,'LEASE_REQUEST_CANCELED','HomeLease',v_lease.id);
+    RETURN jsonb_build_object('success',true,'lease',to_jsonb(v_lease),'replayed',false);
+  END IF;
   IF p_action IN ('approve','accept') AND v_home.address_id IS NOT NULL THEN
     PERFORM id FROM public."HomeAddress" WHERE id=v_home.address_id FOR SHARE;
     v_now:=clock_timestamp();
