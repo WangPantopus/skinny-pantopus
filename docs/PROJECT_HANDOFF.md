@@ -154,8 +154,30 @@ tsconfig restored. Existing iOS/Android tip flows still require their coordinate
 update. Legacy tip recovery, durable delivery and final current-source CI remain
 open; do not merge/deploy PR34 yet.
 
-**Next:** update the existing iOS/Android tip flows to the original Payment
-commands, then finish legacy recovery/delivery/provider acceptance; retain their exact designs. Inspect draft
+**iOS original tip checkpoint after web1b9ff598e:** the existing GigDetail
+picker/handler and Payments DTOs/endpoints now retain the original in the existing
+KeychainStore, read current terms and use same-ID commands. The existing SDK is
+checked immediately before presentation and after every outcome. SDK completion
+without a matching committed receipt cannot report success; loss, cancellation,
+conflicts and storage/session changes retain or explicitly recover the original.
+The existing controls/styles remain, with frozen amount and recovery labels. A
+small throwing read is added to the existing SecureStore interface so Keychain
+failure cannot masquerade as a missing original. No new application screen,
+platform storage system, table or migration is introduced. One additional test
+file holds recovery assertions for the existing tip test class.
+
+Final21 tip tests pass, including real simulator Keychain persistence across store
+instances, this-device-only/unsynchronized attributes and exact item cleanup.
+The preceding combined47-test run includes29 unchanged authorization/bid-recovery
+checks, for50 distinct selected checks across these runs. SwiftLint/SwiftFormat
+pass. The first test build failed on a missing try in the new test assertion;
+corrected source passes and the original failure is retained. Actual provider and
+installed tip UI journeys remain open. Private binding:tip-ios-source-binding-r1.json.
+Owned simulator is shut down. Android DTO/API/storage updates are now in progress
+and not yet compiled; Android handlers/UI/tests must follow before deployment.
+
+**Next:** finish the existing Android tip handlers/UI/recovery and verify them,
+then finish legacy recovery/delivery/provider and all-platform UI acceptance; retain their exact designs. Inspect draft
 PR34 current-head CI
 and final combined CI before marking PR34 ready. Keep all original screen designs.
 R05/R06, paid release gates and the app remain incomplete; the80-row inventory is

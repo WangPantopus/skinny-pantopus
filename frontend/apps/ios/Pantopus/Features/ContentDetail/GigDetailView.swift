@@ -557,7 +557,7 @@ public struct GigDetailView: View {
             Text("Send a tip")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
-            Text("100% goes to your helper. Charged to your card via Stripe.")
+            Text(viewModel.tipMessage)
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
@@ -574,6 +574,7 @@ public struct GigDetailView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("tip.amount.\(cents)")
+                    .disabled(!viewModel.mayChooseTip)
                 }
             }
             VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -585,6 +586,7 @@ public struct GigDetailView: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                     TextField("0.00", text: $tipCustomAmountText)
+                        .disabled(viewModel.hasTipOriginal || viewModel.tipBusy)
                         .keyboardType(.decimalPad)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Theme.Color.appText)
@@ -600,7 +602,7 @@ public struct GigDetailView: View {
                     selectTip(cents)
                 }
             } label: {
-                Text("Send custom tip")
+                Text(viewModel.hasTipOriginal ? viewModel.tipActionTitle : "Send custom tip")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(customTipCents == nil ? Theme.Color.appTextMuted : Theme.Color.appTextInverse)
                     .frame(maxWidth: .infinity)
@@ -608,26 +610,35 @@ public struct GigDetailView: View {
                     .background(customTipCents == nil ? Theme.Color.appSurfaceSunken : Theme.Color.primary600)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             }
-            .disabled(customTipCents == nil)
+            .disabled(customTipCents == nil || (!viewModel.mayChooseTip && !viewModel.mayContinueTip))
             .buttonStyle(.plain)
             .accessibilityIdentifier("tip.amount.customSubmit")
-            Button("Not now") { showTipSheet = false }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .buttonStyle(.plain)
+            Button(viewModel.hasTipOriginal ? "Cancel tip" : "Not now") {
+                showTipSheet = false
+                if viewModel.hasTipOriginal { Task { await viewModel.cancelOriginalTip() } }
+            }
+            .disabled(viewModel.tipBusy)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            .buttonStyle(.plain)
         }
         .padding(Spacing.s5)
         .frame(maxWidth: .infinity)
         .presentationDetents([.height(410)])
         .accessibilityIdentifier("tip.amount")
+        .task {
+            await viewModel.prepareTip()
+            if let amount = viewModel.tipOriginalAmount { tipCustomAmountText = String(format: "%.2f", Double(amount) / 100) }
+        }
     }
 
     private var customTipCents: Int? {
+        if let amount = viewModel.tipOriginalAmount { return amount }
         let cleaned = tipCustomAmountText
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "$", with: "")
             .replacingOccurrences(of: ",", with: "")
-        guard let dollars = Double(cleaned), dollars >= 0.5 else { return nil }
+        guard let dollars = Double(cleaned), dollars.isFinite, dollars >= 0.5, dollars <= 999_999.99 else { return nil }
         return max(50, Int((dollars * 100).rounded()))
     }
 

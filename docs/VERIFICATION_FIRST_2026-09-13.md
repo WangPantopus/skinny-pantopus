@@ -2388,3 +2388,42 @@ page is removed, and Next's generated tsconfig change is restored. Source/eviden
 binding:private `existing-tip-provider-proof-r1/tip-browser-binding-r1.json`.
 Native original-request clients, legacy recovery, durable delivery and provider
 acceptance remain open. PR34 is still draft and needs final current-source CI.
+
+
+## Existing iOS tip handler and protected recovery
+
+September14 follow-up to web1b9ff598e. The old GigDetailViewModel tip handler
+reported success immediately after PaymentSheet completed, even when its optional
+status refresh failed, and lost the original across model/app lifetime. The same
+handler now uses the original tip terms/commands/receipt DTOs, with the existing
+KeychainStore and CheckoutCoordinator. Keychain reads distinguish failure from
+absence. Original amount/UUID/worker/terms are retained before POST; SDK credentials
+are transient. Current actor/session/origin, stored original and exact server
+receipt guard every continuation and cleanup. A current intent check precedes SDK
+presentation; success/error/dismissal are followed by a check of the same original.
+No SDK outcome alone reports paid. Explicit cancel needs a zero-charge receipt.
+Conflicting originals require verified explicit adoption. An existing refund or
+dispute record does not announce a new sent tip.
+
+The existing amount picker, spacing, styles and Stripe screen are retained. The
+same controls show frozen amount/recovery actions when an original is pending;
+an ineligible/read-failed opening cannot choose another amount. Existing custom
+amount parsing now rejects nonfinite/over-limit values before converting to Int.
+No new product screen, native storage mechanism or database change. One new test
+file separates recovery assertions from the existing tip test fixture, keeping
+normal static limits; it is not another app implementation.
+
+Evidence:the first compile reaches app success but test compilation fails on a
+missing try in one new assertion. Corrected source passes47 selected tests
+(18 tip plus29 existing authorization/bid-recovery). Final additional storage and
+callback checks pass21 tip tests, for50 distinct selected checks across the two
+successful runs. Eleven altered receipt bindings are also exercised inside the
+receipt-validation test. SwiftLint and SwiftFormat pass. The actual simulator
+Keychain round-trip crosses separate store instances, verifies this-device-only /
+unsynchronized attributes, and confirms exact removal. Synthetic URLProtocol and
+PaymentSheet presenters supply API/provider outcomes; this does not establish
+real provider acceptance or an installed tip UI journey. The owned simulator is
+shut down, with owner devices untouched. Source hashes and run bindings are private
+under existing-tip-provider-proof-r1/tip-ios-source-binding-r1.json. Android client
+integration, legacy recovery, durable delivery, all-platform UI/provider acceptance
+and final current-source CI remain open; PR34 remains draft.

@@ -180,6 +180,49 @@ public final class GigDetailViewModel {
     }
 
     public private(set) var tipStatus: TipStatus = .idle
+    private(set) var tipBusy = false
+    private(set) var tipMessage = "100% goes to your helper. Charged to your card via Stripe."
+    private var tipOriginal: TipOriginal?
+    private var tipPreview: TipPreview?
+    private var tipProgress: TipResponse?
+    private var tipConflict: TipResponse?
+    private var tipServerSession: String?
+    private var tipMayResume = false
+    private let tipStore: any SecureStore
+    private let makeTipRequestId: () -> String
+    private let tipIdentity: () -> GigStopViewModel.Identity?
+    private let tipOpeningIdentity: GigStopViewModel.Identity?
+    private static var activeTips = Set<String>()
+
+    var tipIsCurrent: Bool {
+        tipOpeningIdentity != nil && tipOpeningIdentity?.actor == currentUserId && tipIdentity() == tipOpeningIdentity
+    }
+
+    var tipOriginalAmount: Int? {
+        tipIsCurrent ? tipOriginal?.amountCents : nil
+    }
+
+    var hasTipOriginal: Bool {
+        tipIsCurrent && tipOriginal != nil && tipProgress?.terminal != true
+    }
+
+    var mayChooseTip: Bool {
+        tipIsCurrent && !tipBusy && tipOriginal == nil && tipPreview?.eligible == true && tipServerSession != nil
+    }
+
+    var mayContinueTip: Bool {
+        tipIsCurrent && !tipBusy && hasTipOriginal && tipServerSession != nil
+    }
+
+    var tipActionTitle: String {
+        if tipConflict != nil { return "View pending tip" }
+        if tipMayResume || tipProgress?.checkout != nil { return "Continue original tip" }
+        return "Check tip status"
+    }
+
+    private var tipScope: String {
+        "gig-tip-original-v1|\(tipOpeningIdentity?.origin ?? "")|\(currentUserId ?? "")|\(gigId)"
+    }
 
     // MARK: - Structured Q&A
 
@@ -252,6 +295,9 @@ public final class GigDetailViewModel {
         currentUserId: String? = GigDetailViewModel.currentSignedInUserId(),
         stopStore: any PendingGigStopStoring = PendingGigStopStore(),
         stopIdentity: (() -> GigStopViewModel.Identity?)? = nil,
+        tipStore: any SecureStore = KeychainStore(service: "app.pantopus.ios.pending-gig-tip"),
+        tipIdentity: (() -> GigStopViewModel.Identity?)? = nil,
+        makeTipRequestId: @escaping () -> String = { UUID().uuidString.lowercased() },
         liveActivity: any GigLiveActivityControlling = GigLiveActivityController.shared,
         roomEvents: @escaping @MainActor (String) -> AsyncStream<GigRoomEvent> = { name in
             SocketClient.shared.events(named: name, as: GigRoomEvent.self)
@@ -266,6 +312,11 @@ public final class GigDetailViewModel {
         self.checkout = checkout
         self.bidAcceptance = bidAcceptance ?? GigBidAcceptanceCoordinator(api: api, checkout: checkout)
         self.currentUserId = currentUserId
+        self.tipStore = tipStore
+        self.makeTipRequestId = makeTipRequestId
+        let resolveTipIdentity = tipIdentity ?? { GigStopViewModel.currentIdentity(api: api) }
+        self.tipIdentity = resolveTipIdentity
+        tipOpeningIdentity = resolveTipIdentity()
         stopRecovery = GigStopRecoveryEntry(gig: gigId, actor: currentUserId, api: api, store: stopStore, identity: stopIdentity)
         self.liveActivity = liveActivity
         self.roomEvents = roomEvents
@@ -302,7 +353,7 @@ public final class GigDetailViewModel {
             viewerIsOwner = currentUserId != nil && detail.gig.userId == currentUserId
             viewerIsWorker = currentUserId != nil && detail.gig.acceptedBy == currentUserId
             canMarkDelivered = Self.viewerCanMarkDelivered(gig: detail.gig, currentUserId: currentUserId)
-            canTip = Self.viewerCanTip(gig: detail.gig, viewerIsOwner: viewerIsOwner)
+            canTip = Self.viewerCanTip(gig: detail.gig, viewerIsOwner: viewerIsOwner) || (tipIsCurrent && (try? readStoredTip()) != nil)
             canInstantAccept = Self.viewerCanInstantAccept(
                 gig: detail.gig,
                 viewerIsOwner: viewerIsOwner,
@@ -957,38 +1008,239 @@ public final class GigDetailViewModel {
         return pendingReview != nil || reviewSubmitted
     }
 
-    /// Send a tip of `amountCents` to the worker: create the tip payment,
-    /// present PaymentSheet via the shared `CheckoutCoordinator`, then
-    /// best-effort reconcile + refresh the gig. We never mark the tip paid
-    /// locally — the refresh-status + webhook reconcile server-side.
+    /// Reopen the existing picker by reading this actor's protected original first.
+    /// A missing server row retains the same UUID; only explicit continuation sends.
+    func prepareTip() async {
+        guard beginTipWork() else { return }
+        defer { finishTipWork() }
+        tipPreview = nil
+        tipProgress = nil
+        tipConflict = nil
+        tipMayResume = false
+        do {
+            tipOriginal = try readStoredTip()
+            if let original = tipOriginal {
+                do {
+                    let result: TipResponse = try await api.request(PaymentsEndpoints.tipOriginal(requestId: original.requestId))
+                    try acceptTip(result, original: original)
+                    return
+                } catch APIError.notFound {
+                    let next = try await readTipPreview()
+                    tipMayResume = next.eligible && next.terms == original.terms
+                    if let other = next.activeRequestId, other != original.requestId {
+                        tipConflict = try await readOtherTip(other)
+                    }
+                    tipMessage = "The original tip is not confirmed. Keep its amount and request when continuing."
+                    return
+                }
+            }
+            let next = try await readTipPreview()
+            if let active = next.activeRequestId {
+                let result = try await readOtherTip(active)
+                try retainTip(result.request, replacing: nil)
+                tipOriginal = result.request
+                try acceptTip(result, original: result.request)
+            } else if next.legacyPaymentId != nil {
+                tipMessage = "An earlier tip needs checking in payment history before another tip can be sent."
+            } else if !next.eligible {
+                tipMessage = "This task is not currently available for a tip. Reopen its details before continuing."
+            }
+        } catch { failTip("Tip details could not be verified. Reopen the original before continuing.") }
+    }
+
     public func sendTip(amountCents: Int) async {
-        guard canTip else { return }
+        if tipServerSession == nil { await prepareTip() }
+        guard tipIsCurrent, !tipBusy else { return }
+        if tipConflict != nil { await adoptOtherTip()
+            return
+        }
+        guard tipProgress?.terminal != true else { return }
+        if let original = tipOriginal, original.amountCents != amountCents {
+            failTip("A previous tip is still pending. Continue its original amount before choosing another.")
+            return
+        }
+        guard tipOriginal != nil || mayChooseTip, (50...99_999_999).contains(amountCents) else { return }
+        await performTip(mode: tipOriginal != nil && !tipMayResume ? "check" : "resume", amount: amountCents)
+    }
+
+    func cancelOriginalTip() async {
+        guard hasTipOriginal, let original = tipOriginal else { return }
+        await performTip(mode: "cancel", amount: original.amountCents)
+    }
+
+    private func performTip(mode: String, amount: Int) async {
+        guard beginTipWork() else { return }
+        defer { finishTipWork() }
         tipStatus = .sending
         do {
-            let response: TipResponse = try await api.request(
-                PaymentsEndpoints.tip(body: TipRequest(gigId: gigId, amount: amountCents))
-            )
-            let outcome = await checkout.present(response.sheetParams)
-            switch outcome {
-            case .paid:
-                if let paymentId = response.paymentId {
-                    _ = try? await api.request(
-                        PaymentsEndpoints.tipRefreshStatus(paymentId: paymentId),
-                        as: TipRefreshStatusResponse.self
-                    )
-                }
-                tipStatus = .succeeded
-                await load()
-            case .canceled:
-                tipStatus = .canceled
-            case let .declined(message), let .failed(message):
-                tipStatus = .failed(message: message)
+            if tipOriginal == nil {
+                guard mode == "resume", let terms = tipPreview?.terms, tipPreview?.eligible == true,
+                      let actor = currentUserId, let worker = terms.payeeId, rawGig?.acceptedBy == worker,
+                      rawGig?.ownerConfirmedAt.flatMap(GigAssignedAuthorizationProgress.date) == terms.ownerConfirmedAt
+                      .flatMap(GigAssignedAuthorizationProgress.date) else { throw APIError.invalidResponse }
+                let id = makeTipRequestId()
+                let original = TipOriginal(
+                    requestId: id,
+                    paymentId: id,
+                    gigId: gigId,
+                    payerId: actor,
+                    payeeId: worker,
+                    amountCents: amount,
+                    currency: "usd",
+                    terms: terms,
+                    paymentMethodId: nil
+                )
+                try retainTip(original, replacing: nil)
+                tipOriginal = original
             }
+            guard let original = tipOriginal else { throw APIError.invalidResponse }
+            let result = try await tipCommand(mode, original: original)
+            guard !result.terminal, mode != "cancel", let selected = result.checkout else {
+                if !result.terminal { failTip(tipMessage) }
+                return
+            }
+            try await confirmOriginalTip(original, selected: selected)
         } catch {
-            tipStatus = .failed(
-                message: (error as? APIError)?.errorDescription ?? "Couldn't send the tip."
-            )
+            if tipIsCurrent, case let APIError.clientError(status, message) = error, status == 409,
+               APIError.code(in: message) == "TIP_ACTIVE" {
+                do {
+                    let next = try await readTipPreview()
+                    if let other = next.activeRequestId, other != tipOriginal?.requestId { tipConflict = try await readOtherTip(other) }
+                } catch { /* Keep the saved original if conflict recovery cannot be verified. */ }
+            }
+            if mode == "resume", tipIsCurrent { tipMayResume = true }
+            failTip("The tip result is unconfirmed. Reopen and check the same original request.")
         }
+    }
+
+    private func confirmOriginalTip(_ original: TipOriginal, selected: TipCheckout) async throws {
+        // Reuse the existing SDK. Read the current session and exact intent immediately before presenting it.
+        let checked = try await tipCommand("check", original: original)
+        guard !checked.terminal else { return }
+        guard let checkoutDetails = checked.checkout, checkoutDetails.sameIntent(as: selected) else { throw APIError.invalidResponse }
+        try requireCurrentTip()
+        let outcome = await checkout.present(checkoutDetails.sheetParams)
+        try requireCurrentTip()
+        // SDK completion, error and dismissal are observations, never payment receipts.
+        let final = try await tipCommand("check", original: original)
+        if !final.terminal {
+            switch outcome {
+            case .canceled: failTip("This tip has not been confirmed. Continue or cancel the same original tip.")
+            case .paid: failTip("Payment is still being checked. Keep and check this original tip.")
+            case .declined, .failed: failTip("The tip result is unconfirmed. Check the same original before trying again.")
+            }
+        }
+    }
+
+    private func tipCommand(_ mode: String, original: TipOriginal) async throws -> TipResponse {
+        try requireCurrentTip()
+        guard let session = tipServerSession, try readStoredTip() == original else { throw APIError.invalidResponse }
+        let result: TipResponse = try await api.request(PaymentsEndpoints.tip(body: TipRequest(
+            original: original,
+            session: session,
+            mode: mode
+        )))
+        try acceptTip(result, original: original)
+        return result
+    }
+
+    private func readTipPreview() async throws -> TipPreview {
+        try requireCurrentTip()
+        let value: TipPreview = try await api.request(PaymentsEndpoints.tipPreview(gigId: gigId))
+        try requireCurrentTip()
+        guard let actor = currentUserId,
+              value.matches(gig: gigId, actor: actor, session: tipServerSession) else { throw APIError.invalidResponse }
+        tipServerSession = value.sessionScope
+        tipPreview = value
+        return value
+    }
+
+    private func readOtherTip(_ requestId: String) async throws -> TipResponse {
+        try requireCurrentTip()
+        let value: TipResponse = try await api.request(PaymentsEndpoints.tipOriginal(requestId: requestId))
+        try requireCurrentTip()
+        guard let actor = currentUserId,
+              value.matches(gig: gigId, actor: actor, requestId: requestId, session: tipServerSession)
+        else { throw APIError.invalidResponse }
+        return value
+    }
+
+    private func adoptOtherTip() async {
+        guard let conflict = tipConflict, let original = tipOriginal, beginTipWork() else { return }
+        defer { finishTipWork() }
+        do {
+            let next = try await readOtherTip(conflict.request.requestId)
+            guard next.request == conflict.request else { throw APIError.invalidResponse }
+            try retainTip(next.request, replacing: original)
+            tipOriginal = next.request
+            tipConflict = nil
+            try acceptTip(next, original: next.request)
+        } catch { failTip("The pending tip could not be verified. Keep the saved original.") }
+    }
+
+    private func acceptTip(_ result: TipResponse, original: TipOriginal) throws {
+        try requireCurrentTip()
+        guard let actor = currentUserId, result.matches(
+            gig: gigId,
+            actor: actor,
+            requestId: original.requestId,
+            session: tipServerSession,
+            original: original
+        ),
+            try readStoredTip() == original else { throw APIError.invalidResponse }
+        if result.terminal { try tipStore.delete(tipScope) }
+        tipServerSession = result.sessionScope
+        tipProgress = result
+        tipMayResume = result.canRetry && result.paymentIntentId == nil
+        if result.status == "succeeded" {
+            if result.changedAfterCapture {
+                failTip("This tip has a payment record. Check history for its refund or dispute status.")
+            } else { tipStatus = .succeeded }
+        } else if result.status == "canceled" {
+            tipStatus = .canceled
+            tipMessage = "The original tip is canceled with no charge."
+        } else {
+            tipStatus = .idle
+            tipMessage = result.status == "needs_review" ? "This original tip needs review. Check payment history before continuing."
+                : "This tip is not confirmed as paid. Continue or check the same original before sending another."
+        }
+    }
+
+    private func readStoredTip() throws -> TipOriginal? {
+        guard let data = try tipStore.readData(tipScope) else { return nil }
+        let value = try JSONDecoder().decode(TipOriginal.self, from: data)
+        guard let actor = currentUserId, value.matches(gig: gigId, actor: actor) else { throw APIError.invalidResponse }
+        return value
+    }
+
+    private func retainTip(_ original: TipOriginal, replacing expected: TipOriginal?) throws {
+        try requireCurrentTip()
+        guard let actor = currentUserId, original.matches(gig: gigId, actor: actor),
+              try readStoredTip() == expected else { throw APIError.invalidResponse }
+        // MainActor serializes the compare/write, including multiple open task views.
+        try tipStore.setData(JSONEncoder().encode(original), for: tipScope)
+    }
+
+    private func beginTipWork() -> Bool {
+        guard tipIsCurrent, !tipBusy, Self.activeTips.insert(tipScope).inserted else { return false }
+        tipBusy = true
+        tipMessage = "100% goes to your helper. Charged to your card via Stripe."
+        return true
+    }
+
+    private func finishTipWork() {
+        Self.activeTips.remove(tipScope)
+        tipBusy = false
+    }
+
+    private func requireCurrentTip() throws {
+        guard tipIsCurrent, !Task.isCancelled else { throw APIError.invalidResponse }
+    }
+
+    private func failTip(_ message: String) {
+        guard tipIsCurrent else { return }
+        tipMessage = message
+        tipStatus = .failed(message: message)
     }
 
     /// Clear the tip toast once the view has shown it.
