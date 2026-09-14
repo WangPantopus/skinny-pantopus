@@ -73,6 +73,14 @@ export async function requestApproval(data: {
  * Accept a lease invite by token.
  * The token is a 64-char hex string provided by the landlord.
  */
+export async function previewInvite(token: string): Promise<{
+  home: { id: string; name: string | null; city: string | null };
+  invitation: { status: 'pending' | 'accepted'; proposed_start: string; proposed_end: string | null; expires_at: string };
+  account_email: string;
+}> {
+  return post('/api/v1/tenant/preview-invite', { token });
+}
+
 export async function acceptInvite(token: string): Promise<{
   lease: TenantLease;
   occupancy: any;

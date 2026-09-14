@@ -169,11 +169,22 @@ Actual browser/SDK/HTTP/SQL checks pass for cancellation, controlled failure/ret
 and a delivered success after tab departure. All134 selected backend/38 rendered
 web checks, standalone types and scoped lint pass. No schema or design changes.
 See [unit evidence](VERIFICATION_FIRST_2026-09-13.md#existing-unit-vacancy-and-child-lease-visibility).
-Native identity/date source113d4cdc6 has no failed CI jobs; Android assembly remains
-running in [CI34827611210](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34827611210).
-The unit follow-up requires its own CI after push.
+Native identity/date source113d4cdc6 passes all15 applicable checks with1 unchanged
+Seeder skip in [CI34827611210](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34827611210).
+The unit/invitation follow-ups require their own CI after push.
 
-**Next:** complete remaining R05 invitation/private-attachment/provider acceptance
+**Existing lease invitation acceptance:** old notification URLs now redirect to
+the existing code-entry screen. Its recipient-only preview and existing lease
+acceptance API pass actual browser/HTTP/SQL cancellation and saved-but-failed-reply
+retry with the same lease/occupancy. All144 backend/49 rendered tests, types and
+scoped lint pass. Household codes reuse the existing protected invitation page.
+No new screen/file/schema; designs remain unchanged. See [invitation evidence](VERIFICATION_FIRST_2026-09-13.md#existing-lease-invitation-landing-and-acceptance).
+Unit checkpoint19369aa40 and the invitation follow-up are saved together for PR#38;
+the current follow-up requires its own remote CI.
+Owned unit API18111 is stopped/cleaned; invitation API18112 and Next18110 are active.
+
+**Next:** verify existing invitation creation/sharing and multi-unit admission,
+then missing bulk unit handlers. Complete remaining R05 private-attachment/provider acceptance
 through existing implementations, and installed Android recovery/foreground when
 computer control is reliable. The earlier APK installed in the owned AVD, but
 control repeatedly selected the IDE instead of the device. No installed Android

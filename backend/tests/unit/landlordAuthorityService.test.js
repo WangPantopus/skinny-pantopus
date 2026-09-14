@@ -634,3 +634,36 @@ describe('Constants', () => {
     expect(map.lease).toBe('standard');
   });
 });
+
+describe('intended recipient lease preview', () => {
+  const token = 'b'.repeat(64);
+  beforeEach(() => {
+    seedHome({ home_type: 'apartment', city: 'Synthetic' }); seedAuthority();
+    seedTable('HomeLeaseInvite', [{ id: 'invite-1', home_id: 'home-1', token_hash: crypto.createHash('sha256').update(token).digest('hex'),
+      invitee_user_id: 'tenant-1', invitee_email: 'Tenant@example.com', status: 'pending',
+      proposed_start: '2026-09-01', proposed_end: null, expires_at: new Date(Date.now() + 86400000).toISOString(),
+      landlord_subject_type: 'user', landlord_subject_id: 'landlord-1' }]);
+  });
+  test('returns only the preview without accepting or exposing proof/authority fields', async () => {
+    const before = JSON.stringify(getTable('HomeLeaseInvite'));
+    const result = await service.previewInvite(token, 'tenant-1', 'tenant@example.com');
+    expect(result).toEqual({ success: true, home: { id: 'home-1', name: 'Test Home', city: 'Synthetic' }, account_email: 'tenant@example.com',
+      invitation: { status: 'pending', proposed_start: '2026-09-01', proposed_end: null, expires_at: expect.any(String) } });
+    expect(JSON.stringify(getTable('HomeLeaseInvite'))).toBe(before);
+    expect(getTable('HomeLease')).toHaveLength(0); expect(notificationService.createNotification).not.toHaveBeenCalled();
+  });
+  test.each([['other-user', 'tenant@example.com'], ['tenant-1', 'other@example.com'], ['tenant-1', '']])(
+    'does not reveal a Home to mismatched identity %s / %s', async (actor, email) => {
+      expect(await service.previewInvite(token, actor, email)).toEqual({ success: false, status: 404, error: expect.any(String) });
+    });
+  test('expired pending invites cannot be actionable; accepted ones remain recoverable', async () => {
+    getTable('HomeLeaseInvite')[0].expires_at = '2020-01-01';
+    expect(await service.previewInvite(token, 'tenant-1', 'tenant@example.com')).toEqual(expect.objectContaining({ success: false, status: 410 }));
+    getTable('HomeLeaseInvite')[0].status = 'accepted';
+    expect(await service.previewInvite(token, 'tenant-1', 'tenant@example.com')).toEqual(expect.objectContaining({ success: true }));
+  });
+  test('revoked authority cannot offer acceptance', async () => {
+    getTable('HomeAuthority')[0].status = 'revoked';
+    expect(await service.previewInvite(token, 'tenant-1', 'tenant@example.com')).toEqual(expect.objectContaining({ success: false, status: 403 }));
+  });
+});

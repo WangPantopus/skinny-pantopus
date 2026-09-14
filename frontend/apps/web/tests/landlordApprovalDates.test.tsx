@@ -10,8 +10,12 @@ import VerificationCenter from '@/components/home/VerificationCenter';
 import { confirmStore } from '@/components/ui/confirm-store';
 import VerifyLandlordDetailsPage from '@/app/(app)/app/homes/[id]/verify-landlord/details/page';
 import { toast } from '@/components/ui/toast-store';
+import InvitePage from '@/app/(app)/app/homes/invite/page';
 
 const mockPush = jest.fn();
+const mockRouter = { push: mockPush, back: jest.fn() };
+let mockQuery = 'tab=requests';
+let mockSignedIn = true;
 
 function unitLeaseProps(onRefresh = jest.fn(), isCurrent = () => true) {
   return { homeId: 'building-1', authorityId: 'authority-1', occupants: [], onRefresh, isCurrent,
@@ -99,15 +103,15 @@ jest.mock('@pantopus/api', () => ({
   landlord: jest.requireActual('../../../packages/api/src/endpoints/landlord'),
   tenant: jest.requireActual('../../../packages/api/src/endpoints/tenant'),
   onTokenChange: () => () => {},
-  getAuthToken: () => 'synthetic-fixture',
+  getAuthToken: () => mockSignedIn ? 'synthetic-fixture' : null,
   AUTH_SESSION_CHANGE_KEY: 'pantopus_auth_session_change',
 }));
 
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }), useParams: () => ({ id: 'home-1' }), useSearchParams: () => new URLSearchParams('tab=requests') }));
-jest.mock('@/components/ui/toast-store', () => ({ toast: { error: jest.fn() } }));
+jest.mock('next/navigation', () => ({ useRouter: () => mockRouter, useParams: () => ({ id: 'home-1' }), useSearchParams: () => new URLSearchParams(mockQuery) }));
+jest.mock('@/components/ui/toast-store', () => ({ toast: { error: jest.fn(), success: jest.fn(), warning: jest.fn() } }));
 jest.mock('@/components/home/useHomePermissions', () => ({ useHomePermissions: () => ({ access: null, reload: jest.fn() }) }));
 
-beforeEach(() => { jest.clearAllMocks(); jest.mocked(post).mockResolvedValue({}); });
+beforeEach(() => { mockQuery = 'tab=requests'; mockSignedIn = true; jest.clearAllMocks(); jest.mocked(post).mockResolvedValue({}); });
 
 test('existing SDK callers can omit reviewed dates', async () => {
   await approveLease('lease-1', 'authority-1');
@@ -443,4 +447,98 @@ test('the details page retires a held preflight before an account change can sub
   expect(post).not.toHaveBeenCalled();
   expect(mockPush).not.toHaveBeenCalled();
   expect(toast.error).not.toHaveBeenCalled();
+});
+
+const leaseToken = 'a'.repeat(64);
+const leasePreview = { home: { id: 'unit-1', name: 'Synthetic Unit', city: 'Synthetic' },
+  invitation: { status: 'pending', proposed_start: '2026-09-01T00:00:00Z', proposed_end: null,
+    expires_at: '2026-09-28T00:00:00Z' }, account_email: 'tenant@example.invalid' };
+function openLeaseInvite() {
+  mockQuery = `type=lease&code=${leaseToken}`;
+  return render(<InvitePage />);
+}
+
+test('the code screen previews the lease before confirmed acceptance through the existing tenant SDK', async () => {
+  jest.mocked(post).mockResolvedValueOnce(leasePreview).mockResolvedValueOnce({ lease: { id: 'lease-1', home_id: 'unit-1', state: 'active' }, occupancy: { id: 'occ-1' } });
+  const confirm = jest.spyOn(confirmStore, 'open').mockResolvedValue(true);
+  try {
+    openLeaseInvite();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/app/homes'));
+    expect(post).toHaveBeenNthCalledWith(1, '/api/v1/tenant/preview-invite', { token: leaseToken });
+    expect(post).toHaveBeenNthCalledWith(2, '/api/v1/tenant/accept-invite', { token: leaseToken });
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ description: expect.stringContaining('tenant@example.invalid') }));
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ description: expect.stringContaining('September 1, 2026') }));
+  } finally { confirm.mockRestore(); }
+});
+
+test.each(['cancel', 'account', 'unmount'])('a %s lease confirmation cannot accept the invite', async mode => {
+  let resolve!: (value: boolean) => void;
+  jest.mocked(post).mockResolvedValueOnce(leasePreview);
+  const confirm = jest.spyOn(confirmStore, 'open').mockImplementation(() => new Promise(done => { resolve = done; }));
+  try {
+    const view = openLeaseInvite();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    if (mode === 'account') fireEvent(window, new StorageEvent('storage', { key: 'pantopus_auth_session_change' }));
+    if (mode === 'unmount') view.unmount();
+    await act(async () => resolve(mode !== 'cancel'));
+    expect(post).toHaveBeenCalledTimes(1); expect(mockPush).not.toHaveBeenCalled();
+  } finally { confirm.mockRestore(); }
+});
+
+test('failed lease acceptance retains the code and retries the same invitation', async () => {
+  jest.mocked(post).mockResolvedValueOnce(leasePreview).mockRejectedValueOnce({ message: 'Reply lost. Retry this invitation.' })
+    .mockResolvedValueOnce({ ...leasePreview, invitation: { ...leasePreview.invitation, status: 'accepted' } })
+    .mockResolvedValueOnce({ lease: { id: 'lease-1', home_id: 'unit-1', state: 'active' }, occupancy: { id: 'occ-1' } });
+  const confirm = jest.spyOn(confirmStore, 'open').mockResolvedValue(true);
+  try {
+    openLeaseInvite(); fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Reply lost. Retry this invitation.'));
+    expect(screen.getByPlaceholderText('Enter code')).toHaveValue(leaseToken);
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/app/homes'));
+    expect(post).toHaveBeenNthCalledWith(4, '/api/v1/tenant/accept-invite', { token: leaseToken });
+  } finally { confirm.mockRestore(); }
+});
+
+test('ordinary Home codes use the protected existing invitation page without legacy acceptance', async () => {
+  render(<InvitePage />); fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: 'home-token' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/invite/home-token'));
+  expect(post).not.toHaveBeenCalled(); expect(get).not.toHaveBeenCalled();
+});
+
+test('login preserves the lease invitation destination without accepting it', async () => {
+  mockSignedIn = false; openLeaseInvite();
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith(`/login?redirectTo=${encodeURIComponent(`/app/homes/invite?type=lease&code=${leaseToken}`)}`));
+  expect(post).not.toHaveBeenCalled();
+});
+
+test.each(['preview', 'accept'])('a delayed %s result cannot confirm or navigate after leaving the invite screen', async phase => {
+  let resolve!: (value: unknown) => void;
+  const delayed = new Promise(done => { resolve = done; });
+  if (phase === 'preview') jest.mocked(post).mockReturnValueOnce(delayed);
+  else jest.mocked(post).mockResolvedValueOnce(leasePreview).mockReturnValueOnce(delayed);
+  const confirm = jest.spyOn(confirmStore, 'open').mockResolvedValue(true);
+  try {
+    const view = openLeaseInvite(); fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.keyDown(screen.getByPlaceholderText('Enter code'), { key: 'Enter' });
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(phase === 'preview' ? 1 : 2));
+    view.unmount();
+    await act(async () => resolve(phase === 'preview' ? leasePreview : { lease: { id: 'lease-1', home_id: 'unit-1', state: 'active' }, occupancy: { id: 'occ-1' } }));
+    expect(mockPush).not.toHaveBeenCalled(); expect(toast.success).not.toHaveBeenCalled();
+    expect(confirm).toHaveBeenCalledTimes(phase === 'preview' ? 0 : 1);
+  } finally { confirm.mockRestore(); }
+});
+
+test.each(['wrong-account', 'malformed'])('a %s preview cannot offer lease acceptance', async mode => {
+  if (mode === 'wrong-account') jest.mocked(post).mockRejectedValueOnce({ message: 'Invitation not available for this account.' });
+  else jest.mocked(post).mockResolvedValueOnce({ home: { id: 'unit-1' } });
+  const confirm = jest.spyOn(confirmStore, 'open').mockResolvedValue(true);
+  try {
+    openLeaseInvite(); fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(confirm).not.toHaveBeenCalled(); expect(post).toHaveBeenCalledTimes(1); expect(mockPush).not.toHaveBeenCalled();
+  } finally { confirm.mockRestore(); }
 });

@@ -415,6 +415,36 @@ class LandlordAuthorityService {
   // acceptInvite
   // ================================================================
 
+  /** Read only the intended authenticated recipient's lease invitation. */
+  async previewInvite(token, userId, userEmail) {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const { data: invite, error } = await supabaseAdmin.from('HomeLeaseInvite')
+      .select('home_id, invitee_user_id, invitee_email, status, proposed_start, proposed_end, expires_at, landlord_subject_type, landlord_subject_id')
+      .eq('token_hash', tokenHash).maybeSingle();
+    if (error) throw error;
+    // Never disclose a Home or the intended recipient's address to another account.
+    if (!invite || (invite.invitee_user_id && invite.invitee_user_id !== userId)
+      || !invite.invitee_email || invite.invitee_email.trim().toLowerCase() !== (userEmail || '').trim().toLowerCase()) {
+      return { success: false, status: 404, error: 'Invitation not available for this account. Use the account it was sent to.' };
+    }
+    if (!['pending', 'accepted'].includes(invite.status)
+      || (invite.status === 'pending' && new Date(invite.expires_at).getTime() <= Date.now())) {
+      return { success: false, status: 410, error: 'This invitation is closed or expired. Ask the landlord for a new invitation.' };
+    }
+    const { data: authority, error: authorityError } = await supabaseAdmin.from('HomeAuthority')
+      .select('id').eq('home_id', invite.home_id).eq('subject_type', invite.landlord_subject_type)
+      .eq('subject_id', invite.landlord_subject_id).eq('status', 'verified').limit(1).maybeSingle();
+    if (authorityError) throw authorityError;
+    if (!authority) return { success: false, status: 403, error: 'Current verified authority required' };
+    const { data: home, error: homeError } = await supabaseAdmin.from('Home')
+      .select('id, name, city').eq('id', invite.home_id).maybeSingle();
+    if (homeError) throw homeError;
+    if (!home) return { success: false, status: 404, error: 'Home not found' };
+    return { success: true, home: { id: home.id, name: home.name, city: home.city },
+      invitation: { status: invite.status, proposed_start: invite.proposed_start,
+        proposed_end: invite.proposed_end, expires_at: invite.expires_at }, account_email: userEmail };
+  }
+
   /**
    * Accept a lease invite using the raw token.
    *

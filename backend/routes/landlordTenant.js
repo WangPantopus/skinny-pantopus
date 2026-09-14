@@ -601,6 +601,20 @@ router.post(
 // Accept a lease invite by token.
 // ──────────────────────────────────────────────────────────────
 
+// Body keeps the raw invitation proof out of request URLs/access logs.
+// This preview never changes the invitation, lease or membership.
+router.post('/tenant/preview-invite', verifyToken, validate(acceptInviteSchema), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const result = await landlordAuthorityService.previewInvite(req.body.token, req.user.id, req.user.email);
+    if (!result.success) return res.status(result.status || 400).json({ error: result.error });
+    res.json({ home: result.home, invitation: result.invitation, account_email: result.account_email });
+  } catch (err) {
+    logger.error('POST /tenant/preview-invite failed', { error: err.message });
+    res.status(500).json({ error: 'Failed to check invitation. Please retry.' });
+  }
+});
+
 router.post(
   '/tenant/accept-invite',
   verifyToken,

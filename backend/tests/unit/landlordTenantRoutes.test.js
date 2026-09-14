@@ -1466,3 +1466,25 @@ describe('Route registration', () => {
     expect(routes).toContain('POST /home/:homeId/dispute');
   });
 });
+
+test('lease preview uses the authenticated recipient and marks the response private/no-store', async () => {
+  const service = require('../../services/addressValidation/landlordAuthorityService');
+  const preview = jest.spyOn(service, 'previewInvite').mockResolvedValue({ success: true,
+    home: { id: 'home-1', name: 'Synthetic Home' }, invitation: { status: 'pending' }, account_email: 'test@example.com' });
+  try {
+    const res = mockRes();
+    await findHandler('POST', '/tenant/preview-invite')(mockReq({ body: { token: 'a'.repeat(64), user_id: 'other' } }), res);
+    expect(preview).toHaveBeenCalledWith('a'.repeat(64), 'test-user-id', 'test@example.com');
+    expect(res._headers['Cache-Control']).toBe('private, no-store');
+    expect(res._json).toEqual({ home: { id: 'home-1', name: 'Synthetic Home' }, invitation: { status: 'pending' }, account_email: 'test@example.com' });
+  } finally { preview.mockRestore(); }
+});
+
+test.each([404, 410, 403])('lease preview preserves its %i failure without leaking data', async status => {
+  const service = require('../../services/addressValidation/landlordAuthorityService');
+  const preview = jest.spyOn(service, 'previewInvite').mockResolvedValue({ success: false, status, error: 'Not available' });
+  try {
+    const res = mockRes(); await findHandler('POST', '/tenant/preview-invite')(mockReq({ body: { token: 'a'.repeat(64) } }), res);
+    expect(res._status).toBe(status); expect(res._json).toEqual({ error: 'Not available' });
+  } finally { preview.mockRestore(); }
+});

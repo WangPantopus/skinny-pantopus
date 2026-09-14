@@ -1172,3 +1172,58 @@ lease acceptance page, and the existing bulk unit tools whose SDK endpoints are
 missing; inspect shared implementations before repair. Private attachment,
 provider delivery, installed Android acceptance and adoption/rollout remain open.
 R05 and the8/72/80 inventory are unchanged.
+
+
+### Existing lease invitation landing and acceptance
+
+The stored lease-notification URL had no matching web page, while the tenant SDK
+and atomic acceptance transaction already existed. The existing Next configuration
+now redirects that URL to the existing Enter Invite Code screen with an explicit
+lease type. The screen preserves its markup/styles, previews the invitation for
+the authenticated recipient, confirms Home/dates/account, then uses the existing
+acceptance API. Ordinary Home codes open the existing protected invitation page
+instead of invoking its older acceptance path. Login preserves the destination.
+No new screen, file, table, migration or acceptance service was added.
+
+The existing landlord service/route/tenant SDK now expose a read-only recipient
+preview. Raw proof stays in the POST body; the response is private/no-store.
+Hash/authority fields are excluded, mismatched account/email returns no Home data,
+and expired pending invitations or revoked authority cannot offer acceptance.
+Accepted invitations can be previewed for retry; the unchanged transaction decides
+whether the original acceptance remains recoverable. The screen retires delayed
+reads, confirmations and completions on account changes or unmount, blocks duplicate
+submissions and retains the code after failure. A saved acceptance directs users
+to My Homes; it does not promise current access independent of lease dates.
+
+Seven rendered baseline checks failed on the old path. All144 selected backend
+and49 rendered checks now pass, including wrong-account/malformed preview,
+cancel/account/unmount confirmation, delayed read/result and lost-reply retry.
+Standalone TypeScript and scoped ESLint pass. Unchanged native and SQL acceptance
+contracts retain their earlier source-specific evidence.
+
+Actual Chrome follows the old notification URL through the redirect and existing
+screen, previews the correct September1 dates, and cancels without acceptance.
+The real existing HTTP/service/SQL transaction then saves one active lease and
+occupancy while a controlled503 hides its success. Retry recovers the same IDs
+with no duplicate records and reaches My Homes. Actual HTTP preview rejects a
+wrong recipient and malformed proof without a lease write. The styled existing
+screen/dialog were visually inspected. Full navigation cancels a held connection;
+in-app Back leaves it connected, and releasing the reply leaves the destination
+visible. Rendered tests separately prove no retired callback navigation/toast.
+Auth and the destination shell are synthetic; no provider email/native link
+acceptance is claimed.
+
+Private lease-invitation-r1 holds source-binding.json, baseline/candidate results,
+http-preview.json and browser-cancel/saved-failed-reply/recovered/held evidence.
+The initial copied fixture collided with the preceding fixture's synthetic email;
+the old fixture was stopped and cleaned before retry. Current owned API18112 and
+Next18110 are active. Unit fixture18111 is stopped and its final exact-row state
+is retained. Durable evidence remains in the existing private audit directory.
+
+Next: existing landlord invitation creation/sharing and real multi-unit admission
+validation, then missing bulk unit handlers. Private lease attachments, provider
+delivery, installed Android acceptance, combined adoption/rollout and R05 remain open.
+
+Native identity/date source113d4cdc6 now passes all15 applicable checks and1
+unchanged Seeder skip in [CI34827611210](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34827611210).
+The unit/invitation follow-up is saved to PR#38 and requires its own CI.
