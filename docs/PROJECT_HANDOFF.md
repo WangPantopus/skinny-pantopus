@@ -53,7 +53,7 @@ retry → cancel → release-original checks pass, as does an explicit fresh req
 122 backend/48 rendered tests, types, scoped lint and the full lease SQL contract
 pass. The existing unmerged migration is updated; no new tables or screen designs.
 See [queued-request evidence](VERIFICATION_FIRST_2026-09-13.md#existing-queued-tenant-request-follow-up).
-This candidate still requires CI after push.
+Application source `25c6a5c01` is committed; its own CI is pending after push.
 
 **Next:** carry the verified status observation through the existing iOS/Android
 lease-request controllers. The API accepts older clients without context; those
@@ -86,7 +86,7 @@ shut down and deleted; its `native-error-runtime-lease.json` is released. Compil
 products and result bundles are retained. Check available disk space before another
 heavy native build, and run only one at a time. No physical device was involved.
 Local acceptance is source-bound under `native-errors-r1`; this native candidate
-is pushed at `29603b01a9151705c44456950e0d46dfb7bf40f6`; [CI34803605947](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34803605947) is still running. See [the current native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-submission-error-follow-up).
+at `29603b01a9151705c44456950e0d46dfb7bf40f6` passes all15 applicable checks in [CI34803605947](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34803605947), with one unchanged Seeder skip. See [the current native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-submission-error-follow-up).
 
 **Verification limits:** browser evidence uses actual components, SDK, HTTP and
 SQL with synthetic authentication in an isolated renderer. Full AppShell/login,

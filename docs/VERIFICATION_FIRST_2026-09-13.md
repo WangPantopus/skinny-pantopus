@@ -685,8 +685,7 @@ simulator is now shut down and deleted; the private native runtime lease is
 released. The unrelated pre-existing simulator was preserved.
 
 Local native acceptance is source-bound in `native-errors-r1` under the existing
-private lease-transaction archive. This native candidate still requires CI after
-push. Its changes are limited to existing models, callers/comments, error-banner
+private lease-transaction archive. Native source `29603b01a9151705c44456950e0d46dfb7bf40f6` passes all15 applicable checks in [CI34803605947](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34803605947), with one unchanged Seeder skip. Its changes are limited to existing models, callers/comments, error-banner
 bindings and relevant tests; the only new tracked file is an Android test PNG. It does not establish installed end-to-end lease
 verification, account/background retirement, native lost-response recovery, actual
 email delivery or all wizard claims. In particular, the existing one-time-email
@@ -753,4 +752,4 @@ queued-original protection. Continue in those existing controllers and SDK model
 then verify account/background/restart and installed lease-verification journeys.
 The successful browser uses an isolated renderer and synthetic authentication,
 not full AppShell/login. R05 remains open; provider delivery, combined populated
-adoption and rollout remain open. This candidate requires its own CI after push.
+adoption and rollout remain open. Queued-request application source `25c6a5c01` requires its own CI after push.
