@@ -90,21 +90,7 @@ class VerifyLandlordDetailsSnapshotTest {
                 handle = SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-snapshot")),
             )
         vm.onPrimary() // -> Details
-        with(form) {
-            vm.setOwnerName(ownerName)
-            vm.setContactName(contactName)
-            vm.setEmail(email)
-            vm.setPhone(phone)
-            vm.setLease(lease)
-            vm.setPMEnabled(pmEnabled)
-            if (pmEnabled) {
-                vm.setPMName(pmName)
-                vm.setPMEmail(pmEmail)
-                vm.setPMPhone(pmPhone)
-            }
-            vm.setMoveInDate(moveInDate)
-            vm.setMessageToLandlord(messageToLandlord)
-        }
+        vm.setVariant(VerifyLandlordVariant.Canonical, form)
         return vm
     }
 

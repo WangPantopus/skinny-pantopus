@@ -159,9 +159,9 @@ internal fun StartStep(content: VerifyLandlordStartContent = VerifyLandlordSampl
                 "Shorter process — we just need to confirm you're really on the lease for " +
                     "Apt 3B. No email to your landlord required."
             } else {
-                "Verifying your landlord links this rental to a real owner so you can send " +
-                    "rent, raise maintenance tickets, and resolve disputes inside Pantopus. " +
-                    "We'll ask them to confirm by email — they don't need an account."
+                "Request approval from this rental's verified property owner. " +
+                    "They review your saved request in Pantopus. " +
+                    "Home access follows the approved lease dates."
             },
     )
     RequirementsCardBlock(rows = requirementRows(content.isFastTrack))
@@ -197,21 +197,21 @@ private fun requirementRows(fastTrack: Boolean): List<RequirementsRow> =
             RequirementsRow(
                 id = "lease",
                 icon = PantopusIcon.Check,
-                title = "A signed lease agreement",
+                title = "Your tenancy details",
                 subcopy =
-                    "PDF, photo, or scan. Current term only — older leases are fine if still active.",
+                    "Your move-in date and a message are optional. A document is not required to send a request.",
             ),
             RequirementsRow(
                 id = "contact",
                 icon = PantopusIcon.Check,
                 title = "Landlord contact info",
-                subcopy = "Their name, email, and phone. We send a one-time confirmation link to them.",
+                subcopy = "Their name, email, and optional phone number are included in your request.",
             ),
             RequirementsRow(
                 id = "time",
                 icon = PantopusIcon.Check,
                 title = "A few minutes",
-                subcopy = "Most verifications take 3–4 min on your side. Landlord confirms in their inbox.",
+                subcopy = "Complete the form, then check its status. Review times depend on the property owner.",
             ),
         )
     }
@@ -456,7 +456,7 @@ internal fun DetailsStep(
     viewModel: VerifyLandlordWizardViewModel,
 ) {
     HeadlineBlock("Landlord & lease details")
-    SubcopyBlock("We'll email this person a one-time link to confirm the rental.")
+    SubcopyBlock("These details are included in your request for the verified property owner to review.")
 
     val validationErrors = state.errors?.takeIf { !it.isEmpty }
     if (validationErrors != null) {
@@ -513,7 +513,7 @@ private fun BusinessInfoCard(
             placeholder = "mira@elmstholdings.com",
             icon = PantopusIcon.Mail,
             keyboard = KeyboardType.Email,
-            hint = "We'll send a confirmation link here.",
+            hint = "Included as contact information in your request.",
             error = errors?.email,
             onChange = viewModel::setEmail,
         )
@@ -540,12 +540,10 @@ private fun LeaseUploadCard(
             overline = "Lease or deed",
             title = "Attach proof of the rental",
             subtitle =
-                "One document is enough — the lease you signed, or a deed showing the owner above.",
+                "Attachments are not available in this request yet. You can submit without a document.",
         )
         if (form.lease == null) {
-            LeaseEmpty {
-                viewModel.setLease(VerifyLandlordSampleData.populatedForm.lease)
-            }
+            LeaseEmpty(onAttach = viewModel::attachLeaseTapped)
         } else {
             LeaseDone(
                 lease = form.lease,
@@ -1163,7 +1161,7 @@ private fun LeaseEmpty(onAttach: () -> Unit) {
                 color = PantopusColors.appText,
             )
             Text(
-                text = "PDF, JPG, or PNG · up to 10 MB",
+                text = "Not available yet · submit without a file",
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextSecondary,
             )
@@ -1392,7 +1390,7 @@ private fun EncryptionFootnote() {
         )
         Text(
             text =
-                "Confirmation email goes only to the landlord. Your name and unit will be shown.",
+                "The verified property owner can review your request. Contact details you enter are included as a note.",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
         )

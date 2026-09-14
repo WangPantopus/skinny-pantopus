@@ -394,6 +394,9 @@ class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
 
     @Test fun initial_state_is_start_step() {
         val vm = makeVm()
+        assertFalse(vm.state.value.startContent.homeChip.label.contains("412 Elm"))
+        assertNull(vm.state.value.startContent.existingLandlord)
+        assertEquals(VerifyLandlordForm(), vm.state.value.form)
         assertEquals(VerifyLandlordStep.Start, vm.state.value.currentStep)
         assertEquals("Start verification", vm.chrome.primaryCtaLabel)
         assertTrue(vm.chrome.primaryCtaEnabled)
@@ -432,7 +435,8 @@ class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
     // MARK: - Variants
 
     @Test fun fast_track_variant_surfaces_existing_landlord() {
-        val vm = makeVm("home-fast-track")
+        val vm = makeVm()
+        vm.setVariant(VerifyLandlordVariant.FastTrack)
         assertTrue(vm.state.value.startContent.isFastTrack)
         assertNotNull(vm.state.value.startContent.existingLandlord)
     }
@@ -493,6 +497,7 @@ class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
     @Test fun submit_blocked_when_errors_present() =
         runTest {
             val vm = makeVm()
+            vm.setVariant(VerifyLandlordVariant.Canonical, VerifyLandlordForm(registeredUnit = "Apt 3B"))
             vm.onPrimary() // -> details
             // Feed the errored form through the public mutators so the
             // VM's validation pipeline runs identically to the runtime.
@@ -517,6 +522,11 @@ class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
             val vm = makeVm("home-42")
             vm.onPrimary()
             vm.seedPopulatedForm()
+            assertFalse(vm.state.value.form.composedMessage.orEmpty().contains("Lease on file:"))
+            vm.setLease(null)
+            vm.attachLeaseTapped()
+            assertNull(vm.state.value.form.lease)
+            assertTrue(vm.state.value.submitState is VerifyLandlordSubmitState.Error)
             vm.setMoveInDate("2026-04-01")
             vm.setMessageToLandlord("Hi, I'm the new tenant.")
             vm.onPrimary() // submit
@@ -529,6 +539,7 @@ class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
             assertEquals("home-42", captured.captured.homeId)
             assertEquals("2026-04-01T00:00:00.000Z", captured.captured.startAt)
             assertTrue(captured.captured.message.orEmpty().contains("Hi, I'm the new tenant."))
+            assertFalse(captured.captured.message.orEmpty().contains("Lease on file:"))
             assertTrue(
                 "Landlord details must travel with the request instead of being discarded",
                 captured.captured.message.orEmpty().contains("Elm Street Holdings LLC"),
@@ -671,6 +682,7 @@ class VerifyLandlordWizardViewModelTest : VerifyLandlordWizardTestFixture() {
     @Test fun field_update_revalidates_when_errors_shown() =
         runTest {
             val vm = makeVm()
+            vm.setVariant(VerifyLandlordVariant.Canonical, VerifyLandlordForm(registeredUnit = "Apt 3B"))
             vm.onPrimary()
             vm.setOwnerName(VerifyLandlordSampleData.errorForm.ownerName)
             vm.setContactName(VerifyLandlordSampleData.errorForm.contactName)

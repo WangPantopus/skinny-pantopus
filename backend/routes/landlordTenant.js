@@ -46,13 +46,13 @@ const requestAuthoritySchema = Joi.object({
 const inviteTenantSchema = Joi.object({
   home_id: Joi.string().uuid().required(),
   invitee_email: Joi.string().email().required(),
-  start_at: Joi.string().isoDate().required(),
-  end_at: Joi.string().isoDate().allow(null),
+  start_at: Joi.string().isoDate().raw().required(),
+  end_at: Joi.string().isoDate().raw().allow(null),
 });
 
 const approveDenySchema = Joi.object({
-  start_at: Joi.string().isoDate(),
-  end_at: Joi.string().isoDate().allow(null),
+  start_at: Joi.string().isoDate().raw(),
+  end_at: Joi.string().isoDate().raw().allow(null),
 });
 
 const denySchema = Joi.object({
@@ -70,8 +70,10 @@ const tenantRequestSchema = Joi.object({
     lease_id: Joi.string().uuid().allow(null).default(null),
     lease_state: Joi.string().valid('pending', 'active', 'ended', 'canceled').allow(null).default(null),
   }),
-  start_at: Joi.string().isoDate().allow(null),
-  end_at: Joi.string().isoDate().allow(null),
+  // Keep the original calendar date for PostgreSQL's existing strict check.
+  // Joi otherwise turns an impossible February 31 into a valid March 3.
+  start_at: Joi.string().isoDate().raw().allow(null),
+  end_at: Joi.string().isoDate().raw().allow(null),
   message: Joi.string().max(1000).allow(null, ''),
 });
 

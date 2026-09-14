@@ -39,7 +39,7 @@ const val VERIFY_LANDLORD_HOME_ID_KEY: String = "homeId"
  */
 data class VerifyLandlordUiState(
     val currentStep: VerifyLandlordStep = VerifyLandlordStep.Start,
-    val startContent: VerifyLandlordStartContent = VerifyLandlordSampleData.canonical,
+    val startContent: VerifyLandlordStartContent = VerifyLandlordStartContent.selectedHome,
     val form: VerifyLandlordForm = VerifyLandlordForm(),
     /**
      * Validation errors materialised lazily — `null` means "user
@@ -104,13 +104,7 @@ open class VerifyLandlordWizardViewModel
         /** Configurable so JVM unit tests can drop the delay to zero. */
         protected open val submitDelayMillis: Long = SUBMIT_DELAY_DEFAULT_MILLIS
 
-        private val _state =
-            MutableStateFlow(
-                VerifyLandlordUiState(
-                    startContent = VerifyLandlordSampleData.startContent(homeId),
-                    form = VerifyLandlordSampleData.formSeed(homeId),
-                ),
-            )
+        private val _state = MutableStateFlow(VerifyLandlordUiState())
         val state: StateFlow<VerifyLandlordUiState> = _state.asStateFlow()
 
         /** One-shot navigation events the screen reacts to. */
@@ -286,6 +280,19 @@ open class VerifyLandlordWizardViewModel
 
         // MARK: - Field mutations
 
+        fun attachLeaseTapped() {
+            if (!isCurrentSession() || _state.value.isSubmitting) return
+            _state.update {
+                it.copy(
+                    errors = null,
+                    submitState =
+                        VerifyLandlordSubmitState.Error(
+                            "Lease attachments aren't available in this request yet. You can submit without a document.",
+                        ),
+                )
+            }
+        }
+
         fun setOwnerName(value: String) = updateForm { it.copy(ownerName = value) }
 
         fun setContactName(value: String) = updateForm { it.copy(contactName = value) }
@@ -319,16 +326,18 @@ open class VerifyLandlordWizardViewModel
             }
 
         /**
-         * Used by previews / sample-data toggles + the dashboard
-         * fast-track decision tree. Mirrors iOS' `setVariant(_:)`.
+         * Explicit preview/sample injection. Live forms start empty.
          */
-        fun setVariant(variant: VerifyLandlordVariant) {
+        fun setVariant(
+            variant: VerifyLandlordVariant,
+            form: VerifyLandlordForm? = null,
+        ) {
             val next =
                 when (variant) {
                     VerifyLandlordVariant.Canonical -> VerifyLandlordSampleData.canonical
                     VerifyLandlordVariant.FastTrack -> VerifyLandlordSampleData.fastTrack
                 }
-            _state.update { it.copy(startContent = next) }
+            _state.update { it.copy(startContent = next, form = form ?: it.form) }
         }
 
         fun acknowledgeEvent() {

@@ -196,8 +196,7 @@ data class VerifyLandlordForm(
             }
         val leaseError =
             when {
-                lease == null -> "Required"
-                lease.detectedUnit != null &&
+                lease?.detectedUnit != null &&
                     registeredUnit.isNotEmpty() &&
                     !lease.detectedUnit.equals(registeredUnit, ignoreCase = true) -> "Unit mismatch"
                 else -> null
@@ -264,7 +263,6 @@ data class VerifyLandlordForm(
                         val pmParts = listOf(pmName, pmEmail, pmPhone).map { it.trim() }.filter { it.isNotEmpty() }
                         if (pmParts.isNotEmpty()) add("Property manager: " + pmParts.joinToString(" · "))
                     }
-                    lease?.let { add("Lease on file: ${it.filename}") }
                 }
             if (lines.isEmpty()) return null
             val joined = lines.joinToString("\n")

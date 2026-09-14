@@ -15,12 +15,12 @@ function SubmittedContent() {
           <Send className="w-10 h-10 text-blue-600" />
         </div>
 
-        <h1 className="text-2xl font-bold text-app-text mb-3">Request sent!</h1>
+        <h1 className="text-2xl font-bold text-app-text mb-3">Check your request</h1>
         <p className="text-base text-app-text-strong leading-relaxed mb-2">
-          Your landlord has been notified. They&apos;ll review your request and you&apos;ll be updated when they respond.
+          Check Status to see whether your request is saved and whether the property owner has responded.
         </p>
         <p className="text-sm text-app-text-muted mb-10">
-          This usually takes 1-3 business days.
+          Review times depend on the property owner.
         </p>
 
         <div className="w-full space-y-3">

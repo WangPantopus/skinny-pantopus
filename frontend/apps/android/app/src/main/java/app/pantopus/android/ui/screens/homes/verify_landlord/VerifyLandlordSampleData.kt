@@ -20,6 +20,15 @@ data class VerifyLandlordStartContent(
     val existingLandlord: VerifyLandlordExistingLandlord? = null,
 ) {
     val isFastTrack: Boolean get() = variant == VerifyLandlordVariant.FastTrack
+
+    companion object {
+        /** Direct links carry only a Home ID; do not invent an address or tenancy. */
+        val selectedHome =
+            VerifyLandlordStartContent(
+                variant = VerifyLandlordVariant.Canonical,
+                homeChip = VerifyLandlordHomeChip(label = "Selected rental"),
+            )
+    }
 }
 
 object VerifyLandlordSampleData {

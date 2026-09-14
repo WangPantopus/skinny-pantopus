@@ -60,6 +60,9 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
 
     func testInitialStateIsStart() {
         let vm = makeVM()
+        XCTAssertFalse(vm.startContent.homeChip.label.contains("412 Elm"))
+        XCTAssertNil(vm.startContent.existingLandlord)
+        XCTAssertEqual(vm.form, VerifyLandlordForm())
         XCTAssertEqual(vm.currentStep, .start)
         XCTAssertEqual(vm.chrome.primaryCTALabel, "Start verification")
         XCTAssertTrue(vm.chrome.primaryCTAEnabled)
@@ -91,7 +94,7 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
     // MARK: - Variants
 
     func testFastTrackVariantSurfacesExistingLandlord() {
-        let vm = makeVM(homeId: "home-fast-track")
+        let vm = makeVM(startContent: VerifyLandlordSampleData.fastTrack)
         XCTAssertTrue(vm.startContent.isFastTrack)
         XCTAssertNotNil(vm.startContent.existingLandlord)
     }
@@ -171,33 +174,6 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
         XCTAssertEqual(vm.errors?.count, 2)
         XCTAssertNil(vm.pendingEvent)
         XCTAssertFalse(vm.chrome.primaryCTAEnabled, "CTA should disable while errors remain")
-    }
-
-    func testSubmitPostsApprovalRequestAndLandsOnSentStep() async {
-        var captured: TenantRequestApprovalRequest?
-        var form = VerifyLandlordSampleData.populatedForm
-        form.moveInDate = "2026-04-01"
-        form.messageToLandlord = "Hi, I'm the new tenant."
-        let vm = makeVM(
-            homeId: "home-1",
-            form: form
-        ) { request in
-            captured = request
-            return .success(Self.stubLease)
-        }
-        vm.primaryTapped() // start -> details
-        await vm.submit()
-        XCTAssertEqual(vm.currentStep, .sent)
-        XCTAssertEqual(vm.submitState, .submitted)
-        XCTAssertEqual(vm.approvalResult?.kind, .submitted)
-        XCTAssertEqual(captured?.homeId, "home-1")
-        XCTAssertEqual(captured?.startAt, "2026-04-01T00:00:00.000Z")
-        XCTAssertTrue(captured?.message?.contains("Hi, I'm the new tenant.") == true)
-        XCTAssertTrue(
-            captured?.message?.contains("Elm Street Holdings LLC") == true,
-            "Landlord details must travel with the request instead of being discarded"
-        )
-        XCTAssertNil(vm.pendingEvent, "A landlord request should not jump to the postcard tracker")
     }
 
     func testSubmitWithoutVerifiedLandlordFallsBackToPostcard() async {
@@ -354,6 +330,42 @@ final class VerifyLandlordWizardViewModelTests: XCTestCase {
 
 @MainActor
 extension VerifyLandlordWizardViewModelTests {
+    func testSubmitPostsApprovalRequestAndLandsOnSentStep() async {
+        var captured: TenantRequestApprovalRequest?
+        var form = VerifyLandlordSampleData.populatedForm
+        XCTAssertFalse(form.composedMessage?.contains("Lease on file:") == true)
+        form.lease = nil
+        form.moveInDate = "2026-04-01"
+        form.messageToLandlord = "Hi, I'm the new tenant."
+        let vm = makeVM(
+            homeId: "home-1",
+            form: form
+        ) { request in
+            captured = request
+            return .success(Self.stubLease)
+        }
+        vm.primaryTapped() // start -> details
+        vm.attachLeaseTapped()
+        XCTAssertNil(vm.form.lease, "Attach must not fabricate an uploaded document")
+        XCTAssertEqual(
+            vm.submitState,
+            .error(message: "Lease attachments aren't available in this request yet. You can submit without a document.")
+        )
+        await vm.submit()
+        XCTAssertEqual(vm.currentStep, .sent)
+        XCTAssertEqual(vm.submitState, .submitted)
+        XCTAssertEqual(vm.approvalResult?.kind, .submitted)
+        XCTAssertEqual(captured?.homeId, "home-1")
+        XCTAssertEqual(captured?.startAt, "2026-04-01T00:00:00.000Z")
+        XCTAssertTrue(captured?.message?.contains("Hi, I'm the new tenant.") == true)
+        XCTAssertFalse(captured?.message?.contains("Lease on file:") == true)
+        XCTAssertTrue(
+            captured?.message?.contains("Elm Street Holdings LLC") == true,
+            "Landlord details must travel with the request instead of being discarded"
+        )
+        XCTAssertNil(vm.pendingEvent, "A landlord request should not jump to the postcard tracker")
+    }
+
     func testNetworkSubmissionReadsContextBeforeEachAttempt() async throws {
         URLProtocolStub.reset()
         let marker = FileManager.default.temporaryDirectory.appendingPathComponent("lease-context-" + UUID().uuidString)

@@ -267,8 +267,6 @@ public struct VerifyLandlordForm: Sendable, Equatable {
                detected.caseInsensitiveCompare(registeredUnit) != .orderedSame {
                 errors.lease = "Unit mismatch"
             }
-        } else {
-            errors.lease = "Required"
         }
         if pmEnabled {
             if pmName.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -334,10 +332,6 @@ public struct VerifyLandlordForm: Sendable, Equatable {
                 lines.append("Property manager: " + pmParts.joined(separator: " · "))
             }
         }
-        if let lease {
-            lines.append("Lease on file: \(lease.filename)")
-        }
-
         guard !lines.isEmpty else { return nil }
         let joined = lines.joined(separator: "\n")
         guard joined.count > Self.messageMaxLength else { return joined }

@@ -137,17 +137,41 @@ without promising notice delivery. All50 iOS/49 Android checks and relevant stat
 checks pass. The installed iOS candidate displays September1 and the correct active
 note in the existing layout. See [resumed evidence](VERIFICATION_FIRST_2026-09-13.md#resumed-native-foreground-and-confirmation-display-verification).
 
-**Next:** finish installed Android recovery/foreground acceptance when computer
-control is reliable, and repair the confirmed native attachment/Home-label and
-remaining provider-copy defects through existing implementations. The current APK
-is installed in the existing owned AVD through Android Studio Running Devices,
-but control repeatedly selects the IDE window instead of the device; no installed
-Android app flow is accepted from that attempt. The temporary worktree's missing
+**Current native identity/attachment and date follow-up:** live forms now start
+empty with a neutral rental label. They no longer fabricate an uploaded lease,
+require that fake attachment, or append a false file-on-record claim. The existing
+attachment control reports its unavailable state; private lease upload remains
+open. Existing native/web copy describes saved status and verified-owner review
+without promising email delivery. The separate submitted URL directs users to
+Check Status rather than asserting a saved request. Existing designs are retained.
+All50 iOS/49 Android checks pass, including four visually inspected text updates
+to existing Android references; the fast-track pixels are unchanged. Android
+assembly, detekt/ktlint and Swift checks pass. Installed iOS verifies unavailable
+Attach, retained form after a real invalid-date response, then one saved request
+after correcting the date, without an attachment claim.
+
+Actual HTTP/SQL exposed February31 silently becoming March3 in Joi. The existing
+route now preserves submitted dates for PostgreSQL's existing strict validation.
+Three impossible start/end cases return400 with zero leases/notices; leap-day and
+offset-time cases still save correctly. All130 selected backend tests and29 existing
+web lease tests pass. No table, migration or replacement screen was added in this
+follow-up. Earlier foreground source9d344bcf0 passes all15 applicable checks in
+[CI34820697178](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34820697178),
+with one unchanged Seeder skip; this follow-up requires its own remote checks.
+See [current evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-identity-attachment-and-calendar-input-follow-up).
+
+**Next:** complete remaining R05 invitation/private-attachment/provider acceptance
+through existing implementations, and installed Android recovery/foreground when
+computer control is reliable. The earlier APK installed in the owned AVD, but
+control repeatedly selected the IDE instead of the device. No installed Android
+app flow is accepted from that attempt; the latest tested APK is retained privately.
+The temporary worktree's missing
 Git link and8,536 older tracked files were restored from the verified head without
 replacing existing edits. A fresh private Gradle project cache replaces missing
 local cache metadata; precise repair/source evidence is preserved privately.
-The API still accepts older clients without context. The separate
-submitted page's notification/time estimate and native email claims remain open.
+The API still accepts older clients without context. Private lease attachment and
+actual provider delivery remain open; no upload/email capability is claimed from
+the corrected wording or synthetic fixtures.
 Do not build speculative command/renewal tables; the separate renewal draft stays
 paused. R05 stays open; the [80-row inventory](REMAINING_WORK_2026-09-11.md)
 remains **8 locally closed / 72 partial or open**, not a completion/effort percentage.
@@ -179,12 +203,14 @@ at `29603b01a9151705c44456950e0d46dfb7bf40f6` passes all15 applicable checks in 
 
 **Verification limits:** browser evidence uses actual components, SDK, HTTP and
 SQL with synthetic authentication in an isolated renderer. Installed iOS lease checks now use the real login UI and wizard with synthetic
-auth/shell and actual tenant routes/SQL. Android installed lease acceptance, native
-installed foreground refresh and provider identity/delivery remain open.
+auth/shell and actual tenant routes/SQL. Android installed lease/foreground
+acceptance and provider identity/delivery remain open.
 Accepted native Leave Home source is unchanged and its evidence is reused. Actual
 provider delivery, combined populated adoption and hosted rollout remain open.
-The owned native API18109 and native test devices were resumed under the existing
-private lease; Next18110 remains stopped. The previous pause completed exact
+The owned native API18109 and iOS test device are active under the existing private
+lease; Next18110, the owned Android AVD and Android Studio are stopped. The temporary
+Android Studio AVD registration was removed; private AVD data and shared SDK remain.
+The previous pause completed exact
 synthetic-row cleanup; the current native fixture is active and needs exact cleanup
 after its journeys. Source, compiled products and result bundles are copied outside the
 temporary worktree. The schema-only lease DB and REST18089 remain reserved to

@@ -1074,3 +1074,56 @@ repointed to intact existing owner packages without modifying those packages.
 R05 stays open; the inventory remains8 locally closed/72 partial or open/80. The
 fake attachment/upload/parse behavior, sample Home/unit and remaining provider
 claims still need repair in their existing paths.
+
+### Existing native identity, attachment and calendar input follow-up
+
+The installed iOS app exposed sample address/unit values and an Attach button that
+inserts a fixture filename without uploading or parsing bytes. The backend request
+contract accepts dates/message and does not require an attachment. Both existing
+native wizards now start empty with a neutral rental label, no longer require the
+fake file, and never append its name as an uploaded lease. Attach reports that
+upload is unavailable through the existing feedback area. Real private lease
+attachment remains unfinished: existing HomeDocument and ownership-claim evidence
+storage were inspected, but their membership/claim authorization cannot be treated
+as permission to expose pre-admission tenant documents.
+
+Native Start/Details and the two existing web presentations now describe saved
+requests and verified-owner review without promising one-time email, delivery or a
+response deadline. The separate submitted URL does not itself prove submission;
+it directs users to its existing Check Status action. No styles, layout controls,
+navigation, product files, tables or migrations were added for these changes.
+
+All50 selected iOS checks and49 Android checks pass, with Swift lint/format, Android
+detekt/ktlint and APK assembly. Four existing Android image references have text
+updates and were visually inspected; the unchanged fast-track pixels retain their
+original PNG. Initial Android identity verification failed three distinct checks
+that depended on the former live sample unit; its existing fixture seam now
+explicitly supplies that unit for mismatch tests/snapshots. Retries are not counted
+as additional coverage. The first Swift static pass found a trailing-closure and
+test-class-size limit; using trailing syntax and moving one test into the existing
+extension resolves both without suppressions. All29 existing web lease tests pass;
+scoped ESLint has zero errors and one unchanged effect-ref warning.
+
+Actual HTTP/SQL separately reproduced an impossible February31 being saved as
+March3. Joi normalized the string before the existing SQL calendar check. The
+three existing lease date schemas now retain the raw ISO input. Three actual
+invalid-start/end cases return400 with zero leases/notices, while a leap-day and
+offset timestamp preserve their intended dates/times. All130 selected route,
+authority-service and pipeline tests pass, including the real validation middleware
+for request, invitation and approval schemas. This reuses the existing SQL guards.
+
+The normally signed installed iOS candidate uses real login/wizard UI, synthetic
+auth/shell and actual tenant routes/isolated SQL. It displays the neutral rental,
+reports Attach unavailable without a file, retains contact/date fields after the
+actual February31 rejection, and saves one pending request when only the date is
+corrected to September1. Its confirmation has the correct date and contact note,
+without a lease-file claim. Exactly two intentional request POSTs occurred: one
+rejected, one saved. The single notification attempt was intercepted; delivery and
+real provider identity are not accepted. Installed Android journeys remain open.
+
+Private source/product bindings, test results, HTTP states and visual comparisons
+are retained in `native-identity-r1`, `native-truth-r1` and `calendar-input-r1` under
+the existing durable audit directory. The prior foreground source9d344bcf0 passes
+all15 applicable [CI34820697178 checks](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34820697178),
+with one unchanged Seeder skip. This follow-up needs its own exact-source CI.
+R05 remains open, and the inventory remains8 locally closed/72 partial or open/80.

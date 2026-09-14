@@ -29,6 +29,13 @@ public struct VerifyLandlordStartContent: Equatable, Sendable {
     public let homeChip: VerifyLandlordHomeChip
     public let existingLandlord: VerifyLandlordExistingLandlord?
 
+    /// Direct links carry only a Home ID; do not invent an address or tenancy.
+    static let selectedHome = Self(
+        variant: .canonical,
+        homeChip: VerifyLandlordHomeChip(label: "Selected rental"),
+        existingLandlord: nil
+    )
+
     public var isFastTrack: Bool {
         variant == .fastTrack
     }

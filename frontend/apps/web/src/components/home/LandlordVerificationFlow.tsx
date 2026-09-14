@@ -383,7 +383,7 @@ function LandlordExistsState({
       </button>
 
       <p className="text-center text-xs text-app-text-muted mt-4">
-        Your landlord will be notified and can approve or deny your request.
+        The property owner can review your saved request and approve or deny it.
       </p>
     </div>
   );
@@ -567,7 +567,7 @@ function PendingApprovalState({
         Waiting for approval
       </h2>
       <p className="text-app-text-secondary text-center text-[15px] leading-relaxed mb-8 max-w-sm mx-auto">
-        Your request has been sent to the landlord. They&apos;ll review and approve your tenancy.
+        Your request is saved and waiting for review. The property owner can approve or deny it.
       </p>
 
       {/* Status badge */}

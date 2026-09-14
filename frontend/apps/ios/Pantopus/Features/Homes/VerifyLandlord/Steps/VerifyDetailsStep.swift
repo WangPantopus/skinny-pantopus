@@ -23,7 +23,7 @@ struct VerifyDetailsStep: View {
     var body: some View {
         HeadlineBlock(
             "Landlord & lease details",
-            subtitle: "We'll email this person a one-time link to confirm the rental."
+            subtitle: "These details are included in your request for the verified property owner to review."
         )
 
         if let errors = viewModel.errors, !errors.isEmpty {
@@ -75,7 +75,7 @@ private struct BusinessInfoCard: View {
                 placeholder: "mira@elmstholdings.com",
                 icon: .mail,
                 keyboard: .emailAddress,
-                hint: "We'll send a confirmation link here.",
+                hint: "Included as contact information in your request.",
                 error: viewModel.errors?.email,
                 onChange: viewModel.setEmail
             )
@@ -100,22 +100,17 @@ private struct LeaseUploadCard: View {
             VerifyLandlordSectionHeader(
                 overline: "Lease or deed",
                 title: "Attach proof of the rental",
-                subtitle: "One document is enough — the lease you signed, "
-                    + "or a deed showing the owner above."
+                subtitle: "Attachments are not available in this request yet. "
+                    + "You can submit without a document."
             )
             LeaseUploadView(
                 lease: viewModel.form.lease,
                 registeredUnit: viewModel.form.registeredUnit,
                 hasError: viewModel.errors?.lease != nil,
-                onAttach: {
-                    // Wired to a real picker when the verify-landlord
-                    // bytes upload endpoint ships. For sample data we
-                    // attach the populated fixture so QA can step
-                    // through the done / warn states inline.
-                    viewModel.setLease(VerifyLandlordSampleData.populatedForm.lease)
-                },
-                onRemove: { viewModel.setLease(nil) }
-            )
+                onAttach: viewModel.attachLeaseTapped
+            ) {
+                viewModel.setLease(nil)
+            }
         }
     }
 }
@@ -469,7 +464,7 @@ private struct LeaseUploadEmptyButton: View {
                         .pantopusTextStyle(.body)
                         .fontWeight(.semibold)
                         .foregroundStyle(Theme.Color.appText)
-                    Text("PDF, JPG, or PNG · up to 10 MB")
+                    Text("Not available yet · submit without a file")
                         .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
@@ -648,8 +643,8 @@ private struct VerifyEncryptionFootnote: View {
         HStack(spacing: Spacing.s2) {
             Icon(.lock, size: 12, color: Theme.Color.appTextSecondary)
             Text(
-                "Confirmation email goes only to the landlord. "
-                    + "Your name and unit will be shown."
+                "The verified property owner can review your request. "
+                    + "Contact details you enter are included as a note."
             )
             .pantopusTextStyle(.caption)
             .foregroundStyle(Theme.Color.appTextSecondary)

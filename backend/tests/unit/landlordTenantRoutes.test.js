@@ -105,7 +105,7 @@ jest.mock('../../utils/authorityResolution', () => ({
 
 // ── Mock validate (pass-through — we test validation separately) ─
 jest.mock('../../middleware/validate', () => {
-  return () => (req, res, next) => next();
+  return schema => Object.assign((req, res, next) => next(), { schema });
 });
 
 const { writeAuditLog } = require('../../utils/homePermissions');
@@ -1372,6 +1372,31 @@ describe('POST /home/:homeId/dispute', () => {
 // ============================================================
 // Route registration (smoke test)
 // ============================================================
+
+describe.each([
+  ['/tenant/request-approval', { home_id: 'f518ec13-0000-4000-8000-000000000100' }],
+  ['/landlord/lease/invite', { home_id: 'f518ec13-0000-4000-8000-000000000100', invitee_email: 'tenant@example.com' }],
+  ['/landlord/lease/:leaseId/approve', {}],
+])('existing calendar validation for %s', (path, fields) => {
+  test('preserves submitted dates so SQL can reject impossible days instead of admitting a different date', () => {
+    const route = router.stack.find(layer => layer.route?.path === path && layer.route.methods.post);
+    const schema = route.route.stack.find(layer => layer.handle.schema).handle.schema;
+    const validate = jest.requireActual('../../middleware/validate')(schema);
+    for (const date of ['2026-02-31', '2026-02-31T00:00:00.000Z', '2026-04-31T09:00:00Z',
+      '2028-02-29', '2026-09-01T09:30:00.123-07:00', '2026-09-01T23:30:00+14:00']) {
+      const body = { ...fields, start_at: date, end_at: date };
+      const req = mockReq({ body }); const res = mockRes(); const next = jest.fn();
+      validate(req, res, next);
+      expect(res._json).toBeNull();
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(req.body).toEqual(body);
+    }
+    const req = mockReq({ body: { ...fields, start_at: '2026-09-01', end_at: null } });
+    const next = jest.fn(); validate(req, mockRes(), next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.body.end_at).toBeNull();
+  });
+});
 
 describe('Route registration', () => {
   test('exports an Express router', () => {

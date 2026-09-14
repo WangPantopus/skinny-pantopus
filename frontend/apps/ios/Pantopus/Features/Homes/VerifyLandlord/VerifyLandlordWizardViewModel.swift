@@ -72,9 +72,8 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         approvalRequester: ApprovalRequester? = nil
     ) {
         self.homeId = homeId
-        self.startContent = startContent
-            ?? VerifyLandlordSampleData.startContent(for: homeId)
-        self.form = form ?? VerifyLandlordSampleData.formSeed(for: homeId)
+        self.startContent = startContent ?? .selectedHome
+        self.form = form ?? VerifyLandlordForm()
         self.api = api
         sessionScope = HomeClaimSessionScope(api: api, identity: sessionIdentity)
         self.submitDelayNanos = submitDelayNanos
@@ -168,6 +167,12 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     }
 
     // MARK: - Form mutations
+
+    func attachLeaseTapped() {
+        guard isCurrentSession, !isSubmitting else { return }
+        errors = nil
+        submitState = .error(message: "Lease attachments aren't available in this request yet. You can submit without a document.")
+    }
 
     func setOwnerName(_ value: String) {
         form.ownerName = value
