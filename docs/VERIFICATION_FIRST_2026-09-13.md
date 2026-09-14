@@ -1501,3 +1501,35 @@ PR38 checkpointc51740fce now passes15 applicable CI34840961607 checks/one Seeder
 skip, including native builds/tests. PR39 checkpoint461120fca passes8 applicable
 CI34843857113 checks/three path-based skips. Those PRs remain unmerged. R05 private
 lease attachment upload and remaining native/provider/adoption criteria remain open.
+
+
+### Existing standalone file upload compatibility
+
+Tracing the existing private lease attachment options exposed a separate real
+upload mismatch. Current iOS/Android/web callers send general, voice_postscript,
+gig_photo, gig_completion, mailbox_unboxing or business_verification; those are
+purposes, not values in the existing File.file_type constraint. An omitted type
+also defaulted to general. All seven actual HTTP/SQL baseline cases wrote storage,
+failed the File insert with500 and attempted cleanup. Existing gig_attachment
+already worked. The supported Word MIME application/msword also passed Multer's
+allowlist but the route's separate category helper rejected it with415.
+
+The existing route now maps those purpose names to existing other, gig_attachment
+or mailbox_attachment categories and retains the purpose in existing file_context.
+Supported canonical names retain their prior behavior. The route rejects invalid
+or repeated file type/visibility fields before quota/storage work. File category
+lookup now uses the same existing MIME allowlist. No client screen, File schema,
+migration, public/private delivery rule or storage provider was replaced.
+
+All115 selected document/file tests and the existing privacy gates pass. Twelve
+actual HTTP/SQL checks cover every observed purpose, default, canonical compatibility,
+Word MIME and invalid metadata without writes; exact owned User/File/object cleanup
+is zero. The earlier baseline unit assertion expecting an explicit null context
+on a mocked canonical File was a fixture mismatch, not another app defect; it was
+corrected. Actual SQL independently establishes the seven insert failures.
+Evidence is privately retained in generic-file-r1. Authentication/S3 objects are
+synthetic. These checks establish upload/record compatibility, not installed
+end-to-end acceptance of every consuming feature or provider access controls.
+The legacy S3 helper returns a direct object/CDN URL even for metadata marked
+private; its deployed access policy and recipient delivery remain unaccepted.
+Do not use that path for the pending tenant's private lease evidence.

@@ -54,16 +54,25 @@ had a stale generated SQL wrapper; CI34843214305 caught an immutable migration
 edit. Existing generator synchronization and the forward function update fix those
 issues. Before migration changes check the actual PR base; all54 wrappers synchronize.
 
-**Next:** continue private lease attachment reuse after the existing document
-security repair. Actual HTTP/SQL reproduced private bytes being delivered after
-access revocation, permission-read failure, tighter visibility, deletion or replacement
-during the storage read. The existing download route now rechecks current permissions,
-visibility and file identity before delivery. All101 selected document/file tests and
-seven actual HTTP/SQL cases pass, with exact fixture cleanup. See the
-[document evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-document-download-authorization).
-The candidate adds no screen, table or migration. Pending rental applicants cannot
-use household-wide document sharing as lease evidence; trace existing File metadata,
-private storage and cleanup before extending the existing lease transaction.
+**Next:** finish the existing file upload compatibility repair, then continue
+private lease attachment reuse. Draft [PR40](https://github.com/WangPantopus/skinny-pantopus/pull/40)
+at22f2884bd contains the document download security repair; its six applicable CI
+checks pass/five path-based jobs skip. Actual HTTP/SQL reproduced private bytes
+being delivered after access revocation, permission-read failure, tighter visibility,
+deletion or replacement during the storage read. The existing route now rechecks
+current permissions, visibility and file identity before delivery (101 tests/seven
+actual HTTP/SQL cases). See [document evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-document-download-authorization).
+
+Following the storage callers exposed seven real generic upload failures: purpose
+names sent by existing web/native callers were outside the File type constraint.
+The current repair maps those purposes into existing categories/file_context and
+uses the existing MIME allowlist for Word files. All115 selected tests, privacy
+gates and12 actual HTTP/SQL checks pass with exact owned cleanup; see
+[upload evidence](VERIFICATION_FIRST_2026-09-13.md#existing-standalone-file-upload-compatibility).
+No screen, schema or new tracked file was added for either repair. Legacy generic
+S3 direct URLs are not accepted private lease storage. Pending applicants need
+applicant/current-authority access, not household-wide document visibility. Reuse
+existing File metadata/private storage/cleanup and the existing lease transaction.
 R05 native invitation links, installed Android/provider criteria and the remaining
 inventory stay open. No speculative replacement/renewal schema.
 

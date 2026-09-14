@@ -77,6 +77,23 @@ const uploadHomeFileSchema = Joi.object({
   category: Joi.string().max(100).optional() // e.g., 'wifi_info', 'house_rules', 'maintenance_receipt'
 });
 
+// Existing clients send purpose names; File.file_type stores the broader
+// canonical category. Keep the purpose in its existing file_context column.
+const STANDALONE_FILE_PURPOSES = {
+  general: 'other', voice_postscript: 'other', business_verification: 'other',
+  gig_photo: 'gig_attachment', gig_completion: 'gig_attachment',
+  mailbox_unboxing: 'mailbox_attachment',
+};
+const standaloneUploadSchema = Joi.object({
+  file_type: Joi.string().valid(
+    'profile_picture', 'post_image', 'post_video', 'gig_attachment',
+    'home_document', 'home_photo', 'home_video', 'chat_file', 'mailbox_attachment',
+    'portfolio_image', 'portfolio_video', 'portfolio_document', 'resume', 'certification', 'other',
+    ...Object.keys(STANDALONE_FILE_PURPOSES),
+  ).default('general'),
+  visibility: Joi.string().valid('public', 'private').default('private'),
+});
+
 // ============ MULTER CONFIGURATION ============
 
 const storage = multer.memoryStorage();
@@ -119,13 +136,8 @@ const generateFilename = (originalFilename, userId) => {
   return `${userId}_${timestamp}_${random}${ext}`;
 };
 
-const getFileCategory = (mimeType) => {
-  if (mimeType.startsWith('image/')) return 'IMAGE';
-  if (mimeType.startsWith('video/')) return 'VIDEO';
-  if (mimeType === 'application/pdf' || mimeType.includes('document') || mimeType === 'text/plain') return 'DOCUMENT';
-  if (mimeType.startsWith('audio/')) return 'AUDIO';
-  return null;
-};
+const getFileCategory = (mimeType) => Object.entries(FILE_TYPES)
+  .find(([, config]) => config.mimeTypes.includes(mimeType.toLowerCase()))?.[0] || null;
 
 const validateFileSize = (fileSize, category) => {
   const config = FILE_TYPES[category];
@@ -777,8 +789,13 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
 
     const userId = req.user.id;
     const file = req.file;
-    const fileType = req.body.file_type || 'general';
-    const visibility = req.body.visibility || 'private';
+    const { value, error } = standaloneUploadSchema.validate({
+      file_type: req.body.file_type, visibility: req.body.visibility,
+    });
+    if (error) return res.status(400).json({ error: 'Invalid file type or visibility' });
+    const purpose = Object.hasOwn(STANDALONE_FILE_PURPOSES, value.file_type) ? value.file_type : null;
+    const fileType = purpose ? STANDALONE_FILE_PURPOSES[purpose] : value.file_type;
+    const visibility = value.visibility;
 
     const fileCategory = getFileCategory(file.mimetype);
     if (!fileCategory) {
@@ -793,7 +810,7 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
     await checkStorageQuota(userId, file.size);
 
     const ext = path.extname(file.originalname).toLowerCase();
-    const folder = fileType === 'voice_postscript' ? 'voice-postscripts' : 'uploads';
+    const folder = purpose === 'voice_postscript' ? 'voice-postscripts' : 'uploads';
 
     const { url: fileUrl, key: s3Key } = await s3.uploadToS3(
       file.buffer,
@@ -813,6 +830,7 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
         mime_type: file.mimetype,
         file_extension: ext,
         file_type: fileType,
+        ...(purpose ? { file_context: purpose } : {}),
         visibility: visibility,
         processing_status: 'completed',
       })
