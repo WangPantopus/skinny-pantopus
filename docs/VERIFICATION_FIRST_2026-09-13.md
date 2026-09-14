@@ -2110,3 +2110,68 @@ Encrypted data written just before a lost local receipt write, or superseded by 
 verified competing request, can remain as an inaccessible encrypted orphan; no
 provider request is issued before the ordinary receipt is retained. Generic
 protected-storage expiry/garbage collection remains a separate lifecycle check.
+
+## Existing residency-letter expiry projection and labels
+
+September14 traced the existing ResidencyLetter service/table/expiry migration,
+issuer routes, public verification route, web IdentityDetail and both native
+letter DTO/card implementations before editing. The baseline issuer query omitted
+expires_at and returned issued until someone verified the public code. The web
+card treated every non-revoked value as Active; native expired decoded as unknown
+and displayed Revoked. These are existing-flow defects, not missing screens or
+schema. The separate scoped ResidencyClaim pass is a different implementation.
+
+The existing issuer serialization now projects elapsed issued rows as expired
+and includes expires_at; an explicitly revoked row stays revoked. Listing changes
+neither the saved status nor frozen PDF bytes. Both native enums accept expired,
+and all three existing cards label Expired/Revoked/Unavailable accurately. The
+web retains historical PDF access and disables Mail/revoke controls for inactive
+letters. Existing structure/styles and working issued behavior are preserved.
+All13 changed files are existing files, including tests and two reports; no new
+tracked file, migration, table or service is required.
+
+Baseline checks reproduce one backend failure/11 passes and two web failures/four
+passes. Candidate passes12 backend tests,20 web tests across the existing mailbox
+and place-group suites,20 iOS DTO tests,6 Android DTO tests, standalone web types,
+scoped ESLint/SwiftLint/SwiftFormat and Android Ktlint/Detekt. The final web fixture
+uses a future date for its issued case; its six tests pass again. Native view
+source compiles, but no installed residency-letter UI journey is claimed.
+
+Eight real local HTTP/SQL cases exercise the actual existing routes, permission
+helper, service, PDF renderer, Supabase client and reserved PostgreSQL database:
+issue one letter; reproduce the baseline list failure; project expiry before a
+public lookup without mutating the row; deny another member's list/PDF/revoke;
+return the exact frozen PDF; publicly return only invalid/expired and retire the
+existing row; retain explicit-revocation precedence; deny removed/outsider and
+unauthenticated access. Identity is synthetic. No external provider ran.
+
+Chrome opens the existing Identity → Residency letter controls and displays the
+captured issuer-list response in a private query-cache fixture. The Expired badge,
+disabled Mail, enabled historical PDF and absent Revoke are verified, with the
+existing layout visually inspected. The initial pre-hydration clicks did nothing;
+a compiled-page reload and hydrated control click produced the verified state.
+This proves rendered behavior, not browser API/auth or mail-provider acceptance.
+
+Private evidence: residency-letter-expiry-r1 contains baseline/candidate logs,
+ios-r1.xcresult and summary, Android summary, http-result-r1.json, issuer-list-r1.json,
+browser-binding-r1.json and cleanup-r2.log. The first HTTP process passed all8
+functional checks but exited1 because its cleanup email filter left three users.
+Exact-ID/email SQL cleanup removed those three; User/Home/HomeOccupancy/ResidencyLetter
+counts are all zero. The corrected private script is retained without relabeling
+the first run. Next18119 is stopped, the exact temporary page/tab removed, native
+simulator stopped and generated output preserved privately. Configuration is
+restored; a stale generated-type failure from the earlier file-picker harness is
+recorded, and regenerated current route types pass. Owner devices are untouched.
+R06/R05, all-platform lifecycle acceptance and hosted rollout remain incomplete.
+
+The preceding file-picker repair merged through
+[PR44](https://github.com/WangPantopus/skinny-pantopus/pull/44) at f6dbbe2eb after
+all6 applicable checks/five path-based skips passed in
+[CI34885279768](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34885279768).
+Its source-specific component/browser limits continue to apply.
+
+Residency-expiry PR45 merged September14 at `e775af9ae` after all15 applicable
+checks/one path skip passed in [CI34886464860](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34886464860).
+Master exactly matched the tested a25b5df61 tree. The paid candidate now includes
+that actual master; the two documentation conflicts retain both scoped evidence
+sections and the current handoff. No application or schema conflict occurred.

@@ -50,6 +50,21 @@ describe('a revoked letter is not valid', () => {
 });
 
 describe('an expired letter is not valid', () => {
+  test('the issuer list shows expiry without needing someone to verify the public code first', async () => {
+    const expiry = new Date(Date.now() - 86400000).toISOString();
+    seedLetter({ expires_at: expiry, pdf_base64: 'preserved-issued-pdf' });
+    const [letter] = await service.listLetters({ homeId: 'home-1', userId: 'user-1' });
+    expect(letter.status).toBe('expired');
+    expect(letter.expires_at).toBe(expiry);
+    expect(getTable('ResidencyLetter')[0].pdf_base64).toBe('preserved-issued-pdf');
+  });
+
+  test('expiry does not relabel an explicitly revoked letter', async () => {
+    seedLetter({ status: 'revoked', expires_at: new Date(Date.now() - 86400000).toISOString() });
+    const [letter] = await service.listLetters({ homeId: 'home-1', userId: 'user-1' });
+    expect(letter.status).toBe('revoked');
+  });
+
   test('reports invalid once past expires_at', async () => {
     seedLetter({ expires_at: new Date(Date.now() - 86400000).toISOString() });
 

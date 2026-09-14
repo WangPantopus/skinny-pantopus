@@ -26,9 +26,9 @@ matched master. No hosted deployment, migration adoption or provider activation 
 **Remaining open PR:** original [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
 is draft at `e9ef2decbb`. Its preserved integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`,
-committed/pushed at `f0736645c`. It incorporates actual PR43/44 master; PR45 is
-merged remotely but not yet incorporated here. No unrelated owner checkout or
-worktree was changed. This is continued verification and repair of existing work.
+explanation checkpoint `1c468e01a`. The current merge incorporates actual
+PR43/44/45 master, including all existing residency-expiry source and evidence. No unrelated owner checkout or
+worktree was changed. Preserve the paused renewal/two-table draft. This is continued verification and repair of existing work.
 
 The nine prior integration conflicts are resolved, preserving both notification
 paths, current Home/session guards and payment proof. Prior combined evidence
@@ -65,8 +65,8 @@ functions/106 trigger bindings, zero errors/eight existing warnings. This is loc
 combined-schema verification; fresh baseline CI, populated hosted adoption and
 provider/native end-to-end acceptance remain distinct gates.
 
-**Next:** incorporate actual PR45 master, update the preserved draft PR34 with
-this verified integration candidate, then continue existing durable tip/provider work
+**Next:** update the preserved draft PR34 with this verified integration
+candidate, inspect combined CI, then continue existing durable tip/provider work
 and final combined CI before marking PR34 ready. Keep all original screen designs.
 R05/R06, paid release gates and the app remain incomplete; the80-row inventory is
 not a completion or duplicated-effort percentage. Private logs/archive/recovery
@@ -115,15 +115,12 @@ had a stale generated SQL wrapper; CI34843214305 caught an immutable migration
 edit. Existing generator synchronization and the forward function update fix those
 issues. Before migration changes check the actual PR base; all54 wrappers synchronize.
 
-**Next:** submit the isolated file-picker repair against the actual merged master,
-verify required CI and merge if green. Continue the existing residency-letter
-expiry repair through iOS/HTTP/SQL verification, then advance PR34's preserved
-integration candidate through its remaining presentation/contract/combined-CI
-work. PR34 stays draft and paid provider activation remains part of the final
-launch bundle. Trace existing/archived web tenant attachment entry and native
-landlord readers before adding anything; the existing web “Upload your lease”
-links use the separate residency-claim flow. Do not merge those contracts or add
-screens based solely on an open inventory row. The existing iOS controls and web landlord reader are now locally verified within the [client evidence limits](VERIFICATION_FIRST_2026-09-13.md#existing-ios-lease-attachment-and-web-landlord-reader). Inspect each existing caller before editing; preserve screen design.
+**Next:** submit the bounded residency-letter expiry repair, check its required CI
+and merge only if green. Continue PR34's existing cancellation presentation and
+tip/recovery/provider gaps. R06 still needs its wider remaining lifecycle/device
+acceptance; trace existing/archived callers before adding anything. Existing web
+“Upload your lease” links use the separate residency-claim flow; do not merge
+those contracts or invent screens from an inventory row. The existing iOS controls and web landlord reader are now locally verified within the [client evidence limits](VERIFICATION_FIRST_2026-09-13.md#existing-ios-lease-attachment-and-web-landlord-reader). Inspect each existing caller before editing; preserve screen design.
 See [attachment evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-lease-file-storage-and-request-binding).
 The request-controls follow-up is verified on draft PR42. The previously open installed Android request journey is now verified
 within the [recorded limits](VERIFICATION_FIRST_2026-09-13.md#existing-native-lease-request-controls-and-calendar-validation).

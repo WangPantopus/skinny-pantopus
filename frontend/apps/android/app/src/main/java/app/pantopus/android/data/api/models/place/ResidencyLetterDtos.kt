@@ -22,6 +22,9 @@ enum class ResidencyLetterStatus {
 
     @Json(name = "revoked")
     REVOKED,
+
+    @Json(name = "expired")
+    EXPIRED,
     UNKNOWN,
 }
 

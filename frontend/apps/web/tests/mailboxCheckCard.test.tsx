@@ -5,7 +5,7 @@
 // run), and "nothing on file" shows as not-checked rather than a pass.
 // ============================================================
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { PlaceIntelligence } from '@pantopus/types';
@@ -76,5 +76,36 @@ describe('MailboxCheckCard', () => {
     await waitFor(() => expect(screen.getByText('Mailbox reality check')).toBeInTheDocument());
     expect(screen.getByText('Not checked yet')).toBeInTheDocument();
     expect(screen.getByText(/physical test hasn’t run/)).toBeInTheDocument();
+  });
+});
+
+
+describe('existing residency letter cards', () => {
+  test.each([
+    ['expired', 'Expired', false],
+    ['revoked', 'Revoked', false],
+    ['unrecognized', 'Unavailable', false],
+    ['issued', 'Active', true],
+  ])('%s letters show %s without changing the card layout', async (status, label, active) => {
+    getCheckMock.mockResolvedValue({ verdict: 'unknown', findings: [], physical: { status: 'not_run', title: 'Not run', detail: '' }, checked_at: null });
+    listClaimsMock.mockResolvedValue([]);
+    listLettersMock.mockResolvedValue([{
+      id: 'letter-1', home_id: 'home-1', status, purpose: 'Library card',
+      resident_name: 'Riley Chen', address: { line1: '123 Test St', city: 'Portland', state: 'OR', zipcode: '97201' },
+      letter_code: 'ABCD-EFGH-JKLM-NPQR', verify_url: 'https://example.test/verify',
+      issued_at: '2026-01-01T00:00:00Z', expires_at: active ? '2099-04-01T00:00:00Z' : '2026-04-01T00:00:00Z', revoked_at: null, pdf_sha256: 'synthetic',
+    }]);
+    renderIdentity();
+    fireEvent.click(screen.getByRole('button', { name: /Generate a verified residency letter/ }));
+    await screen.findByText('ABCD-EFGH-JKLM-NPQR');
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'PDF' })).toBeEnabled();
+    if (active) {
+      expect(screen.getByRole('button', { name: 'Mail' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Revoke' })).toBeEnabled();
+    } else {
+      expect(screen.getByRole('button', { name: 'Mail' })).toBeDisabled();
+      expect(screen.queryByRole('button', { name: 'Revoke' })).not.toBeInTheDocument();
+    }
   });
 });
