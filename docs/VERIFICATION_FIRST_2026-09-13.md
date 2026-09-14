@@ -1713,3 +1713,78 @@ without redesigning them. PR41 now passes11 applicable CI checks/five path skips
 PR42's first attempt failed a Sentry download cache collision before compilation;
 its same-source build/dependent-job retry is running. No new PR for the attachment
 checkpoint has been opened yet.
+
+
+### Existing iOS lease attachment and web landlord reader
+
+The existing iOS Attach action, file card, removal and Submit now use the verified
+private lease contract through existing DocumentFileReader, MultipartUploader,
+APIClient and HomeClaimSessionScope. The added bounded attachment helper owns
+the picker lifetime, at most25MB of selected bytes and one stable upload UUID.
+It is not a replacement screen or storage service. Its opening actor/Home/session
+and original request context survive explicit retries; account changes, closing
+and late completions cannot publish into a retired screen. Unconfirmed uploads
+or removals block submission and retain their in-memory identity until resolved.
+Draft recovery across process restart is not implemented or claimed; abandoned
+files use the existing cleanup worker. No client-phase migration or table is added.
+
+The existing card displays actual sanitized filename, type and size without fake
+parsed pages/owner/unit. Installed testing caught the first unconfirmed upload
+using success styling; the final candidate uses the existing warning treatment
+and attachment error banner without changing layout. Explicit sample previews
+remain samples. The existing web RequestsTab opens files only on request through
+the existing private byte/signature-aware renderer. Viewing makes no lease decision.
+Content clears on close, account change, blur/hidden or unmount. Backend and SDK
+reuse the existing expected-session header; SDK metadata checks bracket byte reads.
+
+Actual browser testing found that the existing property detail query omitted lease
+metadata, hiding both the saved message and attachment. The repaired safe projection
+exposes only message and valid File ID, also used by request-list/tenant status.
+Storage keys, hashes and decision internals remain private. This repairs an existing
+query and reader rather than adding another property page.
+
+Final verification passes248 selected backend tests,148 web tests across five related
+suites,60 iOS tests (eight attachment,44 existing wizard and eight structural
+render/date/error tests),18 actual HTTP/SQL cases, web TypeScript/scoped ESLint,
+SwiftLint/SwiftFormat and privacy gates. The iOS structural suite is not a pixel
+golden comparison. Unchanged migration evidence retains eight SQL contracts,374
+preserved table fingerprints,270 functions/88 trigger bindings and55 synchronized
+wrappers. Initial pnpm command-shim failures remain failed; direct existing package
+entrypoints run successfully without dependency/lockfile changes.
+
+Installed iOS selects a synthetic83-byte text file through the real system picker.
+A committed upload whose reply becomes503 leaves unconfirmed state; explicit Retry
+uses the same File/object with zero leases. Removal's first503 is automatically
+retried by the existing idempotent DELETE transport, retiring that File. This is
+not installed explicit-removal-retry evidence; pending removal state is covered
+by focused tests. A replacement file is attached; a committed request followed
+by503 leaves one lease. Explicit Submit retry recovers the same lease, File, date
+and message. The final product passes60 tests and all679 installed app files
+match the built candidate.
+
+A fresh final-product iOS request opens in the actual web PropertyDetail/RequestsTab
+against the same real local API/database. The owner sees the exact selected text.
+Holding an authorized content response after backend checks, revoking authority
+and delivering the connected old200 bytes makes the SDK's final metadata read
+deny access; the bytes never appear. Restoring authority permits explicit reopening.
+Switching the synthetic cookie account to an outsider removes private card/content
+and the property endpoint denies access. Close/Done finish the browser/native flow.
+These checks use synthetic scoped login, object storage and notifications; they
+do not establish real provider identity/delivery or hosted rollout.
+
+Private evidence is in private-lease-evidence-r1: backend-reader-r1.log,
+web-reader-r1.log, ios-candidate-r2.xcresult, ios-installed-r2-product.json,
+http-client-r3 and native-reader-r2, plus initial installed lost-response snapshots.
+Both fb27 installed cycles and fb26 HTTP fixtures finish with zero owned
+User/File/Home/HomeLease/HomeAuthority/HomeOccupancy/HomeLeaseInvite rows or objects.
+API18109, proxy18117, Next18110 and the owned simulator are stopped. The private
+harness page is restored and exact picker fixture removed. Evidence/source bindings
+are mirrored to the owner's private recovery directory; credentials, tokens and
+operator logs remain outside Git/chat.
+
+PR42 e16c0c499 now passes all11 applicable CI34857194083 attempt2 checks/five
+path skips. Attempt1 remains failed for a Sentry cache collision before compilation;
+no app/CI policy change was made for that retry. This client milestone has not yet
+received remote CI. Android attachment, web tenant entry, remaining native landlord
+readers and other R05 criteria stay open. Continue existing paths, preserving
+designs. R05 and the app remain incomplete.

@@ -156,3 +156,38 @@ test('existing request endpoint forwards the optional file and rejects a receipt
     primary_resident_user_id: actor, metadata: { lease_file_id: stranger } } } });
   expect((await request(app).post('/api/v1/tenant/request-approval').send(body)).status).toBe(503);
 });
+test('the existing status projection restores only the lease file ID, without private storage metadata', async () => {
+  bind();
+  Object.assign(db.getTable('HomeLease')[0], { state: 'pending', created_at: '2026-09-14T00:00:00Z' });
+  db.getTable('HomeLease')[0].metadata.upload_sha256 = sha;
+  const response = await request(app).get(`/api/v1/tenant/home/${home}/status`);
+  expect(response.status).toBe(200);
+  expect(response.body.lease.lease.metadata).toEqual({ message: null, lease_file_id: id });
+  expect(response.text).not.toContain(sha);
+});
+test('the existing request-session guard prevents a refresh replay under a different session before upload', async () => {
+  const session = await request(app).get(`${path}/session`).set('Authorization', 'Bearer first-synthetic-session');
+  expect(session.status).toBe(200);
+  expect(session.body).toMatchObject({ actor_id: actor, home_id: home });
+  expect(session.body.session_scope).toMatch(/^[0-9a-f]{64}$/);
+  const response = await upload().set('Authorization', 'Bearer second-synthetic-session')
+    .set('x-pantopus-session-scope', session.body.session_scope);
+  expect(response.status).toBe(409);
+  expect(response.body.code).toBe('SESSION_SCOPE_CHANGED');
+  expect(rpc).not.toHaveBeenCalled();
+  expect(storage.upload).not.toHaveBeenCalled();
+});
+test('a changed session cannot read or remove a file or submit an attached request', async () => {
+  publish();
+  const session = await request(app).get(`${path}/session`).set('Authorization', 'Bearer first-synthetic-session');
+  const operations = [request(app).get(`${path}/${id}/content`), request(app).delete(`${path}/${id}`),
+    request(app).post('/api/v1/tenant/request-approval').send({ home_id: home, lease_file_id: id, request_context: context })];
+  for (const operation of operations) {
+    const response = await operation.set('Authorization', 'Bearer second-synthetic-session')
+      .set('x-pantopus-session-scope', session.body.session_scope);
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe('SESSION_SCOPE_CHANGED');
+  }
+  expect(rpc).not.toHaveBeenCalled();
+  expect(storage.download).not.toHaveBeenCalled();
+});

@@ -6,10 +6,11 @@
  */
 
 import Image from 'next/image';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import * as api from '@pantopus/api';
 import type { landlord } from '@pantopus/api';
 import { extractApiError } from '@pantopus/ui-utils';
+import PrivateClaimEvidencePreview, { prepareEvidencePreview, type EvidencePreview } from '../home/PrivateClaimEvidencePreview';
 
 type Props = {
   homeId: string;
@@ -120,21 +121,82 @@ function ApproveModal({
 
 // ── Request card ────────────────────────────────────────────
 
+function LeaseFileReview({ homeId, leaseId, fileId, isCurrent }: {
+  homeId: string; leaseId: string; fileId: string; isCurrent: () => boolean;
+}) {
+  const [viewer, setViewer] = useState<{ preview: EvidencePreview; url: string | null; name: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const lifetime = useRef({ active: true, generation: 0, busy: false, retired: false });
+  useEffect(() => {
+    const state = lifetime.current;
+    state.active = true;
+    const hide = () => { state.generation++; state.busy = false; setViewer(null); setBusy(false); };
+    const retire = () => { state.retired = true; hide(); setError('Your session changed. Reopen the property to read this file.'); };
+    const visibility = () => { if (document.visibilityState !== 'visible') hide(); };
+    const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) retire(); };
+    const unsubscribe = api.onTokenChange(retire);
+    window.addEventListener('blur', hide);
+    window.addEventListener('storage', storage);
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      state.active = false; state.generation++; unsubscribe();
+      window.removeEventListener('blur', hide); window.removeEventListener('storage', storage);
+      document.removeEventListener('visibilitychange', visibility);
+    };
+  }, []);
+  useEffect(() => () => { if (viewer?.url) URL.revokeObjectURL(viewer.url); }, [viewer]);
+
+  const open = async () => {
+    const state = lifetime.current;
+    if (state.busy || state.retired || !state.active || !isCurrent()) return;
+    const generation = ++state.generation;
+    const current = () => state.active && !state.retired && state.generation === generation && isCurrent();
+    state.busy = true; setBusy(true); setError(''); setViewer(null);
+    try {
+      const session = await api.tenant.getLeaseFileSession(homeId);
+      if (!current()) return;
+      const result = await api.tenant.downloadLeaseFile(session, fileId);
+      if (!current()) return;
+      if (result.file.lease_id !== leaseId) throw new Error('This file no longer belongs to the selected request.');
+      const preview = await prepareEvidencePreview(result.bytes);
+      if (!current()) return;
+      setViewer({ preview, url: preview.kind === 'text' ? null : URL.createObjectURL(preview.bytes), name: result.file.file_name });
+    } catch (failure) { if (current()) setError(extractApiError(failure, 'Could not open the private lease file. Retry.')); }
+    finally { if (current()) { state.busy = false; setBusy(false); } }
+  };
+  return <div className="mb-4 space-y-2">
+    <button type="button" disabled={busy || lifetime.current.retired} onClick={() => void open()} className="text-sm underline disabled:opacity-50">
+      {busy ? 'Opening lease file…' : 'Open private lease file'}
+    </button>
+    {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+    {viewer && isCurrent() && <div className="space-y-2">
+      <p className="text-sm text-app-text-strong">{viewer.name}</p>
+      <PrivateClaimEvidencePreview key={viewer.url || 'text'} preview={viewer.preview} url={viewer.url}
+        label="Private lease file" downloadName={viewer.name} verificationRequired={false} />
+      <button type="button" className="text-sm underline" onClick={() => { lifetime.current.generation++; setViewer(null); }}>Close file</button>
+    </div>}
+  </div>;
+}
+
 function RequestCard({
   request,
   authorityId: _authorityId,
   onApprove,
   onDeny,
   onRefresh: _onRefresh,
+  isCurrent,
 }: {
   request: landlord.TenantRequest;
   authorityId: string;
   onApprove: () => void;
   onDeny: () => void;
   onRefresh: () => void;
+  isCurrent: () => boolean;
 }) {
   const resident = request.primary_resident;
-  const message = (request.metadata as Record<string, any>)?.message;
+  const message = typeof request.metadata?.message === 'string' ? request.metadata.message : null;
+  const fileId = request.metadata?.lease_file_id;
 
   const formatDate = (iso: string, leaseDate = false) =>
     new Date(iso).toLocaleDateString('en-US', {
@@ -191,6 +253,9 @@ function RequestCard({
           <p className="text-sm text-app-text-strong italic">&ldquo;{message}&rdquo;</p>
         </div>
       )}
+
+      {typeof fileId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fileId) &&
+        <LeaseFileReview key={`${request.home_id}:${request.id}:${fileId}`} homeId={request.home_id} leaseId={request.id} fileId={fileId} isCurrent={isCurrent} />}
 
       {/* Actions */}
       <div className="flex items-center gap-2">
@@ -257,6 +322,7 @@ export default function RequestsTab({ homeId: _homeId, authorityId, requests, on
           onApprove={() => setApproveTarget(req)}
           onDeny={() => handleDeny(req.id)}
           onRefresh={onRefresh}
+          isCurrent={isCurrent}
         />
       ))}
 

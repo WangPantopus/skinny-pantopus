@@ -111,22 +111,35 @@ public struct VerifyLandlordApprovalResult: Sendable, Equatable {
 public struct VerifyLandlordLeaseFile: Sendable, Equatable {
     public let filename: String
     public let sizeLabel: String
-    public let pageCount: Int
+    public let pageCount: Int?
     public let detectedOwner: String?
     public let detectedUnit: String?
+    public let typeLabel: String
+    public let uploadStatus: String
+    public let reviewNote: String?
+
+    var detailLabel: String {
+        [sizeLabel, pageCount.map { "\($0) pages" }, uploadStatus].compactMap { $0 }.joined(separator: " · ")
+    }
 
     public init(
         filename: String,
         sizeLabel: String,
-        pageCount: Int,
+        pageCount: Int?,
         detectedOwner: String?,
-        detectedUnit: String?
+        detectedUnit: String?,
+        typeLabel: String = "PDF",
+        uploadStatus: String = "Uploaded just now",
+        reviewNote: String? = nil
     ) {
         self.filename = filename
         self.sizeLabel = sizeLabel
         self.pageCount = pageCount
         self.detectedOwner = detectedOwner
         self.detectedUnit = detectedUnit
+        self.typeLabel = typeLabel
+        self.uploadStatus = uploadStatus
+        self.reviewNote = reviewNote
     }
 }
 

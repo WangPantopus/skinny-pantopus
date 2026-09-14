@@ -23,6 +23,7 @@ const { writeAuditLog } = require('../utils/homePermissions');
 const { ownershipClaimLimiter } = require('../middleware/rateLimiter');
 const landlordAuthorityService = require('../services/addressValidation/landlordAuthorityService');
 const { assertCallerOwnsLease, resolveVerifiedAuthorityForActor } = require('../utils/authorityResolution');
+const { requireExpectedSessionScope } = require('../utils/requestSessionScope');
 
 // ============================================================
 // VALIDATION SCHEMAS
@@ -64,13 +65,13 @@ const denySchema = Joi.object({
 const endLeaseSchema = Joi.object({});
 
 const tenantRequestSchema = Joi.object({
-  home_id: Joi.string().uuid().required(),
+  home_id: Joi.string().uuid().lowercase().required(),
   lease_file_id: Joi.string().uuid().lowercase(),
   request_context: Joi.object({
-    home_id: Joi.string().uuid().required(),
-    actor_id: Joi.string().uuid().required(),
+    home_id: Joi.string().uuid().lowercase().required(),
+    actor_id: Joi.string().uuid().lowercase().required(),
     // Native encoders omit nil fields; normalize the no-lease observation.
-    lease_id: Joi.string().uuid().allow(null).default(null),
+    lease_id: Joi.string().uuid().lowercase().allow(null).default(null),
     lease_state: Joi.string().valid('pending', 'active', 'ended', 'canceled').allow(null).default(null),
   }),
   // Keep the original calendar date for PostgreSQL's existing strict check.
@@ -205,6 +206,14 @@ router.get(
 );
 
 // ──────────────────────────────────────────────────────────────
+function leaseRequestMetadata(metadata) {
+  return {
+    message: typeof metadata?.message === 'string' ? metadata.message : null,
+    ...(Joi.string().uuid().required().validate(metadata?.lease_file_id).error
+      ? {} : { lease_file_id: metadata.lease_file_id }),
+  };
+}
+
 // GET /landlord/properties/:homeId
 // Property detail with units, active leases, pending requests.
 // ──────────────────────────────────────────────────────────────
@@ -255,16 +264,17 @@ router.get(
       const { data: leases, error: leasesErr } = await supabaseAdmin
         .from('HomeLease')
         .select(`
-          id, home_id, state, source, start_at, end_at, created_at,
+          id, home_id, state, source, start_at, end_at, created_at, metadata,
           primary_resident:primary_resident_user_id(id, username, name, email)
         `)
         .in('home_id', [homeId, ...managedUnitIds])
         .in('state', ['active', 'pending', 'ended', 'canceled'])
         .order('created_at', { ascending: false });
       if (leasesErr) throw leasesErr;
+      const displayLeases = (leases || []).map(lease => ({ ...lease, metadata: leaseRequestMetadata(lease.metadata) }));
 
       // Fetch pending tenant requests (leases sourced from tenant)
-      const pendingRequests = (leases || []).filter(
+      const pendingRequests = displayLeases.filter(
         (l) => l.state === 'pending' && l.source === 'tenant_request',
       );
 
@@ -279,7 +289,7 @@ router.get(
         actor_id: req.user.id,
         home,
         units: (units || []).map(unit => ({ ...unit, lease_status_available: managedUnitIds.has(unit.id) })),
-        leases: leases || [],
+        leases: displayLeases,
         pending_requests: pendingRequests,
         occupants: occupants || [],
         authority: req.authority,
@@ -507,7 +517,7 @@ router.get(
 
       if (error) throw error;
 
-      res.json({ requests: requests || [] });
+      res.json({ requests: (requests || []).map(lease => ({ ...lease, metadata: leaseRequestMetadata(lease.metadata) })) });
     } catch (err) {
       logger.error('GET /landlord/properties/:homeId/requests failed', { error: err.message });
       res.status(500).json({ error: 'Failed to fetch requests' });
@@ -552,7 +562,7 @@ router.get('/tenant/home/:homeId/status', verifyToken, async (req, res) => {
       id: lease.id, home_id: lease.home_id, state, source: lease.source,
       start_at: lease.start_at, end_at: lease.end_at, created_at: lease.created_at,
       metadata: {
-        message: typeof lease.metadata?.message === 'string' ? lease.metadata.message : null,
+        ...leaseRequestMetadata(lease.metadata),
         ...(denied ? { denied_reason: typeof lease.metadata?.denial_reason === 'string' ? lease.metadata.denial_reason : null } : {}),
       },
     } : null;
@@ -588,6 +598,7 @@ router.post(
     try {
       const userId = req.user.id;
       const { home_id, start_at, end_at, message, request_context, lease_file_id } = req.body;
+      if (lease_file_id && !requireExpectedSessionScope(req, res)) return;
 
       const dates = {};
       if (start_at !== undefined) dates.start_at = start_at;

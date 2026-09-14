@@ -30,8 +30,17 @@ public enum TenantEndpoints {
     ///     "This property has no verified landlord…" response selects mail review.
     ///   * 409 — "You already have a pending request for this home" (:527)
     ///   * 409 — "You already have an active lease at this home" (:540)
-    public static func requestApproval(_ request: TenantRequestApprovalRequest) -> Endpoint {
-        Endpoint(method: .post, path: "/api/v1/tenant/request-approval", body: request)
+    public static func requestApproval(_ request: TenantRequestApprovalRequest, headers: [String: String] = [:]) -> Endpoint {
+        Endpoint(method: .post, path: "/api/v1/tenant/request-approval", body: request, headers: headers)
+    }
+
+    static func leaseFile(homeId: String, suffix: String, headers: [String: String], method: Endpoint.Method = .get) -> Endpoint {
+        Endpoint(
+            method: method,
+            path: "/api/v1/tenant/home/\(homeId)/lease-files/\(suffix)",
+            headers: headers,
+            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData
+        )
     }
 
     /// `POST /api/v1/tenant/move-out` — route

@@ -399,6 +399,19 @@ describe('GET /landlord/properties', () => {
 // ============================================================
 
 describe('GET /landlord/properties/:homeId', () => {
+  test('existing request cards receive the saved message and File ID without private decision or storage metadata', async () => {
+    seedHome();
+    const fileId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    seedLease({ state: 'pending', source: 'tenant_request', metadata: {
+      message: 'Please review the attached file', lease_file_id: fileId,
+      storage_bucket: 'private', upload_sha256: 'hidden', landlord_decision: { intent: { actor_id: 'hidden' } },
+    } });
+    const res = mockRes();
+    await propertyDetailHandler(mockReq({ params: { homeId: 'home-1' }, method: 'GET' }), res);
+    expect(res._json.pending_requests[0].metadata).toEqual({ message: 'Please review the attached file', lease_file_id: fileId });
+    expect(res._json.leases[0].metadata).toEqual(res._json.pending_requests[0].metadata);
+  });
+
   test('returns property detail with leases, occupants', async () => {
     seedHome();
     seedLease({ state: 'active' });

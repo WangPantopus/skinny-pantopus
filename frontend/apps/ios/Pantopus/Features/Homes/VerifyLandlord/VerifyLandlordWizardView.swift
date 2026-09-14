@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Concrete verify-landlord wizard. Mirrors the
 /// `ClaimOwnershipWizardView` shape so the two A12 wizards stay
@@ -53,13 +54,27 @@ public struct VerifyLandlordWizardView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             guard visible else { return }
-            if phase == .active { viewModel.resume() } else { viewModel.retirePendingWork() }
+            if phase == .active {
+                viewModel.resume()
+            } else if phase == .background || !viewModel.attachment.showsPicker {
+                viewModel.retirePendingWork()
+            }
         }
         .onChange(of: viewModel.isCurrentSession) { _, current in if !current { viewModel.sessionChanged() } }
         .onDisappear { visible = false
             viewModel.retirePendingWork()
         }
         .accessibilityIdentifier("verifyLandlordWizard")
+        .fileImporter(
+            isPresented: Binding(
+                get: { viewModel.attachment.showsPicker },
+                set: { viewModel.attachment.showsPicker = $0 }
+            ),
+            allowedContentTypes: [.pdf, .plainText, .jpeg, .png, .webP, .heic, .heif],
+            allowsMultipleSelection: false
+        ) {
+            viewModel.attachment.received($0)
+        }
     }
 
     @ViewBuilder

@@ -62,11 +62,13 @@ public enum TenantLeaseState: String, Decodable, Sendable, Hashable {
 /// (`landlordTenant.js:551`) and the deny handler appends to.
 public struct TenantLeaseMetadata: Decodable, Sendable, Hashable {
     public let message: String?
+    public let leaseFileId: String?
     public let deniedReason: String?
     public let deniedAt: String?
 
     private enum CodingKeys: String, CodingKey {
         case message
+        case leaseFileId = "lease_file_id"
         case deniedReason = "denied_reason"
         case deniedAt = "denied_at"
     }
@@ -106,19 +108,22 @@ public struct TenantRequestApprovalRequest: Encodable, Sendable {
     public let endAt: String?
     public let message: String?
     public let requestContext: TenantRequestContext?
+    public let leaseFileId: String?
 
     public init(
         homeId: String,
         startAt: String? = nil,
         endAt: String? = nil,
         message: String? = nil,
-        requestContext: TenantRequestContext? = nil
+        requestContext: TenantRequestContext? = nil,
+        leaseFileId: String? = nil
     ) {
         self.homeId = homeId
         self.startAt = startAt
         self.endAt = endAt
         self.message = message
         self.requestContext = requestContext
+        self.leaseFileId = leaseFileId
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -127,8 +132,54 @@ public struct TenantRequestApprovalRequest: Encodable, Sendable {
         case endAt = "end_at"
         case message
         case requestContext = "request_context"
+        case leaseFileId = "lease_file_id"
     }
 }
+
+struct TenantLeaseFileSession: Decodable {
+    let homeId: String
+    let actorId: String
+    let sessionScope: String
+    var headers: [String: String] {
+        ["X-Pantopus-Session-Scope": sessionScope]
+    }
+
+    func matches(home: String, actor: String) -> Bool {
+        homeId == home && actorId == actor && UUID(uuidString: homeId) != nil
+            && UUID(uuidString: actorId) != nil && HomeClaimReviewSnapshot.validToken(sessionScope)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case homeId = "home_id", actorId = "actor_id", sessionScope = "session_scope"
+    }
+}
+
+struct TenantLeaseFile: Decodable, Equatable {
+    static let allowedMIMEs: Set<String> = [
+        "application/pdf", "text/plain", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"
+    ]
+    static let maxBytes = 25 * 1024 * 1024
+    let id: String
+    let homeId: String
+    let fileName: String
+    let fileSize: Int
+    let mimeType: String
+    let available: Bool
+    let leaseId: String?
+    func matches(home: String, file: String) -> Bool {
+        id == file && homeId == home && UUID(uuidString: id) != nil && UUID(uuidString: homeId) != nil
+            && !fileName.isEmpty && fileName.utf16.count <= 255 && fileSize > 0 && fileSize <= Self.maxBytes
+            && Self.allowedMIMEs.contains(mimeType) && available && (leaseId == nil || UUID(uuidString: leaseId ?? "") != nil)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, available
+        case homeId = "home_id", fileName = "file_name", fileSize = "file_size", mimeType = "mime_type", leaseId = "lease_id"
+    }
+}
+
+struct TenantLeaseFileResponse: Decodable { let file: TenantLeaseFile }
+struct TenantLeaseFileRemoval: Decodable { let deleted: Bool }
 
 /// 201 envelope — `{ lease }` (`landlordTenant.js:587`).
 public struct TenantRequestApprovalResponse: Decodable, Sendable, Hashable {

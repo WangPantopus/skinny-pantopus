@@ -817,7 +817,8 @@ export async function patch<T = any>(
 export async function uploadFile<T = any>(
   url: string,
   file: File,
-  additionalData?: Record<string, any>
+  additionalData?: Record<string, any>,
+  config?: ApiRequestConfig
 ): Promise<T> {
   const formData = new FormData();
   formData.append('file', file);
@@ -844,8 +845,10 @@ export async function uploadFile<T = any>(
   }
 
   const response = await apiClient.post<T>(url, formData, {
+    ...config,
     headers: {
       'Content-Type': 'multipart/form-data',
+      ...config?.headers,
     },
   });
 

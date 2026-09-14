@@ -5,6 +5,7 @@ const db = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const { homeDocumentUploadLimiter } = require('../middleware/rateLimiter');
 const { resolveVerifiedAuthorityForActor } = require('../utils/authorityResolution');
+const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const storage = require('../services/homeDocumentStorage');
 // Reuse the existing private evidence byte/signature inspection only. Uploads
 // remain File reservations; they never create a claim or household document.
@@ -22,6 +23,7 @@ const formSchema = Joi.object({ upload_id: uuid, request_context: contextSchema 
 const multipart = multer({ storage: multer.memoryStorage(),
   limits: { fileSize: storage.MAX_DOCUMENT_BYTES, files: 1, fields: 2, fieldSize: 2048 },
 }).single('file');
+const sessionGuard = (req, res, next) => { if (requireExpectedSessionScope(req, res)) next(); };
 
 function ids(req, _res, next) {
   const { value, error } = Joi.object({ homeId: uuid, uploadId: uuid.optional() }).validate(req.params);
@@ -102,7 +104,13 @@ async function read(req) {
     file.file_size, file.original_filename, file.mime_type, ref.sha256, ref.bucketName, lease?.id]) };
 }
 
-router.post('/tenant/home/:homeId/lease-files', verifyToken, homeDocumentUploadLimiter, ids, multipart, async (req, res, next) => {
+router.get('/tenant/home/:homeId/lease-files/session', verifyToken, ids, sessionGuard, (req, res, next) => {
+  res.set('Cache-Control', 'private, no-store');
+  try { res.json({ ...getRequestSessionScope(req), home_id: req.params.homeId }); }
+  catch (error) { next(error); }
+});
+
+router.post('/tenant/home/:homeId/lease-files', verifyToken, homeDocumentUploadLimiter, ids, sessionGuard, multipart, async (req, res, next) => {
   res.set('Cache-Control', 'private, no-store');
   try {
     let requestContext;
@@ -137,13 +145,13 @@ router.post('/tenant/home/:homeId/lease-files', verifyToken, homeDocumentUploadL
   } catch (error) { next(error); }
 });
 
-router.get('/tenant/home/:homeId/lease-files/:uploadId', verifyToken, ids, async (req, res, next) => {
+router.get('/tenant/home/:homeId/lease-files/:uploadId', verifyToken, ids, sessionGuard, async (req, res, next) => {
   res.set('Cache-Control', 'private, no-store');
   try { res.json({ file: projection((await read(req)).file) }); }
   catch (error) { next(error); }
 });
 
-router.get('/tenant/home/:homeId/lease-files/:uploadId/content', verifyToken, ids, async (req, res, next) => {
+router.get('/tenant/home/:homeId/lease-files/:uploadId/content', verifyToken, ids, sessionGuard, async (req, res, next) => {
   try {
     const before = await read(req);
     const bytes = await storage.download(before.ref);
@@ -160,7 +168,7 @@ router.get('/tenant/home/:homeId/lease-files/:uploadId/content', verifyToken, id
   } catch (error) { next(error); }
 });
 
-router.delete('/tenant/home/:homeId/lease-files/:uploadId', verifyToken, ids, async (req, res, next) => {
+router.delete('/tenant/home/:homeId/lease-files/:uploadId', verifyToken, ids, sessionGuard, async (req, res, next) => {
   res.set('Cache-Control', 'private, no-store');
   try {
     const file = await mutate(req, 'retire', req.params.uploadId);

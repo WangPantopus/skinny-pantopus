@@ -8,16 +8,9 @@
 //                                ├─ known duplicate → .sent (existing pending/active lease)
 //                                └─ verified no-landlord error → openPostcardVerification(homeId)
 //
-//  Submit posts a real tenant approval request to
-//  `POST /api/v1/tenant/request-approval` (route
-//  `backend/routes/landlordTenant.js:483`, mounted at `/api/v1` in
-//  `backend/app.js:397`) carrying the move-in date + message the user
-//  entered, with the landlord / PM details appended to the message
-//  (`tenantRequestSchema` has no structured column for them). When the
-//  home has no verified landlord authority the backend answers 400 —
-//  that is RN's "no landlord on file" branch, and we fall back to the
-//  mailed-code review screen through `openPostcardVerification`. The
-//  user confirms the complete address there before a protected mail command.
+//  Sends dates, contact details and an optional private File reference through
+//  the existing tenant approval route. An explicit no-landlord response opens
+//  the existing address review before any protected mail command.
 //
 
 import Foundation
@@ -43,6 +36,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     /// `.sent` step's content — every field comes off the wire.
     private(set) var approvalResult: VerifyLandlordApprovalResult?
     var pendingEvent: VerifyLandlordOutboundEvent?
+    let attachment: VerifyLandlordLeaseAttachment
 
     // MARK: - Init
 
@@ -67,6 +61,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         startContent: VerifyLandlordStartContent? = nil,
         form: VerifyLandlordForm? = nil,
         api: APIClient = .shared,
+        uploader: MultipartUploader = .shared,
         submitDelayNanos: UInt64 = 800_000_000,
         sessionIdentity: (() -> String?)? = nil,
         approvalRequester: ApprovalRequester? = nil
@@ -75,6 +70,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         self.startContent = startContent ?? .selectedHome
         self.form = form ?? VerifyLandlordForm()
         self.api = api
+        attachment = VerifyLandlordLeaseAttachment(homeId: homeId, api: api, uploader: uploader, identity: sessionIdentity)
         sessionScope = HomeClaimSessionScope(api: api, identity: sessionIdentity)
         self.submitDelayNanos = submitDelayNanos
         self.approvalRequester = approvalRequester
@@ -83,7 +79,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     // MARK: - WizardModel
 
     var chrome: WizardChrome {
-        let dirty = form != VerifyLandlordForm(registeredUnit: form.registeredUnit)
+        let dirty = form != VerifyLandlordForm(registeredUnit: form.registeredUnit) || attachment.hasDraft
         switch currentStep {
         case .start:
             return WizardChrome(
@@ -100,13 +96,13 @@ final class VerifyLandlordWizardViewModel: WizardModel {
             )
         case .details:
             let live = form.validate()
-            let blocked = (errors != nil && !live.isEmpty && !statusNeedsRetry) || isSubmitting
+            let blocked = (errors != nil && !live.isEmpty && !statusNeedsRetry && !attachment.needsRetry) || isSubmitting
             return WizardChrome(
                 title: "Verify landlord",
                 progressLabel: .stepOf(current: 2, total: 3),
                 progressFraction: 2.0 / 3.0,
                 leading: .back,
-                primaryCTALabel: statusNeedsRetry ? "Retry status" : "Submit",
+                primaryCTALabel: statusNeedsRetry ? "Retry status" : (attachment.needsRetry ? attachment.retryLabel : "Submit"),
                 primaryCTAEnabled: !blocked,
                 secondaryCTA: nil,
                 isSubmitting: isSubmitting,
@@ -133,7 +129,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     }
 
     var isSubmitting: Bool {
-        if isLoadingStatus { return true }
+        if isLoadingStatus || attachment.isBusy { return true }
         if case .submitting = submitState { return true }
         return false
     }
@@ -160,6 +156,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
         pendingWork = nil
         if isSubmitting { submitState = .idle }
         isLoadingStatus = false
+        attachment.retirePendingWork()
     }
 
     // MARK: - Form mutations
@@ -167,7 +164,7 @@ final class VerifyLandlordWizardViewModel: WizardModel {
     func attachLeaseTapped() {
         guard isCurrentSession, !isSubmitting else { return }
         errors = nil
-        submitState = .error(message: "Lease attachments aren't available in this request yet. You can submit without a document.")
+        attachment.choose()
     }
 
     func setOwnerName(_ value: String) {
@@ -234,6 +231,9 @@ final class VerifyLandlordWizardViewModel: WizardModel {
             return
         }
         guard currentStep == .details, !isSubmitting, !Task.isCancelled else { return }
+        guard !attachment.needsRetry else { attachment.retry()
+            return
+        }
         let generation = requestGeneration
         let live = form.validate()
         errors = live
@@ -321,6 +321,10 @@ final class VerifyLandlordWizardViewModel: WizardModel {
             message: form.composedMessage
         )
         do {
+            if attachment.hasDraft {
+                let lease = try await attachment.requestApproval(request)
+                return .success(lease)
+            }
             if let approvalRequester {
                 try await Task.sleep(nanoseconds: submitDelayNanos)
                 try Task.checkCancellation()
@@ -426,6 +430,7 @@ extension VerifyLandlordWizardViewModel {
         guard !isCurrentSession else { return }
         retirePendingWork()
         form = VerifyLandlordForm()
+        attachment.clear()
         approvalResult = nil
         errors = nil
         submitState = .idle

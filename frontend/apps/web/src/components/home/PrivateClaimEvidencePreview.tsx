@@ -42,17 +42,19 @@ export async function prepareEvidencePreview(bytes: Blob): Promise<EvidencePrevi
   return { kind: mime === 'application/pdf' ? 'pdf' : 'image', bytes: bytes.slice(0, bytes.size, mime), extension: extensions[mime] };
 }
 
-export default function PrivateClaimEvidencePreview({ preview, url }: { preview: EvidencePreview; url: string | null }) {
+export default function PrivateClaimEvidencePreview({ preview, url, label = 'Private claim evidence', downloadName, verificationRequired = true }: {
+  preview: EvidencePreview; url: string | null; label?: string; downloadName?: string; verificationRequired?: boolean;
+}) {
   const [imageFailed, setImageFailed] = useState(false);
-  if (preview.kind === 'text') return <pre title="Private claim evidence" className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded border p-3 text-sm">{preview.text}</pre>;
+  if (preview.kind === 'text') return <pre title={label} className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded border p-3 text-sm">{preview.text}</pre>;
   if (!url) return null;
   return <div className="space-y-2">
-    {preview.kind === 'pdf' ? <object data={url} type="application/pdf" title="Private claim evidence" className="h-80 w-full rounded border">
+    {preview.kind === 'pdf' ? <object data={url} type="application/pdf" title={label} className="h-80 w-full rounded border">
       <p>The PDF preview is unavailable in this browser. Download the document below to inspect it.</p>
     </object> : imageFailed ? <p>This browser could not display the image. Download it below to inspect it.</p>
       // These are authenticated, validated in-memory bytes, not an optimizable public image URL.
       // eslint-disable-next-line @next/next/no-img-element
-      : <img src={url} title="Private claim evidence" alt="Private claim evidence" className="max-h-80 max-w-full rounded border object-contain" onError={() => setImageFailed(true)} />}
-    <p className="text-xs">If the preview is unavailable, <a href={url} download={`claim-evidence.${preview.extension}`} className="underline">download this document</a> to inspect it. Only confirm verification after inspecting the document.</p>
+      : <img src={url} title={label} alt={label} className="max-h-80 max-w-full rounded border object-contain" onError={() => setImageFailed(true)} />}
+    <p className="text-xs">If the preview is unavailable, <a href={url} download={downloadName || `claim-evidence.${preview.extension}`} className="underline">download this document</a> to inspect it.{verificationRequired && ' Only confirm verification after inspecting the document.'}</p>
   </div>;
 }

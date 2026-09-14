@@ -361,10 +361,9 @@ extension VerifyLandlordWizardViewModelTests {
         vm.primaryTapped() // start -> details
         vm.attachLeaseTapped()
         XCTAssertNil(vm.form.lease, "Attach must not fabricate an uploaded document")
-        XCTAssertEqual(
-            vm.submitState,
-            .error(message: "Lease attachments aren't available in this request yet. You can submit without a document.")
-        )
+        XCTAssertTrue(vm.attachment.showsPicker)
+        vm.attachment.received(.success([]))
+        XCTAssertEqual(vm.submitState, .idle)
         await vm.submit()
         XCTAssertEqual(vm.currentStep, .sent)
         XCTAssertEqual(vm.submitState, .submitted)

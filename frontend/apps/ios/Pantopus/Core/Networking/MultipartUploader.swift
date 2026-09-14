@@ -230,6 +230,34 @@ public final class MultipartUploader: @unchecked Sendable {
         }
     }
 
+    /// Reuses private multipart delivery while binding every retry to the opening lease session.
+    func uploadLeaseFile(
+        scope: TenantLeaseFileSession,
+        uploadId: String,
+        context: TenantRequestContext,
+        file: MultipartFile
+    ) async throws -> TenantLeaseFileResponse {
+        let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let url = environment.apiBaseURL.appendingPathComponent("/api/v1/tenant/home/\(scope.homeId)/lease-files")
+        let contextData = try JSONEncoder().encode(context)
+        guard let encodedContext = String(data: contextData, encoding: .utf8) else { throw APIError.invalidResponse }
+        let body = Self.buildBody(
+            boundary: boundary,
+            file: file,
+            fields: ["upload_id": uploadId, "request_context": encodedContext],
+            extendedFilenames: true
+        )
+        let (data, http) = try await performUpload(to: url, boundary: boundary, body: body, headers: scope.headers)
+        switch http.statusCode {
+        case 200..<300: return try JSONDecoder().decode(TenantLeaseFileResponse.self, from: data)
+        case 401: throw APIError.unauthorized
+        case 400..<500:
+            let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            throw APIError.clientError(status: http.statusCode, message: payload?["error"] as? String ?? "Couldn't upload this lease file.")
+        default: throw APIError.server(status: http.statusCode, body: "The upload is unconfirmed. Retry the same file.")
+        }
+    }
+
     /// Upload private Home document bytes under a stable retry identifier.
     public func uploadHomeDocument(
         homeId: String,

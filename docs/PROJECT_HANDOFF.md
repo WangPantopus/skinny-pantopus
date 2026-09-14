@@ -11,7 +11,7 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 **Active worktree:** `/private/tmp/pantopus-home-permission-boundaries`, branch
 `codex/private-lease-evidence`, based on request-controls checkpoint
-`e16c0c499` on draft [PR42](https://github.com/WangPantopus/skinny-pantopus/pull/42). The private lease attachment backend is locally verified; client integration is next. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
+`e16c0c499` on draft [PR42](https://github.com/WangPantopus/skinny-pantopus/pull/42). The private lease backend, existing iOS attachment controls and existing web landlord reader are locally verified. Android attachment and remaining web/native entry/read paths are next. Draft [PR39](https://github.com/WangPantopus/skinny-pantopus/pull/39) connects the existing controls through shared Home creation;
 73 backend/90 rendered tests and actual browser/HTTP/SQL recovery checks pass.
 See [the unit evidence](VERIFICATION_FIRST_2026-09-13.md#existing-unit-import-and-range-generation). The preserved
 `codex/lease-approval-dates` branch backs draft [PR38](https://github.com/WangPantopus/skinny-pantopus/pull/38)
@@ -54,9 +54,7 @@ had a stale generated SQL wrapper; CI34843214305 caught an immutable migration
 edit. Existing generator synchronization and the forward function update fix those
 issues. Before migration changes check the actual PR base; all54 wrappers synchronize.
 
-**Next:** connect the existing native Attach/file cards and protected readers to the
-verified private lease backend, then the existing landlord review/remaining R05
-criteria. Inspect each existing caller before editing; preserve screen design.
+**Next:** connect the existing Android Attach/file card; then cover web tenant attachment entry and remaining native landlord readers/R05 criteria. The existing iOS controls and web landlord reader are now locally verified within the [client evidence limits](VERIFICATION_FIRST_2026-09-13.md#existing-ios-lease-attachment-and-web-landlord-reader). Inspect each existing caller before editing; preserve screen design.
 See [attachment evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-lease-file-storage-and-request-binding).
 The request-controls follow-up is verified on draft PR42. The previously open installed Android request journey is now verified
 within the [recorded limits](VERIFICATION_FIRST_2026-09-13.md#existing-native-lease-request-controls-and-calendar-validation).
@@ -78,7 +76,7 @@ change or disabled assertion. PR42 at e16c0c499 passed all original applicable
 checks except its iOS build: Sentry binary download hit a runner cache collision
 before compilation. Original [CI34857194083](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34857194083)
 remains a failed attempt; the failed build/dependent jobs were retried as attempt2
-on the same source and are running. No app change or cache-policy workaround.
+on the same source. Attempt2 now passes all11 applicable checks/five path skips, including all three iOS devices, Android and database replay. No app change or cache-policy workaround.
 Draft [PR40](https://github.com/WangPantopus/skinny-pantopus/pull/40) at a1069e1de
 repairs existing private document delivery and generic uploads; all6 applicable
 [CI34845551425](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34845551425)
@@ -103,7 +101,7 @@ older APK and was corrected before acceptance. See
 [native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-lease-invitation-links).
 No screen, schema or new tracked file is added by the candidate.
 
-Private lease upload client integration remains open. Its backend reuses File,
+Private lease client coverage remains partial. Its backend reuses File,
 HomeLease, homeDocumentStorage and the existing recovery worker; the new route
 only supplies the missing applicant/current-authority boundary. One forward
 migration extends existing functions and permits an ownerless File only for a
@@ -115,22 +113,22 @@ The populated forward rehearsal preserves374 table fingerprints and all existing
 function identities/grants; application lint checks270 functions/88 trigger
 bindings with zero errors/eight existing warnings. Actual storage and login are
 synthetic in these bounded checks; hosted provider/rollout criteria stay open.
-Do not claim end-to-end attachment acceptance until existing clients are connected
-and verified. Legacy generic S3 direct URLs remain unaccepted private evidence.
+The subsequent iOS-to-web journey is locally verified below; Android attachment, web tenant entry, remaining native readers and real provider acceptance stay open. Legacy generic S3 direct URLs remain unaccepted private evidence.
+
+The current client milestone passes248 selected backend tests,148 web tests,60 iOS tests and18 actual HTTP/SQL cases, plus types/lint/format/privacy gates. The existing iOS file picker/card/removal/Submit controls reuse the existing multipart uploader and session lifetime. Lost upload/request replies recover the same File/request. The existing web property query omitted request metadata; its safe projection now exposes message and File ID, and RequestsTab reuses the private byte renderer. An installed iOS request opens in the actual browser reader; revocation during delivery and account changes prevent old private content appearing. All679 installed app files match the final tested product. Drafts are in memory, not durable across restart. Login/object storage/notices are synthetic, with real local API/database behavior; hosted delivery and all-platform completion remain open.
 
 **Native evidence/limits:** unchanged request/display source passes50 iOS/49
 Android focused/rendering tests and static checks. Installed iOS covers Back/
 Discard, saved-request/account/foreground recovery, correct calendar/status,
-truthful unavailable Attach feedback and invalid-date rejection/corrected save.
-Live forms no longer insert sample files/data or promise email delivery. Real
-private lease upload UI integration remains unfinished. Installed Android now passes the actual request route/SQL journey and real
+the earlier unavailable Attach feedback and invalid-date rejection/corrected save.
+Live forms no longer insert sample files/data or promise email delivery. iOS Attach is now connected and locally verified; Android remains unfinished. Installed Android now passes the actual request route/SQL journey and real
 Compose control/discard regressions under the recorded native request limits. Reuse the retained
 products; one heavy native build at a time. Provider identity/delivery, combined
 populated adoption and hosted rollout remain open. Notification recovery is
 best effort and requires retry after a lost process; no eventual-push claim.
 
 **Owned runtime:** private root `/private/tmp/pantopus-lease-transaction-r1`;
-Next18110 remains active. The invitation fixture on API18109 is stopped. Exact owned Home, HomeLease,
+Next18110 is stopped after restoring its private harness page. The invitation fixture on API18109 is stopped. Exact owned Home, HomeLease,
 HomeOccupancy, HomeLeaseInvite, HomeAuthority, HomeAddress and User cleanup is zero
 under native-invitation-r1. Unit API18117
 and notice API18116 are stopped.
@@ -153,7 +151,7 @@ unit candidate body, with unchanged signature and passing generated SQL contract
 helper that verifies the exact database, not repeated Docker calls/global restart.
 The private lease File candidate is now applied only to this owned rehearsal
 database (including the existing Home-delete eligibility extension). All fb26
-HTTP fixtures are cleaned; no attachment API listener or native build was started.
+HTTP fixtures are cleaned. Subsequent attachment API18109, browser proxy18117 and owned simulator are stopped. Both installed-client fb27 cycles have zero remaining owned rows/objects. The exact synthetic picker file was removed. Build/test products and source bindings are retained privately.
 Inspect the private current-checkpoint/runtime leases before reuse; clean exact
 owned fixtures afterwards. Credentials, tokens, archives and operator logs stay
 outside Git/chat. Evidence is mirrored to the owner's private
