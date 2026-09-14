@@ -1,14 +1,17 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { get, post } from '../../../packages/api/src/client';
 import { approveLease, type TenantRequest } from '../../../packages/api/src/endpoints/landlord';
 import RequestsTab from '@/components/landlord/RequestsTab';
 import LandlordVerificationFlow from '@/components/home/LandlordVerificationFlow';
 import VerificationCenter from '@/components/home/VerificationCenter';
+import { confirmStore } from '@/components/ui/confirm-store';
 
 jest.mock('../../../packages/api/src/client', () => ({ get: jest.fn(), post: jest.fn() }));
 jest.mock('@pantopus/api', () => ({
   landlord: jest.requireActual('../../../packages/api/src/endpoints/landlord'),
   tenant: jest.requireActual('../../../packages/api/src/endpoints/tenant'),
+  onTokenChange: () => () => {},
+  AUTH_SESSION_CHANGE_KEY: 'pantopus_auth_session_change',
 }));
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
@@ -151,4 +154,60 @@ test('request form retains its edits when a lost reply cannot be resolved', asyn
   expect(screen.getByRole('textbox')).toHaveValue('Keep my message');
   expect(date.value).toBe('2099-10-01');
   expect(post).toHaveBeenCalledTimes(1);
+});
+
+
+function deferredTenantStatus() {
+  let resolve!: (value: unknown) => void;
+  const promise = new Promise<unknown>(done => { resolve = done; });
+  return { promise, resolve };
+}
+const pendingTenantStatus = (homeId: string, message: string) => ({ home_id: homeId, landlord: { has_landlord: true },
+  lease: { state: 'pending', lease: { id: 'lease-1', state: 'pending', start_at: '2026-10-01', created_at: '2026-09-01', metadata: { message } } } });
+
+test('late status for the previous Home cannot replace the selected Home request', async () => {
+  const old = deferredTenantStatus();
+  jest.mocked(get).mockReset().mockReturnValueOnce(old.promise).mockResolvedValue(pendingTenantStatus('home-b', 'Current Home request'));
+  const view = render(<LandlordVerificationFlow homeId="home-a" />);
+  view.rerender(<LandlordVerificationFlow homeId="home-b" />);
+  expect(await screen.findByText(/Current Home request/)).toBeTruthy();
+  await act(async () => old.resolve(pendingTenantStatus('home-a', 'Previous Home private request')));
+  expect(screen.queryByText(/Previous Home private request/)).toBeNull();
+  expect(screen.getByText(/Current Home request/)).toBeTruthy();
+});
+
+test('account-change marker retires a held status before it can reveal the previous account request', async () => {
+  const old = deferredTenantStatus();
+  jest.mocked(get).mockReset().mockReturnValueOnce(old.promise).mockResolvedValue(pendingTenantStatus('home-a', 'Current account request'));
+  render(<LandlordVerificationFlow homeId="home-a" />);
+  act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'pantopus_auth_session_change' })));
+  await act(async () => old.resolve(pendingTenantStatus('home-a', 'Previous account private request')));
+  expect(screen.queryByText(/Previous account private request/)).toBeNull();
+  expect(await screen.findByText(/Current account request/)).toBeTruthy();
+});
+
+
+test('a confirmation opened before account change cannot submit the previous account cancellation', async () => {
+  let confirm!: (value: boolean) => void;
+  const prompt = jest.spyOn(confirmStore, 'open').mockReturnValueOnce(new Promise<boolean>(resolve => { confirm = resolve; }));
+  jest.mocked(get).mockReset().mockResolvedValueOnce(pendingTenantStatus('home-a', 'Previous account request'))
+    .mockResolvedValue({ home_id: 'home-a', landlord: { has_landlord: true }, lease: { state: 'none', lease: null } });
+  try {
+    render(<LandlordVerificationFlow homeId="home-a" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel request' }));
+    expect(prompt).toHaveBeenCalledTimes(1);
+    act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'pantopus_auth_session_change' })));
+    expect(await screen.findByRole('button', { name: 'Request Approval' })).toBeTruthy();
+    await act(async () => confirm(true));
+    expect(post).not.toHaveBeenCalled();
+  } finally { prompt.mockRestore(); }
+});
+
+
+test('a response for another Home cannot provide cancellation controls', async () => {
+  jest.mocked(get).mockReset().mockResolvedValue(pendingTenantStatus('wrong-home', 'Wrong Home private request'));
+  render(<LandlordVerificationFlow homeId="home-a" />);
+  expect(await screen.findByText('Could not confirm this home’s lease status. Please retry.')).toBeTruthy();
+  expect(screen.queryByText(/Wrong Home private request/)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Cancel request' })).toBeNull();
 });

@@ -67,10 +67,22 @@ actual request-recovery and expired-lease browser journeys, and compatibility
 rechecks of the 12 admission/five end HTTP/SQL cases pass. The prior tenant CI
 `08e0b6177` failed an old verification test fixture that omitted the tenant API;
 it now supplies a successful no-landlord/no-lease result with all behavior
-assertions retained. This follow-up requires CI against its pushed head; #38
-remains draft. See [the request evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-request-submission-and-response-loss-follow-up).
+assertions retained. Request source `9c31be7a3` passes all eight applicable checks
+in [CI34798866061](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34798866061),
+with three unchanged scopes skipped. See [the request evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-request-submission-and-response-loss-follow-up).
 
-**Next: stale read/action results across Home/account/background changes, and
+**Current follow-up: tenant Home/account privacy.** Reproduced late status reads
+could restore a previous Home/account's request. The existing tenant component
+now retires reads and action callbacks on Home/account change and unmount, using
+the existing authentication signals. An old cancellation confirmation sends no
+request; a late committed cancellation reply cannot erase the new account's draft.
+No visual markup or styles changed. All 41 relevant rendered tests, fresh web
+TypeScript/scoped lint and three actual browser/SDK/HTTP/SQL account-boundary cases
+pass; six tenant lifecycle cases and saved-submission recovery remain compatible.
+This follow-up needs CI after push; #38 remains draft. See
+[the privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-tenant-homeaccount-boundaries).
+
+**Next: landlord stale read/action results, background changes, and
 the legacy request API's lack of a durable client command ID.** Reuse existing
 controllers and records; saved-status response-loss recovery does not establish
 cancellation of an unseen request or retirement of every queued original.

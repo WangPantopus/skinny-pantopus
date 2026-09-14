@@ -558,7 +558,9 @@ HTTP/SQL admission checks and five end/move-out checks pass again; their fixture
 cleanup leaves only reference tables populated. This compatibility check does
 not replace source-specific installed/native or provider acceptance.
 
-Current request source still requires CI after push. Next: stale read/action
+Request source `9c31be7a3e75f40476fd30458ef957119c62913c` passes all eight applicable
+checks in [CI34798866061](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34798866061),
+with three unchanged scopes skipped. Next: stale read/action
 results across Home/account/background changes and the legacy request API's lack
 of a durable client command ID. Saved-status recovery proves response loss for
 an existing record; it does not claim cancellation of an unseen submission or
@@ -566,3 +568,37 @@ retirement of every queued original. Reconcile those boundaries using existing
 controllers and records before extending anything. R05, installed lease-verification
 consumers, provider delivery and combined populated adoption remain open. Evidence
 is versioned in the existing lease-transaction archive under `request-submission-r1`.
+
+### Existing tenant Home/account boundaries
+
+Two rendered baseline failures confirmed that a delayed status response could
+replace the current Home/account view with the earlier tenant request. The
+existing component now tracks the current read lifetime and uses the existing
+SDK token-change and storage signals. It clears the prior view on account change,
+validates the response Home, and ignores retired responses, errors and action
+callbacks. A confirmation opened in an earlier account cannot send cancellation;
+an old completed cancellation cannot refresh away the new account's draft. These
+are changes within the existing component; no screen, visual markup or style was
+added or replaced.
+
+All 41 relevant rendered checks pass, including the original 22-case Verification
+Center suite, wrong-Home response rejection and the two baseline regressions.
+Fresh standalone TypeScript and scoped lint exit zero. Three actual Chrome cases
+use the existing component/SDK and routed HTTP/SQL with synthetic actors: an old
+actual 200 body is held and then delivered after the new account's status; an old
+confirmation sends zero cancellation POSTs after account change; and a cancellation
+commits before its held reply arrives, without erasing the new account's draft.
+The old response's hash is recorded privately. The final draft screenshot was
+visually checked. Six existing tenant lifecycle browser cases and lost-submission
+recovery still pass with these guards.
+
+The first private browser attempt used an ambiguous textbox locator because
+Chrome also exposes the date input as a textbox; it is preserved as a fixture
+failure. The corrected locator selects the existing textarea and all three cases
+pass. This proves actual HTTP/SQL and component behavior under the existing auth
+signal; it does not prove real login/cookie rotation or full AppShell behavior.
+Background/focus, landlord view lifetimes, unseen/queued submissions and installed
+lease-verification consumers remain open. The current follow-up requires CI after
+push, R05 stays open, and the inventory remains 8 closed / 72 partial or open.
+Private source-bound evidence is versioned under `tenant-account-r1` in the
+existing lease-transaction archive. No backend, SDK or migration changed here.
