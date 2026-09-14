@@ -8,6 +8,8 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.TenantApi
 import com.squareup.moshi.JsonDataException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,6 +34,7 @@ class TenantRepository
                 if (status.homeId != body.homeId || context.homeId != body.homeId || context.actorId.isBlank() || !validLease) {
                     throw JsonDataException("Could not confirm this Home's lease status")
                 }
+                currentCoroutineContext().ensureActive()
                 api.requestApproval(body.copy(requestContext = context))
             }
 

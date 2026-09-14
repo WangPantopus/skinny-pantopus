@@ -752,7 +752,8 @@ queued-original protection. Continue in those existing controllers and SDK model
 then verify account/background/restart and installed lease-verification journeys.
 The successful browser uses an isolated renderer and synthetic authentication,
 not full AppShell/login. R05 remains open; provider delivery, combined populated
-adoption and rollout remain open. Queued-request application source `25c6a5c01` requires its own CI after push.
+adoption and rollout remain open. Queued-request application source `25c6a5c01` at `1e4d5a644` passes all 15 applicable
+checks in [CI34806113797](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34806113797), with 1 unchanged Seeder skip.
 
 
 ### Existing native and second web request context
@@ -796,3 +797,26 @@ simulators, two Android AVDs and one tiny unregistered AVD folder. Exact invento
 exit codes and preserved devices are in private `device-cleanup-r1`; observed free
 space increased 6.46GiB. The owner running simulator and current retained iOS/Android
 acceptance devices remain. Shared SDK/runtime images, products and evidence remain.
+
+
+### Existing Android request departure
+
+At `c8127ddbe`, a focused actual-model/repository probe held the status GET,
+used existing Back then Discard, and released the GET. The abandoned work still
+called request-approval. One regression case failed all three configured retry
+attempts; this was not three separate defects. The baseline is preserved in
+`native-discard-baseline-r1`.
+
+The existing controller now owns/cancels its pending job when leaving. The
+repository checks cancellation after status and before POST; the controller
+checks again before consuming a returned result. The 28-test focused suite and
+formatting pass. The two new checks deliberately deliver responses despite
+cancellation: an abandoned status cannot POST, and a late submission result cannot
+restore Sent or replace dismissal. Existing screen markup/design is unchanged.
+The first formatting attempt rejected two overlong test lines before tests ran;
+the corrected run passes. Candidate source/results are in `native-discard-r1`.
+
+This does not undo a POST already committed by the server, nor prove installed
+navigation, account switching, background/restart or iOS departure behavior.
+The next check is the equivalent iOS departure case, followed by installed native
+verification and saved-state recovery. R05 stays open.

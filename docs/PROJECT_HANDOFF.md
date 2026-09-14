@@ -53,7 +53,8 @@ retry → cancel → release-original checks pass, as does an explicit fresh req
 122 backend/48 rendered tests, types, scoped lint and the full lease SQL contract
 pass. The existing unmerged migration is updated; no new tables or screen designs.
 See [queued-request evidence](VERIFICATION_FIRST_2026-09-13.md#existing-queued-tenant-request-follow-up).
-Application source `25c6a5c01` is committed; its own CI is pending after push.
+Application source `25c6a5c01` at checkpoint `1e4d5a644` passes all 15 applicable
+[CI34806113797 checks](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34806113797), with 1 unchanged Seeder skip.
 
 **Native and second web caller follow-up:** the existing iOS/Android request
 controllers and separate web details page now read current status and submit its
@@ -65,10 +66,17 @@ Swift checks. Actual second-page browser/SDK/HTTP/SQL checks pass for failed rea
 a delivered old-account preflight and a persisted request. Actual HTTP/SQL also
 accepts omitted nil fields and rejects the queued original. See [caller evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-and-second-web-request-context).
 
-**Next:** verify account/background/restart behavior and remaining installed
-lease-verification journeys in these existing native controllers. The API still
-accepts older clients without context. The separate submitted page's unconditional
-notification/time estimate and native email claims require workflow reconciliation.
+**Android departure follow-up:** a focused baseline reproduced a held status
+read still sending POST after Back/Discard. The existing controller now cancels
+pending work; the repository checks cancellation before POST, and the controller
+checks again before applying a late result. All 28 focused Android tests and
+formatting pass, including deliberately noncancelable old responses. This is
+model/repository evidence, not installed UI acceptance.
+
+**Next:** reproduce the corresponding iOS departure case in its existing wizard,
+then verify installed native departure/account/background/restart and saved-request
+recovery. The API still accepts older clients without context. The separate
+submitted page's notification/time estimate and native email claims remain open.
 Do not build speculative command/renewal tables; the separate renewal draft stays
 paused. R05 stays open; the [80-row inventory](REMAINING_WORK_2026-09-11.md)
 remains **8 locally closed / 72 partial or open**, not a completion/effort percentage.

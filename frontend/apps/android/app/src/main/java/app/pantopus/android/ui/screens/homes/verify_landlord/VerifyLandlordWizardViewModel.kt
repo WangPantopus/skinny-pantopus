@@ -15,7 +15,10 @@ import app.pantopus.android.ui.screens.shared.wizard.WizardModel
 import app.pantopus.android.ui.screens.shared.wizard.WizardProgressLabel
 import app.pantopus.android.ui.screens.shared.wizard.WizardSecondaryCta
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -106,6 +109,7 @@ open class VerifyLandlordWizardViewModel
 
         /** One-shot navigation events the screen reacts to. */
         val pendingEvent = MutableStateFlow<VerifyLandlordOutboundEvent?>(null)
+        private var pendingWork: Job? = null
 
         // MARK: - WizardModel
 
@@ -113,6 +117,7 @@ open class VerifyLandlordWizardViewModel
             get() = computeChrome(_state.value)
 
         override fun onLeading() {
+            retirePendingWork()
             when (_state.value.currentStep) {
                 VerifyLandlordStep.Start, VerifyLandlordStep.Sent ->
                     pendingEvent.value = VerifyLandlordOutboundEvent.Dismiss
@@ -123,7 +128,14 @@ open class VerifyLandlordWizardViewModel
         }
 
         override fun onDiscard() {
+            retirePendingWork()
             pendingEvent.value = VerifyLandlordOutboundEvent.Dismiss
+        }
+
+        private fun retirePendingWork() {
+            pendingWork?.cancel()
+            pendingWork = null
+            _state.update { it.copy(submitState = VerifyLandlordSubmitState.Idle) }
         }
 
         override fun onPrimary() {
@@ -131,7 +143,10 @@ open class VerifyLandlordWizardViewModel
                 VerifyLandlordStep.Start -> {
                     _state.update { it.copy(currentStep = VerifyLandlordStep.Details) }
                 }
-                VerifyLandlordStep.Details -> viewModelScope.launch { submit() }
+                VerifyLandlordStep.Details ->
+                    if (!_state.value.isSubmitting) {
+                        pendingWork = viewModelScope.launch { submit() }
+                    }
                 VerifyLandlordStep.Sent -> pendingEvent.value = VerifyLandlordOutboundEvent.Dismiss
             }
         }
@@ -140,7 +155,9 @@ open class VerifyLandlordWizardViewModel
             // Only the Sent step carries a secondary — the mailed-code
             // fallback (RN's "Verify with a mailed code" alternative path).
             if (_state.value.currentStep != VerifyLandlordStep.Sent) return
-            viewModelScope.launch { startPostcardFallback() }
+            if (!_state.value.isSubmitting) {
+                pendingWork = viewModelScope.launch { startPostcardFallback() }
+            }
         }
 
         // MARK: - Field mutations
@@ -235,7 +252,9 @@ open class VerifyLandlordWizardViewModel
                     startAt = form.startAtISO,
                     message = form.composedMessage,
                 )
-            when (val result = tenantRepository.requestApproval(request)) {
+            val result = tenantRepository.requestApproval(request)
+            currentCoroutineContext().ensureActive()
+            when (result) {
                 is NetworkResult.Success -> {
                     val lease = result.data.lease
                     _state.update {

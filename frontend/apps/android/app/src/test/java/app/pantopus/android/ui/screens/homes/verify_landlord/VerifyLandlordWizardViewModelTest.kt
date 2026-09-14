@@ -21,13 +21,16 @@ import io.mockk.coVerifySequence
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -97,6 +100,48 @@ class VerifyLandlordWizardViewModelTest {
             setPMPhone(f.pmPhone)
         }
     }
+
+    @Test fun discarding_held_status_does_not_submit_after_departure() =
+        runTest {
+            val api = mockk<TenantApi>()
+            val held = CompletableDeferred<TenantHomeStatusResponse>()
+            coEvery { api.homeStatus("home-1") } coAnswers { withContext(NonCancellable) { held.await() } }
+            coEvery { api.requestApproval(any()) } returns TenantRequestApprovalResponse(stubLease)
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.onPrimary()
+            vm.seedPopulatedForm()
+            vm.onPrimary()
+            coVerify(exactly = 1) { api.homeStatus("home-1") }
+            vm.onLeading()
+            vm.onDiscard()
+            assertEquals(VerifyLandlordOutboundEvent.Dismiss, vm.pendingEvent.value)
+            held.complete(TenantHomeStatusResponse("home-1", TenantRequestContextDto("home-1", "actor-1", null, null)))
+            coVerify(exactly = 0) { api.requestApproval(any()) }
+            assertEquals(VerifyLandlordStep.Start, vm.state.value.currentStep)
+        }
+
+    @Test fun late_submitted_response_after_discard_cannot_restore_sent_state() =
+        runTest {
+            val api = mockk<TenantApi>()
+            val held = CompletableDeferred<TenantRequestApprovalResponse>()
+            coEvery { api.homeStatus("home-1") } returns
+                TenantHomeStatusResponse("home-1", TenantRequestContextDto("home-1", "actor-1", null, null))
+            coEvery { api.requestApproval(any()) } coAnswers {
+                withContext(NonCancellable) { held.await() }
+            }
+            val vm = TestVm(networkMonitor, SavedStateHandle(mapOf(VERIFY_LANDLORD_HOME_ID_KEY to "home-1")), TenantRepository(api))
+            vm.onPrimary()
+            vm.seedPopulatedForm()
+            vm.onPrimary()
+            coVerify(exactly = 1) { api.requestApproval(any()) }
+            vm.onLeading()
+            vm.onDiscard()
+            held.complete(TenantRequestApprovalResponse(stubLease))
+            assertEquals(VerifyLandlordStep.Start, vm.state.value.currentStep)
+            assertEquals(VerifyLandlordOutboundEvent.Dismiss, vm.pendingEvent.value)
+            assertEquals(VerifyLandlordSubmitState.Idle, vm.state.value.submitState)
+            assertNull(vm.state.value.approvalResult)
+        }
 
     // MARK: - Step machine
 
