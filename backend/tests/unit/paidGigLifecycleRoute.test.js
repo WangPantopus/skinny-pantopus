@@ -218,3 +218,45 @@ describe('workflow writes bind the payment snapshot checked before provider awai
     expect(getTable('Gig')[0].owner_confirmed_at).toBeNull();
   });
 });
+
+
+describe('worker completion preserves the assignment it observed', () => {
+  test.each([
+    ['accepted_by', 'replacement-worker'], ['user_id', 'foreign'], ['status', 'cancelled'],
+    ['status', 'assigned'], ['payment_id', 'replacement'], ['price', 99],
+    ['accepted_at', '2026-09-14T12:00:00Z'], ['started_at', '2026-09-14T12:01:00Z'],
+    ['owner_confirmed_at', '2026-09-14T12:02:00Z'],
+  ])('a late worker completion cannot overwrite changed %s', async (field, value) => {
+    assigned('in_progress');
+    const from = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = from(table);
+      if (table === 'Gig') {
+        const update = query.update.bind(query);
+        query.update = patch => {
+          getTable('Gig')[0] = { ...getTable('Gig')[0], [field]: value };
+          return update(patch);
+        };
+      }
+      return query;
+    });
+    const result = await post('gig/mark-completed', 'worker');
+    expect(result.status).toBe(409);
+    expect(getTable('Gig')[0][field]).toBe(value);
+    expect(getTable('Gig')[0].worker_completed_at).toBeNull();
+    expect(getTable('Notification')).toHaveLength(0);
+  });
+
+  test('an unchanged assignment saves the existing completion proof', async () => {
+    assigned('in_progress');
+    Object.assign(getTable('Gig')[0], { accepted_at: '2026-09-14T12:00:00Z', started_at: '2026-09-14T12:01:00Z' });
+    const result = await request(app).post('/api/gigs/gig/mark-completed').set('x-test-user-id', 'worker')
+      .send({ note: 'Work completed', photos: ['https://fixture.example.invalid/proof.jpg'], checklist: [{ item: 'Finished', done: true }] });
+    expect(result.status).toBe(200);
+    expect(result.body.gig).toMatchObject({ status: 'completed', accepted_by: 'worker', price: 12.5,
+      completion_note: 'Work completed', completion_photos: ['https://fixture.example.invalid/proof.jpg'],
+      completion_checklist: [{ item: 'Finished', done: true }] });
+    expect(result.body.gig.worker_completed_at).toBeTruthy();
+    expect(mockCapture).not.toHaveBeenCalled();
+  });
+});

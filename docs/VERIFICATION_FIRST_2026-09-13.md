@@ -2799,3 +2799,35 @@ of no-show execution: the old multi-write incident/cancellation/reliability path
 still needs concurrency, retry and exact financial receipts. The defined fee rates
 alone do not settle who owes/receives worker cancellation/no-show fees; a policy
 clarification is pending. Completion and other independent security checks continue.
+
+
+## Existing worker completion preserves current assignment
+
+September14: six failing route reproductions show that a delayed worker completion
+could overwrite a changed worker, owner, payment, price or task status. The existing
+mark-completed handler now reuses `bindGigPaymentSnapshot` and checks current
+in-progress status, empty worker/owner completion and the observed assignment/start
+times in the same conditional UPDATE. A lost comparison returns409 before affinity,
+notifications or success; current task data stays intact. Valid completion retains
+the original note/photo/checklist behavior. Only the existing route and lifecycle
+test file change, with no schema, screen or layout change.
+
+93 focused route assertions pass, including nine changed-snapshot cases and valid
+completion. All privacy gates pass, including15 audience-profile assertions. The
+actual Express/owned-PostgreSQL harness passes ten interleavings via separate SQL
+connections plus one unchanged assignment. Replacement-worker/owner/payment/price/
+status/timestamps/owner confirmation and a competing completion remain byte-for-byte
+intact after rejection; no notice is attempted for them. Valid completion saves its
+existing proof and attempts one synthetic owner notification. No provider capture
+runs in worker completion. Exact owned fixture cleanup passes.
+
+Private `worker-completion-http-sql-r3.json`, source bindings and logs retain the
+proof. R1's fixture used a noncanonical account_type and rolled back; R2's local SQL
+adapter incorrectly encoded PostgreSQL text-array proof photos as JSON. The adapter
+was corrected for the existing column type; product serialization was unchanged.
+These failed attempts are retained alongside the passing R3. Existing web/native
+callers were inspected: they retain proof input on a failed submission. That source
+inspection is not a new installed-client acceptance claim; native failures currently
+show generic retry copy. Full proof-upload/privacy, command/session retirement,
+loss/retry recovery, owner-confirmation effects and durable notification acceptance
+remain open within P04/P07/P08/P09.

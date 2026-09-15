@@ -169,8 +169,16 @@ checks) and nine actual local HTTP/SQL denials pass with unchanged rows/no notic
 provider work and exact cleanup. Two existing backend files change, with no schema
 or screen change. See [admission evidence](VERIFICATION_FIRST_2026-09-13.md#existing-no-show-report-admission).
 
-**Next:** finish current-head CI and continue existing completion/reopen and paid
-policy flows. No-show execution still requires atomic concurrent/retry handling and
+**Worker completion:** the existing mark-completed update now binds the observed
+worker/owner/payment/price/status and assignment/start times. A delayed request
+cannot overwrite a replacement assignment, cancellation or prior completion.
+Six initial route failures are reproduced;93 route checks/privacy gates now pass.
+Ten actual HTTP/SQL interleavings preserve exact current rows; an unchanged task
+saves its existing note/photos/checklist with one synthetic notice attempt. No
+migration/new screen/file is added. See [completion evidence](VERIFICATION_FIRST_2026-09-13.md#existing-worker-completion-preserves-current-assignment).
+
+**Next:** finish current-head CI and continue existing owner-confirmation/notification
+recovery and completion/reopen policy flows. No-show execution still requires atomic concurrent/retry handling and
 verified fee/financial outcomes. The repo's fee rates do not specify who owes and
 receives worker cancellation/no-show fees; one policy clarification is pending.
 Continue independent completion/security verification while that remains pending. Finish current-head CI

@@ -5439,7 +5439,7 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
 
     const { data: gig, error: gigError } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, status, accepted_by, title, category')
+      .select('id, user_id, status, accepted_by, title, category, price, payment_id, accepted_at, started_at')
       .eq('id', gigId)
       .single();
 
@@ -5474,16 +5474,25 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
       completion_checklist: safeChecklist,
     };
 
-    const { data: updatedGig, error: updateError } = await supabaseAdmin
+    let completionUpdate = bindGigPaymentSnapshot(supabaseAdmin
       .from('Gig')
       .update(updateData)
       .eq('id', gigId)
-      .select('*')
-      .single();
+      .eq('status', 'in_progress')
+      .is('worker_completed_at', null)
+      .is('owner_confirmed_at', null), gig);
+    for (const field of ['accepted_at', 'started_at']) {
+      completionUpdate = gig[field] == null ? completionUpdate.is(field, null) : completionUpdate.eq(field, gig[field]);
+    }
+    const { data: updatedGig, error: updateError } = await completionUpdate.select('*').maybeSingle();
 
     if (updateError) {
       logger.error('Error marking gig completed', { error: updateError.message, gigId, userId });
       return res.status(500).json({ error: 'Failed to mark gig completed' });
+    }
+
+    if (!updatedGig) {
+      return res.status(409).json({ code: 'COMPLETION_CHANGED', error: 'The task changed before completion was saved. Refresh its details.' });
     }
 
     // ─── Track category affinity (non-blocking) ───
