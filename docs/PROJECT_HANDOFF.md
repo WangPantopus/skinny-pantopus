@@ -470,8 +470,7 @@ Five actual Chrome cases pass with synthetic responses and the real query provid
 API client/session signals and root confirmation. Two existing source/test files
 change; no new screen, hook, backend or schema. See [My bids evidence](VERIFICATION_FIRST_2026-09-13.md#existing-my-bids-reader-and-command-lifetime).
 Owned browser fixture/port3107 are cleaned; configs restored exactly. This and worker60bdd6ba6/web4ddcdaa65 are pushed together atb513c8184 on both
-branches. CI34980516319 passed backend/schema/web/static gates; native jobs were
-still running at the last check. Preserve that run instead of canceling it.
+branches. CI34980516319 now passes all15 applicable jobs/one Seeder skip.
 
 **V2 detail/active-panel follow-up:** ten reproduced failures are repaired in the
 existing page/panel: session/departure/rebinding, stale reads, neighboring socket
@@ -483,9 +482,23 @@ change, with no new screen, backend or migration. See [v2 evidence](VERIFICATION
 The owned fixture/port3107 are stopped and original configs restored. Current-head
 CI is still required for this local follow-up; PR34 remains draft.
 
-**Next:** verify existing ETA/status sharing, including session retirement, current
-helper location, link privacy and the shared-link destination. Locate its existing
-columns, routes and consumers before changing anything. Completion draft/restart
+**ETA tracker/share lifetime:** seven baseline failures are repaired in the existing
+tracker and entrypoint tests.201 focused tests, types and lint pass (zero errors/one
+existing warning), plus five Chrome cases using the actual page/SDK/session/toast.
+Late links cannot be copied after departure, session or work-relationship changes;
+missing/expired receipts fail, and only matching/current ETA events update the card.
+Existing styles are intact. See [ETA evidence](VERIFICATION_FIRST_2026-09-13.md#existing-eta-tracker-and-share-lifetime).
+Owned port3107/fixture/build are removed and original configs restored exactly.
+This and v2 checkpoint4611b261c require their combined canonical CI push.
+
+**Next:** complete sharing privacy and its destination. Current/master route inventory
+and a local Chrome probe confirm `/status/:token` has no web page (404); the existing
+API and canonical Gig share/ETA columns already exist. The general Gig detail uses
+an admin wildcard read; reproduce its token/helper-location projection before a
+bounded repair. Raw-table column grants alone do not prove outsider row access:
+current Gig SELECT RLS limits rows to participants. No new migration is needed merely
+to add existing fields. Then verify existing share/location mutation authority and
+expiry/retry behavior. Completion draft/restart
 continues after that boundary; content-addressed File upload recovery already exists
 and must be reused. There is no active web rebook/boost caller to rebuild.
 Full installed native MyTasks/owner lifetime remains open. Continue completion

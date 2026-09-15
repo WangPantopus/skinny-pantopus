@@ -145,14 +145,18 @@ six reproduced reader/action/receipt failures. The existing page/test reuse the
 session hook, current receipt and modal attempt guards; types/lint pass within the
 existing ts-nocheck/two-warning limit. See [My bids evidence](VERIFICATION_FIRST_2026-09-13.md#existing-my-bids-reader-and-command-lifetime).
 The combined web/worker checkpointb513c8184 is pushed on both branches; CI34980516319
-passes backend/schema/web/static gates with native jobs still running at last check.
+passes all15 applicable jobs/one Seeder skip.
 The subsequent v2 detail/panel follow-up passes187 tests, types/lint (same27 baseline
 warnings) and six Chrome cases after ten reproduced failures. Five existing files
 repair lifetime/receipts, urgent-only admission and socket cleanup; no new screen,
 backend or migration. See [v2 evidence](VERIFICATION_FIRST_2026-09-13.md#existing-v2-task-detail-and-active-panel-lifetime).
-Existing ETA/status-sharing privacy and link behavior are next, then draft/restart;
-existing content-addressed File upload recovery is preserved. The v2 follow-up still
-needs its own CI. No full inventory row is closed by these bounded checks.
+The existing ETA tracker now passes201 focused tests/types/lint and five Chrome
+share cases after seven reproduced failures. It reuses the session hook and existing
+card/SDK; only two existing source/test files change. See [ETA evidence](VERIFICATION_FIRST_2026-09-13.md#existing-eta-tracker-and-share-lifetime).
+The existing share destination returns404 locally; complete that gap and token/helper
+location privacy using the existing API/schema first, then draft/restart. Existing
+content-addressed File upload recovery is preserved. V2 and ETA need combined CI.
+No full inventory row is closed by these bounded checks.
 The preceding main-list change added one Android regression file to preserve the
 existing test-class size rule.
 No inventory row is closed by these bounded checks.

@@ -7,6 +7,7 @@ import MyGigsPage from '@/app/(app)/app/my-gigs/page';
 import MyGigsV2Page from '@/app/(app)/app/my-gigs-v2/page';
 import MyBidsPage from '@/app/(app)/app/my-bids/page';
 import ActiveTaskPanel from '@/components/gig-detail-v2/ActiveTaskPanel';
+import ETATracker from '@/components/gig-detail-v2/ETATracker';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { toast } from '@/components/ui/toast-store';
 
@@ -25,6 +26,8 @@ const mockWithdraw = jest.fn();
 const mockActiveStatus = jest.fn();
 const mockUpdateStatus = jest.fn();
 const mockConfirmCompletion = jest.fn();
+const mockShareStatus = jest.fn();
+const mockClipboard = jest.fn();
 const mockRouter = { push: mockPush };
 const mockTokenListeners = new Set<() => void>();
 let mockToken: string | null = 'cookie-session';
@@ -35,6 +38,7 @@ jest.mock('@pantopus/api', () => ({
   onTokenChange: (listener: () => void) => { mockTokenListeners.add(listener); return () => mockTokenListeners.delete(listener); },
   professional: { getMyProfile: jest.fn().mockResolvedValue(null) },
   gigs: {
+    shareGigStatus: (...args: unknown[]) => mockShareStatus(...args),
     getGigBids: (...args: unknown[]) => mockBids(...args), acceptBid: (...args: unknown[]) => mockAccept(...args),
     getMyGigs: (...args: unknown[]) => mockMyGigs(...args), rejectBid: (...args: unknown[]) => mockReject(...args),
     completeGig: (...args: unknown[]) => mockComplete(...args),
@@ -53,6 +57,8 @@ jest.mock('@/components/ui/confirm-store', () => ({ confirmStore: { open: jest.f
 jest.mock('@/components/ui/toast-store', () => ({ toast: { info: jest.fn(), error: jest.fn(), success: jest.fn() } }));
 
 beforeEach(() => {
+  mockShareStatus.mockReset(); mockClipboard.mockReset().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: mockClipboard } });
   jest.clearAllMocks(); mockTokenListeners.clear(); mockToken = 'cookie-session';
   mockMyGigs.mockReset(); mockBids.mockReset(); mockReject.mockReset(); mockComplete.mockReset();
   jest.mocked(confirmStore.open).mockReset();
@@ -473,4 +479,110 @@ test('v2 active panel preserves ordinary worker completion without urgent status
   const panel = activePanel(false, jest.fn(), { gig: { ...workerBid.gig, is_urgent: false, starts_asap: false, urgent_details: null } });
   fireEvent.click(await screen.findByRole('button', { name: 'Task complete' }));
   await waitFor(() => expect(panel.onStatusChange).toHaveBeenCalledTimes(1)); expect(mockActiveStatus).not.toHaveBeenCalled();
+});
+
+
+const etaGig = { id: 'gig-a', status: 'assigned', user_id: 'owner-a', accepted_by: 'worker-a', helper_eta_minutes: 12, helper_location_updated_at: '2026-09-15T13:00:00Z' };
+const shareReceipt = { share_url: 'https://pantopus.test/status/abcdef1234567890abcdef1234567890', expires_at: '2099-01-01T00:00:00Z' };
+function etaSocket() {
+  const handlers = new Set<(value: Record<string, unknown>) => void>();
+  return { socket: { on: (_: string, handler: (value: Record<string, unknown>) => void) => handlers.add(handler),
+    off: (_: string, handler: (value: Record<string, unknown>) => void) => handlers.delete(handler) } as unknown as React.ComponentProps<typeof ETATracker>['socket'],
+    handlers, send: (value: Record<string, unknown>) => handlers.forEach(handler => handler(value)) };
+}
+
+test('ETA tracker ignores updates for another task', () => {
+  const socket = etaSocket(); render(<ETATracker gig={etaGig} socket={socket.socket} />);
+  act(() => socket.send({ gigId: 'other-gig', eta_minutes: 99, timestamp: Date.now() }));
+  expect(screen.getByText(/ETA: ~12 min/)).toBeInTheDocument();
+});
+
+test('ETA tracker retires private data and a held share reply with its session', async () => {
+  const held = deferred<typeof shareReceipt>(); mockShareStatus.mockReturnValue(held.promise);
+  render(<ETATracker gig={etaGig} socket={null} />); fireEvent.click(screen.getByRole('button', { name: 'Share Status' }));
+  act(replaceSession); await act(async () => held.resolve(shareReceipt));
+  expect(mockClipboard).not.toHaveBeenCalled(); expect(screen.queryByText(/ETA: ~12 min/)).not.toBeInTheDocument();
+  expect(toast.success).not.toHaveBeenCalled();
+});
+
+test('ETA tracker cannot copy a share reply delivered after departure', async () => {
+  const held = deferred<typeof shareReceipt>(); mockShareStatus.mockReturnValue(held.promise);
+  const view = render(<ETATracker gig={etaGig} socket={null} />); fireEvent.click(screen.getByRole('button', { name: 'Share Status' })); view.unmount();
+  await act(async () => held.resolve(shareReceipt)); expect(mockClipboard).not.toHaveBeenCalled(); expect(toast.success).not.toHaveBeenCalled();
+});
+
+test('ETA tracker resets location and a pending share when its task changes', async () => {
+  const held = deferred<typeof shareReceipt>(); mockShareStatus.mockReturnValue(held.promise);
+  const view = render(<ETATracker gig={etaGig} socket={null} />); fireEvent.click(screen.getByRole('button', { name: 'Share Status' }));
+  view.rerender(<ETATracker gig={{ ...etaGig, id: 'gig-b', helper_eta_minutes: null, helper_location_updated_at: null }} socket={null} />);
+  await act(async () => held.resolve(shareReceipt)); expect(mockClipboard).not.toHaveBeenCalled();
+  expect(screen.getByText('Helper accepted — waiting for location update')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Share Status' })).toBeEnabled();
+});
+
+test('ETA tracker adopts a refreshed location for the same task', () => {
+  const view = render(<ETATracker gig={etaGig} socket={null} />);
+  view.rerender(<ETATracker gig={{ ...etaGig, helper_eta_minutes: 5, helper_location_updated_at: '2026-09-15T13:02:00Z' }} socket={null} />);
+  expect(screen.getByText(/ETA: ~5 min/)).toBeInTheDocument();
+});
+
+test('ETA tracker clears its estimate when the helper reports an unknown ETA', () => {
+  const socket = etaSocket(); render(<ETATracker gig={etaGig} socket={socket.socket} />);
+  act(() => socket.send({ gigId: 'gig-a', eta_minutes: null, timestamp: Date.now() }));
+  expect(screen.getByText('Helper accepted — waiting for location update')).toBeInTheDocument();
+});
+
+
+test('ETA tracker rejects a missing share receipt without copying or reporting success', async () => {
+  mockShareStatus.mockResolvedValue({}); render(<ETATracker gig={etaGig} socket={null} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Share Status' }));
+  await waitFor(() => expect(mockShareStatus).toHaveBeenCalledTimes(1));
+  expect(mockClipboard).not.toHaveBeenCalled(); expect(toast.success).not.toHaveBeenCalled(); expect(toast.error).toHaveBeenCalled();
+});
+
+
+test('ETA tracker copies a current share once and allows retry after a failure', async () => {
+  mockShareStatus.mockRejectedValueOnce(new Error('Unavailable')).mockResolvedValue(shareReceipt);
+  render(<ETATracker gig={etaGig} socket={null} />); fireEvent.click(screen.getByRole('button', { name: 'Share Status' }));
+  await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole('button', { name: 'Share Status' }));
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Link copied!'));
+  expect(mockShareStatus.mock.calls).toEqual([['gig-a'], ['gig-a']]); expect(mockClipboard.mock.calls).toEqual([[shareReceipt.share_url]]);
+});
+
+test('ETA tracker does not report a completed clipboard write to a retired session', async () => {
+  const held = deferred<void>(); mockClipboard.mockReturnValue(held.promise); mockShareStatus.mockResolvedValue(shareReceipt);
+  render(<ETATracker gig={etaGig} socket={null} />); fireEvent.click(screen.getByRole('button', { name: 'Share Status' }));
+  await waitFor(() => expect(mockClipboard).toHaveBeenCalledTimes(1)); act(replaceSession);
+  await act(async () => held.resolve()); expect(toast.success).not.toHaveBeenCalled(); expect(toast.error).not.toHaveBeenCalled();
+});
+
+test('ETA tracker retires after a cross-tab signal and leaves other socket consumers subscribed', () => {
+  const socket = etaSocket(), neighbor = jest.fn(); socket.handlers.add(neighbor);
+  render(<ETATracker gig={etaGig} socket={socket.socket} />);
+  act(() => { localStorage.setItem('pantopus:auth-session-change', 'session-b'); window.dispatchEvent(new StorageEvent('storage', { key: 'pantopus:auth-session-change' })); });
+  expect(screen.queryByRole('button', { name: 'Share Status' })).not.toBeInTheDocument(); expect([...socket.handlers]).toEqual([neighbor]);
+  act(() => socket.send({ gigId: 'gig-a', eta_minutes: 1, timestamp: Date.now() })); expect(neighbor).toHaveBeenCalledTimes(1);
+});
+
+test('ETA tracker preserves a newer socket estimate across older events and loaded data', () => {
+  const socket = etaSocket(), view = render(<ETATracker gig={etaGig} socket={socket.socket} />), now = Date.now();
+  act(() => socket.send({ gigId: 'gig-a', eta_minutes: 3, timestamp: now }));
+  act(() => socket.send({ gigId: 'gig-a', eta_minutes: 9, timestamp: now - 1000 }));
+  view.rerender(<ETATracker gig={{ ...etaGig, helper_eta_minutes: 10, helper_location_updated_at: new Date(now - 2000).toISOString() }} socket={socket.socket} />);
+  expect(screen.getByText(/ETA: ~3 min/)).toBeInTheDocument();
+});
+
+test.each([{ accepted_by: 'replacement-worker' }, { status: 'completed' }])('ETA tracker retires a share after its work relationship changes: %p', async change => {
+  const held = deferred<typeof shareReceipt>(); mockShareStatus.mockReturnValue(held.promise);
+  const view = render(<ETATracker gig={etaGig} socket={null} />); fireEvent.click(screen.getByRole('button', { name: 'Share Status' }));
+  view.rerender(<ETATracker gig={{ ...etaGig, ...change }} socket={null} />);
+  await act(async () => held.resolve(shareReceipt)); expect(mockClipboard).not.toHaveBeenCalled(); expect(toast.success).not.toHaveBeenCalled();
+});
+
+test('ETA tracker suppresses duplicate pending shares and stays quiet on a departed error', async () => {
+  const held = deferred<typeof shareReceipt>(); mockShareStatus.mockReturnValue(held.promise.then(() => { throw new Error('Unavailable'); }));
+  const view = render(<ETATracker gig={etaGig} socket={null} />), button = screen.getByRole('button', { name: 'Share Status' });
+  fireEvent.click(button); fireEvent.click(button); expect(mockShareStatus).toHaveBeenCalledTimes(1); view.unmount();
+  await act(async () => held.resolve(shareReceipt)); expect(toast.error).not.toHaveBeenCalled();
 });

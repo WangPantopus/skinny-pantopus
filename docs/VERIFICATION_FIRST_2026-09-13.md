@@ -4118,3 +4118,47 @@ The preceding b513c8184 is running CI34980516319, with backend/schema/web/static
 checks passing at last inspection; this follow-up needs its own CI. PR34 stays draft.
 Existing ETA/location/share-link privacy and child-action retirement remain separate
 verification, alongside completion drafts/restart and the broader inventory.
+
+
+## Existing ETA tracker and share lifetime
+
+The active imported ETATracker (not the unused inline copy) reproduced seven failures:
+another task's event overwrote ETA; a session change or page departure still copied
+a held share reply; rebinding retained old ETA and a pending share; a refreshed
+location was ignored; an unknown ETA retained an old estimate; and an empty share
+reply was copied and reported successful. Baseline runs are retained.
+
+The existing component reuses useGigListSession and keys its entry by task/status/
+owner/worker. Current context is required before sharing, copying or showing a result.
+A synchronous pending guard prevents duplicate requests. Missing/expired share
+receipts retain the existing failure/retry controls. Socket handlers accept only
+their task and valid producer timestamps, preserve newer updates, support unknown
+ETA and remove only their own listener. The existing backend already dynamically
+emits this event with gigId/timestamp; no replacement producer was added. Loaded
+location props remain current without overwriting a newer socket estimate.
+Only the existing tracker and existing entrypoint tests change; styles are unchanged.
+
+Final R1 passes201 focused checks across three existing suites, TypeScript and scoped
+lint (zero errors/one existing any warning). Five Chrome cases pass against the actual
+compiled v2 page, tracker, API SDK, session signals and root toast: current share,
+held share after session change, departure, cross-tab change and invalid-reply retry.
+Responses/cookies/entry controls and clipboard adapter are synthetic; no user clipboard,
+backend fixture, SQL write, provider or hosted operation was used. Socket ordering and
+rebinding are separately component-tested, not a live Socket.IO transport claim.
+
+A separate local Chrome probe returns404 for the exact `/status/:token` path generated
+by the existing backend. Current/master route inventory and Next rewrites contain
+no matching page; the unrelated `/shared/:token` Home-grant page is a different contract.
+Canonical Gig share token/expiry and helper location/ETA columns already exist.
+Read-only local metadata confirms participant-scoped Gig SELECT RLS; column grants
+alone are not evidence that anonymous users can read those rows. General API detail
+projection and share/location authority still need separate reproduction and repair.
+
+The owned server/route/build cache are removed, served entry chunks retained, port3107
+released and both original configs restored exactly. Cleanup first stopped because
+next-env is generated/untracked, then at its one changed route-types reference;
+that exact reference was compared and restored. Both stopped attempts are retained.
+Source hashes/copies, baseline/final checks, five screenshots and cleanup are under
+`existing-tip-provider-proof-r1/eta-sharing-*` and its durable private mirror.
+Previous b513c8184 CI34980516319 passes all15 applicable jobs/one Seeder skip. This
+and v2 checkpoint4611b261c require combined CI; PR34 and the full app remain unfinished.
