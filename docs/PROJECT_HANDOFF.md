@@ -26,7 +26,7 @@ matched master. No hosted deployment, migration adoption or provider activation 
 **Remaining open PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
 remains draft. Its isolated integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
-the canonical PR branch is `codex/staging-paid-gig`, currently at owner-date checkpoint `addebe757`.
+the canonical PR branch is `codex/staging-paid-gig`, currently at creator-authority checkpoint `428243241`.
 The integration branch includes installed iOS checkpoint `d6a0194ea` after
 cold-entry checkpoint `7791bb16f`, following legacy recovery
 `e700862f1` and coordinated Android `c6b1f830e`, iOS `b98cc283c`,
@@ -37,7 +37,7 @@ Current cold-entry `7791bb16f` [CI34920129205](https://github.com/WangPantopus/s
 passes all applicable jobs, including complete schema replay and native checks. The prior `14b8c3ae5` run was superseded/canceled by the new push.
 The durable-notice checkpoint `161aaf529` is now pushed to both branches and
 passes all15 applicable checks/one Seeder skip in [CI34922146452](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34922146452).
-Installed-tip checkpoint `4c8f11114` passes all applicable jobs in [CI34924470956](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34924470956). Owner-date checkpoint `addebe757` is pushed to the canonical branch, with [CI34926992422](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34926992422) in progress.
+Installed-tip checkpoint `4c8f11114` passes all applicable jobs in [CI34924470956](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34924470956). Owner-date checkpoint `addebe757` passes all15 applicable jobs/one Seeder skip in [CI34926992422](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34926992422). Creator-authority checkpoint `428243241` is now pushed to the canonical branch with [CI34929051683](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34929051683) in progress.
 Do not merge/deploy PR34 yet.
 
 **Current original-tip behavior:** the existing Payment.id and financial fields
@@ -199,7 +199,7 @@ See [completion effects evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owne
 In-app storage is durable; push/socket transport and Home service-history capture
 remain best effort after commit, including a lost RPC reply. No eventual-delivery
 claim is made. The transaction milestone `506820ead` is pushed on the integration branch;
-canonical CI still covers the preceding owner-date checkpoint.
+canonical CI now covers the following creator-authority checkpoint.
 
 **Completion proof reads:** six public-detail denial tests reproduced disclosure
 of completion notes/photos/checklists and owner confirmation feedback. The existing
@@ -220,11 +220,22 @@ pgTAP, real-role denial/preservation checks and the observed race pass. One forw
 function/policy migration adds no table/column/data rewrite. See
 [raw access evidence](VERIFICATION_FIRST_2026-09-13.md#existing-gig-policies-retire-revoked-creators).
 
-**Next:** finish current-head CI; continue existing completion proof/upload privacy
-and request recovery. These HTTP/SQL repairs do not establish private object
-storage or bind submitted URLs to owned files; inspect those existing uploads and
-File access paths next. Then finish notification transport/Home provenance
-recovery and completion/reopen policy flows. No-show execution still requires atomic concurrent/retry handling and
+**Completion file admission:** four reproduced unowned/external URL submissions
+now fail before worker completion. The existing S3 service checks the configured
+origin, task/uploader key path and native File record, then reads current object
+metadata through the SDK. Existing image/video/document types and safe older
+basenames are retained. Provider uncertainty leaves completion unset and retryable;
+the existing assignment comparison still protects a changed worker.178 backend
+checks/privacy gates and13 actual HTTP/upload/SQL/S3-SDK scenarios pass, with
+synthetic auth/object provider/notice transport. Three existing source/test files
+change; no schema or client/layout change. See
+[file admission evidence](VERIFICATION_FIRST_2026-09-13.md#existing-completion-submission-verifies-uploaded-files).
+
+**Next:** finish current-head CI; continue existing completion object privacy,
+byte/reference retention and request/session recovery. An owned key and successful
+object-metadata check do not establish private provider access or immutable retention.
+Then finish notification transport/Home provenance recovery and completion/reopen
+policy flows. No-show execution still requires atomic concurrent/retry handling and
 verified fee/financial outcomes. The repo's fee rates do not specify who owes and
 receives worker cancellation/no-show fees; one policy clarification is pending.
 Continue independent completion/security verification while that remains pending. Finish current-head CI

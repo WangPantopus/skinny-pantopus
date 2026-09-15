@@ -5476,6 +5476,9 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
     const safePhotos = Array.isArray(photos)
       ? photos.filter((p) => typeof p === 'string').slice(0, 10)
       : [];
+    for (let i = 0; i < safePhotos.length; i++) {
+      safePhotos[i] = await require('../services/s3Service').verifyGigCompletionFile(safePhotos[i], userId, gig.id);
+    }
     // Validate checklist
     const safeChecklist = Array.isArray(checklist)
       ? checklist.filter((c) => c && typeof c.item === 'string').slice(0, 20)
@@ -5545,7 +5548,7 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
     return res.json({ gig: updatedGig });
   } catch (err) {
     logger.error('Mark completed error', { error: err.message });
-    return res.status(500).json({ error: 'Failed to mark gig completed' });
+    return res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Failed to mark gig completed' });
   }
 });
 

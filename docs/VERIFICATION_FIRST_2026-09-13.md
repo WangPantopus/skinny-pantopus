@@ -3011,3 +3011,58 @@ addebe757; these later integration milestones need their own CI. No hosted schem
 provider or device change ran. This closes the reproduced creator-authority paths;
 completion object storage, supplied file references, client session/restart
 recovery and full installed/provider acceptance remain open.
+
+
+## Existing completion submission verifies uploaded files
+
+September14: four route failures reproduce worker completion accepting external,
+foreign-task, foreign-uploader and non-HTTP proof strings. The existing completion
+handler previously filtered string values only. Its existing web upload endpoint
+creates gigs/<gig>/<actor> keys; native generic uploads create uploads/<actor> keys
+and existing File rows with gig_completion purpose. Those source paths already
+exist; this repair extends the existing S3 service and completion route.
+
+Before saving completion, the route now verifies the configured public-origin/path,
+the current uploader/task path, and the existing native File row's purpose, state,
+size/type and optional task relationship. A HeadObject SDK request goes only to
+the configured bucket using that derived key, never to the supplied URL. Current
+object type/size and native metadata must match. Foreign references and missing
+objects reject; unavailable provider reads return retryable503 with no completion
+write. Existing assignment/date comparisons still run after the provider wait.
+Existing image/video/document types, extensionless keys and safe older basenames
+remain supported. No upload endpoint, table, migration, service or screen is added;
+three existing source/test files change. Signed query/fragment text is not retained
+in the canonical stored reference.
+
+178 focused tests across seven existing route/business/upload suites pass, as do
+privacy gates including15 audience checks. The initial new positive fixtures left
+assignment timestamps undefined instead of SQL NULL (three failures/174 passes);
+correcting those fixtures restores the actual database representation. A later
+compatibility check retains safe older basenames without weakening task/uploader
+path checks. Earlier failure evidence is preserved.
+
+Thirteen actual HTTP/upload/SQL/S3-SDK scenarios pass (77 SQL queries,19 PUT and nine
+HEAD requests to the owned synthetic object provider). Both existing upload
+endpoints process a Unicode filename; native File rows and exact uploaded bytes
+are verified, and the web upload still runs its existing image-processing path.
+Cases cover ordinary web/native and older-key proof, foreign URL/worker/task,
+missing objects, unknown provider reads followed by recovery, changed assignment,
+wrong native purpose/size, a mixed valid/invalid list and completion without files.
+Real task rows and notification attempts match each outcome; no financial provider
+call runs. All SQL fixtures and local object bytes are cleaned, and both local
+servers close. This is HTTP coverage of the endpoints used by web/native clients,
+not a new installed UI journey. Authentication, object service and notices are
+synthetic; the HTTP routes, S3 SDK and SQL are real.
+
+Private completion-proof-file-* scripts/logs/results are source-bound and mirrored.
+R1 covers12 actual cases; final R2 adds older-key compatibility and passes13.
+The previous creator-authority checkpoint428243241 is runningCI34929051683;
+prioraddebe757 passed all15 applicable jobs/one skip inCI34926992422. These later
+source changes still require their own current-head CI.
+
+Limits: this proves admitted references resolve to current supported objects in
+an uploader-owned path at validation time. It does not establish private bucket/CDN
+access, immutable byte retention, cross-provider deletion/commit atomicity or
+completion session/restart recovery. Historical stored references are not rewritten.
+The existing document/video proof presentation also needs its own UI verification.
+No hosted storage, schema, provider activation or client layout changed.

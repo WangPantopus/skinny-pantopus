@@ -1,6 +1,8 @@
 const db = require('../__mocks__/supabaseAdmin');
 const { resetTables, seedTable, getTable, setRpcMock } = db;
 const mockCharge = jest.fn();
+const mockS3Head = jest.fn();
+jest.mock('../../config/aws', () => ({ s3Client: { send: mockS3Head }, S3_BUCKET: 'pantopus-uploads', S3_REGION: 'us-west-2', CLOUDFRONT_URL: '' }));
 const mockRetrieve = jest.fn(), mockCapture = jest.fn(), mockCreate = jest.fn(), mockCancel = jest.fn();
 jest.mock('stripe', () => ({ charges: { retrieve: mockCharge }, paymentIntents: { retrieve: mockRetrieve, capture: mockCapture, create: mockCreate, cancel: mockCancel } }));
 jest.mock('../__mocks__/verifyToken', () => {
@@ -23,6 +25,7 @@ const pi = { id: 'pi_one', customer: 'cus_payer', amount: 1250, currency: 'usd',
 const post = (path, user = 'payer') => request(app).post(`/api/gigs/${path}`).set('x-test-user-id', user).send({});
 beforeEach(() => {
   jest.restoreAllMocks(); jest.clearAllMocks(); resetTables();
+  mockS3Head.mockResolvedValue({ ContentLength: 32, ContentType: 'image/jpeg' });
   seedTable('User', [{ id: 'payer', account_type: 'personal' }, { id: 'worker', account_type: 'personal' }]);
   seedTable('Gig', [{ id: 'gig', user_id: 'payer', title: 'Synthetic gig', price: 20, status: 'open',
     accepted_by: null, payment_id: null, owner_confirmed_at: null }]);
@@ -33,7 +36,7 @@ beforeEach(() => {
     payment_method_details: { type: 'card', card: { capture_before: Math.floor(Date.now()/1000)+3600 } } });
 });
 function assigned(status = 'assigned') {
-  Object.assign(getTable('Gig')[0], { status, accepted_by: 'worker', payment_id: 'pay', price: 12.5,
+  Object.assign(getTable('Gig')[0], { status, accepted_by: 'worker', payment_id: 'pay', price: 12.5, accepted_at: null, started_at: null,
     worker_completed_at: status === 'completed' ? '2026-09-10T00:00:00Z' : null });
   getTable('Payment')[0].payment_status = 'authorized';
 }
@@ -260,10 +263,10 @@ describe('worker completion preserves the assignment it observed', () => {
     assigned('in_progress');
     Object.assign(getTable('Gig')[0], { accepted_at: '2026-09-14T12:00:00Z', started_at: '2026-09-14T12:01:00Z' });
     const result = await request(app).post('/api/gigs/gig/mark-completed').set('x-test-user-id', 'worker')
-      .send({ note: 'Work completed', photos: ['https://fixture.example.invalid/proof.jpg'], checklist: [{ item: 'Finished', done: true }] });
+      .send({ note: 'Work completed', photos: ['https://pantopus-uploads.s3.us-west-2.amazonaws.com/gigs/gig/worker/1700000000000_0123456789abcdef.jpg'], checklist: [{ item: 'Finished', done: true }] });
     expect(result.status).toBe(200);
     expect(result.body.gig).toMatchObject({ status: 'completed', accepted_by: 'worker', price: 12.5,
-      completion_note: 'Work completed', completion_photos: ['https://fixture.example.invalid/proof.jpg'],
+      completion_note: 'Work completed', completion_photos: ['https://pantopus-uploads.s3.us-west-2.amazonaws.com/gigs/gig/worker/1700000000000_0123456789abcdef.jpg'],
       completion_checklist: [{ item: 'Finished', done: true }] });
     expect(result.body.gig.worker_completed_at).toBeTruthy();
     expect(mockCapture).not.toHaveBeenCalled();
@@ -376,5 +379,81 @@ describe('public gig detail keeps completion evidence within the current work re
     const result = await request(app).get('/api/gigs/gig').set('Authorization', 'Bearer unavailable');
     expect(result.status).toBe(200);
     for (const key of Object.keys(proof)) expect(result.body.gig).not.toHaveProperty(key);
+  });
+});
+
+
+describe('worker completion proof belongs to its uploader', () => {
+  test.each([
+    'https://unrelated.example.invalid/tracker.jpg',
+    'https://pantopus-uploads.s3.us-west-2.amazonaws.com/gigs/other/worker/proof.jpg',
+    'https://pantopus-uploads.s3.us-west-2.amazonaws.com/gigs/gig/foreign/proof.jpg',
+    'data:image/svg+xml,untrusted',
+  ])('rejects an unowned proof reference before completing: %s', async photo => {
+    assigned('in_progress');
+    const result = await request(app).post('/api/gigs/gig/mark-completed').set('x-test-user-id', 'worker').send({ photos: [photo] });
+    expect(result.status).toBe(400); expect(getTable('Gig')[0].status).toBe('in_progress');
+    expect(mockS3Head).not.toHaveBeenCalled(); expect(mockCapture).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('existing uploaded proof is verified before the completion write', () => {
+  const base = 'https://pantopus-uploads.s3.us-west-2.amazonaws.com/';
+  const name = '1700000000000_0123456789abcdef.jpg';
+  const uploadKey = 'uploads/worker/' + name;
+  const submit = photo => request(app).post('/api/gigs/gig/mark-completed').set('x-test-user-id', 'worker').send({ photos: [photo] });
+  function nativeFile(patch = {}) {
+    seedTable('File', [{ id: 'proof-file', user_id: 'worker', file_path: uploadKey,
+      file_type: 'gig_attachment', file_context: 'gig_completion', gig_id: null,
+      processing_status: 'completed', is_deleted: false, file_size: 32, mime_type: 'image/jpeg', ...patch }]);
+  }
+  test('an older safe basename still verifies through its owned path', async () => {
+    assigned('in_progress');
+    expect((await submit(base + 'gigs/gig/worker/legacy-proof.jpg')).status).toBe(200);
+    expect(mockS3Head.mock.calls[0][0].input.Key).toBe('gigs/gig/worker/legacy-proof.jpg');
+  });
+  test('native generic upload reuses its existing owned File row and exact S3 object', async () => {
+    assigned('in_progress'); nativeFile();
+    const result = await submit(base + uploadKey); expect(result.status).toBe(200);
+    expect(result.body.gig.completion_photos).toEqual([base + uploadKey]);
+    expect(mockS3Head.mock.calls[0][0].input).toEqual({ Bucket: 'pantopus-uploads', Key: uploadKey });
+    expect(getTable('File')).toHaveLength(1);
+  });
+  test.each([
+    { user_id: 'foreign' }, { file_context: 'gig_photo' }, { gig_id: 'other' },
+    { processing_status: 'uploading' }, { is_deleted: true },
+  ])('unavailable native upload metadata is rejected: %j', async patch => {
+    assigned('in_progress'); nativeFile(patch);
+    expect((await submit(base + uploadKey)).status).toBe(400);
+    expect(getTable('Gig')[0].status).toBe('in_progress'); expect(mockS3Head).not.toHaveBeenCalled();
+  });
+  test.each([
+    { ContentLength: 0, ContentType: 'image/jpeg' },
+    { ContentLength: 32, ContentType: 'text/html' },
+    { ContentLength: 11 * 1024 * 1024, ContentType: 'image/jpeg' },
+  ])('unsupported object metadata never completes work: %j', async metadata => {
+    assigned('in_progress'); mockS3Head.mockResolvedValue(metadata);
+    expect((await submit(base + 'gigs/gig/worker/' + name)).status).toBe(400);
+    expect(getTable('Gig')[0].status).toBe('in_progress');
+  });
+  test('a missing object and an unknown provider read preserve uncompleted work', async () => {
+    assigned('in_progress'); mockS3Head.mockRejectedValueOnce({ name: 'NotFound' });
+    expect((await submit(base + 'gigs/gig/worker/' + name)).status).toBe(400);
+    mockS3Head.mockRejectedValueOnce(new Error('Synthetic timeout'));
+    expect((await submit(base + 'gigs/gig/worker/' + name)).status).toBe(503);
+    expect(getTable('Gig')[0].status).toBe('in_progress');
+  });
+  test('assignment changes during the object check still fail the existing conditional write', async () => {
+    assigned('in_progress'); mockS3Head.mockImplementationOnce(async () => {
+      getTable('Gig')[0] = { ...getTable('Gig')[0], accepted_by: 'replacement' };
+      return { ContentLength: 32, ContentType: 'image/jpeg' };
+    });
+    expect((await submit(base + 'gigs/gig/worker/' + name)).status).toBe(409);
+    expect(getTable('Gig')[0].status).toBe('in_progress'); expect(getTable('Gig')[0].accepted_by).toBe('replacement');
+  });
+  test.each(['video/mp4', 'application/pdf'])('existing supported %s proof remains admissible', async mimeType => {
+    assigned('in_progress'); mockS3Head.mockResolvedValue({ ContentLength: 32, ContentType: mimeType });
+    expect((await submit(base + 'gigs/gig/worker/' + name)).status).toBe(200);
   });
 });

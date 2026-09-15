@@ -2,7 +2,7 @@
 // S3 SERVICE — Upload, delete, presigned URL generation
 // ============================================================
 
-const { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 const path = require('path');
@@ -67,6 +67,52 @@ async function uploadProfilePicture(buffer, originalFilename, userId, mimeType) 
 async function uploadGigMedia(buffer, originalFilename, userId, gigId, mimeType) {
   const key = generateS3Key(`gigs/${gigId}`, originalFilename, userId);
   return uploadToS3(buffer, key, mimeType);
+}
+
+/** Verify an existing completion upload without fetching a caller-supplied URL. */
+async function verifyGigCompletionFile(url, userId, gigId) {
+  const invalid = () => Object.assign(new Error('Choose proof files uploaded by you for this task.'), { statusCode: 400 });
+  let key;
+  try {
+    const base = new URL(getPublicUrl(''));
+    const reference = new URL(url);
+    if (reference.origin !== base.origin || reference.username || reference.password
+      || !reference.pathname.startsWith(base.pathname)) throw invalid();
+    key = decodeURIComponent(reference.pathname.slice(base.pathname.length));
+  } catch { throw invalid(); }
+  const parts = key.split('/');
+  const same = (left, right) => String(left).toLowerCase() === String(right).toLowerCase();
+  const webUpload = parts.length === 4 && parts[0] === 'gigs' && same(parts[1], gigId) && same(parts[2], userId);
+  const nativeUpload = parts.length === 3 && parts[0] === 'uploads' && same(parts[1], userId);
+  // Keep older basenames usable without permitting another path segment or
+  // URL escapes. Ownership comes from the task/uploader path and actual object.
+  if ((!webUpload && !nativeUpload) || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(parts.at(-1))) throw invalid();
+
+  let file;
+  if (nativeUpload) {
+    const { data, error } = await require('../config/supabaseAdmin').from('File')
+      .select('id, gig_id, file_size, mime_type').eq('user_id', userId).eq('file_path', key)
+      .eq('file_type', 'gig_attachment').eq('file_context', 'gig_completion')
+      .eq('processing_status', 'completed').eq('is_deleted', false).maybeSingle();
+    if (error) throw Object.assign(new Error('Proof files could not be checked. Please retry.'), { statusCode: 503 });
+    if (!data || (data.gig_id && !same(data.gig_id, gigId))) throw invalid();
+    file = data;
+  }
+
+  let object;
+  try {
+    object = await s3Client.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: key }),
+      { abortSignal: AbortSignal.timeout(10000) });
+  } catch (error) {
+    if (error?.$metadata?.httpStatusCode === 404 || error?.name === 'NotFound' || error?.name === 'NoSuchKey') throw invalid();
+    throw Object.assign(new Error('Proof files could not be checked. Please retry.'), { statusCode: 503 });
+  }
+  const mimeType = String(object.ContentType || '').split(';')[0].trim().toLowerCase();
+  const category = categorizeFile(mimeType);
+  if (!category || !Number.isSafeInteger(object.ContentLength) || object.ContentLength <= 0
+    || object.ContentLength > MAX_FILE_SIZES[category]
+    || (file && (Number(file.file_size) !== object.ContentLength || file.mime_type !== mimeType))) throw invalid();
+  return getPublicUrl(key);
 }
 
 async function uploadHomeTaskMedia(buffer, originalFilename, userId, taskId, mimeType) {
@@ -134,6 +180,7 @@ function isAllowedType(mimeType) {
 module.exports = {
   categorizeFile, generateS3Key, getPublicUrl, isAllowedType,
   uploadToS3, uploadProfilePicture, uploadGigMedia,
+  verifyGigCompletionFile,
   uploadHomeTaskMedia, uploadReviewMedia, uploadListingMedia, uploadGeneral,
   deleteFromS3, getPresignedDownloadUrl, getObjectAsString, getPresignedUploadUrl,
   ALL_ALLOWED_TYPES, ALLOWED_IMAGE_TYPES, ALLOWED_VIDEO_TYPES, ALLOWED_DOC_TYPES, MAX_FILE_SIZES,
