@@ -3574,3 +3574,64 @@ this change needs current-head CI. PR34 remains draft. The digest is neither an 
 token nor proof that a person inspected all fields. Post-server-read proof/provider
 races, native owner callback lifetime, MyTasks admission, draft/restart and full
 installed/provider/release acceptance remain open for subsequent bounded verification.
+
+
+## Existing MyTasks waits for owner confirmation
+
+Existing native MyTasks called the owner completion endpoint while work was still
+in progress, optimistically moved it to Done before a response, and treated worker
+completion as owner confirmation. Android reproduced two unique failures (six
+executions because the configured runner retried each). Existing web MyGigsV2 also
+offered Mark Complete only before the worker was done. These are repairs to the
+existing row models, handlers and API projection; no replacement screen is needed.
+
+All three existing lists now keep worker-submitted work active with Ready to confirm,
+use their existing confirmation action only for that state, and require a matching
+completed receipt with a valid owner-confirmation date. In-progress work opens the
+existing detail page. Native optimistic completion copies are removed; the existing
+loader refreshes after a receipt. Native failures open existing detail for recovery.
+Duplicate pending taps issue one command. Web retains its existing confirmation
+dialog and rejects changed-auth callbacks. Card layout, styling and row structure
+remain unchanged. Native account/request lifetime is a separate pending check.
+
+Actual Chrome plus existing MyGigs/worker-completion/owner-completion HTTP routes,
+StripeService and owned PostgreSQL pass two scenarios: normal confirmation and
+a lost committed reply. Each uses37 SQL calls and one synthetic capture. Pending
+confirmation has zero captures/no success, a repeat tap sends no second command,
+and reload finds the confirmed receipt after a lost reply. The normal run also
+verifies unconfirmed work is excluded from Completed and included in In progress.
+Authentication, business directory, browser wrapper and Stripe are synthetic.
+Native SDK checks do not establish installed native paid-lifecycle UI acceptance.
+
+This browser fixture honors simple SQL column projections literally. It exposed
+missing Gig.boosted_at and boost_expires_at fields used by the existing list query.
+Original backend migration149 and archived20260516000000 are byte-identical, and
+the legacy schema already contains both fields and the index; canonical replay
+omitted them. The new20260915040000 forward migration restores those two nullable
+fields and the existing partial index with bounded locking. It adds no table and
+does not infer historical boost data. Both missing-field and already-adopted
+rehearsals preserve the complete existing task values, including full-precision
+boost dates, across repeated application. Exact ab02 fixtures roll back. Earlier
+owner-review SQL adapters used SELECT* and did not verify the literal list column
+projection; their other recorded route/payment checks retain their stated scope.
+
+Local verification passes45 Android MyTasks checks plus compile/detekt/ktlint,
+15 backend list/payment checks and all privacy gates (including15 audience checks),
+all65 SQL contracts, the generated paid pgTAP wrapper, migration policy and wrapper
+synchronization. Web project types pass; this existing page retains its pre-existing
+ts-nocheck limitation. Its lint has zero errors/three existing warnings. iOS passes43
+checks across MyTasks and unchanged Magic Task suites, build, format and strict lint.
+All679 installed test-host files match the retained build; the owned simulator
+returns to shutdown, and the unrelated booted simulator remains untouched.
+
+Retained attempts include Android formatting failures R1–R3 and a complex-condition
+static failure R4, corrected without weakening rules; iOS test-file length was
+repaired by replacing its obsolete header comments. The first browser attempt
+failed on the missing original boost fields. Final normal browser R4 and lost-reply
+R3 pass with zero page errors, and screenshots preserve the existing layout.
+Exact ab01 actors/tasks/payments/notices are cleaned after every fixture. API18109
+and Next3107 are stopped; the private page is removed, configuration hashes restored,
+and served browser products retained. No hosted schema or actual provider operation
+is part of this scope. Private my-tasks-completion-* source/run/product records
+retain failures and verification limits. Current-head CI remains required and
+PR34 remains draft; no wider inventory row is closed by these bounded checks.

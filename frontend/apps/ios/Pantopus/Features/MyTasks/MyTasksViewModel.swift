@@ -72,9 +72,9 @@ public enum MyTasksStatus: Sendable, Hashable {
     /// "Starts {weekday}" — gig.status = assigned + scheduled_start in
     /// the future.
     case scheduled(weekday: String)
-    /// "Leave a review" — completed gigs where the poster hasn't yet
-    /// rated the worker (uses awaitReview as a fallback while the
-    /// backend doesn't surface `poster_review_left`).
+    /// Worker-submitted work still awaiting owner confirmation.
+    case awaitingConfirmation
+    /// Confirmed work awaiting the poster’s review.
     case awaitReview
     /// "Completed" — completed + the poster has already rated.
     case completed
@@ -93,6 +93,7 @@ public enum MyTasksStatus: Sendable, Hashable {
         case .noBids: "No bids yet"
         case .inProgress: "In progress"
         case let .scheduled(weekday): "Starts \(weekday)"
+        case .awaitingConfirmation: "Ready to confirm"
         case .awaitReview: "Leave a review"
         case .completed: "Completed"
         case .cancelled: "Cancelled"
@@ -107,6 +108,7 @@ public enum MyTasksStatus: Sendable, Hashable {
         case .noBids: .circleSlash
         case .inProgress: .play
         case .scheduled: .calendar
+        case .awaitingConfirmation: .checkCheck
         case .awaitReview: .star
         case .completed: .checkCheck
         case .cancelled: .x
@@ -117,7 +119,7 @@ public enum MyTasksStatus: Sendable, Hashable {
     /// Chip variant straight from the design's STATUS map.
     public var chipVariant: StatusChipVariant {
         switch self {
-        case .reviewing, .scheduled, .awaitReview: .info
+        case .reviewing, .scheduled, .awaitingConfirmation, .awaitReview: .info
         case .urgent: .error
         case .noBids, .cancelled, .expired: .neutral
         case .inProgress, .completed: .success
@@ -275,8 +277,9 @@ public enum MyTasksFooter: Sendable, Hashable {
     /// `boost` — [Edit details (ghost), Boost in feed (primary)]. Used
     /// for open + no-bids tasks.
     case boost
-    /// `inprogress` — [Message (ghost), Mark complete (primary)].
+    /// Active work keeps the existing Message and View task actions.
     case inProgress
+    case confirmCompletion
     /// `review` — single full-width "Leave a review".
     case review
     /// `repost` — single full-width "Repost task".
@@ -402,6 +405,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     // MARK: - Dependencies
 
     private let api: APIClient
+    private var confirmingGigIds: Set<String> = []
     private let onOpenTask: @MainActor (MyGigDTO) -> Void
     private let onOpenBids: @MainActor (MyGigDTO) -> Void
     private let onEditTask: @MainActor (MyGigDTO) -> Void
@@ -522,7 +526,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     public static func statusFilterId(for status: MyTasksStatus) -> String {
         switch status {
         case .reviewing, .urgent, .noBids: "open"
-        case .inProgress, .scheduled: "in_progress"
+        case .inProgress, .scheduled, .awaitingConfirmation: "in_progress"
         case .completed, .awaitReview: "done"
         case .cancelled, .expired: "closed"
         }
@@ -652,22 +656,30 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         }
     }
 
-    /// Optimistically mark the assigned gig as complete (poster
-    /// confirmation). The row moves from Active → Done with the "Leave
-    /// a review" chip.
+    /// Confirm only worker-submitted work and keep the row active until a receipt.
     public func markComplete(_ dto: MyGigDTO) async {
-        guard let index = gigs.firstIndex(where: { $0.id == dto.id }) else { return }
-        let previous = gigs
-        gigs[index] = Self.completedCopy(of: gigs[index])
-        rebuild()
+        guard let current = gigs.first(where: { $0.id == dto.id }) else { return }
+        guard current.status == "completed", Self.parseDate(current.ownerConfirmedAt) == nil,
+              let review = dto.completionReview, !review.isEmpty, current.completionReview == review
+        else { onOpenTask(dto)
+            return
+        }
+        guard confirmingGigIds.insert(dto.id).inserted else { return }
+        defer { confirmingGigIds.remove(dto.id) }
         do {
-            _ = try await api.request(
-                GigsEndpoints.completeGigAsPoster(gigId: dto.id, expectedReview: dto.completionReview),
-                as: EmptyResponse.self
+            let response: GigDetailResponse = try await api.request(
+                GigsEndpoints.completeGigAsPoster(gigId: dto.id, expectedReview: review)
             )
+            guard response.gig.id == dto.id, response.gig.status == "completed",
+                  Self.parseDate(response.gig.ownerConfirmedAt) != nil
+            else { onOpenTask(dto)
+                return
+            }
+            await load()
         } catch {
-            gigs = previous
-            rebuild()
+            // The existing detail loader recovers a lost committed reply or shows
+            // current work after a conflict; never manufacture a local receipt.
+            onOpenTask(dto)
         }
     }
 
@@ -716,7 +728,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         switch status {
         case .reviewing, .urgent, .noBids:
             MyTasksTab.open
-        case .inProgress, .scheduled:
+        case .inProgress, .scheduled, .awaitingConfirmation:
             MyTasksTab.active
         case .completed, .awaitReview:
             MyTasksTab.done
@@ -733,9 +745,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         case "cancelled":
             return .cancelled
         case "completed":
-            // Until a backend `poster_review_left` flag lands, every
-            // completed gig prompts a review.
-            return .awaitReview
+            return parseDate(dto.ownerConfirmedAt) == nil ? .awaitingConfirmation : .awaitReview
         case "in_progress":
             return .inProgress
         case "assigned":
@@ -773,6 +783,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         case .noBids: .boost
         case .inProgress: .inProgress
         case .scheduled: .inProgress
+        case .awaitingConfirmation: .confirmCompletion
         case .awaitReview: .review
         case .completed: .none
         case .cancelled, .expired: .repost
@@ -1019,7 +1030,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
                     handler: callbacks.onBoost
                 )
             ])
-        case .inProgress:
+        case .inProgress, .confirmCompletion:
             RowFooter(actions: [
                 RowFooterAction(
                     title: "Message",
@@ -1028,10 +1039,10 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
                     handler: callbacks.onMessage
                 ),
                 RowFooterAction(
-                    title: "Mark complete",
+                    title: variant == .confirmCompletion ? "Confirm completion" : "View task",
                     icon: .checkCheck,
                     variant: .primary,
-                    handler: callbacks.onMarkComplete
+                    handler: variant == .confirmCompletion ? callbacks.onMarkComplete : callbacks.onTap
                 )
             ])
         case .review:
@@ -1123,38 +1134,8 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
             sourceFlow: dto.sourceFlow,
             taskArchetype: dto.taskArchetype,
             taskFormat: dto.taskFormat,
-            completionReview: dto.completionReview
-        )
-    }
-
-    /// Build an optimistic copy of a gig whose status is flipped to
-    /// completed (used by `markComplete`).
-    public static func completedCopy(of dto: MyGigDTO) -> MyGigDTO {
-        MyGigDTO(
-            id: dto.id,
-            title: dto.title,
-            description: dto.description,
-            price: dto.price,
-            category: dto.category,
-            status: "completed",
-            createdAt: dto.createdAt,
-            updatedAt: ISO8601DateFormatter().string(from: Date()),
-            deadline: dto.deadline,
-            isUrgent: dto.isUrgent,
-            userId: dto.userId,
-            acceptedBy: dto.acceptedBy,
-            acceptedAt: dto.acceptedAt,
-            scheduledStart: dto.scheduledStart,
-            payType: dto.payType,
-            bidCount: dto.bidCount,
-            topBidAmount: dto.topBidAmount,
-            topBidders: dto.topBidders,
-            boostedAt: dto.boostedAt,
-            boostExpiresAt: dto.boostExpiresAt,
-            sourceFlow: dto.sourceFlow,
-            taskArchetype: dto.taskArchetype,
-            taskFormat: dto.taskFormat,
-            completionReview: dto.completionReview
+            completionReview: dto.completionReview,
+            ownerConfirmedAt: dto.ownerConfirmedAt
         )
     }
 }

@@ -1385,7 +1385,7 @@ router.get('/my-gigs', verifyToken, async (req, res) => {
     const ownerIds = Array.from(new Set([userId, ...managedBusinessIds]));
     let query = supabaseAdmin
       .from('Gig')
-      .select(`${GIG_LIST}, attachments, payment_id, started_at, worker_completed_at, completion_note, completion_photos, completion_checklist`)
+      .select(`${GIG_LIST}, attachments, payment_id, started_at, worker_completed_at, owner_confirmed_at, completion_note, completion_photos, completion_checklist`)
       .in('user_id', ownerIds)
       .order('created_at', { ascending: false })
       .limit(parseInt(limit));

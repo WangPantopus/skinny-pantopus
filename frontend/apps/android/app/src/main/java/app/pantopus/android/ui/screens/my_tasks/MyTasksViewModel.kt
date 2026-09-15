@@ -106,6 +106,12 @@ sealed class MyTasksStatus {
         override val chipVariant = StatusChipVariant.Info
     }
 
+    data object AwaitingConfirmation : MyTasksStatus() {
+        override val label = "Ready to confirm"
+        override val icon = PantopusIcon.CheckCheck
+        override val chipVariant = StatusChipVariant.Info
+    }
+
     data object AwaitReview : MyTasksStatus() {
         override val label = "Leave a review"
         override val icon = PantopusIcon.Star
@@ -257,6 +263,8 @@ sealed class MyTasksFooter {
 
     data object InProgress : MyTasksFooter()
 
+    data object ConfirmCompletion : MyTasksFooter()
+
     data object Review : MyTasksFooter()
 
     data object Repost : MyTasksFooter()
@@ -279,6 +287,7 @@ class MyTasksViewModel
         private var loadedAtLeastOnce = false
         private var nowProvider: () -> Instant = { Instant.now() }
 
+        private val confirmingGigIds = mutableSetOf<String>()
         private var openTaskHandler: (MyGigDto) -> Unit = {}
         private var openBidsHandler: (MyGigDto) -> Unit = {}
         private var editTaskHandler: (MyGigDto) -> Unit = {}
@@ -556,18 +565,30 @@ class MyTasksViewModel
         }
 
         fun markComplete(dto: MyGigDto) {
-            val index = gigs.indexOfFirst { it.id == dto.id }
-            if (index < 0) return
-            val previous = gigs
-            gigs = gigs.toMutableList().also { it[index] = completedCopy(gigs[index]) }
-            applyState()
+            val current = gigs.firstOrNull { it.id == dto.id } ?: return
+            val review = dto.completionReview
+            val awaitsConfirmation = current.status == "completed" && parseInstant(current.ownerConfirmedAt) == null
+            val matchesReview = !review.isNullOrEmpty() && current.completionReview == review
+            if (!awaitsConfirmation || !matchesReview) {
+                openTaskHandler(dto)
+                return
+            }
+            if (!confirmingGigIds.add(dto.id)) return
             viewModelScope.launch {
-                when (gigsRepo.completeGigAsPoster(dto.id, dto.completionReview)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        gigs = previous
-                        applyState()
+                try {
+                    when (val result = gigsRepo.completeGigAsPoster(dto.id, review)) {
+                        is NetworkResult.Success -> {
+                            val receipt = result.data.gig
+                            if (receipt?.id == dto.id && receipt.status == "completed" && parseInstant(receipt.ownerConfirmedAt) != null) {
+                                load()
+                            } else {
+                                openTaskHandler(dto)
+                            }
+                        }
+                        is NetworkResult.Failure -> openTaskHandler(dto)
                     }
+                } finally {
+                    confirmingGigIds.remove(dto.id)
                 }
             }
         }
@@ -726,7 +747,7 @@ class MyTasksViewModel
                                 ),
                             ),
                     )
-                is MyTasksFooter.InProgress ->
+                is MyTasksFooter.InProgress, is MyTasksFooter.ConfirmCompletion ->
                     RowFooter(
                         actions =
                             listOf(
@@ -737,10 +758,23 @@ class MyTasksViewModel
                                     onClick = { messageWorkerHandler(dto) },
                                 ),
                                 RowFooterAction(
-                                    title = "Mark complete",
+                                    title =
+                                        if (variant is MyTasksFooter.ConfirmCompletion) {
+                                            "Confirm completion"
+                                        } else {
+                                            "View task"
+                                        },
                                     icon = PantopusIcon.CheckCheck,
                                     variant = CompactButtonVariant.Primary,
-                                    onClick = { markComplete(dto) },
+                                    onClick = {
+                                        if (variant is MyTasksFooter.ConfirmCompletion) {
+                                            markComplete(
+                                                dto,
+                                            )
+                                        } else {
+                                            openTaskHandler(dto)
+                                        }
+                                    },
                                 ),
                             ),
                     )
@@ -810,7 +844,7 @@ class MyTasksViewModel
             fun tabFor(status: MyTasksStatus): String =
                 when (status) {
                     is MyTasksStatus.Reviewing, is MyTasksStatus.Urgent, is MyTasksStatus.NoBids -> MyTasksTab.OPEN
-                    is MyTasksStatus.InProgress, is MyTasksStatus.Scheduled -> MyTasksTab.ACTIVE
+                    is MyTasksStatus.InProgress, is MyTasksStatus.Scheduled, is MyTasksStatus.AwaitingConfirmation -> MyTasksTab.ACTIVE
                     is MyTasksStatus.Completed, is MyTasksStatus.AwaitReview -> MyTasksTab.DONE
                     is MyTasksStatus.Cancelled, is MyTasksStatus.Expired -> MyTasksTab.CLOSED
                 }
@@ -822,7 +856,12 @@ class MyTasksViewModel
                 val gigStatus = (dto.status ?: "").lowercase(Locale.ROOT)
                 return when (gigStatus) {
                     "cancelled" -> MyTasksStatus.Cancelled
-                    "completed" -> MyTasksStatus.AwaitReview
+                    "completed" ->
+                        if (parseInstant(dto.ownerConfirmedAt) == null) {
+                            MyTasksStatus.AwaitingConfirmation
+                        } else {
+                            MyTasksStatus.AwaitReview
+                        }
                     "in_progress" -> MyTasksStatus.InProgress
                     "assigned" -> {
                         val scheduled = parseInstant(dto.scheduledStart)
@@ -865,6 +904,7 @@ class MyTasksViewModel
                     is MyTasksStatus.Urgent -> MyTasksFooter.Urgent(bidCount)
                     is MyTasksStatus.NoBids -> MyTasksFooter.Boost
                     is MyTasksStatus.InProgress, is MyTasksStatus.Scheduled -> MyTasksFooter.InProgress
+                    is MyTasksStatus.AwaitingConfirmation -> MyTasksFooter.ConfirmCompletion
                     is MyTasksStatus.AwaitReview -> MyTasksFooter.Review
                     is MyTasksStatus.Completed -> MyTasksFooter.None
                     is MyTasksStatus.Cancelled, is MyTasksStatus.Expired -> MyTasksFooter.Repost
@@ -874,7 +914,7 @@ class MyTasksViewModel
             fun statusFilterId(status: MyTasksStatus): String =
                 when (status) {
                     is MyTasksStatus.Reviewing, is MyTasksStatus.Urgent, is MyTasksStatus.NoBids -> "open"
-                    is MyTasksStatus.InProgress, is MyTasksStatus.Scheduled -> "in_progress"
+                    is MyTasksStatus.InProgress, is MyTasksStatus.Scheduled, is MyTasksStatus.AwaitingConfirmation -> "in_progress"
                     is MyTasksStatus.Completed, is MyTasksStatus.AwaitReview -> "done"
                     is MyTasksStatus.Cancelled, is MyTasksStatus.Expired -> "closed"
                 }
@@ -1030,11 +1070,5 @@ class MyTasksViewModel
                     updatedAt = now.toString(),
                 )
             }
-
-            fun completedCopy(dto: MyGigDto): MyGigDto =
-                dto.copy(
-                    status = "completed",
-                    updatedAt = Instant.now().toString(),
-                )
         }
     }

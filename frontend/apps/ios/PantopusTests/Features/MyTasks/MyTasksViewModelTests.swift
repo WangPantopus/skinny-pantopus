@@ -2,24 +2,8 @@
 //  MyTasksViewModelTests.swift
 //  PantopusTests
 //
-//  T5.3.2 — My tasks V2. Covers:
-//    - load → loaded / empty / error transitions
-//    - tab assignment per derived status (open → Open, urgent → Open,
-//      noBids → Open, inProgress → Active, scheduled → Active,
-//      awaitReview → Done, cancelled → Closed, expired → Closed)
-//    - status derivation: open + bid_count>0 → reviewing, open + 0 →
-//      noBids, open + deadline<4h → urgent, open + deadline passed →
-//      expired, assigned + future scheduled_start → scheduled,
-//      in_progress → inProgress, cancelled → cancelled, completed →
-//      awaitReview
-//    - footer per status (open / urgent → review-bids variants, noBids
-//      → boost, in-progress → mark-complete, awaitReview → review,
-//      cancelled/expired → repost, completed → none)
-//    - muted highlight on cancelled / expired
-//    - banner content on the Open tab
-//    - optimistic boost flips boost_expires_at in-cache
-//    - tone mapping for the bidder stack
-//
+// Existing task lifecycle, row design, filtering and completion receipt checks.
+// Worker-submitted work remains Active until the owner confirms it.
 
 import XCTest
 @testable import Pantopus
@@ -207,11 +191,11 @@ final class MyTasksViewModelTests: XCTestCase {
         )
     }
 
-    func testStatusDerivation_CompletedIsAwaitReview() {
+    func testStatusDerivation_WorkerCompletionAwaitsConfirmation() {
         let dto = makeGig(id: "x", status: "completed")
         XCTAssertEqual(
             MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow),
-            .awaitReview
+            .awaitingConfirmation
         )
     }
 
@@ -250,7 +234,7 @@ final class MyTasksViewModelTests: XCTestCase {
         )
     }
 
-    func testFooter_InProgressHasMarkComplete() {
+    func testFooter_InProgressHasViewTask() {
         XCTAssertEqual(
             MyTasksViewModel.footerFor(status: .inProgress, bidCount: 0),
             .inProgress
@@ -411,6 +395,53 @@ final class MyTasksViewModelTests: XCTestCase {
         let body = String(data: command?.authTestBodyData() ?? Data(), encoding: .utf8) ?? ""
         XCTAssertTrue(body.contains("listed-review"))
         XCTAssertTrue(body.contains("expectedReview"))
+    }
+
+    func testWorkerCompletionStaysActiveUntilOwnerConfirms() {
+        let unconfirmed = MyGigDTO(id: "g1", title: "Work", status: "completed", completionReview: "loaded-review")
+        let confirmed = MyGigDTO(id: "g1", title: "Work", status: "completed", ownerConfirmedAt: "2026-09-15T12:00:00Z")
+        XCTAssertEqual(
+            MyTasksViewModel.tabFor(status: MyTasksViewModel.derivedStatus(for: unconfirmed, now: Self.fixedNow)),
+            MyTasksTab.active
+        )
+        XCTAssertEqual(MyTasksViewModel.tabFor(status: MyTasksViewModel.derivedStatus(for: confirmed, now: Self.fixedNow)), MyTasksTab.done)
+        XCTAssertEqual(renderRow(for: unconfirmed).footer?.actions.last?.title, "Confirm completion")
+        XCTAssertEqual(renderRow(for: makeGig(id: "g2", status: "in_progress")).footer?.actions.last?.title, "View task")
+    }
+
+    func testPrematureConfirmationOpensTaskWithoutSending() async {
+        let dto = MyGigDTO(id: "g1", title: "Work", status: "in_progress")
+        SequencedURLProtocol.sequence = [.status(200, body: #"{"gigs":[{"id":"g1","title":"Work","status":"in_progress"}]}"#)]
+        var opened: [String] = []
+        let vm = MyTasksViewModel(api: makeAPI(), onOpenTask: { opened.append($0.id) }, now: { Self.fixedNow })
+        await vm.load()
+        await vm.markComplete(dto)
+        XCTAssertEqual(opened, ["g1"])
+        XCTAssertFalse(SequencedURLProtocol.capturedRequests.contains { $0.url?.path == "/api/gigs/g1/complete" })
+    }
+
+    func testConfirmationWaitsForReceiptAndIgnoresDuplicateTap() async throws {
+        let before = #"{"id":"g1","title":"Work","status":"completed","completion_review":"loaded-review"}"#
+        let after = #"{"id":"g1","title":"Work","status":"completed","owner_confirmed_at":"2026-09-15T12:00:00Z"}"#
+        let dto = try JSONDecoder().decode(MyGigDTO.self, from: Data(before.utf8))
+        SequencedURLProtocol.routeResponses = [
+            "/api/gigs/my-gigs": [.status(200, body: "{\"gigs\":[\(before)]}"), .status(200, body: "{\"gigs\":[\(after)]}")],
+            "/api/gigs/g1/complete": [.status(200, body: "{\"gig\":\(after)}", delay: 0.3)]
+        ]
+        let vm = makeVM()
+        await vm.load()
+        let pending = Task { await vm.markComplete(dto) }
+        for _ in 0..<100 {
+            if SequencedURLProtocol.capturedRequests.contains(where: { $0.url?.path == "/api/gigs/g1/complete" }) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(vm.tabs.first { $0.id == MyTasksTab.active }?.count, 1)
+        XCTAssertEqual(vm.tabs.first { $0.id == MyTasksTab.done }?.count, 0)
+        await vm.markComplete(dto)
+        await pending.value
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.url?.path == "/api/gigs/g1/complete" }.count, 1)
+        XCTAssertEqual(vm.tabs.first { $0.id == MyTasksTab.active }?.count, 0)
+        XCTAssertEqual(vm.tabs.first { $0.id == MyTasksTab.done }?.count, 1)
     }
 
     // MARK: - Helpers

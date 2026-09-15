@@ -5,6 +5,17 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions, pg_catalog;
 SELECT plan(1);
 SELECT lives_ok($contract$
+-- Existing MyTasks/GIG_LIST readers need the original boost projection in the
+-- canonical schema, even when no task has ever been boosted.
+DO $$ BEGIN
+ PERFORM id,boosted_at,boost_expires_at,worker_completed_at,owner_confirmed_at
+  FROM public."Gig" LIMIT 1;
+ IF (SELECT count(*) FROM information_schema.columns WHERE table_schema='public'
+  AND table_name='Gig' AND column_name IN('boosted_at','boost_expires_at')
+  AND data_type='timestamp with time zone' AND is_nullable='YES')<>2 THEN
+  RAISE EXCEPTION 'Existing Gig boost projection is unavailable'; END IF;
+END $$;
+
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
 INSERT INTO auth.users(id,email) SELECT ('aae10000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,

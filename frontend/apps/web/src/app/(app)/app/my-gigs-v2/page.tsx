@@ -4,7 +4,7 @@
 import { getErrorMessage } from '@pantopus/utils';
 import { gigBidCheckoutUrl } from '@/components/gig-detail/GigBidCheckout';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
@@ -20,6 +20,14 @@ import { ListArchetype } from '@/components/archetypes';
 
 type FilterStatus = 'all' | 'open' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
 
+function awaitingConfirmation(gig: GigListItem) {
+  return gig.status === 'completed' && !Number.isFinite(Date.parse(gig.owner_confirmed_at || ''));
+}
+
+function listStatus(gig: GigListItem) {
+  return awaitingConfirmation(gig) ? 'in_progress' : gig.status;
+}
+
 const ENGAGEMENT_CONFIG: Record<string, { label: string; cls: string }> = {
   instant_accept: { label: '⚡ Instant', cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
   curated_offers: { label: '📋 Offers', cls: 'bg-blue-50 text-blue-700 border border-blue-200' },
@@ -30,6 +38,7 @@ const ENGAGEMENT_CONFIG: Record<string, { label: string; cls: string }> = {
 
 export default function MyGigsV2Page() {
   const router = useRouter();
+  const confirmingGigs = useRef(new Set<string>());
   const [gigs, setGigs] = useState<GigListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -51,7 +60,7 @@ export default function MyGigsV2Page() {
       setFetchError(null);
       const response = await api.gigs.getMyGigs({
         limit: 100,
-        status: filter === 'all' ? undefined : [filter]
+        status: filter === 'all' ? undefined : filter === 'in_progress' ? ['in_progress', 'completed'] : [filter]
       });
 
       const resObj = response as Record<string, any>;
@@ -114,21 +123,31 @@ export default function MyGigsV2Page() {
   };
 
   const handleMarkComplete = async (gigId: string) => {
-    const expectedReview = gigs.find(gig => gig.id === gigId)?.completion_review ?? null;
-    const yes = await confirmStore.open({ title: 'Mark this gig as complete?', description: 'This will finalize the task and trigger payment processing.', confirmLabel: 'Complete', variant: 'primary' });
-    if (!yes) return;
+    const loaded = gigs.find(gig => gig.id === gigId);
+    if (!loaded || !awaitingConfirmation(loaded) || !loaded.completion_review) {
+      router.push(`/app/gigs-v2/${gigId}`); return;
+    }
+    const expectedReview = loaded.completion_review;
+    const token = getAuthToken();
+    const yes = await confirmStore.open({ title: 'Confirm this completed work?', description: 'This approves the worker’s completed task and releases its payment.', confirmLabel: 'Confirm', variant: 'primary' });
+    if (!yes || token !== getAuthToken() || confirmingGigs.current.has(gigId)) return;
+    confirmingGigs.current.add(gigId);
 
     try {
-      await api.gigs.completeGig(gigId, { expectedReview });
-      toast.success('Gig marked as complete!');
+      const result = await api.gigs.completeGig(gigId, { expectedReview });
+      if (token !== getAuthToken()) return;
+      if (result.gig?.id !== gigId || result.gig.status !== 'completed' || !Number.isFinite(Date.parse(result.gig.owner_confirmed_at || ''))) throw new Error('Completion receipt unavailable. Open the task to check its current state.');
+      toast.success('Completion confirmed');
       loadGigs();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err));
+      if (token === getAuthToken()) toast.error(getErrorMessage(err));
+    } finally {
+      confirmingGigs.current.delete(gigId);
     }
   };
 
   const filteredGigs = gigs.filter(gig => {
-    if (filter !== 'all' && gig.status !== filter) return false;
+    if (filter !== 'all' && listStatus(gig) !== filter) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       const title = (gig.title || '').toLowerCase();
@@ -143,8 +162,8 @@ export default function MyGigsV2Page() {
     all: gigs.length,
     open: gigs.filter(g => g.status === 'open').length,
     assigned: gigs.filter(g => g.status === 'assigned').length,
-    in_progress: gigs.filter(g => g.status === 'in_progress').length,
-    completed: gigs.filter(g => g.status === 'completed').length,
+    in_progress: gigs.filter(g => listStatus(g) === 'in_progress').length,
+    completed: gigs.filter(g => listStatus(g) === 'completed').length,
     cancelled: gigs.filter(g => g.status === 'cancelled').length,
   };
 
@@ -275,7 +294,7 @@ function GigCardV2({
           <div className="flex items-center gap-3 mb-2">
             <h3 className="text-xl font-semibold text-app-text">{gig.title}</h3>
             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusClasses(GIG_STATUS, gig.status)}`}>
-              {statusLabel(GIG_STATUS, gig.status)}
+              {awaitingConfirmation(gig) ? 'Ready to confirm' : statusLabel(GIG_STATUS, gig.status)}
             </span>
             {ec && (
               <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${ec.cls}`}>
@@ -326,12 +345,12 @@ function GigCardV2({
             Close Gig
           </button>
         )}
-        {gig.status === 'in_progress' && (
+        {(gig.status === 'in_progress' || awaitingConfirmation(gig)) && (
           <button
-            onClick={onComplete}
+            onClick={gig.status === 'completed' ? onComplete : onView}
             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
           >
-            Mark Complete
+            {gig.status === 'completed' ? 'Confirm completion' : 'View task'}
           </button>
         )}
       </div>

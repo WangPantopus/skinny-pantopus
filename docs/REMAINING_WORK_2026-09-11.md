@@ -86,16 +86,22 @@ account/access/departure changes and preserves the normal confirmation/tip flow.
 106 focused checks, TypeScript, scoped lint and five actual Chrome scenarios pass
 within synthetic-response limits. See [web lifetime evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-review-retires-late-web-responses).
 Completion-delivery CI34947875754 passes all15 applicable jobs/one Seeder skip.
-Home-history and this web checkpoint require their next combined CI. Stale reviewed
-terms, full installed owner confirmation and draft/restart acceptance remain open.
+Home-history and this web checkpoint pass all15 applicable jobs/one Seeder skip
+in CI34952128109. Full installed owner confirmation and draft/restart acceptance
+remain open.
 No additional inventory row is closed.
 The loaded owner-review repair now rejects stale completion/price/proof before
 capture using the existing API, helper, DTOs and seven callers. Local backend6053,
 web107, Android82 and iOS78 checks pass; actual Chrome/HTTP/SQL proves stale capture0
 and explicit refreshed review capture1. See [review evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-confirmation-binds-the-loaded-review).
-The combined checkpoint still requires its own CI. MyTasks completion admission,
-native owner lifetime, post-read proof races, installed full owner lifecycle and
-real provider/release acceptance remain open. No row is closed by these checks.
+The combined checkpoint still requires its own CI. Existing MyTasks admission and
+receipt feedback now pass45 Android/43 iOS checks, native static/build gates and
+two actual Chrome/HTTP/SQL scenarios. The literal list query exposed missing fields
+from original migration149; the forward restoration preserves existing boost values
+and passes65 SQL contracts, pgTAP and migration policy. See [MyTasks evidence](VERIFICATION_FIRST_2026-09-13.md#existing-mytasks-waits-for-owner-confirmation).
+Native owner/MyTasks request lifetime, post-read proof races, installed full owner
+lifecycle and real provider/release acceptance remain open. No row is closed by
+these checks.
 
 
 ## 1. Home identity and current access — active work

@@ -22,6 +22,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.RowHighlight
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -101,6 +102,74 @@ class MyTasksViewModelTest {
             viewModel.load()
             viewModel.markComplete(loaded)
             coVerify(exactly = 1) { gigsRepo.completeGigAsPoster("g1", "listed-review") }
+        }
+
+    @Test
+    fun worker_done_remains_active_until_owner_confirms() {
+        val loaded = dto(id = "g1", status = "completed").copy(completionReview = "loaded-review")
+        val status = MyTasksViewModel.derivedStatus(loaded, fixedNow)
+        assertEquals(MyTasksTab.ACTIVE, MyTasksViewModel.tabFor(status))
+    }
+
+    @Test
+    fun premature_list_confirmation_sends_no_financial_command() =
+        runTest {
+            val loaded = dto(id = "g1", status = "in_progress")
+            coEvery { gigsRepo.myGigs(any(), any()) } returns NetworkResult.Success(MyGigsResponse(gigs = listOf(loaded)))
+            coEvery { gigsRepo.completeGigAsPoster("g1", null) } returns
+                NetworkResult.Failure(NetworkError.Server(400, "Worker must complete first"))
+            val viewModel = vm()
+            viewModel.load()
+            viewModel.markComplete(loaded)
+            coVerify(exactly = 0) { gigsRepo.completeGigAsPoster(any(), any()) }
+        }
+
+    @Test
+    fun confirmed_work_can_move_to_done_and_review() {
+        val loaded = dto(id = "g1", status = "completed").copy(ownerConfirmedAt = "2026-09-15T12:00:00Z")
+        val status = MyTasksViewModel.derivedStatus(loaded, fixedNow)
+        assertEquals(MyTasksStatus.AwaitReview, status)
+        assertEquals(MyTasksTab.DONE, MyTasksViewModel.tabFor(status))
+    }
+
+    @Test
+    fun confirmation_waits_for_receipt_and_ignores_duplicate_tap() =
+        runTest {
+            val loaded = dto(id = "g1", status = "completed").copy(completionReview = "original-review")
+            val confirmed = loaded.copy(ownerConfirmedAt = "2026-09-15T12:00:00Z")
+            coEvery { gigsRepo.myGigs(any(), any()) } returnsMany
+                listOf(
+                    NetworkResult.Success(MyGigsResponse(gigs = listOf(loaded))),
+                    NetworkResult.Success(MyGigsResponse(gigs = listOf(confirmed))),
+                )
+            val reply = CompletableDeferred<NetworkResult<CompleteGigResponse>>()
+            coEvery { gigsRepo.completeGigAsPoster("g1", "original-review") } coAnswers { reply.await() }
+            val viewModel = vm()
+            viewModel.load()
+            viewModel.markComplete(loaded)
+            viewModel.markComplete(loaded)
+            assertEquals(1, viewModel.tabs.value.first { it.id == MyTasksTab.ACTIVE }.count)
+            assertEquals(0, viewModel.tabs.value.first { it.id == MyTasksTab.DONE }.count)
+            coVerify(exactly = 1) { gigsRepo.completeGigAsPoster("g1", "original-review") }
+            reply.complete(NetworkResult.Success(CompleteGigResponse(gig = confirmed)))
+            assertEquals(0, viewModel.tabs.value.first { it.id == MyTasksTab.ACTIVE }.count)
+            assertEquals(1, viewModel.tabs.value.first { it.id == MyTasksTab.DONE }.count)
+        }
+
+    @Test
+    fun missing_receipt_opens_existing_task_without_marking_done() =
+        runTest {
+            val loaded = dto(id = "g1", status = "completed").copy(completionReview = "loaded-review")
+            coEvery { gigsRepo.myGigs(any(), any()) } returns NetworkResult.Success(MyGigsResponse(gigs = listOf(loaded)))
+            coEvery { gigsRepo.completeGigAsPoster("g1", "loaded-review") } returns NetworkResult.Success(CompleteGigResponse())
+            val opened = mutableListOf<String>()
+            val viewModel = vm()
+            viewModel.bindCallbacks({ opened.add(it.id) }, {}, {}, {}, {}, {}, {})
+            viewModel.load()
+            viewModel.markComplete(loaded)
+            assertEquals(listOf("g1"), opened)
+            assertEquals(1, viewModel.tabs.value.first { it.id == MyTasksTab.ACTIVE }.count)
+            assertEquals(0, viewModel.tabs.value.first { it.id == MyTasksTab.DONE }.count)
         }
 
     // MARK: - Lifecycle
@@ -242,9 +311,9 @@ class MyTasksViewModelTest {
     }
 
     @Test
-    fun derived_status_completed_is_await_review() {
+    fun derived_status_worker_completed_waits_for_confirmation() {
         val result = MyTasksViewModel.derivedStatus(dto("g", status = "completed"), fixedNow)
-        assertEquals(MyTasksStatus.AwaitReview, result)
+        assertEquals(MyTasksStatus.AwaitingConfirmation, result)
     }
 
     @Test

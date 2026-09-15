@@ -26,16 +26,16 @@ matched master. No hosted deployment, migration adoption or provider activation 
 **Remaining open PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
 remains draft. Its isolated integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
-the canonical PR branch is `codex/staging-paid-gig`. Both branches now include Home-history and web lifetime checkpoint `88082fdde`. Its
+the canonical PR branch is `codex/staging-paid-gig`. Both branches include Home-history and web lifetime checkpoint `88082fdde`. Its
 [CI34952128109](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34952128109)
-passes backend/schema/web/static gates; native jobs remain running at this update.
+passes all15 applicable jobs/one Seeder skip.
 The preceding completion-delivery checkpoint `1a8a7d549` in
 [CI34947875754](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34947875754)
 passes all15 applicable jobs/one Seeder skip. The preceding
 private-proof checkpoint `ca097cd85` passes all15 applicable jobs/one Seeder skip in
 [CI34944635449](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34944635449).
-The following owner-review checkpoint is described below; require its own CI
-before accepting that checkpoint for integration.
+Integration includes loaded-review checkpoint `b65dc6f3b` and the locally verified
+MyTasks follow-up below. Their combined canonical-branch push requires its own CI.
 The integration branch includes installed iOS checkpoint `d6a0194ea` after
 cold-entry checkpoint `7791bb16f`, following legacy recovery
 `e700862f1` and coordinated Android `c6b1f830e`, iOS `b98cc283c`,
@@ -350,9 +350,22 @@ review/one capture/tip entry. Three further HTTP/SQL cases verify both aliases,
 matching receipt reuse and private projections. Native SDK tests are not installed
 owner lifecycle UI acceptance. See [review evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-confirmation-binds-the-loaded-review).
 
-**Next:** require the loaded-review checkpoint’s own CI before integration.
-Verify existing MyTasks completion admission/feedback and native owner request
-lifetime, then post-server-read proof/provider interleavings. Continue completion
+**MyTasks completion checkpoint:** the existing web/iOS/Android lists now keep
+worker-submitted work active until owner confirmation, prevent premature/duplicate
+commands, and refresh from a matching receipt. Existing card layouts are preserved.
+Literal SQL projections exposed two missing fields from original migration149;
+one forward migration restores those nullable boost fields and their existing
+index, preserving already-adopted values and absent history.45 Android and43 iOS
+checks/static/build gates,15 backend checks/privacy gates,65 SQL contracts, paid
+pgTAP and migration policy pass. Two actual Chrome/HTTP/StripeService/SQL journeys
+(normal/lost reply,37 SQL calls/one synthetic capture each) pass. The owned iOS
+simulator is shutdown and all679 test-host files match the retained build. Native
+SDK tests are not installed paid-lifecycle UI or actual-provider acceptance.
+See [MyTasks evidence](VERIFICATION_FIRST_2026-09-13.md#existing-mytasks-waits-for-owner-confirmation).
+
+**Next:** require combined loaded-review/MyTasks CI before integration.
+Verify existing native owner-confirmation and MyTasks account/request lifetime,
+then post-server-read proof/provider interleavings. Continue completion
 draft/restart verification using existing storage first. Generic maintenance granular authority/raw RLS, Home-origin admission
 and full maintenance UI acceptance remain separate follow-ups; this bounded history
 checkpoint does not close them. Continue completion/reopen policy flows, hosted

@@ -36,6 +36,7 @@ data class MyGigDto(
     @Json(name = "is_urgent") val isUrgent: Boolean? = null,
     @Json(name = "user_id") val userId: String? = null,
     @Json(name = "accepted_by") val acceptedBy: String? = null,
+    @Json(name = "owner_confirmed_at") val ownerConfirmedAt: String? = null,
     @Json(name = "completion_review") val completionReview: String? = null,
     @Json(name = "accepted_at") val acceptedAt: String? = null,
     @Json(name = "scheduled_start") val scheduledStart: String? = null,
