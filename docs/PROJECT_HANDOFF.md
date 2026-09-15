@@ -210,11 +210,21 @@ closed in the existing business helper.155 focused backend tests/privacy gates a
 Four existing backend/test files change; no migration or UI change. See
 [proof-read evidence](VERIFICATION_FIRST_2026-09-13.md#existing-public-gig-detail-protects-completion-evidence).
 
+**Raw Gig proxy access:** authenticated SQL reproduced a revoked business creator
+reading and replacing private completion proof. The existing Gig SELECT/UPDATE
+policies now require that creator's current authority, through one caller-bound
+wrapper around existing friend/business permission functions. A second observed
+row-lock race required a fresh permission read in UPDATE WITH CHECK; revocation
+now rejects that waiting write and preserves proof.65 SQL contracts/generated
+pgTAP, real-role denial/preservation checks and the observed race pass. One forward
+function/policy migration adds no table/column/data rewrite. See
+[raw access evidence](VERIFICATION_FIRST_2026-09-13.md#existing-gig-policies-retire-revoked-creators).
+
 **Next:** finish current-head CI; continue existing completion proof/upload privacy
-and request recovery. The public HTTP repair does not establish private object
+and request recovery. These HTTP/SQL repairs do not establish private object
 storage or bind submitted URLs to owned files; inspect those existing uploads and
-raw SQL/Gig proxy-authority paths next. Then finish notification transport/Home
-provenance recovery and completion/reopen policy flows. No-show execution still requires atomic concurrent/retry handling and
+File access paths next. Then finish notification transport/Home provenance
+recovery and completion/reopen policy flows. No-show execution still requires atomic concurrent/retry handling and
 verified fee/financial outcomes. The repo's fee rates do not specify who owes and
 receives worker cancellation/no-show fees; one policy clarification is pending.
 Continue independent completion/security verification while that remains pending. Finish current-head CI

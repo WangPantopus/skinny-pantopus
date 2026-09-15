@@ -2965,3 +2965,49 @@ is not provider access control. Existing raw Gig SQL policies also use creator/
 beneficiary relationships and need current proxy/business-authority verification.
 Client session/restart recovery, full installed/provider journeys and completion
 push/provenance delivery remain open. No hosted change or native rebuild ran.
+
+
+## Existing Gig policies retire revoked creators
+
+September14: an authenticated PostgreSQL role still read and replaced private
+completion proof after the creator's BusinessTeam membership was revoked. The
+baseline gig_select_authorized and gig_update_creator policies depended forever
+on created_by. The existing backend posts business gigs with the human creator
+and business user_id, so current HTTP authority alone did not protect this path.
+The initial private raw-gig-proxy-before-r1 SQL reproduces both bypasses and rolls
+back all synthetic rows.
+
+The two existing policies now require current authority for a creator acting on
+another owner's task. One caller-bound SECURITY DEFINER wrapper reuses existing
+can_proxy_post and business_has_permission logic, retaining friend delegation,
+current business post/manage authority and personal ownership. It accepts no actor
+argument and binds decisions to auth.uid(). The narrow wrapper avoids recursively
+applying BusinessTeam RLS while evaluating Gig RLS; it does not introduce another
+team/permission implementation. Current owners, beneficiaries and assigned workers
+retain reads. The existing creator-only raw content-edit rule is preserved for
+currently authorized creators. Backend service-role paths remain unchanged.
+
+The first wrapper used STABLE evaluation. An observed separate-connection race
+showed a creator UPDATE could wait on the Gig row while membership was revoked,
+then commit using the statement's old authority snapshot. VOLATILE evaluation
+makes the existing UPDATE WITH CHECK read current authority after that wait. The
+same observed race now returns a denial with zero updated rows and original proof
+preserved. No request-delay assumption substitutes for the measured lock wait.
+
+The existing paid-gig SQL contract now verifies active creator reads/edits,
+revoked creator read/write denial, explicit override denial, manage-only authority,
+owner/worker/personal reads, unrelated and anonymous denials, caller identity binding
+and unchanged proof after denied edits. All65 SQL contracts and the generated paid
+acceptance pgTAP wrapper pass. Function lint remains364 PL/pgSQL functions/108
+bindings, zero errors/eight existing warnings; the new SQL-language wrapper is
+exercised by actual policies/roles. Migration ordering/compatibility checks pass
+against mastere775af9ae. The separate before/after race and exact fixture cleanup
+are retained privately in raw-gig-proxy-* with source hashes and durable mirrors.
+
+One forward migration20260914080000_gig_current_creator_authority.sql changes
+functions/policies only. It adds no table, column, screen or stored-row rewrite,
+and leaves applied migration history intact. Canonical PR34 CI still covers
+addebe757; these later integration milestones need their own CI. No hosted schema,
+provider or device change ran. This closes the reproduced creator-authority paths;
+completion object storage, supplied file references, client session/restart
+recovery and full installed/provider acceptance remain open.

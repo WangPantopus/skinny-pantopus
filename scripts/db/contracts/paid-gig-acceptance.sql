@@ -236,4 +236,81 @@ BEGIN
   RAISE EXCEPTION 'Free completion failed: %',r; END IF;
 END $$;
 RESET ROLE;
+-- A creator's old business/proxy identity must not outlive current authority.
+UPDATE public."User" SET account_type='business' WHERE id='aae10000-0000-4000-8000-000000000004';
+INSERT INTO public."BusinessTeam"(business_user_id,user_id,role_base,is_active)
+ VALUES('aae10000-0000-4000-8000-000000000004','aae10000-0000-4000-8000-000000000003','staff',true);
+INSERT INTO public."BusinessPermissionOverride"(business_user_id,user_id,permission,allowed) VALUES
+ ('aae10000-0000-4000-8000-000000000004','aae10000-0000-4000-8000-000000000003','gigs.post',true),
+ ('aae10000-0000-4000-8000-000000000004','aae10000-0000-4000-8000-000000000003','gigs.manage',false);
+UPDATE public."Gig" SET created_by='aae10000-0000-4000-8000-000000000003',
+ beneficiary_user_id='aae10000-0000-4000-8000-000000000004',completion_note='Private business completion'
+ WHERE id='aae10000-0000-4000-8000-000000000102';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000003',true);
+DO $$ DECLARE changed integer; BEGIN
+ IF (SELECT count(*) FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102')<>1 THEN
+  RAISE EXCEPTION 'Active posting creator lost existing read'; END IF;
+ UPDATE public."Gig" SET completion_note='Authorized creator edit' WHERE id='aae10000-0000-4000-8000-000000000102';
+ GET DIAGNOSTICS changed=ROW_COUNT;
+ IF changed<>1 THEN RAISE EXCEPTION 'Active creator lost existing edit'; END IF;
+END $$;
+RESET ROLE;
+UPDATE public."BusinessTeam" SET is_active=false WHERE business_user_id='aae10000-0000-4000-8000-000000000004';
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE changed integer; BEGIN
+ IF EXISTS(SELECT FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102') THEN
+  RAISE EXCEPTION 'Revoked creator retained private proof reads'; END IF;
+ UPDATE public."Gig" SET completion_note='Revoked creator edit' WHERE id='aae10000-0000-4000-8000-000000000102';
+ GET DIAGNOSTICS changed=ROW_COUNT;
+ IF changed<>0 THEN RAISE EXCEPTION 'Revoked creator retained writes'; END IF;
+END $$;
+RESET ROLE;
+UPDATE public."BusinessTeam" SET is_active=true WHERE business_user_id='aae10000-0000-4000-8000-000000000004';
+UPDATE public."BusinessPermissionOverride" SET allowed=false WHERE business_user_id='aae10000-0000-4000-8000-000000000004';
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ IF EXISTS(SELECT FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102') THEN
+  RAISE EXCEPTION 'Explicitly denied creator retained private proof'; END IF;
+ IF public.gig_creator_has_current_authority('aae10000-0000-4000-8000-000000000001') THEN
+  RAISE EXCEPTION 'Caller borrowed another owner identity'; END IF;
+END $$;
+RESET ROLE;
+UPDATE public."BusinessPermissionOverride" SET allowed=true
+ WHERE business_user_id='aae10000-0000-4000-8000-000000000004' AND permission='gigs.manage';
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ IF (SELECT count(*) FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102')<>1 THEN
+  RAISE EXCEPTION 'Current managing creator lost existing read'; END IF;
+END $$;
+SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000004',true);
+DO $$ BEGIN
+ IF (SELECT count(*) FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102')<>1 THEN
+  RAISE EXCEPTION 'Business owner lost proof'; END IF;
+END $$;
+SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000002',true);
+DO $$ BEGIN
+ IF (SELECT count(*) FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102')<>1 THEN
+  RAISE EXCEPTION 'Current worker lost proof'; END IF;
+END $$;
+SELECT set_config('request.jwt.claim.sub','aae10000-0000-4000-8000-000000000001',true);
+DO $$ BEGIN
+ IF EXISTS(SELECT FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102') THEN
+  RAISE EXCEPTION 'Unrelated owner acquired business proof'; END IF;
+ IF (SELECT count(*) FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000101')<>1 THEN
+  RAISE EXCEPTION 'Personal owner lost existing read'; END IF;
+END $$;
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','',true);
+SET LOCAL ROLE anon;
+DO $$ BEGIN
+ IF EXISTS(SELECT FROM public."Gig" WHERE id IN('aae10000-0000-4000-8000-000000000101','aae10000-0000-4000-8000-000000000102'))
+  OR public.gig_creator_has_current_authority('aae10000-0000-4000-8000-000000000004') THEN
+  RAISE EXCEPTION 'Anonymous caller acquired private proof/authority'; END IF;
+END $$;
+RESET ROLE;
+DO $$ BEGIN
+ IF (SELECT completion_note FROM public."Gig" WHERE id='aae10000-0000-4000-8000-000000000102') IS DISTINCT FROM 'Authorized creator edit' THEN
+  RAISE EXCEPTION 'Denied writes changed stored proof'; END IF;
+END $$;
 ROLLBACK;
