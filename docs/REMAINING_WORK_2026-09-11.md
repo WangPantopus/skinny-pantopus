@@ -174,12 +174,16 @@ It reuses the geography decoder, compares the current assignment/task/location
 snapshot, validates the receipt and enforces the30-second interval from stored state.
 Three existing source/test files change; no client/schema/layout change. See
 [writer evidence](VERIFICATION_FIRST_2026-09-13.md#existing-helper-location-writer).
-Next verify the existing urgent status writer and notification recipients, then
-completion draft/restart. Location consent/raw participant access remains open
-because existing compose wording and reader behavior disagree. The v2 publisher
-has no active client caller in the inspected sources; installed tracking is unaccepted.
-Content-addressed File upload recovery is preserved. d01 status-link CI34990349201
-passes all15 applicable jobs/one skip; subsequent socket/location changes need CI.
+The existing urgent writer/reader follow-up fixes21 reproduced boundary failures.
+289 overlapping compatibility checks and202 final route checks, privacy gates,
+13 HTTP/SQL cases and five concurrency/compatibility cases pass. Four existing
+source/test/mock files change; no client/schema/layout change. See [urgent evidence](VERIFICATION_FIRST_2026-09-13.md#existing-urgent-status-writer-and-private-reader).
+Next inspect existing urgent notification idempotency/delivery and sequential retries,
+then completion draft/restart. Consent/raw participant access and installed tracking
+remain open; no consent policy is inferred from inconsistent existing wording.
+Content-addressed File recovery and notification idempotency already exist and must
+be reused. d01 CI34990349201 passes15 applicable jobs/one skip. Socket/location
+c7d45dd09 CI34993419890 is running; this urgent follow-up is not yet covered by it.
 No full inventory row is closed by these bounded checks.
 The preceding main-list change added one Android regression file to preserve the
 existing test-class size rule.

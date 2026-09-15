@@ -880,3 +880,98 @@ test('private task detail is not stored in shared browser or intermediary caches
   const result = await request(app).get('/api/gigs/gig'); expect(result.status).toBe(200);
   expect(result.headers['cache-control']).toContain('no-store');
 });
+
+
+describe('existing urgent task writer boundaries', () => {
+  const notifications = require('../__mocks__/notificationService');
+  beforeEach(() => Object.assign(getTable('Gig')[0], {
+    user_id: 'payer', accepted_by: 'worker', status: 'assigned', is_urgent: true, starts_asap: false,
+    accepted_at: '2026-09-01T00:00:00Z', started_at: null, updated_at: '2026-09-01T00:00:00Z',
+    urgent_details: { shareLocationDuringTask: false, helper_eta_minutes: 9,
+      helper_last_location: { latitude: 40.72, longitude: -74 }, current_fulfillment_status: 'on_the_way' },
+  }));
+  const status = (body = { status: 'arrived' }, actor = 'worker') => request(app)
+    .post('/api/gigs/gig/status').set('x-test-user-id', actor).send(body);
+  function interleave(change, receipt) {
+    const from = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = from(table), execute = query._execute.bind(query), update = query.update.bind(query);
+      let writing = false;
+      query.update = value => { writing = true; if (change) { const once = change; change = null; once(); } return update(value); };
+      query._execute = () => { const result = JSON.parse(JSON.stringify(execute())); return writing && receipt ? receipt(result) : result; };
+      return query;
+    });
+  }
+  test.each(['open', 'completed', 'cancelled'])('cannot change fulfillment on a %s task', async value => {
+    getTable('Gig')[0].status = value; const before = structuredClone(getTable('Gig'));
+    expect((await status()).status).toBe(409); expect(getTable('Gig')).toEqual(before);
+    expect(notifications.createNotification).not.toHaveBeenCalled();
+  });
+  test.each(['owner', 'worker', 'status', 'assignment-time', 'urgent-details', 'deleted'])('preserves post-read %s changes', async change => {
+    let expected;
+    interleave(() => {
+      if (change === 'deleted') seedTable('Gig', []);
+      else Object.assign(getTable('Gig')[0], {
+        owner: { user_id: 'replacement' }, worker: { accepted_by: 'replacement' }, status: { status: 'completed' },
+        'assignment-time': { accepted_at: '2026-09-02T00:00:00Z' },
+        'urgent-details': { urgent_details: { ...getTable('Gig')[0].urgent_details, shareLocationDuringTask: true, current_fulfillment_status: 'in_progress' } },
+      }[change]);
+      expected = structuredClone(getTable('Gig'));
+    });
+    expect((await status()).status).toBe(409); expect(getTable('Gig')).toEqual(expected);
+    expect(notifications.createNotification).not.toHaveBeenCalled();
+  });
+  test.each(['empty', 'wrong-status', 'wrong-details'])('requires the stored %s receipt before reporting success or notifying', async change => {
+    interleave(null, result => ({ ...result, data: change === 'empty' ? null : {
+      ...result.data, ...(change === 'wrong-status' ? { id: 'another-gig' } : { urgent_details: { current_fulfillment_status: 'in_progress' } }),
+    } }));
+    const response = await status(); expect([409, 503]).toContain(response.status);
+    expect(notifications.createNotification).not.toHaveBeenCalled();
+  });
+  test.each([{ helper_eta_minutes: 7 }, { helper_latitude: 40.73, helper_longitude: -74 }])
+  ('the poster cannot forge helper tracking fields %j', async fields => {
+    const before = structuredClone(getTable('Gig'));
+    expect((await status({ status: 'in_progress', ...fields }, 'payer')).status).toBe(403);
+    expect(getTable('Gig')).toEqual(before);
+  });
+  test('rejects a partial location pair without discarding input silently', async () => {
+    const before = structuredClone(getTable('Gig'));
+    expect((await status({ status: 'arrived', helper_latitude: 40.72 })).status).toBe(400);
+    expect(getTable('Gig')).toEqual(before);
+  });
+  test('does not return stored helper coordinates from the status mutation', async () => {
+    const response = await status(); expect(response.status).toBe(200);
+    expect(Object.keys(response.body.gig).sort()).toEqual(['id', 'is_urgent', 'status', 'urgent_details']);
+    expect(response.body.gig.urgent_details).not.toHaveProperty('helper_last_location');
+    expect(getTable('Gig')[0].urgent_details.helper_last_location).toEqual({ latitude: 40.72, longitude: -74 });
+  });
+  test.each(['asap', 'legacy-json', 'poster-null-eta'])('preserves the existing %s caller contract', async variant => {
+    if (variant === 'asap') Object.assign(getTable('Gig')[0], { is_urgent: false, starts_asap: true });
+    if (variant === 'legacy-json') getTable('Gig')[0].urgent_details = JSON.stringify(getTable('Gig')[0].urgent_details);
+    const response = variant === 'poster-null-eta'
+      ? await status({ status: 'in_progress', helper_eta_minutes: null }, 'payer') : await status();
+    expect(response.status).toBe(200);
+    expect(response.body.fulfillment_status).toBe(variant === 'poster-null-eta' ? 'in_progress' : 'arrived');
+    expect(getTable('Gig')[0].urgent_details.helper_eta_minutes).toBe(9);
+    expect(notifications.createNotification).toHaveBeenCalledTimes(1);
+  });
+  test('preserves a zero-minute ETA in the active reader', async () => {
+    getTable('Gig')[0].urgent_details.helper_eta_minutes = 0;
+    const response = await request(app).get('/api/gigs/gig/active-status').set('x-test-user-id', 'payer');
+    expect(response.status).toBe(200); expect(response.body.helper_eta_minutes).toBe(0);
+  });
+  test('ends exact live location disclosure when the task ends', async () => {
+    getTable('Gig')[0].status = 'completed'; getTable('Gig')[0].urgent_details.shareLocationDuringTask = true;
+    const response = await request(app).get('/api/gigs/gig/active-status').set('x-test-user-id', 'payer');
+    expect(response.status).toBe(200); expect(response.body.helper_location).toBeNull();
+  });
+  test('requires a boolean location-sharing opt-in', async () => {
+    getTable('Gig')[0].urgent_details.shareLocationDuringTask = 'false';
+    const response = await request(app).get('/api/gigs/gig/active-status').set('x-test-user-id', 'payer');
+    expect(response.status).toBe(200); expect(response.body.helper_location).toBeNull();
+  });
+  test.each(['read', 'write'])('the private urgent %s response disables caching', async mode => {
+    const response = mode === 'write' ? await status() : await request(app).get('/api/gigs/gig/active-status').set('x-test-user-id', 'payer');
+    expect(response.status).toBe(200); expect(response.headers['cache-control']).toContain('no-store');
+  });
+});

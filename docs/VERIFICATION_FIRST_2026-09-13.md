@@ -4380,3 +4380,66 @@ uses it to gate helper location; keep that discrepancy open rather than inventin
 policy. Continue the existing urgent status route next. PR34/app/release remain
 unfinished. Prior d01a2f248 CI34990349201 is now fully green (15 successes/one skip);
 the socket/location checkpoint requires its own canonical CI.
+
+
+## Existing urgent status writer and private reader
+
+September15:20 actual-route unit failures reproduce inactive/post-read task changes,
+stale JSON merges, false saved receipts, poster-supplied helper data, partial
+coordinates silently discarded, private mutation responses, zero ETA erased and
+missing cache controls. A separate21st check reproduces a stored string `false`
+being treated as enabled location sharing. The existing endpoint, current native/
+web callers, JSONB fields, serializer and notification/socket helpers already exist.
+
+The urgent POST now validates coordinate pairs and the current assigned/in-progress
+work relationship. Only the helper may change helper tracking; a poster's optional
+null ETA is ignored so existing typed callers preserve the helper's value. Its
+conditional update compares observed task/assignment/start/update fields and the
+complete explicitly serialized JSONB snapshot. A changed row returns409; database
+or receipt uncertainty returns503 before success/events/notices. Matching saved
+participants, status, urgent details and update time are required. The response
+retains its original four Gig fields and uses the existing tracking redactor to
+withhold exact coordinates. Existing fields, styles and canonical paid lifecycle
+transitions are preserved; no new screen/table/migration/service is added.
+
+The active reader and private event preserve zero ETA. Exact live coordinates
+require both an active task and boolean sharing opt-in. Successful private readers/
+mutations use no-store headers; validation failures occur in the existing middleware.
+
+Evidence under private `existing-tip-provider-proof-r1`:
+
+- `urgent-writer-baseline-r1` has20 failing cases; `urgent-writer-opt-in-baseline-r1`
+  has the separate string-false disclosure failure.
+- `urgent-writer-candidate-r3` passes289 checks/five suites and privacy gates pass
+  (including15 audience checks). After the one-line boolean opt-in refinement,
+  `urgent-writer-candidate-r4` passes202 final route checks. Totals overlap; there
+  are290 distinct checks across these runs, not491 distinct tests.
+- `urgent-writer-http-baseline-r1`/`...candidate-r1` execute13 actual local HTTP/SQL
+  cases. Denied current writes preserve the complete current row and attempt no
+  notice. Candidate uses73 queries plus two cleanup queries. The deleted baseline
+  returned500; it is not counted as an unsafe successful deletion response.
+- `urgent-writer-concurrent-baseline-r1` reproduces two simultaneous successes and
+  two notification attempts after both requests observe one SQL snapshot. The final
+  `urgent-writer-concurrent-candidate-r2` returns200/409, saves the winner's status
+  and attempts one notice. It also verifies ASAP-only tasks, historical JSON-string
+  objects, poster null ETA and the boolean opt-in gate (five cases,27 queries plus
+  two cleanup queries). The original four-field response shape is checked.
+- All ab16 rows and API18109/socket clients are cleaned. HTTP handlers, SQL snapshot
+  predicates/JSONB comparison and committed interleavings execute locally. Auth,
+  notification/badge transport and SQL adapter are synthetic; notification counts
+  are attempts, not real delivery or durable in-app storage acceptance.
+
+The shared in-memory database mock now implements serialized equality specifically
+for the existing urgent_details JSONB column. Actual SQL independently proves both
+ordinary and historical JSON values. Candidate R1 passed223 checks but failed four
+socket fixtures: Node structuredClone produced objects from another Jest realm,
+which do not satisfy strict JSON receipt equality. These fixtures now use JSON
+serialization/parsing like HTTP. R2/R3 pass with production receipt checks intact.
+One nullable starts_asap fixture field was also made explicit, matching the schema.
+
+This does not close sequential retry/lost-reply notification delivery, installed
+urgent tracking or broader consent/raw participant access. Existing notification
+idempotency and stored-notice transport must be inspected before adding anything.
+Historical notices need not be removed solely because participants later change.
+The prior c7d45dd09 socket/location head is in CI34993419890; this follow-up needs
+its own subsequent canonical CI. PR34/app/release remain unfinished.

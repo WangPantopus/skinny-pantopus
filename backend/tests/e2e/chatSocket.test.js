@@ -623,7 +623,7 @@ describe('private helper tracking on the existing public task room', () => {
         if (table === 'Gig' && saved && change === 'read-fails') {
           return { data: null, error: { message: 'Synthetic tracking authority read failure' } };
         }
-        const result = structuredClone(execute());
+        const result = JSON.parse(JSON.stringify(execute()));
         if (table === 'Gig' && writing && !saved) {
           saved = true;
           if (change === 'owner') getTable('Gig')[0].user_id = U3;
@@ -645,7 +645,7 @@ describe('private helper tracking on the existing public task room', () => {
       id: gigId, user_id: U1, accepted_by: U2, title: 'Synthetic private helper task', status: 'assigned',
       accepted_at: null, started_at: null, updated_at: null, helper_last_location: null,
       helper_location_updated_at: null, helper_eta_minutes: null,
-      exact_location: 'SRID=4326;POINT(-74.006 40.7128)', is_urgent: true,
+      exact_location: 'SRID=4326;POINT(-74.006 40.7128)', is_urgent: true, starts_asap: false,
       urgent_details: { shareLocationDuringTask: false },
     }]);
     const owner = await connect(TOKEN_U1);

@@ -322,7 +322,14 @@ function createQueryBuilder(tableName) {
     eq(field, value) {
       const f = fieldFor(field);
       const [column, jsonKey] = f.split('->>');
-      filters.push((row) => (jsonKey ? row[column]?.[jsonKey] : row[column]) === value);
+      // This JSONB column is filtered by its serialized PostgREST value. PostgreSQL
+      // compares JSON content (including legacy JSON strings), not JS references.
+      if (column === 'urgent_details' && !jsonKey && typeof value === 'string') {
+        const expected = JSON.parse(value);
+        filters.push(row => require('node:util').isDeepStrictEqual(row[column], expected));
+      } else {
+        filters.push((row) => (jsonKey ? row[column]?.[jsonKey] : row[column]) === value);
+      }
       return builder;
     },
     ilike(field, pattern) {

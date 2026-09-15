@@ -545,13 +545,31 @@ case pass, preserving newer rows and exactly one winner. Exact ab15 fixtures and
 API18109 are cleaned. Three existing source/test files change; no schema/client/
 layout change. See [writer evidence](VERIFICATION_FIRST_2026-09-13.md#existing-helper-location-writer).
 
-**Next:** verify the existing urgent status writer's current-assignment/active-task
-checks, stale JSON merges, stored receipts and notification recipients. The v2
-location SDK function has no active client caller in the inspected web/iOS/Android
-sources; this endpoint repair is not installed live-location acceptance. Keep the
-sharing-consent/raw participant-read issue open: the existing compose label describes
-poster location while active-status gates helper location. Do not silently redefine
-that policy. Reuse current tracking fields and existing serializers. Completion draft/restart
+**Existing urgent status writer:**21 failing baseline cases (20 initial plus a
+separate string-false sharing check) reproduce stale/inactive writes, false receipts,
+helper-field spoofing, ignored partial coordinates, mutation/read disclosure and
+zero-ETA/cache errors. The existing route now compares its current work/JSONB snapshot,
+requires a matching stored receipt, and keeps helper data with the helper. It reuses
+the existing redactor and retains the original response shape. The reader preserves
+zero ETA and requires an active task plus boolean sharing opt-in for exact location.
+289 compatibility checks/five suites and privacy gates pass; the final route suite
+passes202 including the additional opt-in regression (overlapping totals).
+Thirteen actual local HTTP/SQL cases and a separate five-case concurrency/compatibility
+run pass. One of two competing snapshots wins with one notification attempt; ASAP,
+legacy JSON and poster-null-ETA callers still work. All ab16 fixtures/API18109 are
+cleaned. Four existing source/test/mock files change; no schema/client/layout change.
+See [urgent evidence](VERIFICATION_FIRST_2026-09-13.md#existing-urgent-status-writer-and-private-reader).
+
+**Next:** inspect existing urgent notification storage/delivery/retry before changing
+it. Concurrent rejected writes no longer attempt a notice, but ambiguous replies,
+sequential repeats and delivery failures remain unaccepted. `createNotification`
+already supports an idempotency key; compare this existing contract before adding
+anything. Historical recipients may legitimately retain earlier notices, so do not
+assume every later reassignment makes an earlier authorized notice incorrect.
+The broader consent/raw participant-read question remains open: compose wording
+and reader behavior disagree, and there is no active v2 location publisher caller
+in the inspected clients. Continue installed tracking/other existing flows without
+inventing consent policy. Completion draft/restart
 continues after that boundary; content-addressed File upload recovery already exists
 and must be reused. There is no active web rebook/boost caller to rebuild.
 Full installed native MyTasks/owner lifetime remains open. Continue completion

@@ -7652,16 +7652,16 @@ const urgentStatusSchema = Joi.object({
   helper_eta_minutes: Joi.number().integer().min(0).max(120).allow(null).optional(),
   helper_latitude: Joi.number().min(-90).max(90).optional(),
   helper_longitude: Joi.number().min(-180).max(180).optional(),
-});
+}).and('helper_latitude', 'helper_longitude');
 
 /**
  * POST /api/gigs/:gigId/status
  * Update the fulfillment status of an urgent task.
  * Worker can set: on_the_way, arrived, picked_up, dropped_off
  * Poster can set: in_progress
- * Status also auto-sets to in_progress on arrived.
  */
 router.post('/:gigId/status', verifyToken, validate(urgentStatusSchema), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { gigId } = req.params;
     const userId = req.user.id;
@@ -7669,11 +7669,12 @@ router.post('/:gigId/status', verifyToken, validate(urgentStatusSchema), async (
 
     const { data: gig, error: gigError } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, accepted_by, status, is_urgent, starts_asap, urgent_details, title')
+      .select('id, user_id, accepted_by, status, accepted_at, started_at, updated_at, is_urgent, starts_asap, urgent_details, title')
       .eq('id', gigId)
-      .single();
+      .maybeSingle();
 
-    if (gigError || !gig) return res.status(404).json({ error: 'Gig not found' });
+    if (gigError) return res.status(503).json({ error: 'Unable to verify the current task' });
+    if (!gig) return res.status(404).json({ error: 'Gig not found' });
 
     // Only urgent/asap tasks can use this endpoint
     if (!gig.is_urgent && !gig.starts_asap) {
@@ -7685,6 +7686,13 @@ router.post('/:gigId/status', verifyToken, validate(urgentStatusSchema), async (
 
     if (!isPoster && !isWorker) {
       return res.status(403).json({ error: 'Only the poster or assigned worker can update status' });
+    }
+
+    if (!['assigned', 'in_progress'].includes(gig.status) || !gig.accepted_by) {
+      return res.status(409).json({ error: 'Fulfillment updates require an active assigned task' });
+    }
+    if (!isWorker && (helper_eta_minutes != null || helper_latitude !== undefined || helper_longitude !== undefined)) {
+      return res.status(403).json({ error: 'Only the assigned helper can publish helper tracking' });
     }
 
     // Enforce role restrictions
@@ -7706,7 +7714,7 @@ router.post('/:gigId/status', verifyToken, validate(urgentStatusSchema), async (
       fulfillment_status_updated_at: new Date().toISOString(),
     };
 
-    if (helper_eta_minutes !== undefined) {
+    if (isWorker && helper_eta_minutes !== undefined) {
       updatedUrgent.helper_eta_minutes = helper_eta_minutes;
     }
 
@@ -7724,16 +7732,26 @@ router.post('/:gigId/status', verifyToken, validate(urgentStatusSchema), async (
       updated_at: nowIso,
     };
 
-    const { data: updatedGig, error: updateError } = await supabaseAdmin
-      .from('Gig')
-      .update(updateData)
-      .eq('id', gigId)
-      .select('id, status, is_urgent, urgent_details')
-      .single();
-
+    let update = supabaseAdmin.from('Gig').update(updateData).eq('id', gigId);
+    for (const field of ['user_id', 'accepted_by', 'status', 'accepted_at', 'started_at', 'updated_at', 'is_urgent', 'starts_asap']) {
+      update = gig[field] == null ? update.is(field, null) : update.eq(field, gig[field]);
+    }
+    // PostgREST equality values are strings; explicitly encode the complete JSONB
+    // snapshot so a newer consent, location or fulfillment edit is preserved.
+    update = gig.urgent_details == null ? update.is('urgent_details', null)
+      : update.eq('urgent_details', JSON.stringify(gig.urgent_details));
+    const { data: updatedGig, error: updateError } = await update
+      .select('id, user_id, accepted_by, status, is_urgent, urgent_details, updated_at')
+      .maybeSingle();
     if (updateError) {
       logger.error('Urgent status update error', { error: updateError.message, gigId, userId });
-      return res.status(500).json({ error: 'Failed to update status' });
+      return res.status(503).json({ error: 'Unable to confirm the fulfillment update' });
+    }
+    if (!updatedGig) return res.status(409).json({ error: 'Task changed. Refresh before updating status' });
+    if (updatedGig.id !== gigId || updatedGig.user_id !== gig.user_id || updatedGig.accepted_by !== gig.accepted_by
+      || updatedGig.status !== gig.status || !isDeepStrictEqual(updatedGig.urgent_details, updatedUrgent)
+      || Date.parse(updatedGig.updated_at) !== Date.parse(nowIso)) {
+      return res.status(503).json({ error: 'Unable to confirm the fulfillment update' });
     }
 
     // Emit Socket.IO event to both poster and worker
@@ -7742,7 +7760,7 @@ router.post('/:gigId/status', verifyToken, validate(urgentStatusSchema), async (
       const statusPayload = {
         gigId,
         fulfillmentStatus: status,
-        helper_eta_minutes: updatedUrgent.helper_eta_minutes || null,
+        helper_eta_minutes: updatedUrgent.helper_eta_minutes ?? null,
         timestamp: Date.now(),
       };
       await emitPrivateGigUpdate(io, gig, 'gig_status_update', statusPayload);
@@ -7770,7 +7788,10 @@ router.post('/:gigId/status', verifyToken, validate(urgentStatusSchema), async (
     }
 
     logger.info('Urgent status updated', { gigId, userId, status, role: isWorker ? 'worker' : 'poster' });
-    return res.json({ gig: updatedGig, fulfillment_status: status });
+    return res.json({ gig: redactGigTracking({
+      id: updatedGig.id, status: updatedGig.status, is_urgent: updatedGig.is_urgent,
+      urgent_details: updatedGig.urgent_details,
+    }, true), fulfillment_status: status });
   } catch (err) {
     logger.error('Urgent status error', { error: err.message });
     return res.status(500).json({ error: 'Failed to update urgent status' });
@@ -7783,6 +7804,7 @@ router.post('/:gigId/status', verifyToken, validate(urgentStatusSchema), async (
  * (if location sharing is enabled) for an urgent task.
  */
 router.get('/:gigId/active-status', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { gigId } = req.params;
     const userId = req.user.id;
@@ -7815,12 +7837,12 @@ router.get('/:gigId/active-status', verifyToken, async (req, res) => {
       gig_status: gig.status,
       fulfillment_status: urgentDetails.current_fulfillment_status || null,
       fulfillment_status_updated_at: urgentDetails.fulfillment_status_updated_at || null,
-      helper_eta_minutes: urgentDetails.helper_eta_minutes || null,
+      helper_eta_minutes: urgentDetails.helper_eta_minutes ?? null,
       helper_location: null,
     };
 
     // Only expose helper location if location sharing is enabled
-    if (urgentDetails.shareLocationDuringTask && urgentDetails.helper_last_location) {
+    if (['assigned', 'in_progress'].includes(gig.status) && urgentDetails.shareLocationDuringTask === true && urgentDetails.helper_last_location) {
       result.helper_location = urgentDetails.helper_last_location;
     }
 
