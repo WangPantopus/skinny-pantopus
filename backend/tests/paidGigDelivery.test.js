@@ -56,6 +56,7 @@ describe('durable acceptance relay', () => {
       }
       if (name === 'read_gig_acceptance_delivery') return { data: missingLease ? { error: 'LEASE_LOST' } : { eligible, notification: note } };
       if (name === 'finish_gig_acceptance_delivery') return { data: !failedAck };
+      if (name === 'claim_gig_completion_delivery') return { data: null };
       throw new Error('Unexpected RPC');
     });
     db.setRpcMock(rpc); return rpc;
@@ -76,6 +77,19 @@ describe('durable acceptance relay', () => {
       p_id: 'event', p_lease_id: 'lease', p_outcome: 'retry', p_error: 'provider_outcome_unknown',
     });
   });
+  test.each([
+    {}, { acceptedCount: 1 }, { unresolvedCount: 0 },
+    { acceptedCount: 1, unresolvedCount: -1 }, { acceptedCount: -1, unresolvedCount: 0 },
+    { acceptedCount: 1.5, unresolvedCount: 0 }, { acceptedCount: 0, unresolvedCount: '0' },
+  ])('an incomplete transport receipt cannot retire the stored acceptance event: %j', async receipt => {
+    const rpc = fixture();
+    notificationMock.deliverStoredGigNotification.mockResolvedValue(receipt);
+    await relay();
+    expect(rpc).toHaveBeenCalledWith('finish_gig_acceptance_delivery', {
+      p_id: 'event', p_lease_id: 'lease', p_outcome: 'retry', p_error: 'delivery_unavailable',
+    });
+    expect(db.getTable('Notification')).toEqual([note]);
+  });
   test('push opt-out settles as suppressed, preventing replay after preference restoration', async () => {
     const rpc = fixture();
     notificationMock.deliverStoredGigNotification.mockResolvedValue({ acceptedCount: 0, unresolvedCount: 0, suppressed: true });
@@ -84,5 +98,51 @@ describe('durable acceptance relay', () => {
   test('lost acknowledgement is not reported as a completed relay', async () => {
     fixture({ failedAck: true }); await expect(relay()).rejects.toThrow('receipt not saved');
     expect(db.getTable('Notification')).toEqual([note]);
+  });
+});
+
+describe('existing relay recovers completion notifications', () => {
+  const completion = { ...note, type: 'gig_completed', user_id: 'owner' };
+  function fixture({ eligible = true, consent = true, lostLease = false, failedAck = false } = {}) {
+    let claimed = false;
+    const rpc = jest.fn(async name => {
+      if (name === 'claim_gig_acceptance_delivery') return { data: null };
+      if (name === 'claim_gig_completion_delivery') {
+        if (claimed) return { data: null }; claimed = true;
+        return { data: { id: completion.id, lease_id: 'completion-lease' } };
+      }
+      if (name === 'read_gig_completion_delivery') return { data: lostLease ? { error: 'LEASE_LOST' }
+        : { eligible, notification: completion, pushAllowedAtCompletion: consent } };
+      if (name === 'finish_gig_completion_delivery') return { data: !failedAck };
+      throw new Error('Unexpected RPC');
+    });
+    db.setRpcMock(rpc); return rpc;
+  }
+  test('uses the existing notice identity and commit-time consent', async () => {
+    const rpc = fixture(); expect(await relay()).toEqual({ processed: 1 });
+    expect(notificationMock.deliverStoredGigNotification).toHaveBeenCalledWith(completion, { pushAllowedAtCompletion: true });
+    expect(rpc).toHaveBeenCalledWith('finish_gig_completion_delivery', {
+      p_id: completion.id, p_lease_id: 'completion-lease', p_outcome: 'done', p_error: null,
+    });
+    expect(db.getTable('Notification')).toEqual([note]);
+  });
+  test.each([{ eligible: false }, { lostLease: true }, { consent: null }])('unproven completion delivery never sends: %j', async options => {
+    fixture(options); await relay(); expect(notificationMock.deliverStoredGigNotification).not.toHaveBeenCalled();
+  });
+  test.each([{}, { acceptedCount: 1 }, { acceptedCount: 0, unresolvedCount: -1 },
+    { acceptedCount: 1, unresolvedCount: 1 }])('unknown completion transport keeps the same retry identity: %j', async receipt => {
+    const rpc = fixture(); notificationMock.deliverStoredGigNotification.mockResolvedValue(receipt);
+    await relay(); expect(rpc).toHaveBeenCalledWith('finish_gig_completion_delivery', expect.objectContaining({
+      p_id: completion.id, p_lease_id: 'completion-lease', p_outcome: 'retry',
+    }));
+  });
+  test('does not claim successful work after a lost queue acknowledgement', async () => {
+    fixture({ failedAck: true }); await expect(relay()).rejects.toThrow('receipt not saved');
+  });
+  test('retains commit-time opt-out even if transport is enabled later', async () => {
+    const rpc = fixture({ consent: false });
+    notificationMock.deliverStoredGigNotification.mockResolvedValue({ acceptedCount: 0, unresolvedCount: 0, suppressed: true });
+    await relay(); expect(notificationMock.deliverStoredGigNotification).toHaveBeenCalledWith(completion, { pushAllowedAtCompletion: false });
+    expect(rpc).toHaveBeenCalledWith('finish_gig_completion_delivery', expect.objectContaining({ p_outcome: 'suppressed' }));
   });
 });

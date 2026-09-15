@@ -11,7 +11,6 @@ const logger = require('../utils/logger');
 const {
   createNotification,
   createBulkNotifications,
-  deliverStoredGigNotification,
   notifyBidReceived,
   notifyBidAccepted,
 } = require('../services/notificationService');
@@ -5533,12 +5532,8 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
         .catch(() => {});
     }
 
-    // Notices are already committed with the proof. Transport never inserts a
-    // second notice or turns a saved completion into a failed submission.
-    for (const notification of result.notifications) {
-      try { await deliverStoredGigNotification(notification); }
-      catch (_) { logger.warn('Worker completion notice transport unavailable', { gigId }); }
-    }
+    // Existing notices and their delivery state commit with proof. The scheduled
+    // worker also reaches them after a lost acknowledgement or process restart.
 
     emitGigUpdate(req, gigId, 'completion-update');
     emitGigUpdate(req, gigId, 'status-change');
@@ -5644,15 +5639,8 @@ async function confirmCompletionHelper(req, { gigId, userId, satisfaction, note 
     }).catch(() => {});
   }
 
-  // In-app notices are already committed with confirmation. Transport failures
-  // cannot undo that receipt; a retry never inserts or re-alerts the same notices.
-  for (const notification of confirmation.notifications || []) {
-    try {
-      await deliverStoredGigNotification(notification);
-    } catch (error) {
-      logger.warn('Completion notification transport unavailable', { gigId, notificationId: notification.id });
-    }
-  }
+  // The existing scheduled delivery worker owns these committed notifications;
+  // request retries never create a competing delivery or a second notice.
 
   emitGigUpdate(req, gigId, 'completion-update');
   emitGigUpdate(req, gigId, 'status-change');

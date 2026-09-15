@@ -1282,12 +1282,16 @@ async function notifyHouseholdAccessRequest({
 
 
 /** Deliver an already-committed paid-gig notification without inserting again. */
-async function deliverStoredGigNotification(notification, { pushAllowedAtCapture } = {}) {
+async function deliverStoredGigNotification(notification, { pushAllowedAtCapture, pushAllowedAtCompletion } = {}) {
   if (!notification?.id || !['bid_accepted', 'bid_on_standby', 'payout_onboarding_nudge', 'payout_sent', 'payment_completed', 'gig_auto_cancelled', 'payment_auth_expiring', 'gig_cancelled', 'bid_reopened', 'bid_rejected', 'worker_cant_make_it', 'tip_received', 'gig_confirmed', 'gig_completed'].includes(notification.type)) {
     throw new Error('Unsupported stored gig notification');
   }
   if (notification.type === 'tip_received' && typeof pushAllowedAtCapture !== 'boolean') {
     throw new Error('Tip capture preference receipt unavailable');
+  }
+  if (pushAllowedAtCompletion !== undefined && (typeof pushAllowedAtCompletion !== 'boolean'
+    || !['gig_completed', 'gig_confirmed', 'bid_rejected'].includes(notification.type))) {
+    throw new Error('Completion preference receipt unavailable');
   }
   const userId = notification.user_id;
   const [global, granular] = await Promise.all([
@@ -1297,6 +1301,7 @@ async function deliverStoredGigNotification(notification, { pushAllowedAtCapture
   if (global.error || granular.error) throw new Error('Notification preferences unavailable');
   // A suppressed event stays in-app and is never replayed when push is enabled.
   const suppressed = (notification.type === 'tip_received' && !pushAllowedAtCapture)
+    || pushAllowedAtCompletion === false
     || global.data?.push_notifications !== true || granular.data?.gig_updates_enabled === false;
   if (!suppressed) emitDesktopAlert(notification);
   const result = suppressed ? { acceptedCount: 0, unresolvedCount: 0 }
@@ -1308,6 +1313,13 @@ async function deliverStoredGigNotification(notification, { pushAllowedAtCapture
   badgeService.emitBadgeUpdate(userId);
   if (_io && _connectedUsers) {
     for (const socketId of getUserSocketIds(userId)) _io.to(socketId).emit('notification:new', notification);
+  }
+  if (_io && typeof pushAllowedAtCompletion === 'boolean'
+    && ['gig_completed', 'gig_confirmed'].includes(notification.type)) {
+    const gigId = notification.metadata?.gig_id;
+    const events = notification.type === 'gig_confirmed'
+      ? ['completion-update', 'status-change', 'payment-update'] : ['completion-update', 'status-change'];
+    for (const eventType of events) _io.to(`gig:${gigId}`).emit(`gig:${eventType}`, { gigId, eventType, timestamp: Date.now() });
   }
   return { ...result, suppressed };
 }

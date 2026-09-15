@@ -26,9 +26,11 @@ matched master. No hosted deployment, migration adoption or provider activation 
 **Remaining open PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
 remains draft. Its isolated integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
-the canonical PR branch is `codex/staging-paid-gig`. Both branches are at verified client checkpoint `fe612d224`, following atomic
-worker-completion `3579e89c8`. [CI34939105641](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34939105641)
-passes all15 applicable jobs/one Seeder skip; the preceding canonical worker-retry head is `f58f322e4`.
+the canonical PR branch is `codex/staging-paid-gig`. Both branches are at private-proof checkpoint `ca097cd85`. Its [CI34944635449](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34944635449)
+has passed backend/schema/web gates; native jobs are still running. Preceding client
+checkpoint `fe612d224` [CI34939105641](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34939105641)
+passes all15 applicable jobs/one Seeder skip. The current working candidate adds
+completion-notification recovery in the existing queue worker; see below.
 The integration branch includes installed iOS checkpoint `d6a0194ea` after
 cold-entry checkpoint `7791bb16f`, following legacy recovery
 `e700862f1` and coordinated Android `c6b1f830e`, iOS `b98cc283c`,
@@ -295,13 +297,25 @@ migration replay and function lint pass (372 functions/112 bindings,0 errors/8
 existing warnings). Full fresh-schema/current-head CI is still required. No hosted
 bucket is configured or claimed verified. See [private proof evidence](VERIFICATION_FIRST_2026-09-13.md#existing-completion-proof-uses-private-bytes).
 
-**Next:** commit/push the locally verified private-photo checkpoint and require
-current-head CI before accepting it for integration. fe612d224 passes all applicable
-jobs. Continue hosted private-byte adoption and historical CDN reconciliation,
-client restart recovery and other existing generic private File purposes. Matching
-saved proof is a completion receipt, not a new claim of private provider availability.
-Then finish notification transport/Home provenance recovery and completion/reopen
-policy flows. No-show execution still requires atomic concurrent/retry handling and
+**Current completion-delivery candidate:** existing Notification metadata now commits
+retry state with new worker/owner/standby completion notices. The existing acceptance
+worker leases and delivers them; no new table, column, service or screen is added.
+Private event terms are hashes; transport strips queue metadata. Commit-time and
+current push preferences, current assignment/authority, read/deletion state and
+exact leases are respected.204 focused checks,65 SQL contracts, privacy gates,
+complete forward replay and function lint (376 functions/113 bindings,0 errors/8
+existing warnings) pass. Actual HTTP/SQL/job/service acceptance passes two lost-reply/
+unknown-delivery scenarios (58 SQL calls/3 synthetic push attempts); concurrency
+passes six observed row-lock waits and two claim/rollback cases. Full backend passes6035 tests/16 skips across339 passing suites. Current-head CI
+remains required. Live provider delivery remains unverified.
+See [completion delivery evidence](VERIFICATION_FIRST_2026-09-13.md#existing-completion-notifications-reuse-the-delivery-worker).
+
+**Next:** preserve evidence and commit/push this locally verified candidate, then
+require current-head CI. Then repair the existing Home maintenance-history capture after
+confirming its lost-reply failure. Continue completion restart/reopen policy flows,
+hosted private-byte adoption/historical CDN reconciliation and other existing private
+File purposes. Preserve the accepted client products because this delivery candidate
+changes no client code. No-show execution still requires atomic concurrent/retry handling and
 verified fee/financial outcomes. The repo's fee rates do not specify who owes and
 receives worker cancellation/no-show fees; one policy clarification is pending.
 Continue independent completion/security verification while that remains pending. Finish current-head CI

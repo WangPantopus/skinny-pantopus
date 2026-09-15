@@ -21,7 +21,11 @@ Updated September15,2026. The existing completion-private-storage checkpoint
 extends File/quota and current clients without a new table or screen. Local SQL,
 HTTP/SDK, browser and native evidence is tracked in the [private proof report](VERIFICATION_FIRST_2026-09-13.md#existing-completion-proof-uses-private-bytes).
 Hosted bucket adoption, historical CDN reconciliation, other generic private-file
-purposes, restart recovery and completion transport/provenance remain open. These
+purposes, restart recovery and Home provenance remain open. Completion transport now passes
+local HTTP/SQL/worker and concurrency acceptance with synthetic transport; current
+candidate full backend regression passes6035/16 skips; current-head CI and live
+provider acceptance remain open. See the
+[delivery report](VERIFICATION_FIRST_2026-09-13.md#existing-completion-notifications-reuse-the-delivery-worker). These
 accepted subjourneys do not close the broader payment or release rows.
 Start with [the current handoff](PROJECT_HANDOFF.md) and
 [resume guide](SESSION_RESUME_2026-09-10.md). This is the authoritative ordered

@@ -354,7 +354,7 @@ BEGIN
  IF r->>'reused' IS DISTINCT FROM 'false' OR original->>'worker_completed_at' IS NULL
   OR jsonb_array_length(r->'notifications')<>1 OR n->>'user_id'<>'aae10000-0000-4000-8000-000000000001'
   OR n->>'type'<>'gig_completed' OR length(n->>'title')<>255
-  OR n->'metadata' IS DISTINCT FROM jsonb_build_object('gig_id',g,'has_photos',true,'has_note',true)
+  OR ((n->'metadata')-'gig_completion_delivery_v1') IS DISTINCT FROM jsonb_build_object('gig_id',g,'has_photos',true,'has_note',true)
   OR n->>'context'<>'personal' OR n->>'context_type'<>'personal' THEN
   RAISE EXCEPTION 'Worker completion receipt/notice invalid: %',r; END IF;
  UPDATE public."Notification" SET is_read=true WHERE id=(n->>'id')::uuid;
@@ -491,6 +491,94 @@ SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','aaef0000-0000-4000-8000-000000000003',true);
 DO $$ BEGIN IF EXISTS(SELECT FROM public."File" WHERE metadata->>'storage_contract'='gig_completion_v1') THEN RAISE EXCEPTION 'Raw private File exposed'; END IF; END $$;
 RESET ROLE;
+
+-- Completion delivery reuses the exact existing Notification and queue worker.
+INSERT INTO auth.users(id,email) SELECT ('aaf40000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+ 'completion-delivery-'||n||'@example.invalid' FROM generate_series(1,3) n;
+INSERT INTO public."User"(id,email,username,name) SELECT id,email,'completion_delivery_'||right(id::text,1),'Delivery fixture'
+ FROM auth.users WHERE id::text LIKE 'aaf40000-%';
+INSERT INTO public."MailPreferences"(user_id,push_notifications)
+ VALUES('aaf40000-0000-4000-8000-000000000001',false),('aaf40000-0000-4000-8000-000000000002',true);
+INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,accepted_at,started_at)
+ VALUES('aaf40000-0000-4000-8000-000000000100','aaf40000-0000-4000-8000-000000000001','aaf40000-0000-4000-8000-000000000001',
+ 'Delivery fixture','Synthetic',0,'in_progress','aaf40000-0000-4000-8000-000000000002',clock_timestamp(),clock_timestamp());
+INSERT INTO public."GigBid"(id,gig_id,user_id,bid_amount,status)
+ VALUES('aaf40000-0000-4000-8000-000000000200','aaf40000-0000-4000-8000-000000000100','aaf40000-0000-4000-8000-000000000003',0,'pending');
+DO $$
+DECLARE g public."Gig"; owner_id uuid:='aaf40000-0000-4000-8000-000000000001'; worker uuid:='aaf40000-0000-4000-8000-000000000002';
+ r jsonb; terms jsonb; proof jsonb:='{"completion_note":"private completion note","completion_photos":[],"completion_checklist":[]}';
+ n public."Notification"; event jsonb; lease uuid; old_lease uuid; original_hash text; rec record;
+BEGIN
+ -- Retire only earlier synthetic notices created by this contract so its queue
+ -- assertions do not consume unrelated database work. The whole contract rolls back.
+ PERFORM set_config('app.gig_completion_delivery','on',true);
+ UPDATE public."Notification" SET metadata=jsonb_set(metadata,'{gig_completion_delivery_v1,state}','"done"')
+ WHERE metadata ? 'gig_completion_delivery_v1' AND (metadata->>'gig_id' LIKE 'aae10000-%' OR metadata->>'gig_id' LIKE 'aaef0000-%');
+ PERFORM set_config('app.gig_completion_delivery','off',true);
+ SELECT * INTO g FROM public."Gig" WHERE id='aaf40000-0000-4000-8000-000000000100';
+ terms:=jsonb_build_object('user_id',g.user_id,'accepted_by',g.accepted_by,'price',g.price,'payment_id',g.payment_id,'accepted_at',g.accepted_at,'started_at',g.started_at);
+ r:=public.mark_gig_completed(g.id,worker,terms,proof); SELECT * INTO n FROM public."Notification" WHERE id=(r->'notifications'->0->>'id')::uuid;
+ IF n.metadata->'gig_completion_delivery_v1'->>'state' IS DISTINCT FROM 'pending'
+  OR n.metadata->'gig_completion_delivery_v1'->>'push_allowed_at_completion' IS DISTINCT FROM 'false'
+  OR n.metadata::text LIKE '%private completion note%' OR n.metadata::text LIKE '%payment_id%' THEN RAISE EXCEPTION 'Completion delivery receipt missing or private values disclosed'; END IF;
+ UPDATE public."MailPreferences" SET push_notifications=true WHERE user_id=owner_id;
+ event:=public.claim_gig_completion_delivery(); lease:=(event->>'lease_id')::uuid;
+ IF event->>'id' IS DISTINCT FROM n.id::text THEN RAISE EXCEPTION 'Wrong completion delivery selected'; END IF;
+ r:=public.read_gig_completion_delivery(n.id,lease);
+ IF r->>'eligible' IS DISTINCT FROM 'true' OR r->>'pushAllowedAtCompletion' IS DISTINCT FROM 'false'
+  OR r->'notification'->'metadata' ? 'gig_completion_delivery_v1' THEN RAISE EXCEPTION 'Consent or safe transport projection changed'; END IF;
+ UPDATE public."Notification" SET is_read=true WHERE id=n.id;
+ IF public.read_gig_completion_delivery(n.id,lease)->>'eligible' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Read state invalidated original notice'; END IF;
+ SELECT public.gig_completion_delivery_terms(x,'worker') INTO original_hash FROM public."Gig" x WHERE id=g.id;
+ PERFORM set_config('TimeZone','America/Los_Angeles',true);
+ IF (SELECT public.gig_completion_delivery_terms(x,'worker') FROM public."Gig" x WHERE id=g.id)<>original_hash THEN RAISE EXCEPTION 'Timezone changed completion binding'; END IF;
+ PERFORM set_config('TimeZone','UTC',true);
+ IF public.finish_gig_completion_delivery(n.id,gen_random_uuid(),'done') THEN RAISE EXCEPTION 'Foreign delivery lease accepted'; END IF;
+ IF NOT public.finish_gig_completion_delivery(n.id,lease,'retry','synthetic unknown') THEN RAISE EXCEPTION 'Unknown delivery lost'; END IF;
+ IF public.claim_gig_completion_delivery() IS NOT NULL THEN RAISE EXCEPTION 'Backoff ignored'; END IF;
+ PERFORM set_config('app.gig_completion_delivery','on',true);
+ UPDATE public."Notification" SET metadata=jsonb_set(metadata,'{gig_completion_delivery_v1,retry_at}',to_jsonb(clock_timestamp()-interval '1 second')) WHERE id=n.id;
+ PERFORM set_config('app.gig_completion_delivery','off',true);
+ event:=public.claim_gig_completion_delivery(); old_lease:=lease;lease:=(event->>'lease_id')::uuid;
+ IF event->>'id'<>n.id::text OR old_lease=lease OR public.read_gig_completion_delivery(n.id,old_lease)->>'error' IS DISTINCT FROM 'LEASE_LOST' THEN RAISE EXCEPTION 'Retry lease identity invalid'; END IF;
+ IF NOT public.finish_gig_completion_delivery(n.id,lease,'done') THEN RAISE EXCEPTION 'Matching delivery did not finish'; END IF;
+ r:=public.mark_gig_completed(g.id,worker,terms,proof);
+ IF r->>'reused' IS DISTINCT FROM 'true' OR jsonb_array_length(r->'notifications')<>0
+  OR (SELECT is_read FROM public."Notification" WHERE id=n.id) IS DISTINCT FROM true
+  OR public.claim_gig_completion_delivery() IS NOT NULL THEN RAISE EXCEPTION 'Completion retry recreated delivery'; END IF;
+ -- Raw recipients may mark read/delete but cannot forge or erase queue state.
+ PERFORM set_config('request.jwt.claim.sub',owner_id::text,true); SET LOCAL ROLE authenticated;
+ UPDATE public."Notification" SET is_read=false WHERE id=n.id;
+ BEGIN UPDATE public."Notification" SET metadata=metadata-'gig_completion_delivery_v1' WHERE id=n.id;
+  RAISE EXCEPTION 'Recipient erased delivery contract'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ RESET ROLE;
+ -- Owner confirmation makes the earlier review request obsolete and queues
+ -- both the worker confirmation and the already-closed standby bid notice.
+ SELECT * INTO g FROM public."Gig" WHERE id=g.id;
+ terms:=terms||jsonb_build_object('worker_completed_at',g.worker_completed_at);
+ r:=public.confirm_gig_completion(g.id,owner_id,terms,NULL,NULL);
+ IF jsonb_array_length(r->'notifications')<>2 THEN RAISE EXCEPTION 'Owner completion did not retain both notices'; END IF;
+ FOR rec IN SELECT * FROM public."Notification" WHERE metadata->>'gig_id'=g.id::text AND type IN ('gig_confirmed','bid_rejected') ORDER BY created_at,id LOOP
+  event:=public.claim_gig_completion_delivery();lease:=(event->>'lease_id')::uuid;
+  IF event->>'id'<>rec.id::text OR public.read_gig_completion_delivery(rec.id,lease)->>'eligible' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Confirmed notification unavailable'; END IF;
+  IF rec.type='bid_rejected' THEN
+   UPDATE public."GigBid" SET status='pending' WHERE id='aaf40000-0000-4000-8000-000000000200';
+   IF public.read_gig_completion_delivery(rec.id,lease)->>'eligible' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'Reopened bid received stale rejection'; END IF;
+  ELSE
+   UPDATE public."Notification" SET metadata=metadata||'{"gig_id":"malformed"}' WHERE id=rec.id;
+   IF public.read_gig_completion_delivery(rec.id,lease)->>'eligible' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'Changed notice admitted'; END IF;
+  END IF;
+  DELETE FROM public."Notification" WHERE id=rec.id;
+  IF public.read_gig_completion_delivery(rec.id,lease)->>'error' IS DISTINCT FROM 'LEASE_LOST'
+   OR NOT public.finish_gig_completion_delivery(rec.id,lease,'retry') THEN RAISE EXCEPTION 'Deleted notice was not canceled'; END IF;
+ END LOOP;
+ INSERT INTO public."Notification"(user_id,type,title,metadata) VALUES(owner_id,'gig_completed','Historical notice',jsonb_build_object('gig_id',g.id)) RETURNING * INTO n;
+ IF n.metadata ? 'gig_completion_delivery_v1' THEN RAISE EXCEPTION 'Historical notification was queued'; END IF;
+ FOR rec IN SELECT oid::regprocedure signature FROM pg_proc WHERE pronamespace='public'::regnamespace
+  AND proname IN ('claim_gig_completion_delivery','read_gig_completion_delivery','finish_gig_completion_delivery') LOOP
+  IF has_function_privilege('authenticated',rec.signature,'EXECUTE') OR has_function_privilege('anon',rec.signature,'EXECUTE') THEN RAISE EXCEPTION 'Completion delivery routine exposed'; END IF;
+ END LOOP;
+END $$;
 
 $contract$, 'paid-gig-acceptance.sql');
 SELECT * FROM finish();

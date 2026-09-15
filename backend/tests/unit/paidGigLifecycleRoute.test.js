@@ -328,7 +328,7 @@ describe('owner confirmation commits existing effects through one database decis
       notifications: [notice], reused: false } })); setRpcMock(rpc);
     expect((await post('gig/confirm-completion')).status).toBe(200);
     expect(rpc).toHaveBeenCalledWith('confirm_gig_completion', expect.objectContaining({ p_actor_id: 'payer' }));
-    expect(notifications.deliverStoredGigNotification).toHaveBeenCalledWith(notice);
+    expect(notifications.deliverStoredGigNotification).not.toHaveBeenCalled();
     expect(notifications.createNotification).not.toHaveBeenCalled();
     expect(notifications.createBulkNotifications).not.toHaveBeenCalled();
     expect(getTable('User')[1].gigs_completed).toBeUndefined();
@@ -346,7 +346,7 @@ describe('owner confirmation commits existing effects through one database decis
     expect(capture).toHaveBeenCalledTimes(1); expect(rpc).toHaveBeenCalledTimes(1);
     expect(notifications.deliverStoredGigNotification).not.toHaveBeenCalled();
   });
-  test('a failed transport preserves the committed response and does not insert another notice', async () => {
+  test('the request leaves committed delivery to the existing worker without another notice', async () => {
     assigned('completed'); jest.spyOn(service, 'capturePayment').mockResolvedValue({ success: true });
     setRpcMock(async () => ({ data: { gig: { ...getTable('Gig')[0], owner_confirmed_at: '2026-09-14T15:00:00Z' },
       notifications: [{ id: 'stored-notice', user_id: 'worker', type: 'gig_confirmed' }], reused: false } }));
@@ -580,7 +580,7 @@ describe('worker completion recovers the saved result', () => {
     expect((await submit()).status).toBe(409); expect(getTable('Notification')).toHaveLength(0);
   });
 
-  test('the completion transaction returns its stored notice for transport without reinsertion', async () => {
+  test('the completion transaction queues its stored notice without request-time delivery', async () => {
     assigned('in_progress');
     const notifications = require('../__mocks__/notificationService');
     const notice = { id: 'stored-completion', user_id: 'payer', type: 'gig_completed' };
@@ -590,7 +590,7 @@ describe('worker completion recovers the saved result', () => {
     expect((await submit()).status).toBe(200);
     expect(rpc).toHaveBeenCalledWith('mark_gig_completed', expect.objectContaining({ p_gig_id: 'gig', p_actor_id: 'worker',
       p_expected: { user_id: 'payer', accepted_by: 'worker', price: 12.5, payment_id: 'pay', accepted_at: null, started_at: null } }));
-    expect(notifications.deliverStoredGigNotification).toHaveBeenCalledWith(notice);
+    expect(notifications.deliverStoredGigNotification).not.toHaveBeenCalled();
     expect(notifications.createBulkNotifications).not.toHaveBeenCalled();
   });
 

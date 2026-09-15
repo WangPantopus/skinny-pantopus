@@ -3344,3 +3344,61 @@ restart/draft recovery, completion transport and Home provenance remain open.
 Existing native owner models currently do not expose completion photo/note fields;
 this milestone verifies their existing submission flow, not a new native reader.
 No hosted migration, bucket configuration or deployment runs in this checkpoint.
+
+
+## Existing completion notifications reuse the delivery worker
+
+September15: accepted installed-client fixtures established that a lost completion
+SQL acknowledgement left one durable in-app notice and zero transport attempts.
+The matching-receipt retry returned before the route's best-effort delivery. The
+same gap existed after owner confirmation. Existing acceptance, wallet/tip, stop,
+expiry and Home task queues, Notification schema/RLS, archived implementations and
+all-ref history were compared. Paid acceptance requires an acceptance record; Home
+queues require Home/task semantics; Payment metadata excludes free gigs. The repair
+extends existing Notification metadata and the scheduled acceptance worker. One
+forward function/trigger/index migration adds no table, column or service and does
+not backfill historical notices. Existing screens and client sources are unchanged.
+
+New worker, owner and standby completion notices atomically capture SHA256 hashes
+of the original Gig terms and notice, commit-time push consent and lease/retry state.
+Raw proof, assignment and payment snapshots are never copied into notifications.
+The service-only reader locks Gig before Notification, checks current assignment,
+confirmation/financial state and business reviewer authority, then strips queue
+metadata from transport. Changed notices and obsolete review/bid events suppress.
+Read flags survive retries; deletion cancels delivery without recreation. Unknown
+transport outcomes and missing/invalid receipt counts retry the same notice; seven
+malformed acceptance receipts that previously incorrectly finished now also retry.
+Commit-time opt-out stays suppressed after preferences are enabled; current opt-out
+and token ownership remain enforced by the existing transport. Existing detail
+refresh events are also delivered through that worker after a lost request reply.
+Provider delivery is at least once; exactly-once external alerts are not claimed.
+
+Local verification passes204 tests/four focused suites and privacy gates, including15
+audience checks. All65 SQL contracts and generated wrappers pass. Complete forward
+migration replay in a rollback transaction passes; function lint checks376 functions/
+113 trigger bindings with zero errors/eight existing warnings. Full backend passes
+6035 tests/16 skips across339 passing suites. Current-head CI remains required.
+
+Two actual HTTP/SQL/scheduled-worker/notification-service journeys pass, using58 SQL
+calls, three synthetic push attempts and14 synthetic socket events. Worker completion
+returns503 after a committed write, then200 on retry with one original notification.
+An unknown delivery receipt retries the same ID and preserves its read flag. A second
+journey loses both worker and owner acknowledgements: retry keeps the original three
+notices, suppresses the obsolete review and opted-out standby notice, and delivers
+one worker confirmation with its three original detail-refresh signals. Six observed
+separate-connection lock waits cover worker replacement, deletion, owner confirmation,
+read-state changes, stale lease acknowledgement and revoked business authority. Two
+additional SKIP LOCKED/rollback cases prevent duplicate leases/phantom attempts.
+Exact fixture cleanup passes; the owned API is stopped. No provider/storage sends
+or hosted schema changes run in this checkpoint.
+
+Earlier failed attempts remain evidence: seven baseline malformed receipt failures;
+missing digest function caused the first migration transaction to roll back, fixed
+using the existing built-in SHA256 pattern; function lint found an ambiguous local
+variable, renamed before the passing run; two SQL fixture expectation/precedence
+failures are corrected before contract R3. Private completion-delivery-* commands,
+fixtures, outcomes and source bindings are retained under existing-tip-provider-proof-r1.
+Accepted private-proof browser/native products are reused because relevant client
+code/configuration is unchanged. PR34 stays draft. Home maintenance provenance,
+restart recovery, hosted storage/historical reconciliation, live delivery and the
+remaining payment/release scope remain open.
