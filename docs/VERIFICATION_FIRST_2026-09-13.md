@@ -4009,3 +4009,56 @@ upload recovery already handles unknown upload replies and is preserved. My bids
 the reachable v2 active-task completion caller, completion drafts/restart and the
 broader inventory remain under verification. PR34 stays draft; this follow-up and
 local web4ddcdaa65 require their combined CI push.
+
+
+## Existing My bids reader and command lifetime
+
+The existing Profile-linked My bids page used an unscoped QueryClient key and
+unguarded global confirmations. Baseline six tests fail: same-cookie session change
+retains private rows, each of completion/start/accept-counter/decline-counter can
+submit after page departure, and an empty completion receipt triggers a successful
+refetch. The actual backend projects the worker as GigBid.user_id; the page uses
+that existing field to compare its completion receipt.
+
+The page reuses useGigListSession, its current query and existing modal/notification
+controls. An entry-specific nonsecret cache key and zero inactive retention prevent
+old-account cache reuse; retired rows/counts/modals and actions are masked or inert.
+Reads and post-request refresh/errors check the opening session. A withdrawal
+attempt cannot affect a later modal opening, and duplicate clicks on the same
+pending withdrawal are blocked. Worker completion checks task/status/worker/time
+and the empty note/photos it submitted before refetching. Existing start/counter
+commands, reason values, navigation destinations and screen styles remain intact.
+Only the existing page and existing entrypoint test file change.
+
+Final R3 passes129 checks across the two existing entrypoint and tip/completion
+suites (42 entrypoint,87 tip/completion). Types pass; scoped lint reports zero errors
+and two existing warnings, including the existing page-level ts-nocheck. Positive
+checks preserve current start/counter/withdrawal behavior and matching-receipt
+refresh; negative checks include seven mismatched receipts, cache reentry, cross-tab
+held reads, retired replies and a reopened withdrawal during a held request.
+An initial append command used the wrong working-directory-relative path and wrote
+no test content; R2 therefore covered the earlier113 checks. R3 uses the explicit
+existing path and runs the full129. The original failed baseline is retained.
+
+Five Chrome R3 cases pass using the actual compiled page, API client session signals,
+QueryProvider and root confirmation: same-cookie reentry, cross-tab held read,
+departed completion, invalid receipt followed by matching retry, and withdrawal
+modal reentry. Completion retry sends two identical existing commands; only the
+matching receipt refreshes the list. Withdrawals use the existing DELETE endpoint.
+The fixture's responses, cookies and entry controls are synthetic; no backend,
+database, hosted or provider operation ran. Screenshots preserve the current layout.
+
+Browser R1 reports an initial script parse error and zero reads; its cause is not
+established. Diagnostic R2 passes the first four cases on unchanged application
+source, then stops because the fixture supported POST but omitted the existing
+DELETE withdrawal method. R3 corrects that fixture and passes all five; failed runs
+are not relabeled as green. The first cleanup stopped safely at a Next-generated
+reference change after stopping the owned server and restoring tsconfig; the exact
+one-line next-env change was then confirmed and the original restored. The owned
+route/build cache are removed, served entry chunks retained and port3107 released.
+Source hashes, baselines, runs, screenshots, compiled entry chunks and cleanup are
+under `existing-tip-provider-proof-r1/my-bids-web-*` and its durable private mirror.
+
+PR34 remains draft. This and worker60bdd6ba6/web4ddcdaa65 await the combined CI push.
+The reachable v2 active-task caller and its containing detail page remain separate
+verification; no full paid, account, installed or provider journey is closed here.

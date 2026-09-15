@@ -5,6 +5,7 @@ import OffersPanel from '@/components/gig-detail/OffersPanel';
 import GigChatActions from '@/components/chat/GigChatActions';
 import MyGigsPage from '@/app/(app)/app/my-gigs/page';
 import MyGigsV2Page from '@/app/(app)/app/my-gigs-v2/page';
+import MyBidsPage from '@/app/(app)/app/my-bids/page';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { toast } from '@/components/ui/toast-store';
 
@@ -14,6 +15,12 @@ const mockAccept = jest.fn();
 const mockMyGigs = jest.fn();
 const mockReject = jest.fn();
 const mockComplete = jest.fn();
+const mockMyBids = jest.fn();
+const mockMark = jest.fn();
+const mockStart = jest.fn();
+const mockAcceptCounter = jest.fn();
+const mockDeclineCounter = jest.fn();
+const mockWithdraw = jest.fn();
 const mockRouter = { push: mockPush };
 const mockTokenListeners = new Set<() => void>();
 let mockToken: string | null = 'cookie-session';
@@ -27,6 +34,9 @@ jest.mock('@pantopus/api', () => ({
     getGigBids: (...args: unknown[]) => mockBids(...args), acceptBid: (...args: unknown[]) => mockAccept(...args),
     getMyGigs: (...args: unknown[]) => mockMyGigs(...args), rejectBid: (...args: unknown[]) => mockReject(...args),
     completeGig: (...args: unknown[]) => mockComplete(...args),
+    getMyBids: (...args: unknown[]) => mockMyBids(...args), markGigCompleted: (...args: unknown[]) => mockMark(...args),
+    startGig: (...args: unknown[]) => mockStart(...args), acceptCounter: (...args: unknown[]) => mockAcceptCounter(...args),
+    declineCounter: (...args: unknown[]) => mockDeclineCounter(...args), withdrawBid: (...args: unknown[]) => mockWithdraw(...args),
   },
 }));
 jest.mock('@/components/gig-detail/GigBidCheckout', () => ({ gigBidCheckoutUrl: (gig: string, bid: string) => `/app/gigs/${gig}?action=payment_setup&bid=${bid}#payment-checkout` }));
@@ -40,6 +50,7 @@ beforeEach(() => {
   jest.clearAllMocks(); mockTokenListeners.clear(); mockToken = 'cookie-session';
   mockMyGigs.mockReset(); mockBids.mockReset(); mockReject.mockReset(); mockComplete.mockReset();
   jest.mocked(confirmStore.open).mockReset();
+  [mockMyBids, mockMark, mockStart, mockAcceptCounter, mockDeclineCounter, mockWithdraw].forEach(mock => mock.mockReset());
   localStorage.clear(); localStorage.setItem('pantopus:auth-session-change', 'session-a');
 });
 
@@ -215,4 +226,115 @@ test('a current matching owner receipt refreshes the existing list', async () =>
   await screen.findByText('Server confirmed task');
   expect(mockComplete).toHaveBeenCalledWith('gig-a', { expectedReview: completedGig.completion_review });
   expect(toast.success).toHaveBeenCalledWith('Completion confirmed');
+});
+
+
+const workerBid = { id: 'bid-worker', user_id: 'worker-a', gig_id: 'gig-a', status: 'accepted', bid_amount: 25,
+  created_at: '2026-09-15T00:00:00Z', gig: { ...ownedGig, status: 'in_progress' } };
+
+test('My bids clears private rows on a same-cookie session replacement', async () => {
+  mockMyBids.mockResolvedValue({ bids: [workerBid] }); renderMyGigs(MyBidsPage);
+  await screen.findByText(ownedGig.title); act(replaceSession);
+  expect(screen.queryByText(ownedGig.title)).not.toBeInTheDocument();
+});
+
+test.each([
+  ['Mark Complete', workerBid, mockMark],
+  ['Start Work', { ...workerBid, gig: { ...workerBid.gig, status: 'assigned' } }, mockStart],
+  ['Accept $30', { ...workerBid, status: 'countered', counter_status: 'pending', counter_amount: 30 }, mockAcceptCounter],
+  ['Decline', { ...workerBid, status: 'countered', counter_status: 'pending', counter_amount: 30 }, mockDeclineCounter],
+] as const)('My bids pending %s cannot submit after page departure', async (label, bid, command) => {
+  mockMyBids.mockResolvedValue({ bids: [bid] });
+  const pending = deferred<boolean>(); jest.mocked(confirmStore.open).mockReturnValue(pending.promise);
+  const page = renderMyGigs(MyBidsPage);
+  fireEvent.click(await screen.findByRole('button', { name: label }));
+  await waitFor(() => expect(confirmStore.open).toHaveBeenCalledTimes(1)); page.unmount();
+  await act(async () => pending.resolve(true)); expect(command).not.toHaveBeenCalled();
+});
+
+test('My bids cannot accept an empty completion receipt as a saved task', async () => {
+  mockMyBids.mockResolvedValue({ bids: [workerBid] }); mockMark.mockResolvedValue({});
+  jest.mocked(confirmStore.open).mockResolvedValue(true); renderMyGigs(MyBidsPage);
+  fireEvent.click(await screen.findByRole('button', { name: 'Mark Complete' }));
+  await waitFor(() => expect(mockMark).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(toast.error).toHaveBeenCalled());
+  expect(mockMyBids).toHaveBeenCalledTimes(1);
+});
+
+const workerReceipt = { id: 'gig-a', status: 'completed', accepted_by: 'worker-a', worker_completed_at: '2026-09-15T12:00:00Z', completion_note: null, completion_photos: [] };
+
+test.each([
+  { id: 'other' }, { status: 'in_progress' }, { accepted_by: 'other' }, { worker_completed_at: null },
+  { worker_completed_at: 'invalid' }, { completion_note: 'Unexpected proof' }, { completion_photos: ['other'] },
+])('My bids rejects a mismatched completion receipt %p', async mismatch => {
+  mockMyBids.mockResolvedValue({ bids: [workerBid] }); mockMark.mockResolvedValue({ gig: { ...workerReceipt, ...mismatch } });
+  jest.mocked(confirmStore.open).mockResolvedValue(true); renderMyGigs(MyBidsPage);
+  fireEvent.click(await screen.findByRole('button', { name: 'Mark Complete' }));
+  await waitFor(() => expect(toast.error).toHaveBeenCalled()); expect(mockMyBids).toHaveBeenCalledTimes(1);
+});
+
+test('My bids refreshes the existing list after its matching worker receipt', async () => {
+  mockMyBids.mockResolvedValueOnce({ bids: [workerBid] }).mockResolvedValueOnce({ bids: [{ ...workerBid, gig: { ...workerBid.gig, status: 'completed', title: 'Saved task' } }] });
+  mockMark.mockResolvedValue({ gig: workerReceipt }); jest.mocked(confirmStore.open).mockResolvedValue(true);
+  renderMyGigs(MyBidsPage); fireEvent.click(await screen.findByRole('button', { name: 'Mark Complete' }));
+  await screen.findByText('Saved task'); expect(mockMark).toHaveBeenCalledWith('gig-a');
+  expect(screen.queryByRole('button', { name: 'Mark Complete' })).not.toBeInTheDocument();
+  expect(toast.error).not.toHaveBeenCalled();
+});
+
+test('My bids reentry cannot reuse the previous account cache', async () => {
+  mockMyBids.mockResolvedValueOnce({ bids: [workerBid] }); const page = renderMyGigs(MyBidsPage);
+  await screen.findByText(ownedGig.title); page.unmount(); act(replaceSession);
+  mockMyBids.mockResolvedValueOnce({ bids: [{ ...workerBid, id: 'bid-b', user_id: 'worker-b', gig: { ...workerBid.gig, title: 'Current worker task' } }] });
+  renderMyGigs(MyBidsPage, page.client); expect(screen.queryByText(ownedGig.title)).not.toBeInTheDocument();
+  await screen.findByText('Current worker task');
+});
+
+test('My bids retires a held read after a cross-tab session change', async () => {
+  const held = deferred<unknown>(); mockMyBids.mockReturnValue(held.promise); renderMyGigs(MyBidsPage);
+  await waitFor(() => expect(mockMyBids).toHaveBeenCalledTimes(1));
+  act(() => { localStorage.setItem('pantopus:auth-session-change', 'session-b'); window.dispatchEvent(new StorageEvent('storage', { key: 'pantopus:auth-session-change' })); });
+  await act(async () => held.resolve({ bids: [workerBid] }));
+  expect(screen.queryByText(ownedGig.title)).not.toBeInTheDocument();
+  expect(screen.getByText('Your session changed. Reopen My bids to continue.')).toBeInTheDocument();
+});
+
+test('My bids ignores a completion reply after account replacement', async () => {
+  const held = deferred<unknown>(); mockMark.mockReturnValue(held.promise); mockMyBids.mockResolvedValue({ bids: [workerBid] });
+  jest.mocked(confirmStore.open).mockResolvedValue(true); renderMyGigs(MyBidsPage);
+  fireEvent.click(await screen.findByRole('button', { name: 'Mark Complete' })); await waitFor(() => expect(mockMark).toHaveBeenCalledTimes(1));
+  act(replaceSession); await act(async () => held.resolve({}));
+  expect(toast.error).not.toHaveBeenCalled(); expect(mockMyBids).toHaveBeenCalledTimes(1);
+});
+
+test('My bids preserves a reopened withdrawal modal after the old request finishes', async () => {
+  const held = deferred<unknown>(); mockWithdraw.mockReturnValueOnce(held.promise).mockResolvedValue({});
+  mockMyBids.mockResolvedValue({ bids: [{ ...workerBid, status: 'pending' }] }); renderMyGigs(MyBidsPage);
+  fireEvent.click(await screen.findByRole('button', { name: 'Withdraw Bid' }));
+  fireEvent.click(screen.getAllByRole('button', { name: 'Withdraw Bid' }).at(-1)!);
+  await waitFor(() => expect(mockWithdraw).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Withdraw Bid' }));
+  await act(async () => held.resolve({}));
+  expect(screen.getByRole('heading', { name: 'Withdraw Bid' })).toBeInTheDocument();
+  expect(mockMyBids).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Withdraw Bid' }).at(-1)!);
+  await waitFor(() => expect(mockWithdraw).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.queryByRole('heading', { name: 'Withdraw Bid' })).not.toBeInTheDocument());
+});
+
+test.each([
+  ['Start Work', { ...workerBid, gig: { ...workerBid.gig, status: 'assigned' } }, mockStart],
+  ['Accept $30', { ...workerBid, status: 'countered', counter_status: 'pending', counter_amount: 30 }, mockAcceptCounter],
+  ['Decline', { ...workerBid, status: 'countered', counter_status: 'pending', counter_amount: 30 }, mockDeclineCounter],
+] as const)('My bids current %s preserves its command and refresh', async (label, bid, command) => {
+  mockMyBids.mockResolvedValueOnce({ bids: [bid] }).mockResolvedValueOnce({ bids: [{ ...bid, gig: { ...bid.gig, title: 'Current saved bid task' } }] });
+  command.mockResolvedValue({}); jest.mocked(confirmStore.open).mockResolvedValue(true); renderMyGigs(MyBidsPage);
+  fireEvent.click(await screen.findByRole('button', { name: label })); await screen.findByText('Current saved bid task');
+  expect(command.mock.calls).toEqual([command === mockStart ? ['gig-a'] : ['gig-a', 'bid-worker']]);
+});
+
+test('My bids preserves signed-out navigation without private reads', async () => {
+  mockToken = null; renderMyGigs(MyBidsPage); await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/login'));
+  expect(mockMyBids).not.toHaveBeenCalled();
 });

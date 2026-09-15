@@ -140,9 +140,13 @@ The locally committed web4ddcdaa65 follow-up shares the next CI push with worker
 receipt validation:46 Android/53 iOS/107 web checks, build/static/type gates pass
 after each client reproduced empty-reply false success. Nine existing files change;
 no screen, storage service or schema is added. See [worker receipt evidence](VERIFICATION_FIRST_2026-09-13.md#existing-worker-completion-receipt-validation).
-My bids has six reproduced reader/action/receipt failures and is under local
-verification. The other active web completion caller and draft/restart behavior
-remain next; existing content-addressed File upload recovery is preserved.
+My bids now passes129 selected web tests and five actual Chrome scenarios after
+six reproduced reader/action/receipt failures. The existing page/test reuse the
+session hook, current receipt and modal attempt guards; types/lint pass within the
+existing ts-nocheck/two-warning limit. See [My bids evidence](VERIFICATION_FIRST_2026-09-13.md#existing-my-bids-reader-and-command-lifetime).
+The v2 active-task caller/containing page and draft/restart behavior remain next;
+existing content-addressed File upload recovery is preserved. These checkpoints
+await combined CI; no full inventory row is closed by them.
 The preceding main-list change added one Android regression file to preserve the
 existing test-class size rule.
 No inventory row is closed by these bounded checks.

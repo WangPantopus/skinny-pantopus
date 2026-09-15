@@ -461,12 +461,22 @@ server2000 UTF-16-unit limit. See [receipt evidence](VERIFICATION_FIRST_2026-09-
 The owned iOS simulator is shut down; the separate user simulator is preserved.
 This locally accepted follow-up needs CI with the preceding web4ddcdaa65 commit.
 
-**Next:** finish My bids reader/action and receipt verification, then inspect the
-other existing v2 active-task caller and completion draft/restart behavior. My bids
-has six reproduced failures and a repair under local verification; do not count
-it accepted yet. The existing upload service already content-addresses completion
-File records and recovers unknown upload replies. Reuse it; no replacement upload
-store/table is required. There is no active web rebook/boost caller to rebuild.
+**My bids follow-up:** the existing page now retires private rows, cached reads and
+pending bid/task actions with its session/page. Completion requires the matching
+worker receipt; a held withdrawal cannot close a newly reopened modal. Six baseline
+failures are reproduced, then129 selected web tests, TypeScript and scoped lint
+pass (zero errors/two existing warnings, including the existing ts-nocheck).
+Five actual Chrome cases pass with synthetic responses and the real query provider,
+API client/session signals and root confirmation. Two existing source/test files
+change; no new screen, hook, backend or schema. See [My bids evidence](VERIFICATION_FIRST_2026-09-13.md#existing-my-bids-reader-and-command-lifetime).
+Owned browser fixture/port3107 are cleaned; configs restored exactly. This and the
+worker60bdd6ba6/web4ddcdaa65 checkpoints are ready for the combined CI push.
+
+**Next:** verify the reachable v2 active-task completion caller and containing detail
+page, then completion draft/restart behavior. The existing upload service already
+content-addresses completion File records and recovers unknown upload replies.
+Reuse it; no replacement upload store/table is required. There is no active web
+rebook/boost caller to rebuild.
 Full installed native MyTasks/owner lifetime remains open. Continue completion
 draft/restart verification using existing storage first. Generic maintenance granular authority/raw RLS, Home-origin admission
 and full maintenance UI acceptance remain separate follow-ups; this bounded history
