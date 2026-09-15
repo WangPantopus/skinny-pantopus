@@ -146,6 +146,7 @@ class MyTasksViewModelTest {
             coEvery { gigsRepo.completeGigAsPoster("g1", "original-review") } coAnswers { reply.await() }
             val viewModel = vm()
             viewModel.load()
+            viewModel.selectTab(MyTasksTab.ACTIVE)
             viewModel.markComplete(loaded)
             viewModel.markComplete(loaded)
             assertEquals(1, viewModel.tabs.value.first { it.id == MyTasksTab.ACTIVE }.count)
@@ -154,6 +155,28 @@ class MyTasksViewModelTest {
             reply.complete(NetworkResult.Success(CompleteGigResponse(gig = confirmed)))
             assertEquals(0, viewModel.tabs.value.first { it.id == MyTasksTab.ACTIVE }.count)
             assertEquals(1, viewModel.tabs.value.first { it.id == MyTasksTab.DONE }.count)
+        }
+
+    @Test
+    fun older_refresh_cannot_replace_a_newer_task_list() =
+        runTest {
+            val late = CompletableDeferred<NetworkResult<MyGigsResponse>>()
+            var reads = 0
+            coEvery { gigsRepo.myGigs(any(), any()) } coAnswers {
+                reads += 1
+                if (reads == 2) {
+                    late.await()
+                } else {
+                    NetworkResult.Success(MyGigsResponse(gigs = listOf(dto(if (reads == 1) "initial" else "newest"))))
+                }
+            }
+            val viewModel = vm()
+            viewModel.load()
+            viewModel.refresh()
+            viewModel.refresh()
+            late.complete(NetworkResult.Success(MyGigsResponse(gigs = listOf(dto("stale")))))
+            val state = viewModel.state.value as ListOfRowsUiState.Loaded
+            assertEquals("newest", state.sections.first().rows.first().id)
         }
 
     @Test

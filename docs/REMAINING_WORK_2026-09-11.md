@@ -111,9 +111,17 @@ lock waits, effect rollback and four-row historical preservation pass. See the
 [capture evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-capture-original-and-recovery).
 Complete-schema checkpoint CI and real-provider/operator/release acceptance remain
 required; a local bound does not close R05 or all paid-flow rows.
-Native MyTasks request lifetime, installed full owner lifecycle and real provider/
-release acceptance remain open. Four post-server-read capture races are reproduced
-with actual HTTP/SQL and synthetic Stripe, and remain unresolved; see [capture baseline](VERIFICATION_FIRST_2026-09-13.md#existing-owner-capture-interleaving-baseline).
+Native MyTasks refresh ordering and canceled iOS confirmation now pass46 Android/
+45 iOS checks and static/build gates. The corrected Android Active-tab fixture
+reproduced a refresh no-op missed by its earlier empty Open-tab fixture. See the
+[bounded follow-up](VERIFICATION_FIRST_2026-09-13.md#existing-mytasks-refresh-order-and-canceled-confirmation).
+Account/screen lifetime, boost rollback ordering, installed full owner lifecycle
+and real provider/release acceptance remain open. The four post-server-read capture
+races are locally repaired by the original-approval checkpoint above; the
+[capture baseline](VERIFICATION_FIRST_2026-09-13.md#existing-owner-capture-interleaving-baseline)
+is retained as failure evidence, not a still-unresolved defect.0654e856e complete-schema/
+backend CI passes; remaining native jobs are running. This native follow-up is local
+until that run completes.
 No inventory row is closed by these bounded checks.
 
 

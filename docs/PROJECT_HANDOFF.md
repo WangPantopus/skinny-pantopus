@@ -397,8 +397,22 @@ Drain old capture handlers and coordinate the new backend/schema before hosted
 admission; no hosted activation ran. Real-provider, refund/dispute/cap-exhaustion
 operations and full installed paid lifecycle remain release gates.
 
+**MyTasks refresh/cancellation checkpoint:** the existing Android Active tab now
+refreshes after a matching confirmation receipt. Both native list loaders ignore
+older responses; iOS ignores canceled confirmation callbacks. The prior Android
+happy-path fixture had selected an empty Open tab and missed the Active-tab no-op.
+The corrected baseline reproduced that defect, stale Android refresh replacement,
+and canceled iOS navigation.46 Android and45 iOS checks plus native static/build
+gates pass. Four existing native source/test files change; no layout, endpoint or
+schema change. See [the bounded evidence](VERIFICATION_FIRST_2026-09-13.md#existing-mytasks-refresh-order-and-canceled-confirmation).
+These compiled-model checks do not verify actual screen departure or account
+switching. The owned iOS simulator is shut down; the separate user simulator is
+preserved. Capture checkpoint0654e856e has passed complete-schema/backend CI;
+its remaining native CI jobs are still running. Keep this local follow-up off the
+canonical branch until that run finishes so its native jobs are not canceled.
+
 **Next:** finish the capture checkpoint CI, then verify the existing native MyTasks
-account/request lifetime and completion draft/restart behavior. Inspect existing
+account/screen lifetime, boost rollback ordering and completion draft/restart behavior. Inspect existing
 implementations first and preserve screen designs.
 Native MyTasks account/request lifetime remains open. Continue completion
 draft/restart verification using existing storage first. Generic maintenance granular authority/raw RLS, Home-origin admission

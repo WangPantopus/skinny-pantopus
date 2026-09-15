@@ -285,6 +285,7 @@ class MyTasksViewModel
     ) : ViewModel() {
         private var gigs: List<MyGigDto> = emptyList()
         private var loadedAtLeastOnce = false
+        private var loadGeneration = 0L
         private var nowProvider: () -> Instant = { Instant.now() }
 
         private val confirmingGigIds = mutableSetOf<String>()
@@ -415,9 +416,12 @@ class MyTasksViewModel
         fun loadMoreIfNeeded() = Unit
 
         private fun reload() {
+            val generation = ++loadGeneration
             if (!loadedAtLeastOnce) _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
-                when (val result = gigsRepo.myGigs()) {
+                val result = gigsRepo.myGigs()
+                if (generation != loadGeneration) return@launch
+                when (result) {
                     is NetworkResult.Success -> {
                         gigs = result.data.gigs
                         loadedAtLeastOnce = true
@@ -580,7 +584,7 @@ class MyTasksViewModel
                         is NetworkResult.Success -> {
                             val receipt = result.data.gig
                             if (receipt?.id == dto.id && receipt.status == "completed" && parseInstant(receipt.ownerConfirmedAt) != null) {
-                                load()
+                                refresh()
                             } else {
                                 openTaskHandler(dto)
                             }

@@ -1,7 +1,3 @@
-//
-//  MyTasksViewModelTests.swift
-//  PantopusTests
-//
 // Existing task lifecycle, row design, filtering and completion receipt checks.
 // Worker-submitted work remains Active until the owner confirms it.
 
@@ -42,8 +38,6 @@ final class MyTasksViewModelTests: XCTestCase {
     private func makeVM(api: APIClient? = nil) -> MyTasksViewModel {
         MyTasksViewModel(api: api ?? makeAPI()) { Self.fixedNow }
     }
-
-    // MARK: - Lifecycle
 
     func testLoadEmptyTransitionsToEmpty() async {
         SequencedURLProtocol.sequence = [.status(200, body: "{\"gigs\":[],\"total\":0}")]
@@ -99,8 +93,6 @@ final class MyTasksViewModelTests: XCTestCase {
         }
     }
 
-    // MARK: - Tab assignment
-
     func testTabAssignment_OpenStatuses() {
         XCTAssertEqual(MyTasksViewModel.tabFor(status: .reviewing), MyTasksTab.open)
         XCTAssertEqual(MyTasksViewModel.tabFor(status: .urgent(hoursLeft: 2)), MyTasksTab.open)
@@ -122,22 +114,14 @@ final class MyTasksViewModelTests: XCTestCase {
         XCTAssertEqual(MyTasksViewModel.tabFor(status: .expired), MyTasksTab.closed)
     }
 
-    // MARK: - Status derivation
-
     func testStatusDerivation_OpenWithBidsIsReviewing() {
         let dto = makeGig(id: "x", status: "open", bidCount: 4)
-        XCTAssertEqual(
-            MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow),
-            .reviewing
-        )
+        XCTAssertEqual(MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow), .reviewing)
     }
 
     func testStatusDerivation_OpenWithZeroBidsIsNoBids() {
         let dto = makeGig(id: "x", status: "open", bidCount: 0)
-        XCTAssertEqual(
-            MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow),
-            .noBids
-        )
+        XCTAssertEqual(MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow), .noBids)
     }
 
     func testStatusDerivation_OpenWithDeadlineWithin4hIsUrgent() {
@@ -164,10 +148,7 @@ final class MyTasksViewModelTests: XCTestCase {
             bidCount: 0,
             deadline: ISO8601DateFormatter().string(from: deadline)
         )
-        XCTAssertEqual(
-            MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow),
-            .expired
-        )
+        XCTAssertEqual(MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow), .expired)
     }
 
     func testStatusDerivation_AssignedWithFutureScheduledIsScheduled() {
@@ -185,29 +166,18 @@ final class MyTasksViewModelTests: XCTestCase {
 
     func testStatusDerivation_InProgressIsInProgress() {
         let dto = makeGig(id: "x", status: "in_progress")
-        XCTAssertEqual(
-            MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow),
-            .inProgress
-        )
+        XCTAssertEqual(MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow), .inProgress)
     }
 
     func testStatusDerivation_WorkerCompletionAwaitsConfirmation() {
         let dto = makeGig(id: "x", status: "completed")
-        XCTAssertEqual(
-            MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow),
-            .awaitingConfirmation
-        )
+        XCTAssertEqual(MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow), .awaitingConfirmation)
     }
 
     func testStatusDerivation_CancelledIsCancelled() {
         let dto = makeGig(id: "x", status: "cancelled")
-        XCTAssertEqual(
-            MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow),
-            .cancelled
-        )
+        XCTAssertEqual(MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow), .cancelled)
     }
-
-    // MARK: - Footer
 
     func testFooter_ReviewingHasEditAndReviewBids() {
         let footer = MyTasksViewModel.footerFor(status: .reviewing, bidCount: 3)
@@ -228,10 +198,7 @@ final class MyTasksViewModelTests: XCTestCase {
     }
 
     func testFooter_NoBidsHasBoost() {
-        XCTAssertEqual(
-            MyTasksViewModel.footerFor(status: .noBids, bidCount: 0),
-            .boost
-        )
+        XCTAssertEqual(MyTasksViewModel.footerFor(status: .noBids, bidCount: 0), .boost)
     }
 
     func testFooter_InProgressHasViewTask() {
@@ -269,8 +236,6 @@ final class MyTasksViewModelTests: XCTestCase {
         )
     }
 
-    // MARK: - Highlight
-
     func testHighlight_TerminalRowsAreMuted() {
         XCTAssertEqual(MyTasksViewModel.highlight(for: .cancelled), .muted)
         XCTAssertEqual(MyTasksViewModel.highlight(for: .expired), .muted)
@@ -283,8 +248,6 @@ final class MyTasksViewModelTests: XCTestCase {
         XCTAssertNil(MyTasksViewModel.highlight(for: .inProgress))
         XCTAssertNil(MyTasksViewModel.highlight(for: .awaitReview))
     }
-
-    // MARK: - Bidder stack
 
     func testBidderStack_OverflowEqualsCountMinusVisible() {
         let dto = makeGig(
@@ -320,8 +283,6 @@ final class MyTasksViewModelTests: XCTestCase {
         XCTAssertEqual(MyTasksViewModel.tone(for: ""), .slate)
     }
 
-    // MARK: - Banner
-
     func testBannerOnOpenTabSummarisesNewBids() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: """
@@ -339,8 +300,6 @@ final class MyTasksViewModelTests: XCTestCase {
         // updated_at within 24h, bid_count=4 → banner shows "4 new bids since yesterday".
         XCTAssertEqual(vm.banner?.title, "4 new bids since yesterday")
     }
-
-    // MARK: - Optimistic boost
 
     func testBoostFlipsExpiresAtInCache() async {
         SequencedURLProtocol.sequence = [
@@ -444,7 +403,51 @@ final class MyTasksViewModelTests: XCTestCase {
         XCTAssertEqual(vm.tabs.first { $0.id == MyTasksTab.done }?.count, 1)
     }
 
-    // MARK: - Helpers
+    func testCanceledConfirmationDoesNotNavigateFromRetiredAction() async throws {
+        let before = #"{"id":"g1","title":"Work","status":"completed","completion_review":"loaded-review"}"#
+        let dto = try JSONDecoder().decode(MyGigDTO.self, from: Data(before.utf8))
+        SequencedURLProtocol.routeResponses = [
+            "/api/gigs/my-gigs": [.status(200, body: "{\"gigs\":[\(before)]}")],
+            "/api/gigs/g1/complete": [.status(503, body: "{}", delay: 0.5)]
+        ]
+        var opened = 0
+        let onOpen: @MainActor (MyGigDTO) -> Void = { _ in opened += 1 }
+        let vm = MyTasksViewModel(api: makeAPI(), onOpenTask: onOpen)
+        await vm.load()
+        let pending = Task { await vm.markComplete(dto) }
+        for _ in 0..<100 {
+            if SequencedURLProtocol.capturedRequests.contains(where: { $0.url?.path == "/api/gigs/g1/complete" }) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(SequencedURLProtocol.capturedRequests.contains { $0.url?.path == "/api/gigs/g1/complete" })
+        pending.cancel()
+        await pending.value
+        XCTAssertEqual(opened, 0)
+    }
+
+    func testOlderRefreshCannotOverwriteTheLastAcceptedListAfterNewerFailure() async throws {
+        let initial = #"{"gigs":[{"id":"initial","title":"Initial task","status":"open"}]}"#
+        let stale = #"{"gigs":[{"id":"stale","title":"Stale task","status":"open"}]}"#
+        SequencedURLProtocol.routeResponses = [
+            "/api/gigs/my-gigs": [
+                .status(200, body: initial),
+                .status(200, body: stale, delay: 0.3),
+                .status(503, body: "{}")
+            ]
+        ]
+        let vm = makeVM()
+        await vm.load()
+        let earlier = Task { await vm.refresh() }
+        for _ in 0..<100 {
+            if SequencedURLProtocol.capturedRequests.count >= 2 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.count, 2)
+        await vm.refresh()
+        await earlier.value
+        guard case let .loaded(sections, _) = vm.state else { return XCTFail("Expected the last accepted list") }
+        XCTAssertEqual(sections.first?.rows.first?.id, "initial")
+    }
 
     private func renderRow(for dto: MyGigDTO) -> RowModel {
         let status = MyTasksViewModel.derivedStatus(for: dto, now: Self.fixedNow)

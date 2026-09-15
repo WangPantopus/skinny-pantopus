@@ -3777,3 +3777,39 @@ Do not roll back to raw old serializers while private originals exist. Exhausted
 capture caps, provider disputes/refunds, operator resolution, hosted adoption and the
 full installed owner lifecycle remain wider acceptance gates; PR34 remains draft.
 Native MyTasks lifetime and completion draft/restart are the next bounded checks.
+
+## Existing MyTasks refresh order and canceled confirmation
+
+After0654e856e, inspection of the existing MyTasks callers found Android's
+confirmed-receipt path calling `load()`, which returns when the current tab is
+already populated. The earlier happy-path test left an empty Open tab selected;
+selecting the actual Active tab reproduced the stale row after success. A held
+older Android refresh also replaced a newer accepted list. Baseline R1 records
+two distinct failures (six failed executions with the configured retries).
+An iOS baseline using the existing APIClient/SequencedURLProtocol and compiled
+view model reproduced navigation after the confirmation Task was canceled.
+These are bounded model reproductions, not installed screen-departure acceptance.
+
+Four existing native source/test files change. Android calls the existing refresh
+after a matching receipt. Both loaders use a request generation to retire earlier
+responses; iOS also checks cancellation before applying reads or confirmation
+callbacks. No screen, layout, table, migration, endpoint or identity service is
+added. iOS test comments/formatting were shortened to retain the existing500-line
+limit; lint rules were not weakened.
+
+The final Android run passes46 tests, compile, detekt and ktlint. The final iOS
+build and45 tests (37 MyTasks plus8 unchanged Magic Task checks) pass with
+SwiftFormat and strict SwiftLint. The iOS regression also keeps the last accepted
+list when a newer refresh fails and an older response arrives later. Source hashes,
+baseline/final logs, Android XML and iOS result bundles are retained under
+`existing-tip-provider-proof-r1/my-tasks-lifetime-*` in the private evidence root
+and durable mirror. Repository/HTTP responses in these tests are synthetic; this
+does not repeat or replace actual local HTTP/SQL acceptance of unchanged backend
+code. No full installed paid lifecycle or actual provider claim is made.
+
+The owned simulator81989235 is shut down and the separate user simulator is
+preserved. Account changes, real view departure, optimistic boost rollback ordering
+and the adjacent rebook rail remain separate verification work.0654e856e's
+complete-schema/backend CI is green while remaining native jobs are running;
+the local follow-up awaits that run before a canonical-branch push. PR34 remains
+draft and no broader inventory row is closed.

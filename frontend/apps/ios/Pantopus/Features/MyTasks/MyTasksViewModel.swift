@@ -420,6 +420,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
 
     private var gigs: [MyGigDTO] = []
     private var loadedAtLeastOnce = false
+    private var loadGeneration = 0
     private var counts = TabCounts()
 
     private struct TabCounts {
@@ -474,12 +475,16 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     // MARK: - Fetching
 
     private func fetch() async {
+        loadGeneration += 1
+        let generation = loadGeneration
         do {
             let response: MyGigsResponse = try await api.request(GigsEndpoints.myGigs())
+            guard generation == loadGeneration, !Task.isCancelled else { return }
             gigs = response.gigs
             loadedAtLeastOnce = true
             rebuild()
         } catch {
+            guard generation == loadGeneration, !Task.isCancelled else { return }
             if !loadedAtLeastOnce {
                 let message = (error as? APIError)?.errorDescription ?? "Couldn't load your tasks."
                 state = .error(message: message)
@@ -658,6 +663,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
 
     /// Confirm only worker-submitted work and keep the row active until a receipt.
     public func markComplete(_ dto: MyGigDTO) async {
+        guard !Task.isCancelled else { return }
         guard let current = gigs.first(where: { $0.id == dto.id }) else { return }
         guard current.status == "completed", Self.parseDate(current.ownerConfirmedAt) == nil,
               let review = dto.completionReview, !review.isEmpty, current.completionReview == review
@@ -670,6 +676,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
             let response: GigDetailResponse = try await api.request(
                 GigsEndpoints.completeGigAsPoster(gigId: dto.id, expectedReview: review)
             )
+            guard !Task.isCancelled else { return }
             guard response.gig.id == dto.id, response.gig.status == "completed",
                   Self.parseDate(response.gig.ownerConfirmedAt) != nil
             else { onOpenTask(dto)
@@ -679,7 +686,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         } catch {
             // The existing detail loader recovers a lost committed reply or shows
             // current work after a conflict; never manufacture a local receipt.
-            onOpenTask(dto)
+            if !Task.isCancelled { onOpenTask(dto) }
         }
     }
 
