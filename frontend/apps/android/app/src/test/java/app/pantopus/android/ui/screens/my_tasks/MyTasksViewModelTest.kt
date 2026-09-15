@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.models.gigs.TopBidderDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigsRepository
+import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
 import app.pantopus.android.ui.screens.shared.list_of_rows.BidderTone
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowHighlight
@@ -87,8 +88,8 @@ class MyTasksViewModelTest {
         taskFormat = taskFormat,
     )
 
-    private fun vm(): MyTasksViewModel =
-        MyTasksViewModel(gigsRepo).apply {
+    private fun vm(identity: () -> Pair<String, String?>? = { "u_me" to "test-session" }): MyTasksViewModel =
+        MyTasksViewModel(gigsRepo, gigIdentityFixture(identity)).apply {
             overrideNow { fixedNow }
         }
 

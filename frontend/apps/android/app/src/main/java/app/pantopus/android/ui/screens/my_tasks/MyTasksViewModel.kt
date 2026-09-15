@@ -19,6 +19,8 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.screens.gigs.checkout.GigCheckoutIdentity
+import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
 import app.pantopus.android.ui.screens.offers.OffersCategory
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilter
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivitySortOrder
@@ -282,10 +284,15 @@ class MyTasksViewModel
     @Inject
     constructor(
         private val gigsRepo: GigsRepository,
+        private val identities: GigPaymentIdentitySource,
     ) : ViewModel() {
         private var gigs: List<MyGigDto> = emptyList()
         private var loadedAtLeastOnce = false
         private var loadGeneration = 0L
+        private var screenGeneration = 0L
+        private var screenActive = true
+        private var scopeMarker = identities.scopeMarker()
+        private var loadedIdentity: GigCheckoutIdentity? = null
         private var nowProvider: () -> Instant = { Instant.now() }
 
         private val confirmingGigIds = mutableSetOf<String>()
@@ -339,6 +346,7 @@ class MyTasksViewModel
         val sortFilterOptions = ActivitySortOrder.ALL
 
         fun openFilterSheet() {
+            if (!scopeIsCurrent(screenGeneration)) return
             _showFilterSheet.value = true
         }
 
@@ -351,19 +359,60 @@ class MyTasksViewModel
             applyState()
         }
 
-        private val _fab =
-            MutableStateFlow<FabAction?>(
-                FabAction(
-                    icon = PantopusIcon.Plus,
-                    contentDescription = "Post a task with Magic Task",
-                    variant = FabVariant.MagicCreate,
-                    onClick = { postTaskHandler() },
-                ),
-            )
+        private val _fab = MutableStateFlow<FabAction?>(null)
         val fab: StateFlow<FabAction?> = _fab.asStateFlow()
 
         private val _banner = MutableStateFlow<BannerConfig?>(null)
         val banner: StateFlow<BannerConfig?> = _banner.asStateFlow()
+
+        init {
+            viewModelScope.launch {
+                identities.changes.collect {
+                    if (scopeMarker != identities.scopeMarker()) {
+                        invalidate()
+                        scopeMarker = identities.scopeMarker()
+                        if (screenActive) reload()
+                    }
+                }
+            }
+        }
+
+        private fun invalidate() {
+            screenGeneration += 1
+            loadGeneration += 1
+            loadedIdentity = null
+            loadedAtLeastOnce = false
+            gigs = emptyList()
+            confirmingGigIds.clear()
+            _state.value = ListOfRowsUiState.Loading
+            _tabs.value = defaultTabs()
+            _banner.value = null
+            _fab.value = null
+            _showFilterSheet.value = false
+        }
+
+        fun retire() {
+            screenActive = false
+            invalidate()
+        }
+
+        private fun scopeIsCurrent(generation: Long): Boolean =
+            screenActive && generation == screenGeneration && scopeMarker == identities.scopeMarker()
+
+        private suspend fun isCurrent(
+            generation: Long,
+            identity: GigCheckoutIdentity,
+        ): Boolean = scopeIsCurrent(generation) && identities.paymentIdentity() == identity && scopeIsCurrent(generation)
+
+        private fun createFab(): FabAction {
+            val generation = screenGeneration
+            return FabAction(
+                icon = PantopusIcon.Plus,
+                contentDescription = "Post a task with Magic Task",
+                variant = FabVariant.MagicCreate,
+                onClick = { if (scopeIsCurrent(generation)) postTaskHandler() },
+            )
+        }
 
         /**
          * Wire in the navigation callbacks before [load]. Same pattern
@@ -379,6 +428,9 @@ class MyTasksViewModel
             onPostTask: () -> Unit,
             onRepost: (MyGigDto) -> Unit,
         ) {
+            invalidate()
+            screenActive = true
+            scopeMarker = identities.scopeMarker()
             openTaskHandler = onOpenTask
             openBidsHandler = onOpenBids
             editTaskHandler = onEditTask
@@ -386,13 +438,7 @@ class MyTasksViewModel
             leaveReviewHandler = onLeaveReview
             postTaskHandler = onPostTask
             repostHandler = onRepost
-            _fab.value =
-                FabAction(
-                    icon = PantopusIcon.Plus,
-                    contentDescription = "Post a task with Magic Task",
-                    variant = FabVariant.MagicCreate,
-                    onClick = { postTaskHandler() },
-                )
+            _fab.value = createFab()
         }
 
         /** Test hook — override the clock for deterministic time-window verdicts. */
@@ -401,6 +447,11 @@ class MyTasksViewModel
         }
 
         fun load() {
+            if (!screenActive) return
+            if (scopeMarker != identities.scopeMarker()) {
+                invalidate()
+                scopeMarker = identities.scopeMarker()
+            }
             if (_state.value is ListOfRowsUiState.Loaded && loadedAtLeastOnce) return
             reload()
         }
@@ -416,13 +467,27 @@ class MyTasksViewModel
         fun loadMoreIfNeeded() = Unit
 
         private fun reload() {
+            if (!screenActive) return
+            if (scopeMarker != identities.scopeMarker()) {
+                invalidate()
+                scopeMarker = identities.scopeMarker()
+            }
+            val screen = screenGeneration
             val generation = ++loadGeneration
             if (!loadedAtLeastOnce) _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
+                val identity = identities.paymentIdentity()
+                if (!scopeIsCurrent(screen) || generation != loadGeneration) return@launch
+                if (identity == null) {
+                    invalidate()
+                    _state.value = ListOfRowsUiState.Error("Sign in again to load your tasks.")
+                    return@launch
+                }
                 val result = gigsRepo.myGigs()
-                if (generation != loadGeneration) return@launch
+                if (!isCurrent(screen, identity) || generation != loadGeneration) return@launch
                 when (result) {
                     is NetworkResult.Success -> {
+                        loadedIdentity = identity
                         gigs = result.data.gigs
                         loadedAtLeastOnce = true
                         applyState()
@@ -437,6 +502,8 @@ class MyTasksViewModel
         }
 
         private fun applyState() {
+            if (!scopeIsCurrent(screenGeneration)) return
+            _fab.value = createFab()
             val now = nowProvider()
             val projections =
                 gigs.map { dto ->
@@ -496,7 +563,10 @@ class MyTasksViewModel
                 onCta = { applyFilter(ActivityFilter()) },
             )
 
-        private fun emptyStateFor(tab: String): ListOfRowsUiState.Empty =
+        private fun emptyStateFor(
+            tab: String,
+            generation: Long = screenGeneration,
+        ): ListOfRowsUiState.Empty =
             when (tab) {
                 MyTasksTab.OPEN ->
                     // T6.0b — Magic Task primary CTA. The shell's
@@ -511,7 +581,7 @@ class MyTasksViewModel
                                 "drafts the title, budget, and schedule — you just " +
                                 "confirm and post.",
                         ctaTitle = "Try Magic Task",
-                        onCta = { postTaskHandler() },
+                        onCta = { if (scopeIsCurrent(generation)) postTaskHandler() },
                     )
                 MyTasksTab.ACTIVE ->
                     ListOfRowsUiState.Empty(
@@ -552,15 +622,20 @@ class MyTasksViewModel
         // MARK: - Mutations
 
         fun boost(dto: MyGigDto) {
+            val generation = screenGeneration
+            val identity = loadedIdentity ?: return
+            if (!scopeIsCurrent(generation)) return
             val index = gigs.indexOfFirst { it.id == dto.id }
             if (index < 0) return
             val previous = gigs
             gigs = gigs.toMutableList().also { it[index] = boostedCopy(gigs[index], nowProvider()) }
             applyState()
             viewModelScope.launch {
+                if (!isCurrent(generation, identity)) return@launch
                 when (gigsRepo.boostGig(dto.id)) {
                     is NetworkResult.Success -> Unit
                     is NetworkResult.Failure -> {
+                        if (!isCurrent(generation, identity)) return@launch
                         gigs = previous
                         applyState()
                     }
@@ -569,6 +644,9 @@ class MyTasksViewModel
         }
 
         fun markComplete(dto: MyGigDto) {
+            val generation = screenGeneration
+            val identity = loadedIdentity ?: return
+            if (!scopeIsCurrent(generation)) return
             val current = gigs.firstOrNull { it.id == dto.id } ?: return
             val review = dto.completionReview
             val awaitsConfirmation = current.status == "completed" && parseInstant(current.ownerConfirmedAt) == null
@@ -580,7 +658,10 @@ class MyTasksViewModel
             if (!confirmingGigIds.add(dto.id)) return
             viewModelScope.launch {
                 try {
-                    when (val result = gigsRepo.completeGigAsPoster(dto.id, review)) {
+                    if (!isCurrent(generation, identity)) return@launch
+                    val result = gigsRepo.completeGigAsPoster(dto.id, review)
+                    if (!isCurrent(generation, identity)) return@launch
+                    when (result) {
                         is NetworkResult.Success -> {
                             val receipt = result.data.gig
                             if (receipt?.id == dto.id && receipt.status == "completed" && parseInstant(receipt.ownerConfirmedAt) != null) {
@@ -592,7 +673,7 @@ class MyTasksViewModel
                         is NetworkResult.Failure -> openTaskHandler(dto)
                     }
                 } finally {
-                    confirmingGigIds.remove(dto.id)
+                    if (generation == screenGeneration) confirmingGigIds.remove(dto.id)
                 }
             }
         }
@@ -621,6 +702,7 @@ class MyTasksViewModel
             now: Instant,
         ): RowModel {
             val dto = projection.dto
+            val generation = screenGeneration
             val category = OffersCategory.fromRaw(dto.category)
             val budget = formatBudget(dto.price, dto.payType)
             val title = dto.title.takeIf { it.isNotBlank() } ?: "Untitled task"
@@ -663,7 +745,7 @@ class MyTasksViewModel
                 template = RowTemplate.StatusChip,
                 leading = leading,
                 trailing = RowTrailing.PriceStack(amount = budget, sublabel = null),
-                onTap = { openTaskHandler(dto) },
+                onTap = { if (scopeIsCurrent(generation)) openTaskHandler(dto) },
                 chips = chips,
                 highlight = highlight(projection.status),
                 footer = footer(projection.footer, dto),
@@ -692,6 +774,7 @@ class MyTasksViewModel
         private fun footer(
             variant: MyTasksFooter,
             dto: MyGigDto,
+            generation: Long = screenGeneration,
         ): RowFooter? =
             when (variant) {
                 is MyTasksFooter.None -> null
@@ -703,14 +786,14 @@ class MyTasksViewModel
                                     title = "Edit",
                                     icon = PantopusIcon.Pencil,
                                     variant = CompactButtonVariant.Ghost,
-                                    onClick = { editTaskHandler(dto) },
+                                    onClick = { if (scopeIsCurrent(generation)) editTaskHandler(dto) },
                                 ),
                                 RowFooterAction(
                                     title = if (variant.bidCount > 0) "Review ${variant.bidCount} bids" else "Review bids",
                                     icon = PantopusIcon.Inbox,
                                     variant = CompactButtonVariant.Primary,
                                     flex = 2,
-                                    onClick = { openBidsHandler(dto) },
+                                    onClick = { if (scopeIsCurrent(generation)) openBidsHandler(dto) },
                                 ),
                             ),
                     )
@@ -722,14 +805,14 @@ class MyTasksViewModel
                                     title = "Extend 24h",
                                     icon = PantopusIcon.ClockPlus,
                                     variant = CompactButtonVariant.Ghost,
-                                    onClick = { editTaskHandler(dto) },
+                                    onClick = { if (scopeIsCurrent(generation)) editTaskHandler(dto) },
                                 ),
                                 RowFooterAction(
                                     title = if (variant.bidCount > 0) "Review ${variant.bidCount} bids" else "Review bids",
                                     icon = PantopusIcon.Inbox,
                                     variant = CompactButtonVariant.Primary,
                                     flex = 2,
-                                    onClick = { openBidsHandler(dto) },
+                                    onClick = { if (scopeIsCurrent(generation)) openBidsHandler(dto) },
                                 ),
                             ),
                     )
@@ -741,13 +824,13 @@ class MyTasksViewModel
                                     title = "Edit details",
                                     icon = PantopusIcon.Pencil,
                                     variant = CompactButtonVariant.Ghost,
-                                    onClick = { editTaskHandler(dto) },
+                                    onClick = { if (scopeIsCurrent(generation)) editTaskHandler(dto) },
                                 ),
                                 RowFooterAction(
                                     title = "Boost in feed",
                                     icon = PantopusIcon.Rocket,
                                     variant = CompactButtonVariant.Primary,
-                                    onClick = { boost(dto) },
+                                    onClick = { if (scopeIsCurrent(generation)) boost(dto) },
                                 ),
                             ),
                     )
@@ -759,7 +842,7 @@ class MyTasksViewModel
                                     title = "Message",
                                     icon = PantopusIcon.MessageCircle,
                                     variant = CompactButtonVariant.Ghost,
-                                    onClick = { messageWorkerHandler(dto) },
+                                    onClick = { if (scopeIsCurrent(generation)) messageWorkerHandler(dto) },
                                 ),
                                 RowFooterAction(
                                     title =
@@ -771,6 +854,7 @@ class MyTasksViewModel
                                     icon = PantopusIcon.CheckCheck,
                                     variant = CompactButtonVariant.Primary,
                                     onClick = {
+                                        if (!scopeIsCurrent(generation)) return@RowFooterAction
                                         if (variant is MyTasksFooter.ConfirmCompletion) {
                                             markComplete(
                                                 dto,
@@ -790,7 +874,7 @@ class MyTasksViewModel
                                     title = "Leave a review",
                                     icon = PantopusIcon.Star,
                                     variant = CompactButtonVariant.Primary,
-                                    onClick = { leaveReviewHandler(dto) },
+                                    onClick = { if (scopeIsCurrent(generation)) leaveReviewHandler(dto) },
                                 ),
                             ),
                     )
@@ -802,7 +886,7 @@ class MyTasksViewModel
                                     title = "Repost task",
                                     icon = PantopusIcon.ArrowsRepeat,
                                     variant = CompactButtonVariant.Primary,
-                                    onClick = { repostHandler(dto) },
+                                    onClick = { if (scopeIsCurrent(generation)) repostHandler(dto) },
                                 ),
                             ),
                     )

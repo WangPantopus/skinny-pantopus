@@ -1,6 +1,3 @@
-// Existing task lifecycle, row design, filtering and completion receipt checks.
-// Worker-submitted work remains Active until the owner confirms it.
-
 import XCTest
 @testable import Pantopus
 
@@ -13,7 +10,6 @@ final class MyTasksViewModelTests: XCTestCase {
         SequencedURLProtocol.reset()
     }
 
-    /// Fixed clock so the time-window verdicts are deterministic.
     private static let fixedNow: Date = {
         var components = DateComponents()
         components.year = 2026
@@ -27,6 +23,10 @@ final class MyTasksViewModelTests: XCTestCase {
             ?? Date(timeIntervalSince1970: 1_778_846_400)
     }()
 
+    private static func ownerIdentity() -> GigStopViewModel.Identity? {
+        .init(actor: "u_me", session: "test-session", origin: "synthetic-origin")
+    }
+
     private func makeAPI() -> APIClient {
         APIClient(
             environment: .current,
@@ -36,7 +36,7 @@ final class MyTasksViewModelTests: XCTestCase {
     }
 
     private func makeVM(api: APIClient? = nil) -> MyTasksViewModel {
-        MyTasksViewModel(api: api ?? makeAPI()) { Self.fixedNow }
+        MyTasksViewModel(api: api ?? makeAPI(), identity: Self.ownerIdentity) { Self.fixedNow }
     }
 
     func testLoadEmptyTransitionsToEmpty() async {
@@ -47,8 +47,6 @@ final class MyTasksViewModelTests: XCTestCase {
             XCTFail("Expected .empty, got \(vm.state)")
             return
         }
-        // T6.0b — Magic Task primary CTA replaces the classic
-        // "Post a task" headline + CTA on the Open tab.
         XCTAssertEqual(content.headline, "No tasks posted yet — try Magic Task")
         XCTAssertEqual(content.ctaTitle, "Try Magic Task")
     }
@@ -125,7 +123,6 @@ final class MyTasksViewModelTests: XCTestCase {
     }
 
     func testStatusDerivation_OpenWithDeadlineWithin4hIsUrgent() {
-        // Deadline 2h from now → urgent(2).
         let deadline = Self.fixedNow.addingTimeInterval(2 * 3600)
         let dto = makeGig(
             id: "x",
@@ -297,7 +294,6 @@ final class MyTasksViewModelTests: XCTestCase {
         let vm = makeVM()
         await vm.load()
         XCTAssertNotNil(vm.banner)
-        // updated_at within 24h, bid_count=4 → banner shows "4 new bids since yesterday".
         XCTAssertEqual(vm.banner?.title, "4 new bids since yesterday")
     }
 
@@ -318,8 +314,6 @@ final class MyTasksViewModelTests: XCTestCase {
             XCTFail("Expected .loaded after initial fetch")
             return
         }
-        // Find the loaded gig and boost it via the static row's callbacks
-        // by calling the VM helper directly.
         let dto = MyGigDTO(
             id: "g1",
             title: "Drip fix",
@@ -331,7 +325,6 @@ final class MyTasksViewModelTests: XCTestCase {
             bidCount: 0
         )
         await vm.boost(dto)
-        // After boost the row still lives on the Open tab and bid_count is unchanged.
         guard case let .loaded(sections, _) = vm.state else {
             XCTFail("Expected .loaded after boost")
             return
@@ -372,7 +365,13 @@ final class MyTasksViewModelTests: XCTestCase {
         let dto = MyGigDTO(id: "g1", title: "Work", status: "in_progress")
         SequencedURLProtocol.sequence = [.status(200, body: #"{"gigs":[{"id":"g1","title":"Work","status":"in_progress"}]}"#)]
         var opened: [String] = []
-        let vm = MyTasksViewModel(api: makeAPI(), onOpenTask: { opened.append($0.id) }, now: { Self.fixedNow })
+        let fixedClock: @Sendable () -> Date = { Self.fixedNow }
+        let vm = MyTasksViewModel(
+            api: makeAPI(),
+            onOpenTask: { opened.append($0.id) },
+            identity: Self.ownerIdentity,
+            now: fixedClock
+        )
         await vm.load()
         await vm.markComplete(dto)
         XCTAssertEqual(opened, ["g1"])
@@ -412,7 +411,7 @@ final class MyTasksViewModelTests: XCTestCase {
         ]
         var opened = 0
         let onOpen: @MainActor (MyGigDTO) -> Void = { _ in opened += 1 }
-        let vm = MyTasksViewModel(api: makeAPI(), onOpenTask: onOpen)
+        let vm = MyTasksViewModel(api: makeAPI(), onOpenTask: onOpen, identity: Self.ownerIdentity)
         await vm.load()
         let pending = Task { await vm.markComplete(dto) }
         for _ in 0..<100 {

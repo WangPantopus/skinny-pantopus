@@ -299,10 +299,10 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
 
     public var tabs: [ListOfRowsTab] {
         [
-            ListOfRowsTab(id: MyTasksTab.open, label: "Open", count: counts.open),
-            ListOfRowsTab(id: MyTasksTab.active, label: "Active", count: counts.active),
-            ListOfRowsTab(id: MyTasksTab.done, label: "Done", count: counts.done),
-            ListOfRowsTab(id: MyTasksTab.closed, label: "Closed", count: counts.closed)
+            ListOfRowsTab(id: MyTasksTab.open, label: "Open", count: visibleCounts.open),
+            ListOfRowsTab(id: MyTasksTab.active, label: "Active", count: visibleCounts.active),
+            ListOfRowsTab(id: MyTasksTab.done, label: "Done", count: visibleCounts.done),
+            ListOfRowsTab(id: MyTasksTab.closed, label: "Closed", count: visibleCounts.closed)
         ]
     }
 
@@ -314,19 +314,24 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     }
 
     public var fab: FABAction? {
+        guard canDisplay else { return nil }
+        let generation = screenGeneration
         // T6.0b — Magic Task FAB. 60pt gradient (primary600 → primary700)
         // with a sparkles disc clipped over the top-right corner.
         // Tapping invokes the same `onPostTask` callback the screen
         // already wires; the destination route is responsible for
         // opening the Magic Task draft flow (or falling back to the
         // classic compose form when Magic Task is feature-flagged off).
-        FABAction(
+        return FABAction(
             icon: .plus,
             accessibilityLabel: "Post a task with Magic Task",
             variant: .magicCreate
         ) { [weak self] in
             guard let self else { return }
-            Task { @MainActor in self.onPostTask() }
+            Task { @MainActor in
+                guard self.isCurrent(generation) else { return }
+                self.onPostTask()
+            }
         }
     }
 
@@ -338,16 +343,22 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     /// (HubTabRoot.swift:213), and widening it would touch every existing
     /// caller. Category prefill ships; title prefill is recorded as a gap.
     public func rebook(_ gig: RebookableGigDTO) {
+        guard canDisplay else { return }
         onRebook(gig)
     }
 
     public var topBarAction: TopBarAction? {
-        TopBarAction(
+        guard canDisplay else { return nil }
+        let generation = screenGeneration
+        return TopBarAction(
             icon: .filter,
             accessibilityLabel: "Filter tasks"
         ) { [weak self] in
             guard let self else { return }
-            Task { @MainActor in self.isFilterPresented = true }
+            Task { @MainActor in
+                guard self.isCurrent(generation) else { return }
+                self.isFilterPresented = true
+            }
         }
     }
 
@@ -377,11 +388,13 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
 
     /// Store the applied filter and re-project the visible rows.
     public func applyFilter(_ filter: ActivityFilter) {
+        guard canDisplay else { return }
         activityFilter = filter
         rebuild()
     }
 
     public var banner: BannerConfig? {
+        guard canDisplay else { return nil }
         guard selectedTab == MyTasksTab.open else { return nil }
         guard counts.openTotal > 0 else { return nil }
         let title: String
@@ -400,7 +413,45 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         return BannerConfig(icon: .inbox, title: title, subtitle: subtitle, onTap: nil)
     }
 
-    public private(set) var state: ListOfRowsState = .loading
+    private var storedState: ListOfRowsState = .loading
+    public private(set) var state: ListOfRowsState {
+        get {
+            guard isCurrentAccount else { return .error(message: "Reopen My tasks to load your current session.") }
+            return screenActive ? storedState : .loading
+        }
+        set { storedState = newValue }
+    }
+
+    private let identity: () -> GigStopViewModel.Identity?
+    private let openingIdentity: GigStopViewModel.Identity?
+    private var screenActive = true
+    private var screenGeneration = 0
+    public var isCurrentAccount: Bool {
+        openingIdentity != nil && identity() == openingIdentity
+    }
+
+    private var canDisplay: Bool {
+        screenActive && isCurrentAccount
+    }
+
+    private var visibleCounts: TabCounts {
+        canDisplay ? counts : TabCounts()
+    }
+
+    private func isCurrent(_ generation: Int) -> Bool {
+        generation == screenGeneration && canDisplay && !Task.isCancelled
+    }
+
+    public func retire() {
+        screenActive = false
+        screenGeneration += 1
+        loadGeneration += 1
+        gigs = []
+        counts = TabCounts()
+        loadedAtLeastOnce = false
+        confirmingGigIds.removeAll()
+        isFilterPresented = false
+    }
 
     // MARK: - Dependencies
 
@@ -444,9 +495,13 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         onPostTask: @escaping @MainActor () -> Void = {},
         onRepost: @escaping @MainActor (MyGigDTO) -> Void = { _ in },
         onRebook: @escaping @MainActor (RebookableGigDTO) -> Void = { _ in },
+        identity: (() -> GigStopViewModel.Identity?)? = nil,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.api = api
+        let resolveIdentity = identity ?? { GigStopViewModel.currentIdentity(api: api) }
+        self.identity = resolveIdentity
+        openingIdentity = resolveIdentity()
         self.onOpenTask = onOpenTask
         self.onOpenBids = onOpenBids
         self.onEditTask = onEditTask
@@ -461,6 +516,8 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     // MARK: - ListOfRowsDataSource
 
     public func load() async {
+        guard isCurrentAccount, !Task.isCancelled else { return }
+        screenActive = true
         if !loadedAtLeastOnce { state = .loading }
         await fetch()
     }
@@ -475,16 +532,18 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     // MARK: - Fetching
 
     private func fetch() async {
+        guard canDisplay, !Task.isCancelled else { return }
+        let screen = screenGeneration
         loadGeneration += 1
         let generation = loadGeneration
         do {
             let response: MyGigsResponse = try await api.request(GigsEndpoints.myGigs())
-            guard generation == loadGeneration, !Task.isCancelled else { return }
+            guard generation == loadGeneration, isCurrent(screen) else { return }
             gigs = response.gigs
             loadedAtLeastOnce = true
             rebuild()
         } catch {
-            guard generation == loadGeneration, !Task.isCancelled else { return }
+            guard generation == loadGeneration, isCurrent(screen) else { return }
             if !loadedAtLeastOnce {
                 let message = (error as? APIError)?.errorDescription ?? "Couldn't load your tasks."
                 state = .error(message: message)
@@ -550,45 +609,68 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         }
     }
 
+    private func performIfCurrent(_ generation: Int, action: () async -> Void) async {
+        guard isCurrent(generation) else { return }
+        await action()
+    }
+
     private func callbacks(for dto: MyGigDTO) -> RowCallbacks {
-        RowCallbacks(
+        let generation = screenGeneration
+        return RowCallbacks(
             onTap: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in self.onOpenTask(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { self.onOpenTask(dto) }
+                }
             },
             onReviewBids: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in self.onOpenBids(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { self.onOpenBids(dto) }
+                }
             },
             onEdit: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in self.onEditTask(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { self.onEditTask(dto) }
+                }
             },
             onBoost: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in await self.boost(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { await self.boost(dto) }
+                }
             },
             onMessage: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in self.onMessageWorker(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { self.onMessageWorker(dto) }
+                }
             },
             onMarkComplete: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in await self.markComplete(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { await self.markComplete(dto) }
+                }
             },
             onLeaveReview: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in self.onLeaveReview(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { self.onLeaveReview(dto) }
+                }
             },
             onRepost: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in self.onRepost(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { self.onRepost(dto) }
+                }
             }
         )
     }
 
     private func emptyContent(for tab: String) -> ListOfRowsState.EmptyContent {
-        switch tab {
+        let generation = screenGeneration
+        return switch tab {
         case MyTasksTab.open:
             // T6.0b — Magic Task primary CTA. The shell's EmptyState
             // renders the headline + body + single primary button; the
@@ -602,7 +684,10 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
                     + "confirm and post.",
                 ctaTitle: "Try Magic Task"
             ) { [weak self] in
-                Task { @MainActor in self?.onPostTask() }
+                Task { @MainActor in
+                    guard let self, self.isCurrent(generation) else { return }
+                    self.onPostTask()
+                }
             }
         case MyTasksTab.active:
             ListOfRowsState.EmptyContent(
@@ -646,6 +731,8 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     /// No bids) but the row's `boost_expires_at` is updated locally so
     /// future renders can surface a "Boosted" hint.
     public func boost(_ dto: MyGigDTO) async {
+        let generation = screenGeneration
+        guard isCurrent(generation) else { return }
         guard let index = gigs.firstIndex(where: { $0.id == dto.id }) else { return }
         let previous = gigs
         gigs[index] = Self.boostedCopy(of: gigs[index], now: now())
@@ -656,6 +743,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
                 as: BoostGigResponse.self
             )
         } catch {
+            guard isCurrent(generation) else { return }
             gigs = previous
             rebuild()
         }
@@ -663,7 +751,8 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
 
     /// Confirm only worker-submitted work and keep the row active until a receipt.
     public func markComplete(_ dto: MyGigDTO) async {
-        guard !Task.isCancelled else { return }
+        let generation = screenGeneration
+        guard isCurrent(generation) else { return }
         guard let current = gigs.first(where: { $0.id == dto.id }) else { return }
         guard current.status == "completed", Self.parseDate(current.ownerConfirmedAt) == nil,
               let review = dto.completionReview, !review.isEmpty, current.completionReview == review
@@ -671,22 +760,22 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
             return
         }
         guard confirmingGigIds.insert(dto.id).inserted else { return }
-        defer { confirmingGigIds.remove(dto.id) }
+        defer { if generation == screenGeneration { confirmingGigIds.remove(dto.id) } }
         do {
             let response: GigDetailResponse = try await api.request(
                 GigsEndpoints.completeGigAsPoster(gigId: dto.id, expectedReview: review)
             )
-            guard !Task.isCancelled else { return }
+            guard isCurrent(generation) else { return }
             guard response.gig.id == dto.id, response.gig.status == "completed",
                   Self.parseDate(response.gig.ownerConfirmedAt) != nil
             else { onOpenTask(dto)
                 return
             }
-            await load()
+            await refresh()
         } catch {
             // The existing detail loader recovers a lost committed reply or shows
             // current work after a conflict; never manufacture a local receipt.
-            if !Task.isCancelled { onOpenTask(dto) }
+            if isCurrent(generation) { onOpenTask(dto) }
         }
     }
 

@@ -3809,7 +3809,57 @@ code. No full installed paid lifecycle or actual provider claim is made.
 
 The owned simulator81989235 is shut down and the separate user simulator is
 preserved. Account changes, real view departure, optimistic boost rollback ordering
-and the adjacent rebook rail remain separate verification work.0654e856e's
-complete-schema/backend CI is green while remaining native jobs are running;
-the local follow-up awaits that run before a canonical-branch push. PR34 remains
+and the adjacent rebook rail remain separate verification work.0654e856e passes
+all15 applicable jobs/one Seeder skip in
+[CI34964238115](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34964238115),
+including complete schema replay and native checks. The refresh follow-up is
+committed locally at f32c8e66b while the account/screen checks finish. PR34 remains
 draft and no broader inventory row is closed.
+
+## Existing native MyTasks account and view lifetime
+
+The existing main-list models did not bind their loaded state and callbacks to
+the current session or view lifetime. iOS baseline tests use the actual AuthManager,
+APIClient and compiled model with synthetic HTTP responses: sign-out leaves the
+old row/count/banner visible, and a held503 confirmation navigates after the same
+actor receives a replacement session. Two tests record four failed assertions.
+Android's held confirmation invokes newly rebound navigation callbacks; its
+baseline records one distinct failure across three configured retry executions.
+Existing root sign-out navigation does not make these retained model callbacks safe.
+
+The repair uses GigStopViewModel.currentIdentity on iOS and GigPaymentIdentitySource
+on Android. Existing model/view files clear or mask retired state, retire row and
+empty-state actions, and reject late reads/confirmation/boost callbacks. Rebinding
+starts a new view generation without letting the previous command clear its state.
+Android observes the existing identity signal and reloads the current account;
+iOS keeps the original session boundary and permits a fresh list entry. All three
+iOS callers append their existing destinations directly, removing22 redundant
+Task hops after the guard. No routes or visual treatment are redesigned.
+
+Android R3 passes52 tests (46 existing main-list checks plus6 focused lifetime
+checks), detekt, ktlint and compilation. The final response-order check holds the
+session lookup itself while a newer list finishes, verifying the generation is
+checked after that await. R2 passed51 checks before this additional ordering guard.
+R1 stopped at the unchanged LargeClass rule; the new lifetime cases were moved to
+one focused Android test file, preserving the rule and existing test suite.
+Ten other native files already existed. No application screen/service, endpoint,
+table, migration or new identity subsystem is added.
+
+iOS R2 passes50 tests (37 existing main-list checks and13 Magic Task/lifetime checks),
+build, strict SwiftLint and SwiftFormat. The existing row designs remain covered by
+the unchanged8 Magic Task projections. Tests cover sign-out, replacement-session
+read and confirmation responses, same-session departure/reentry, old row actions,
+and a fresh entry that loads the replacement session. R1 compiled successfully;
+two new reentry cases exhausted their one-response GET fixtures. Supplying the
+second expected response fixed those fixtures; the same product source passes R2.
+The initial static failures and corrected zero-violation run remain recorded.
+
+Source hashes, both baseline/final runs, Android XML, iOS result bundles and cleanup
+are retained under `existing-tip-provider-proof-r1/my-tasks-account-*` and its
+durable mirror. The owned iOS simulator is shut down and the separate user simulator
+is preserved. These checks use synthetic transport/repositories; no installed full
+owner/account-switch journey, actual provider or hosted operation is claimed.
+The main-list acceptance does not cover the adjacent rebook rail's separate reader,
+optimistic boost rollback ordering or completion draft/restart. Those are next.
+0654e856e's complete CI remains green; the combined native checkpoint needs its own
+CI. PR34 stays draft and the wider inventory remains open.

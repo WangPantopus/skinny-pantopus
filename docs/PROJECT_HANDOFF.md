@@ -392,7 +392,9 @@ recovery; seven observed lock waits and a forced effect rollback pass. Forward r
 preserves four historical payments/gigs without approval backfill. Function lint381
 functions/116 bindings has zero errors/eight existing warnings. See the
 [original capture evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-capture-original-and-recovery).
-This is local acceptance; require this checkpoint's own complete-schema/native CI.
+Checkpoint0654e856e passes all15 applicable jobs/one Seeder skip in
+[CI34964238115](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34964238115),
+including complete schema replay and native checks.
 Drain old capture handlers and coordinate the new backend/schema before hosted
 admission; no hosted activation ran. Real-provider, refund/dispute/cap-exhaustion
 operations and full installed paid lifecycle remain release gates.
@@ -407,14 +409,27 @@ gates pass. Four existing native source/test files change; no layout, endpoint o
 schema change. See [the bounded evidence](VERIFICATION_FIRST_2026-09-13.md#existing-mytasks-refresh-order-and-canceled-confirmation).
 These compiled-model checks do not verify actual screen departure or account
 switching. The owned iOS simulator is shut down; the separate user simulator is
-preserved. Capture checkpoint0654e856e has passed complete-schema/backend CI;
-its remaining native CI jobs are still running. Keep this local follow-up off the
-canonical branch until that run finishes so its native jobs are not canceled.
+preserved. The follow-up is committed at f32c8e66b and is included in the next
+combined native checkpoint.
 
-**Next:** finish the capture checkpoint CI, then verify the existing native MyTasks
-account/screen lifetime, boost rollback ordering and completion draft/restart behavior. Inspect existing
+**Native MyTasks account/lifetime checkpoint:** the existing main list and its
+row actions now retire reads/commands after session changes, departure and
+rebinding. iOS uses the existing GigStop identity resolver and Android the existing
+GigPaymentIdentitySource. Current Android identity signals clear the old list and
+load the current account; an iOS session change requires a fresh list entry.
+The three iOS navigation callers now append destinations directly after the guard.
+52 Android and50 iOS checks plus static/compilation gates pass. Ten existing native
+files change and one focused Android test file is added to preserve the unchanged
+test-class size limit; no new application screen, service or schema. See
+[account/lifetime evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-mytasks-account-and-view-lifetime).
+These are compiled-model/APIClient checks; full installed account-switch/owner UI
+is still open. The adjacent rebook rail has its own reader and is not covered by
+this main-list acceptance. Require the combined checkpoint's own CI before merge.
+
+**Next:** run the combined checkpoint CI and verify the existing rebook rail,
+boost rollback ordering and completion draft/restart behavior. Inspect existing
 implementations first and preserve screen designs.
-Native MyTasks account/request lifetime remains open. Continue completion
+Full installed native MyTasks/owner lifetime remains open. Continue completion
 draft/restart verification using existing storage first. Generic maintenance granular authority/raw RLS, Home-origin admission
 and full maintenance UI acceptance remain separate follow-ups; this bounded history
 checkpoint does not close them. Continue completion/reopen policy flows, hosted

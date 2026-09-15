@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.my_tasks
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -49,7 +50,11 @@ fun MyTasksScreen(
     val showFilterSheet by viewModel.showFilterSheet.collectAsStateWithLifecycle()
     val activityFilter by viewModel.activityFilter.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) {
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.retire() }
+    }
+
+    LaunchedEffect(viewModel) {
         viewModel.bindCallbacks(
             onOpenTask = onOpenTask,
             onOpenBids = onOpenBids,
