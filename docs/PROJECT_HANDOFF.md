@@ -26,7 +26,7 @@ matched master. No hosted deployment, migration adoption or provider activation 
 **Remaining open PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
 remains draft. Its isolated integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
-the canonical PR branch is `codex/staging-paid-gig`, currently at creator-authority checkpoint `428243241`.
+the canonical PR branch is `codex/staging-paid-gig`, currently at worker-retry checkpoint `f58f322e4`.
 The integration branch includes installed iOS checkpoint `d6a0194ea` after
 cold-entry checkpoint `7791bb16f`, following legacy recovery
 `e700862f1` and coordinated Android `c6b1f830e`, iOS `b98cc283c`,
@@ -38,6 +38,7 @@ passes all applicable jobs, including complete schema replay and native checks. 
 The durable-notice checkpoint `161aaf529` is now pushed to both branches and
 passes all15 applicable checks/one Seeder skip in [CI34922146452](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34922146452).
 Installed-tip checkpoint `4c8f11114` passes all applicable jobs in [CI34924470956](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34924470956). Owner-date checkpoint `addebe757` passes all15 applicable jobs/one Seeder skip in [CI34926992422](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34926992422). Creator-authority checkpoint `428243241` passes all15 applicable checks/one Seeder skip in [CI34929051683](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34929051683).
+Worker-retry checkpoint `f58f322e4` is running [CI34931505743](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34931505743).
 Do not merge/deploy PR34 yet.
 
 **Current original-tip behavior:** the existing Payment.id and financial fields
@@ -244,11 +245,23 @@ proof/time without another write, object check or notice attempt. A concurrent
 result must also match the observed assignment/payment/date fields. Two reproduced
 failures are repaired in three existing source/test files; no schema/client/layout
 changes.196 focused tests/privacy gates and eight actual HTTP/SQL/S3-SDK scenarios
-pass, including a lost committed SQL acknowledgement. This does not recover the
-notice missed after that lost acknowledgement. See [retry evidence](VERIFICATION_FIRST_2026-09-13.md#existing-worker-completion-recovers-its-saved-result).
+pass, including a lost committed SQL acknowledgement. The following transaction
+repair closes the reproduced missing in-app notice. See [retry evidence](VERIFICATION_FIRST_2026-09-13.md#existing-worker-completion-recovers-its-saved-result).
 
-**Next:** finish current-head CI; repair the reproduced missing worker-completion
-notice through existing records, then continue completion object privacy,
+**Worker completion notices:** the existing route now commits proof and owner
+notices through one service-only function over existing Gig/Notification records.
+Current worker/assignment terms are checked under lock; failed notice writes roll
+back completion. Matching receipts preserve read/deleted notices. Existing stored
+notice transport replaces the competing insert.222 focused assertions/privacy
+gates,65 SQL contracts/generated pgTAP, eight actual HTTP/SQL scenarios and seven
+observed lock waits pass. Function lint:365 functions/108 bindings, zero errors/eight
+existing warnings. One function migration adds no table/column/trigger/screen.
+See [atomic worker notice evidence](VERIFICATION_FIRST_2026-09-13.md#existing-worker-completion-commits-its-notices).
+Push/socket transport remains best effort after commit; lost replies preserve
+in-app notices but do not yet guarantee transport recovery.
+
+**Next:** finish current-head CI and verify existing client completion retries,
+which currently re-upload files after an unknown submission result. Continue completion object privacy,
 byte/reference retention and client request/session recovery. Matching saved proof
 is a completion receipt, not a fresh claim that its bytes remain privately available.
 Then finish notification transport/Home provenance recovery and completion/reopen

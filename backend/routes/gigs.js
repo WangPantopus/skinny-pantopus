@@ -92,14 +92,6 @@ function bindGigPaymentSnapshot(query, gig) {
   return gig.accepted_by ? scoped.eq('accepted_by', gig.accepted_by) : scoped.is('accepted_by', null);
 }
 
-function bindGigAssignmentSnapshot(query, gig) {
-  let scoped = bindGigPaymentSnapshot(query, gig);
-  for (const field of ['accepted_at', 'started_at']) {
-    scoped = gig[field] == null ? scoped.is(field, null) : scoped.eq(field, gig[field]);
-  }
-  return scoped;
-}
-
 function matchesWorkerCompletion(gig, userId, proof) {
   return gig?.status === 'completed' && String(gig.accepted_by) === String(userId)
     && typeof gig.worker_completed_at === 'string' && Number.isFinite(Date.parse(gig.worker_completed_at))
@@ -5502,35 +5494,26 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
       safePhotos[i] = await storage.verifyGigCompletionFile(safePhotos[i], userId, gig.id);
     }
 
-    const nowIso = new Date().toISOString();
-    const updateData = {
-      status: 'completed',
-      worker_completed_at: nowIso,
-      updated_at: nowIso,
-      ...proof,
-    };
-
-    const completionUpdate = bindGigAssignmentSnapshot(supabaseAdmin
-      .from('Gig')
-      .update(updateData)
-      .eq('id', gigId)
-      .eq('status', 'in_progress')
-      .is('worker_completed_at', null)
-      .is('owner_confirmed_at', null), gig);
-    const { data: updatedGig, error: updateError } = await completionUpdate.select('*').maybeSingle();
-
-    if (updateError) {
-      logger.error('Error marking gig completed', { error: updateError.message, gigId, userId });
-      return res.status(500).json({ error: 'Failed to mark gig completed' });
+    const { data: result, error: updateError } = await supabaseAdmin.rpc('mark_gig_completed', {
+      p_gig_id: gigId, p_actor_id: userId,
+      p_expected: Object.fromEntries(['user_id', 'accepted_by', 'price', 'payment_id', 'accepted_at', 'started_at']
+        .map(field => [field, gig[field] ?? null])),
+      p_proof: proof,
+    });
+    if (updateError || !result) {
+      logger.error('Error marking gig completed', { error: updateError?.message, gigId, userId });
+      return res.status(503).json({ error: 'Completion could not be confirmed. Please retry.' });
     }
-
-    if (!updatedGig) {
-      const { data: committed, error: readError } = await bindGigAssignmentSnapshot(supabaseAdmin
-        .from('Gig').select('*').eq('id', gigId).eq('status', 'completed'), gig).maybeSingle();
-      if (readError) return res.status(503).json({ error: 'Completion could not be checked. Please retry.' });
-      if (matchesWorkerCompletion(committed, userId, proof)) return res.json({ gig: committed, reused: true });
-      return res.status(409).json({ code: 'COMPLETION_CHANGED', error: 'The task changed before completion was saved. Refresh its details.' });
+    if (result.error) {
+      const status = { NOT_FOUND: 404, FORBIDDEN: 403, COMPLETION_CHANGED: 409, INVALID_COMPLETION_PROOF: 400 }[result.error] || 500;
+      return res.status(status).json({ code: result.error, error: 'The task changed before completion was saved. Refresh its details.' });
     }
+    const updatedGig = result.gig;
+    if (!updatedGig || updatedGig.id !== gig.id || !matchesWorkerCompletion(updatedGig, userId, proof)
+      || !Array.isArray(result.notifications) || typeof result.reused !== 'boolean') {
+      return res.status(503).json({ error: 'Completion could not be confirmed. Please retry.' });
+    }
+    if (result.reused) return res.json({ gig: updatedGig, reused: true });
 
     // ─── Track category affinity (non-blocking) ───
     if (gig.category && gig.accepted_by) {
@@ -5539,28 +5522,11 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
         .catch(() => {});
     }
 
-    // ─── Notify gig poster: worker marked completed ───
-    const { data: worker } = await supabaseAdmin
-      .from('User')
-      .select('name, username')
-      .eq('id', userId)
-      .single();
-    const workerName = worker?.name || worker?.username || 'The worker';
-
-    const hasProof = safePhotos.length > 0 || note;
-    const ownerRecipients = await getGigOwnerNotificationRecipients(gig.user_id, userId);
-    if (ownerRecipients.length > 0) {
-      createBulkNotifications(
-        ownerRecipients.map((recipientId) => ({
-          userId: recipientId,
-          type: 'gig_completed',
-          title: `"${gig.title || 'Your gig'}" marked as completed`,
-          body: `${workerName} marked the gig as done${hasProof ? ' with proof attached' : ''}. Please review and confirm completion.`,
-          icon: '✅',
-          link: `/gigs/${gigId}`,
-          metadata: { gig_id: gigId, has_photos: safePhotos.length > 0, has_note: !!note },
-        }))
-      );
+    // Notices are already committed with the proof. Transport never inserts a
+    // second notice or turns a saved completion into a failed submission.
+    for (const notification of result.notifications) {
+      try { await deliverStoredGigNotification(notification); }
+      catch (_) { logger.warn('Worker completion notice transport unavailable', { gigId }); }
     }
 
     emitGigUpdate(req, gigId, 'completion-update');

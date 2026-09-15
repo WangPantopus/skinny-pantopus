@@ -41,6 +41,27 @@ function assigned(status = 'assigned') {
   getTable('Payment')[0].payment_status = 'authorized';
 }
 
+// Model only the RPC boundary for route tests. Transaction/rollback/recipient
+// behavior is verified against PostgreSQL in paid-gig-acceptance.sql.
+beforeEach(() => setRpcMock(async (name, args) => {
+  if (name !== 'mark_gig_completed') return { data: null };
+  const expected = args.p_expected;
+  const bind = query => {
+    for (const [field, value] of Object.entries(expected)) query = value == null ? query.is(field, null) : query.eq(field, value);
+    return query;
+  };
+  const result = await bind(db.from('Gig').update({ ...args.p_proof, status: 'completed',
+    worker_completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', args.p_gig_id).eq('status', 'in_progress').is('worker_completed_at', null).is('owner_confirmed_at', null))
+    .select('*').maybeSingle();
+  if (result.data) return { data: { gig: result.data, notifications: [], reused: false } };
+  const current = await bind(db.from('Gig').select('*').eq('id', args.p_gig_id).eq('status', 'completed')).maybeSingle();
+  if (current.data && Object.entries(args.p_proof).every(([field, value]) => require('node:util').isDeepStrictEqual(current.data[field], value))) {
+    return { data: { gig: current.data, notifications: [], reused: true } };
+  }
+  return { data: { error: 'COMPLETION_CHANGED' } };
+}));
+
 describe('actual paid-gig owner routes', () => {
   test('known authorized checkout returns exact frozen amount without another sheet setup', async () => {
     const rpc = jest.fn(async (name) => ({ data: name === 'verify_paid_gig_actor' ? { allowed: true } : { attempt: {
@@ -557,5 +578,27 @@ describe('worker completion recovers the saved result', () => {
       return query;
     });
     expect((await submit()).status).toBe(409); expect(getTable('Notification')).toHaveLength(0);
+  });
+
+  test('the completion transaction returns its stored notice for transport without reinsertion', async () => {
+    assigned('in_progress');
+    const notifications = require('../__mocks__/notificationService');
+    const notice = { id: 'stored-completion', user_id: 'payer', type: 'gig_completed' };
+    const rpc = jest.fn(async (_name, args) => ({ data: { gig: { ...getTable('Gig')[0], ...args.p_proof,
+      status: 'completed', worker_completed_at: '2026-09-14T16:00:00Z' }, notifications: [notice], reused: false } }));
+    setRpcMock(rpc); notifications.deliverStoredGigNotification.mockRejectedValueOnce(new Error('Transport unavailable'));
+    expect((await submit()).status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith('mark_gig_completed', expect.objectContaining({ p_gig_id: 'gig', p_actor_id: 'worker',
+      p_expected: { user_id: 'payer', accepted_by: 'worker', price: 12.5, payment_id: 'pay', accepted_at: null, started_at: null } }));
+    expect(notifications.deliverStoredGigNotification).toHaveBeenCalledWith(notice);
+    expect(notifications.createBulkNotifications).not.toHaveBeenCalled();
+  });
+
+  test('an unconfirmed transaction reply remains retryable and sends no competing notice', async () => {
+    assigned('in_progress'); setRpcMock(async () => ({ error: { code: '08006' } }));
+    expect((await submit()).status).toBe(503);
+    const notifications = require('../__mocks__/notificationService');
+    expect(notifications.deliverStoredGigNotification).not.toHaveBeenCalled();
+    expect(notifications.createBulkNotifications).not.toHaveBeenCalled();
   });
 });

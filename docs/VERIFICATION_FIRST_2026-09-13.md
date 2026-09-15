@@ -3137,3 +3137,57 @@ client session/restart recovery remain open. Private worker-completion-retry-*
 evidence is source-bound and mirrored. Prior creator-authority428243241 passed all
 15 applicable CI checks/one Seeder skip inCI34929051683; the new source requires
 its own CI. No hosted schema/deployment/provider configuration changed.
+
+
+## Existing worker completion commits its notices
+
+September14: the preceding actual HTTP/SQL retry case reproduced a committed
+worker completion whose lost database acknowledgement caused zero notice attempts.
+The current worker handler stores proof before best-effort createBulkNotifications;
+that separate insert cannot provide transaction safety. Existing/archived SQL and
+all-ref history contain no mark_gig_completed transaction. The existing owner
+confirm_gig_completion function handles a later stage with payment/counter effects;
+it cannot directly save worker proof before owner review. The repair adds one
+service-only function over existing Gig and Notification records. No table, column,
+trigger, service file, client or screen is added. Applied migrations are unchanged.
+
+The existing handler verifies uploaded objects, then the function takes the Gig
+lock and rechecks worker, owner, price/payment and assignment times. It saves the
+existing note/photo/checklist and timestamp together with owner notices. Failed
+notice writes roll back proof. Matching concurrent receipts return the original
+row with no new notices; changed proof/assignment is rejected. Notice recipients
+reuse the existing business permission functions: current owner and active managers
+or posters, excluding the worker. Notice metadata includes only gig ID and proof
+presence flags. Maximum-length gig titles produce a valid truncated notice title.
+No historical completion is backfilled and read/deleted notices are preserved.
+The existing stored-notice transport handles fresh receipts without reinserting.
+
+222 assertions across eight existing suites pass, with privacy gates including15
+audience checks. All65 SQL contracts and the generated paid-gig pgTAP wrapper pass;
+application-function lint checks365 functions/108 trigger bindings with zero errors
+and eight existing warnings. Migration ordering/backward-compatibility checks pass;
+fresh-schema replay remains a current-head CI requirement.
+
+Eight actual HTTP/SQL/S3-SDK cases pass (66 queries,14 synthetic object uploads/eight
+HEADs). Each completion retains exactly one actual Notification row, including the
+lost SQL acknowledgement case (first503, matching retry200). Concurrent identical
+submissions retain one proof/notice with one fresh and one reused result. Existing
+proof mismatch, worker replacement, later confirmation, optional empty proof and
+reference normalization behavior is retained. Auth/object service/notice transport
+are synthetic; SQL rows and route/SDK execution are real. No financial provider
+call runs. Exact fixture rows/objects are cleaned and local servers stop.
+
+Seven separate-connection waits are observed in pg_stat_activity. Same-Gig retry,
+rollback followed by waiting retry, different concurrent proof and changed worker,
+assignment date or owner all preserve the required proof/notice outcome. Business
+team revocation while the caller waits on Gig excludes that member after the lock
+resumes. The contract also forces notice failure to prove rollback and checks
+active/revoked/explicit-denial recipients and read/deleted notice preservation.
+
+Private worker-completion-notice-* source, result and cleanup evidence is bound
+and mirrored. Canonicalf58f322e4 is runningCI34931505743; this later transaction
+still needs its own CI. In-app notice durability is closed for this transaction;
+push/socket retries and Home provenance are still open. Actual client completion
+retry currently re-uploads proof files and needs its own repair/acceptance. Private
+object storage, retention and client session/restart recovery remain unaccepted.
+No hosted migration/deployment/provider configuration changed.

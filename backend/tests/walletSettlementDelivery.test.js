@@ -15,6 +15,15 @@ beforeEach(() => {
 });
 
 describe('stored notification delivery', () => {
+  test('worker completion uses its existing stored notice and current push preferences', async () => {
+    const completion = { ...note, type: 'gig_completed' };
+    db.seedTable('Notification', [completion]);
+    expect(await notify.deliverStoredGigNotification(completion)).toMatchObject({ acceptedCount: 1, suppressed: false });
+    expect(push.sendToUserWithReceipt).toHaveBeenCalledWith('worker', expect.objectContaining({ data: expect.objectContaining({
+      notificationId: 'note', type: 'gig_completed',
+    }) }));
+    expect(db.getTable('Notification')).toEqual([completion]);
+  });
   test('delivers the exact stored notification and never inserts another row', async () => {
     expect(await notify.deliverStoredGigNotification(note)).toMatchObject({ acceptedCount: 1, suppressed: false });
     expect(push.sendToUserWithReceipt).toHaveBeenCalledWith('worker', expect.objectContaining({ data: {

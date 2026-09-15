@@ -320,6 +320,88 @@ DO $$ BEGIN
   RAISE EXCEPTION 'Denied writes changed stored proof'; END IF;
 END $$;
 
+-- Worker proof and its existing owner notices commit as one decision.
+DO $$ DECLARE role_name text; BEGIN
+ FOREACH role_name IN ARRAY ARRAY['anon','authenticated'] LOOP
+  IF has_function_privilege(role_name,'public.mark_gig_completed(uuid,uuid,jsonb,jsonb)','EXECUTE') THEN
+   RAISE EXCEPTION 'Client acquired worker completion transaction'; END IF;
+ END LOOP;
+END $$;
+INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,accepted_at,started_at)
+VALUES('aae10000-0000-4000-8000-000000000103','aae10000-0000-4000-8000-000000000001',
+ 'aae10000-0000-4000-8000-000000000001',repeat('x',255),'Worker notice contract',0,'in_progress',
+ 'aae10000-0000-4000-8000-000000000002','2026-09-14T10:00:00Z','2026-09-14T10:01:00Z');
+SET LOCAL ROLE service_role;
+DO $$ DECLARE g uuid:='aae10000-0000-4000-8000-000000000103'; w uuid:='aae10000-0000-4000-8000-000000000002';
+ expected jsonb; original jsonb; r jsonb; n jsonb; proof jsonb:=
+ '{"completion_note":"Private worker proof","completion_photos":["owned-proof-reference"],"completion_checklist":[{"item":"Private checklist","done":true}]}';
+BEGIN
+ SELECT to_jsonb(x) INTO expected FROM public."Gig" x WHERE id=g;
+ IF public.mark_gig_completed(g,'aae10000-0000-4000-8000-000000000001',expected,proof)->>'error' IS DISTINCT FROM 'FORBIDDEN'
+  OR public.mark_gig_completed(g,w,expected||'{"price":99}'::jsonb,proof)->>'error' IS DISTINCT FROM 'COMPLETION_CHANGED'
+  OR public.mark_gig_completed(g,w,expected,proof||'{"completion_photos":{}}'::jsonb)->>'error' IS DISTINCT FROM 'INVALID_COMPLETION_PROOF' THEN
+  RAISE EXCEPTION 'Worker completion accepted invalid authority, terms or proof'; END IF;
+ PERFORM set_config('pantopus.confirmation_failure','Notification',true);
+ BEGIN
+  PERFORM public.mark_gig_completed(g,w,expected,proof);
+  RAISE EXCEPTION 'Worker completion notice failure ignored';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'contract forced completion effect failure' THEN RAISE; END IF; END;
+ PERFORM set_config('pantopus.confirmation_failure','',true);
+ IF (SELECT to_jsonb(x) FROM public."Gig" x WHERE id=g) IS DISTINCT FROM expected
+  OR EXISTS(SELECT FROM public."Notification" WHERE metadata->>'gig_id'=g::text) THEN
+  RAISE EXCEPTION 'Partial worker completion survived notice failure'; END IF;
+ r:=public.mark_gig_completed(g,w,expected,proof);original:=r->'gig';n:=r->'notifications'->0;
+ IF r->>'reused' IS DISTINCT FROM 'false' OR original->>'worker_completed_at' IS NULL
+  OR jsonb_array_length(r->'notifications')<>1 OR n->>'user_id'<>'aae10000-0000-4000-8000-000000000001'
+  OR n->>'type'<>'gig_completed' OR length(n->>'title')<>255
+  OR n->'metadata' IS DISTINCT FROM jsonb_build_object('gig_id',g,'has_photos',true,'has_note',true)
+  OR n->>'context'<>'personal' OR n->>'context_type'<>'personal' THEN
+  RAISE EXCEPTION 'Worker completion receipt/notice invalid: %',r; END IF;
+ UPDATE public."Notification" SET is_read=true WHERE id=(n->>'id')::uuid;
+ r:=public.mark_gig_completed(g,w,expected,proof);
+ IF r->>'reused' IS DISTINCT FROM 'true' OR r->'gig' IS DISTINCT FROM original OR r->'notifications'<>'[]'::jsonb
+  OR NOT (SELECT is_read FROM public."Notification" WHERE id=(n->>'id')::uuid) THEN
+  RAISE EXCEPTION 'Retry changed worker receipt/read notice'; END IF;
+ DELETE FROM public."Notification" WHERE id=(n->>'id')::uuid;
+ r:=public.mark_gig_completed(g,w,expected,proof);
+ IF r->>'reused' IS DISTINCT FROM 'true' OR EXISTS(SELECT FROM public."Notification" WHERE metadata->>'gig_id'=g::text) THEN
+  RAISE EXCEPTION 'Retry recreated deleted worker notice'; END IF;
+ IF public.mark_gig_completed(g,w,expected,proof||'{"completion_note":"Replacement"}'::jsonb)->>'error'
+  IS DISTINCT FROM 'COMPLETION_CHANGED' OR (SELECT to_jsonb(x) FROM public."Gig" x WHERE id=g) IS DISTINCT FROM original THEN
+  RAISE EXCEPTION 'Retry replaced the saved proof'; END IF;
+END $$;
+RESET ROLE;
+INSERT INTO public."BusinessTeam"(business_user_id,user_id,role_base,is_active) VALUES
+ ('aae10000-0000-4000-8000-000000000004','aae10000-0000-4000-8000-000000000001','owner',false),
+ ('aae10000-0000-4000-8000-000000000004','aae10000-0000-4000-8000-000000000002','owner',true);
+INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by)
+SELECT ('aae10000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'aae10000-0000-4000-8000-000000000004',
+ 'aae10000-0000-4000-8000-000000000004','Business worker notice','Synthetic contract',0,'in_progress',
+ 'aae10000-0000-4000-8000-000000000002' FROM generate_series(104,106) n;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE g uuid; expected jsonb; r jsonb; step integer; count_expected integer;
+ proof jsonb:='{"completion_note":null,"completion_photos":[],"completion_checklist":[]}';
+BEGIN
+ FOR step IN 104..106 LOOP
+  g:=('aae10000-0000-4000-8000-'||lpad(step::text,12,'0'))::uuid;
+  IF step=105 THEN UPDATE public."BusinessTeam" SET is_active=false
+   WHERE business_user_id='aae10000-0000-4000-8000-000000000004' AND user_id='aae10000-0000-4000-8000-000000000003'; END IF;
+  IF step=106 THEN
+   UPDATE public."BusinessTeam" SET is_active=true
+    WHERE business_user_id='aae10000-0000-4000-8000-000000000004' AND user_id='aae10000-0000-4000-8000-000000000003';
+   UPDATE public."BusinessPermissionOverride" SET allowed=false WHERE business_user_id='aae10000-0000-4000-8000-000000000004';
+  END IF;
+  SELECT to_jsonb(x) INTO expected FROM public."Gig" x WHERE id=g;
+  r:=public.mark_gig_completed(g,'aae10000-0000-4000-8000-000000000002',expected,proof);
+  count_expected:=CASE WHEN step=104 THEN 2 ELSE 1 END;
+  IF jsonb_array_length(r->'notifications') IS DISTINCT FROM count_expected
+   OR EXISTS(SELECT FROM public."Notification" WHERE metadata->>'gig_id'=g::text
+    AND user_id IN('aae10000-0000-4000-8000-000000000001','aae10000-0000-4000-8000-000000000002')) THEN
+   RAISE EXCEPTION 'Completion notice admitted revoked/denied/self recipient or lost current manager: %',r; END IF;
+ END LOOP;
+END $$;
+RESET ROLE;
+
 $contract$, 'paid-gig-acceptance.sql');
 SELECT * FROM finish();
 ROLLBACK;
