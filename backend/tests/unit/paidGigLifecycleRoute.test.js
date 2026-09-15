@@ -208,6 +208,7 @@ describe('workflow writes bind the payment snapshot checked before provider awai
   });
   test.each([
     ['payment_id', 'replacement'], ['price', 99], ['user_id', 'foreign'], ['accepted_by', 'replacement-worker'],
+    ['worker_completed_at', '2026-09-14T14:00:00Z'], ['accepted_at', '2026-09-14T12:00:00Z'], ['started_at', '2026-09-14T12:01:00Z'],
   ])('owner confirmation refuses changed %s after capture', async (field, value) => {
     assigned('completed');
     jest.spyOn(service, 'capturePayment').mockImplementation(async () => {
@@ -258,5 +259,26 @@ describe('worker completion preserves the assignment it observed', () => {
       completion_checklist: [{ item: 'Finished', done: true }] });
     expect(result.body.gig.worker_completed_at).toBeTruthy();
     expect(mockCapture).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('a concurrent owner receipt must still describe the reviewed completion', () => {
+  test.each([
+    ['status', 'cancelled', 409],
+    ['worker_completed_at', '2026-09-14T14:00:00Z', 409],
+    ['accepted_at', '2026-09-14T12:00:00Z', 409],
+    ['started_at', '2026-09-14T12:01:00Z', 409],
+    ['unchanged', null, 200],
+  ])('receipt with %s returns only its matching result', async (field, value, expectedStatus) => {
+    assigned('completed');
+    jest.spyOn(service, 'capturePayment').mockImplementation(async () => {
+      const next = { ...getTable('Gig')[0], owner_confirmed_at: '2026-09-14T15:00:00Z' };
+      if (field !== 'unchanged') next[field] = value;
+      getTable('Gig')[0] = next;
+      return { success: true };
+    });
+    expect((await post('gig/complete')).status).toBe(expectedStatus);
+    expect(getTable('Gig')[0].owner_confirmed_at).toBe('2026-09-14T15:00:00Z');
   });
 });

@@ -177,8 +177,16 @@ Ten actual HTTP/SQL interleavings preserve exact current rows; an unchanged task
 saves its existing note/photos/checklist with one synthetic notice attempt. No
 migration/new screen/file is added. See [completion evidence](VERIFICATION_FIRST_2026-09-13.md#existing-worker-completion-preserves-current-assignment).
 
-**Next:** finish current-head CI and continue existing owner-confirmation/notification
-recovery and completion/reopen policy flows. No-show execution still requires atomic concurrent/retry handling and
+**Owner confirmation:** three additional reproduced races are fixed by extending
+the existing conditional update to observed worker-completion/assignment/start
+times. A reused concurrent receipt must match those times and completed status.
+101 route assertions and six actual HTTP/StripeService/local-SQL cases pass,
+including synthetic lost provider replies: captured financial truth is retained,
+changed work is not owner-confirmed, and matching retries do not recapture. No
+migration/screen/table is added. See [owner confirmation evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-confirmation-preserves-reviewed-completion).
+
+**Next:** finish current-head CI and check existing owner-confirmation notification,
+reliability and standby-bid recovery, then completion/reopen policy flows. No-show execution still requires atomic concurrent/retry handling and
 verified fee/financial outcomes. The repo's fee rates do not specify who owes and
 receives worker cancellation/no-show fees; one policy clarification is pending.
 Continue independent completion/security verification while that remains pending. Finish current-head CI

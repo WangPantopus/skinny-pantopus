@@ -90,6 +90,14 @@ function bindGigPaymentSnapshot(query, gig) {
   return gig.accepted_by ? scoped.eq('accepted_by', gig.accepted_by) : scoped.is('accepted_by', null);
 }
 
+function bindGigAssignmentSnapshot(query, gig) {
+  let scoped = bindGigPaymentSnapshot(query, gig);
+  for (const field of ['accepted_at', 'started_at']) {
+    scoped = gig[field] == null ? scoped.is(field, null) : scoped.eq(field, gig[field]);
+  }
+  return scoped;
+}
+
 const IMAGE_EXT_RE = /\.(jpe?g|png|webp|gif)(\?.*)?$/i;
 const unavailableGigFeatureTables = new Set();
 const GIG_START_REMINDER_TYPE = 'gig_start_reminder';
@@ -5474,16 +5482,13 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
       completion_checklist: safeChecklist,
     };
 
-    let completionUpdate = bindGigPaymentSnapshot(supabaseAdmin
+    const completionUpdate = bindGigAssignmentSnapshot(supabaseAdmin
       .from('Gig')
       .update(updateData)
       .eq('id', gigId)
       .eq('status', 'in_progress')
       .is('worker_completed_at', null)
       .is('owner_confirmed_at', null), gig);
-    for (const field of ['accepted_at', 'started_at']) {
-      completionUpdate = gig[field] == null ? completionUpdate.is(field, null) : completionUpdate.eq(field, gig[field]);
-    }
     const { data: updatedGig, error: updateError } = await completionUpdate.select('*').maybeSingle();
 
     if (updateError) {
@@ -5595,13 +5600,17 @@ async function confirmCompletionHelper(req, { gigId, userId, satisfaction, note 
     })
     .eq('id', gigId)
     .eq('status', 'completed')
+    .eq('worker_completed_at', gig.worker_completed_at)
     .is('owner_confirmed_at', null);
-  const { data: updatedGig, error: updateError } = await bindGigPaymentSnapshot(confirmationUpdate, gig).select('*').maybeSingle();
+  const { data: updatedGig, error: updateError } = await bindGigAssignmentSnapshot(confirmationUpdate, gig).select('*').maybeSingle();
 
   if (!updateError && !updatedGig) {
     const { data: receipt, error } = await supabaseAdmin.from('Gig').select('*').eq('id', gigId).single();
     if (!error && receipt?.owner_confirmed_at && receipt.payment_id === gig.payment_id && receipt.user_id === gig.user_id
-        && receipt.accepted_by === gig.accepted_by && Number(receipt.price) === Number(gig.price)) return receipt;
+        && receipt.accepted_by === gig.accepted_by && Number(receipt.price) === Number(gig.price)
+        && receipt.status === 'completed' && receipt.worker_completed_at === gig.worker_completed_at
+        && (receipt.accepted_at ?? null) === (gig.accepted_at ?? null)
+        && (receipt.started_at ?? null) === (gig.started_at ?? null)) return receipt;
     throw Object.assign(new Error('Completion changed while it was being confirmed'), { statusCode: 409 });
   }
 

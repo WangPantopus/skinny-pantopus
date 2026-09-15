@@ -2831,3 +2831,30 @@ inspection is not a new installed-client acceptance claim; native failures curre
 show generic retry copy. Full proof-upload/privacy, command/session retirement,
 loss/retry recovery, owner-confirmation effects and durable notification acceptance
 remain open within P04/P07/P08/P09.
+
+
+## Existing owner confirmation preserves reviewed completion
+
+September14: three route reproductions show that owner confirmation checked the
+payment/parties/price but still confirmed changed worker-completion or assignment/
+start timestamps after capture returned. The existing conditional UPDATE now
+compares those dates; its concurrent-receipt fallback also requires completed
+status and matching dates. The existing worker and owner paths share the same
+assignment-comparison helper. No payment table, migration, service or UI is rebuilt.
+
+101 assertions pass across the existing paid lifecycle/stop/payment route suites,
+including changed dates, invalid concurrent receipts and matching /complete alias
+recovery. Six actual Express/StripeService/owned-PostgreSQL cases pass with synthetic
+provider/auth/notice transport. Four changed-work cases return409 after recording
+the exact successful capture; the legitimate financial record stays captured_hold
+while owner confirmation and newer task state remain untouched. Two unchanged
+cases confirm and retry with one capture/notice attempt each, including recovery
+from a lost provider reply. There are six synthetic captures, zero new intent
+creations and exact fixture cleanup. Source, fixture and product limits are bound
+in private `owner-confirmation-*` evidence under `existing-tip-provider-proof-r1`.
+
+This is a comparison repair, not complete owner-confirmation acceptance. Existing
+post-confirmation notification/reliability/standby writes still need durable
+recovery; client opening/command-session binding, exact proof-file validation and
+full installed/provider journeys remain open. The three date predicates do not
+establish a general immutable attachment-review contract.
