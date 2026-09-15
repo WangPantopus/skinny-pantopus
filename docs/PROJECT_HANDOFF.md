@@ -516,7 +516,8 @@ rotate and retry them, and verify narrow/long-title layouts. The only new app fi
 actual404. It reuses current shared-page spacing, cards, status badges and error states;
 no existing screen is redesigned. See [status-link evidence](VERIFICATION_FIRST_2026-09-13.md#existing-status-links-authority-expiry-and-missing-destination).
 The owned API/Next servers and exact ab13 fixtures are cleaned, original configs are
-restored and compiled entries retained. This and2ef9772be need their combined CI.
+restored and compiled entries retained. The combined d01a2f248 head passes all15
+applicable jobs/one Seeder skip in CI34990349201.
 
 **Private task socket delivery:** the actual Socket.IO baseline reproduced both ETA
 and urgent fulfillment/ETA broadcasts reaching an unrelated authenticated subscriber.
@@ -528,16 +529,29 @@ checks across five suites and privacy gates pass. Twelve actual local HTTP/Socke
 SQL audience cases plus a public acceptance event pass, with exact ab14 cleanup and
 API18109 stopped. Four existing source/test files change; no schema/client/layout
 change. See [socket evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-task-socket-delivery).
-The d01a2f248 combined status-link CI34990349201 is still running; backend/schema/web
-and iOS build have passed, with final native jobs pending at this checkpoint.
+Socket checkpoint1b8d1c227 is pushed on integration; it will share canonical CI with
+the location-writer checkpoint below. The prior d01a2f248 status-link CI34990349201
+passes all15 applicable jobs/one Seeder skip.
 
-**Next:** verify current-helper location publishing and urgent status writes. The
-actual SQL fixture confirmed the existing update-location WKT-only decoder returns
-null ETA for the stored geography format. Reuse `utils/parsePostGISPoint.js` and
-check input, assignment/consent, concurrent/late writes and receipts in the existing
-routes before changing them. Socket privacy does not make these writes atomic or
-repair notification recipient races. No new schema is needed merely to add the
-already-existing tracking fields. Completion draft/restart
+**Existing location writer:**16 failing unit baselines,13 actual local HTTP/SQL
+cases and a two-request concurrency baseline reproduce unsafe inputs/late writes,
+missing geography ETA, retained obsolete ETA and duplicate competing successes.
+The existing endpoint now reuses the shared geography decoder, checks finite numeric
+input and active assignment, compares its observed task/location fields when saving,
+and requires a matching stored receipt. The existing30-second interval uses the
+stored timestamp instead of a process-local map.266 backend checks/five suites and
+privacy gates pass;13 actual HTTP/SQL cases and a separate simultaneous-request
+case pass, preserving newer rows and exactly one winner. Exact ab15 fixtures and
+API18109 are cleaned. Three existing source/test files change; no schema/client/
+layout change. See [writer evidence](VERIFICATION_FIRST_2026-09-13.md#existing-helper-location-writer).
+
+**Next:** verify the existing urgent status writer's current-assignment/active-task
+checks, stale JSON merges, stored receipts and notification recipients. The v2
+location SDK function has no active client caller in the inspected web/iOS/Android
+sources; this endpoint repair is not installed live-location acceptance. Keep the
+sharing-consent/raw participant-read issue open: the existing compose label describes
+poster location while active-status gates helper location. Do not silently redefine
+that policy. Reuse current tracking fields and existing serializers. Completion draft/restart
 continues after that boundary; content-addressed File upload recovery already exists
 and must be reused. There is no active web rebook/boost caller to rebuild.
 Full installed native MyTasks/owner lifetime remains open. Continue completion

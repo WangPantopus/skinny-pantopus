@@ -21,6 +21,7 @@ const { createNotification } = require('../services/notificationService');
 const stripeService = require('../stripe/stripeService');
 const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
 const { emitPrivateGigUpdate } = require('../socket/chatSocketio');
+const parsePostGISPoint = require('../utils/parsePostGISPoint');
 
 // ============ REAL-TIME HELPER (same pattern as gigs.js) ============
 
@@ -35,12 +36,8 @@ function emitGigUpdate(req, gigId, eventType, extra) {
   });
 }
 
-// ============ RATE-LIMIT MAP FOR LOCATION UPDATES ============
-
-/** In-memory per-gig throttle: gigId → last update timestamp */
-const locationUpdateTimestamps = new Map();
-
-const LOCATION_UPDATE_INTERVAL_MS = 30_000; // 30 seconds
+// The stored timestamp and conditional write enforce this across API processes.
+const LOCATION_UPDATE_INTERVAL_MS = 30_000;
 
 // ============ HAVERSINE HELPER ============
 
@@ -332,76 +329,67 @@ router.post('/:gigId/update-location', verifyToken, async (req, res) => {
   try {
     const { gigId } = req.params;
     const helperId = req.user.id;
-    const { latitude, longitude } = req.body;
+    const { latitude, longitude } = req.body || {};
 
-    // Validate input
-    if (latitude == null || longitude == null) {
-      return res.status(400).json({ error: 'latitude and longitude are required' });
-    }
-    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-      return res.status(400).json({ error: 'Invalid coordinates' });
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+      || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      return res.status(400).json({ error: 'Valid numeric latitude and longitude are required' });
     }
 
-    // Rate limit: 1 update per 30s per gig
-    const lastUpdate = locationUpdateTimestamps.get(gigId);
-    if (lastUpdate && Date.now() - lastUpdate < LOCATION_UPDATE_INTERVAL_MS) {
-      return res.status(429).json({ error: 'Location updates limited to once per 30 seconds' });
-    }
-
-    // Fetch gig — verify caller is the assigned helper
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, accepted_by, exact_location')
+      .select('id, user_id, accepted_by, status, accepted_at, started_at, updated_at, exact_location, helper_last_location, helper_location_updated_at, helper_eta_minutes')
       .eq('id', gigId)
-      .single();
-
-    if (gigErr || !gig) {
-      return res.status(404).json({ error: 'Gig not found' });
-    }
-
+      .maybeSingle();
+    if (gigErr) return res.status(503).json({ error: 'Unable to verify the current task' });
+    if (!gig) return res.status(404).json({ error: 'Gig not found' });
     if (gig.accepted_by !== helperId) {
       return res.status(403).json({ error: 'Only the assigned helper can update location' });
     }
-
-    // Calculate ETA using Haversine if gig has a location
-    let etaMinutes = null;
-    if (gig.exact_location) {
-      // Parse PostGIS point: SRID=4326;POINT(lng lat) or POINT(lng lat)
-      const pointMatch = String(gig.exact_location).match(
-        /POINT\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i
-      );
-      if (pointMatch) {
-        const gigLng = parseFloat(pointMatch[1]);
-        const gigLat = parseFloat(pointMatch[2]);
-        const distKm = haversineKm(latitude, longitude, gigLat, gigLng);
-        etaMinutes = Math.max(1, Math.round((distKm / 30) * 60)); // 30 km/h average
-      }
+    if (!['assigned', 'in_progress'].includes(gig.status)) {
+      return res.status(409).json({ error: 'Location updates require an active task' });
+    }
+    const previousUpdate = Date.parse(gig.helper_location_updated_at);
+    if (Number.isFinite(previousUpdate) && Date.now() - previousUpdate < LOCATION_UPDATE_INTERVAL_MS) {
+      return res.status(429).json({ error: 'Location updates limited to once per 30 seconds' });
     }
 
-    // Build PostGIS point string
+    const target = parsePostGISPoint(gig.exact_location);
+    const etaMinutes = target && Number.isFinite(target.latitude) && Number.isFinite(target.longitude)
+      && Math.abs(target.latitude) <= 90 && Math.abs(target.longitude) <= 180
+      ? Math.max(1, Math.round((haversineKm(latitude, longitude, target.latitude, target.longitude) / 30) * 60))
+      : null;
     const pointWkt = `SRID=4326;POINT(${longitude} ${latitude})`;
     const now = new Date().toISOString();
-
     const updateData = {
       helper_last_location: pointWkt,
       helper_location_updated_at: now,
+      helper_eta_minutes: etaMinutes,
+      updated_at: now,
     };
-    if (etaMinutes != null) {
-      updateData.helper_eta_minutes = etaMinutes;
+
+    // Preserve the exact work relationship, target and previously observed update.
+    // Competing requests cannot both replace the same snapshot, even on separate servers.
+    let update = supabaseAdmin.from('Gig').update(updateData).eq('id', gigId);
+    for (const field of ['user_id', 'accepted_by', 'status', 'accepted_at', 'started_at', 'updated_at',
+      'exact_location', 'helper_last_location', 'helper_location_updated_at', 'helper_eta_minutes']) {
+      update = gig[field] == null ? update.is(field, null) : update.eq(field, gig[field]);
     }
-
-    const { error: updateErr } = await supabaseAdmin
-      .from('Gig')
-      .update(updateData)
-      .eq('id', gigId);
-
+    const { data: saved, error: updateErr } = await update
+      .select('id, user_id, accepted_by, status, helper_last_location, helper_location_updated_at, helper_eta_minutes')
+      .maybeSingle();
     if (updateErr) {
       logger.error('Failed to update helper location', { gigId, error: updateErr.message });
-      return res.status(500).json({ error: 'Failed to update location' });
+      return res.status(503).json({ error: 'Unable to confirm the location update' });
     }
-
-    // Record timestamp for rate-limiting
-    locationUpdateTimestamps.set(gigId, Date.now());
+    if (!saved) return res.status(409).json({ error: 'Task changed. Refresh before updating location' });
+    const savedLocation = parsePostGISPoint(saved.helper_last_location);
+    if (saved.id !== gigId || saved.user_id !== gig.user_id || saved.accepted_by !== helperId
+      || saved.status !== gig.status || saved.helper_eta_minutes !== etaMinutes
+      || Date.parse(saved.helper_location_updated_at) !== Date.parse(now)
+      || savedLocation?.latitude !== latitude || savedLocation?.longitude !== longitude) {
+      return res.status(503).json({ error: 'Unable to confirm the location update' });
+    }
 
     // Real-time ETA event
     await emitPrivateGigUpdate(req.app.get('io'), gig, 'gig:eta-update', {

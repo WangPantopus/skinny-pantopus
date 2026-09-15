@@ -4322,3 +4322,61 @@ fixture additionally confirms null ETA from the existing WKT-only parser when
 `utils/parsePostGISPoint.js` already supports that format and should be reused.
 Installed native/UI live-tracking and real provider/release acceptance remain open;
 PR34 remains draft. The d01 status-link CI34990349201 is still running at this checkpoint.
+
+
+## Existing helper location writer
+
+September15: the existing `update-location` endpoint has a typed SDK function but
+no active web/iOS/Android publisher caller was found. It already stores location/ETA
+fields; no new screen, table, migration or tracking service is needed.16 failing
+unit baselines reproduce nonnumeric coordinates, inactive-task writes, post-read
+owner/worker/status/target/newer-location/deletion changes, absent geography ETA,
+retained obsolete ETA, mismatched receipts and bypassed stored throttling.
+
+Thirteen actual HTTP/owned-SQL baseline cases confirm the existing geography format
+is missed, obsolete ETA remains stored, stale updates return200, numeric strings/
+arrays can be persisted and a boolean instead causes a database error/500. This last
+case differs from the permissive in-memory mock; it is not a successful boolean
+location write. A separate two-request baseline holds both observed snapshots and
+returns two successes, overwriting one location.
+
+The existing route now reuses `utils/parsePostGISPoint.js`, validates finite numeric
+coordinates and requires an assigned/in-progress task with this helper. Its existing
+write compares observed owner/worker/status/assignment/start/task-update/target and
+prior location/ETA fields. No matching row returns409; database/receipt uncertainty
+returns503. A success requires matching task participants/status, stored coordinates,
+ETA and update time. Unknown destination clears obsolete ETA. The existing30-second
+limit reads the stored update time, with the same conditional write preventing
+competing processes from replacing one snapshot. The process-local map is removed.
+Event names and socket delivery from the preceding checkpoint remain intact.
+
+Evidence under private `existing-tip-provider-proof-r1`:
+
+- `location-writer-baseline-r1`:16 reproduced failing checks/one passing outsider denial.
+- `location-writer-candidate-r3`:266 checks in five suites pass; privacy gates pass,
+  including15 audience checks. Added empty-body and concurrent-write checks pass.
+- `location-writer-http-baseline-r1` and `...candidate-r1`:13 actual HTTP/local SQL
+  cases each. Candidate performs74 queries plus two cleanup queries; denied writes
+  preserve the complete current row. Current geography yields2-minute ETA, and an
+  absent destination clears the stored99-minute value.
+- `location-writer-concurrent-baseline-r1`/`...candidate-r1`: two actual HTTP requests
+  observe the same SQL snapshot before either writes. Baseline returns200/200;
+  candidate returns200/409 and the stored coordinates/ETA/time match the winner.
+  Candidate performs nine queries plus two cleanup queries.
+- Exact ab15 rows are absent after both runs and API18109/socket clients are stopped.
+  Auth, notification/badge transport and SQL adapter are synthetic. Actual handler
+  code, geography serialization, SQL predicates and committed interleavings execute.
+
+Candidate R1's17 new writer checks passed but six socket cases failed because their
+in-memory Gig omitted nullable database columns. The existing socket fixture now
+supplies actual null fields; R2/R3 pass without weakening production comparisons or
+changing the shared database mock. The final request-body guard is also covered by
+R3 and the final concurrent HTTP candidate. No client/style/schema change is made.
+
+This does not establish a working installed publisher or resolve urgent-status
+writes, notification recipient races, or raw participant access/consent semantics.
+The compose toggle says the helper sees the poster's location, while active-status
+uses it to gate helper location; keep that discrepancy open rather than inventing
+policy. Continue the existing urgent status route next. PR34/app/release remain
+unfinished. Prior d01a2f248 CI34990349201 is now fully green (15 successes/one skip);
+the socket/location checkpoint requires its own canonical CI.

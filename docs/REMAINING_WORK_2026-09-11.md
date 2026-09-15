@@ -168,11 +168,18 @@ owner/worker subscriptions after two actual Socket.IO baseline leaks.247 backend
 checks and privacy gates pass; twelve local HTTP/Socket.IO/SQL audience cases and
 an actual public acceptance marker pass. Four existing source/test files change;
 no screen/schema/layout change. See [socket evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-task-socket-delivery).
-Next verify current-helper location/urgent writes and completion draft/restart.
-The SQL fixture confirms the WKT-only location decoder misses stored geography;
-reuse the existing decoder and reproduce stale-write/input/receipt problems first.
-Content-addressed File upload recovery is preserved. V2/ETA at75ea51867 pass
-CI34985637885 (15 successes/one skip); d01 status-link CI34990349201 is still running.
+The existing location writer now passes266 backend checks/privacy gates,13 local
+HTTP/SQL cases and a two-request concurrency case after16 unit baseline failures.
+It reuses the geography decoder, compares the current assignment/task/location
+snapshot, validates the receipt and enforces the30-second interval from stored state.
+Three existing source/test files change; no client/schema/layout change. See
+[writer evidence](VERIFICATION_FIRST_2026-09-13.md#existing-helper-location-writer).
+Next verify the existing urgent status writer and notification recipients, then
+completion draft/restart. Location consent/raw participant access remains open
+because existing compose wording and reader behavior disagree. The v2 publisher
+has no active client caller in the inspected sources; installed tracking is unaccepted.
+Content-addressed File upload recovery is preserved. d01 status-link CI34990349201
+passes all15 applicable jobs/one skip; subsequent socket/location changes need CI.
 No full inventory row is closed by these bounded checks.
 The preceding main-list change added one Android regression file to preserve the
 existing test-class size rule.

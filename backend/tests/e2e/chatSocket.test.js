@@ -643,6 +643,8 @@ describe('private helper tracking on the existing public task room', () => {
     const gigId = `dd000000-0000-4000-a000-${String(++serial).padStart(12, '0')}`;
     seedTable('Gig', [{
       id: gigId, user_id: U1, accepted_by: U2, title: 'Synthetic private helper task', status: 'assigned',
+      accepted_at: null, started_at: null, updated_at: null, helper_last_location: null,
+      helper_location_updated_at: null, helper_eta_minutes: null,
       exact_location: 'SRID=4326;POINT(-74.006 40.7128)', is_urgent: true,
       urgent_details: { shareLocationDuringTask: false },
     }]);
