@@ -178,12 +178,16 @@ The existing urgent writer/reader follow-up fixes21 reproduced boundary failures
 289 overlapping compatibility checks and202 final route checks, privacy gates,
 13 HTTP/SQL cases and five concurrency/compatibility cases pass. Four existing
 source/test/mock files change; no client/schema/layout change. See [urgent evidence](VERIFICATION_FIRST_2026-09-13.md#existing-urgent-status-writer-and-private-reader).
-Next inspect existing urgent notification idempotency/delivery and sequential retries,
-then completion draft/restart. Consent/raw participant access and installed tracking
-remain open; no consent policy is inferred from inconsistent existing wording.
-Content-addressed File recovery and notification idempotency already exist and must
-be reused. d01 CI34990349201 passes15 applicable jobs/one skip. Socket/location
-c7d45dd09 CI34993419890 is running; this urgent follow-up is not yet covered by it.
+Existing urgent notices now reuse the Notification unique key after two unit/service
+and three actual HTTP/SQL duplicate baselines.243 checks/privacy gates and six actual
+HTTP/service/SQL cases verify retries, read-state preservation, distinct assignments/
+steps and an unchanged historical notice. Two existing source/test files change;
+no schema/client/layout/control store is added. See [notice evidence](VERIFICATION_FIRST_2026-09-13.md#existing-urgent-notification-retry-identity).
+Next verify completion draft/restart against existing forms/storage and canonical
+saved state, preserving already accepted upload recovery. Transport remains best
+effort; real push, consent/raw participant access and installed tracking remain open.
+d01 CI34990349201 passes15 applicable jobs/one skip. c7d45dd09 CI34993419890 is running;
+urgent writer341da82c6 and the notice follow-up are not yet covered by that run.
 No full inventory row is closed by these bounded checks.
 The preceding main-list change added one Android regression file to preserve the
 existing test-class size rule.

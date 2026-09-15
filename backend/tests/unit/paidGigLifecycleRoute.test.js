@@ -975,3 +975,61 @@ describe('existing urgent task writer boundaries', () => {
     expect(response.status).toBe(200); expect(response.headers['cache-control']).toContain('no-store');
   });
 });
+
+
+describe('existing urgent notification retries', () => {
+  const notices = require('../__mocks__/notificationService');
+  const actualNotices = require(require('node:path').resolve(__dirname, '../../services/notificationService.js'));
+  let loseInsertReply = false;
+  beforeEach(() => {
+    loseInsertReply = false;
+    Object.assign(getTable('Gig')[0], { user_id: 'payer', accepted_by: 'worker', status: 'assigned',
+      is_urgent: true, starts_asap: false, accepted_at: '2026-09-01T00:00:00Z', started_at: null,
+      updated_at: '2026-09-01T00:00:00Z', urgent_details: { current_fulfillment_status: 'on_the_way', helper_eta_minutes: 9 } });
+    notices.createNotification.mockImplementation(actualNotices.createNotification);
+    const from = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = from(table), insert = query.insert.bind(query), execute = query._execute.bind(query);
+      let inserting;
+      query.insert = value => { inserting = value; return insert(value); };
+      query._execute = () => {
+        // The real Notification index is global and unique for non-null keys.
+        if (table === 'Notification' && inserting?.idempotency_key
+          && getTable('Notification').some(row => row.idempotency_key === inserting.idempotency_key)) {
+          return { data: null, error: { code: '23505', message: 'Existing notification event' } };
+        }
+        const result = execute();
+        if (table === 'Notification' && inserting && loseInsertReply) { loseInsertReply = false; return { data: null, error: { message: 'Synthetic lost committed insert reply' } }; }
+        return result;
+      };
+      return query;
+    });
+  });
+  afterEach(() => { notices.createNotification.mockReset(); actualNotices.init(null, null); });
+  async function update(nextStatus = 'arrived') {
+    const response = await request(app).post('/api/gigs/gig/status').set('x-test-user-id', 'worker').send({ status: nextStatus });
+    expect(response.status).toBe(200);
+    await Promise.all(notices.createNotification.mock.results.map(result => result.value));
+    return response;
+  }
+  test('retrying a saved status preserves one existing read notification', async () => {
+    await update(); expect(getTable('Notification')).toHaveLength(1);
+    getTable('Notification')[0].is_read = true;
+    const first = structuredClone(getTable('Notification')[0]);
+    await update(); expect(getTable('Notification')).toEqual([first]);
+  });
+  test('retrying a lost notification insert reply does not create another notice', async () => {
+    loseInsertReply = true;
+    await update(); expect(loseInsertReply).toBe(false); expect(getTable('Notification')).toHaveLength(1);
+    await update(); expect(getTable('Notification')).toHaveLength(1);
+  });
+  test.each(['next-step', 'next-assignment'])('a %s still receives its own notice', async change => {
+    await update();
+    if (change === 'next-assignment') getTable('Gig')[0].accepted_at = '2026-09-02T00:00:00Z';
+    const next = change === 'next-step' ? 'in_progress' : 'arrived';
+    await update(next); await update(next);
+    expect(getTable('Notification')).toHaveLength(2);
+    expect(new Set(getTable('Notification').map(row => row.idempotency_key)).size).toBe(2);
+  });
+
+});

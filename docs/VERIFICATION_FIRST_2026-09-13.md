@@ -4443,3 +4443,51 @@ idempotency and stored-notice transport must be inspected before adding anything
 Historical notices need not be removed solely because participants later change.
 The prior c7d45dd09 socket/location head is in CI34993419890; this follow-up needs
 its own subsequent canonical CI. PR34/app/release remain unfinished.
+
+
+## Existing urgent notification retry identity
+
+September15: two route/actual-service unit failures and three actual local HTTP/
+Notification-service/SQL scenarios reproduce a second unread notice after repeating
+an accepted fulfillment step. The real HTTP reply is destroyed in one case; another
+persists Notification but substitutes a failed insert acknowledgement. The existing
+Notification service already accepts an idempotency key, and the baseline schema
+already has a unique index. No new storage/queue/schema/provider integration is needed.
+
+The existing urgent producer now supplies a SHA256-derived event key over the task,
+owner/worker/assignment time, actor, recipient and fulfillment step. One assignment's
+repeated step/ETA submissions retain its original notice, including read state and
+original text; current tracking values still update through the existing status/socket
+flow. Distinct steps and assignments have distinct keys. The existing service/index
+handle concurrent duplicates and lost insert replies. Only two existing source/test
+files change, with no client/layout change or additional JSON control fields.
+
+Private evidence under `existing-tip-provider-proof-r1`:
+
+- `urgent-notice-baseline-r1`: two reproduced route/actual-service failures.
+- `urgent-notice-http-baseline-r1`: three actual scenarios each save two notices;
+  repeating a read notice adds a new unread one (46 SQL queries before cleanup).
+- `urgent-notice-candidate-r2`:243 checks/three suites pass, including existing push
+  preference and desktop delivery checks. Privacy gates pass, including15 audience checks.
+- `urgent-notice-http-candidate-r2`: six actual HTTP/Notification-service/local-SQL
+  cases pass. Ordinary retry, destroyed HTTP reply and lost committed insert reply
+  each leave one notice. New steps/new assignments still create their own notices,
+  and one historical unkeyed/read notice remains byte-for-byte unchanged. The actual
+  global unique index rejects duplicate keys.96 queries plus two cleanup queries.
+- All ab17 rows, API18109 and socket clients are cleaned. Authentication and badge/
+  push transport are synthetic; actual route, service and Notification storage run.
+  The SQL adapter maps real23505 failures to the existing service's PostgREST contract.
+
+Candidate R1 passed242 checks but one lost-reply fixture recursively replaced its
+own database spy, producing500 before the intended assertion. R2 composes the lost
+reply with the same scoped unique-index fixture and passes. Production code is
+unchanged between those runs. Actual SQL independently proves uniqueness.
+
+This is bounded event deduplication and retryable storage, not guaranteed transport.
+A process failure before the first notification write with no later request still
+has the existing best-effort limitation. Existing unkeyed historical notices are not
+rewritten/backfilled, and cross-version deduplication is not claimed. A same-step ETA
+change keeps the earlier stage notice; live/current status remains separately readable.
+Continue actual completion/restart and remaining provider/release acceptance. PR34
+stays draft. c7d45dd09 CI34993419890 is running; this and urgent341da82c6 need a later
+canonical CI run without canceling the in-flight native checks.

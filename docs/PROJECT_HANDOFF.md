@@ -560,16 +560,27 @@ legacy JSON and poster-null-ETA callers still work. All ab16 fixtures/API18109 a
 cleaned. Four existing source/test/mock files change; no schema/client/layout change.
 See [urgent evidence](VERIFICATION_FIRST_2026-09-13.md#existing-urgent-status-writer-and-private-reader).
 
-**Next:** inspect existing urgent notification storage/delivery/retry before changing
-it. Concurrent rejected writes no longer attempt a notice, but ambiguous replies,
-sequential repeats and delivery failures remain unaccepted. `createNotification`
-already supports an idempotency key; compare this existing contract before adding
-anything. Historical recipients may legitimately retain earlier notices, so do not
-assume every later reassignment makes an earlier authorized notice incorrect.
-The broader consent/raw participant-read question remains open: compose wording
-and reader behavior disagree, and there is no active v2 location publisher caller
-in the inspected clients. Continue installed tracking/other existing flows without
-inventing consent policy. Completion draft/restart
+**Existing urgent notice retries:** two failing route/service tests and three actual
+HTTP/Notification-service/SQL scenarios reproduce duplicate notices after ordinary
+retries, destroyed HTTP replies and lost committed insert replies. The existing
+producer now supplies the already-supported idempotency key, scoped to the Gig,
+owner/worker/assignment, actor, recipient and fulfillment step. It reuses the existing
+Notification unique index and never replaces read notices.243 backend/notification
+checks and privacy gates pass; six actual HTTP/service/SQL cases preserve one notice,
+allow distinct steps/assignments and preserve an unkeyed historical notice exactly.
+All ab17 fixtures/API18109 are cleaned. Two existing source/test files change; no
+new schema/client/layout/control metadata. See [notice evidence](VERIFICATION_FIRST_2026-09-13.md#existing-urgent-notification-retry-identity).
+Transport remains best effort; saved state is not proof of push delivery. Historical
+unkeyed events are preserved, without a claim of deduplication across old/new handlers.
+The prior c7d45dd09 CI34993419890 is still running; urgent341da82c6 and this follow-up
+will need subsequent canonical CI.
+
+**Next:** verify existing completion draft/restart behavior against the actual forms
+and their current storage before changing it. Preserve accepted upload recovery and
+saved-completion journeys; absence of unsent-draft autosave alone does not establish
+a broken promised feature. Check lost replies/restart against canonical saved state
+and retained file identities first. The broader consent/raw participant-read question
+and installed tracking remain open. Completion draft/restart
 continues after that boundary; content-addressed File upload recovery already exists
 and must be reused. There is no active web rebook/boost caller to rebuild.
 Full installed native MyTasks/owner lifetime remains open. Continue completion

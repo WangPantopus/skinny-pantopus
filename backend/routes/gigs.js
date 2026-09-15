@@ -1,5 +1,6 @@
 const express = require('express');
 const { isDeepStrictEqual } = require('node:util');
+const { createHash } = require('node:crypto');
 const router = express.Router();
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -7779,6 +7780,11 @@ router.post('/:gigId/status', verifyToken, validate(urgentStatusSchema), async (
       createNotification({
         userId: recipientId,
         type: 'urgent_status_update',
+        // Notify once for this actor's fulfillment step in this assignment.
+        // Repeated ETA/status submissions reuse the existing stored notice.
+        idempotencyKey: `gig-urgent:${createHash('sha256').update(JSON.stringify([
+          gigId, gig.user_id, gig.accepted_by, gig.accepted_at ?? null, userId, recipientId, status,
+        ])).digest('hex')}`,
         title: `Task update: ${gig.title || 'Urgent task'}`,
         body: `${isWorker ? 'Your helper' : 'The poster'} ${statusLabels[status] || status}${updatedUrgent.helper_eta_minutes ? ` (ETA: ${updatedUrgent.helper_eta_minutes} min)` : ''}`,
         icon: '\u26A1',
