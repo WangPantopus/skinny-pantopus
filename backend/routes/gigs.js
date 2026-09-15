@@ -313,16 +313,40 @@ async function topBiddersByGig(gigIds) {
   return byGigId;
 }
 
-function serializeGigForViewer(gig, { canViewCompletion = false } = {}) {
+function redactGigTracking(gig, canViewPrivateWork = false) {
   if (!gig) return null;
-  const { creator, acceptedBy, ...safe } = gig;
-  if (!canViewCompletion) {
+  const safe = { ...gig };
+  // Share credentials belong only to the explicit share command. Exact helper
+  // coordinates belong to the existing consent-gated active-status reader.
+  for (const key of ['status_share_token', 'status_share_expires_at', 'helper_last_location']) delete safe[key];
+  if (safe.urgent_details != null) {
+    let urgent = safe.urgent_details;
+    if (typeof urgent === 'string') {
+      try { urgent = JSON.parse(urgent); } catch { urgent = null; }
+    }
+    safe.urgent_details = urgent && typeof urgent === 'object' && !Array.isArray(urgent) ? { ...urgent } : null;
+    if (safe.urgent_details) {
+      delete safe.urgent_details.helper_last_location;
+      if (!canViewPrivateWork) delete safe.urgent_details.helper_eta_minutes;
+    }
+  }
+  if (!canViewPrivateWork) {
+    delete safe.helper_eta_minutes;
+    delete safe.helper_location_updated_at;
+  }
+  return safe;
+}
+
+function serializeGigForViewer(gig, { canViewPrivateWork = false } = {}) {
+  if (!gig) return null;
+  const { creator, acceptedBy, ...safe } = redactGigTracking(gig, canViewPrivateWork);
+  if (!canViewPrivateWork) {
     for (const key of ['completion_note', 'completion_photos', 'completion_checklist',
       'owner_confirmation_note', 'owner_satisfaction']) delete safe[key];
   }
   return {
     ...safe,
-    ...(canViewCompletion ? { completion_review: paidGigAcceptance.completionReview(gig) } : {}),
+    ...(canViewPrivateWork ? { completion_review: paidGigAcceptance.completionReview(gig) } : {}),
     creator: creator
       ? serializeUserIdentityForViewer(creator)
       : serializeGigAuthorForViewer({
@@ -1290,6 +1314,7 @@ router.get('/nearby', async (req, res) => {
  * Get current user's gigs
  */
 router.get('/user/me', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const userId = req.user.id;
     const { status } = req.query;
@@ -1311,7 +1336,7 @@ router.get('/user/me', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch your gigs' });
     }
 
-    res.json({ gigs: gigs || [] });
+    res.json({ gigs: (gigs || []).map(gig => redactGigTracking(gig, true)) });
   } catch (err) {
     logger.error('User gigs fetch error', { error: err.message, userId: req.user.id });
     res.status(500).json({ error: 'Failed to fetch your gigs' });
@@ -1372,6 +1397,7 @@ router.get('/assignments/me', verifyToken, async (req, res) => {
  * Get current user's posted gigs
  */
 router.get('/my-gigs', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const userId = req.user.id;
     const { limit = 100, status } = req.query;
@@ -1440,7 +1466,7 @@ router.get('/my-gigs', verifyToken, async (req, res) => {
 
       const { completion_note, completion_photos, completion_checklist, ...listedGig } = gig;
       return {
-        ...listedGig,
+        ...redactGigTracking(listedGig, true),
         completion_review: paidGigAcceptance.completionReview(gig),
         bid_count: bidStats.bid_count,
         bidsCount: bidStats.bid_count,
@@ -2193,6 +2219,7 @@ router.get('/search', verifyToken, async (req, res) => {
  * We enrich each gig with bidsCount (number of bids/offers).
  */
 router.get('/', async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const {
       limit = 20,
@@ -2680,7 +2707,7 @@ router.get('/', async (req, res) => {
         'Anonymous';
 
       return {
-        ...g,
+        ...redactGigTracking(g, Boolean(currentUserId) && (g.user_id === currentUserId || g.accepted_by === currentUserId)),
         poster_display_name: posterDisplayName,
         poster_username: poster?.username || null,
         poster_profile_picture_url: poster?.profile_picture_url || null,
@@ -2848,6 +2875,7 @@ router.get('/in-bounds', async (req, res) => {
  * Returns empty array when user has no saved gigs (not 404).
  */
 router.get('/saved', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const userId = req.user.id;
     const { data: savedRows, error: savedErr } = await supabaseAdmin
@@ -2958,7 +2986,7 @@ router.get('/saved', verifyToken, async (req, res) => {
           'Anonymous';
 
         return {
-          ...gig,
+          ...redactGigTracking(gig, gig.user_id === userId || gig.accepted_by === userId),
           poster_display_name: posterDisplayName,
           poster_username: poster?.username || null,
           poster_profile_picture_url: poster?.profile_picture_url || null,
@@ -3629,6 +3657,7 @@ router.delete('/hidden-categories/:category', verifyToken, async (req, res) => {
  * Get a single gig by ID
  */
 router.get('/:id', async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { id } = req.params;
     const currentUserId = req.user?.id || (await extractOptionalUserId(req));
@@ -3685,11 +3714,11 @@ router.get('/:id', async (req, res) => {
     applyLocationPrecision(gig, precision, isOwner);
     gig.locationUnlocked = locationUnlocked;
 
-    const canViewCompletion = Boolean(currentUserId) && (
+    const canViewPrivateWork = Boolean(currentUserId) && (
       String(gig.accepted_by) === String(currentUserId)
       || (await getGigOwnerAccess(gig.user_id, currentUserId, 'gigs.manage')).allowed
     );
-    res.json({ gig: serializeGigForViewer(gig, { canViewCompletion }) });
+    res.json({ gig: serializeGigForViewer(gig, { canViewPrivateWork }) });
   } catch (err) {
     logger.error('Gig fetch error', { error: err.message, gigId: req.params.id });
     res.status(500).json({ error: 'Failed to fetch gig' });

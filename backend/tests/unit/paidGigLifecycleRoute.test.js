@@ -817,3 +817,66 @@ describe('owner confirmation binds the loaded review before capture', () => {
     expect(result.status).toBe(409); expect(mockCapture).not.toHaveBeenCalled();
   });
 });
+
+
+describe('general gig responses do not disclose share credentials or helper coordinates', () => {
+  const privateLocation = { latitude: 40.7128, longitude: -74.006, updated_at: '2026-09-15T12:00:00Z' };
+  function withLocation(share = false) {
+    assigned('in_progress');
+    Object.assign(getTable('Gig')[0], { status_share_token: 'abcdef1234567890abcdef1234567890',
+      status_share_expires_at: '2099-01-01T00:00:00Z', helper_last_location: 'SRID=4326;POINT(-74.006 40.7128)',
+      helper_location_updated_at: privateLocation.updated_at, helper_eta_minutes: 12, is_urgent: true,
+      urgent_details: { shareLocationDuringTask: share, helper_last_location: privateLocation, helper_eta_minutes: 9, current_fulfillment_status: 'on_the_way' } });
+  }
+  const read = actor => {
+    if (actor) db.setAuthMocks({ getUser: async () => ({ data: { user: { id: actor } }, error: null }) });
+    const req = request(app).get('/api/gigs/gig');
+    return actor ? req.set('Authorization', 'Bearer synthetic-read') : req;
+  };
+  test.each([null, 'foreign', 'former-worker', 'bidder', 'payer', 'worker'])('%s cannot obtain raw share credentials from general detail', async actor => {
+    withLocation(); const before = JSON.stringify(getTable('Gig')[0]); const result = await read(actor);
+    expect(result.status).toBe(200); expect(result.body.gig).not.toHaveProperty('status_share_token');
+    expect(result.body.gig).not.toHaveProperty('status_share_expires_at'); expect(getTable('Gig')[0]).toMatchObject(JSON.parse(before));
+  });
+  test.each([null, 'foreign', 'payer', 'worker'])('%s cannot bypass the dedicated location reader through general detail', async actor => {
+    withLocation(); const before = JSON.stringify(getTable('Gig')[0]); const result = await read(actor);
+    expect(result.status).toBe(200); expect(result.body.gig).not.toHaveProperty('helper_last_location');
+    expect(result.body.gig.urgent_details).not.toHaveProperty('helper_last_location'); expect(getTable('Gig')[0]).toMatchObject(JSON.parse(before));
+  });
+  test.each([null, 'foreign', 'former-worker', 'bidder'])('%s cannot obtain private ETA without a shared link', async actor => {
+    withLocation(); const result = await read(actor); expect(result.status).toBe(200);
+    expect(result.body.gig).not.toHaveProperty('helper_eta_minutes'); expect(result.body.gig).not.toHaveProperty('helper_location_updated_at');
+    expect(result.body.gig.urgent_details).not.toHaveProperty('helper_eta_minutes');
+  });
+  test.each([JSON.stringify({ helper_last_location: privateLocation, helper_eta_minutes: 9, shareLocationDuringTask: false }), 'malformed', null])('legacy urgent values cannot bypass location redaction: %p', async legacy => {
+    withLocation(); getTable('Gig')[0].urgent_details = legacy;
+    const result = await read('foreign'); expect(result.status).toBe(200);
+    expect(JSON.stringify(result.body)).not.toContain('40.7128');
+    if (result.body.gig.urgent_details) expect(result.body.gig.urgent_details).not.toHaveProperty('helper_eta_minutes');
+    expect(getTable('Gig')[0].urgent_details).toBe(legacy);
+  });
+  test.each([['/?status=in_progress', null], ['/saved', 'foreign'], ['/user/me', 'payer'], ['/my-gigs', 'payer']])('task list %s does not bypass location consent', async (path, actor) => {
+    withLocation(false); seedTable('GigSave', [{ id: 'saved-location', gig_id: 'gig', user_id: 'foreign' }]);
+    const req = request(app).get('/api/gigs' + path); const result = await (actor ? req.set('x-test-user-id', actor) : req);
+    expect(result.status).toBe(200); expect(result.headers['cache-control']).toContain('no-store'); expect(result.body.gigs).toHaveLength(1);
+    expect(result.body.gigs[0].urgent_details).not.toHaveProperty('helper_last_location');
+    if (actor !== 'payer') expect(result.body.gigs[0].urgent_details).not.toHaveProperty('helper_eta_minutes');
+    else expect(result.body.gigs[0].urgent_details.helper_eta_minutes).toBe(9);
+    expect(getTable('Gig')[0].urgent_details.helper_last_location).toEqual(privateLocation);
+  });
+  test.each(['payer', 'worker'])('%s retains ETA and the existing consent-gated location reader', async actor => {
+    withLocation(false); const result = await read(actor); expect(result.status).toBe(200);
+    expect(result.body.gig.helper_eta_minutes).toBe(12); expect(result.body.gig.urgent_details.helper_eta_minutes).toBe(9);
+    let active = await request(app).get('/api/gigs/gig/active-status').set('x-test-user-id', actor);
+    expect(active.status).toBe(200); expect(active.body.helper_location).toBeNull();
+    getTable('Gig')[0].urgent_details.shareLocationDuringTask = true;
+    active = await request(app).get('/api/gigs/gig/active-status').set('x-test-user-id', actor);
+    expect(active.status).toBe(200); expect(active.body.helper_location).toEqual(privateLocation);
+  });
+});
+
+
+test('private task detail is not stored in shared browser or intermediary caches', async () => {
+  const result = await request(app).get('/api/gigs/gig'); expect(result.status).toBe(200);
+  expect(result.headers['cache-control']).toContain('no-store');
+});

@@ -49,7 +49,7 @@ jest.mock('@/components/gig-detail/PaymentSection', () => () => null);
 jest.mock('@/components/gig-detail/GigBidCheckout', () => ({ gigBidCheckoutUrl: () => '' }));
 jest.mock('@/components/gig-detail-v2/OffersPanelV2', () => () => null);
 jest.mock('@/components/gig-detail-v2/InstantAcceptButton', () => () => null);
-jest.mock('@/components/gig-detail-v2/ETATracker', () => () => null);
+jest.mock('@/components/gig-detail-v2/ETATracker', () => function MockETATracker() { return <div data-testid="eta-tracker" />; });
 jest.mock('@/components/gig-detail-v2/ActiveTaskPanel', () => () => null);
 jest.mock('@/components/FileUpload', () => () => null);
 jest.mock('@/components/payments/StripeConnectOnboarding', () => () => null);
@@ -413,4 +413,19 @@ test('v2 detail rebinding cannot adopt a response from the previous task', async
   page.rerender(<V2Page />); await screen.findByText('Current different task');
   await act(async () => held.resolve({ id: gigId, user_id: owner, title: 'Previous task private detail', status: 'open', price: 0 } as never));
   expect(screen.queryByText('Previous task private detail')).not.toBeInTheDocument(); expect(screen.getByText('Current different task')).toBeInTheDocument();
+});
+
+
+test('v2 detail offers status sharing only to the task owner or assigned worker', async () => {
+  jest.mocked(api.gigs.getGigById).mockResolvedValue({ id: gigId, user_id: owner, accepted_by: 'other-worker',
+    status: 'in_progress', title: 'Current task', price: 0 } as never);
+  render(<V2Page />); await screen.findByText('Current task'); expect(screen.queryByTestId('eta-tracker')).not.toBeInTheDocument();
+});
+
+
+test.each([owner, worker])('v2 detail preserves status sharing for current participant %s', async actor => {
+  jest.mocked(api.users.getMyProfile).mockResolvedValue({ id: actor } as never);
+  jest.mocked(api.gigs.getGigById).mockResolvedValue({ id: gigId, user_id: owner, accepted_by: worker,
+    status: 'in_progress', title: 'Current task', price: 0 } as never);
+  render(<V2Page />); await screen.findByText('Current task'); expect(screen.getByTestId('eta-tracker')).toBeInTheDocument();
 });

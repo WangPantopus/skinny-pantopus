@@ -153,9 +153,14 @@ backend or migration. See [v2 evidence](VERIFICATION_FIRST_2026-09-13.md#existin
 The existing ETA tracker now passes201 focused tests/types/lint and five Chrome
 share cases after seven reproduced failures. It reuses the session hook and existing
 card/SDK; only two existing source/test files change. See [ETA evidence](VERIFICATION_FIRST_2026-09-13.md#existing-eta-tracker-and-share-lifetime).
-The existing share destination returns404 locally; complete that gap and token/helper
-location privacy using the existing API/schema first, then draft/restart. Existing
-content-addressed File upload recovery is preserved. V2 and ETA need combined CI.
+General task tracking privacy now passes264 backend/204 web checks, privacy gates
+and actual local HTTP/SQL: six detail viewers/four lists/two consent-disabled readers,
+two direct outsider RLS denials and unchanged stored Gig. Four existing source/test
+files repair the responses and sharing entry, with no schema/native/layout change.
+See [tracking privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-general-task-response-tracking-privacy).
+The existing share destination still returns404 locally; complete that gap and the
+existing share/location mutation authority/expiry/retry boundaries, then draft/restart. Existing
+content-addressed File upload recovery is preserved. V2/ETA are pushed at75ea51867 with CI34985637885 running; tracking privacy needs later CI.
 No full inventory row is closed by these bounded checks.
 The preceding main-list change added one Android regression file to preserve the
 existing test-class size rule.

@@ -4162,3 +4162,55 @@ Source hashes/copies, baseline/final checks, five screenshots and cleanup are un
 `existing-tip-provider-proof-r1/eta-sharing-*` and its durable private mirror.
 Previous b513c8184 CI34980516319 passes all15 applicable jobs/one Seeder skip. This
 and v2 checkpoint4611b261c require combined CI; PR34 and the full app remain unfinished.
+
+
+## Existing general task response tracking privacy
+
+The general Gig detail uses an admin wildcard read. Fourteen baseline tests reproduce
+raw share token/expiry, top-level/nested helper coordinates and outsider ETA exposure;
+one cache test and one v2 entry test also fail. Four additional list baselines reproduce
+urgent_details.helper_last_location bypassing the existing location-sharing switch in
+public browse, saved tasks, user/me and my-gigs. These20 failed assertions are bounded
+regressions, not an app completion or duplicated-effort percentage.
+
+Actual HTTP with owned PostgreSQL confirms the detail exposure for anonymous, owner,
+worker and three outsider viewers. Direct anon/authenticated-outsider SELECT sees zero
+rows, proving the API bypass separately from existing RLS. A later fixture exercises
+the literal selected Gig columns for all four list routes and confirms nested-location
+exposure there too. Unused nested User relation joins are omitted by the SQL adapter.
+
+The existing route file now uses one small tracking projection across those responses.
+Share credentials and raw helper coordinates stay out of general reads. Current owner/
+worker detail retains ETA; public/foreign lists do not. Existing owner list ETA remains.
+The separate active-status endpoint continues to honor its location switch. Serialized
+urgent objects are cloned before removal, including legacy encoded objects; malformed
+values fail closed. No stored column is removed or rewritten. All five affected routes
+send private/no-store headers. The existing v2 page restricts its share card to the
+owner/worker; current participants retain it, with no styling changes.
+
+Final R3 passes264 checks/seven backend suites and204 checks/three web suites, web
+TypeScript, scoped lint (zero errors/23 existing page warnings) and all privacy gates,
+including15 audience-profile checks. Candidate R1's10 extra failures came from comparing
+the entire in-memory mock row after the old detail handler decorated it; the test now
+checks every original value, and actual SQL independently confirms no stored change.
+Web R2 stopped on the named-component lint requirement for the new test stub; a named
+stub passes without changing product behavior or weakening lint.
+
+Actual final HTTP/SQL acceptance passes six detail viewers, four list routes, two
+consent-disabled active-status reads and two direct outsider RLS denials.31 SQL queries
+plus two cleanup queries pass, with the complete stored Gig unchanged. The shared
+mock-based tests additionally preserve consent-enabled owner/worker coordinates and
+legacy urgent-value redaction. The first HTTP fixture stopped during route import
+because its synthetic Stripe getter threw during construction; no provider operation
+ran. Returning a getter-only proxy fixed the fixture. The first list fixture omitted
+the existing deadline OR filter; the corrected adapter runs the actual SQL predicate.
+Both failed runs cleaned their exact owned rows, and failed logs remain retained.
+
+Four existing source/test files change. No new file, table, migration, native code or
+screen design is added. Source hashes/copies, baselines, accepted runs and exact ab12
+cleanup are under `existing-tip-provider-proof-r1/eta-privacy-*` and its durable private
+mirror. API18109 is stopped; no hosted operation ran. Authentication/business directory
+are synthetic. This does not close full installed UI, every tracking/socket surface,
+share/location post-read authority, assignment changes, status destination or hosted
+cache/token reconciliation. PR34 remains draft; CI34985637885 covers preceding75ea51867,
+and this follow-up requires its own later CI.

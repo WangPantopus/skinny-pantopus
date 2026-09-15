@@ -700,7 +700,7 @@ function GigDetailV2Content() {
           )}
 
           {/* ETA tracker when assigned */}
-          {(gigStatus === 'assigned' || gigStatus === 'in_progress') && (
+          {(gigStatus === 'assigned' || gigStatus === 'in_progress') && (isMyGig || iAmWorker) && (
             <ETATrackerComp gig={gig} socket={socket} />
           )}
 

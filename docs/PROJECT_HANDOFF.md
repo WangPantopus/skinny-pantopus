@@ -489,16 +489,26 @@ Late links cannot be copied after departure, session or work-relationship change
 missing/expired receipts fail, and only matching/current ETA events update the card.
 Existing styles are intact. See [ETA evidence](VERIFICATION_FIRST_2026-09-13.md#existing-eta-tracker-and-share-lifetime).
 Owned port3107/fixture/build are removed and original configs restored exactly.
-This and v2 checkpoint4611b261c require their combined canonical CI push.
+This and v2 checkpoint4611b261c are pushed at75ea51867; CI34985637885 is running.
 
-**Next:** complete sharing privacy and its destination. Current/master route inventory
-and a local Chrome probe confirm `/status/:token` has no web page (404); the existing
-API and canonical Gig share/ETA columns already exist. The general Gig detail uses
-an admin wildcard read; reproduce its token/helper-location projection before a
-bounded repair. Raw-table column grants alone do not prove outsider row access:
-current Gig SELECT RLS limits rows to participants. No new migration is needed merely
-to add existing fields. Then verify existing share/location mutation authority and
-expiry/retry behavior. Completion draft/restart
+**General task tracking privacy:**20 failing baseline checks reproduce raw share-token,
+helper-coordinate/ETA, cache and sharing-entry gaps. The existing serializer/list
+responses now omit share credentials and exact helper coordinates, gate ETA by the
+current work relationship and use no-store headers. The four affected lists reuse
+one helper in the existing route file; the existing consent-gated active-status
+reader remains available. The v2 sharing card is offered only to owner/worker.
+264 backend/204 web checks, types/lint/privacy gates and actual local HTTP/SQL checks
+pass: six detail viewers, four lists, two active-status reads and two raw RLS denials,
+with unchanged stored Gig and exact fixture cleanup. No schema/native/layout change.
+See [tracking privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-general-task-response-tracking-privacy).
+The API18109 fixture is stopped. This local follow-up needs its own CI after the
+running75ea51867 checkpoint; preserve that run.
+
+**Next:** finish the existing sharing endpoint's authority/expiry/retry behavior and
+its missing web destination. Current/master/history route inventory and local Chrome
+confirm `/status/:token` has no page (404); existing API and canonical Gig share/ETA
+columns already exist. Reuse those contracts. Also review share-token rotation at
+cutover and location/assignment changes; do not claim all tracking surfaces closed. Completion draft/restart
 continues after that boundary; content-addressed File upload recovery already exists
 and must be reused. There is no active web rebook/boost caller to rebuild.
 Full installed native MyTasks/owner lifetime remains open. Continue completion
