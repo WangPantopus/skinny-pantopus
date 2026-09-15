@@ -3635,3 +3635,67 @@ and served browser products retained. No hosted schema or actual provider operat
 is part of this scope. Private my-tasks-completion-* source/run/product records
 retain failures and verification limits. Current-head CI remains required and
 PR34 remains draft; no wider inventory row is closed by these bounded checks.
+
+
+## Existing native owner confirmation retires stale callbacks
+
+The existing detail handlers accepted empty success responses; Android emitted
+completion success and refetched, while iOS returned nil and the existing view
+treated nil as success. Both could refetch after a session changed. Android also
+sent two commands for a repeated pending tap. Corrected baseline fixtures reproduce
+three unique Android failures (nine failed executions with configured retries) and
+two iOS failures with three failed assertions. Android's first fixture missed the
+existing tip-preview dependency; it is retained as a fixture failure, not product
+evidence. The corrected baseline uses a consistent owner identity.
+
+Five existing native files extend the existing completion attempt/generation/job,
+identity markers, read scope and departure wiring. Owner admission requires the
+loaded review and current owner context; pending repeats send one command. A
+matching completed receipt with a valid owner-confirmation date is required before
+success/refetch. Late session/departure responses retire silently. iOS returns
+confirmed/failed/ignored and the existing view displays success only for confirmed;
+its previous nil-success convention remains unchanged for unrelated actions.
+No new schema, service, screen or visual layout is introduced. Retirement suppresses
+client callbacks; it does not cancel a financial operation already admitted by
+the server. Existing server receipt/recovery requirements remain separate.
+
+All42 selected Android detail tests pass with compilation, detekt and ktlint,
+including the existing worker proof regressions and the normal confirmed receipt.
+All50 iOS detail tests pass with build, SwiftFormat and strict SwiftLint, including
+normal confirmation/tip refresh, incomplete receipt, late session, departure and
+duplicate command checks. All679 installed iOS test-host files match the retained
+build, and the owned simulator returns to shutdown. These use mocked repositories
+or URLProtocol responses; they are not installed full owner paid-lifecycle UI or
+actual provider acceptance. Backend/web/schema acceptance is reused where source
+is unchanged; no broad suite is repeated solely for these native handler changes.
+
+Android's first candidate failed line-length formatting; iOS's first lint failed
+two trailing-closure checks. Minimal corrections preserve the original rules.
+Private native-owner-confirmation-* evidence retains baseline attempts, source
+and product hashes, commands and final results. The five application/test files
+already existed. The unrelated simulator and owner checkout remain untouched.
+The preceding loaded-review/MyTasks checkpoint48df046f6 passes all15 applicable
+jobs/one Seeder skip in CI34957710591; require this native checkpoint's own CI
+before integration. PR34 stays
+draft. Native MyTasks account/request lifetime remains a separate pending check.
+
+## Existing owner capture interleaving baseline
+
+While native validation ran, the existing HTTP/StripeService/SQL fixture reproduced
+four post-server-read races (50 SQL calls/four synthetic captures). Completion
+proof changes during provider retrieval, after capture preparation, and at the
+synthetic capture call each return200 and confirm different proof. A completion-time
+change during provider retrieval returns409 only after the payment is captured,
+leaving the task unconfirmed. Both confirmation aliases are exercised. Auth,
+business directory and Stripe are synthetic; routes/services and owned PostgreSQL
+are actual. Exact ab03 cleanup passes and API18109 is stopped.
+
+This is an unresolved blocker, not a completed repair. The existing capture
+preparation locks/checks financial terms but does not bind the reviewed proof;
+final confirmation checks only the earlier assignment fields. Existing stop/expiry
+guards cover their own requests. The existing capture retry job also only selects
+already-confirmed tasks, missing newly ambiguous captures before confirmation.
+Compare and extend the existing Payment metadata, capture functions and retry job
+before proposing new persistence. Preserve the separate booking-payment caller.
+Private owner-capture-interleaving-* baseline and reuse records retain the exact
+commands/results. No new capture implementation or migration is claimed here.

@@ -1935,20 +1935,37 @@ public extension GigDetailViewModel {
         }
     }
 
-    /// Poster confirms completion (`/complete`) — releases payment and
-    /// unlocks the tip affordance on refresh.
+    enum ConfirmationResult: Equatable {
+        case confirmed
+        case ignored
+        case failed(String)
+    }
+
+    /// Confirm the loaded work only while its original account and screen remain current.
     @discardableResult
-    func confirmCompletion() async -> String? {
-        guard canConfirmCompletion else { return nil }
+    func confirmCompletion() async -> ConfirmationResult {
+        guard canConfirmCompletion, writeIdentityIsCurrent, completionAttempt == nil,
+              let review = rawGig?.completionReview, !review.isEmpty else { return .ignored }
+        let attempt = UUID()
+        completionAttempt = attempt
+        func current() -> Bool {
+            completionAttempt == attempt && writeIdentityIsCurrent && !Task.isCancelled
+                && viewerIsOwner && rawGig?.id == gigId && rawGig?.completionReview == review
+        }
+        defer { if completionAttempt == attempt { completionAttempt = nil } }
         do {
-            _ = try await api.request(
-                GigsEndpoints.completeGigAsPoster(gigId: gigId, expectedReview: rawGig?.completionReview),
-                as: EmptyResponse.self
+            let response: GigDetailResponse = try await api.request(
+                GigsEndpoints.completeGigAsPoster(gigId: gigId, expectedReview: review)
             )
+            guard current() else { return .ignored }
+            guard response.gig.id == gigId, response.gig.status == "completed",
+                  response.gig.ownerConfirmedAt.flatMap(GigAssignedAuthorizationProgress.date) != nil
+            else { return .failed("Confirmation receipt unavailable. Reopen the task to check its current state.") }
             await refreshSilently()
-            return nil
+            return current() ? .confirmed : .ignored
         } catch {
-            return (error as? APIError)?.errorDescription ?? "Couldn't confirm completion."
+            guard current() else { return .ignored }
+            return .failed((error as? APIError)?.errorDescription ?? "Couldn't confirm completion.")
         }
     }
 

@@ -135,7 +135,8 @@ final class GigDetailViewModelTests: XCTestCase {
 
     private func makeOwnerVM(
         presenter: StubAcceptPresenter = StubAcceptPresenter(),
-        emitRecorder: EmitRecorder = EmitRecorder()
+        emitRecorder: EmitRecorder = EmitRecorder(),
+        identity: (() -> GigStopViewModel.Identity?)? = nil
     ) -> GigDetailViewModel {
         let api = makeAPI()
         return GigDetailViewModel(
@@ -147,6 +148,7 @@ final class GigDetailViewModelTests: XCTestCase {
                 checkout: CheckoutCoordinator(api: api, presenter: presenter)
             ) { "origin|owner|session" },
             currentUserId: "owner-1",
+            tipIdentity: identity,
             roomEvents: { _ in AsyncStream { $0.finish() } },
             emitRoom: { event, gigId in emitRecorder.events.append("\(event):\(gigId)") }
         )
@@ -364,7 +366,7 @@ final class GigDetailViewModelTests: XCTestCase {
         let markedDone = Self
             .gigJSON(#""status":"completed","user_id":"owner-1","accepted_by":"w1","completion_review":"original-loaded-review""#)
         let confirmed = Self.gigJSON(
-            #""status":"completed","user_id":"owner-1","accepted_by":"w1","owner_confirmed_at":"2026-06-09T00:00:00Z""#
+            #""status":"completed","user_id":"owner-1","accepted_by":"w1","owner_confirmed_at":"2026-06-09T00:00:00Z","completion_review":"original-loaded-review""#
         )
         stubRoutes([
             "/api/gigs/g1": [.status(200, body: markedDone), .status(200, body: confirmed)],
@@ -377,15 +379,17 @@ final class GigDetailViewModelTests: XCTestCase {
                 .status(200, body: #"{"pending":[{"gig_id":"g1","reviewee_id":"w1","role":"owner","reviewee_name":"Worker"}]}"#),
                 .status(200, body: #"{"pending":[{"gig_id":"g1","reviewee_id":"w1","role":"owner","reviewee_name":"Worker"}]}"#)
             ],
-            "/api/gigs/g1/complete": [.status(200, body: #"{"message":"ok"}"#)]
+            "/api/gigs/g1/complete": [.status(200, body: confirmed)]
         ])
-        let vm = makeOwnerVM()
+        let vm = makeOwnerVM {
+            .init(actor: "owner-1", session: "owner-session", origin: "synthetic-origin")
+        }
         await vm.load()
         XCTAssertEqual(vm.activePhase, .markedDone)
         XCTAssertTrue(vm.canConfirmCompletion)
         XCTAssertFalse(vm.canTip)
         let error = await vm.confirmCompletion()
-        XCTAssertNil(error)
+        XCTAssertEqual(error, .confirmed)
         XCTAssertTrue(SequencedURLProtocol.capturedRequests.contains { $0.url?.path == "/api/gigs/g1/complete" })
         let command = SequencedURLProtocol.capturedRequests.first { $0.url?.path == "/api/gigs/g1/complete" }
         let body = String(data: command?.httpBodyData() ?? Data(), encoding: .utf8) ?? ""
@@ -394,6 +398,74 @@ final class GigDetailViewModelTests: XCTestCase {
         XCTAssertEqual(vm.activePhase, .confirmed)
         XCTAssertFalse(vm.canConfirmCompletion)
         XCTAssertTrue(vm.canTip, "Confirmed completion unlocks the Block 3D tip dock.")
+    }
+
+    private func ownerConfirmationVM(
+        reply: SequencedURLProtocol.Response,
+        identity: @escaping () -> GigStopViewModel.Identity? = {
+            .init(actor: "owner-1", session: "owner-session", origin: "synthetic-origin")
+        }
+    ) async -> GigDetailViewModel {
+        let body = Self.gigJSON(#""status":"completed","user_id":"owner-1","accepted_by":"w1","completion_review":"owner-review""#)
+        stubRoutes([
+            "/api/gigs/g1": Array(repeating: .status(200, body: body), count: 3),
+            "/api/gigs/g1/bids": Array(repeating: .status(200, body: #"{"bids":[]}"#), count: 3),
+            "/api/gigs/g1/questions": Array(repeating: .status(200, body: Self.questionsJSON), count: 3),
+            "/api/gigs/g1/complete": [reply],
+            "/api/gigs/g1/tip-preview": Array(repeating: .status(503, body: "{}"), count: 3)
+        ])
+        let vm = makeOwnerVM(identity: identity)
+        await vm.load()
+        return vm
+    }
+
+    func testOwnerMissingReceiptCannotReportSuccess() async {
+        let vm = await ownerConfirmationVM(reply: .status(200, body: "{}"))
+        let error = await vm.confirmCompletion()
+        guard case .failed = error else { return XCTFail("Missing receipt cannot report success") }
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.url?.path == "/api/gigs/g1" }.count, 1)
+    }
+
+    func testOwnerLateSessionReplyDoesNotRefresh() async {
+        var identity: GigStopViewModel.Identity? = .init(actor: "owner-1", session: "owner-session", origin: "synthetic-origin")
+        let vm = await ownerConfirmationVM(reply: .status(200, body: "{}", delay: 0.3)) { identity }
+        let pending = Task { await vm.confirmCompletion() }
+        for _ in 0..<100 {
+            if !proofRequests("/api/gigs/g1/complete").isEmpty { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(proofRequests("/api/gigs/g1/complete").count, 1)
+        identity = .init(actor: "owner-1", session: "replacement-session", origin: "synthetic-origin")
+        let result = await pending.value
+        XCTAssertEqual(result, .ignored)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.url?.path == "/api/gigs/g1" }.count, 1)
+    }
+
+    func testOwnerDepartureRetiresPendingConfirmation() async {
+        let vm = await ownerConfirmationVM(reply: .status(200, body: "{}", delay: 0.3))
+        let pending = Task { await vm.confirmCompletion() }
+        for _ in 0..<100 {
+            if !proofRequests("/api/gigs/g1/complete").isEmpty { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(proofRequests("/api/gigs/g1/complete").count, 1)
+        vm.retireDeliveryProof()
+        let result = await pending.value
+        XCTAssertEqual(result, .ignored)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.filter { $0.url?.path == "/api/gigs/g1" }.count, 1)
+    }
+
+    func testOwnerDuplicatePendingTapSendsOneCommand() async {
+        let vm = await ownerConfirmationVM(reply: .status(200, body: "{}", delay: 0.3))
+        let pending = Task { await vm.confirmCompletion() }
+        for _ in 0..<100 {
+            if !proofRequests("/api/gigs/g1/complete").isEmpty { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        let duplicate = await vm.confirmCompletion()
+        XCTAssertEqual(duplicate, .ignored)
+        _ = await pending.value
+        XCTAssertEqual(proofRequests("/api/gigs/g1/complete").count, 1)
     }
 
     func testNoShowCheckGatesOwnerAffordanceAndReportCancels() async {

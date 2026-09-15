@@ -35,7 +35,8 @@ passes all15 applicable jobs/one Seeder skip. The preceding
 private-proof checkpoint `ca097cd85` passes all15 applicable jobs/one Seeder skip in
 [CI34944635449](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34944635449).
 Integration includes loaded-review checkpoint `b65dc6f3b` and the locally verified
-MyTasks follow-up below. Their combined canonical-branch push requires its own CI.
+MyTasks follow-up below. Their combined canonical-branch head `48df046f6` passes all15 applicable jobs/one
+Seeder skip in [CI34957710591](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34957710591).
 The integration branch includes installed iOS checkpoint `d6a0194ea` after
 cold-entry checkpoint `7791bb16f`, following legacy recovery
 `e700862f1` and coordinated Android `c6b1f830e`, iOS `b98cc283c`,
@@ -363,9 +364,21 @@ simulator is shutdown and all679 test-host files match the retained build. Nativ
 SDK tests are not installed paid-lifecycle UI or actual-provider acceptance.
 See [MyTasks evidence](VERIFICATION_FIRST_2026-09-13.md#existing-mytasks-waits-for-owner-confirmation).
 
-**Next:** require combined loaded-review/MyTasks CI before integration.
-Verify existing native owner-confirmation and MyTasks account/request lifetime,
-then post-server-read proof/provider interleavings. Continue completion
+**Native owner callback checkpoint:** the existing detail handlers now require a
+matching receipt and current owner/session/screen before success/refetch, suppress
+pending duplicate requests, and distinguish ignored callbacks from success.42
+Android and50 iOS detail checks/static/build gates pass, including existing worker
+proof behavior. Five existing native files change; layouts are preserved. All679
+iOS test-host files match the retained build; this is not installed full owner UI
+or actual provider acceptance. See [native callback evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-owner-confirmation-retires-stale-callbacks).
+
+**Next:** require the native callback checkpoint's own CI before integration. Four actual HTTP/SQL
+post-server-read races are now reproduced: changed proof can still be confirmed,
+and changed completion time can reject only after capture. Extend existing capture
+preparation/original Payment metadata/retry handling and verify concurrency, current
+authority and ambiguous provider recovery; preserve the booking caller. See the
+[capture baseline](VERIFICATION_FIRST_2026-09-13.md#existing-owner-capture-interleaving-baseline).
+Native MyTasks account/request lifetime remains open. Continue completion
 draft/restart verification using existing storage first. Generic maintenance granular authority/raw RLS, Home-origin admission
 and full maintenance UI acceptance remain separate follow-ups; this bounded history
 checkpoint does not close them. Continue completion/reopen policy flows, hosted

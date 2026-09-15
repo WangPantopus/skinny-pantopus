@@ -311,7 +311,13 @@ public struct GigDetailView: View {
                         Task { await runToasting(success: "Task started.") { await viewModel.startTask() } }
                     },
                     onConfirmCompletion: {
-                        Task { await runToasting(success: "Completion confirmed.") { await viewModel.confirmCompletion() } }
+                        Task {
+                            switch await viewModel.confirmCompletion() {
+                            case .confirmed: toast = ToastMessage(text: "Completion confirmed.", kind: .success)
+                            case let .failed(message): toast = ToastMessage(text: message, kind: .error)
+                            case .ignored: break
+                            }
+                        }
                     },
                     onReportNoShow: { showNoShowSheet = true },
                     onRunningLate: { showRunningLateSheet = true },

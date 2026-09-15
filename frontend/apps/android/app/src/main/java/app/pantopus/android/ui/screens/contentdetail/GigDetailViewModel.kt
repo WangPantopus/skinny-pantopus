@@ -1569,7 +1569,7 @@ class GigDetailViewModel
                         }
                         val identity = checkoutIdentities.paymentIdentity() ?: return@launch
 
-                        suspend fun current(): Boolean = deliveryProofIsCurrent(identity, actor, marker, gig.id, generation)
+                        suspend fun current(): Boolean = completionIsCurrent(identity, actor, marker, gig.id, generation)
 
                         if (!current()) return@launch
                         val urls = deliveryProofUrls(photos, gig.status?.lowercase() == "completed", ::current) ?: return@launch
@@ -1582,27 +1582,28 @@ class GigDetailViewModel
                             succeeded = true
                         }
                     } finally {
-                        onResult(finishDeliveryProof(succeeded, actor, marker, generation))
+                        onResult(finishCompletionAttempt(succeeded, actor, marker, generation))
                     }
                 }
         }
 
-        private suspend fun deliveryProofIsCurrent(
+        private suspend fun completionIsCurrent(
             identity: GigCheckoutIdentity,
             actor: String,
             marker: String,
             taskId: String,
             generation: Long,
+            owner: Boolean = false,
         ): Boolean {
             val latest = checkoutIdentities.paymentIdentity()
             val readable = bidCheckout.isCurrentReadScope()
             val sameSession = latest == identity && identity.userId == actor && marker == checkoutIdentities.scopeMarker()
-            val sameTask = rawGig?.id == taskId && rawGig?.acceptedBy == actor
+            val sameTask = rawGig?.id == taskId && (if (owner) rawGig?.userId else rawGig?.acceptedBy) == actor
             val sameFrame = generation == completionGeneration && readable && actor == currentUserId()
             return sameSession && sameTask && sameFrame
         }
 
-        private fun finishDeliveryProof(
+        private fun finishCompletionAttempt(
             succeeded: Boolean,
             actor: String,
             marker: String,
@@ -1891,19 +1892,49 @@ class GigDetailViewModel
             }
         }
 
-        /** Owner `POST /complete` — confirm the worker's marked-done. */
+        /** Confirm the loaded work only within the original account and screen. */
         fun confirmCompletion() {
-            val expectedReview = rawGig?.completionReview
-            viewModelScope.launch {
-                when (val result = repo.completeGigAsPoster(gigId, expectedReview)) {
-                    is NetworkResult.Success -> {
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast("Completion confirmed"))
-                        silentRefetch()
+            val gig = rawGig ?: return
+            val actor = currentUserId() ?: return
+            val review = gig.completionReview
+            if (completionInFlight || !ownerCanConfirmCompletion(gig, actor) || review.isNullOrEmpty()) return
+            val generation = completionGeneration
+            val marker = checkoutIdentities.scopeMarker()
+            completionInFlight = true
+            completionJob =
+                viewModelScope.launch {
+                    try {
+                        val identity = checkoutIdentities.paymentIdentity() ?: return@launch
+
+                        suspend fun current(): Boolean =
+                            completionIsCurrent(identity, actor, marker, gig.id, generation, owner = true) &&
+                                rawGig?.completionReview == review
+                        if (!current()) return@launch
+                        val result = repo.completeGigAsPoster(gigId, review)
+                        if (!current()) return@launch
+                        when (result) {
+                            is NetworkResult.Success -> {
+                                val receipt = result.data.gig
+                                val confirmed = parseEpochMillis(receipt?.ownerConfirmedAt) != null
+                                if (receipt?.id == gigId && receipt.status == "completed" && confirmed) {
+                                    _lifecycleEvents.emit(GigLifecycleEvent.Toast("Completion confirmed"))
+                                    silentRefetch()
+                                } else {
+                                    _lifecycleEvents.emit(
+                                        GigLifecycleEvent.Toast(
+                                            "Confirmation receipt unavailable. Reopen the task to check its current state.",
+                                            isError = true,
+                                        ),
+                                    )
+                                }
+                            }
+                            is NetworkResult.Failure ->
+                                _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        }
+                    } finally {
+                        finishCompletionAttempt(false, actor, marker, generation)
                     }
-                    is NetworkResult.Failure ->
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
                 }
-            }
         }
 
         /** Either party `POST /report-no-show` — cancels the task with an incident. */

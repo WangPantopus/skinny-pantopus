@@ -22,6 +22,7 @@ import app.pantopus.android.data.api.models.gigs.GigPaymentResponse
 import app.pantopus.android.data.api.models.gigs.GigQuestionsResponse
 import app.pantopus.android.data.api.models.gigs.GigSaveResponse
 import app.pantopus.android.data.api.models.gigs.MarkCompletedResponse
+import app.pantopus.android.data.api.models.gigs.MyGigDto
 import app.pantopus.android.data.api.models.gigs.NoShowCheckResponse
 import app.pantopus.android.data.api.models.gigs.RescheduleGigResponse
 import app.pantopus.android.data.api.models.gigs.WorkerAckResponse
@@ -766,10 +767,87 @@ class GigDetailSaveViewModelTest {
             val gig =
                 assignedGig(acceptedBy = "worker-9", ownerId = "viewer-1")
                     .copy(status = "completed", completionReview = "original-loaded-review")
-            val vm = lifecycleVm(gig)
+            coEvery { paymentsRepo.tipPreview("g1") } returns NetworkResult.Failure(NetworkError.Server(503, null))
+            val vm = lifecycleVm(gig, checkoutIdentity = { "viewer-1" to "owner-session" })
             coEvery { repo.completeGigAsPoster("g1", "original-loaded-review") } returns NetworkResult.Success(CompleteGigResponse())
             vm.confirmCompletion()
             coVerify(exactly = 1) { repo.completeGigAsPoster("g1", "original-loaded-review") }
+        }
+
+    private fun ownerConfirmationVm(identity: () -> Pair<String, String?>? = { "viewer-1" to "owner-session" }): GigDetailViewModel {
+        coEvery { paymentsRepo.tipPreview("g1") } returns NetworkResult.Failure(NetworkError.Server(503, null))
+        return lifecycleVm(
+            assignedGig(acceptedBy = "worker-9", ownerId = "viewer-1").copy(status = "completed", completionReview = "owner-review"),
+            checkoutIdentity = identity,
+        )
+    }
+
+    @Test
+    fun owner_missing_receipt_does_not_report_success() =
+        runTest {
+            val vm = ownerConfirmationVm()
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            coEvery { repo.completeGigAsPoster("g1", "owner-review") } returns NetworkResult.Success(CompleteGigResponse())
+            vm.confirmCompletion()
+            assertFalse(events.contains(GigLifecycleEvent.Toast("Completion confirmed")))
+            coVerify(exactly = 1) { repo.detail("g1") }
+        }
+
+    @Test
+    fun owner_late_session_reply_does_not_report_or_refresh() =
+        runTest {
+            var identity: Pair<String, String?>? = "viewer-1" to "owner-session"
+            val vm = ownerConfirmationVm { identity }
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            val reply = CompletableDeferred<NetworkResult<CompleteGigResponse>>()
+            coEvery { repo.completeGigAsPoster("g1", "owner-review") } coAnswers { reply.await() }
+            vm.confirmCompletion()
+            identity = "viewer-1" to "replacement-session"
+            reply.complete(NetworkResult.Success(CompleteGigResponse()))
+            assertTrue(events.isEmpty())
+            coVerify(exactly = 1) { repo.detail("g1") }
+        }
+
+    @Test
+    fun owner_duplicate_pending_tap_sends_one_confirmation() =
+        runTest {
+            val vm = ownerConfirmationVm()
+            val reply = CompletableDeferred<NetworkResult<CompleteGigResponse>>()
+            coEvery { repo.completeGigAsPoster("g1", "owner-review") } coAnswers { reply.await() }
+            vm.confirmCompletion()
+            vm.confirmCompletion()
+            reply.complete(NetworkResult.Success(CompleteGigResponse()))
+            coVerify(exactly = 1) { repo.completeGigAsPoster("g1", "owner-review") }
+        }
+
+    @Test
+    fun owner_departure_retires_pending_confirmation() =
+        runTest {
+            val vm = ownerConfirmationVm()
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            val reply = CompletableDeferred<NetworkResult<CompleteGigResponse>>()
+            coEvery { repo.completeGigAsPoster("g1", "owner-review") } coAnswers { reply.await() }
+            vm.confirmCompletion()
+            vm.leaveRealtime()
+            reply.complete(NetworkResult.Success(CompleteGigResponse()))
+            assertTrue(events.isEmpty())
+            coVerify(exactly = 1) { repo.detail("g1") }
+        }
+
+    @Test
+    fun owner_current_receipt_reports_success_and_refreshes() =
+        runTest {
+            val vm = ownerConfirmationVm()
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            val receipt = MyGigDto(id = "g1", title = "Existing task", status = "completed", ownerConfirmedAt = "2026-09-15T12:00:00Z")
+            coEvery { repo.completeGigAsPoster("g1", "owner-review") } returns NetworkResult.Success(CompleteGigResponse(gig = receipt))
+            vm.confirmCompletion()
+            assertEquals(listOf(GigLifecycleEvent.Toast("Completion confirmed")), events)
+            coVerify(exactly = 2) { repo.detail("g1") }
         }
 
     private fun deliveryVm(

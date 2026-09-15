@@ -94,14 +94,19 @@ The loaded owner-review repair now rejects stale completion/price/proof before
 capture using the existing API, helper, DTOs and seven callers. Local backend6053,
 web107, Android82 and iOS78 checks pass; actual Chrome/HTTP/SQL proves stale capture0
 and explicit refreshed review capture1. See [review evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-confirmation-binds-the-loaded-review).
-The combined checkpoint still requires its own CI. Existing MyTasks admission and
+The combined loaded-review/MyTasks checkpoint48df046f6 passes all15 applicable
+jobs/one Seeder skip in CI34957710591. Existing MyTasks admission and
 receipt feedback now pass45 Android/43 iOS checks, native static/build gates and
 two actual Chrome/HTTP/SQL scenarios. The literal list query exposed missing fields
 from original migration149; the forward restoration preserves existing boost values
 and passes65 SQL contracts, pgTAP and migration policy. See [MyTasks evidence](VERIFICATION_FIRST_2026-09-13.md#existing-mytasks-waits-for-owner-confirmation).
-Native owner/MyTasks request lifetime, post-read proof races, installed full owner
-lifecycle and real provider/release acceptance remain open. No row is closed by
-these checks.
+Existing native detail owner callbacks now pass42 Android/50 iOS checks with static/
+build gates; incomplete receipts, duplicate pending commands and retired callbacks
+are covered using existing scope mechanisms. See [native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-owner-confirmation-retires-stale-callbacks).
+Native MyTasks request lifetime, installed full owner lifecycle and real provider/
+release acceptance remain open. Four post-server-read capture races are reproduced
+with actual HTTP/SQL and synthetic Stripe, and remain unresolved; see [capture baseline](VERIFICATION_FIRST_2026-09-13.md#existing-owner-capture-interleaving-baseline).
+No inventory row is closed by these bounded checks.
 
 
 ## 1. Home identity and current access — active work
