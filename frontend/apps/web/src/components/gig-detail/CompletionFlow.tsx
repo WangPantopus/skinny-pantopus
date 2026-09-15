@@ -13,7 +13,7 @@ import Image from 'next/image';
 import * as api from '@pantopus/api';
 import FileUpload from '@/components/FileUpload';
 import StripeConnectOnboarding from '@/components/payments/StripeConnectOnboarding';
-import TipModal, { tipId, tipRecoverySlot } from '@/components/payments/TipModal';
+import TipModal, { tipId, tipRecoverySlot, verifyTipPreview } from '@/components/payments/TipModal';
 import AssignedGigAuthorization from '@/components/payments/AssignedGigAuthorization';
 import { toast } from '@/components/ui/toast-store';
 import GigStopDialog from './GigStopDialog';
@@ -133,12 +133,22 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       if (url.href !== window.location.href) router.replace(url.pathname + url.search + url.hash);
       setTipRecoveryRequestId(returned); setShowTipModal(true);
     } else if (typeof indexedDB !== 'undefined') {
-      void tipRecoverySlot(origin, currentUserId, gigId).load().then(original => {
-        if (current() && original) { setTipRecoveryRequestId(original.value.requestId); setShowTipModal(true); }
+      void tipRecoverySlot(origin, currentUserId, gigId).load().then(async original => {
+        if (!current()) return;
+        if (original) { setTipRecoveryRequestId(original.value.requestId); setShowTipModal(true); return; }
+        if (!isOwner || !isCompleted) return;
+        // A fresh browser has no retained UUID for an older payment. Discover
+        // only an existing local payment; the picker still verifies and retains
+        // its exact identity before any explicit check or cancellation.
+        const preview = await api.payments.getTipPreview(gigId);
+        if (!current()) return;
+        verifyTipPreview(preview, gigId, currentUserId, null);
+        const existingId = preview.activeRequestId || preview.legacyPaymentId;
+        if (existingId) { setTipRecoveryRequestId(existingId); setShowTipModal(true); }
       }).catch(() => { /* Explicit tip entry still shows retained-storage errors before sending. */ });
     }
     return () => { active = false; unsubscribe(); };
-  }, [currentUserId, gigId, router]);
+  }, [currentUserId, gigId, router, isOwner, isCompleted]);
 
   const handleReopenBidding = () => setStopAction('reopen_bidding');
 

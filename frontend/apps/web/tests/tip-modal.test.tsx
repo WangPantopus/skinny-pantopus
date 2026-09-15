@@ -301,6 +301,31 @@ describe('existing completion page tip recovery entry', () => {
     await screen.findByRole('button', { name: 'Check tip status' });
     expect(read).toHaveBeenCalledWith(requestId); expect(create).not.toHaveBeenCalled();
   });
+  test('fresh completed-task entry discovers an older tip after current worker and confirmation disappear', async () => {
+    getPreview.mockResolvedValue({ ...preview, eligible: false, unavailableReason: 'LEGACY_REVIEW', legacyPaymentId: requestId,
+      terms: { ...preview.terms, payeeId: null, ownerConfirmedAt: null } });
+    read.mockResolvedValue(legacyPending);
+    render(<CompletionFlow {...completionProps} gig={{ accepted_by: null, owner_confirmed_at: null }} />);
+    const button = await screen.findByRole('button', { name: 'Check tip status' });
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(mockSaved.get(key)?.value).toEqual(legacyOriginal); expect(create).not.toHaveBeenCalled();
+    expect(crypto.randomUUID).not.toHaveBeenCalled(); expect(screen.getByRole('button', { name: '$10' })).toBeDisabled();
+  });
+  test('fresh entry with no pending payment does not open a new tip automatically', async () => {
+    render(<CompletionFlow {...completionProps} />);
+    await waitFor(() => expect(getPreview).toHaveBeenCalledTimes(1));
+    expect(read).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled(); expect(mockSaved.size).toBe(0);
+    expect(screen.queryByText(/Leave a tip/)).not.toBeInTheDocument();
+  });
+  test.each(['cookie', 'origin'])('late cold-tip discovery cannot open after %s changes', async change => {
+    const held = deferred<GigTipPreview>(); getPreview.mockReturnValue(held.promise);
+    render(<CompletionFlow {...completionProps} />);
+    await waitFor(() => expect(getPreview).toHaveBeenCalledTimes(1));
+    act(() => { if (change === 'cookie') localStorage.setItem(AUTH_SESSION_CHANGE_KEY, 'changed'); else origin = 'https://other.test'; });
+    await act(async () => held.resolve({ ...preview, eligible: false, unavailableReason: 'LEGACY_REVIEW', legacyPaymentId: requestId }));
+    expect(read).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled(); expect(mockSaved.size).toBe(0);
+    expect(screen.queryByText(/Leave a tip/)).not.toBeInTheDocument();
+  });
   test('provider return strips transient provider query values and uses only the original request identity', async () => {
     window.history.replaceState({}, '', `/app/gigs/${gig}?tip_request=${requestId}&payment_intent_client_secret=synthetic&payment_intent=pi_tip&redirect_status=succeeded`);
     render(<CompletionFlow {...completionProps} />);

@@ -2571,3 +2571,44 @@ sender and scheduled wallet-delivery worker provide reusable transport/retry cod
 the wallet settlement delivery table itself requires a settlement and must not be
 repurposed for tip capture. No delivery implementation changed in this checkpoint.
 PR34, paid launch, R05/R06 and the app remain incomplete.
+
+
+## Existing tip entry without a saved client request
+
+September14 continuation after `14b8c3ae5`: the existing native detail gates
+required the current worker and owner confirmation, hiding historical payment
+recovery on a fresh install. Web could similarly lack both a retained UUID and
+current eligibility. The existing local preview already identifies the original
+payment; no replacement endpoint, payment, screen or database object is needed.
+
+The three detail implementations now inspect that preview for the completed task's
+current personal payer. Native restores its existing tip dock only when a pending
+payment exists; web opens its existing recovery picker. Existing validators and
+identity/session checks bind discovery to the current account and API origin.
+An empty preview cannot enable a new charge when current terms are missing. The
+picker retains the original amount and UUID and uses the existing explicit check/
+cancel commands. New-tip eligibility, screen layouts and styling are preserved.
+Seven existing source/test files change; no new file or migration is added.
+
+Verification on the seven hashed source files:
+
+- Web87 focused assertions pass (tip57 and stop-entry30); TypeScript passes.
+  Scoped lint has zero errors/seven existing warnings. Cases include an empty
+  preview, recovery without worker/confirmation and retired session/origin replies.
+- Android76 selected unit checks pass: recovery30, tip view-model7, protected-store6,
+  saved-task28 and stop-entry5. Format/detekt pass. Recovery entry disappears when
+  the session changes during discovery; existing API outcomes are synthetic.
+- iOS26 focused tip tests pass with zero failures/skips; format/strict lint pass.
+  Missing current terms can recover the historical amount/UUID through the old
+  picker and explicit check; no existing payment leaves the entry hidden.
+  R1 compiled but installation failed because the Mac ran out of disk space;
+  zero tests ran. After removing2.18GiB of task-owned disposable build caches,
+  R2 executes the same compiled app with test-without-building and passes26.
+  Sources, accepted products/APKs, device data and test evidence are retained.
+
+Private `existing-tip-provider-proof-r1/cold-tip-source-binding-r1.json` binds
+all seven hashes and run results. `cold-tip-*` logs/commands/results are retained
+privately and mirrored in the existing audit directory. This checkpoint is not a
+full installed UI or actual-provider journey. No Android emulator was started;
+the owned iOS simulator is stopped. No hosted/provider change ran. Current-head
+CI, durable tip delivery and the remaining paid/all-app acceptance stay open.

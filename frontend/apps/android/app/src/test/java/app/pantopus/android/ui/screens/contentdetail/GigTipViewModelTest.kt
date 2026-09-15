@@ -97,18 +97,21 @@ class GigTipViewModelTest {
             ownerConfirmedAt = "2026-06-01T00:00:00Z",
         )
 
-    private fun vmWithLoadedTip(): GigDetailViewModel {
-        coEvery { repo.detail("g1") } returns NetworkResult.Success(GigDetailResponse(gig = completedConfirmedGig()))
-        coEvery { repo.bids("g1") } returns NetworkResult.Success(GigBidsResponse(bids = emptyList()))
-        coEvery { repo.questions("g1") } returns NetworkResult.Success(GigQuestionsResponse(questions = emptyList()))
+    private fun vmWithLoadedTip(
+        gig: GigDto = completedConfirmedGig(),
+        identities: app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource = gigIdentityFixture(),
+    ): GigDetailViewModel {
+        coEvery { repo.detail(gig.id) } returns NetworkResult.Success(GigDetailResponse(gig = gig))
+        coEvery { repo.bids(gig.id) } returns NetworkResult.Success(GigBidsResponse(bids = emptyList()))
+        coEvery { repo.questions(gig.id) } returns NetworkResult.Success(GigQuestionsResponse(questions = emptyList()))
         coEvery { reviewsRepo.myPending() } returns NetworkResult.Success(MyPendingReviewsResponse(pending = emptyList()))
         // Phase 5b — the owner of an assigned+ gig fetches the payment card.
-        coEvery { repo.gigPayment("g1") } returns NetworkResult.Success(GigPaymentResponse())
-        coEvery { repo.noShowCheck("g1") } returns
+        coEvery { repo.gigPayment(gig.id) } returns NetworkResult.Success(GigPaymentResponse())
+        coEvery { repo.noShowCheck(gig.id) } returns
             NetworkResult.Success(
                 app.pantopus.android.data.api.models.gigs.NoShowCheckResponse(canReport = false),
             )
-        coEvery { repo.changeOrders("g1") } returns
+        coEvery { repo.changeOrders(gig.id) } returns
             NetworkResult.Success(
                 app.pantopus.android.data.api.models.gigs.GigChangeOrdersResponse(),
             )
@@ -125,8 +128,8 @@ class GigTipViewModelTest {
             socket,
             activeNotifier,
             gigsV2Repo,
-            SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
-            checkoutIdentities = gigIdentityFixture(),
+            SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to gig.id)),
+            checkoutIdentities = identities,
             refundFactory = mockk(relaxed = true),
             authorizationFactory = mockk { every { create(any(), any()) } returns authorization },
             stopFactory = mockk(relaxed = true),
@@ -161,6 +164,63 @@ class GigTipViewModelTest {
             assertTrue(vm.canTip())
             val content = (vm.state.value as ContentDetailUiState.Loaded).content
             assertEquals("Send a tip", content.dock.primary.label)
+        }
+
+    @Test fun coldHistoricalTipEntryRequiresCurrentScopedExistingPayment() =
+        runTest {
+            val actor = "22222222-2222-4222-8222-222222222222"
+            val gigId = "11111111-1111-4111-8111-111111111111"
+            val requestId = "44444444-4444-4444-8444-444444444444"
+            val task = completedConfirmedGig().copy(id = gigId, userId = actor, acceptedBy = null, ownerConfirmedAt = null)
+            every { authRepo.state } returns
+                MutableStateFlow<AuthRepository.State>(
+                    AuthRepository.State.SignedIn(
+                        UserDto(id = actor, email = "cold@example.invalid", displayName = "Poster", avatarUrl = null),
+                    ),
+                )
+            val preview =
+                app.pantopus.android.data.api.models.payments.TipPreview(
+                    actor, "a".repeat(64),
+                    app.pantopus.android.data.api.models.payments.TipTerms(gigId, actor, null, null), false, "LEGACY_REVIEW",
+                    null, requestId, 50, 99_999_999, 3,
+                )
+            coEvery { paymentsRepo.tipPreview(gigId) } returns NetworkResult.Success(preview)
+            val vm = vmWithLoadedTip(task, gigIdentityFixture { actor to "session1" })
+            vm.load()
+            assertTrue(vm.canTip())
+            assertEquals("Send a tip", (vm.state.value as ContentDetailUiState.Loaded).content.dock.primary.label)
+            coVerify(exactly = 0) { paymentsRepo.tip(any()) }
+            coEvery { paymentsRepo.tipPreview(gigId) } returns NetworkResult.Success(preview.copy(legacyPaymentId = null))
+            vm.load()
+            assertFalse(vm.canTip())
+        }
+
+    @Test fun lateHistoricalTipPreviewCannotExposeAnEntryAfterSessionChanges() =
+        runTest {
+            val actor = "22222222-2222-4222-8222-222222222222"
+            val gigId = "11111111-1111-4111-8111-111111111111"
+            val task = completedConfirmedGig().copy(id = gigId, userId = actor, acceptedBy = null, ownerConfirmedAt = null)
+            every { authRepo.state } returns
+                MutableStateFlow<AuthRepository.State>(
+                    AuthRepository.State.SignedIn(
+                        UserDto(id = actor, email = "cold@example.invalid", displayName = "Poster", avatarUrl = null),
+                    ),
+                )
+            var session = "session1"
+            coEvery { paymentsRepo.tipPreview(gigId) } answers {
+                session = "session2"
+                NetworkResult.Success(
+                    app.pantopus.android.data.api.models.payments.TipPreview(
+                        actor, "a".repeat(64),
+                        app.pantopus.android.data.api.models.payments.TipTerms(gigId, actor, null, null), false, "LEGACY_REVIEW",
+                        null, "44444444-4444-4444-8444-444444444444", 50, 99_999_999, 3,
+                    ),
+                )
+            }
+            val vm = vmWithLoadedTip(task, gigIdentityFixture { actor to session })
+            vm.load()
+            assertFalse(vm.canTip())
+            coVerify(exactly = 0) { paymentsRepo.tip(any()) }
         }
 
     @Test fun assignedPayerAndBusinessManagerCanOpenExactServerPayment() =

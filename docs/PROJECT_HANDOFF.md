@@ -31,7 +31,9 @@ checkpoint is `e700862f1`, following coordinated Android `c6b1f830e`, iOS `b98cc
 web `1b9ff598e` and backend `410ae2767`. It incorporates actual PR43/44/45 master.
 The preceding coordinated head `8203a3ea7db551cce24041815aa7cd4302a9502d` passes
 all15 applicable checks/one Seeder skip in [CI34907347192](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34907347192).
-The new legacy checkpoint requires its own current-head CI and full schema replay.
+Current `14b8c3ae5` CI34918875520 has passed backend, web, safeguards and complete
+schema replay; native jobs are still running. The following cold-entry checkpoint
+requires its own current-head CI.
 Do not merge/deploy PR34 yet.
 
 **Current original-tip behavior:** the existing Payment.id and financial fields
@@ -101,10 +103,13 @@ recorded warning limits. Actual service/local SQL passes19 scenarios with synthe
 provider/notice transport,10 separate-connection cases pass, all65 SQL contracts
 pass and function lint has359 functions/107 bindings, zero errors/eight existing
 warnings. See the [legacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-legacy-tip-recovery-without-replacement-charges).
-Full installed/provider acceptance remains open. Concrete next entry check: a fresh
-client without a retained original can still lose the detail tip entry after the
-current worker/confirmation disappears; reuse the existing payment/detail screens
-to recover the historical payment without loosening new-charge eligibility.
+Full installed/provider acceptance remains open. The next locally verified
+checkpoint repairs cold historical discovery in the existing detail screens. A
+fresh personal-payer session can reach an existing payment after the current
+worker/confirmation disappears; an empty preview does not admit a new charge.
+Web87 assertions, Android76 unit checks and iOS26 tests pass, with source-bound
+static checks. Seven existing source/test files change; no migration or layout
+change. See the [cold-entry evidence](VERIFICATION_FIRST_2026-09-13.md#existing-tip-entry-without-a-saved-client-request).
 
 **Other paid work preserved:** the existing cancellation Other explanation is
 private in the original GigStopRequest and encrypted web recovery. Public receipts
@@ -115,10 +120,10 @@ versions moved byte-for-byte to14020100–14020900 after current Home master. No
 master migration was rewritten; correct `MIGRATION_BASE_SHA` policy and prior
 complete-schema CI validate ordering. Earlier failed attempts remain recorded.
 
-**Next:** complete cold historical-tip discovery in existing screens, then durable
-tip delivery, actual installed all-platform/provider journeys and final current-head
-CI. The legacy command/receipt checkpoint above is locally verified; remaining entry
-and acceptance limits are not a claim that the feature is missing. Recheck existing implementations before each change.
+**Next:** repair durable tip delivery using existing payment/notification and
+worker implementations, then actual installed all-platform/provider journeys and
+final current-head CI. Legacy commands and cold discovery are locally verified;
+remaining acceptance limits are not a claim that the feature is missing. Recheck existing implementations before each change.
 P01–P03/P07–P09, R05/R06 and the wider80-row inventory remain open within their
 stated limits. After the paid scope, continue the remaining existing-feature
 inventory; preserve accepted subjourneys and screen designs.

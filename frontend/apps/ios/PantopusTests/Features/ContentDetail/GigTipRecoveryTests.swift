@@ -263,6 +263,43 @@ extension GigTipTests {
         XCTAssertFalse(try decoded(wrong, as: TipOriginal.self).matches(gig: gig, actor: actor))
     }
 
+    func testFreshInstallFindsHistoricalTipAfterCurrentWorkerAndConfirmationDisappear() async throws {
+        var unavailable = preview
+        unavailable["eligible"] = false
+        unavailable["unavailableReason"] = "LEGACY_REVIEW"
+        unavailable["legacyPaymentId"] = requestId
+        unavailable["terms"] = ["gigId": gig, "payerId": actor, "payeeId": NSNull(), "ownerConfirmedAt": NSNull()]
+        let vm = try make(
+            posts: [.status(202, body: json(legacyPending))],
+            reads: [.status(200, body: json(legacyPending))],
+            gigFields: ["accepted_by": NSNull(), "owner_confirmed_at": NSNull()],
+            previews: [.status(200, body: json(unavailable)), .status(200, body: json(unavailable))]
+        )
+        await vm.load()
+        XCTAssertTrue(vm.canTip)
+        XCTAssertFalse(vm.mayChooseTip)
+        XCTAssertTrue(tipPosts.isEmpty)
+        guard case let .loaded(content) = vm.state else { return XCTFail("Existing detail did not load") }
+        XCTAssertEqual(content.dock.primary.label, "Send a tip")
+        await vm.prepareTip()
+        XCTAssertTrue(vm.hasTipOriginal)
+        XCTAssertEqual(vm.tipOriginalAmount, 1000)
+        await vm.sendTip(amountCents: 1000)
+        XCTAssertEqual(try bodies().first?["mode"] as? String, "check")
+        XCTAssertEqual(try bodies().first?["requestId"] as? String, requestId)
+    }
+
+    func testFreshInstallDoesNotInventTipEntryWithoutPendingHistoricalPayment() async throws {
+        var unavailable = preview
+        unavailable["eligible"] = false
+        unavailable["unavailableReason"] = "NOT_CONFIRMED"
+        unavailable["terms"] = ["gigId": gig, "payerId": actor, "payeeId": NSNull(), "ownerConfirmedAt": NSNull()]
+        let vm = try make(previewFields: unavailable, gigFields: ["accepted_by": NSNull(), "owner_confirmed_at": NSNull()])
+        await vm.load()
+        XCTAssertFalse(vm.canTip)
+        XCTAssertTrue(tipPosts.isEmpty)
+    }
+
     func testRealKeychainRetainsOnlyOriginalAcrossStoreInstances() throws {
         let service = "app.pantopus.ios.tip-verification.\(UUID().uuidString)"
         let first = KeychainStore(service: service)

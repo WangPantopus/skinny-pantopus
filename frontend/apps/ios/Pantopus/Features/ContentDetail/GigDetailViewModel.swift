@@ -358,6 +358,7 @@ public final class GigDetailViewModel {
             viewerIsWorker = currentUserId != nil && detail.gig.acceptedBy == currentUserId
             canMarkDelivered = Self.viewerCanMarkDelivered(gig: detail.gig, currentUserId: currentUserId)
             canTip = Self.viewerCanTip(gig: detail.gig, viewerIsOwner: viewerIsOwner) || (tipIsCurrent && (try? readStoredTip()) != nil)
+            if !canTip { canTip = await hasHistoricalTipEntry(gig: detail.gig) }
             canInstantAccept = Self.viewerCanInstantAccept(
                 gig: detail.gig,
                 viewerIsOwner: viewerIsOwner,
@@ -696,6 +697,15 @@ public final class GigDetailViewModel {
         guard let worker = gig.acceptedBy, !worker.isEmpty else { return false }
         guard (gig.status ?? "").lowercased() == "completed" else { return false }
         return (gig.ownerConfirmedAt ?? "").isEmpty == false
+    }
+
+    /// Current terms gate a new tip, but cannot hide an already-existing payment
+    /// from its original payer on a fresh install. This reads local eligibility only.
+    private func hasHistoricalTipEntry(gig: GigDTO) async -> Bool {
+        guard tipIsCurrent, currentUserId == gig.userId, gig.status?.lowercased() == "completed" else { return false }
+        guard let preview = try? await readTipPreview(), tipIsCurrent,
+              rawGig?.userId == currentUserId, rawGig?.status?.lowercased() == "completed" else { return false }
+        return preview.activeRequestId != nil || preview.legacyPaymentId != nil
     }
 
     /// The instant-accept gate: `engagement_mode == "instant_accept"`,

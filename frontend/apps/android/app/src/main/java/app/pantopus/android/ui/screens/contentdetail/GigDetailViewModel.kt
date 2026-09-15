@@ -22,6 +22,7 @@ import app.pantopus.android.data.api.models.gigs.PlaceBidBody
 import app.pantopus.android.data.api.models.gigs.ViewerBidStatus
 import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.data.api.models.offers.UpdateBidBody
+import app.pantopus.android.data.api.models.payments.TipValidation
 import app.pantopus.android.data.api.models.reviews.CreateReviewBody
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -825,12 +826,13 @@ class GigDetailViewModel
                         // Bidder side — resolve before projecting so the
                         // dock renders "Update bid" on the first frame.
                         loadViewerBid(result.data.gig)
+                        val historicalTip = hasHistoricalTipEntry(result.data.gig)
                         if (!bidCheckout.isCurrentReadScope()) {
                             _state.value = ContentDetailUiState.Error("Your account changed. Reopen this task to continue.")
                             refetchInFlight = false
                             return@launch
                         }
-                        applyLoaded(result.data.gig, bids)
+                        applyLoaded(result.data.gig, bids, historicalTip)
                         loadQuestions()
                     }
                     is NetworkResult.Failure -> {
@@ -919,6 +921,7 @@ class GigDetailViewModel
         private fun applyLoaded(
             gig: GigDto,
             bids: List<GigBidDto>,
+            historicalTip: Boolean = false,
         ) {
             val uid = currentUserId()
             rawGig = gig
@@ -927,7 +930,7 @@ class GigDetailViewModel
             viewerIsOwner = uid != null && uid == gig.userId
             viewerIsWorker = uid != null && uid == gig.acceptedBy
             canMarkDelivered = viewerCanMarkDelivered(gig, uid)
-            canTip = viewerCanTip(gig, uid)
+            canTip = viewerCanTip(gig, uid) || historicalTip
             canInstantAccept = viewerCanInstantAccept(gig, uid)
             _bids.value = bids
             if (viewerIsOwner) bidCheckout.restore(gigId, bids)
@@ -1992,6 +1995,19 @@ class GigDetailViewModel
         }
 
         // MARK: - Tip (Block 3D)
+
+        /** Existing local payment discovery restores the old picker, without admitting a new charge. */
+        private suspend fun hasHistoricalTipEntry(gig: GigDto): Boolean {
+            val actor = currentUserId() ?: return false
+            if (viewerCanTip(gig, actor) || gig.userId != actor || gig.status?.lowercase() != "completed") return false
+            val marker = checkoutIdentities.scopeMarker()
+            val identity = checkoutIdentities.paymentIdentity() ?: return false
+            if (identity.userId != actor || checkoutIdentities.scopeMarker() != marker) return false
+            val preview = (paymentsRepo.tipPreview(gig.id) as? NetworkResult.Success)?.data ?: return false
+            if (checkoutIdentities.paymentIdentity() != identity || checkoutIdentities.scopeMarker() != marker) return false
+            return TipValidation.preview(preview, gig.id, actor, null) &&
+                (preview.activeRequestId != null || preview.legacyPaymentId != null)
+        }
 
         /** Each screen opening owns its recovery callbacks; storage survives navigation. */
         fun createTipRecovery(scope: kotlinx.coroutines.CoroutineScope) =

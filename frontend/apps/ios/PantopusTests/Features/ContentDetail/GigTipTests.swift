@@ -125,9 +125,11 @@ final class GigTipTests: XCTestCase {
         store: any SecureStore = InMemoryStore(),
         presenter: StubTipPresenter = StubTipPresenter(),
         identity: (() -> GigStopViewModel.Identity?)? = nil,
-        previewFields: [String: Any]? = nil
+        previewFields: [String: Any]? = nil,
+        gigFields: [String: Any]? = nil,
+        previews: [SequencedURLProtocol.Response]? = nil
     ) throws -> GigDetailViewModel {
-        let envelope: [String: Any] = [
+        var envelope: [String: Any] = [
             "gig": [
                 "id": gig,
                 "title": "Patio cleanup",
@@ -137,13 +139,17 @@ final class GigTipTests: XCTestCase {
                 "owner_confirmed_at": "2026-06-01T00:00:00+00:00"
             ]
         ]
+        if let gigFields, var value = envelope["gig"] as? [String: Any] {
+            value.merge(gigFields) { _, next in next }
+            envelope["gig"] = value
+        }
         let routes: [String: [SequencedURLProtocol.Response]] = try [
             "/api/gigs/\(gig)": [.status(200, body: json(envelope))],
             "/api/gigs/\(gig)/bids": [.status(200, body: "{\"bids\":[]}")],
             "/api/gigs/\(gig)/questions": [.status(200, body: "{\"questions\":[]}")],
             "/api/gigs/\(gig)/payment": [.status(200, body: "{\"payment\":null}")],
             "/api/reviews/my-pending": [.status(200, body: "{\"pending\":[]}")],
-            "/api/payments/tip-preview": [.status(200, body: json(previewFields ?? preview))],
+            "/api/payments/tip-preview": previews ?? [.status(200, body: json(previewFields ?? preview))],
             statusPath: reads, "/api/payments/tip": posts
         ]
         let api = APIClient(environment: .current, session: SequencedURLProtocol.makeSession(routeResponses: routes), retryPolicy: .none)
