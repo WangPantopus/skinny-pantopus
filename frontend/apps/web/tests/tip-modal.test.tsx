@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { TextEncoder as NodeTextEncoder } from 'node:util';
 import { AUTH_SESSION_CHANGE_KEY, payments, gigs, upload } from '@pantopus/api';
 import type { GigTipPreview, GigTipRequest, GigTipProgress, GigTipReceipt } from '@pantopus/api';
+import { toast } from '../src/components/ui/toast-store';
 import TipModal, { verifyTipProgress } from '../src/components/payments/TipModal';
 import CompletionFlow, { type CompletionFlowHandle } from '../src/components/gig-detail/CompletionFlow';
 const router = { push: jest.fn(), replace: jest.fn() };
@@ -43,7 +44,7 @@ let origin = 'https://app.test';
 const listeners = new Set<() => void>();
 jest.mock('@pantopus/api', () => ({
   payments: { createTip: jest.fn(), getTipPreview: jest.fn(), getTipRequest: jest.fn() },
-  gigs: { markGigCompleted: jest.fn(), checkNoShow: jest.fn() },
+  gigs: { markGigCompleted: jest.fn(), confirmGigCompletion: jest.fn(), checkNoShow: jest.fn() },
   upload: { uploadGigCompletionMedia: jest.fn() },
   getAuthToken: () => token, getApiBaseUrl: () => origin, AUTH_SESSION_CHANGE_KEY: 'session-change',
   onTokenChange: (fn: () => void) => { listeners.add(fn); return () => listeners.delete(fn); },
@@ -430,4 +431,54 @@ describe('existing completion page tip recovery entry', () => {
     await act(async () => held.resolve());
     expect(screen.queryByText(/Leave a tip/)).not.toBeInTheDocument(); expect(read).not.toHaveBeenCalled();
   });
+});
+
+
+describe('existing owner confirmation request lifetime', () => {
+  const ownerProps = { gigId: gig, gig: { user_id: actor, accepted_by: worker, price: 12.5 },
+    isOwner: true, isWorker: false, currentUserId: actor, gigStatus: 'completed', paymentLifecycleStatus: 'authorized', onOpenChat: jest.fn() };
+  test.each(['token event', 'silent token', 'session marker', 'origin', 'owner role', 'dismissal', 'unmount'])('late owner success is retired after %s', async change => {
+    const held = deferred<Awaited<ReturnType<typeof gigs.confirmGigCompletion>>>();
+    jest.mocked(gigs.confirmGigCompletion).mockReturnValue(held.promise);
+    const changed = jest.fn(), ref = React.createRef<CompletionFlowHandle>();
+    const page = render(<CompletionFlow {...ownerProps} ref={ref} onStatusChange={changed} />);
+    act(() => ref.current!.confirmCompletion());
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Approve' }));
+    await waitFor(() => expect(gigs.confirmGigCompletion).toHaveBeenCalledTimes(1));
+    if (change === 'token event') act(() => { token = 'replacement'; listeners.forEach(fn => fn()); });
+    if (change === 'silent token') token = 'replacement';
+    if (change === 'session marker') localStorage.setItem(AUTH_SESSION_CHANGE_KEY, 'replacement');
+    if (change === 'origin') origin = 'https://replacement.test';
+    if (change === 'owner role') page.rerender(<CompletionFlow {...ownerProps} ref={ref} isOwner={false} onStatusChange={changed} />);
+    if (change === 'dismissal') fireEvent.click(screen.getByRole('button', { name: 'Go Back' }));
+    if (change === 'unmount') page.unmount();
+    await act(async () => held.resolve({ gig: { id: gig, owner_confirmed_at: preview.terms.ownerConfirmedAt } } as unknown as Awaited<ReturnType<typeof gigs.confirmGigCompletion>>));
+    expect(changed).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '$5' })).not.toBeInTheDocument();
+  });
+  test('a retired owner failure cannot alert the replacement account', async () => {
+    let reject!: (error: Error) => void;
+    jest.mocked(gigs.confirmGigCompletion).mockReturnValue(new Promise((_, fail) => { reject = fail; }));
+    const ref = React.createRef<CompletionFlowHandle>();
+    render(<CompletionFlow {...ownerProps} ref={ref} />);
+    act(() => ref.current!.confirmCompletion()); fireEvent.click(screen.getByRole('button', { name: 'Confirm & Approve' }));
+    act(() => { token = 'replacement'; listeners.forEach(fn => fn()); });
+    await act(async () => reject(new Error('Old request failed')));
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(screen.queryByText('Review Work')).not.toBeInTheDocument();
+  });
+  test('silent session replacement before approval sends no confirmation', () => {
+    const ref = React.createRef<CompletionFlowHandle>(); render(<CompletionFlow {...ownerProps} ref={ref} />);
+    act(() => ref.current!.confirmCompletion()); localStorage.setItem(AUTH_SESSION_CHANGE_KEY, 'replacement');
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Approve' }));
+    expect(gigs.confirmGigCompletion).not.toHaveBeenCalled();
+  });
+  test('current owner success preserves the existing completion and tip flow', async () => {
+    jest.mocked(gigs.confirmGigCompletion).mockResolvedValue({ gig: { id: gig, owner_confirmed_at: preview.terms.ownerConfirmedAt } } as unknown as Awaited<ReturnType<typeof gigs.confirmGigCompletion>>);
+    const changed = jest.fn(), ref = React.createRef<CompletionFlowHandle>(); render(<CompletionFlow {...ownerProps} ref={ref} onStatusChange={changed} />);
+    act(() => ref.current!.confirmCompletion()); fireEvent.click(screen.getByRole('button', { name: 'Confirm & Approve' }));
+    await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('button', { name: '$5' })).toBeInTheDocument();
+  });
+
 });

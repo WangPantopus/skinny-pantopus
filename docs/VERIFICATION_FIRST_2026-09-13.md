@@ -3475,3 +3475,41 @@ passes. Private completion-history-* commands, source/results and prior failures
 preserved under existing-tip-provider-proof-r1. PR34 stays draft. Generic maintenance
 granular permissions/raw RLS, Home-origin admission, create-command recovery, complete
 maintenance UI acceptance and the remaining paid/release scope remain open.
+
+
+## Existing owner review retires late web responses
+
+The existing worker completion path already scoped callbacks to task, actor, token,
+API origin and session marker; the owner path used an unguarded await. Six baseline
+cases reproduced a late confirmation refreshing a retired page/opening its tip UI.
+The existing scope and attempt are now shared with owner confirmation. Opening and
+submission require current ownership/status/session; late success/failure after
+sign-out, silent session/origin change, role loss, dismissal or unmount has no stale
+UI effect. Missing API methods fail truthfully. Current success preserves the tip
+flow. Dismissal retires UI callbacks; it does not cancel server financial work.
+Only the existing CompletionFlow and its existing tip-modal test file change; no
+screen, layout, storage, schema or backend contract is added.
+
+106 focused tests across two suites pass. TypeScript passes; scoped lint has zero
+errors and six existing any warnings. Chrome uses the real component and API client
+with intercepted synthetic responses: sign-out, role loss, leaving, dismissal and
+normal success all pass, with one submitted request each and zero page errors.
+The four retired cases produce no refresh or tip; the current case refreshes once
+and opens the existing tip control. The sign-out case was additionally rerun with
+the real clearAuthToken API. The original review layout was visually inspected.
+No backend/provider journey or installed native owner-confirmation acceptance is
+claimed by these browser cases. Existing accepted native products are preserved.
+
+The first browser harness attempt could not click fixture-only external controls
+behind the modal backdrop; corrected fixture controls simulate those external events
+without changing product controls. Test DTO casts and a test-only require import
+caused initial type/lint failures, now corrected. All attempts remain preserved in
+private owner-confirmation-web-* evidence. The temporary page was removed, the three
+configuration files restored by hash, the served product retained privately and the
+owned port3107 stopped. No native device or backend server was started.
+
+Completion-delivery head1a8a7d549 passes all15 applicable jobs/one Seeder skip in
+[CI34947875754](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34947875754).
+Home-history dd788e03a and this web checkpoint require their combined current-head
+CI. PR34 remains draft. A separate pre-request stale-reviewed-terms concern remains
+to reproduce; this callback repair makes no financial authorization claim about it.

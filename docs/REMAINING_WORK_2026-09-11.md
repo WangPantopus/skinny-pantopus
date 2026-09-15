@@ -81,6 +81,15 @@ was repaired after actual pre-hydration native GET leakage with synthetic data.
 All four forms pass disabled/delayed JavaScript checks. This is a bounded
 subjourney; the authentication change itself closes no additional acceptance row.
 
+The existing owner-confirmation web component now retires late responses after
+account/access/departure changes and preserves the normal confirmation/tip flow.
+106 focused checks, TypeScript, scoped lint and five actual Chrome scenarios pass
+within synthetic-response limits. See [web lifetime evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-review-retires-late-web-responses).
+Completion-delivery CI34947875754 passes all15 applicable jobs/one Seeder skip.
+Home-history and this web checkpoint require their next combined CI. Stale reviewed
+terms, full installed owner confirmation and draft/restart acceptance remain open.
+No additional inventory row is closed.
+
 ## 1. Home identity and current access — active work
 
 - [x] H01 **Implemented and locally verified:** Detail/property-detail current authority and held-result retirement pass real SDK/HTTP/SQL acceptance. See [the bounded repair](home-detail-authority-2026-09-11.md); final-head CI remains G05. H02/H06 are also locally verified; H03/H04 projections are now locally verified; H05 native identity is now locally verified; H07/H08 remain partial.

@@ -105,6 +105,16 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   const [noShowDescription, setNoShowDescription] = useState('');
   const [reportingNoShow, setReportingNoShow] = useState(false);
 
+  // Poster confirm completion
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmSatisfaction, setConfirmSatisfaction] = useState(0);
+  const [confirmNote, setConfirmNote] = useState('');
+  const [submittingConfirm, setSubmittingConfirm] = useState(false);
+
+  // Tip
+  const [showTipModal, setShowTipModal] = useState(false);
+  const [tipRecoveryRequestId, setTipRecoveryRequestId] = useState<string | undefined>();
+
   // Worker completion proof
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [completionNote, setCompletionNote] = useState('');
@@ -121,9 +131,11 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
     completionScope.current = { actor: currentUserId, gigId, token: api.getAuthToken(), origin: api.getApiBaseUrl(), marker: completionSessionMarker() };
     completionAttempt.current = null; completionUploads.current = new WeakMap();
     setShowCompletionModal(false); setCompletionNote(''); setCompletionFiles([]); setSubmittingCompletion(false);
+    setShowConfirmModal(false); setConfirmNote(''); setConfirmSatisfaction(0); setSubmittingConfirm(false); setShowTipModal(false);
     const retire = () => {
       completionScope.current = null; completionAttempt.current = null; completionUploads.current = new WeakMap();
       setShowCompletionModal(false); setCompletionNote(''); setCompletionFiles([]); setSubmittingCompletion(false);
+      setShowConfirmModal(false); setConfirmNote(''); setConfirmSatisfaction(0); setSubmittingConfirm(false); setShowTipModal(false);
     };
     const unsubscribe = api.onTokenChange(retire);
     const changed = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) retire(); };
@@ -132,17 +144,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       completionScope.current = null; completionAttempt.current = null; completionUploads.current = new WeakMap();
       unsubscribe(); window.removeEventListener('storage', changed);
     };
-  }, [gigId, currentUserId, gigStatus, isWorker]);
-
-  // Poster confirm completion
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmSatisfaction, setConfirmSatisfaction] = useState(0);
-  const [confirmNote, setConfirmNote] = useState('');
-  const [submittingConfirm, setSubmittingConfirm] = useState(false);
-
-  // Tip
-  const [showTipModal, setShowTipModal] = useState(false);
-  const [tipRecoveryRequestId, setTipRecoveryRequestId] = useState<string | undefined>();
+  }, [gigId, currentUserId, gigStatus, isWorker, isOwner]);
 
   // Reopen the existing amount/status screen for this actor's retained original.
   // A Stripe return URL only identifies a request; its outcome comes from the API.
@@ -280,12 +282,20 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   };
 
   const handleConfirmCompletion = () => {
+    if (showConfirmModal || completionAttempt.current) return;
+    if (!isOwner || !isCompleted || !completionScopeIsCurrent(completionScope.current)) {
+      toast.error('Reopen the task with your current account before confirming completion.'); return;
+    }
     setShowConfirmModal(true);
     setConfirmSatisfaction(0);
     setConfirmNote('');
   };
 
   const submitConfirmation = async () => {
+    const scope = completionScope.current;
+    if (completionAttempt.current || !isOwner || !isCompleted || !completionScopeIsCurrent(scope)) return;
+    const attempt = {}; completionAttempt.current = attempt;
+    const current = () => completionAttempt.current === attempt && completionScopeIsCurrent(scope);
     setSubmittingConfirm(true);
     try {
       const gigsExt = api.gigs as unknown as GigsCompletionApiExt;
@@ -297,16 +307,19 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
         await gigsExt.confirmGigCompletion(gigId, payload);
       } else if (typeof gigsExt.completeGig === 'function') {
         await gigsExt.completeGig(gigId, payload);
+      } else {
+        throw new Error('Completion confirmation is unavailable. Please reopen the task.');
       }
+      if (!current()) return;
       setShowConfirmModal(false);
       onStatusChange?.();
+      if (!current()) return;
       setTipRecoveryRequestId(undefined);
       setShowTipModal(true);
     } catch (err: unknown) {
-      console.error('Confirm completion failed:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to confirm');
+      if (current()) toast.error(err instanceof Error ? err.message : 'Failed to confirm');
     } finally {
-      setSubmittingConfirm(false);
+      if (current()) { completionAttempt.current = null; setSubmittingConfirm(false); }
     }
   };
 
@@ -674,7 +687,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
 
             <div className="px-6 py-4 flex gap-3 justify-end border-t border-app-border-subtle">
               <button
-                onClick={() => setShowConfirmModal(false)}
+                onClick={() => { completionAttempt.current = null; setSubmittingConfirm(false); setShowConfirmModal(false); }}
                 className="px-4 py-2 text-app-text-strong hover:bg-app-hover rounded-lg font-medium text-sm"
               >
                 Go Back

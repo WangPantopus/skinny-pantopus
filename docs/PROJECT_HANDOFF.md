@@ -28,7 +28,7 @@ remains draft. Its isolated integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
 the canonical PR branch is `codex/staging-paid-gig`. Both branches include completion-delivery checkpoint `1a8a7d549`. Its
 [CI34947875754](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34947875754)
-has passed backend/schema/web gates; native checks are still running. The preceding
+passes all15 applicable jobs/one Seeder skip. The preceding
 private-proof checkpoint `ca097cd85` passes all15 applicable jobs/one Seeder skip in
 [CI34944635449](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34944635449).
 The following local Home-history repair is described below; require its own CI
@@ -308,10 +308,10 @@ exact leases are respected.204 focused checks,65 SQL contracts, privacy gates,
 complete forward replay and function lint (376 functions/113 bindings,0 errors/8
 existing warnings) pass. Actual HTTP/SQL/job/service acceptance passes two lost-reply/
 unknown-delivery scenarios (58 SQL calls/3 synthetic push attempts); concurrency
-passes six observed row-lock waits and two claim/rollback cases. Full backend passes6035 tests/16 skips across339 passing suites. CI34947875754 remains in progress. Live provider delivery remains unverified.
+passes six observed row-lock waits and two claim/rollback cases. Full backend passes6035 tests/16 skips across339 passing suites. CI34947875754 passes all15 applicable jobs/one Seeder skip. Live provider delivery remains unverified.
 See [completion delivery evidence](VERIFICATION_FIRST_2026-09-13.md#existing-completion-notifications-reuse-the-delivery-worker).
 
-**Current Home-history candidate:** actual SQL exposed seven missing columns from
+**Home-history checkpoint `dd788e03a`:** actual SQL exposed seven missing columns from
 existing migration151, despite existing screens/routes. One forward migration
 restores that original HomeMaintenanceLog shape, preserves performed legacy rows
 and already-adopted values, and extends confirmation to commit eligible history
@@ -326,9 +326,19 @@ rollback/retry, ordinary maintenance CRUD, stale cancellation and exact cleanup 
 Six observed Home/Gig lock waits pass. No browser/native source or layout changes.
 See [history evidence](VERIFICATION_FIRST_2026-09-13.md#existing-home-maintenance-history-commits-with-completion).
 
-**Next:** preserve and commit/push the Home-history checkpoint, then require its
-current-head CI. Continue completion draft/restart recovery using existing client
-storage first. Generic maintenance granular authority/raw RLS, Home-origin admission
+**Owner-confirmation web checkpoint:** six reproduced late-response failures are
+repaired in the existing CompletionFlow using its existing account/request scope.
+Sign-out, session/origin changes, owner-role loss, dismissal and departure retire
+callbacks; a current success still opens the existing tip flow. No layout or schema
+change.106 focused checks, TypeScript and scoped lint (0 errors/6 existing warnings)
+pass; five Chrome scenarios pass using the actual component/API client and synthetic
+responses. See [web lifetime evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-review-retires-late-web-responses).
+
+**Next:** push the Home-history and web lifetime checkpoints together and require
+current-head CI. Reproduce whether a review loaded before a completion/assignment
+change can approve the newer work before provider capture; inspect existing terms
+contracts before any repair. Then continue completion draft/restart verification
+using existing storage first. Generic maintenance granular authority/raw RLS, Home-origin admission
 and full maintenance UI acceptance remain separate follow-ups; this bounded history
 checkpoint does not close them. Continue completion/reopen policy flows, hosted
 private-byte adoption/historical CDN reconciliation and other private File purposes.
