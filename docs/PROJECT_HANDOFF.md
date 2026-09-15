@@ -198,12 +198,23 @@ Function lint:364 functions/108 bindings, zero errors/eight existing warnings.
 See [completion effects evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-confirmation-commits-its-records-together).
 In-app storage is durable; push/socket transport and Home service-history capture
 remain best effort after commit, including a lost RPC reply. No eventual-delivery
-claim is made. The current transaction milestone is on the integration branch;
+claim is made. The transaction milestone `506820ead` is pushed on the integration branch;
 canonical CI still covers the preceding owner-date checkpoint.
 
-**Next:** finish current-head CI; verify existing completion proof/upload privacy
-and request recovery, then finish notification transport/Home provenance recovery
-and completion/reopen policy flows. No-show execution still requires atomic concurrent/retry handling and
+**Completion proof reads:** six public-detail denial tests reproduced disclosure
+of completion notes/photos/checklists and owner confirmation feedback. The existing
+serializer now exposes those fields only to the current owner, worker or authorized
+business manager/poster. A reproduced failed permission-override read now fails
+closed in the existing business helper.155 focused backend tests/privacy gates and
+11 actual HTTP/SQL reads pass, with source rows preserved and no provider calls.
+Four existing backend/test files change; no migration or UI change. See
+[proof-read evidence](VERIFICATION_FIRST_2026-09-13.md#existing-public-gig-detail-protects-completion-evidence).
+
+**Next:** finish current-head CI; continue existing completion proof/upload privacy
+and request recovery. The public HTTP repair does not establish private object
+storage or bind submitted URLs to owned files; inspect those existing uploads and
+raw SQL/Gig proxy-authority paths next. Then finish notification transport/Home
+provenance recovery and completion/reopen policy flows. No-show execution still requires atomic concurrent/retry handling and
 verified fee/financial outcomes. The repo's fee rates do not specify who owes and
 receives worker cancellation/no-show fees; one policy clarification is pending.
 Continue independent completion/security verification while that remains pending. Finish current-head CI

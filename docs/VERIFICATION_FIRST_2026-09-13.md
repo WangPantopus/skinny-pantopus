@@ -2923,3 +2923,45 @@ remain best effort after commit. A lost RPC response preserves those notices but
 can leave transport unattempted; this is measured, not labeled eventual delivery.
 Client opening/session binding, proof-file privacy, full installed/provider
 completion and fee/no-show policy remain open. No hosted migration or activation ran.
+
+
+## Existing public gig detail protects completion evidence
+
+September14: six failing route checks reproduced private completion notes, proof
+photo URLs, checklists and owner confirmation feedback in public GET /api/gigs/:id
+responses for anonymous, unrelated, former-worker, bidding, revoked-business and
+failed-authentication callers. The existing SELECT-star path used a serializer
+that passed all five fields through. The existing serializer now defaults those
+fields out; the detail route retains them only for the current accepted worker
+or owner, including current business manage/post permission. Existing public task
+content and participant proof presentation are preserved. No screen/layout changes.
+
+While checking that boundary, a separate reproduction showed that hasPermission
+could treat a failed BusinessPermissionOverride read as an absent denial and use
+a role grant. The existing helper now returns false on that read error. Its usual
+role and override behavior remains intact. This is four existing backend/test
+files; there is no new service, schema or migration.
+
+155 assertions across six existing route/business-permission suites pass, along
+with all privacy gates (including15 audience checks). Eleven actual Express/owned
+SQL reads exercise anonymous/unrelated/invalid authentication, owner/current worker,
+authorized/revoked/explicitly denied business administrator, an unavailable denial
+read, departure and replacement worker. The existing business permission helper
+runs against real SQL. Exact task rows remain unchanged; zero provider or notice
+calls run; owned actors/tasks/team/override and temporary role fixtures are cleaned.
+Authentication and the injected failed override read are synthetic. R1's private
+harness restored its module override before lazy optional-auth loading, so owner
+access failed; R2 fixed that but assumed role defaults existed in the schema-only
+rehearsal DB. R3 explicitly seeds those absent synthetic role defaults, removes them
+afterward, and passes all11 reads. Product source is unchanged between those harness
+attempts. Both initial unit failure sets and private harness attempts are retained.
+
+Evidence is source-bound in private completion-proof-read-* and
+completion-permission-* files under existing-tip-provider-proof-r1 and mirrored to
+the owner recovery archive. This verifies the public HTTP response boundary, not
+all completion-media privacy. Existing upload paths still require proof of owned
+file references and actual private object access; a File.visibility label alone
+is not provider access control. Existing raw Gig SQL policies also use creator/
+beneficiary relationships and need current proxy/business-authority verification.
+Client session/restart recovery, full installed/provider journeys and completion
+push/provenance delivery remain open. No hosted change or native rebuild ran.

@@ -313,9 +313,13 @@ async function topBiddersByGig(gigIds) {
   return byGigId;
 }
 
-function serializeGigForViewer(gig) {
+function serializeGigForViewer(gig, { canViewCompletion = false } = {}) {
   if (!gig) return null;
   const { creator, acceptedBy, ...safe } = gig;
+  if (!canViewCompletion) {
+    for (const key of ['completion_note', 'completion_photos', 'completion_checklist',
+      'owner_confirmation_note', 'owner_satisfaction']) delete safe[key];
+  }
   return {
     ...safe,
     creator: creator
@@ -3678,7 +3682,11 @@ router.get('/:id', async (req, res) => {
     applyLocationPrecision(gig, precision, isOwner);
     gig.locationUnlocked = locationUnlocked;
 
-    res.json({ gig: serializeGigForViewer(gig) });
+    const canViewCompletion = Boolean(currentUserId) && (
+      String(gig.accepted_by) === String(currentUserId)
+      || (await getGigOwnerAccess(gig.user_id, currentUserId, 'gigs.manage')).allowed
+    );
+    res.json({ gig: serializeGigForViewer(gig, { canViewCompletion }) });
   } catch (err) {
     logger.error('Gig fetch error', { error: err.message, gigId: req.params.id });
     res.status(500).json({ error: 'Failed to fetch gig' });

@@ -48,13 +48,16 @@ async function hasPermission(businessUserId, userId, permission) {
   if (roleBase === 'owner') return true;
 
   // Check per-user override first
-  const { data: override } = await supabaseAdmin
+  const { data: override, error: overrideError } = await supabaseAdmin
     .from('BusinessPermissionOverride')
     .select('allowed')
     .eq('business_user_id', businessUserId)
     .eq('user_id', userId)
     .eq('permission', permission)
     .maybeSingle();
+
+  // A failed read cannot establish that an explicit denial is absent.
+  if (overrideError) return false;
 
   if (override && override.allowed !== null && override.allowed !== undefined) {
     return override.allowed;

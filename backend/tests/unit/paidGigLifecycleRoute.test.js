@@ -338,3 +338,43 @@ describe('owner confirmation commits existing effects through one database decis
     expect(notifications.deliverStoredGigNotification).not.toHaveBeenCalled();
   });
 });
+
+
+describe('public gig detail keeps completion evidence within the current work relationship', () => {
+  const proof = { completion_note: 'Private access instructions in proof',
+    completion_photos: ['https://fixture.example.invalid/private-proof.jpg'],
+    completion_checklist: [{ item: 'Private checklist', done: true }],
+    owner_confirmation_note: 'Private owner review', owner_satisfaction: 4 };
+  const read = actor => {
+    if (actor) db.setAuthMocks({ getUser: async () => ({ data: { user: { id: actor } }, error: null }) });
+    const req = request(app).get('/api/gigs/gig');
+    return actor ? req.set('Authorization', 'Bearer synthetic-read') : req;
+  };
+  test.each([null, 'foreign', 'former-worker', 'bidder'])('%s cannot read private completion evidence on the public detail', async actor => {
+    assigned('completed'); Object.assign(getTable('Gig')[0], proof);
+    if (actor === 'bidder') getTable('GigBid').push({ id: 'other-bid', gig_id: 'gig', user_id: actor, status: 'pending' });
+    const result = await read(actor);
+    expect(result.status).toBe(200); expect(result.body.gig.title).toBe('Synthetic gig');
+    for (const key of Object.keys(proof)) expect(result.body.gig).not.toHaveProperty(key);
+    expect(getTable('Gig')[0]).toMatchObject(proof);
+  });
+  test.each(['payer', 'worker'])('%s retains existing completion content', async actor => {
+    assigned('completed'); Object.assign(getTable('Gig')[0], proof);
+    const result = await read(actor); expect(result.status).toBe(200); expect(result.body.gig).toMatchObject(proof);
+  });
+  test.each(['gigs.manage', 'gigs.post', 'revoked'])('business %s uses current existing permission checks', async permission => {
+    assigned('completed'); Object.assign(getTable('Gig')[0], proof); getTable('User')[0].account_type = 'business';
+    require('../../utils/businessPermissions').hasPermission.mockImplementation(async (owner, actor, key) =>
+      owner === 'payer' && actor === 'delegate' && key === permission);
+    const result = await read('delegate'); expect(result.status).toBe(200);
+    if (permission === 'revoked') for (const key of Object.keys(proof)) expect(result.body.gig).not.toHaveProperty(key);
+    else expect(result.body.gig).toMatchObject(proof);
+  });
+  test('failed optional authentication cannot expose proof', async () => {
+    assigned('completed'); Object.assign(getTable('Gig')[0], proof);
+    db.setAuthMocks({ getUser: async () => { throw new Error('Synthetic auth unavailable'); } });
+    const result = await request(app).get('/api/gigs/gig').set('Authorization', 'Bearer unavailable');
+    expect(result.status).toBe(200);
+    for (const key of Object.keys(proof)) expect(result.body.gig).not.toHaveProperty(key);
+  });
+});
