@@ -37,7 +37,7 @@ Current cold-entry `7791bb16f` [CI34920129205](https://github.com/WangPantopus/s
 passes all applicable jobs, including complete schema replay and native checks. The prior `14b8c3ae5` run was superseded/canceled by the new push.
 The durable-notice checkpoint `161aaf529` is now pushed to both branches and
 passes all15 applicable checks/one Seeder skip in [CI34922146452](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34922146452).
-Installed-tip checkpoint `4c8f11114` passes all applicable jobs in [CI34924470956](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34924470956). Owner-date checkpoint `addebe757` passes all15 applicable jobs/one Seeder skip in [CI34926992422](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34926992422). Creator-authority checkpoint `428243241` is now pushed to the canonical branch with [CI34929051683](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34929051683) in progress.
+Installed-tip checkpoint `4c8f11114` passes all applicable jobs in [CI34924470956](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34924470956). Owner-date checkpoint `addebe757` passes all15 applicable jobs/one Seeder skip in [CI34926992422](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34926992422). Creator-authority checkpoint `428243241` passes all15 applicable checks/one Seeder skip in [CI34929051683](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34929051683).
 Do not merge/deploy PR34 yet.
 
 **Current original-tip behavior:** the existing Payment.id and financial fields
@@ -231,9 +231,26 @@ synthetic auth/object provider/notice transport. Three existing source/test file
 change; no schema or client/layout change. See
 [file admission evidence](VERIFICATION_FIRST_2026-09-13.md#existing-completion-submission-verifies-uploaded-files).
 
-**Next:** finish current-head CI; continue existing completion object privacy,
-byte/reference retention and request/session recovery. An owned key and successful
-object-metadata check do not establish private provider access or immutable retention.
+**Proof storage finding:** two tiny synthetic objects under the existing web/native
+proof paths were anonymously readable through the configured CDN, although direct
+S3 reads returned403 and all four S3 public-access-block flags were enabled. Both
+exact created object versions were deleted and their absence verified. No app
+records/user files or provider configuration changed. The existing private Supabase
+bucket could not be verified with local configuration. Private proof storage and
+historical object reconciliation remain release requirements; see [provider evidence](VERIFICATION_FIRST_2026-09-13.md#existing-completion-storage-provider-check).
+
+**Worker completion recovery:** matching retries now return the existing saved
+proof/time without another write, object check or notice attempt. A concurrent
+result must also match the observed assignment/payment/date fields. Two reproduced
+failures are repaired in three existing source/test files; no schema/client/layout
+changes.196 focused tests/privacy gates and eight actual HTTP/SQL/S3-SDK scenarios
+pass, including a lost committed SQL acknowledgement. This does not recover the
+notice missed after that lost acknowledgement. See [retry evidence](VERIFICATION_FIRST_2026-09-13.md#existing-worker-completion-recovers-its-saved-result).
+
+**Next:** finish current-head CI; repair the reproduced missing worker-completion
+notice through existing records, then continue completion object privacy,
+byte/reference retention and client request/session recovery. Matching saved proof
+is a completion receipt, not a fresh claim that its bytes remain privately available.
 Then finish notification transport/Home provenance recovery and completion/reopen
 policy flows. No-show execution still requires atomic concurrent/retry handling and
 verified fee/financial outcomes. The repo's fee rates do not specify who owes and

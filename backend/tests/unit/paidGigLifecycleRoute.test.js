@@ -457,3 +457,105 @@ describe('existing uploaded proof is verified before the completion write', () =
     expect((await submit(base + 'gigs/gig/worker/' + name)).status).toBe(200);
   });
 });
+
+describe('worker completion recovers the saved result', () => {
+  const photo = 'https://pantopus-uploads.s3.us-west-2.amazonaws.com/gigs/gig/worker/proof.jpg';
+  const payload = { note: 'Finished the agreed work', photos: [photo], checklist: [{ item: 'Cleaned', done: true }] };
+  const submit = (body = payload, actor = 'worker') => request(app).post('/api/gigs/gig/mark-completed')
+    .set('x-test-user-id', actor).send(body);
+
+  test('lost success reply recovers the same proof without storage or notification work', async () => {
+    assigned('in_progress');
+    expect((await submit()).status).toBe(200);
+    const saved = structuredClone(getTable('Gig')[0]);
+    const notices = structuredClone(getTable('Notification'));
+    mockS3Head.mockClear().mockRejectedValue(new Error('Provider currently unavailable'));
+    const retry = await submit();
+    expect(retry.status).toBe(200); expect(retry.body.reused).toBe(true);
+    expect(retry.body.gig).toEqual(saved); expect(getTable('Gig')[0]).toEqual(saved);
+    expect(getTable('Notification')).toEqual(notices); expect(mockS3Head).not.toHaveBeenCalled();
+  });
+
+  test('a concurrent identical submission returns the committed row', async () => {
+    assigned('in_progress');
+    const from = db.from.bind(db); let saved;
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = from(table);
+      if (table === 'Gig') {
+        const update = query.update.bind(query);
+        query.update = patch => {
+          saved = { ...getTable('Gig')[0], ...patch, worker_completed_at: '2026-09-14T14:00:00Z' };
+          getTable('Gig')[0] = saved;
+          return update(patch);
+        };
+      }
+      return query;
+    });
+    const retry = await submit();
+    expect(retry.status).toBe(200); expect(retry.body.reused).toBe(true);
+    expect(retry.body.gig).toEqual(saved); expect(getTable('Gig')[0]).toEqual(saved);
+    expect(getTable('Notification')).toHaveLength(0);
+  });
+
+  test.each([
+    { ...payload, note: 'Different work' },
+    { ...payload, photos: [photo.replace('proof.jpg', 'different.jpg')] },
+    { ...payload, checklist: [{ item: 'Cleaned', done: false }] },
+  ])('a retry cannot replace the saved proof: %j', async body => {
+    assigned('in_progress'); expect((await submit()).status).toBe(200);
+    const saved = structuredClone(getTable('Gig')[0]); mockS3Head.mockClear();
+    expect((await submit(body)).status).toBe(409);
+    expect(getTable('Gig')[0]).toEqual(saved); expect(mockS3Head).not.toHaveBeenCalled();
+  });
+
+  test('the existing normalized reference survives expired query text and later owner confirmation', async () => {
+    assigned('in_progress');
+    expect((await submit({ ...payload, photos: [photo + '?original=one#preview'] })).status).toBe(200);
+    getTable('Gig')[0].owner_confirmed_at = '2026-09-14T16:00:00Z';
+    const saved = structuredClone(getTable('Gig')[0]); mockS3Head.mockClear();
+    const retry = await submit({ ...payload, photos: [photo + '?original=two'] });
+    expect(retry.status).toBe(200); expect(retry.body.gig).toEqual(saved);
+    expect(mockS3Head).not.toHaveBeenCalled(); expect(mockCapture).not.toHaveBeenCalled();
+  });
+
+  test.each(['foreign', 'payer'])('another actor cannot recover a worker result: %s', async actor => {
+    assigned('in_progress'); expect((await submit()).status).toBe(200);
+    const saved = structuredClone(getTable('Gig')[0]);
+    expect((await submit(payload, actor)).status).toBe(403); expect(getTable('Gig')[0]).toEqual(saved);
+  });
+
+  test('a former worker cannot recover proof after replacement', async () => {
+    assigned('in_progress'); expect((await submit()).status).toBe(200);
+    getTable('Gig')[0].accepted_by = 'replacement';
+    expect((await submit()).status).toBe(403);
+  });
+
+  test.each([null, 'invalid'])('a missing completion receipt is not success: %s', async timestamp => {
+    assigned('in_progress'); expect((await submit()).status).toBe(200);
+    getTable('Gig')[0].worker_completed_at = timestamp;
+    expect((await submit()).status).toBe(409);
+  });
+
+  test('completion without optional proof also recovers its original time', async () => {
+    assigned('in_progress'); expect((await submit({})).status).toBe(200);
+    const saved = structuredClone(getTable('Gig')[0]);
+    const retry = await submit({}); expect(retry.status).toBe(200); expect(retry.body.gig).toEqual(saved);
+  });
+
+  test.each(['user_id', 'accepted_by', 'payment_id', 'price', 'accepted_at', 'started_at'])('a concurrent result from another %s cannot be reused', async field => {
+    assigned('in_progress'); const from = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = from(table);
+      if (table === 'Gig') {
+        const update = query.update.bind(query);
+        query.update = patch => {
+          getTable('Gig')[0] = { ...getTable('Gig')[0], ...patch,
+            [field]: field === 'price' ? 99 : field.endsWith('_at') ? '2026-09-14T14:00:00Z' : 'replacement' };
+          return update(patch);
+        };
+      }
+      return query;
+    });
+    expect((await submit()).status).toBe(409); expect(getTable('Notification')).toHaveLength(0);
+  });
+});

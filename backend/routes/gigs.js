@@ -1,4 +1,5 @@
 const express = require('express');
+const { isDeepStrictEqual } = require('node:util');
 const router = express.Router();
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -97,6 +98,14 @@ function bindGigAssignmentSnapshot(query, gig) {
     scoped = gig[field] == null ? scoped.is(field, null) : scoped.eq(field, gig[field]);
   }
   return scoped;
+}
+
+function matchesWorkerCompletion(gig, userId, proof) {
+  return gig?.status === 'completed' && String(gig.accepted_by) === String(userId)
+    && typeof gig.worker_completed_at === 'string' && Number.isFinite(Date.parse(gig.worker_completed_at))
+    && (gig.completion_note ?? null) === proof.completion_note
+    && isDeepStrictEqual(gig.completion_photos ?? [], proof.completion_photos)
+    && isDeepStrictEqual(gig.completion_checklist ?? [], proof.completion_checklist);
 }
 
 const IMAGE_EXT_RE = /\.(jpe?g|png|webp|gif)(\?.*)?$/i;
@@ -5456,7 +5465,7 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
 
     const { data: gig, error: gigError } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, status, accepted_by, title, category, price, payment_id, accepted_at, started_at')
+      .select('*')
       .eq('id', gigId)
       .single();
 
@@ -5466,7 +5475,7 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
     if (!isWorker)
       return res.status(403).json({ error: 'Only the assigned worker can mark completion' });
 
-    if (gig.status !== 'in_progress') {
+    if (!['in_progress', 'completed'].includes(gig.status)) {
       return res
         .status(400)
         .json({ error: `Gig must be in_progress to complete (current: ${gig.status})` });
@@ -5476,22 +5485,29 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
     const safePhotos = Array.isArray(photos)
       ? photos.filter((p) => typeof p === 'string').slice(0, 10)
       : [];
-    for (let i = 0; i < safePhotos.length; i++) {
-      safePhotos[i] = await require('../services/s3Service').verifyGigCompletionFile(safePhotos[i], userId, gig.id);
-    }
+    const storage = require('../services/s3Service');
+    for (let i = 0; i < safePhotos.length; i++) safePhotos[i] = storage.normalizeGigCompletionFile(safePhotos[i], userId, gig.id);
     // Validate checklist
     const safeChecklist = Array.isArray(checklist)
       ? checklist.filter((c) => c && typeof c.item === 'string').slice(0, 20)
       : [];
+
+    const proof = { completion_note: note ? String(note).slice(0, 2000) : null,
+      completion_photos: safePhotos, completion_checklist: safeChecklist };
+    if (gig.status === 'completed') {
+      if (matchesWorkerCompletion(gig, userId, proof)) return res.json({ gig, reused: true });
+      return res.status(409).json({ code: 'COMPLETION_CHANGED', error: 'This task already has different completion details. Refresh its details.' });
+    }
+    for (let i = 0; i < safePhotos.length; i++) {
+      safePhotos[i] = await storage.verifyGigCompletionFile(safePhotos[i], userId, gig.id);
+    }
 
     const nowIso = new Date().toISOString();
     const updateData = {
       status: 'completed',
       worker_completed_at: nowIso,
       updated_at: nowIso,
-      completion_note: note ? String(note).slice(0, 2000) : null,
-      completion_photos: safePhotos,
-      completion_checklist: safeChecklist,
+      ...proof,
     };
 
     const completionUpdate = bindGigAssignmentSnapshot(supabaseAdmin
@@ -5509,6 +5525,10 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
     }
 
     if (!updatedGig) {
+      const { data: committed, error: readError } = await bindGigAssignmentSnapshot(supabaseAdmin
+        .from('Gig').select('*').eq('id', gigId).eq('status', 'completed'), gig).maybeSingle();
+      if (readError) return res.status(503).json({ error: 'Completion could not be checked. Please retry.' });
+      if (matchesWorkerCompletion(committed, userId, proof)) return res.json({ gig: committed, reused: true });
       return res.status(409).json({ code: 'COMPLETION_CHANGED', error: 'The task changed before completion was saved. Refresh its details.' });
     }
 

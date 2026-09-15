@@ -69,8 +69,7 @@ async function uploadGigMedia(buffer, originalFilename, userId, gigId, mimeType)
   return uploadToS3(buffer, key, mimeType);
 }
 
-/** Verify an existing completion upload without fetching a caller-supplied URL. */
-async function verifyGigCompletionFile(url, userId, gigId) {
+function gigCompletionKey(url, userId, gigId) {
   const invalid = () => Object.assign(new Error('Choose proof files uploaded by you for this task.'), { statusCode: 400 });
   let key;
   try {
@@ -87,9 +86,23 @@ async function verifyGigCompletionFile(url, userId, gigId) {
   // Keep older basenames usable without permitting another path segment or
   // URL escapes. Ownership comes from the task/uploader path and actual object.
   if ((!webUpload && !nativeUpload) || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(parts.at(-1))) throw invalid();
+  return key;
+}
+
+// A saved completion can be compared during recovery without depending on a
+// new provider read. This only normalizes its owned path; it does not verify bytes.
+function normalizeGigCompletionFile(url, userId, gigId) {
+  return getPublicUrl(gigCompletionKey(url, userId, gigId));
+}
+
+/** Verify an existing completion upload without fetching a caller-supplied URL. */
+async function verifyGigCompletionFile(url, userId, gigId) {
+  const key = gigCompletionKey(url, userId, gigId);
+  const invalid = () => Object.assign(new Error('Choose proof files uploaded by you for this task.'), { statusCode: 400 });
+  const same = (left, right) => String(left).toLowerCase() === String(right).toLowerCase();
 
   let file;
-  if (nativeUpload) {
+  if (key.startsWith('uploads/')) {
     const { data, error } = await require('../config/supabaseAdmin').from('File')
       .select('id, gig_id, file_size, mime_type').eq('user_id', userId).eq('file_path', key)
       .eq('file_type', 'gig_attachment').eq('file_context', 'gig_completion')
@@ -180,7 +193,7 @@ function isAllowedType(mimeType) {
 module.exports = {
   categorizeFile, generateS3Key, getPublicUrl, isAllowedType,
   uploadToS3, uploadProfilePicture, uploadGigMedia,
-  verifyGigCompletionFile,
+  verifyGigCompletionFile, normalizeGigCompletionFile,
   uploadHomeTaskMedia, uploadReviewMedia, uploadListingMedia, uploadGeneral,
   deleteFromS3, getPresignedDownloadUrl, getObjectAsString, getPresignedUploadUrl,
   ALL_ALLOWED_TYPES, ALLOWED_IMAGE_TYPES, ALLOWED_VIDEO_TYPES, ALLOWED_DOC_TYPES, MAX_FILE_SIZES,

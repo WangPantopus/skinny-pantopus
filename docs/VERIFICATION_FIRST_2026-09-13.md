@@ -3066,3 +3066,74 @@ access, immutable byte retention, cross-provider deletion/commit atomicity or
 completion session/restart recovery. Historical stored references are not rewritten.
 The existing document/video proof presentation also needs its own UI verification.
 No hosted storage, schema, provider activation or client layout changed.
+
+
+## Existing completion storage provider check
+
+September14: the actual configured AWS bucket reports all four public-access-block
+flags enabled, no public ACL grant and a nonpublic bucket policy. That does not
+establish CDN privacy. Two tiny synthetic objects were created at random keys
+matching the existing web/native proof paths. Direct anonymous S3 GET returned403;
+anonymous CloudFront GET returned206 with the exact synthetic bytes for both paths.
+The File visibility flag cannot protect those bytes. Both exact created versions
+were deleted and HEAD verified absence. No application records or user files were
+read/written; provider configuration was not changed. This was a bounded real
+storage probe, not a deployment or Stripe/push activation.
+
+The generic File implementation already contains a Supabase private-bucket path;
+Home byte contracts already verify HOME_DOCUMENTS_BUCKET is private. A read-only
+getBucket('private') check returned StorageUnknownError and HOME_DOCUMENTS_BUCKET
+is absent in the owner local configuration. No private bucket availability is
+claimed and no replacement storage infrastructure was created. Authenticated
+private delivery, reference/byte retention and reconciliation of historical public
+objects remain required before PR34 release. Reusing current S3 keys with signed
+URLs alone would leave the demonstrated CDN bypass intact.
+
+Sanitized completion-storage-config-probe-r1, completion-storage-access-probe-r1
+and completion-private-bucket-probe-r1 evidence is retained privately and mirrored.
+Keys, bucket hostnames and credentials are excluded from Git/chat. The probes do
+not establish hosted database/storage policy adoption or other application flows.
+
+## Existing worker completion recovers its saved result
+
+September14: two reproduced route failures reject the same successful completion
+on retry (400) or after a concurrent identical submission (409). The existing Gig
+already stores its completion timestamp, note, photo references and checklist; no
+new command table, client store or migration is needed to recover that receipt.
+
+The existing handler now compares the normalized request with the saved proof and
+requires a valid completion timestamp/current assigned worker. A matching saved
+result returns200/reused without another write, object-provider read, affinity
+interaction or notification attempt. Different proof returns409. A concurrent
+winner must also match the original owner/worker/price/payment/assignment dates
+through the existing conditional query. Later owner confirmation is preserved.
+The existing upload-path parser is reused separately from object verification so
+an unavailable provider cannot prevent reading an already committed result.
+New submissions still require the actual object check. Only three existing backend
+source/test files change; screens, upload endpoints and schema are preserved.
+
+196 assertions across seven focused suites and privacy gates (including15 audience
+checks) pass. Eighteen additional cases cover identical retry/concurrency, changed
+proof, replaced/foreign actors, invalid/missing completion timestamps, optional
+empty proof, query normalization and changed concurrent assignment fields. The
+original two failures are retained in worker-completion-retry-before-r1.log.
+
+Eight actual HTTP/SQL scenarios pass with73 queries and the real S3 SDK against an
+owned synthetic object provider (14 uploads/eight HEADs). A lost database commit
+acknowledgement first returns500; retry returns the exact stored completion with
+zero additional provider checks or writes. Two overlapping SQL updates return the
+same result with one new submission/one reused receipt and one notice attempt.
+Different proof, a replaced worker, later confirmation, empty proof and normalized
+query references preserve the exact stored rows. SQL fixtures and local objects
+are removed and both fixture servers stop. Auth/object-provider/notice transport
+are synthetic; no financial provider call occurs. No installed native/browser
+recovery journey is claimed for this change.
+
+The lost-acknowledgement case also demonstrates a remaining defect: worker notice
+creation is still after the completion commit and can be missed (zero attempts).
+This repair recovers the saved completion only; durable worker notice creation,
+transport/Home provenance, protected object storage, immutable retention and
+client session/restart recovery remain open. Private worker-completion-retry-*
+evidence is source-bound and mirrored. Prior creator-authority428243241 passed all
+15 applicable CI checks/one Seeder skip inCI34929051683; the new source requires
+its own CI. No hosted schema/deployment/provider configuration changed.
