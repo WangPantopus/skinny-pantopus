@@ -26,7 +26,7 @@ matched master. No hosted deployment, migration adoption or provider activation 
 **Remaining open PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
 remains draft. Its isolated integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
-the canonical PR branch is `codex/staging-paid-gig`, currently at installed-tip checkpoint `4c8f11114`.
+the canonical PR branch is `codex/staging-paid-gig`, currently at owner-date checkpoint `addebe757`.
 The integration branch includes installed iOS checkpoint `d6a0194ea` after
 cold-entry checkpoint `7791bb16f`, following legacy recovery
 `e700862f1` and coordinated Android `c6b1f830e`, iOS `b98cc283c`,
@@ -37,7 +37,7 @@ Current cold-entry `7791bb16f` [CI34920129205](https://github.com/WangPantopus/s
 passes all applicable jobs, including complete schema replay and native checks. The prior `14b8c3ae5` run was superseded/canceled by the new push.
 The durable-notice checkpoint `161aaf529` is now pushed to both branches and
 passes all15 applicable checks/one Seeder skip in [CI34922146452](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34922146452).
-Installed-tip checkpoint `4c8f11114` has [CI34924470956](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34924470956) in progress and still needs all current-head checks.
+Installed-tip checkpoint `4c8f11114` passes all applicable jobs in [CI34924470956](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34924470956). Owner-date checkpoint `addebe757` is pushed to the canonical branch, with [CI34926992422](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34926992422) in progress.
 Do not merge/deploy PR34 yet.
 
 **Current original-tip behavior:** the existing Payment.id and financial fields
@@ -185,8 +185,25 @@ including synthetic lost provider replies: captured financial truth is retained,
 changed work is not owner-confirmed, and matching retries do not recapture. No
 migration/screen/table is added. See [owner confirmation evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-confirmation-preserves-reviewed-completion).
 
-**Next:** finish current-head CI and check existing owner-confirmation notification,
-reliability and standby-bid recovery, then completion/reopen policy flows. No-show execution still requires atomic concurrent/retry handling and
+**Owner-confirmation effects:** an actual HTTP/SQL reproduction returned success
+on confirmation and retry while losing the worker's completed-job increment.
+The existing route now calls one service-only transaction over existing Gig,
+Payment, User, GigBid and Notification records. Current ownership, assignment dates
+and capture proof are checked under locks; the confirmation, increment, standby
+closure and in-app notices commit together. One forward function migration adds no
+table/column/screen. Historical confirmations and read/deleted notices are preserved.
+116 focused backend checks/privacy gates,65 SQL contracts/generated pgTAP,
+14 actual HTTP/service/SQL scenarios and five observed lock-wait cases pass.
+Function lint:364 functions/108 bindings, zero errors/eight existing warnings.
+See [completion effects evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-confirmation-commits-its-records-together).
+In-app storage is durable; push/socket transport and Home service-history capture
+remain best effort after commit, including a lost RPC reply. No eventual-delivery
+claim is made. The current transaction milestone is on the integration branch;
+canonical CI still covers the preceding owner-date checkpoint.
+
+**Next:** finish current-head CI; verify existing completion proof/upload privacy
+and request recovery, then finish notification transport/Home provenance recovery
+and completion/reopen policy flows. No-show execution still requires atomic concurrent/retry handling and
 verified fee/financial outcomes. The repo's fee rates do not specify who owes and
 receives worker cancellation/no-show fees; one policy clarification is pending.
 Continue independent completion/security verification while that remains pending. Finish current-head CI

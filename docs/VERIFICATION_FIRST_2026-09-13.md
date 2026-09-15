@@ -2858,3 +2858,68 @@ post-confirmation notification/reliability/standby writes still need durable
 recovery; client opening/command-session binding, exact proof-file validation and
 full installed/provider journeys remain open. The three date predicates do not
 establish a general immutable attachment-review contract.
+
+
+## Existing owner confirmation commits its records together
+
+September14: an actual Express/StripeService/local-SQL reproduction interrupted the
+User.gigs_completed write after owner confirmation. The first request and retry
+both returned200, the captured Payment and owner receipt remained saved, and the
+worker's count stayed zero. That is a concrete partial-write defect in the existing
+flow. Active/archive migrations and all-ref history contained no existing
+confirm_gig_completion function; the existing capture functions commit financial
+proof without grouping these later Gig/User/GigBid/Notification writes.
+
+The existing route now invokes one service-only transaction over those existing
+records. It locks the current Gig, rechecks current owner/business authority and
+observed assignment/completion dates, locks and verifies the committed captured
+Payment, then writes confirmation, an atomic count increment, remaining standby
+closures and existing in-app notification types together. UPDATE RETURNING selects
+only the bids actually closed. A failed write rolls back all confirmation effects
+while retaining the previously verified capture. Existing capture recovery and the
+original Payment/intent are reused. Concurrent/retried confirmations do not change
+the first receipt or recreate read/deleted notices. Existing free completion and
+historical receipt behavior are preserved. No historical count/notice backfill runs.
+
+One forward function migration,20260914070000_gig_completion_confirmation.sql,
+is needed for the database transaction because separate REST writes cannot roll
+back together. It adds no table, column, trigger or screen. Existing transport now
+accepts the gig_confirmed type; no notification is inserted again by the route.
+No screen, layout or client file changes. Migration ordering/compatibility checks
+pass against actual master e775af9ae; the initial missing compatibility comment was
+corrected without changing the SQL body. The schema addition is inert for the old
+backend; backend rollback retains already committed records and needs no data rewrite.
+
+Verification:116 focused tests in the existing lifecycle/stop/payment/delivery
+suites pass, as do privacy gates (including15 audience checks),65 SQL contracts and
+the generated paid acceptance pgTAP wrapper. The initial new transport test had an
+unqualified fixture helper (one failure/115 passes); its corrected test passes.
+The SQL contract forces User, bid and notification writes to fail and checks exact
+rollback/preserved financial truth, actor/date/financial denials, free completion,
+read/deleted notices and service-only privileges. Application function lint checks
+364 functions/108 bindings with zero errors/eight existing warnings.
+
+Fourteen actual HTTP/StripeService/owned-SQL scenarios pass (235 SQL queries,
+12 synthetic captures, zero replacement intent creations): six preserve date and
+lost-provider-reply behavior after moving the comparison to SQL; eight exercise
+three interrupted effect writes and successful retries, lost committed RPC reply,
+failed notice transport, free completion, historical receipt and ordinary paid
+completion. Real SQL rows confirm the counter/bid/notice outcomes, and notice
+metadata contains only the existing gig/reason fields in personal context. Five
+separate-connection tests observe actual PostgreSQL lock waits: duplicate same-task
+confirmation, two tasks crediting one worker, a rolled-back leader with a waiting
+retry, changed completion and changed owner. Exact fixture cleanup passes; no
+owned server/device remains running from these checks.
+
+Private owner-effects-* logs, fixture code, source hashes and result files are
+retained under existing-tip-provider-proof-r1 and mirrored to the owner recovery
+archive. CI34924470956 passed the previous installed-tip checkpoint4c8f11114.
+Canonical checkpointaddebe757 is runningCI34926992422; this newer transaction
+milestone still needs its own current-head CI before integration/merge.
+
+Limits: authentication/provider/push transport are synthetic. The in-app notices
+are durable, but push/socket delivery and existing Home service-history capture
+remain best effort after commit. A lost RPC response preserves those notices but
+can leave transport unattempted; this is measured, not labeled eventual delivery.
+Client opening/session binding, proof-file privacy, full installed/provider
+completion and fee/no-show policy remain open. No hosted migration or activation ran.

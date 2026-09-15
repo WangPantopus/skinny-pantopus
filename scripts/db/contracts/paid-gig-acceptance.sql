@@ -152,9 +152,88 @@ DO $$ DECLARE r text; fn regprocedure; BEGIN
   IF has_table_privilege(r,'public."Payment"','INSERT,UPDATE,DELETE,TRUNCATE') THEN RAISE EXCEPTION 'Client retained financial mutation privileges'; END IF;
   FOR fn IN SELECT p.oid::regprocedure FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'
    AND p.proname IN ('begin_paid_gig_acceptance','accept_free_gig_bid','bind_paid_gig_acceptance','finalize_paid_gig_acceptance',
-    'cancel_paid_gig_acceptance','prepare_paid_gig_capture','record_paid_gig_capture') LOOP
+    'cancel_paid_gig_acceptance','prepare_paid_gig_capture','record_paid_gig_capture','confirm_gig_completion') LOOP
    IF has_function_privilege(r,fn,'EXECUTE') THEN RAISE EXCEPTION 'Client acquired service RPC'; END IF;
   END LOOP;
  END LOOP;
 END $$;
+-- Confirmation and its existing reliability/bid/in-app records must commit together.
+CREATE FUNCTION pg_temp.fail_completion_effect() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_TABLE_NAME=current_setting('pantopus.confirmation_failure',true) THEN
+  RAISE EXCEPTION 'contract forced completion effect failure'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER completion_contract_user BEFORE UPDATE ON public."User" FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_completion_effect();
+CREATE TRIGGER completion_contract_bid BEFORE UPDATE ON public."GigBid" FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_completion_effect();
+CREATE TRIGGER completion_contract_notice BEFORE INSERT ON public."Notification" FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_completion_effect();
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE g uuid:='aae10000-0000-4000-8000-000000000101'; u uuid:='aae10000-0000-4000-8000-000000000001';
+ worker uuid:='aae10000-0000-4000-8000-000000000002'; expected jsonb; r jsonb; receipt jsonb;
+ before_payment jsonb; stage text; changed jsonb; note_count integer;
+BEGIN
+ SELECT to_jsonb(x) INTO expected FROM public."Gig" x WHERE id=g;
+ SELECT to_jsonb(x) INTO before_payment FROM public."Payment" x WHERE id=(expected->>'payment_id')::uuid;
+ SELECT count(*) INTO note_count FROM public."Notification" WHERE metadata->>'gig_id'=g::text;
+ IF public.confirm_gig_completion(g,worker,expected,5,'review')->>'error' IS DISTINCT FROM 'FORBIDDEN' THEN
+  RAISE EXCEPTION 'Worker confirmed owner work'; END IF;
+ FOREACH stage IN ARRAY ARRAY['worker_completed_at','accepted_at','started_at','payment_id','user_id','accepted_by','price'] LOOP
+  changed:=jsonb_set(expected,ARRAY[stage],CASE WHEN stage='price' THEN '99'::jsonb
+   WHEN stage IN ('payment_id','user_id','accepted_by') THEN to_jsonb('aae10000-0000-4000-8000-000000000099'::text)
+   ELSE to_jsonb('2020-01-01T00:00:00Z'::text) END);
+  IF public.confirm_gig_completion(g,u,changed,5,'review')->>'error' IS DISTINCT FROM 'COMPLETION_CHANGED' THEN
+   RAISE EXCEPTION 'Changed completion % accepted',stage; END IF;
+ END LOOP;
+ FOREACH stage IN ARRAY ARRAY['User','GigBid','Notification'] LOOP
+  PERFORM set_config('pantopus.confirmation_failure',stage,true);
+  BEGIN
+   PERFORM public.confirm_gig_completion(g,u,expected,5,'review');
+   RAISE EXCEPTION 'Completion effect did not fail';
+  EXCEPTION WHEN raise_exception THEN
+   IF SQLERRM<>'contract forced completion effect failure' THEN RAISE; END IF;
+  END;
+  IF (SELECT to_jsonb(x) FROM public."Gig" x WHERE id=g) IS DISTINCT FROM expected
+   OR (SELECT coalesce(gigs_completed,0) FROM public."User" WHERE id=worker)<>0
+   OR (SELECT status FROM public."GigBid" WHERE id='aae10000-0000-4000-8000-000000000202')<>'pending'
+   OR (SELECT count(*) FROM public."Notification" WHERE metadata->>'gig_id'=g::text)<>note_count
+   OR (SELECT to_jsonb(x) FROM public."Payment" x WHERE id=(expected->>'payment_id')::uuid) IS DISTINCT FROM before_payment THEN
+   RAISE EXCEPTION 'Partial completion survived failed % write',stage; END IF;
+ END LOOP;
+ PERFORM set_config('pantopus.confirmation_failure','',true);
+ -- Capture proof must still be current when confirmation takes the payment lock.
+ UPDATE public."Payment" SET refunded_amount=1 WHERE id=(expected->>'payment_id')::uuid;
+ IF public.confirm_gig_completion(g,u,expected,5,'review')->>'error' IS DISTINCT FROM 'PAYMENT_NOT_CAPTURED' THEN
+  RAISE EXCEPTION 'Refunded capture confirmed'; END IF;
+ UPDATE public."Payment" SET refunded_amount=0 WHERE id=(expected->>'payment_id')::uuid;
+ r:=public.confirm_gig_completion(g,u,expected,5,'review'); receipt:=r->'gig';
+ IF r->>'reused' IS DISTINCT FROM 'false' OR jsonb_array_length(r->'notifications')<>2
+  OR receipt->>'owner_confirmed_at' IS NULL OR receipt->>'owner_confirmation_note' IS DISTINCT FROM 'review'
+  OR (SELECT coalesce(gigs_completed,0) FROM public."User" WHERE id=worker)<>1
+  OR (SELECT status FROM public."GigBid" WHERE id='aae10000-0000-4000-8000-000000000202')<>'rejected'
+  OR (SELECT status FROM public."GigBid" WHERE id='aae10000-0000-4000-8000-000000000201')<>'accepted' THEN
+  RAISE EXCEPTION 'Confirmation records not committed together: %',r; END IF;
+ -- A read notice and a deleted notice are user state, not missing writes to repair.
+ UPDATE public."Notification" SET is_read=true WHERE id=(r->'notifications'->0->>'id')::uuid;
+ DELETE FROM public."Notification" WHERE id=(r->'notifications'->1->>'id')::uuid;
+ r:=public.confirm_gig_completion(g,u,expected,1,'replacement');
+ IF r->>'reused' IS DISTINCT FROM 'true' OR r->'gig' IS DISTINCT FROM receipt
+  OR r->'notifications' IS DISTINCT FROM '[]'::jsonb
+  OR (SELECT coalesce(gigs_completed,0) FROM public."User" WHERE id=worker)<>1
+  OR (SELECT count(*) FROM public."Notification" WHERE metadata->>'gig_id'=g::text)<>note_count+1
+  OR NOT (SELECT is_read FROM public."Notification" WHERE type='gig_confirmed' AND metadata->>'gig_id'=g::text) THEN
+  RAISE EXCEPTION 'Retry changed receipt, count or read/deleted notices'; END IF;
+ -- Preserve existing free completion without manufacturing a financial row.
+ g:='aae10000-0000-4000-8000-000000000102';u:='aae10000-0000-4000-8000-000000000004';
+ UPDATE public."Gig" SET status='completed',accepted_by=worker,worker_completed_at=now() WHERE id=g;
+ SELECT to_jsonb(x) INTO expected FROM public."Gig" x WHERE id=g;
+ IF public.confirm_gig_completion(g,u,expected,NULL,NULL)->>'error' IS DISTINCT FROM 'PAYMENT_NOT_CAPTURED' THEN
+  RAISE EXCEPTION 'Missing paid record confirmed'; END IF;
+ UPDATE public."Gig" SET price=0 WHERE id=g;
+ SELECT to_jsonb(x) INTO expected FROM public."Gig" x WHERE id=g;
+ r:=public.confirm_gig_completion(g,u,expected,NULL,NULL);
+ IF r->'gig'->>'owner_confirmed_at' IS NULL OR (SELECT coalesce(gigs_completed,0) FROM public."User" WHERE id=worker)<>2 THEN
+  RAISE EXCEPTION 'Free completion failed: %',r; END IF;
+END $$;
+RESET ROLE;
 ROLLBACK;

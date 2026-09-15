@@ -15,6 +15,12 @@ beforeEach(() => {
 });
 
 describe('stored notification delivery', () => {
+  test('stored owner confirmation reuses preference-aware transport without inserting a notice', async () => {
+    db.seedTable('MailPreferences', [{ user_id: 'worker', push_notifications: true }]);
+    const confirmation = { id: 'completion', user_id: 'worker', type: 'gig_confirmed', title: 'Confirmed', metadata: { gig_id: 'gig' } };
+    expect(await notify.deliverStoredGigNotification(confirmation)).toMatchObject({ suppressed: false });
+    expect(db.getTable('Notification')).toEqual([note]);
+  });
   test('delivers the exact stored notification and never inserts another row', async () => {
     expect(await notify.deliverStoredGigNotification(note)).toMatchObject({ acceptedCount: 1, suppressed: false });
     expect(push.sendToUserWithReceipt).toHaveBeenCalledWith('worker', expect.objectContaining({ data: {

@@ -10,6 +10,7 @@ const logger = require('../utils/logger');
 const {
   createNotification,
   createBulkNotifications,
+  deliverStoredGigNotification,
   notifyBidReceived,
   notifyBidAccepted,
 } = require('../services/notificationService');
@@ -5587,37 +5588,27 @@ async function confirmCompletionHelper(req, { gigId, userId, satisfaction, note 
       paidGigAcceptance.terms(gig, gig.accepted_by, Math.round(price * 100)));
   }
 
-  const nowIso = new Date().toISOString();
-  const safeSatisfaction = satisfaction ? Math.min(5, Math.max(1, parseInt(satisfaction))) : null;
-
-  const confirmationUpdate = supabaseAdmin
-    .from('Gig')
-    .update({
-      owner_confirmed_at: nowIso,
-      updated_at: nowIso,
-      owner_confirmation_note: note ? String(note).slice(0, 1000) : null,
-      owner_satisfaction: safeSatisfaction,
-    })
-    .eq('id', gigId)
-    .eq('status', 'completed')
-    .eq('worker_completed_at', gig.worker_completed_at)
-    .is('owner_confirmed_at', null);
-  const { data: updatedGig, error: updateError } = await bindGigAssignmentSnapshot(confirmationUpdate, gig).select('*').maybeSingle();
-
-  if (!updateError && !updatedGig) {
-    const { data: receipt, error } = await supabaseAdmin.from('Gig').select('*').eq('id', gigId).single();
-    if (!error && receipt?.owner_confirmed_at && receipt.payment_id === gig.payment_id && receipt.user_id === gig.user_id
-        && receipt.accepted_by === gig.accepted_by && Number(receipt.price) === Number(gig.price)
-        && receipt.status === 'completed' && receipt.worker_completed_at === gig.worker_completed_at
-        && (receipt.accepted_at ?? null) === (gig.accepted_at ?? null)
-        && (receipt.started_at ?? null) === (gig.started_at ?? null)) return receipt;
-    throw Object.assign(new Error('Completion changed while it was being confirmed'), { statusCode: 409 });
+  const rating = parseInt(satisfaction, 10);
+  const { data: confirmation, error: confirmationError } = await supabaseAdmin.rpc('confirm_gig_completion', {
+    p_gig_id: gigId,
+    p_actor_id: userId,
+    p_expected: Object.fromEntries(['user_id', 'accepted_by', 'price', 'payment_id',
+      'accepted_at', 'started_at', 'worker_completed_at'].map(key => [key, gig[key] ?? null])),
+    p_satisfaction: Number.isFinite(rating) ? Math.min(5, Math.max(1, rating)) : null,
+    p_note: note ? String(note).slice(0, 1000) : null,
+  });
+  if (confirmationError || !confirmation) {
+    throw Object.assign(new Error('Completion could not be confirmed. Please retry.'), { statusCode: 503 });
   }
-
-  if (updateError) {
-    logger.error('Error confirming completion', { error: updateError.message, gigId, userId });
-    throw new Error('Failed to confirm completion');
+  if (confirmation.error) {
+    const statusCode = { NOT_FOUND: 404, FORBIDDEN: 403 }[confirmation.error] || 409;
+    throw Object.assign(new Error('Completion changed or its payment could not be verified'), { statusCode });
   }
+  const updatedGig = confirmation.gig;
+  if (!updatedGig?.owner_confirmed_at) {
+    throw Object.assign(new Error('Completion receipt unavailable. Please retry.'), { statusCode: 503 });
+  }
+  if (confirmation.reused) return updatedGig;
 
   // ─── Provenance capture (non-blocking) ───
   // Payment has captured and the owner has confirmed, so this is a paid,
@@ -5641,62 +5632,18 @@ async function confirmCompletionHelper(req, { gigId, userId, satisfaction, note 
       category: gig.category,
       price: gig.price,
       performedBy: gig.accepted_by,
-      performedAt: nowIso,
+      performedAt: updatedGig.owner_confirmed_at,
     }).catch(() => {});
   }
 
-  // ─── Notify the worker: owner confirmed completion ───
-  if (gig.accepted_by) {
-    createNotification({
-      userId: gig.accepted_by,
-      type: 'gig_confirmed',
-      title: `Gig "${gig.title || 'completed gig'}" confirmed!`,
-      body: 'The gig owner confirmed your work is complete. Great job!',
-      icon: '🎉',
-      link: `/gigs/${gigId}`,
-      metadata: { gig_id: gigId },
-    });
-
-    // ─── Update worker reliability: increment gigs_completed ───
-    const { data: workerData } = await supabaseAdmin
-      .from('User')
-      .select('gigs_completed')
-      .eq('id', gig.accepted_by)
-      .single();
-    if (workerData) {
-      await supabaseAdmin
-        .from('User')
-        .update({ gigs_completed: (workerData.gigs_completed || 0) + 1 })
-        .eq('id', gig.accepted_by);
+  // In-app notices are already committed with confirmation. Transport failures
+  // cannot undo that receipt; a retry never inserts or re-alerts the same notices.
+  for (const notification of confirmation.notifications || []) {
+    try {
+      await deliverStoredGigNotification(notification);
+    } catch (error) {
+      logger.warn('Completion notification transport unavailable', { gigId, notificationId: notification.id });
     }
-  }
-
-  // ─── Reject all remaining standby bids now that the gig is confirmed complete ───
-  const gigTitle = gig.title || 'a gig';
-  const { data: remainingBids } = await supabaseAdmin
-    .from('GigBid')
-    .select('id, user_id')
-    .eq('gig_id', gigId)
-    .in('status', ['pending', 'countered']);
-
-  if (remainingBids && remainingBids.length > 0) {
-    const remainingIds = remainingBids.map((b) => b.id);
-    const remainingUserIds = [...new Set(remainingBids.map((b) => b.user_id))];
-
-    await supabaseAdmin
-      .from('GigBid')
-      .update({ status: 'rejected', updated_at: new Date().toISOString() })
-      .in('id', remainingIds);
-
-    createBulkNotifications(remainingUserIds.map((uid) => ({
-      userId: uid,
-      type: 'bid_rejected',
-      title: `"${gigTitle}" has been completed`,
-      body: `The gig "${gigTitle}" has been completed by another worker. Your bid is now closed.`,
-      icon: '✅',
-      link: `/gigs/${gigId}`,
-      metadata: { gig_id: gigId, reason: 'gig_completed' },
-    })));
   }
 
   emitGigUpdate(req, gigId, 'completion-update');
