@@ -163,9 +163,16 @@ existing share/status endpoints reject stale writes and revoked/expired reads;
 276 backend/212 web checks and nine local HTTP/SQL cases pass, plus seven browser
 checks. One new page reuses existing UI styles; other changes are in existing files.
 See [status-link evidence](VERIFICATION_FIRST_2026-09-13.md#existing-status-links-authority-expiry-and-missing-destination).
-Next verify live task-room audiences and current-helper location publishing, then
-draft/restart. Public task updates must keep working while private ETA is restricted. Existing
-content-addressed File upload recovery is preserved. V2/ETA at75ea51867 pass CI34985637885 (15 successes/one skip); tracking privacy/status links need combined CI.
+The existing private socket producers now restrict ETA/urgent updates to current
+owner/worker subscriptions after two actual Socket.IO baseline leaks.247 backend
+checks and privacy gates pass; twelve local HTTP/Socket.IO/SQL audience cases and
+an actual public acceptance marker pass. Four existing source/test files change;
+no screen/schema/layout change. See [socket evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-task-socket-delivery).
+Next verify current-helper location/urgent writes and completion draft/restart.
+The SQL fixture confirms the WKT-only location decoder misses stored geography;
+reuse the existing decoder and reproduce stale-write/input/receipt problems first.
+Content-addressed File upload recovery is preserved. V2/ETA at75ea51867 pass
+CI34985637885 (15 successes/one skip); d01 status-link CI34990349201 is still running.
 No full inventory row is closed by these bounded checks.
 The preceding main-list change added one Android regression file to preserve the
 existing test-class size rule.

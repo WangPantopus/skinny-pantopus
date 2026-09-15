@@ -8,6 +8,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const logger = require('../utils/logger');
+const { emitPrivateGigUpdate } = require('../socket/chatSocketio');
 const {
   createNotification,
   createBulkNotifications,
@@ -7744,7 +7745,7 @@ router.post('/:gigId/status', verifyToken, validate(urgentStatusSchema), async (
         helper_eta_minutes: updatedUrgent.helper_eta_minutes || null,
         timestamp: Date.now(),
       };
-      io.to(`gig:${gigId}`).emit('gig_status_update', statusPayload);
+      await emitPrivateGigUpdate(io, gig, 'gig_status_update', statusPayload);
     }
 
     // Notify the other party

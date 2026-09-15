@@ -53,6 +53,8 @@ function createTestServer() {
   io = new Server(httpServer, { cors: { origin: '*' } });
   app.set('io', io);
   app.use('/api/chat', require('../../routes/chats'));
+  app.use('/api/gigs', require('../../routes/gigs'));
+  app.use('/api/gigs', require('../../routes/gigsV2'));
   chatSocketio(io);
 }
 
@@ -571,5 +573,122 @@ describe('Multi-device (same user, multiple sockets)', () => {
 
     const event = await offlinePromise;
     expect(event.userId).toBe(U2);
+  });
+});
+
+
+describe('private helper tracking on the existing public task room', () => {
+  const db = require('../__mocks__/supabaseAdmin');
+  let serial = 200;
+  afterEach(() => jest.restoreAllMocks());
+
+  async function setTaskSubscription(socket, gigId, subscribed = true) {
+    const room = `gig:${gigId}`;
+    const adapter = io.of('/').adapter;
+    const event = subscribed ? 'join-room' : 'leave-room';
+    const changed = new Promise((resolve, reject) => {
+      const listener = (name, socketId) => {
+        if (name !== room || socketId !== socket.id) return;
+        clearTimeout(timer);
+        adapter.off(event, listener);
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        adapter.off(event, listener);
+        reject(new Error('Task subscription timed out'));
+      }, 3000);
+      adapter.on(event, listener);
+    });
+    socket.emit(subscribed ? 'gig:join' : 'gig:leave', { gigId });
+    await changed;
+  }
+
+  async function deliveryBarrier(sockets) {
+    // Ordered after producer packets on each connection; no timed absence guess.
+    const delivered = Promise.all(sockets.map(socket => waitForEvent(socket, 'fixture:tracking-barrier')));
+    io.emit('fixture:tracking-barrier', {});
+    await delivered;
+  }
+
+  function changeAfterSave(change) {
+    const from = db.from.bind(db);
+    let saved = false;
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = from(table);
+      const execute = query._execute.bind(query);
+      const update = query.update.bind(query);
+      let writing = false;
+      query.update = value => { writing = true; return update(value); };
+      query._execute = () => {
+        if (table === 'Gig' && saved && change === 'read-fails') {
+          return { data: null, error: { message: 'Synthetic tracking authority read failure' } };
+        }
+        const result = structuredClone(execute());
+        if (table === 'Gig' && writing && !saved) {
+          saved = true;
+          if (change === 'owner') getTable('Gig')[0].user_id = U3;
+          if (change === 'worker') getTable('Gig')[0].accepted_by = U3;
+          if (change === 'deleted') seedTable('Gig', []);
+        }
+        return result;
+      };
+      return query;
+    });
+  }
+
+  test.each(['eta', 'urgent'].flatMap(kind =>
+    ['current', 'owner', 'worker', 'deleted', 'read-fails', 'left'].map(change => [kind, change])))
+  ('private %s updates respect %s authority and subscriptions', async (kind, change) => {
+    seedData();
+    const gigId = `dd000000-0000-4000-a000-${String(++serial).padStart(12, '0')}`;
+    seedTable('Gig', [{
+      id: gigId, user_id: U1, accepted_by: U2, title: 'Synthetic private helper task', status: 'assigned',
+      exact_location: 'SRID=4326;POINT(-74.006 40.7128)', is_urgent: true,
+      urgent_details: { shareLocationDuringTask: false },
+    }]);
+    const owner = await connect(TOKEN_U1);
+    const ownerSecondDevice = await connect(TOKEN_U1);
+    const helper = await connect(TOKEN_U2);
+    const outsider = await connect(TOKEN_U3);
+    const sockets = [owner, ownerSecondDevice, helper, outsider];
+    for (const socket of sockets) await setTaskSubscription(socket, gigId);
+    if (change === 'left') await setTaskSubscription(owner, gigId, false);
+    if (!['current', 'left'].includes(change)) changeAfterSave(change);
+    const event = kind === 'eta' ? 'gig:eta-update' : 'gig_status_update';
+    const updates = sockets.map(socket => {
+      const received = [];
+      socket.on(event, value => received.push(value));
+      return received;
+    });
+    const saved = await request(app)
+      .post(`/api/gigs/${gigId}/${kind === 'eta' ? 'update-location' : 'status'}`)
+      .set('x-test-user-id', U2)
+      .send(kind === 'eta' ? { latitude: 40.72, longitude: -74 } : { status: 'on_the_way', helper_eta_minutes: 7 });
+    expect(saved.status).toBe(200);
+    await deliveryBarrier(sockets);
+    if (['current', 'left'].includes(change)) {
+      expect(updates[0]).toHaveLength(change === 'left' ? 0 : 1);
+      expect(updates[1]).toHaveLength(1);
+      expect(updates[2]).toHaveLength(1);
+      expect(updates[1][0]).toMatchObject(kind === 'eta'
+        ? { gigId, eventType: 'eta-update', eta_minutes: 2 }
+        : { gigId, fulfillmentStatus: 'on_the_way', helper_eta_minutes: 7 });
+    } else {
+      expect(updates.slice(0, 3)).toEqual([[], [], []]);
+    }
+    expect(updates[3]).toEqual([]);
+  });
+
+  test('public watchers still receive the existing task acceptance marker', async () => {
+    seedData();
+    const gigId = 'dd000000-0000-4000-a000-000000000299';
+    seedTable('Gig', [{ id: gigId, user_id: U1, title: 'Synthetic free task', price: 0,
+      status: 'open', engagement_mode: 'instant_accept' }]);
+    const outsider = await connect(TOKEN_U3);
+    await setTaskSubscription(outsider, gigId);
+    const changed = waitForEvent(outsider, 'gig:status-change');
+    const saved = await request(app).post(`/api/gigs/${gigId}/instant-accept`).set('x-test-user-id', U2).send({});
+    expect(saved.status).toBe(200);
+    expect(await changed).toEqual({ gigId, eventType: 'status-change', timestamp: expect.any(Number) });
   });
 });

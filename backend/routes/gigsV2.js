@@ -20,6 +20,7 @@ const logger = require('../utils/logger');
 const { createNotification } = require('../services/notificationService');
 const stripeService = require('../stripe/stripeService');
 const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
+const { emitPrivateGigUpdate } = require('../socket/chatSocketio');
 
 // ============ REAL-TIME HELPER (same pattern as gigs.js) ============
 
@@ -350,7 +351,7 @@ router.post('/:gigId/update-location', verifyToken, async (req, res) => {
     // Fetch gig — verify caller is the assigned helper
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, accepted_by, exact_location')
+      .select('id, user_id, accepted_by, exact_location')
       .eq('id', gigId)
       .single();
 
@@ -403,7 +404,10 @@ router.post('/:gigId/update-location', verifyToken, async (req, res) => {
     locationUpdateTimestamps.set(gigId, Date.now());
 
     // Real-time ETA event
-    emitGigUpdate(req, gigId, 'eta-update', {
+    await emitPrivateGigUpdate(req.app.get('io'), gig, 'gig:eta-update', {
+      gigId,
+      eventType: 'eta-update',
+      timestamp: Date.now(),
       eta_minutes: etaMinutes,
     });
 

@@ -4274,3 +4274,51 @@ test/config files change, of which only the missing page is new, plus three exis
 docs. Prior75ea51867 CI34985637885 passes all15 applicable jobs/one Seeder skip. This and
 2ef9772be require combined CI; PR34 remains draft. Live task-room audiences, location
 publisher authority/consent/input, assignment transitions and hosted cutover remain open.
+
+
+## Existing private task socket delivery
+
+September15: two failing real Socket.IO cases confirm that an unrelated signed-in
+account subscribing through existing `gig:join` receives `gig:eta-update` and
+`gig_status_update`, including helper ETA. The public room also supports legitimate
+public task/acceptance/bid activity. Existing notification/badge delivery already
+uses the authenticated `connectedUsers` socket registry, so no new room, subscription
+store, service, migration or client implementation is needed.
+
+The two existing producers now call a narrow helper in `chatSocketio.js`. A current
+Gig owner/worker read must match the producer's observed participants. Delivery
+uses their authenticated connected socket IDs only when still subscribed to this
+Gig. Missing/changed participants, failed reads, departed subscriptions and outsiders
+receive no private event. Public room admission and event names remain unchanged;
+the actual free-task instant-accept route still emits its limited public marker.
+No screen/style/layout or data storage changes are included.
+
+Acceptance and private evidence under `existing-tip-provider-proof-r1`:
+
+- `tracking-socket-baseline-r1`: two reproduced route/socket disclosure failures.
+- `tracking-socket-candidate-r2`:247 tests in five existing suites pass, including
+  chat, both tracking producers, delivery, paid lifecycle and session revocation.
+  `tracking-socket-privacy-r1` passes all privacy gates, including15 audience checks.
+- `tracking-socket-http-r2`: twelve actual HTTP/Socket.IO/local PostgreSQL scenarios
+  cover current participants, two owner devices, assignment/ownership changes after
+  saving, deletion, a failed authority lookup and a departed subscription. One
+  additional actual free-task acceptance event reaches the public watcher.
+  Authentication, notification/badge transport and one lookup outage are synthetic;
+  the narrow SQL adapter executes the selected Gig columns and actual writes.
+- Exact ab14 rows are cleaned; API18109 and all owned socket clients are stopped.
+  Source/check commands, results and cleanup are preserved and mirrored privately.
+
+Candidate R1 passed50 tests but failed the command because it also named a nonexistent
+location test file. R2 uses the verified existing suite paths. HTTP fixture R1 had a
+syntax error before execution and performed no SQL/server work; R2 corrected the
+fixture and passes. These failures are preserved rather than relabeled successful.
+
+This closes only the reproduced socket audience gap. A missed live event remains
+recoverable through existing readers; this is not durable transport acceptance.
+Location/urgent write authority, consent/raw participant reads, late writes and
+notification recipient races remain separate verification work. The actual SQL
+fixture additionally confirms null ETA from the existing WKT-only parser when
+`exact_location` is returned in stored geography format. The existing shared
+`utils/parsePostGISPoint.js` already supports that format and should be reused.
+Installed native/UI live-tracking and real provider/release acceptance remain open;
+PR34 remains draft. The d01 status-link CI34990349201 is still running at this checkpoint.

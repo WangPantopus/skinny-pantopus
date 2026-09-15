@@ -518,12 +518,26 @@ no existing screen is redesigned. See [status-link evidence](VERIFICATION_FIRST_
 The owned API/Next servers and exact ab13 fixtures are cleaned, original configs are
 restored and compiled entries retained. This and2ef9772be need their combined CI.
 
-**Next:** verify live Gig socket audiences and current-helper location publishing.
-Existing gig:join accepts any authenticated gigId; reproduce private event exposure
-before changing it. Public detail rooms also serve legitimate task/bid updates, so
-preserve those uses while comparing existing authenticated socket delivery. Check
-location input, assignment/consent and delayed write behavior in the existing routes.
-No new schema is needed merely to add the already-existing tracking fields. Completion draft/restart
+**Private task socket delivery:** the actual Socket.IO baseline reproduced both ETA
+and urgent fulfillment/ETA broadcasts reaching an unrelated authenticated subscriber.
+The two existing producers now reuse one helper in the existing socket module. It
+rechecks the owner/worker and emits only to their still-subscribed authenticated
+socket IDs; changed/deleted/failed authority reads suppress private delivery. Public
+room admission and the existing task-acceptance marker remain available.247 backend
+checks across five suites and privacy gates pass. Twelve actual local HTTP/Socket.IO/
+SQL audience cases plus a public acceptance event pass, with exact ab14 cleanup and
+API18109 stopped. Four existing source/test files change; no schema/client/layout
+change. See [socket evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-task-socket-delivery).
+The d01a2f248 combined status-link CI34990349201 is still running; backend/schema/web
+and iOS build have passed, with final native jobs pending at this checkpoint.
+
+**Next:** verify current-helper location publishing and urgent status writes. The
+actual SQL fixture confirmed the existing update-location WKT-only decoder returns
+null ETA for the stored geography format. Reuse `utils/parsePostGISPoint.js` and
+check input, assignment/consent, concurrent/late writes and receipts in the existing
+routes before changing them. Socket privacy does not make these writes atomic or
+repair notification recipient races. No new schema is needed merely to add the
+already-existing tracking fields. Completion draft/restart
 continues after that boundary; content-addressed File upload recovery already exists
 and must be reused. There is no active web rebook/boost caller to rebuild.
 Full installed native MyTasks/owner lifetime remains open. Continue completion
