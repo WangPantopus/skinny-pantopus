@@ -26,7 +26,9 @@ matched master. No hosted deployment, migration adoption or provider activation 
 **Remaining open PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
 remains draft. Its isolated integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
-the canonical PR branch is `codex/staging-paid-gig`. The current pushed cold-entry checkpoint is `7791bb16f`, following legacy recovery
+the canonical PR branch is `codex/staging-paid-gig`, currently at `161aaf529`.
+The integration branch includes installed iOS checkpoint `d6a0194ea` after
+cold-entry checkpoint `7791bb16f`, following legacy recovery
 `e700862f1` and coordinated Android `c6b1f830e`, iOS `b98cc283c`,
 web `1b9ff598e` and backend `410ae2767`. It incorporates actual PR43/44/45 master.
 The preceding coordinated head `8203a3ea7db551cce24041815aa7cd4302a9502d` passes
@@ -34,7 +36,8 @@ all15 applicable checks/one Seeder skip in [CI34907347192](https://github.com/Wa
 Current cold-entry `7791bb16f` [CI34920129205](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34920129205)
 passes all applicable jobs, including complete schema replay and native checks. The prior `14b8c3ae5` run was superseded/canceled by the new push.
 The durable-notice checkpoint `161aaf529` is now pushed to both branches and
-requires its own current-head CI. Installed tip UI verification is in progress.
+passes all15 applicable checks/one Seeder skip in [CI34922146452](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34922146452).
+The later installed UI source still needs its own complete current-head CI.
 Do not merge/deploy PR34 yet.
 
 **Current original-tip behavior:** the existing Payment.id and financial fields
@@ -147,19 +150,32 @@ three `children: .contain` modifiers repair the existing shell/dock/picker group
 without changing visuals. An existing payment UI test file carries the journey.
 Source-bound format/strict lint pass. See the [installed iOS evidence](VERIFICATION_FIRST_2026-09-13.md#installed-ios-historical-tip-recovery-and-accessibility).
 
-**Next:** run the existing Android and web tip controls against the owned18109
-HTTP/SQL fixture, preserving the accepted iOS/source evidence, then remaining
-started-work/no-show/fee/completion and paid-gig policy flows. Finish current-head CI
+**Installed Android/web tip recovery:** Chrome's actual completion/tip controls
+pass historical discovery, frozen$10/reload, two same-ID checks, one capture/notice
+and exact recovery cleanup against actual local HTTP/SQL. Its wrapper/auth/provider
+are synthetic. Android passes two installed success/cancel journeys with the same
+original through restart, disabled amount changes and exact encrypted-entry cleanup;
+success stores one notice and cancellation stores none, with zero replacement
+creates. The installed APK matches the tested build. A reproduced stale Android dock
+now refreshes from the existing detail loader after a committed receipt;38 focused
+tests and static/build checks pass. Three existing Android files change; no new
+screen/table/migration. See [installed Android/web evidence](VERIFICATION_FIRST_2026-09-13.md#installed-android-and-web-historical-tip-recovery).
+
+**Next:** finish current-head CI and continue existing started-work/no-show/fee/
+completion and paid-gig policy flows. A new five-case route reproduction shows
+that no-show preview denies early/in-progress reports while POST still cancels;
+repair admission using the existing timing rules before accepting that workflow. Finish current-head CI
 and real-provider acceptance before activation. The new iOS journey is not actual
 Stripe/push acceptance. Recheck existing implementations before each change.
 P01–P03/P07–P09, R05/R06 and the wider80-row inventory remain open within their
 stated limits. After the paid scope, continue the remaining existing-feature
 inventory; preserve accepted subjourneys and screen designs.
 
-**Runtime/ownership:** the owned iOS simulator is stopped after the passing journey.
-The isolated tip HTTP/SQL fixture18109 remains active for Android/web; the Android
-loopback APK build is in progress (one heavy native build). Chrome and the Android
-AVD are stopped. Their data and accepted products are retained. The Android verification
+**Runtime/ownership:** owned iOS/Android simulators, Chrome and the isolated tip
+HTTP fixture18109 are stopped after verification. No native build remains active.
+Exact fixture cleanup reports zero actors/gigs/payments/notifications. The private
+web wrapper was removed and pre-run configs restored. Device data and accepted
+products are retained. The Android verification
 used its private AVD home and created no global registration. Exact random tip
 storage-key cleanup passes. Direct PostgreSQL64522 and the owned Home rehearsal
 REST18089 remain reserved; inspect private leases before use. Owner checkout,

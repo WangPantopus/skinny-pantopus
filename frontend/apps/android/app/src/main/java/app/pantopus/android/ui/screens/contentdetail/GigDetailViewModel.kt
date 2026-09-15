@@ -2019,6 +2019,7 @@ class GigDetailViewModel
                 checkoutIdentities::paymentIdentity,
                 checkoutIdentities::scopeMarker,
                 checkoutIdentities.changes,
+                onReceipt = { silentRefetch() },
             )
 
         /** Get-or-create the gig chat room, then emit navigation payload. */

@@ -90,12 +90,41 @@ class GigTipRecoveryTest {
         }
     }
 
-    private fun TestScope.flow(): GigTipRecovery {
+    private fun TestScope.flow(onReceipt: () -> Unit = {}): GigTipRecovery {
         coEvery { repository.tipPreview(gig) } returns NetworkResult.Success(preview)
         coEvery { repository.tipOriginal(requestId) } answers { NetworkResult.Success(pending.copy(request = original)) }
         coEvery { repository.tip(any()) } returns NetworkResult.Success(pending)
-        return GigTipRecovery(gig, repository, store, backgroundScope, { currentIdentity }, { marker }, changes, admission, { requestId })
+        return GigTipRecovery(gig, repository, store, backgroundScope, {
+            currentIdentity
+        }, { marker }, changes, admission, { requestId }, onReceipt)
     }
+
+    @Test fun committedReceiptRefreshesDetailsOnlyAfterExactStorageCleanup() =
+        runTest {
+            var refreshes = 0
+            val flow =
+                flow {
+                    assertNull(store.value)
+                    refreshes++
+                }
+            store.value = original
+            coEvery { repository.tipOriginal(requestId) } returns NetworkResult.Success(succeeded)
+            store.clearFailure = true
+            flow.prepare()
+            runCurrent()
+            assertEquals(0, refreshes)
+            assertFalse(flow.state.value.terminal)
+            assertEquals(original, store.value)
+            store.clearFailure = false
+            flow.prepare()
+            runCurrent()
+            assertEquals(1, refreshes)
+            assertTrue(flow.state.value.terminal)
+            assertFalse(flow.state.value.canContinue)
+            val content = GigDetailViewModel.Projection.project(snapshot.copy(acceptedBy = null), emptyList(), viewerUserId = actor)
+            val loaded = ContentDetailUiState.Loaded(content)
+            assertEquals(loaded, tipRecoveryDetailState(loaded, flow.state.value))
+        }
 
     @Test fun firstSubmissionMustRetainExactOriginalBeforeCallingApi() =
         runTest {

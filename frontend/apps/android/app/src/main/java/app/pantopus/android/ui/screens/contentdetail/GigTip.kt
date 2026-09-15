@@ -86,6 +86,7 @@ sealed interface GigReviewState {
 data class GigTipState(
     val busy: Boolean = false,
     val invalidated: Boolean = false,
+    val terminal: Boolean = false,
     val originalAmount: Int? = null,
     val canChoose: Boolean = false,
     val canContinue: Boolean = false,
@@ -106,6 +107,7 @@ class GigTipRecovery(
     identityChanges: Flow<Unit> = emptyFlow(),
     private val admission: GigBidCheckoutAdmission = GigBidCheckoutAdmission.shared,
     private val newId: () -> String = { UUID.randomUUID().toString() },
+    private val onReceipt: () -> Unit = {},
 ) {
     private val openingMarker = scopeMarker()
     private val workToken = UUID.randomUUID().toString()
@@ -419,6 +421,7 @@ class GigTipRecovery(
                 result.status == "succeeded" -> "The original tip is confirmed."
                 else -> "This tip is not confirmed as paid. Continue or check the same original before sending another."
             }
+        if (result.terminal) onReceipt()
     }
 
     private suspend fun readStored(): TipOriginal? {
@@ -477,7 +480,7 @@ class GigTipRecovery(
         val controlsAvailable = !busy && presentation == null
         _state.value =
             GigTipState(
-                busy = busy || presentation != null, originalAmount = original?.amountCents,
+                busy = busy || presentation != null, terminal = progress?.terminal == true, originalAmount = original?.amountCents,
                 canChoose = controlsAvailable && original == null && preview?.eligible == true && serverSession != null,
                 canContinue = controlsAvailable && pending && serverSession != null,
                 canCancel = controlsAvailable && pending && serverSession != null && progress?.canCancel != false,
@@ -505,7 +508,8 @@ fun tipRecoveryDetailState(
     state: ContentDetailUiState,
     tip: GigTipState,
 ): ContentDetailUiState {
-    if (state !is ContentDetailUiState.Loaded || tip.originalAmount == null || tip.invalidated) return state
+    if (state !is ContentDetailUiState.Loaded) return state
+    if (tip.originalAmount == null || tip.invalidated || tip.terminal) return state
     val content = state.content
     return state.copy(
         content =

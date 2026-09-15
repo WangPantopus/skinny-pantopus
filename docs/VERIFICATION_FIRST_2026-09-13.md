@@ -2726,3 +2726,47 @@ simulator is shut down, preserving its data. The loopback18109 fixture remains
 reserved for Android/web; its current successful iOS state is archived before reuse.
 Actual provider/push delivery, other installed tip cases, wider paid policies and
 all-app acceptance remain open. Next: Android/web existing tip journeys, then P04–P10.
+
+
+## Installed Android and web historical tip recovery
+
+September14 follow-up reuses the existing task detail, tip controls, protected
+storage, actual tip HTTP routes, StripeService and owned local SQL. Authentication
+and Stripe outcomes are synthetic; neither an external charge nor a push send ran.
+This verifies production controls under a private fixture, not the complete site
+or real-provider acceptance. The existing screen designs are preserved.
+
+Android's first installed journey on `d6a0194ea` passes cold discovery, frozen$10,
+restart/reopen, two checks of the same historical UUID, one capture/notice and exact
+one-entry encrypted cleanup. The installed APK matches SHA256 `2774f09daee602ed6247d6d34d454867dc53fee9a309f31a59ebb658045c2a15`.
+It also exposes a stale "Check tip status" dock after success, until reopening.
+The existing coordinator now publishes terminal receipt state and calls the existing
+detail refetch only after verified receipt plus exact storage cleanup. Terminal
+state no longer overrides the detail dock. Internal original/receipt protection
+remains; failed storage cleanup does not refresh or report terminal success.
+Three existing Android implementation/test files change, with no new product file.
+
+The corrected source passes31 recovery/7 view-model tests, formatting, Detekt and
+assembly. Two installed success/cancel journeys pass with restart, frozen amount,
+zero replacement intent/customer creations and immediate dock retirement before
+another restart. Success makes one durable notice; cancellation cancels the same
+intent once and makes none. Both remove exactly one encrypted entry. The installed
+APK equals the candidate byte hash recorded privately. Earlier R1 Detekt rejects
+a complex condition; splitting the existing guards fixes it without changing policy.
+
+Actual Chrome passes existing CompletionFlow/TipModal discovery, selected frozen$10,
+reload/reopening, two same-ID checks, one local receipt/notice, zero replacement
+creates and removal of the saved original/recovery entry. R1 incorrectly expected
+the custom input to contain a selected preset amount; the screenshot proves the
+existing$10 preset is selected and the empty custom input is disabled. R2 verifies
+that unchanged design and passes. There are zero browser page errors. No web product
+file changed; its temporary private wrapper is removed and configs restored.
+
+Evidence is source/product-bound in private `installed-tip-android-source-binding-r2.json`,
+`installed-tip-web-source-binding-r2.json`, the Android success/cancel-r2 XML/images/
+state snapshots, Chrome-r2 snapshots and run logs under `existing-tip-provider-proof-r1`.
+Earlier failed attempts remain preserved. Both owned native simulators, the owned
+Chrome process and tip fixture18109 are stopped. Exact SQL cleanup reports zero
+fixture auth/users/gigs/payments/notifications; products/device data are retained.
+PR34 stays draft; current-head CI, real-provider/push acceptance and the remaining
+paid/no-show/fee/dispute/inventory scopes remain open.
