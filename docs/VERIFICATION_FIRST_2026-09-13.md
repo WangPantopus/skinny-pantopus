@@ -3191,3 +3191,74 @@ push/socket retries and Home provenance are still open. Actual client completion
 retry currently re-uploads proof files and needs its own repair/acceptance. Private
 object storage, retention and client session/restart recovery remain unaccepted.
 No hosted migration/deployment/provider configuration changed.
+
+## Existing client completion retries reuse uploaded proof
+
+September14, verified local checkpoint: existing web CompletionFlow and native
+GigDetailViewModel handlers upload again after an unknown mark-completed result.
+Two web regressions reproduce replacement uploads and submission after an account
+change. The repair retains acknowledged upload references while the existing
+form is open, uploads only missing selected files, and rejects incomplete upload
+receipts. Actor/session/origin and attempt checks retire late callbacks after
+identity changes, cancellation or departure. Existing native identity readers and
+uploaders are reused. No screen, layout, table, migration or service file is added.
+Android now passes72 selected JVM tests (36 task lifecycle, five stop entry and31 tip recovery), format, Detekt and compilation. R1–R5 formatting/static/compile failures remain recorded; R6 passes. One test-class size exception follows the existing test fixture convention; shipping complexity is reduced without suppressing its check. iOS passes46 detail tests on R3 plus43 unchanged tip/authorization checks on R2 (89 distinct). The first run stalled before test attachment; R2 exposed an incorrect path in the new fixture, corrected before R3. Installed native verification passes below.
+
+Web passes96 rendered tests across the existing tip and assigned-authorization
+suites, standalone TypeScript and scoped lint (zero errors/six existing warnings).
+Chrome R2 uses the actual completion picker/controls, Express routes, S3 SDK and
+owned PostgreSQL. The first completion commits but its SQL acknowledgement is
+lost:503 leaves the form's note and file selected; retry returns200 with the exact
+same URL and original timestamp. Two submissions produce one upload request
+(original plus existing thumbnail), one HEAD and one durable owner notification.
+R1 incorrectly expected only one object PUT, overlooking the existing thumbnail;
+that failed assertion is preserved. R2 passes with no browser page errors. The
+synthetic authentication/object service/notice transport are explicit fixture
+boundaries. Both SQL fixtures clean exactly; Chrome/API/Next stop, the temporary
+page is removed and prior configs restored. Screenshots retain the existing design.
+
+References are currently transient, so process restart and a lost upload response
+before receipt remain open. A saved proof receipt does not establish private byte
+availability. The confirmed CDN exposure, historical reconciliation, retention,
+completion push/socket and Home provenance recovery remain open. PR34 stays draft;
+canonicalf58f322e4 passed CI34931505743, while this later client/transaction checkpoint
+still needs current-head CI. Private web-completion-* and
+native-completion-* evidence preserves failures and results separately.
+
+The installed iOS R5 journey passes using the existing task, Photos picker, note,
+submit/error/retry and confirmation controls. One upload and two identical
+completion submissions preserve the original timestamp and one actual owner
+Notification. All679 installed app files match build R6. Authentication, shell
+read projection, object provider and notice transport are synthetic; upload and
+completion handlers, S3 SDK calls and owned SQL are real. No financial provider
+work occurs. R2 reproduced parent identifiers replacing submit/close identifiers;
+two existing-sheet accessibility grouping modifiers repair that boundary without
+visual changes. R1/R3 setup failures, R2 failure and R4's Photos accessibility hit
+target failure are retained; R5 uses the photo's observed frame for the actual tap.
+The owned iOS simulator stops and exact SQL cleanup passes.
+
+A further configuration read identifies the unavailable Supabase endpoint as
+loopback, with HOME_DOCUMENTS_BUCKET unset. The earlier StorageUnknownError is
+therefore not evidence about a hosted private Supabase bucket. The S3/CloudFront
+anonymous-byte finding remains an actual configured-provider observation.
+
+The installed Android R1 journey also passes using the existing task, system
+Photos picker, note, submit/error/retry, confirmation and Back controls. Empty
+proof causes zero uploads/submissions. A lost committed response preserves the
+selected photo/note; explicit retry sends identical proof twice, with one upload,
+one object PUT/HEAD, the original timestamp and one stored owner notification.
+The installed APK matches the tested build. Authentication, shell read projection,
+object provider and notice transport are synthetic; actual HTTP upload/completion
+routes, S3 SDK and owned SQL run. No financial provider calls occur. The expired
+session was signed in through existing controls, then the task link was reopened;
+replaying a deferred deep link after login is not verified. Native payment-timing
+copy on a free task is a separate unverified follow-up. Neither journey proves
+process-restart proof recovery or immediate push/socket delivery after a lost reply.
+
+Exact native SQL cleanup passes and both owned simulators/API stop. The exact
+hash-checked Android photo is removed; other device data is retained. Accepted APK
+and app ZIP archives match installed products (all679 iOS files). Final private
+source bindings explicitly reuse unchanged ViewModel/test checks; the later iOS
+UI-test helper and two accessibility modifiers are bound to the passing installed
+journey. All10 modified client/test files already existed. Failed runs and the
+accepted evidence are preserved and mirrored under existing-tip-provider-proof-r1.

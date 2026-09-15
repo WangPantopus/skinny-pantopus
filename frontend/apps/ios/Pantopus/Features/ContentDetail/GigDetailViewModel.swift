@@ -193,8 +193,14 @@ public final class GigDetailViewModel {
     private let tipIdentity: () -> GigStopViewModel.Identity?
     private let tipOpeningIdentity: GigStopViewModel.Identity?
     private static var activeTips = Set<String>()
+    private var completionUploads: [DeliveryProofPhoto: String] = [:]
+    private var completionAttempt: UUID?
 
     var tipIsCurrent: Bool {
+        writeIdentityIsCurrent
+    }
+
+    private var writeIdentityIsCurrent: Bool {
         tipOpeningIdentity != nil && tipOpeningIdentity?.actor == currentUserId && tipIdentity() == tipOpeningIdentity
     }
 
@@ -1269,10 +1275,37 @@ public final class GigDetailViewModel {
     /// confirmation; refreshes the task (status → completed) on success.
     @discardableResult
     public func submitDeliveryProof(photos: [DeliveryProofPhoto], note: String?) async -> Bool {
-        guard let gig = rawGig, !photos.isEmpty else { return false }
+        guard writeIdentityIsCurrent, api.apiBaseURL == uploader.apiBaseURL else {
+            retireDeliveryProof()
+            return false
+        }
+        guard let gig = rawGig, gig.acceptedBy == currentUserId, !photos.isEmpty,
+              completionAttempt == nil, ["in_progress", "completed"].contains(gig.status?.lowercased() ?? "")
+        else { return false }
+        if gig.status?.lowercased() == "completed", photos.contains(where: { completionUploads[$0] == nil }) { return false }
+        let attempt = UUID()
+        completionAttempt = attempt
+        let selected = Set(photos)
+        completionUploads = completionUploads.filter { selected.contains($0.key) }
+        func current() -> Bool {
+            completionAttempt == attempt && writeIdentityIsCurrent && !Task.isCancelled
+                && rawGig?.id == gig.id && rawGig?.acceptedBy == currentUserId
+                && api.apiBaseURL == uploader.apiBaseURL
+        }
+        defer {
+            if completionAttempt == attempt {
+                completionAttempt = nil
+                if !writeIdentityIsCurrent { completionUploads.removeAll() }
+            }
+        }
         do {
             var urls: [String] = []
             for photo in photos {
+                guard current() else { return false }
+                if let saved = completionUploads[photo] {
+                    urls.append(saved)
+                    continue
+                }
                 let response = try await uploader.uploadFile(
                     MultipartFile(
                         fieldName: "file",
@@ -1282,17 +1315,28 @@ public final class GigDetailViewModel {
                     ),
                     formFields: ["file_type": "gig_completion", "visibility": "private"]
                 )
+                guard current(), !response.file.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+                completionUploads[photo] = response.file.url
                 urls.append(response.file.url)
             }
+            guard current() else { return false }
             _ = try await api.request(
                 GigsEndpoints.markCompleted(gigId: gig.id, note: note, photos: urls),
                 as: EmptyResponse.self
             )
+            guard current() else { return false }
+            completionUploads.removeAll()
             await load()
-            return true
+            return current()
         } catch {
             return false
         }
+    }
+
+    /// Retire this sheet's callbacks and transient uploaded references on departure.
+    public func retireDeliveryProof() {
+        completionAttempt = nil
+        completionUploads.removeAll()
     }
 
     /// Place a bid with the caller-supplied amount + message + proposed

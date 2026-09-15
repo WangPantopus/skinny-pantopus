@@ -26,7 +26,9 @@ matched master. No hosted deployment, migration adoption or provider activation 
 **Remaining open PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
 remains draft. Its isolated integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
-the canonical PR branch is `codex/staging-paid-gig`, currently at worker-retry checkpoint `f58f322e4`.
+the canonical PR branch is `codex/staging-paid-gig`. The current client checkpoint
+follows atomic worker-completion `3579e89c8`; its push/current-head CI are recorded
+with this checkpoint. The preceding canonical worker-retry head is `f58f322e4`.
 The integration branch includes installed iOS checkpoint `d6a0194ea` after
 cold-entry checkpoint `7791bb16f`, following legacy recovery
 `e700862f1` and coordinated Android `c6b1f830e`, iOS `b98cc283c`,
@@ -38,7 +40,7 @@ passes all applicable jobs, including complete schema replay and native checks. 
 The durable-notice checkpoint `161aaf529` is now pushed to both branches and
 passes all15 applicable checks/one Seeder skip in [CI34922146452](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34922146452).
 Installed-tip checkpoint `4c8f11114` passes all applicable jobs in [CI34924470956](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34924470956). Owner-date checkpoint `addebe757` passes all15 applicable jobs/one Seeder skip in [CI34926992422](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34926992422). Creator-authority checkpoint `428243241` passes all15 applicable checks/one Seeder skip in [CI34929051683](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34929051683).
-Worker-retry checkpoint `f58f322e4` is running [CI34931505743](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34931505743).
+Worker-retry checkpoint `f58f322e4` passes all15 applicable checks/one Seeder skip in [CI34931505743](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34931505743).
 Do not merge/deploy PR34 yet.
 
 **Current original-tip behavior:** the existing Payment.id and financial fields
@@ -260,10 +262,27 @@ See [atomic worker notice evidence](VERIFICATION_FIRST_2026-09-13.md#existing-wo
 Push/socket transport remains best effort after commit; lost replies preserve
 in-app notices but do not yet guarantee transport recovery.
 
-**Next:** finish current-head CI and verify existing client completion retries,
-which currently re-upload files after an unknown submission result. Continue completion object privacy,
-byte/reference retention and client request/session recovery. Matching saved proof
-is a completion receipt, not a fresh claim that its bytes remain privately available.
+**Client completion verification:** existing web/iOS/Android handlers now retain
+acknowledged upload references through an open-form retry and retire old identity/
+departure callbacks.96 web,72 Android and89 distinct iOS selected checks pass,
+with scoped static checks. Actual Chrome verifies a committed503 followed by a
+matching200: one upload request, one saved completion/notice and the original time.
+Installed iOS also passes the actual picker, lost-reply retry and existing
+confirmation controls against owned HTTP/SQL; all679 installed app files match
+the tested build. iOS exposed inherited container identifiers on the existing proof
+controls; two accessibility grouping modifiers preserve the design. Installed
+Android also passes the actual picker, empty-proof denial, retained note/photo,
+lost-response retry and confirmation/Back controls. Its installed APK matches the
+tested build. Each native journey uses one upload, two identical completion
+requests and one stored notice. No new client file, screen, table or migration is
+added. Source/product bindings and accepted archives are preserved privately.
+Current-head CI and full provider acceptance remain required.
+See [client retry evidence](VERIFICATION_FIRST_2026-09-13.md#existing-client-completion-retries-reuse-uploaded-proof).
+
+**Next:** push this verified checkpoint and check current-head CI. Continue
+completion object privacy, byte/reference retention and
+client restart recovery. Matching saved proof is a completion receipt, not a fresh
+claim that its bytes remain privately available.
 Then finish notification transport/Home provenance recovery and completion/reopen
 policy flows. No-show execution still requires atomic concurrent/retry handling and
 verified fee/financial outcomes. The repo's fee rates do not specify who owes and
@@ -275,8 +294,12 @@ P01–P03/P07–P09, R05/R06 and the wider80-row inventory remain open within th
 stated limits. After the paid scope, continue the remaining existing-feature
 inventory; preserve accepted subjourneys and screen designs.
 
-**Runtime/ownership:** owned iOS/Android simulators, Chrome and the isolated tip
-HTTP fixture18109 are stopped after verification. No native build remains active.
+**Runtime/ownership:** web/Chrome and native completion fixtures are cleaned and
+stopped;18109 is released. The isolated Android AVD and owned iOS simulator are
+shut down. Accepted APK/app archives match installed products; the exact owned
+Android photo is removed. A separate booted simulator
+EB5AD759-4699-481F-8A9F-0D650B074623 is not owned by this task and is preserved.
+One heavy native build runs at a time. Prior tip fixture cleanup remains valid.
 Exact fixture cleanup reports zero actors/gigs/payments/notifications. The private
 web wrapper was removed and pre-run configs restored. Device data and accepted
 products are retained. The Android verification

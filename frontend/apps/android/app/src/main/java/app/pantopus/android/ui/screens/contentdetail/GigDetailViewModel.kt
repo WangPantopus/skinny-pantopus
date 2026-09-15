@@ -38,6 +38,7 @@ import app.pantopus.android.data.reviews.ReviewsRepository
 import app.pantopus.android.ui.screens.gigs.GigsCategory
 import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationCoordinator
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
+import app.pantopus.android.ui.screens.gigs.checkout.GigCheckoutIdentity
 import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
 import app.pantopus.android.ui.screens.gigs.refunds.GigRefundCoordinator
 import app.pantopus.android.ui.screens.gigs.refunds.GigRefundFactory
@@ -1526,43 +1527,135 @@ class GigDetailViewModel
          * Calls [onResult] with `true` so the Delivery Proof sheet can flip
          * to its SUBMITTED confirmation; refreshes the task on success.
          */
+        private val completionUploads = mutableMapOf<String, String>()
+        private var completionGeneration = 0L
+        private var completionInFlight = false
+        private var completionJob: Job? = null
+
+        fun retireDeliveryProof() {
+            completionGeneration++
+            completionJob?.cancel()
+            completionJob = null
+            completionInFlight = false
+            completionUploads.clear()
+        }
+
         fun submitDeliveryProof(
             photos: List<DeliveryProofPhoto>,
             note: String?,
             onResult: (Boolean) -> Unit = {},
         ) {
             val gig = rawGig
-            if (gig == null || photos.isEmpty()) {
+            val actor = currentUserId()
+            if (gig == null || actor == null || photos.isEmpty()) {
                 onResult(false)
                 return
             }
-            viewModelScope.launch {
-                val urls = mutableListOf<String>()
-                for (photo in photos) {
-                    val upload =
-                        filesRepo.uploadFile(
-                            filename = photo.filename,
-                            mimeType = photo.mimeType,
-                            bytes = photo.bytes,
-                            fileType = "gig_completion",
-                            visibility = "private",
-                        )
-                    when (upload) {
-                        is NetworkResult.Success -> urls.add(upload.data.file.url)
-                        is NetworkResult.Failure -> {
-                            onResult(false)
+            val workerMaySubmit = gig.acceptedBy == actor && gig.status?.lowercase() in listOf("in_progress", "completed")
+            if (completionInFlight || !workerMaySubmit) {
+                onResult(false)
+                return
+            }
+            val generation = completionGeneration
+            val marker = checkoutIdentities.scopeMarker()
+            completionInFlight = true
+            completionJob =
+                viewModelScope.launch {
+                    var succeeded = false
+                    try {
+                        if (!bidCheckout.isCurrentReadScope()) {
+                            retireDeliveryProof()
                             return@launch
                         }
+                        val identity = checkoutIdentities.paymentIdentity() ?: return@launch
+
+                        suspend fun current(): Boolean = deliveryProofIsCurrent(identity, actor, marker, gig.id, generation)
+
+                        if (!current()) return@launch
+                        val urls = deliveryProofUrls(photos, gig.status?.lowercase() == "completed", ::current) ?: return@launch
+                        if (!current()) return@launch
+                        val result = repo.markCompleted(gigId, note, urls)
+                        if (!current()) return@launch
+                        if (result is NetworkResult.Success) {
+                            completionUploads.clear()
+                            load()
+                            succeeded = true
+                        }
+                    } finally {
+                        onResult(finishDeliveryProof(succeeded, actor, marker, generation))
                     }
                 }
-                when (repo.markCompleted(gigId, note, urls)) {
-                    is NetworkResult.Success -> {
-                        load()
-                        onResult(true)
-                    }
-                    is NetworkResult.Failure -> onResult(false)
-                }
+        }
+
+        private suspend fun deliveryProofIsCurrent(
+            identity: GigCheckoutIdentity,
+            actor: String,
+            marker: String,
+            taskId: String,
+            generation: Long,
+        ): Boolean {
+            val latest = checkoutIdentities.paymentIdentity()
+            val readable = bidCheckout.isCurrentReadScope()
+            val sameSession = latest == identity && identity.userId == actor && marker == checkoutIdentities.scopeMarker()
+            val sameTask = rawGig?.id == taskId && rawGig?.acceptedBy == actor
+            val sameFrame = generation == completionGeneration && readable && actor == currentUserId()
+            return sameSession && sameTask && sameFrame
+        }
+
+        private fun finishDeliveryProof(
+            succeeded: Boolean,
+            actor: String,
+            marker: String,
+            generation: Long,
+        ): Boolean {
+            val ownsAttempt = generation == completionGeneration
+            val current = actor == currentUserId() && marker == checkoutIdentities.scopeMarker()
+            if (ownsAttempt) {
+                completionInFlight = false
+                completionJob = null
+                if (!current) completionUploads.clear()
             }
+            return succeeded && ownsAttempt && current
+        }
+
+        private suspend fun deliveryProofUrls(
+            photos: List<DeliveryProofPhoto>,
+            alreadyCompleted: Boolean,
+            current: suspend () -> Boolean,
+        ): List<String>? {
+            val urls = mutableListOf<String>()
+            for (photo in photos) {
+                val (bytes, key) =
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                        val snapshot = photo.bytes.copyOf()
+                        val hash =
+                            java.security.MessageDigest.getInstance("SHA-256").digest(snapshot)
+                                .joinToString("") { "%02x".format(it) }
+                        snapshot to (photo.filename + "|" + photo.mimeType + "|" + hash)
+                    }
+                if (!current()) return null
+                val saved = completionUploads[key]
+                if (saved != null) {
+                    urls.add(saved)
+                    continue
+                }
+                if (alreadyCompleted) return null
+                val uploaded =
+                    filesRepo.uploadFile(
+                        filename = photo.filename,
+                        mimeType = photo.mimeType,
+                        bytes = bytes,
+                        fileType = "gig_completion",
+                        visibility = "private",
+                    )
+                if (!current()) return null
+                if (uploaded !is NetworkResult.Success || uploaded.data.file.url.isBlank()) return null
+                completionUploads[key] = uploaded.data.file.url
+                urls.add(uploaded.data.file.url)
+            }
+            if (!current()) return null
+
+            return urls
         }
 
         /** Returns the gig id wired from `SavedStateHandle`. */
@@ -1989,6 +2082,7 @@ class GigDetailViewModel
 
         /** Leave the room + stop collecting when the screen goes away. */
         fun leaveRealtime() {
+            retireDeliveryProof()
             realtimeJob?.cancel()
             realtimeJob = null
             socket.emit("gig:leave", JSONObject().put("gigId", gigId))

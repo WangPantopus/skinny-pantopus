@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   Wrench,
   CheckCircle,
@@ -66,6 +66,12 @@ interface CompletionFlowProps {
   onOpenChat: () => void;
 }
 
+function completionSessionMarker() {
+  try { return localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY); } catch { return null; }
+}
+
+type CompletionScope = { actor: string | undefined; gigId: string; token: string | null; origin: string; marker: string | null };
+
 export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function CompletionFlow({
   gigId,
   gig,
@@ -105,6 +111,29 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   const [completionNote, setCompletionNote] = useState('');
   const [completionFiles, setCompletionFiles] = useState<File[]>([]);
   const [submittingCompletion, setSubmittingCompletion] = useState(false);
+  const completionScope = useRef<CompletionScope | null>(null);
+  const completionAttempt = useRef<object | null>(null);
+  const completionUploads = useRef(new WeakMap<File, string>());
+  const completionScopeIsCurrent = (scope: CompletionScope | null) => Boolean(scope?.actor && scope.token
+    && completionScope.current === scope && scope.actor === currentUserId && scope.gigId === gigId
+    && scope.token === api.getAuthToken() && scope.origin === api.getApiBaseUrl() && scope.marker === completionSessionMarker());
+
+  useEffect(() => {
+    completionScope.current = { actor: currentUserId, gigId, token: api.getAuthToken(), origin: api.getApiBaseUrl(), marker: completionSessionMarker() };
+    completionAttempt.current = null; completionUploads.current = new WeakMap();
+    setShowCompletionModal(false); setCompletionNote(''); setCompletionFiles([]); setSubmittingCompletion(false);
+    const retire = () => {
+      completionScope.current = null; completionAttempt.current = null; completionUploads.current = new WeakMap();
+      setShowCompletionModal(false); setCompletionNote(''); setCompletionFiles([]); setSubmittingCompletion(false);
+    };
+    const unsubscribe = api.onTokenChange(retire);
+    const changed = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) retire(); };
+    window.addEventListener('storage', changed);
+    return () => {
+      completionScope.current = null; completionAttempt.current = null; completionUploads.current = new WeakMap();
+      unsubscribe(); window.removeEventListener('storage', changed);
+    };
+  }, [gigId, currentUserId, gigStatus, isWorker]);
 
   // Poster confirm completion
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -203,32 +232,51 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   };
 
   const handleMarkCompleted = () => {
+    if (showCompletionModal || completionAttempt.current) return;
+    if (!isWorker || gigStatus !== 'in_progress' || !completionScopeIsCurrent(completionScope.current)) {
+      toast.error('Reopen the task with your current account before submitting completion.'); return;
+    }
+    completionAttempt.current = null; completionUploads.current = new WeakMap();
     setShowCompletionModal(true);
     setCompletionNote('');
     setCompletionFiles([]);
   };
 
   const submitCompletion = async () => {
+    const scope = completionScope.current;
+    if (completionAttempt.current || !completionScopeIsCurrent(scope)) return;
+    const attempt = {}; completionAttempt.current = attempt;
+    const current = () => completionAttempt.current === attempt && completionScopeIsCurrent(scope);
+    const files = [...completionFiles];
     setSubmittingCompletion(true);
     try {
-      let photoUrls: string[] = [];
-      if (completionFiles.length > 0) {
-        const uploadRes = await api.upload.uploadGigCompletionMedia(gigId, completionFiles);
-        photoUrls = (uploadRes?.media || []).map((m: Record<string, any>) => m.file_url).filter(Boolean) as string[];
+      const missing = files.filter(file => !completionUploads.current.has(file));
+      if (missing.length > 0) {
+        const uploadRes = await api.upload.uploadGigCompletionMedia(gigId, missing);
+        if (!current()) return;
+        const media = uploadRes?.media;
+        if (!Array.isArray(media) || media.length !== missing.length
+          || media.some(item => typeof item.file_url !== 'string' || !item.file_url.trim())) {
+          throw new Error('Some proof files could not be confirmed. Please retry.');
+        }
+        missing.forEach((file, index) => completionUploads.current.set(file, media[index].file_url));
       }
+      if (!current()) return;
+      const photoUrls = files.map(file => completionUploads.current.get(file)!);
       const gigsExt = api.gigs as unknown as GigsCompletionApiExt;
       await gigsExt.markGigCompleted(gigId, {
         note: completionNote || undefined,
         photos: photoUrls.length > 0 ? photoUrls : undefined,
       });
+      if (!current()) return;
+      completionUploads.current = new WeakMap();
       setShowCompletionModal(false);
       setCompletionFiles([]);
       onStatusChange?.();
     } catch (err: unknown) {
-      console.error('Mark completed failed:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to mark completed');
+      if (current()) toast.error(err instanceof Error ? err.message : 'Failed to mark completed');
     } finally {
-      setSubmittingCompletion(false);
+      if (current()) { completionAttempt.current = null; setSubmittingCompletion(false); }
     }
   };
 
@@ -495,7 +543,10 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
 
             <div className="px-6 py-4 flex gap-3 justify-end border-t border-app-border-subtle">
               <button
-                onClick={() => setShowCompletionModal(false)}
+                onClick={() => {
+                  completionAttempt.current = null; completionUploads.current = new WeakMap();
+                  setShowCompletionModal(false); setSubmittingCompletion(false); setCompletionFiles([]); setCompletionNote('');
+                }}
                 className="px-4 py-2 text-app-text-strong hover:bg-app-hover rounded-lg font-medium text-sm"
               >
                 Cancel

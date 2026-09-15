@@ -87,6 +87,7 @@ public struct GigDetailView: View {
             viewModel.startRealtime()
         }
         .onDisappear { viewModel.stopRealtime()
+            viewModel.retireDeliveryProof()
             authorizationLifetime?.retire()
             stopLifetime?.retire()
         }
@@ -120,15 +121,17 @@ public struct GigDetailView: View {
             )
             .presentationDetents([.large])
         }
-        .sheet(item: $deliveryTarget) { target in
+        .sheet(item: $deliveryTarget, onDismiss: { viewModel.retireDeliveryProof() }, content: { target in
             DeliveryProofSheetView(
                 target: target,
                 onSubmit: { photos, note in
                     await viewModel.submitDeliveryProof(photos: photos, note: note)
                 },
-                onDismiss: { deliveryTarget = nil }
+                onDismiss: { viewModel.retireDeliveryProof()
+                    deliveryTarget = nil
+                }
             )
-        }
+        })
         .sheet(isPresented: $showTipSheet) { tipSheet }
         .sheet(item: $refundTarget, onDismiss: { Task { await viewModel.refreshAfterRefund() } }, content: { target in
             GigRefundView(model: target)

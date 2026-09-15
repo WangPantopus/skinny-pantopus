@@ -1,14 +1,16 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { TextEncoder as NodeTextEncoder } from 'node:util';
-import { AUTH_SESSION_CHANGE_KEY, payments } from '@pantopus/api';
+import { AUTH_SESSION_CHANGE_KEY, payments, gigs, upload } from '@pantopus/api';
 import type { GigTipPreview, GigTipRequest, GigTipProgress, GigTipReceipt } from '@pantopus/api';
 import TipModal, { verifyTipProgress } from '../src/components/payments/TipModal';
-import CompletionFlow from '../src/components/gig-detail/CompletionFlow';
+import CompletionFlow, { type CompletionFlowHandle } from '../src/components/gig-detail/CompletionFlow';
 const router = { push: jest.fn(), replace: jest.fn() };
 jest.mock('next/navigation', () => ({ useRouter: () => router }));
 jest.mock('next/image', () => () => null);
-jest.mock('../src/components/FileUpload', () => () => null);
+jest.mock('../src/components/FileUpload', () => function MockFileUpload({ onFilesSelected }: { onFilesSelected: (files: File[]) => void }) {
+  return <button onClick={() => onFilesSelected([new File(['proof'], 'work.jpg', { type: 'image/jpeg' })])}>Pick synthetic proof</button>;
+});
 jest.mock('../src/components/payments/StripeConnectOnboarding', () => () => null);
 jest.mock('../src/components/ui/toast-store', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 
@@ -41,6 +43,8 @@ let origin = 'https://app.test';
 const listeners = new Set<() => void>();
 jest.mock('@pantopus/api', () => ({
   payments: { createTip: jest.fn(), getTipPreview: jest.fn(), getTipRequest: jest.fn() },
+  gigs: { markGigCompleted: jest.fn(), checkNoShow: jest.fn() },
+  upload: { uploadGigCompletionMedia: jest.fn() },
   getAuthToken: () => token, getApiBaseUrl: () => origin, AUTH_SESSION_CHANGE_KEY: 'session-change',
   onTokenChange: (fn: () => void) => { listeners.add(fn); return () => listeners.delete(fn); },
 }));
@@ -82,6 +86,87 @@ beforeEach(() => {
   Object.defineProperty(globalThis, 'TextEncoder', { configurable: true, value: NodeTextEncoder });
   Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: jest.fn(() => requestId) });
   getPreview.mockResolvedValue(preview); read.mockResolvedValue(pending); create.mockResolvedValue(pending);
+});
+
+describe('existing completion submission retries', () => {
+  const submitted = jest.fn();
+  const uploadProof = jest.mocked(upload.uploadGigCompletionMedia), mark = jest.mocked(gigs.markGigCompleted);
+  function openProof(pick = true) {
+    const ref = React.createRef<CompletionFlowHandle>();
+    const result = render(<CompletionFlow ref={ref} gigId={gig} gig={{ accepted_by: worker, price: 0 }}
+      isOwner={false} isWorker currentUserId={worker} gigStatus="in_progress" paymentLifecycleStatus="none"
+      onStatusChange={submitted} onOpenChat={jest.fn()} />);
+    act(() => ref.current!.markCompleted());
+    if (pick) fireEvent.click(screen.getByRole('button', { name: 'Pick synthetic proof' }));
+    return { ...result, ref };
+  }
+  const clickSubmit = async () => act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Mark Complete' })); });
+  beforeEach(() => {
+    uploadProof.mockResolvedValue({ media: [{ file_url: 'https://proof.test/original.jpg' }] } as Awaited<ReturnType<typeof upload.uploadGigCompletionMedia>>);
+    mark.mockResolvedValue({ gig: { id: gig, status: 'completed' } } as Awaited<ReturnType<typeof gigs.markGigCompleted>>);
+  });
+  test('a lost completion reply retries the same uploaded references', async () => {
+    mark.mockRejectedValueOnce(new Error('Lost completion reply')); openProof();
+    await clickSubmit(); await waitFor(() => expect(screen.getByRole('button', { name: 'Mark Complete' })).toBeEnabled());
+    await clickSubmit(); await waitFor(() => expect(submitted).toHaveBeenCalledTimes(1));
+    expect(uploadProof).toHaveBeenCalledTimes(1); expect(mark).toHaveBeenCalledTimes(2);
+    expect(mark.mock.calls[1]).toEqual(mark.mock.calls[0]);
+  });
+  test('an upload returned after account change cannot submit completion', async () => {
+    const held = deferred<Awaited<ReturnType<typeof upload.uploadGigCompletionMedia>>>();
+    uploadProof.mockReturnValue(held.promise); openProof(); await clickSubmit();
+    act(() => { token = 'other-session'; listeners.forEach(fn => fn()); });
+    await act(async () => held.resolve({ media: [{ file_url: 'https://proof.test/original.jpg' }] } as Awaited<ReturnType<typeof upload.uploadGigCompletionMedia>>));
+    expect(mark).not.toHaveBeenCalled(); expect(submitted).not.toHaveBeenCalled();
+  });
+  test.each(['marker', 'origin', 'unmount', 'cancel'])('late upload cannot submit after %s', async change => {
+    const held = deferred<Awaited<ReturnType<typeof upload.uploadGigCompletionMedia>>>();
+    uploadProof.mockReturnValue(held.promise); const page = openProof(); await clickSubmit();
+    act(() => {
+      if (change === 'marker') localStorage.setItem(AUTH_SESSION_CHANGE_KEY, 'replacement');
+      if (change === 'origin') origin = 'https://other.test';
+      if (change === 'unmount') page.unmount();
+      if (change === 'cancel') fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    });
+    await act(async () => held.resolve({ media: [{ file_url: 'https://proof.test/original.jpg' }] } as Awaited<ReturnType<typeof upload.uploadGigCompletionMedia>>));
+    expect(mark).not.toHaveBeenCalled(); expect(submitted).not.toHaveBeenCalled();
+  });
+  test('late completion success cannot update a replacement account', async () => {
+    const held = deferred<Awaited<ReturnType<typeof gigs.markGigCompleted>>>(); mark.mockReturnValue(held.promise);
+    openProof(); await clickSubmit(); await waitFor(() => expect(mark).toHaveBeenCalledTimes(1));
+    act(() => { token = 'replacement'; listeners.forEach(fn => fn()); });
+    await act(async () => held.resolve({ gig: { id: gig, status: 'completed' } } as Awaited<ReturnType<typeof gigs.markGigCompleted>>));
+    expect(submitted).not.toHaveBeenCalled(); expect(screen.queryByText('Submit Completion')).not.toBeInTheDocument();
+  });
+  test('canceling an old upload cannot clear a newer submission guard', async () => {
+    const old = deferred<Awaited<ReturnType<typeof upload.uploadGigCompletionMedia>>>();
+    const next = deferred<Awaited<ReturnType<typeof upload.uploadGigCompletionMedia>>>();
+    uploadProof.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    const page = openProof(); await clickSubmit();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    act(() => page.ref.current!.markCompleted()); fireEvent.click(screen.getByRole('button', { name: 'Pick synthetic proof' }));
+    await clickSubmit();
+    await act(async () => old.resolve({ media: [{ file_url: 'https://proof.test/old.jpg' }] } as Awaited<ReturnType<typeof upload.uploadGigCompletionMedia>>));
+    expect(mark).not.toHaveBeenCalled(); expect(screen.getByRole('button', { name: 'Submitting…' })).toBeDisabled();
+    await act(async () => next.resolve({ media: [{ file_url: 'https://proof.test/new.jpg' }] } as Awaited<ReturnType<typeof upload.uploadGigCompletionMedia>>));
+    expect(mark).toHaveBeenCalledTimes(1); expect(mark.mock.calls[0][1]?.photos).toEqual(['https://proof.test/new.jpg']);
+  });
+  test('missing upload receipts cannot silently complete without the selected proof', async () => {
+    uploadProof.mockResolvedValueOnce({ message: 'Synthetic incomplete upload', media: [] });
+    openProof(); await clickSubmit(); expect(mark).not.toHaveBeenCalled();
+    await clickSubmit(); expect(uploadProof).toHaveBeenCalledTimes(2); expect(mark).toHaveBeenCalledTimes(1);
+  });
+  test('duplicate clicks admit only one upload and completion request', async () => {
+    const held = deferred<Awaited<ReturnType<typeof upload.uploadGigCompletionMedia>>>(); uploadProof.mockReturnValue(held.promise);
+    openProof(); const button = screen.getByRole('button', { name: 'Mark Complete' });
+    act(() => { fireEvent.click(button); fireEvent.click(button); }); expect(uploadProof).toHaveBeenCalledTimes(1);
+    await act(async () => held.resolve({ media: [{ file_url: 'https://proof.test/original.jpg' }] } as Awaited<ReturnType<typeof upload.uploadGigCompletionMedia>>));
+    expect(mark).toHaveBeenCalledTimes(1);
+  });
+  test('the existing optional no-file submission still works', async () => {
+    openProof(false); await clickSubmit(); expect(uploadProof).not.toHaveBeenCalled();
+    expect(mark).toHaveBeenCalledWith(gig, { note: undefined, photos: undefined }); expect(submitted).toHaveBeenCalledTimes(1);
+  });
 });
 
 test('opening only reads eligibility and explicit submission retains the exact original before POST', async () => {

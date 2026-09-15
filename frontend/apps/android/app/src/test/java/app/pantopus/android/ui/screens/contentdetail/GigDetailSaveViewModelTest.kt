@@ -20,9 +20,11 @@ import app.pantopus.android.data.api.models.gigs.GigPaymentDto
 import app.pantopus.android.data.api.models.gigs.GigPaymentResponse
 import app.pantopus.android.data.api.models.gigs.GigQuestionsResponse
 import app.pantopus.android.data.api.models.gigs.GigSaveResponse
+import app.pantopus.android.data.api.models.gigs.MarkCompletedResponse
 import app.pantopus.android.data.api.models.gigs.NoShowCheckResponse
 import app.pantopus.android.data.api.models.gigs.RescheduleGigResponse
 import app.pantopus.android.data.api.models.gigs.WorkerAckResponse
+import app.pantopus.android.data.api.models.homes.FileUploadResponse
 import app.pantopus.android.data.api.models.offers.MyBidsResponse
 import app.pantopus.android.data.api.models.users.UserDto
 import app.pantopus.android.data.api.net.NetworkError
@@ -43,6 +45,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,6 +86,8 @@ private class RecordingActiveNotifier : GigActiveNotifier {
     }
 }
 
+// Lifecycle regressions share the existing task/session fixture.
+@Suppress("LargeClass")
 @OptIn(ExperimentalCoroutinesApi::class)
 class GigDetailSaveViewModelTest {
     private val repo: GigsRepository = mockk()
@@ -748,4 +753,164 @@ class GigDetailSaveViewModelTest {
     fun realtime_room_events_include_rescheduled() {
         assertTrue(GigDetailViewModel.GIG_ROOM_EVENTS.contains("gig:rescheduled"))
     }
+
+    private fun deliveryPhoto() = DeliveryProofPhoto("photo-one", "synthetic proof".toByteArray(), "work.jpg", "image/jpeg")
+
+    private fun uploadedProof(suffix: String = "one") =
+        NetworkResult.Success(FileUploadResponse("Uploaded", FileUploadResponse.FileRef("file-$suffix", "https://proof.test/$suffix.jpg")))
+
+    private fun deliveryVm(
+        identity: () -> Pair<String, String?>? = { "u1" to "proof-session" },
+        status: String = "in_progress",
+    ): GigDetailViewModel {
+        every { authRepo.state } returns
+            MutableStateFlow<AuthRepository.State>(
+                AuthRepository.State.SignedIn(
+                    UserDto(id = "u1", email = "proof@example.invalid", displayName = "Worker", avatarUrl = null),
+                ),
+            )
+        coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any()) } returns uploadedProof()
+        coEvery { repo.markCompleted(any(), any(), any()) } returns NetworkResult.Success(MarkCompletedResponse())
+        return lifecycleVm(assignedGig(acceptedBy = "u1").copy(status = status), checkoutIdentity = identity)
+    }
+
+    private suspend fun submitProof(
+        vm: GigDetailViewModel,
+        photos: List<DeliveryProofPhoto>,
+    ): Boolean {
+        val response = CompletableDeferred<Boolean>()
+        vm.submitDeliveryProof(photos, "Original note") { response.complete(it) }
+        return response.await()
+    }
+
+    @Test
+    fun delivery_proof_retry_reuses_the_original_upload() =
+        runTest {
+            val vm = deliveryVm()
+            coEvery { repo.markCompleted(any(), any(), any()) } returnsMany
+                listOf(
+                    NetworkResult.Failure(NetworkError.Server(503, null)), NetworkResult.Success(MarkCompletedResponse()),
+                )
+            val photos = listOf(deliveryPhoto())
+            assertFalse(submitProof(vm, photos))
+            assertTrue(submitProof(vm, photos))
+            coVerify(exactly = 1) { filesRepo.uploadFile(any(), any(), any(), "gig_completion", "private") }
+            coVerify(exactly = 2) { repo.markCompleted("g1", "Original note", listOf("https://proof.test/one.jpg")) }
+        }
+
+    @Test
+    fun partial_delivery_upload_keeps_the_first_file_for_retry() =
+        runTest {
+            val vm = deliveryVm()
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any()) } returnsMany
+                listOf(
+                    uploadedProof(), NetworkResult.Failure(NetworkError.Server(503, null)), uploadedProof("two"),
+                )
+            val photos = listOf(deliveryPhoto(), DeliveryProofPhoto("two", "second proof".toByteArray(), "two.jpg", "image/jpeg"))
+            assertFalse(submitProof(vm, photos))
+            coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }
+            assertTrue(submitProof(vm, photos))
+            coVerify(exactly = 3) { filesRepo.uploadFile(any(), any(), any(), any(), any()) }
+            coVerify(
+                exactly = 1,
+            ) { repo.markCompleted("g1", "Original note", listOf("https://proof.test/one.jpg", "https://proof.test/two.jpg")) }
+        }
+
+    @Test
+    fun late_delivery_upload_cannot_submit_after_identity_change() =
+        runTest {
+            var identity: Pair<String, String?>? = "u1" to "proof-session"
+            val vm = deliveryVm(identity = { identity })
+            val started = CompletableDeferred<Unit>()
+            val held = CompletableDeferred<NetworkResult<FileUploadResponse>>()
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any()) } coAnswers {
+                started.complete(Unit)
+                held.await()
+            }
+            val result = CompletableDeferred<Boolean>()
+            vm.submitDeliveryProof(listOf(deliveryPhoto()), null) { result.complete(it) }
+            started.await()
+            identity = "u2" to "other-session"
+            held.complete(uploadedProof())
+            assertFalse(result.await())
+            coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }
+        }
+
+    @Test
+    fun delivery_departure_and_duplicate_submit_do_not_create_another_request() =
+        runTest {
+            val vm = deliveryVm()
+            val started = CompletableDeferred<Unit>()
+            val held = CompletableDeferred<NetworkResult<FileUploadResponse>>()
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any()) } coAnswers {
+                started.complete(Unit)
+                held.await()
+            }
+            val result = CompletableDeferred<Boolean>()
+            vm.submitDeliveryProof(listOf(deliveryPhoto()), null) { result.complete(it) }
+            started.await()
+            assertFalse(submitProof(vm, listOf(deliveryPhoto())))
+            vm.retireDeliveryProof()
+            held.complete(uploadedProof())
+            assertFalse(result.await())
+            coVerify(exactly = 1) { filesRepo.uploadFile(any(), any(), any(), any(), any()) }
+            coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }
+        }
+
+    @Test
+    fun changed_photo_bytes_with_same_picker_id_get_a_new_upload() =
+        runTest {
+            val vm = deliveryVm()
+            val uploads = listOf(uploadedProof(), uploadedProof("changed"))
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any()) } returnsMany uploads
+            coEvery { repo.markCompleted(any(), any(), any()) } returnsMany
+                listOf(
+                    NetworkResult.Failure(NetworkError.Server(503, null)), NetworkResult.Success(MarkCompletedResponse()),
+                )
+            val photo = deliveryPhoto()
+            assertFalse(submitProof(vm, listOf(photo)))
+            photo.bytes[0] = 1
+            assertTrue(submitProof(vm, listOf(photo)))
+            coVerify(exactly = 2) { filesRepo.uploadFile(any(), any(), any(), any(), any()) }
+            coVerify(exactly = 1) { repo.markCompleted("g1", "Original note", listOf("https://proof.test/changed.jpg")) }
+        }
+
+    @Test
+    fun completed_cold_entry_does_not_upload_replacement_proof() =
+        runTest {
+            val vm = deliveryVm(status = "completed")
+            assertFalse(submitProof(vm, listOf(deliveryPhoto())))
+            coVerify(exactly = 0) { filesRepo.uploadFile(any(), any(), any(), any(), any()) }
+            coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }
+        }
+
+    @Test
+    fun missing_upload_reference_does_not_mark_work_complete() =
+        runTest {
+            val vm = deliveryVm()
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any()) } returns
+                NetworkResult.Success(FileUploadResponse("Uploaded", FileUploadResponse.FileRef("file-one", "")))
+            assertFalse(submitProof(vm, listOf(deliveryPhoto())))
+            coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }
+        }
+
+    @Test
+    fun late_completion_response_cannot_refresh_a_replacement_session() =
+        runTest {
+            var identity: Pair<String, String?>? = "u1" to "proof-session"
+            val vm = deliveryVm(identity = { identity })
+            val started = CompletableDeferred<Unit>()
+            val held = CompletableDeferred<NetworkResult<MarkCompletedResponse>>()
+            coEvery { repo.markCompleted(any(), any(), any()) } coAnswers {
+                started.complete(Unit)
+                held.await()
+            }
+            val result = CompletableDeferred<Boolean>()
+            vm.submitDeliveryProof(listOf(deliveryPhoto()), null) { result.complete(it) }
+            started.await()
+            identity = "u2" to "replacement"
+            held.complete(NetworkResult.Success(MarkCompletedResponse()))
+            assertFalse(result.await())
+            coVerify(exactly = 1) { repo.detail("g1") }
+        }
 }

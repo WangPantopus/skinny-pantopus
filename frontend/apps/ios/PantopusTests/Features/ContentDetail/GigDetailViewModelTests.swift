@@ -969,6 +969,155 @@ final class GigDetailViewModelTests: XCTestCase {
         XCTAssertTrue(SequencedURLProtocol.capturedRequests.contains { $0.url?.path == "/api/gigs/g1/report-no-show" })
         XCTAssertNil(vm.activePhase, "Cancelled after the report.")
     }
+
+    // MARK: - Existing delivery-proof upload and retry
+
+    private var proofPhoto: DeliveryProofPhoto {
+        DeliveryProofPhoto(id: "photo-one", data: Data("synthetic proof".utf8), filename: "work.jpg", mimeType: "image/jpeg")
+    }
+
+    private func proofVM(
+        uploads: [SequencedURLProtocol.Response],
+        completions: [SequencedURLProtocol.Response],
+        identity: @escaping () -> GigStopViewModel.Identity? = {
+            .init(actor: "worker-1", session: "proof-session", origin: "synthetic-origin")
+        },
+        status: String = "in_progress"
+    ) async -> GigDetailViewModel {
+        let envelope = "{\"gig\":{\"id\":\"g1\",\"title\":\"Existing task\",\"price\":0,\"status\":\"\(status)\",\"user_id\":\"owner-1\",\"accepted_by\":\"worker-1\"}}"
+        let routes: [String: [SequencedURLProtocol.Response]] = [
+            "/api/gigs/g1": Array(repeating: .status(200, body: envelope), count: 3),
+            "/api/gigs/g1/questions": Array(repeating: .status(200, body: Self.questionsJSON), count: 3),
+            "/api/gigs/g1/payment": Array(repeating: .status(200, body: "{\"payment\":null}"), count: 3),
+            "/api/files/upload": uploads,
+            "/api/gigs/g1/mark-completed": completions
+        ]
+        let session = SequencedURLProtocol.makeSession(routeResponses: routes)
+        let vm = GigDetailViewModel(
+            gigId: "g1",
+            api: APIClient(session: session, retryPolicy: .none),
+            uploader: MultipartUploader(session: session),
+            currentUserId: "worker-1",
+            tipIdentity: identity
+        )
+        await vm.load()
+        XCTAssertEqual(vm.rawGig?.status, status)
+        XCTAssertEqual(vm.rawGig?.acceptedBy, "worker-1")
+        return vm
+    }
+
+    private func uploadedProof(_ suffix: String = "one", delay: TimeInterval = 0) -> SequencedURLProtocol.Response {
+        .status(
+            201,
+            body: "{\"message\":\"Uploaded\",\"file\":{\"id\":\"file-\(suffix)\",\"url\":\"https://proof.test/\(suffix).jpg\"}}",
+            delay: delay
+        )
+    }
+
+    private func proofRequests(_ path: String) -> [URLRequest] {
+        SequencedURLProtocol.capturedRequests.filter { $0.httpMethod == "POST" && $0.url?.path == path }
+    }
+
+    private func waitForProofUpload() async {
+        for _ in 0..<100 {
+            if !proofRequests("/api/files/upload").isEmpty { return }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("Expected the existing upload request")
+    }
+
+    func testDeliveryProofRetryReusesOriginalUploadedURLs() async throws {
+        let vm = await proofVM(uploads: [uploadedProof()], completions: [.status(503, body: "{}"), .status(200, body: "{}")])
+        let first = await vm.submitDeliveryProof(photos: [proofPhoto], note: "Original note")
+        let retry = await vm.submitDeliveryProof(photos: [proofPhoto], note: "Original note")
+        XCTAssertFalse(first)
+        XCTAssertTrue(retry)
+        XCTAssertEqual(proofRequests("/api/files/upload").count, 1)
+        XCTAssertEqual(proofRequests("/api/gigs/g1/mark-completed").count, 2)
+        let bodies = try proofRequests("/api/gigs/g1/mark-completed").map { request -> NSDictionary in
+            let data = try XCTUnwrap(request.httpBodyData())
+            return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? NSDictionary)
+        }
+        XCTAssertEqual(bodies.count, 2)
+        let firstBody = try XCTUnwrap(bodies.first)
+        let lastBody = try XCTUnwrap(bodies.last)
+        XCTAssertEqual(firstBody, lastBody)
+        XCTAssertEqual(lastBody["photos"] as? [String], ["https://proof.test/one.jpg"])
+    }
+
+    func testDeliveryProofPartialUploadRetryKeepsTheFirstFile() async {
+        let vm = await proofVM(
+            uploads: [uploadedProof(), .status(503, body: "{}"), uploadedProof("two")],
+            completions: [.status(200, body: "{}")]
+        )
+        let second = DeliveryProofPhoto(id: "photo-two", data: Data("second proof".utf8), filename: "second.jpg", mimeType: "image/jpeg")
+        let first = await vm.submitDeliveryProof(photos: [proofPhoto, second], note: nil)
+        XCTAssertFalse(first)
+        XCTAssertTrue(proofRequests("/api/gigs/g1/mark-completed").isEmpty)
+        let retry = await vm.submitDeliveryProof(photos: [proofPhoto, second], note: nil)
+        XCTAssertTrue(retry)
+        XCTAssertEqual(proofRequests("/api/files/upload").count, 3)
+        XCTAssertEqual(proofRequests("/api/gigs/g1/mark-completed").count, 1)
+    }
+
+    func testDeliveryProofLateUploadCannotSubmitAfterSessionChange() async {
+        var session: GigStopViewModel.Identity? = .init(actor: "worker-1", session: "proof-session", origin: "synthetic-origin")
+        let vm = await proofVM(uploads: [uploadedProof(delay: 0.2)], completions: []) { session }
+        let task = Task { await vm.submitDeliveryProof(photos: [self.proofPhoto], note: nil) }
+        await waitForProofUpload()
+        session = .init(actor: "other", session: "replacement", origin: "synthetic-origin")
+        let result = await task.value
+        XCTAssertFalse(result)
+        XCTAssertTrue(proofRequests("/api/gigs/g1/mark-completed").isEmpty)
+    }
+
+    func testDeliveryProofDepartureRetiresPendingUploadAndDuplicateSubmission() async {
+        let vm = await proofVM(uploads: [uploadedProof(delay: 0.2)], completions: [])
+        let task = Task { await vm.submitDeliveryProof(photos: [self.proofPhoto], note: nil) }
+        await waitForProofUpload()
+        let duplicate = await vm.submitDeliveryProof(photos: [proofPhoto], note: nil)
+        XCTAssertFalse(duplicate)
+        vm.retireDeliveryProof()
+        let result = await task.value
+        XCTAssertFalse(result)
+        XCTAssertEqual(proofRequests("/api/files/upload").count, 1)
+        XCTAssertTrue(proofRequests("/api/gigs/g1/mark-completed").isEmpty)
+    }
+
+    func testDeliveryProofChangedBytesWithSamePickerIDCannotReuseAnOldURL() async {
+        let vm = await proofVM(
+            uploads: [uploadedProof(), uploadedProof("changed")],
+            completions: [.status(503, body: "{}"), .status(200, body: "{}")]
+        )
+        let first = await vm.submitDeliveryProof(photos: [proofPhoto], note: nil)
+        XCTAssertFalse(first)
+        let changed = DeliveryProofPhoto(
+            id: proofPhoto.id,
+            data: Data("changed bytes".utf8),
+            filename: proofPhoto.filename,
+            mimeType: proofPhoto.mimeType
+        )
+        let retry = await vm.submitDeliveryProof(photos: [changed], note: nil)
+        XCTAssertTrue(retry)
+        XCTAssertEqual(proofRequests("/api/files/upload").count, 2)
+    }
+
+    func testDeliveryProofCompletedTaskDoesNotUploadReplacementFilesOnColdEntry() async {
+        let vm = await proofVM(uploads: [], completions: [], status: "completed")
+        let result = await vm.submitDeliveryProof(photos: [proofPhoto], note: nil)
+        XCTAssertFalse(result)
+        XCTAssertTrue(proofRequests("/api/files/upload").isEmpty)
+    }
+
+    func testDeliveryProofMissingUploadURLDoesNotSubmitAnEmptyReference() async {
+        let vm = await proofVM(
+            uploads: [.status(201, body: "{\"message\":\"Uploaded\",\"file\":{\"id\":\"f1\",\"url\":\"\"}}")],
+            completions: []
+        )
+        let result = await vm.submitDeliveryProof(photos: [proofPhoto], note: nil)
+        XCTAssertFalse(result)
+        XCTAssertTrue(proofRequests("/api/gigs/g1/mark-completed").isEmpty)
+    }
 }
 
 private extension URLRequest {

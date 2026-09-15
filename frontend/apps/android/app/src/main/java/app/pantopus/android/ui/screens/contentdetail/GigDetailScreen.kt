@@ -429,17 +429,24 @@ fun GigDetailScreen(
     val delivery = deliveryTarget
     if (delivery != null) {
         ModalBottomSheet(
-            onDismissRequest = { deliveryTarget = null },
+            onDismissRequest = {
+                viewModel.retireDeliveryProof()
+                deliveryTarget = null
+            },
             sheetState = deliverySheetState,
         ) {
             DeliveryProofSheet(
                 target = delivery,
                 onSubmit = { photos, note ->
                     suspendCancellableCoroutine<Boolean> { cont ->
-                        viewModel.submitDeliveryProof(photos, note) { result -> cont.resume(result) }
+                        cont.invokeOnCancellation { viewModel.retireDeliveryProof() }
+                        viewModel.submitDeliveryProof(photos, note) { result -> if (cont.isActive) cont.resume(result) }
                     }
                 },
-                onDismiss = { deliveryTarget = null },
+                onDismiss = {
+                    viewModel.retireDeliveryProof()
+                    deliveryTarget = null
+                },
             )
         }
     }
