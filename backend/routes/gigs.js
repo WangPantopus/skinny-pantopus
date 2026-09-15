@@ -321,6 +321,7 @@ function serializeGigForViewer(gig, { canViewCompletion = false } = {}) {
   }
   return {
     ...safe,
+    ...(canViewCompletion ? { completion_review: paidGigAcceptance.completionReview(gig) } : {}),
     creator: creator
       ? serializeUserIdentityForViewer(creator)
       : serializeGigAuthorForViewer({
@@ -1384,7 +1385,7 @@ router.get('/my-gigs', verifyToken, async (req, res) => {
     const ownerIds = Array.from(new Set([userId, ...managedBusinessIds]));
     let query = supabaseAdmin
       .from('Gig')
-      .select(`${GIG_LIST}, attachments`)
+      .select(`${GIG_LIST}, attachments, payment_id, started_at, worker_completed_at, completion_note, completion_photos, completion_checklist`)
       .in('user_id', ownerIds)
       .order('created_at', { ascending: false })
       .limit(parseInt(limit));
@@ -1436,8 +1437,10 @@ router.get('/my-gigs', verifyToken, async (req, res) => {
       };
       const topBidders = topBiddersByGigId[String(gig.id)] || [];
 
+      const { completion_note, completion_photos, completion_checklist, ...listedGig } = gig;
       return {
-        ...gig,
+        ...listedGig,
+        completion_review: paidGigAcceptance.completionReview(gig),
         bid_count: bidStats.bid_count,
         bidsCount: bidStats.bid_count,
         top_bid_amount: bidStats.top_bid_amount,
@@ -5548,7 +5551,7 @@ router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
  * Used by both /confirm-completion and /complete routes.
  * Throws on any failure — callers catch and return appropriate HTTP errors.
  */
-async function confirmCompletionHelper(req, { gigId, userId, satisfaction, note }) {
+async function confirmCompletionHelper(req, { gigId, userId, satisfaction, note, expectedReview }) {
   const { data: gig, error: gigError } = await supabaseAdmin
     .from('Gig')
     .select('*')
@@ -5580,6 +5583,10 @@ async function confirmCompletionHelper(req, { gigId, userId, satisfaction, note 
     throw err;
   }
 
+  if (typeof expectedReview !== 'string' || !/^[a-f0-9]{64}$/.test(expectedReview)
+    || expectedReview !== paidGigAcceptance.completionReview(gig)) {
+    throw Object.assign(new Error('The task or its completion changed. Reopen it and review the current work before confirming.'), { statusCode: 409 });
+  }
   if (gig.owner_confirmed_at) return gig;
   const price = Number(gig.price);
   if (!Number.isFinite(price) || price < 0 || (price > 0 && !gig.payment_id)) {
@@ -5628,14 +5635,14 @@ async function confirmCompletionHelper(req, { gigId, userId, satisfaction, note 
 /**
  * POST /api/gigs/:gigId/confirm-completion
  * Owner confirms completion after worker marks completed.
- * Body: { satisfaction?: 1-5, note?: string }
+ * Body: { expectedReview: string, satisfaction?: 1-5, note?: string }
  */
 router.post('/:gigId/confirm-completion', verifyToken, async (req, res) => {
   try {
     const { gigId } = req.params;
     const userId = req.user.id;
-    const { satisfaction, note } = req.body;
-    const updatedGig = await confirmCompletionHelper(req, { gigId, userId, satisfaction, note });
+    const { satisfaction, note, expectedReview } = req.body || {};
+    const updatedGig = await confirmCompletionHelper(req, { gigId, userId, satisfaction, note, expectedReview });
     return res.json({ gig: updatedGig });
   } catch (err) {
     logger.error('Confirm completion error', { error: err.message });
@@ -5651,8 +5658,8 @@ router.post('/:gigId/complete', verifyToken, async (req, res) => {
   try {
     const { gigId } = req.params;
     const userId = req.user.id;
-    const { satisfaction, note } = req.body || {};
-    const updatedGig = await confirmCompletionHelper(req, { gigId, userId, satisfaction, note });
+    const { satisfaction, note, expectedReview } = req.body || {};
+    const updatedGig = await confirmCompletionHelper(req, { gigId, userId, satisfaction, note, expectedReview });
     return res.json({ gig: updatedGig });
   } catch (err) {
     logger.error('Complete gig error', { error: err.message });

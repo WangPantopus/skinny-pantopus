@@ -396,6 +396,23 @@ final class MyTasksViewModelTests: XCTestCase {
         XCTAssertEqual(sections.first?.rows.first?.id, "g1")
     }
 
+    func testListedConfirmationRetainsLoadedReview() async throws {
+        let json = #"{"id":"g1","title":"Work","status":"completed","completion_review":"listed-review"}"#
+        let dto = try JSONDecoder().decode(MyGigDTO.self, from: Data(json.utf8))
+        XCTAssertEqual(dto.completionReview, "listed-review")
+        SequencedURLProtocol.sequence = [
+            .status(200, body: "{\"gigs\":[\(json)],\"total\":1}"),
+            .status(200, body: #"{"message":"ok"}"#)
+        ]
+        let vm = makeVM()
+        await vm.load()
+        await vm.markComplete(dto)
+        let command = SequencedURLProtocol.capturedRequests.first { $0.url?.path == "/api/gigs/g1/complete" }
+        let body = String(data: command?.authTestBodyData() ?? Data(), encoding: .utf8) ?? ""
+        XCTAssertTrue(body.contains("listed-review"))
+        XCTAssertTrue(body.contains("expectedReview"))
+    }
+
     // MARK: - Helpers
 
     private func renderRow(for dto: MyGigDTO) -> RowModel {

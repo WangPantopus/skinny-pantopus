@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.contentdetail
 import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.core.notifications.GigActiveNotification
 import app.pantopus.android.core.notifications.GigActiveNotifier
+import app.pantopus.android.data.api.models.gigs.CompleteGigResponse
 import app.pantopus.android.data.api.models.gigs.GigBidAcceptResponse
 import app.pantopus.android.data.api.models.gigs.GigBidDto
 import app.pantopus.android.data.api.models.gigs.GigBidMutationResponse
@@ -758,6 +759,18 @@ class GigDetailSaveViewModelTest {
 
     private fun uploadedProof(suffix: String = "one") =
         NetworkResult.Success(FileUploadResponse("Uploaded", FileUploadResponse.FileRef("file-$suffix", "https://proof.test/$suffix.jpg")))
+
+    @Test
+    fun owner_confirmation_sends_the_loaded_review() =
+        runTest {
+            val gig =
+                assignedGig(acceptedBy = "worker-9", ownerId = "viewer-1")
+                    .copy(status = "completed", completionReview = "original-loaded-review")
+            val vm = lifecycleVm(gig)
+            coEvery { repo.completeGigAsPoster("g1", "original-loaded-review") } returns NetworkResult.Success(CompleteGigResponse())
+            vm.confirmCompletion()
+            coVerify(exactly = 1) { repo.completeGigAsPoster("g1", "original-loaded-review") }
+        }
 
     private fun deliveryVm(
         identity: () -> Pair<String, String?>? = { "u1" to "proof-session" },

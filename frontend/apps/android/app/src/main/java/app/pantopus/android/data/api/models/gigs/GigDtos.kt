@@ -63,6 +63,7 @@ data class GigDto(
     val tags: List<String>? = null,
     @Json(name = "user_id") val userId: String? = null,
     @Json(name = "accepted_by") val acceptedBy: String? = null,
+    @Json(name = "completion_review") val completionReview: String? = null,
     @Json(name = "accepted_at") val acceptedAt: String? = null,
     // Set the moment the worker starts. Both pre-start release routes
     // (`/reopen-bidding`, `/worker-release`) reject once this is non-null.

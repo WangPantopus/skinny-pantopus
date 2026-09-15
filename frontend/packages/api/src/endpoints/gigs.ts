@@ -410,7 +410,7 @@ export async function markGigCompleted(
  */
 export async function confirmGigCompletion(
   gigId: string,
-  data?: { satisfaction?: number; note?: string }
+  data: { expectedReview: string | null; satisfaction?: number; note?: string }
 ): Promise<{ gig: Gig }> {
   return post<{ gig: Gig }>(`/api/gigs/${gigId}/confirm-completion`, data || {});
 }
@@ -506,7 +506,8 @@ export async function getBidStats(): Promise<{
  */
 export async function completeGig(
   gigId: string,
-  data?: {
+  data: {
+    expectedReview: string | null;
     rating?: number;
     review?: string;
   }

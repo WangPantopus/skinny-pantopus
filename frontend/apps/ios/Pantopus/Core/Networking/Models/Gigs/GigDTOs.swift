@@ -27,6 +27,7 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
     public let acceptedAt: String?
     /// Set when the poster confirms completion — gates the Block 3D tip
     /// affordance (the `/tip` route requires a completed + confirmed gig).
+    public let completionReview: String?
     public let ownerConfirmedAt: String?
     public let scheduledStart: String?
     public let paymentId: String?
@@ -95,6 +96,7 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
         case userId = "user_id"
         case acceptedBy = "accepted_by"
         case acceptedAt = "accepted_at"
+        case completionReview = "completion_review"
         case ownerConfirmedAt = "owner_confirmed_at"
         case scheduledStart = "scheduled_start"
         case paymentId = "payment_id"
@@ -145,6 +147,7 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
         userId = try c.decodeIfPresent(String.self, forKey: .userId)
         acceptedBy = try c.decodeIfPresent(String.self, forKey: .acceptedBy)
         acceptedAt = try c.decodeIfPresent(String.self, forKey: .acceptedAt)
+        completionReview = try c.decodeIfPresent(String.self, forKey: .completionReview)
         ownerConfirmedAt = try c.decodeIfPresent(String.self, forKey: .ownerConfirmedAt)
         scheduledStart = try c.decodeIfPresent(String.self, forKey: .scheduledStart)
         paymentId = try c.decodeIfPresent(String.self, forKey: .paymentId)
@@ -229,7 +232,8 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
         estimatedDuration: Double? = nil,
         items: [GigItemDTO]? = nil,
         startsAsap: Bool? = nil,
-        paymentId: String? = nil
+        paymentId: String? = nil,
+        completionReview: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -244,6 +248,7 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
         self.userId = userId
         self.acceptedBy = acceptedBy
         self.acceptedAt = acceptedAt
+        self.completionReview = completionReview
         self.ownerConfirmedAt = ownerConfirmedAt
         self.scheduledStart = scheduledStart
         self.paymentId = paymentId

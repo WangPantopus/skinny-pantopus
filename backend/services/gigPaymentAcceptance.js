@@ -1,3 +1,4 @@
+const { createHash } = require('node:crypto');
 const db = require('../config/supabaseAdmin');
 const stripeService = require('../stripe/stripeService');
 const { conflict, assertPaymentTerms } = require('../stripe/gigPaymentProof');
@@ -12,6 +13,23 @@ async function rpc(name, args, key) {
   return data;
 }
 const terms = (gig, payeeId, amount) => ({ gigId: gig.id, payerId: gig.user_id, payeeId, amount });
+
+// Bind an owner's command to the completion loaded by the existing screen.
+// This digest grants no access; every command still requires current authority.
+function completionReview(gig) {
+  if (gig?.status !== 'completed' || !gig.worker_completed_at
+    || !Number.isFinite(Date.parse(gig.worker_completed_at))) return null;
+  const price = Number(gig.price);
+  if (gig.price == null || !Number.isFinite(price) || price < 0) return null;
+  // Keep PostgreSQL's full fractional precision; JS Date would round microseconds.
+  const dates = ['accepted_at', 'started_at', 'worker_completed_at'].map(key => gig[key] ?? null);
+  return createHash('sha256').update(JSON.stringify(['gig-completion-review-v1',
+    gig.id, gig.user_id, gig.accepted_by ?? null, gig.payment_id ?? null, price,
+    gig.origin_home_id ?? null, gig.title ?? null, gig.description ?? null, ...dates,
+    gig.completion_note ?? null, gig.completion_photos ?? [],
+    gig.completion_checklist ?? [],
+  ])).digest('hex');
+}
 
 async function begin(gig, bid, actorId = gig.user_id) {
   const { attempt, reused } = await rpc('begin_paid_gig_acceptance_as_actor', {
@@ -116,4 +134,4 @@ async function abort(gig, bid, actorId = gig.user_id) {
   await stripeService.cancelAuthorization(result.attempt.payment_id);
   return rpc('cancel_paid_gig_acceptance_as_actor', { ...args, p_complete: true }, 'bid');
 }
-module.exports = { begin, finalize, abort, terms, rpc };
+module.exports = { begin, finalize, abort, terms, rpc, completionReview };

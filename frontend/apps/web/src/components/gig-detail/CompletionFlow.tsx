@@ -1,5 +1,6 @@
 'use client';
 
+import { getErrorMessage } from '@pantopus/utils';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   Wrench,
@@ -25,6 +26,7 @@ interface CompletionGigData {
   acceptedBy?: string | null;
   payment_status?: string;
   completion_photos?: string[];
+  completion_review?: string | null;
   completion_note?: string;
   completion_checklist?: Array<{ item: string; done: boolean }>;
   worker_completed_at?: string | null;
@@ -110,6 +112,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   const [confirmSatisfaction, setConfirmSatisfaction] = useState(0);
   const [confirmNote, setConfirmNote] = useState('');
   const [submittingConfirm, setSubmittingConfirm] = useState(false);
+  const reviewedCompletion = useRef<string | null>(null);
 
   // Tip
   const [showTipModal, setShowTipModal] = useState(false);
@@ -286,6 +289,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
     if (!isOwner || !isCompleted || !completionScopeIsCurrent(completionScope.current)) {
       toast.error('Reopen the task with your current account before confirming completion.'); return;
     }
+    reviewedCompletion.current = gig.completion_review ?? null;
     setShowConfirmModal(true);
     setConfirmSatisfaction(0);
     setConfirmNote('');
@@ -300,6 +304,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
     try {
       const gigsExt = api.gigs as unknown as GigsCompletionApiExt;
       const payload = {
+        expectedReview: reviewedCompletion.current,
         satisfaction: confirmSatisfaction > 0 ? confirmSatisfaction : undefined,
         note: confirmNote || undefined,
       };
@@ -317,7 +322,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       setTipRecoveryRequestId(undefined);
       setShowTipModal(true);
     } catch (err: unknown) {
-      if (current()) toast.error(err instanceof Error ? err.message : 'Failed to confirm');
+      if (current()) toast.error(getErrorMessage(err));
     } finally {
       if (current()) { completionAttempt.current = null; setSubmittingConfirm(false); }
     }

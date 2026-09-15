@@ -9,6 +9,7 @@
 package app.pantopus.android.ui.screens.my_tasks
 
 import app.pantopus.android.data.api.models.gigs.BoostGigResponse
+import app.pantopus.android.data.api.models.gigs.CompleteGigResponse
 import app.pantopus.android.data.api.models.gigs.MyGigDto
 import app.pantopus.android.data.api.models.gigs.MyGigsResponse
 import app.pantopus.android.data.api.models.gigs.TopBidderDto
@@ -19,6 +20,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.BidderTone
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowHighlight
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -87,6 +89,18 @@ class MyTasksViewModelTest {
     private fun vm(): MyTasksViewModel =
         MyTasksViewModel(gigsRepo).apply {
             overrideNow { fixedNow }
+        }
+
+    @Test
+    fun listed_confirmation_retains_original_review() =
+        runTest {
+            val loaded = dto(id = "g1", status = "completed").copy(completionReview = "listed-review")
+            coEvery { gigsRepo.myGigs(any(), any()) } returns NetworkResult.Success(MyGigsResponse(gigs = listOf(loaded)))
+            coEvery { gigsRepo.completeGigAsPoster("g1", "listed-review") } returns NetworkResult.Success(CompleteGigResponse())
+            val viewModel = vm()
+            viewModel.load()
+            viewModel.markComplete(loaded)
+            coVerify(exactly = 1) { gigsRepo.completeGigAsPoster("g1", "listed-review") }
         }
 
     // MARK: - Lifecycle

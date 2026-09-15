@@ -435,7 +435,7 @@ describe('existing completion page tip recovery entry', () => {
 
 
 describe('existing owner confirmation request lifetime', () => {
-  const ownerProps = { gigId: gig, gig: { user_id: actor, accepted_by: worker, price: 12.5 },
+  const ownerProps = { gigId: gig, gig: { user_id: actor, accepted_by: worker, price: 12.5, completion_review: 'a'.repeat(64) },
     isOwner: true, isWorker: false, currentUserId: actor, gigStatus: 'completed', paymentLifecycleStatus: 'authorized', onOpenChat: jest.fn() };
   test.each(['token event', 'silent token', 'session marker', 'origin', 'owner role', 'dismissal', 'unmount'])('late owner success is retired after %s', async change => {
     const held = deferred<Awaited<ReturnType<typeof gigs.confirmGigCompletion>>>();
@@ -454,6 +454,20 @@ describe('existing owner confirmation request lifetime', () => {
     if (change === 'unmount') page.unmount();
     await act(async () => held.resolve({ gig: { id: gig, owner_confirmed_at: preview.terms.ownerConfirmedAt } } as unknown as Awaited<ReturnType<typeof gigs.confirmGigCompletion>>));
     expect(changed).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '$5' })).not.toBeInTheDocument();
+  });
+  test('an open review retains its original version through a newer page projection and retry', async () => {
+    const ref = React.createRef<CompletionFlowHandle>();
+    jest.mocked(gigs.confirmGigCompletion).mockRejectedValue({ message: 'Reopen and review the current work', statusCode: 409 });
+    const page = render(<CompletionFlow {...ownerProps} ref={ref} />);
+    act(() => ref.current!.confirmCompletion());
+    page.rerender(<CompletionFlow {...ownerProps} gig={{ ...ownerProps.gig, completion_review: 'b'.repeat(64), price: 20 }} ref={ref} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Approve' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm & Approve' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Approve' }));
+    await waitFor(() => expect(gigs.confirmGigCompletion).toHaveBeenCalledTimes(2));
+    expect(toast.error).toHaveBeenCalledWith('Reopen and review the current work');
+    for (const call of jest.mocked(gigs.confirmGigCompletion).mock.calls) expect(call[1]?.expectedReview).toBe('a'.repeat(64));
     expect(screen.queryByRole('button', { name: '$5' })).not.toBeInTheDocument();
   });
   test('a retired owner failure cannot alert the replacement account', async () => {

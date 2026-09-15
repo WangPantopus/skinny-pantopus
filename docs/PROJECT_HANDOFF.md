@@ -26,12 +26,15 @@ matched master. No hosted deployment, migration adoption or provider activation 
 **Remaining open PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
 remains draft. Its isolated integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
-the canonical PR branch is `codex/staging-paid-gig`. Both branches include completion-delivery checkpoint `1a8a7d549`. Its
+the canonical PR branch is `codex/staging-paid-gig`. Both branches now include Home-history and web lifetime checkpoint `88082fdde`. Its
+[CI34952128109](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34952128109)
+passes backend/schema/web/static gates; native jobs remain running at this update.
+The preceding completion-delivery checkpoint `1a8a7d549` in
 [CI34947875754](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34947875754)
 passes all15 applicable jobs/one Seeder skip. The preceding
 private-proof checkpoint `ca097cd85` passes all15 applicable jobs/one Seeder skip in
 [CI34944635449](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34944635449).
-The following local Home-history repair is described below; require its own CI
+The following owner-review checkpoint is described below; require its own CI
 before accepting that checkpoint for integration.
 The integration branch includes installed iOS checkpoint `d6a0194ea` after
 cold-entry checkpoint `7791bb16f`, following legacy recovery
@@ -334,11 +337,23 @@ change.106 focused checks, TypeScript and scoped lint (0 errors/6 existing warni
 pass; five Chrome scenarios pass using the actual component/API client and synthetic
 responses. See [web lifetime evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-review-retires-late-web-responses).
 
-**Next:** push the Home-history and web lifetime checkpoints together and require
-current-head CI. Reproduce whether a review loaded before a completion/assignment
-change can approve the newer work before provider capture; inspect existing terms
-contracts before any repair. Then continue completion draft/restart verification
-using existing storage first. Generic maintenance granular authority/raw RLS, Home-origin admission
+**Loaded owner-review checkpoint:** actual HTTP/StripeService/SQL reproduced
+three confirmations of changed completion time, proof and price before request;
+a$12.50 review captured$20 with synthetic Stripe. The existing acceptance helper
+now fingerprints the loaded completion. Existing detail/private owner list return
+it, all seven web/iOS/Android owner callers send their loaded value, and both
+confirmation aliases reject missing/stale values before capture. No schema, new
+service/file, screen or layout is added. Full backend6053 passes/16 skips; privacy
+gates,107 web,82 Android and78 iOS checks pass with source-bound static/build
+checks. Actual Chrome/HTTP/SQL verifies two stale409s/capture0, then explicit fresh
+review/one capture/tip entry. Three further HTTP/SQL cases verify both aliases,
+matching receipt reuse and private projections. Native SDK tests are not installed
+owner lifecycle UI acceptance. See [review evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-confirmation-binds-the-loaded-review).
+
+**Next:** require the loaded-review checkpoint’s own CI before integration.
+Verify existing MyTasks completion admission/feedback and native owner request
+lifetime, then post-server-read proof/provider interleavings. Continue completion
+draft/restart verification using existing storage first. Generic maintenance granular authority/raw RLS, Home-origin admission
 and full maintenance UI acceptance remain separate follow-ups; this bounded history
 checkpoint does not close them. Continue completion/reopen policy flows, hosted
 private-byte adoption/historical CDN reconciliation and other private File purposes.

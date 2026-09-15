@@ -818,6 +818,7 @@ export interface Gig {
   cancellation_zone?: number | null;
   cancellation_fee?: number | null;
   // Proof of completion
+  completion_review?: string | null;
   completion_note?: string | null;
   completion_photos?: string[];
   completion_checklist?: { item: string; done: boolean }[];

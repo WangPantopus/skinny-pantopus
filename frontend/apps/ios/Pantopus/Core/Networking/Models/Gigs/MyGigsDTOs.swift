@@ -28,6 +28,7 @@ public struct MyGigDTO: Decodable, Sendable, Hashable, Identifiable {
     public let isUrgent: Bool?
     public let userId: String?
     public let acceptedBy: String?
+    public let completionReview: String?
     public let acceptedAt: String?
     public let scheduledStart: String?
     public let payType: String?
@@ -76,7 +77,8 @@ public struct MyGigDTO: Decodable, Sendable, Hashable, Identifiable {
         boostExpiresAt: String? = nil,
         sourceFlow: String? = nil,
         taskArchetype: String? = nil,
-        taskFormat: String? = nil
+        taskFormat: String? = nil,
+        completionReview: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -90,6 +92,7 @@ public struct MyGigDTO: Decodable, Sendable, Hashable, Identifiable {
         self.isUrgent = isUrgent
         self.userId = userId
         self.acceptedBy = acceptedBy
+        self.completionReview = completionReview
         self.acceptedAt = acceptedAt
         self.scheduledStart = scheduledStart
         self.payType = payType
@@ -111,6 +114,7 @@ public struct MyGigDTO: Decodable, Sendable, Hashable, Identifiable {
         case isUrgent = "is_urgent"
         case userId = "user_id"
         case acceptedBy = "accepted_by"
+        case completionReview = "completion_review"
         case acceptedAt = "accepted_at"
         case scheduledStart = "scheduled_start"
         case payType = "pay_type"

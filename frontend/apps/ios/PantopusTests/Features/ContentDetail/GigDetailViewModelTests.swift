@@ -361,7 +361,8 @@ final class GigDetailViewModelTests: XCTestCase {
     }
 
     func testOwnerConfirmCompletionUnlocksTip() async {
-        let markedDone = Self.gigJSON(#""status":"completed","user_id":"owner-1","accepted_by":"w1""#)
+        let markedDone = Self
+            .gigJSON(#""status":"completed","user_id":"owner-1","accepted_by":"w1","completion_review":"original-loaded-review""#)
         let confirmed = Self.gigJSON(
             #""status":"completed","user_id":"owner-1","accepted_by":"w1","owner_confirmed_at":"2026-06-09T00:00:00Z""#
         )
@@ -386,6 +387,10 @@ final class GigDetailViewModelTests: XCTestCase {
         let error = await vm.confirmCompletion()
         XCTAssertNil(error)
         XCTAssertTrue(SequencedURLProtocol.capturedRequests.contains { $0.url?.path == "/api/gigs/g1/complete" })
+        let command = SequencedURLProtocol.capturedRequests.first { $0.url?.path == "/api/gigs/g1/complete" }
+        let body = String(data: command?.httpBodyData() ?? Data(), encoding: .utf8) ?? ""
+        XCTAssertTrue(body.contains("original-loaded-review"))
+        XCTAssertTrue(body.contains("expectedReview"))
         XCTAssertEqual(vm.activePhase, .confirmed)
         XCTAssertFalse(vm.canConfirmCompletion)
         XCTAssertTrue(vm.canTip, "Confirmed completion unlocks the Block 3D tip dock.")

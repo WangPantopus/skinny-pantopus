@@ -1,5 +1,6 @@
 'use client';
 
+import { getErrorMessage } from '@pantopus/utils';
 import { useState, useEffect, useCallback } from 'react';
 import {
   Car,
@@ -178,12 +179,12 @@ export default function ActiveTaskPanel({
     });
     if (!yes) return;
     try {
-      await api.gigs.confirmGigCompletion(gig.id, {});
+      await api.gigs.confirmGigCompletion(gig.id, { expectedReview: gig.completion_review ?? null });
       onStatusChange();
-    } catch {
-      toast.error('Failed to confirm completion');
+    } catch (error) {
+      toast.error(getErrorMessage(error));
     }
-  }, [gig.id, onStatusChange]);
+  }, [gig.id, gig.completion_review, onStatusChange]);
 
   // User info
   const worker = gig.acceptedBy || gig.accepted_by_user;

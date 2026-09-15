@@ -22,7 +22,9 @@ const p = { id: 'pay', gig_id: 'gig', payer_id: 'payer', payee_id: 'worker', amo
 const pi = { id: 'pi_one', customer: 'cus_payer', amount: 1250, currency: 'usd', capture_method: 'manual',
   status: 'requires_capture', amount_capturable: 1250, latest_charge: 'ch_one',
   metadata: { payer_id: 'payer', payee_id: 'worker', gig_id: 'gig', acceptance_attempt_id: 'attempt' } };
-const post = (path, user = 'payer') => request(app).post(`/api/gigs/${path}`).set('x-test-user-id', user).send({});
+const review = () => require('../../services/gigPaymentAcceptance').completionReview(getTable('Gig')[0]);
+const post = (path, user = 'payer') => request(app).post(`/api/gigs/${path}`).set('x-test-user-id', user)
+  .send(/\/(confirm-completion|complete)$/.test(path) ? { expectedReview: review() } : {});
 beforeEach(() => {
   jest.restoreAllMocks(); jest.clearAllMocks(); resetTables();
   mockS3Head.mockResolvedValue({ ContentLength: 32, ContentType: 'image/jpeg' });
@@ -770,4 +772,32 @@ describe('completion private byte storage reuses the existing provider client', 
     expect(bucket.remove).toHaveBeenLastCalledWith([file.file_path]);
   });
 
+});
+
+
+describe('owner confirmation binds the loaded review before capture', () => {
+  test.each([
+    ['worker_completed_at', '2026-09-15T10:00:00Z'], ['worker_completed_at', '2026-09-10T00:00:00.000001Z'], ['accepted_at', '2026-09-15T08:00:00Z'],
+    ['completion_note', 'Replacement proof'], ['completion_photos', ['different-private-reference']],
+    ['completion_checklist', [{ item: 'Replacement step', done: true }]],
+    ['price', 20], ['payment_id', 'replacement-payment'], ['accepted_by', 'replacement-worker'],
+    ['origin_home_id', 'other-home'], ['title', 'Different job'],
+  ])('changed %s is rejected before provider or confirmation writes', async (key, value) => {
+    assigned('completed'); const expectedReview = review(); getTable('Gig')[0][key] = value;
+    const capture = jest.spyOn(service, 'capturePayment');
+    const result = await request(app).post('/api/gigs/gig/confirm-completion').set('x-test-user-id', 'payer').send({ expectedReview });
+    expect(result.status).toBe(409); expect(capture).not.toHaveBeenCalled();
+    expect(getTable('Gig')[0].owner_confirmed_at).toBeNull();
+  });
+  test.each([undefined, null, '', 'bad', '0'.repeat(64)])('missing or invalid loaded review %s rejects the alias before capture', async expectedReview => {
+    assigned('completed'); const capture = jest.spyOn(service, 'capturePayment');
+    const result = await request(app).post('/api/gigs/gig/complete').set('x-test-user-id', 'payer').send({ expectedReview });
+    expect(result.status).toBe(409); expect(capture).not.toHaveBeenCalled();
+  });
+  test('an already-confirmed receipt must still match the loaded review', async () => {
+    assigned('completed'); const expectedReview = review();
+    Object.assign(getTable('Gig')[0], { owner_confirmed_at: '2026-09-15T10:00:00Z', completion_note: 'Changed after the original review' });
+    const result = await request(app).post('/api/gigs/gig/complete').set('x-test-user-id', 'payer').send({ expectedReview });
+    expect(result.status).toBe(409); expect(mockCapture).not.toHaveBeenCalled();
+  });
 });

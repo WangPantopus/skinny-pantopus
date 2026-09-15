@@ -3513,3 +3513,64 @@ Completion-delivery head1a8a7d549 passes all15 applicable jobs/one Seeder skip i
 Home-history dd788e03a and this web checkpoint require their combined current-head
 CI. PR34 remains draft. A separate pre-request stale-reviewed-terms concern remains
 to reproduce; this callback repair makes no financial authorization claim about it.
+
+
+## Existing owner confirmation binds the loaded review
+
+The existing confirmation transaction compared the Gig read by the server after a
+request arrived. None of the seven current owner callers carried the completion
+loaded by the screen. Actual GET, both POST aliases, StripeService and local SQL
+reproduced three changed completion-time/proof/price approvals before request:
+a$12.50 loaded task captured$20 after its price changed. Baseline35 SQL calls/three
+synthetic captures and exact fixture cleanup are retained.
+
+The existing gigPaymentAcceptance helper now computes a non-authorizing digest of
+existing assignment/payment/price, full-precision dates, task description/Home and
+completion proof. Detail exposes it only to current completion viewers; the private
+owner list computes the same digest without adding raw proof to its projection.
+Both confirmation aliases compare the loaded digest before provider work or receipt
+reuse. Current permission checks, Stripe proof and SQL transaction checks remain.
+No new table, migration, service, screen or product file is added. Existing DTOs,
+endpoints and all seven current web/iOS/Android owner callers carry their loaded
+value. The web review keeps its original through projection changes/retries until
+reopened. Actual Chrome also exposed generic error copy for plain API errors; the
+existing shared error helper now displays the instruction to reopen and review.
+Existing screen layout/classes and native presentation source are preserved.
+Updated clients and backend must deploy together: older commands without the loaded
+review now reject before capture.
+
+Full backend passes6053 checks/16 skips across339 suites. Final privacy gates pass,
+including15 audience checks.107 focused web assertions/types pass; scoped lint has
+zero errors/13 existing warnings across its expanded file scope. Android82 tests
+across three suites pass with actual DTO serialization and caller checks, compile,
+detekt and ktlint. iOS78 tests across the detail/MyTasks suites pass with actual
+URLProtocol request-body assertions, build, format and strict lint. These native
+checks do not claim installed owner paid-lifecycle UI or real Stripe acceptance.
+Existing accepted native products remain retained; the current iOS test host is
+separately bound to source and archived. No native UI design change occurs.
+
+Final actual HTTP/SQL acceptance passes three changed-review cases with71 queries:
+stale/missing commands return409 with no capture or new confirmation notices; a
+fresh explicit review captures once, retry preserves the original confirmation,
+and an old review cannot reuse a changed receipt. Private owner-list and detail
+digests match; public detail omits proof/digest. Chrome uses the real CompletionFlow,
+API client, forwarded HTTP routes, StripeService and SQL (21 queries): two same-review
+409s leave capture0/authorized/unconfirmed, then refresh/reopen/current approval
+captures once, stores confirmation and opens the existing tip control. Authentication,
+business directory, Stripe and tip preview are synthetic. No actual provider send,
+hosted adoption or deployment is claimed. All exact aafd/aafe/aaff fixtures are
+removed; API18109 and Next3107 are stopped, temporary page/configuration restored,
+and browser products/private logs retained outside Git.
+
+Retained attempts include a partial test-edit script stopped by a mismatched helper
+name, the first iOS build's file-private test-helper access error (fixed by reusing
+existing shared AuthTestSupport), and the final browser's five-second initial-load
+timeout. The warmed browser retry allows30 seconds and records page errors; it passes
+with zero page errors and the expected server error copy. No app change was made to
+address that timeout. Xcode returns the owned simulator to shutdown; unrelated
+simulators remain untouched. Private owner-review-* records bind exact source, commands,
+results, failed attempts and products. Previous CI34952128109 is a separate checkpoint;
+this change needs current-head CI. PR34 remains draft. The digest is neither an access
+token nor proof that a person inspected all fields. Post-server-read proof/provider
+races, native owner callback lifetime, MyTasks admission, draft/restart and full
+installed/provider/release acceptance remain open for subsequent bounded verification.

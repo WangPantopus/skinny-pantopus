@@ -1893,8 +1893,9 @@ class GigDetailViewModel
 
         /** Owner `POST /complete` — confirm the worker's marked-done. */
         fun confirmCompletion() {
+            val expectedReview = rawGig?.completionReview
             viewModelScope.launch {
-                when (val result = repo.completeGigAsPoster(gigId)) {
+                when (val result = repo.completeGigAsPoster(gigId, expectedReview)) {
                     is NetworkResult.Success -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast("Completion confirmed"))
                         silentRefetch()

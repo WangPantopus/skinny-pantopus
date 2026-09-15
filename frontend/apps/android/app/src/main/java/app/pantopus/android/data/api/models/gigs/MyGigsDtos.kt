@@ -36,6 +36,7 @@ data class MyGigDto(
     @Json(name = "is_urgent") val isUrgent: Boolean? = null,
     @Json(name = "user_id") val userId: String? = null,
     @Json(name = "accepted_by") val acceptedBy: String? = null,
+    @Json(name = "completion_review") val completionReview: String? = null,
     @Json(name = "accepted_at") val acceptedAt: String? = null,
     @Json(name = "scheduled_start") val scheduledStart: String? = null,
     @Json(name = "pay_type") val payType: String? = null,
@@ -70,6 +71,10 @@ data class MyGigsResponse(
 data class BoostGigResponse(
     @Json(name = "boost_expires_at") val boostExpiresAt: String? = null,
 )
+
+/** Binds confirmation to the completion loaded by the existing screen. */
+@JsonClass(generateAdapter = true)
+data class ConfirmCompletionBody(val expectedReview: String?)
 
 /** Envelope from `POST /api/gigs/:gigId/complete` and `/cancel`. */
 @JsonClass(generateAdapter = true)

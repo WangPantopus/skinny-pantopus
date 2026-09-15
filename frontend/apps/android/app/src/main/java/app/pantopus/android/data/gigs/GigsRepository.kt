@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.models.gigs.BoostGigResponse
 import app.pantopus.android.data.api.models.gigs.CancelGigBody
 import app.pantopus.android.data.api.models.gigs.CancellationPreviewResponse
 import app.pantopus.android.data.api.models.gigs.CompleteGigResponse
+import app.pantopus.android.data.api.models.gigs.ConfirmCompletionBody
 import app.pantopus.android.data.api.models.gigs.CounterBidBody
 import app.pantopus.android.data.api.models.gigs.CreateChangeOrderBody
 import app.pantopus.android.data.api.models.gigs.CreateGigBody
@@ -364,7 +365,10 @@ class GigsRepository
 
         suspend fun boostGig(gigId: String): NetworkResult<BoostGigResponse> = safeApiCall { api.boostGig(gigId) }
 
-        suspend fun completeGigAsPoster(gigId: String): NetworkResult<CompleteGigResponse> = safeApiCall { api.completeGigAsPoster(gigId) }
+        suspend fun completeGigAsPoster(
+            gigId: String,
+            expectedReview: String?,
+        ): NetworkResult<CompleteGigResponse> = safeApiCall { api.completeGigAsPoster(gigId, ConfirmCompletionBody(expectedReview)) }
 
         suspend fun cancelGig(
             gigId: String,

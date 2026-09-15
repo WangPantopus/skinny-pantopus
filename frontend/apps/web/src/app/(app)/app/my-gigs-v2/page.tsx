@@ -1,6 +1,7 @@
 // @ts-nocheck
 'use client';
 
+import { getErrorMessage } from '@pantopus/utils';
 import { gigBidCheckoutUrl } from '@/components/gig-detail/GigBidCheckout';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -113,15 +114,16 @@ export default function MyGigsV2Page() {
   };
 
   const handleMarkComplete = async (gigId: string) => {
+    const expectedReview = gigs.find(gig => gig.id === gigId)?.completion_review ?? null;
     const yes = await confirmStore.open({ title: 'Mark this gig as complete?', description: 'This will finalize the task and trigger payment processing.', confirmLabel: 'Complete', variant: 'primary' });
     if (!yes) return;
 
     try {
-      await api.gigs.completeGig(gigId);
+      await api.gigs.completeGig(gigId, { expectedReview });
       toast.success('Gig marked as complete!');
       loadGigs();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to complete gig');
+      toast.error(getErrorMessage(err));
     }
   };
 

@@ -89,6 +89,14 @@ Completion-delivery CI34947875754 passes all15 applicable jobs/one Seeder skip.
 Home-history and this web checkpoint require their next combined CI. Stale reviewed
 terms, full installed owner confirmation and draft/restart acceptance remain open.
 No additional inventory row is closed.
+The loaded owner-review repair now rejects stale completion/price/proof before
+capture using the existing API, helper, DTOs and seven callers. Local backend6053,
+web107, Android82 and iOS78 checks pass; actual Chrome/HTTP/SQL proves stale capture0
+and explicit refreshed review capture1. See [review evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-confirmation-binds-the-loaded-review).
+The combined checkpoint still requires its own CI. MyTasks completion admission,
+native owner lifetime, post-read proof races, installed full owner lifecycle and
+real provider/release acceptance remain open. No row is closed by these checks.
+
 
 ## 1. Home identity and current access — active work
 

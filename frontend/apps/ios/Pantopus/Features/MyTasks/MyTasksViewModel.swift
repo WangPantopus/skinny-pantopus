@@ -662,7 +662,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         rebuild()
         do {
             _ = try await api.request(
-                GigsEndpoints.completeGigAsPoster(gigId: dto.id),
+                GigsEndpoints.completeGigAsPoster(gigId: dto.id, expectedReview: dto.completionReview),
                 as: EmptyResponse.self
             )
         } catch {
@@ -1122,7 +1122,8 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
             boostExpiresAt: formatter.string(from: expires),
             sourceFlow: dto.sourceFlow,
             taskArchetype: dto.taskArchetype,
-            taskFormat: dto.taskFormat
+            taskFormat: dto.taskFormat,
+            completionReview: dto.completionReview
         )
     }
 
@@ -1152,7 +1153,8 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
             boostExpiresAt: dto.boostExpiresAt,
             sourceFlow: dto.sourceFlow,
             taskArchetype: dto.taskArchetype,
-            taskFormat: dto.taskFormat
+            taskFormat: dto.taskFormat,
+            completionReview: dto.completionReview
         )
     }
 }

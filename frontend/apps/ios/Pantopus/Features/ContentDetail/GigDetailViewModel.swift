@@ -1941,7 +1941,10 @@ public extension GigDetailViewModel {
     func confirmCompletion() async -> String? {
         guard canConfirmCompletion else { return nil }
         do {
-            _ = try await api.request(GigsEndpoints.completeGigAsPoster(gigId: gigId), as: EmptyResponse.self)
+            _ = try await api.request(
+                GigsEndpoints.completeGigAsPoster(gigId: gigId, expectedReview: rawGig?.completionReview),
+                as: EmptyResponse.self
+            )
             await refreshSilently()
             return nil
         } catch {

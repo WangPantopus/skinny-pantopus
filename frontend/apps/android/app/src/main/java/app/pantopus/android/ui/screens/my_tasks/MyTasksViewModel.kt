@@ -562,7 +562,7 @@ class MyTasksViewModel
             gigs = gigs.toMutableList().also { it[index] = completedCopy(gigs[index]) }
             applyState()
             viewModelScope.launch {
-                when (gigsRepo.completeGigAsPoster(dto.id)) {
+                when (gigsRepo.completeGigAsPoster(dto.id, dto.completionReview)) {
                     is NetworkResult.Success -> Unit
                     is NetworkResult.Failure -> {
                         gigs = previous

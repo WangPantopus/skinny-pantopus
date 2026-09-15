@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.models.gigs.BoostGigResponse
 import app.pantopus.android.data.api.models.gigs.CancelGigBody
 import app.pantopus.android.data.api.models.gigs.CancellationPreviewResponse
 import app.pantopus.android.data.api.models.gigs.CompleteGigResponse
+import app.pantopus.android.data.api.models.gigs.ConfirmCompletionBody
 import app.pantopus.android.data.api.models.gigs.CounterBidBody
 import app.pantopus.android.data.api.models.gigs.CreateChangeOrderBody
 import app.pantopus.android.data.api.models.gigs.CreateGigBody
@@ -536,6 +537,7 @@ interface GigsApi {
     @POST("api/gigs/{gigId}/complete")
     suspend fun completeGigAsPoster(
         @Path("gigId") gigId: String,
+        @Body body: ConfirmCompletionBody,
     ): CompleteGigResponse
 
     /**
