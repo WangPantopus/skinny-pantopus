@@ -3907,3 +3907,55 @@ No database, hosted or provider operation ran in this scope. The preceding
 a943a0dab checkpoint passes all15 applicable jobs/one Seeder skip in
 [CI34969633236](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34969633236).
 This follow-up needs its own CI. PR34 and the wider inventory remain unfinished.
+
+## Existing web My Gigs cache, reads and actions
+
+Both personal list routes already existed. The canonical page used an unscoped
+React Query key; the v2 page kept local rows/bids. Their containing layouts provide
+a plain QueryClientProvider and do not retire these pages on session changes.
+The corrected baseline records five failures: each page retains private rows after
+a same-cookie session replacement, the canonical cache reuses the old account after
+departure/reentry, a pending bid confirmation submits after page departure, and an
+old v2 filter response replaces a newer accepted list. The initial fixture missed
+the bid-count suffix; R2 fixes that selector, and R3 resets unused mock queues
+between failed tests before adding the filter case. All failed runs remain retained.
+
+The two existing pages reuse the API client's token-change and cross-tab marker
+signals through one small shared `useGigListSession` hook. It binds callbacks to
+their mounted opening session; the canonical query uses a nonsecret entry key and
+zero inactive retention. No credential enters the cache key. Retired rows/counts,
+bid modals and page actions disappear or become inert. A fresh entry loads current
+data. V2 read generations reject old lists/bids, and pending rejection/owner
+confirmation checks current page/modal scope before sending or applying results.
+Normal bid checkout URLs, confirmation receipts and post-success refresh remain.
+The existing error component provides reopening feedback. Layouts and navigation
+destinations are unchanged. Three edited source/test files already existed; only
+the shared hook is new. No endpoint, database migration or application screen is added.
+
+Final source passes101 focused tests across the existing entrypoint, session-signal
+and tip/completion suites; TypeScript has zero errors and scoped ESLint has zero
+errors/five existing warnings. Tests include StrictMode replay, signed-out guards,
+same-cookie/cross-tab changes, delivered old reads, same-task modal reentry,
+current checkout navigation, retired completion responses and matching-receipt
+refresh. The initial candidate passes all five reproduced defects; the final run
+also includes the expanded positive and adjacent compatibility checks.
+
+Seven Chrome R2 scenarios pass using compiled actual pages, the root query provider,
+actual API client/session signals and real root confirmation dialog: two same-cookie
+replacement/reentry cases, two cross-tab held-read cases, departed rejection,
+current owner confirmation and reversed filter responses. Only the current owner
+confirmation sends a write, carrying its exact loaded review, then refreshes the
+server-confirmed row. These use synthetic route responses and fixture entry controls;
+they are not backend/SQL, real-account, provider or full installed lifecycle proof.
+R1 timed out at its initial five-second populated-page expectation and accepted no
+case; R2 adds diagnostic capture and passes on unchanged application source. Its
+failure cause was not established, and R1 is not reported as passing.
+
+Source hashes, baseline/final checks, browser scenarios/screenshots, compiled entry
+chunks and cleanup are retained under `existing-tip-provider-proof-r1/my-gigs-web-*`
+and the durable private mirror. The temporary route/build cache are removed, the
+Next-modified tsconfig is restored byte-for-byte and port3107 is released. No database,
+hosted or provider operation ran in this scope. The preceding native head8ea69bbe4
+is running [CI34972981459](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34972981459);
+this web follow-up needs its own CI. PR34 remains draft. Completion draft/restart,
+full paid/account journeys and the broader inventory remain open.

@@ -434,11 +434,25 @@ three iOS failures. Final57 Android/55 iOS checks, static gates and builds pass.
 All nine changed source/test files already existed; no layout, backend or schema
 change. See [the evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-native-rebooking-history-and-boost-refresh).
 The owned iOS simulator is shut down; the separate user simulator is preserved.
-This follow-up needs its own CI; PR34 remains draft.
+Both branches now contain 8ea69bbe4, with
+[CI34972981459](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34972981459)
+running. PR34 remains draft.
 
-**Next:** verify the existing web My Gigs readers/actions, then completion
-draft/restart behavior. Inspect existing implementations first and preserve screen
-designs. There is no active web rebook/boost caller to rebuild.
+**Web My Gigs lifetime:** both existing pages now retire private lists and pending
+actions with the current session/page. Five baseline cases reproduce retained
+same-cookie history, shared-cache reuse, departed bid rejection and stale filter
+reads.101 focused tests, TypeScript and scoped lint pass (zero errors/five existing
+warnings). Seven Chrome cases pass with the actual pages, API client/session signals
+and root confirmation; transport and fixture entry controls are synthetic. One small
+shared hook joins the existing auth signals; three other source/test files already
+existed. Layouts, routes, backend and schema are preserved. See
+[web evidence](VERIFICATION_FIRST_2026-09-13.md#existing-web-my-gigs-cache-reads-and-actions).
+The temporary route/build are removed, original tsconfig restored and port3107
+released. This web follow-up needs its own CI after the current native run finishes.
+
+**Next:** verify completion draft/restart behavior. Inspect existing storage and
+implementations first and preserve screen designs. There is no active web
+rebook/boost caller to rebuild.
 Full installed native MyTasks/owner lifetime remains open. Continue completion
 draft/restart verification using existing storage first. Generic maintenance granular authority/raw RLS, Home-origin admission
 and full maintenance UI acceptance remain separate follow-ups; this bounded history

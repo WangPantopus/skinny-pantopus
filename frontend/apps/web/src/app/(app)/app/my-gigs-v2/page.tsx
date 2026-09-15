@@ -17,6 +17,7 @@ import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import type { GigListItem, GigBidWithUser } from '@pantopus/types';
 import { ListArchetype } from '@/components/archetypes';
+import { useGigListSession } from '@/hooks/useGigListSession';
 
 type FilterStatus = 'all' | 'open' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
 
@@ -38,8 +39,15 @@ const ENGAGEMENT_CONFIG: Record<string, { label: string; cls: string }> = {
 
 export default function MyGigsV2Page() {
   const router = useRouter();
+  const session = useGigListSession();
+  const { isCurrent } = session;
+  const navigate = (url: string) => { if (isCurrent()) router.push(url); };
   const confirmingGigs = useRef(new Set<string>());
-  const [gigs, setGigs] = useState<GigListItem[]>([]);
+  const rejectingBids = useRef(new Set<string>());
+  const loadGeneration = useRef(0);
+  const bidsGeneration = useRef(0);
+  const [storedGigs, setGigs] = useState<GigListItem[]>([]);
+  const gigs = session.active ? storedGigs : [];
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterStatus>('all');
@@ -49,98 +57,130 @@ export default function MyGigsV2Page() {
   const [loadingBids, setLoadingBids] = useState(false);
   const [bidsError, setBidsError] = useState<string | null>(null);
 
-  const loadGigs = useCallback(async () => {
-    try {
-      const token = getAuthToken();
-      if (!token) {
-        router.push('/login');
-        return;
-      }
+  useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
+  useEffect(() => {
+    if (!session.active) {
+      setGigs([]); setSelectedGig(null); setBids([]); setBidsError(null);
+      confirmingGigs.current.clear(); rejectingBids.current.clear();
+      loadGeneration.current++; bidsGeneration.current++;
+    }
+  }, [session.active]);
+
+  const loadGigs = useCallback(async () => {
+    if (!isCurrent()) return;
+    const generation = ++loadGeneration.current;
+    const current = () => isCurrent() && generation === loadGeneration.current;
+    try {
       setFetchError(null);
       const response = await api.gigs.getMyGigs({
         limit: 100,
         status: filter === 'all' ? undefined : filter === 'in_progress' ? ['in_progress', 'completed'] : [filter]
       });
-
+      if (!current()) return;
       const resObj = response as Record<string, any>;
       const gigsArray = (resObj.gigs || resObj.data || []) as GigListItem[];
       setGigs(gigsArray);
     } catch (err) {
+      if (!current()) return;
       console.error('Failed to load gigs:', err);
       setGigs([]);
       setFetchError('Failed to load your gigs. Please try again.');
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
-  }, [filter, router]);
+  }, [filter, isCurrent]);
 
   useEffect(() => {
+    const generation = loadGeneration;
     loadGigs();
+    return () => { generation.current++; };
   }, [loadGigs]);
 
+  const closeBids = () => {
+    bidsGeneration.current++; setSelectedGig(null); setBids([]); setBidsError(null);
+  };
+
   const loadBidsForGig = async (gigId: string) => {
+    if (!isCurrent()) return;
+    const generation = ++bidsGeneration.current;
+    const current = () => isCurrent() && generation === bidsGeneration.current;
     setLoadingBids(true);
+    setBids([]);
     setBidsError(null);
     try {
       const response = await api.gigs.getGigBids(gigId);
+      if (!current()) return;
       setBids(response.bids || []);
     } catch {
+      if (!current()) return;
       setBids([]);
       setBidsError('Failed to load bids');
     } finally {
-      setLoadingBids(false);
+      if (current()) setLoadingBids(false);
     }
   };
 
   const handleViewGig = (gig: GigListItem) => {
-    router.push(`/app/gigs-v2/${gig.id}`);
+    navigate(`/app/gigs-v2/${gig.id}`);
   };
 
   const handleViewBids = (gig: GigListItem) => {
+    if (!isCurrent() || !gigs.includes(gig)) return;
     setBidsError(null);
     setSelectedGig(gig);
     loadBidsForGig(gig.id);
   };
 
   const handleAcceptBid = (bidId: string) => {
-    if (selectedGig) router.push(gigBidCheckoutUrl(selectedGig.id, bidId));
+    if (selectedGig && !loadingBids && bids.some(bid => bid.id === bidId && ['pending', 'pending_payment'].includes(bid.status))) {
+      navigate(gigBidCheckoutUrl(selectedGig.id, bidId));
+    }
   };
 
   const handleRejectBid = async (bidId: string) => {
-    if (!selectedGig) return;
+    if (!isCurrent() || !selectedGig || loadingBids || !bids.some(bid => bid.id === bidId && bid.status === 'pending')) return;
+    const generation = bidsGeneration.current;
+    const current = () => isCurrent() && generation === bidsGeneration.current;
+    const pendingKey = `${generation}:${bidId}`;
     const yes = await confirmStore.open({ title: 'Reject this bid?', description: 'This bidder will be notified of the rejection.', confirmLabel: 'Reject Bid', variant: 'destructive' });
-    if (!yes) return;
+    if (!yes || !current() || rejectingBids.current.has(pendingKey)) return;
+    rejectingBids.current.add(pendingKey);
 
     try {
       setBidsError(null);
       await api.gigs.rejectBid(selectedGig.id, bidId);
+      if (!current()) return;
       toast.info('Bid rejected');
       loadBidsForGig(selectedGig.id);
     } catch (err: unknown) {
-      setBidsError(err instanceof Error ? err.message : 'Failed to reject bid');
+      if (current()) setBidsError(err instanceof Error ? err.message : 'Failed to reject bid');
+    } finally {
+      rejectingBids.current.delete(pendingKey);
     }
   };
 
   const handleMarkComplete = async (gigId: string) => {
+    if (!isCurrent()) return;
     const loaded = gigs.find(gig => gig.id === gigId);
     if (!loaded || !awaitingConfirmation(loaded) || !loaded.completion_review) {
-      router.push(`/app/gigs-v2/${gigId}`); return;
+      navigate(`/app/gigs-v2/${gigId}`); return;
     }
     const expectedReview = loaded.completion_review;
-    const token = getAuthToken();
+    const generation = loadGeneration.current;
+    const current = () => isCurrent() && generation === loadGeneration.current;
     const yes = await confirmStore.open({ title: 'Confirm this completed work?', description: 'This approves the worker’s completed task and releases its payment.', confirmLabel: 'Confirm', variant: 'primary' });
-    if (!yes || token !== getAuthToken() || confirmingGigs.current.has(gigId)) return;
+    if (!yes || !current() || confirmingGigs.current.has(gigId)) return;
     confirmingGigs.current.add(gigId);
 
     try {
       const result = await api.gigs.completeGig(gigId, { expectedReview });
-      if (token !== getAuthToken()) return;
+      if (!current()) return;
       if (result.gig?.id !== gigId || result.gig.status !== 'completed' || !Number.isFinite(Date.parse(result.gig.owner_confirmed_at || ''))) throw new Error('Completion receipt unavailable. Open the task to check its current state.');
       toast.success('Completion confirmed');
       loadGigs();
     } catch (err: unknown) {
-      if (token === getAuthToken()) toast.error(getErrorMessage(err));
+      if (current()) toast.error(getErrorMessage(err));
     } finally {
       confirmingGigs.current.delete(gigId);
     }
@@ -175,7 +215,7 @@ export default function MyGigsV2Page() {
           subtitle={`${gigs.length} total · ${stats.open} open`}
           primaryAction={{
             label: 'Quick post',
-            onClick: () => router.push('/app/gigs-v2/new'),
+            onClick: () => navigate('/app/gigs-v2/new'),
           }}
           headerFilters={
             <SearchInput
@@ -187,9 +227,10 @@ export default function MyGigsV2Page() {
           }
           renderHeader={() => (
             <>
-              {fetchError && (
+              {(fetchError || session.retired) && (
                 <div className="mb-4">
-                  <ErrorState message={fetchError} onRetry={() => loadGigs()} />
+                  <ErrorState message={session.retired ? 'Your session changed. Reopen My tasks to continue.' : fetchError!}
+                    onRetry={() => { if (session.retired) window.location.reload(); else void loadGigs(); }} />
                 </div>
               )}
               <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
@@ -202,7 +243,7 @@ export default function MyGigsV2Page() {
               </div>
             </>
           )}
-          loading={loading}
+          loading={loading && !session.retired}
           loadingSlot={<LoadingSkeleton variant="gig-card" count={3} />}
           rows={filteredGigs}
           rowSpacing={4}
@@ -212,7 +253,7 @@ export default function MyGigsV2Page() {
               gig={gig}
               onView={() => handleViewGig(gig)}
               onViewBids={() => handleViewBids(gig)}
-              onClose={() => router.push(`/app/gigs-v2/${gig.id}?action=cancel`)}
+              onClose={() => navigate(`/app/gigs-v2/${gig.id}?action=cancel`)}
               onComplete={() => handleMarkComplete(gig.id)}
             />
           )}
@@ -222,22 +263,19 @@ export default function MyGigsV2Page() {
             subcopy: filter === 'all' ? 'Post your first task to get started.' : 'Try changing your filter.',
             tone: 'personal',
             ctaLabel: 'Quick post',
-            onCtaClick: () => router.push('/app/gigs-v2/new'),
+            onCtaClick: () => navigate('/app/gigs-v2/new'),
           }}
         />
       </main>
 
       {/* Bids Modal */}
-      {selectedGig && (
+      {session.active && selectedGig && (
         <BidsModal
           gig={selectedGig}
           bids={bids}
           loading={loadingBids}
           error={bidsError}
-          onClose={() => {
-            setSelectedGig(null);
-            setBidsError(null);
-          }}
+          onClose={closeBids}
           onAccept={handleAcceptBid}
           onReject={handleRejectBid}
         />
