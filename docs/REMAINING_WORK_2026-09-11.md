@@ -7,6 +7,13 @@ instruction below requires checking existing implementations and current evidenc
 it is not permission to rebuild a screen or add a competing schema. The original
 improvement requirements remain in scope.
 
+The user approved [three workstreams](workstreams/README.md) on September 15.
+This document remains the authoritative backlog; the shared hub records current
+assignments and dependencies. First bounded milestones: P04 Start Work (Stream 1),
+M02 browser guest passes (Stream 2), N04 personal blocking/direct messages (Stream 3).
+Each stream reuses accepted evidence before choosing new verification. Setup and
+read-only discovery close no acceptance rows. Shared G/O/L work stays coordinated.
+
 Native reviewer history is accepted and integrated through PR #35 into #32.
 PR #36 current-claims HTTP/SDK/browser/native acceptance is also complete at
 `1c5f7bb1b`, with final CI 34781479982 passing. The existing presentation is restored and integrated from `a68e8f0e5`;

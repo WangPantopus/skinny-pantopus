@@ -1,0 +1,150 @@
+# Three-stream coordination
+
+Updated September 15, 2026. The user authorized three concurrent streams. This
+folder coordinates their next bounded milestones; it does not replace the existing
+backlog, acceptance evidence, or verification-first instructions.
+
+## Where to start
+
+| Document | Purpose | Writer |
+| --- | --- | --- |
+| [AGENTS.md](../../AGENTS.md) | Rules for preserving existing work and designs | Coordinator, when an agreed rule needs recording |
+| [Project handoff](../PROJECT_HANDOFF.md) | Current integrated state and next decisions | Coordinator |
+| [Remaining work](../REMAINING_WORK_2026-09-11.md) | Authoritative requirements and acceptance rows | Coordinator, using stream evidence |
+| This guide | Ownership, dependencies, integration and shared resources | Coordinator |
+| [1. Gigs/payments](01-gigs-payments.md) | Current gig/payment milestone and handoff | Stream 1 |
+| [2. Home/household](02-home-household.md) | Current Home milestone and handoff | Stream 2 |
+| [3. Accounts/social](03-accounts-social.md) | Current account/social/notification milestone and handoff | Stream 3 |
+| [Verification report](../VERIFICATION_FIRST_2026-09-13.md) and linked reports | Source-bound results, failures and limitations | Coordinator integrates stream report contributions |
+
+The coordinator is also Stream 1; there is no fourth implementation stream.
+Each stream owns the affected backend, database contract and clients for its
+milestone. Platform boundaries do not split ownership of one user journey.
+
+Backlog ownership: Stream 1 handles P (gigs/payments); Stream 2 handles H/R/I/D/F/M
+(Home, residency, intelligence, records, bills, mail/guests); Stream 3 handles N/A
+(social, notifications, accounts/providers). A03 shared storage changes require
+explicit ownership, and A05 routes each feature-specific finding to its domain
+owner. U (UI/accessibility/lifetime) checks accompany each affected journey; G/O/L
+(integration, operations and launch) stay coordinated centrally with stream input.
+These categories assign responsibility, not permission to reopen accepted work.
+
+## Live location and Git branches
+
+The live coordination folder on this Mac is:
+`/private/tmp/pantopus-paid-gig-integration/docs/workstreams/`.
+All three agents read that exact directory, even while editing application code
+in another worktree. A copy in a different branch is a committed snapshot, not a
+live message channel. This path belongs to a Git worktree of the same repository;
+the owner's main checkout remains separate.
+
+| Stream | Application worktree | Branch / starting state |
+| --- | --- | --- |
+| 1 | `/private/tmp/pantopus-paid-gig-integration` | `codex/paid-gig-integration`; setup starts at `3e93cd167` |
+| 2 | `/private/tmp/pantopus-workstream-home` | `codex/workstream-home`; master `e775af9ae` |
+| 3 | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; master `e775af9ae` |
+
+Streams 2 and 3 compare relevant pending Stream 1 changes before editing shared
+code. They start from master because their first scoped implementations are
+unchanged in the paid candidate. This permits small independent PRs to master.
+The coordinator then integrates merged master into the paid candidate and checks
+the combined behavior. Do not merge the entire unfinished paid branch into a new
+stream just to obtain its status documents.
+
+Each agent writes only its own status file in the live folder. It commits code
+only from its own application worktree. The coordinator commits/pushes shared
+status snapshots after the author finishes an update; no blanket `git add .`.
+Remote workers must send their source-bound handoff to the coordinator instead
+of treating a stale local copy as the live folder.
+
+## Working agreement
+
+1. Select one bounded milestone from an existing inventory row. Locate its screen,
+   caller, endpoint, service and database contract. Read relevant accepted evidence
+   and compare source/configuration before choosing verification to repeat.
+2. Record the milestone, exact candidate files, reused evidence, unknowns, next
+   verification and completion criterion in the stream file. Source suspicion is
+   not a reproduced bug; an open row is not a missing implementation.
+3. Before changing a shared file or acquiring a shared runtime, send the coordinator
+   a request identifying the purpose and affected streams. The coordinator records
+   one owner here and acknowledges it before work starts. An empty row is not a
+   lock that multiple workers may independently claim.
+4. Reproduce the failure or document a concrete unmet requirement. Repair the
+   existing implementation, preserve layouts and reuse existing services/schema.
+   New tables, migrations, services or screens require the comparison in AGENTS.md.
+5. Verify affected behavior and meaningful regressions. Actual UI/HTTP/persistence
+   evidence is required where the milestone calls for it. Label synthetic auth,
+   provider responses and transport; do not equate saved state with delivery.
+6. Commit/push a reviewable milestone and hand off its SHA, changed paths, baseline,
+   final evidence, limits, cleanup and remaining decisions. The coordinator reviews,
+   reconciles shared changes/migrations and runs required CI before merging.
+
+Update status when starting, changing scope/ownership, reproducing a defect,
+finishing verification, becoming blocked, or handing off. Do not append a diary of
+every command. Keep the current snapshot short; link detailed evidence/history.
+Notify an affected peer through the coordinator when a finding changes its contract
+or priority. Merely writing a note in another branch does not notify anyone.
+
+Use states: discovery, verification, repair, ready for review, CI, merged, blocked.
+Record the blocker and independent work that can continue. Local acceptance of a
+small milestone does not close a broad inventory row or establish launch readiness.
+No fixed completion percentage follows from row counts or numbers of tests.
+
+## Shared ownership and requests
+
+The current stream status files name candidate ownership for their first milestones.
+These cross-cutting files/contracts require coordinator assignment for each edit:
+
+- Authentication/session helpers; notification services, workers and sockets;
+  generic File/upload/storage; shared navigation and SDK exports; CI/build manifests.
+- `backend/routes/gigs.js` and payment services are initially Stream 1's scope.
+  Home-related callers must coordinate before changing them.
+- Migration versions, replay/adoption, shared permission/RPC contracts and release
+  configuration are coordinated centrally. Never rewrite applied migration history.
+
+| Request / decision | Owner | Status / next action |
+| --- | --- | --- |
+| Shared file changes | Coordinator | None granted for new Stream 2/3 repairs; discovery is read-only |
+| Stream 3 socket admission, if needed | Coordinator with Stream 1/3 | Compare retained private-gig socket changes before granting a socket edit |
+| Cancellation/no-show fee payer and recipient | Product decision, recorded by Stream 1 | Still unspecified; independent Start Work verification can proceed |
+| User's Place redesign, PR #46 | User's separate scope | Preserved outside these verification milestones |
+
+## Runtime reservations
+
+One heavy native build runs on this Mac at a time. Remote CI uses its own runners.
+Acquire a reservation before a build, simulator install, shared cache write,
+database fixture/migration or server bind. Record process/lease and evidence paths
+privately; never put credentials, raw device tokens or operator logs in Git/chat.
+Check actual processes and the existing private leases before reuse. A stale note
+or elapsed time is not proof a resource is free.
+
+| Resource | Current reservation | Rule |
+| --- | --- | --- |
+| Local heavy native build | None at setup inspection | Coordinator grants one owner; others continue lighter work |
+| iOS/Android test devices | No new reservation | Preserve accepted device state; inspect existing leases |
+| Databases / fixture ports | No new reservation | Separate exact owned fixtures or exclusive write lease; record cleanup |
+| Existing SQL port 64522 and REST port 18089 | Retained prior rehearsal resources | Never assume available or change their schema from another stream |
+| Physical iPhone | Owner's installed build 3 | No test install or device mutation without a concrete authorized task |
+
+Dependencies and accepted products are reused after checking their contracts.
+Do not run three package installations or cache cleans. Low disk space is a reason
+to sequence builds and request precise cleanup, not erase another stream's evidence.
+Streams release resources on handoff after verifying processes and exact cleanup.
+
+## Integration and completion
+
+Only the coordinator updates shared handoff/backlog disposition or merges these
+streams' PRs. A handoff includes source SHA/base, current PR/CI, reused and new
+evidence, remaining limits, shared impacts and runtime cleanup. Run current-head
+required checks; additional end-to-end repeats need a changed contract or identified
+integration risk. Batch documentation-only publication to avoid canceling useful CI.
+
+At setup, PR #34 is still draft at `c9cb69825` with
+[CI34998717315](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34998717315)
+passing 15 applicable jobs/one Seeder skip. Integration `3e93cd167` only adds the
+verified iPhone-install documentation. Green CI does not finish the paid scope.
+PR #46 (`place-design`) is a separate open user PR. Refresh live state before action.
+
+This setup creates no recurring background automation. Status files distinguish
+completed discovery from running verification; agent work is dispatched in bounded
+milestones. The first milestones are assigned in the three linked status files.

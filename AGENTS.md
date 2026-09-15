@@ -37,3 +37,11 @@ The user's September 13 direction supersedes older buildout instructions:
 
 See [the reconciliation](docs/VERIFICATION_FIRST_2026-09-13.md) for current
 PR dispositions, paused drafts, inventory sources and the next bounded task.
+
+## Approved parallel work
+
+When working in one of the user's three streams, read
+[the coordination guide](docs/workstreams/README.md) and your stream status before
+editing. Use its single live coordination location, file ownership and runtime
+reservations. Keep the existing handoff/backlog authoritative and preserve each
+stream's accepted evidence. The coordinator integrates shared status and merges.

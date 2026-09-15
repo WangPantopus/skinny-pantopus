@@ -7,6 +7,31 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## Three concurrent workstreams — September 15
+
+The user approved three feature streams with shared instructions/status. Start at
+[docs/workstreams/README.md](workstreams/README.md) for the live coordination
+location, worktree/branch ownership, shared-file requests and runtime reservations.
+Each stream writes its own status; the primary coordinator also owns Stream 1 and
+integrates shared handoff/backlog updates. Existing reports and the 80-row inventory
+remain authoritative; no replacement task tracker or app infrastructure is added.
+
+- Stream 1, gigs/payments: P04 Start Work recovery and assignment lifetime, using
+  the existing paid integration checkout and accepted web evidence.
+- Stream 2, Home/household: M02 existing browser guest-pass issue/view/revoke,
+  reusing accepted sharing-service/database evidence.
+- Stream 3, accounts/social/notifications: N04 personal block/unblock and direct
+  message admission, preserving distinct existing block contracts/policies.
+
+The two new streams have isolated branches from master `e775af9ae`; their first
+scoped files are unchanged in the paid candidate. Their independent discovery
+audits and this setup do not claim a newly reproduced defect or completed flow.
+Baseline verification is queued in the three status files; no new runtime/device
+reservation has been granted. PR #46 (`place-design`) remains the user's separate
+scope. The owner's master checkout now matches remote master and is clean; its
+design work is committed on `place-design`, so older dirty-checkout notes below
+are historical. Keep the three-stream guide and live Git state ahead of those notes.
+
 ## Current state — September15
 
 **Requested physical iPhone update:** all code through `c9cb69825` is committed and
@@ -16,8 +41,8 @@ configuration and matching app/Keychain/app-group/APNs identities. Device invent
 confirms build3. The signed product and private evidence are durably mirrored; no
 uninstall/data clear, launch, hosted migration/deployment or provider activation ran.
 See [the installation record](physical-iphone-refresh-2026-09-11.md#september-15-2026--latest-committed-client).
-CI34998717315 on c9cb69825 is still running; prior c7d45dd09 CI passes15 jobs/one skip.
-This documentation follow-up is pushed on integration while canonical CI finishes.
+CI run 34998717315 on c9cb69825 passes 15 applicable jobs/one Seeder skip.
+Integration 3e93cd167 adds only the installation documentation to that source.
 Backend-dependent features and the broader app acceptance remain incomplete.
 
 **Master:** `e775af9ae393c1e961df8f0043e3aed734326196` after authorized
@@ -34,7 +59,7 @@ repair [PR44](https://github.com/WangPantopus/skinny-pantopus/pull/44) merged at
 `f6dbbe2eb` (six applicable checks/five path skips). Their reviewed trees exactly
 matched master. No hosted deployment, migration adoption or provider activation ran.
 
-**Remaining open PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
+**Open verification PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
 remains draft. Its isolated integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
 the canonical PR branch is `codex/staging-paid-gig`. Both branches include Home-history and web lifetime checkpoint `88082fdde`. Its
@@ -583,9 +608,10 @@ All ab17 fixtures/API18109 are cleaned. Two existing source/test files change; n
 new schema/client/layout/control metadata. See [notice evidence](VERIFICATION_FIRST_2026-09-13.md#existing-urgent-notification-retry-identity).
 Transport remains best effort; saved state is not proof of push delivery. Historical
 unkeyed events are preserved, without a claim of deduplication across old/new handlers.
-The prior c7d45dd09 [CI34993419890](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34993419890)
-now passes all15 applicable jobs/one Seeder skip. Urgent341da82c6 and notice4c5655217
-need subsequent canonical CI with the Start Work follow-up below.
+The c7d45dd09 [CI34993419890](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34993419890)
+and combined c9cb69825 [CI34998717315](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34998717315)
+each pass15 applicable jobs/one Seeder skip. The latter includes urgent341da82c6,
+notice4c5655217 and the Start Work follow-up below. PR34 remains unfinished/draft.
 
 **Existing web Start Work control:** ten failing baselines reproduce duplicate
 pending requests, stale success and acceptance of invalid receipts. The existing
