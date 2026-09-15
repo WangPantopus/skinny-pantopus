@@ -37,7 +37,7 @@ def uid(n):return 'aad20000-0000-4000-8000-'+str(n).zfill(12)
 def lit(v):return 'NULL' if v is None else "'"+str(v).replace("'","''")+"'"
 def rpc(name,*args):return 'SET ROLE service_role; SELECT public.'+name+'('+','.join(args)+')::text; RESET ROLE;'
 def reserve(gig,request):return rpc('reserve_gig_tip_original',lit(uid(gig)),lit(uid(1)),lit('a'*64),lit(uid(request)),lit(json.dumps(terms[gig])), '500','NULL','false')
-def decode(c,sql):return json.loads(c.run(sql)[0])
+def decode(c,sql):return json.loads(c.run(sql)[0] or 'null')
 def start_wait(sql):
  out=[];errors=[]
  def run():
@@ -127,12 +127,32 @@ try:
  assert decode(w,rpc('read_gig_tip_original',lit(uid(602)),lit(uid(1))))['payment']['metadata'] is None
  print('PASS: changed historical amount wins its row lock and blocks stale provider-proof adoption',flush=True)
 
+ # The existing payment relay leases a committed tip notice using the Payment
+ # row. A competing worker skips the lock and never sends that same live lease.
+ w.run('INSERT INTO public."Payment"(id,gig_id,payer_id,payee_id,payment_type,payment_status,amount_total,amount_subtotal,amount_to_payee,amount_platform_fee,tip_amount,currency,stripe_payment_intent_id,stripe_charge_id,captured_at,payment_succeeded_at) VALUES ('+
+  ','.join([lit(uid(603)),lit(uid(107)),lit(uid(1)),lit(uid(2)),"'tip'","'captured_hold'",'500','500','500','0','500',"'usd'","'pi_tipdeliveryrace'","'ch_tipdeliveryrace'",'now()','now()'])+');')
+ w.run('BEGIN;');first=decode(w,rpc('claim_gig_tip_delivery'));assert first['id']==uid(603)
+ assert decode(l,rpc('claim_gig_tip_delivery')) is None;w.run('COMMIT;')
+ assert decode(l,rpc('claim_gig_tip_delivery')) is None
+ print('PASS: separate payment relay workers skip a locked notice and cannot duplicate its live lease',flush=True)
+ w.run("BEGIN; SET LOCAL app.gig_tip_delivery='on'; UPDATE public.\"Payment\" SET metadata=jsonb_set(metadata,'{gig_tip_delivery_v1,lease_until}',to_jsonb(clock_timestamp()-interval '1 second')) WHERE id="+lit(uid(603))+"; COMMIT;")
+ second=decode(l,rpc('claim_gig_tip_delivery'));assert second['id']==first['id'] and second['lease_id']!=first['lease_id']
+ assert decode(w,rpc('finish_gig_tip_delivery',lit(uid(603)),lit(first['lease_id']),"'done'")) is False
+ print('PASS: expired notice work is reclaimable and the superseded worker cannot acknowledge it',flush=True)
+ w.run('BEGIN; UPDATE public."Payment" SET metadata=metadata||'+lit(json.dumps({'unrelated':'retained'}))+'::jsonb WHERE id='+lit(uid(603))+';')
+ saved=finish(start_wait(rpc('finish_gig_tip_delivery',lit(uid(603)),lit(second['lease_id']),"'done'")))
+ assert saved is True
+ assert w.run('SELECT metadata->>'+lit('unrelated')+' FROM public."Payment" WHERE id='+lit(uid(603))+';')==['retained']
+ assert decode(w,rpc('claim_gig_tip_delivery')) is None
+ print('PASS: a delivery acknowledgement waits for newer Payment metadata and preserves it after an observed row lock',flush=True)
+
 finally:
  w.close();l.close()
  if setup:
   # Originals intentionally resist normal deletion. Remove only these exact
   # fixture Payments in this disposable DB; normal FK cleanup follows.
-  cleanup='BEGIN; SET LOCAL session_replication_role=replica; DELETE FROM public."Payment" WHERE id IN ('+','.join(lit(uid(n)) for n in [301,302,303,305,306,396,601,602])+'); SET LOCAL session_replication_role=origin;'
+  cleanup='BEGIN; SET LOCAL session_replication_role=replica; DELETE FROM public."Payment" WHERE id IN ('+','.join(lit(uid(n)) for n in [301,302,303,305,306,396,601,602,603])+'); SET LOCAL session_replication_role=origin;'
+  cleanup+='DELETE FROM public."Notification" WHERE user_id='+lit(uid(2))+' AND type=\'tip_received\';'
   cleanup+='DELETE FROM public."Gig" WHERE id IN ('+','.join(lit(uid(n)) for n in range(101,108))+');'
   cleanup+='DELETE FROM public."StripeAccount" WHERE user_id='+lit(uid(2))+';'
   cleanup+='DELETE FROM public."User" WHERE id IN ('+lit(uid(1))+','+lit(uid(2))+'); DELETE FROM auth.users WHERE id IN ('+lit(uid(1))+','+lit(uid(2))+'); COMMIT;'

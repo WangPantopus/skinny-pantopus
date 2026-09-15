@@ -1282,9 +1282,12 @@ async function notifyHouseholdAccessRequest({
 
 
 /** Deliver an already-committed paid-gig notification without inserting again. */
-async function deliverStoredGigNotification(notification) {
-  if (!notification?.id || !['bid_accepted', 'bid_on_standby', 'payout_onboarding_nudge', 'payout_sent', 'payment_completed', 'gig_auto_cancelled', 'payment_auth_expiring', 'gig_cancelled', 'bid_reopened', 'bid_rejected', 'worker_cant_make_it'].includes(notification.type)) {
+async function deliverStoredGigNotification(notification, { pushAllowedAtCapture } = {}) {
+  if (!notification?.id || !['bid_accepted', 'bid_on_standby', 'payout_onboarding_nudge', 'payout_sent', 'payment_completed', 'gig_auto_cancelled', 'payment_auth_expiring', 'gig_cancelled', 'bid_reopened', 'bid_rejected', 'worker_cant_make_it', 'tip_received'].includes(notification.type)) {
     throw new Error('Unsupported stored gig notification');
+  }
+  if (notification.type === 'tip_received' && typeof pushAllowedAtCapture !== 'boolean') {
+    throw new Error('Tip capture preference receipt unavailable');
   }
   const userId = notification.user_id;
   const [global, granular] = await Promise.all([
@@ -1293,7 +1296,8 @@ async function deliverStoredGigNotification(notification) {
   ]);
   if (global.error || granular.error) throw new Error('Notification preferences unavailable');
   // A suppressed event stays in-app and is never replayed when push is enabled.
-  const suppressed = global.data?.push_notifications !== true || granular.data?.gig_updates_enabled === false;
+  const suppressed = (notification.type === 'tip_received' && !pushAllowedAtCapture)
+    || global.data?.push_notifications !== true || granular.data?.gig_updates_enabled === false;
   if (!suppressed) emitDesktopAlert(notification);
   const result = suppressed ? { acceptedCount: 0, unresolvedCount: 0 }
     : await pushService.sendToUserWithReceipt(userId, {

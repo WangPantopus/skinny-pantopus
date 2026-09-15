@@ -82,7 +82,7 @@ describe('existing tip status requires the current matching provider payment', (
     expect(result.payment_status).toBe('captured_hold');
     expect(getTable('Payment')[0].stripe_charge_id).toBe(charge.id);
     expect(getTable('Payment')[0].payment_succeeded_at).toBe(new Date(charge.created * 1000).toISOString());
-    expect(createNotification).toHaveBeenCalledTimes(1);
+    expect(createNotification).not.toHaveBeenCalled(); // SQL capture owns durable notification creation.
   });
   test('historical capture cannot be validated by a different latest Charge', async () => {
     const { payment, intent, charge } = tipFixture();
@@ -167,7 +167,6 @@ describe('original tip creation and recovery in the existing service', () => {
     stripe.paymentIntents.retrieve.mockImplementation(async () => copy(intent));
     stripe.charges.retrieve.mockImplementation(async () => copy(charge));
     jest.spyOn(stripeService, 'createEphemeralKey').mockResolvedValue({ secret: 'ephemeral_fixture' });
-    jest.spyOn(stripeService, '_notifyTipReceivedIfNeeded').mockResolvedValue(true);
     jest.spyOn(db, 'rpc').mockImplementation(async (name, args) => {
       calls.push(name);
       if (name === 'reserve_gig_tip_original' && reserveError) return { error: { message: 'Reservation unavailable' } };
@@ -231,7 +230,7 @@ describe('original tip creation and recovery in the existing service', () => {
     expect(result.status).toBe('succeeded'); expect(result.receipt.amountChargedCents).toBe(500);
     expect(saved.payment.amount_to_payee).toBe(500); expect(saved.payment.amount_platform_fee).toBe(0);
     expect(stripe.paymentIntents.retrieve).toHaveBeenCalledWith(intent.id);
-    expect(stripeService._notifyTipReceivedIfNeeded).toHaveBeenCalledTimes(1);
+    expect(createNotification).not.toHaveBeenCalled();
   });
   test('reservation failure prevents all provider work', async () => {
     reserveError = true;
@@ -324,7 +323,7 @@ describe('original tip creation and recovery in the existing service', () => {
     recordError = true;
     const result = await stripeService.createTipPayment(command());
     expect(result.status).toBe('pending'); expect(result.receipt).toBeNull(); expect(result.checkout).toBeUndefined();
-    expect(stripeService._notifyTipReceivedIfNeeded).not.toHaveBeenCalled();
+    expect(createNotification).not.toHaveBeenCalled();
   });
   test('a busy original returns pending without any provider work', async () => {
     claimBusy = true;
@@ -414,6 +413,6 @@ describe('original tip creation and recovery in the existing service', () => {
     const cmd = legacy(); recordError = true;
     const result = await stripeService.createTipPayment(cmd);
     expect(result.status).toBe('needs_review'); expect(result.receipt).toBeNull(); expect(result.canRetry).toBe(false);
-    expect(stripeService._notifyTipReceivedIfNeeded).not.toHaveBeenCalled();
+    expect(createNotification).not.toHaveBeenCalled();
   });
 });

@@ -15,7 +15,7 @@ const payer = uid(1), worker = uid(2), customer = 'cus_tiporiginalsql';
 const quote = v => v == null ? 'NULL' : "'" + String(typeof v === 'object' ? JSON.stringify(v) : v).replaceAll("'", "''") + "'";
 const ident = v => { assert.match(v, /^[a-zA-Z_][a-zA-Z0-9_]*$/); return `"${v}"`; };
 let queries = 0, createCalls = 0, cancelCalls = 0, customerCalls = 0, notices = 0, loseCreate = false, hideList = false, loseRecord = false, failRecord = false;
-let loseAdoption = false;
+let loseAdoption = false, loseDeliveryAck = false, deliveryUnknown = true;
 let initialStatus = 'succeeded', holdCreate = null, releaseCreate = null;
 const keys = new Map(), intents = new Map(), parameters = new Map(), legacyRequests = new Map();
 async function sql(query) {
@@ -24,7 +24,8 @@ async function sql(query) {
   return stdout.trim();
 }
 const allowed = new Set(['preview_gig_tip', 'reserve_gig_tip_original', 'read_gig_tip_original', 'claim_gig_tip_original',
-  'prepare_gig_tip_provider', 'record_gig_tip_original', 'release_gig_tip_original', 'cancel_unstarted_gig_tip', 'bind_payment_customer', 'register_legacy_gig_tip']);
+  'prepare_gig_tip_provider', 'record_gig_tip_original', 'release_gig_tip_original', 'cancel_unstarted_gig_tip', 'bind_payment_customer', 'register_legacy_gig_tip', 'claim_wallet_settlement_delivery', 'read_wallet_settlement_delivery', 'finish_wallet_settlement_delivery',
+  'claim_gig_tip_delivery', 'read_gig_tip_delivery', 'finish_gig_tip_delivery']);
 const tables = new Set(['User', 'PaymentMethod', 'Payment', 'Gig']);
 const db = {
   async rpc(name, args) {
@@ -32,9 +33,10 @@ const db = {
     if (name === 'record_gig_tip_original' && failRecord) return { error: { message: 'Synthetic failed write' } };
     const params = Object.entries(args).map(([k, v]) => { assert.match(k, /^p_[a-z_]+$/); return k + '=>' + quote(v); }).join(',');
     try {
-      const data = JSON.parse(await sql(`SET ROLE service_role; SELECT to_jsonb(public.${name}(${params}));`));
+      const data = JSON.parse(await sql(`SET ROLE service_role; SELECT coalesce(to_jsonb(public.${name}(${params})),'null'::jsonb);`));
       if (name === 'record_gig_tip_original' && loseRecord) { loseRecord = false; return { error: { message: 'Synthetic lost acknowledgement' } }; }
       if (name === 'register_legacy_gig_tip' && loseAdoption) { loseAdoption = false; return { error: { message: 'Synthetic lost adoption acknowledgement' } }; }
+      if (name === 'finish_gig_tip_delivery' && loseDeliveryAck) { loseDeliveryAck = false; return { error: { message: 'Synthetic lost delivery acknowledgement' } }; }
       return { data };
     } catch (error) { return { error: { message: error.message } }; }
   },
@@ -115,13 +117,20 @@ const stripe = {
 };
 const overrides = new Map([[root + '/backend/config/supabaseAdmin.js', db],
   [root + '/backend/stripe/getStripeClient.js', { getStripeClient: () => stripe }],
-  [root + '/backend/services/notificationService.js', { createNotification: async n => {
-    assert.equal(n.userId, worker); assert.equal(n.idempotencyKey, `gig-tip-received:${n.metadata.payment_id}`); notices++; return { id: uid(900) };
-  } }], [root + '/backend/utils/logger.js', { info() {}, warn() {}, error() {}, debug() {} }]]);
+  [root + '/backend/services/notificationService.js', {
+    createNotification: async () => { throw new Error('Capture bypassed durable notification storage'); },
+    deliverStoredGigNotification: async (n, options) => {
+      assert.equal(n.user_id, worker); assert.equal(n.type, 'tip_received');
+      assert.equal(n.idempotency_key, `gig-tip-received:${n.metadata.payment_id}`);
+      assert.equal(options.pushAllowedAtCapture, true); notices++;
+      return { acceptedCount: 1, unresolvedCount: deliveryUnknown ? 1 : 0 };
+    },
+  }], [root + '/backend/utils/logger.js', { info() {}, warn() {}, error() {}, debug() {} }]]);
 process.env.STRIPE_SECRET_KEY = 'sk_test_local_tip_original_synthetic';
 const originalLoad = Module._load;
 Module._load = function (name, parent, isMain) { const key = Module._resolveFilename(name, parent, isMain); return overrides.has(key) ? overrides.get(key) : originalLoad.apply(this, arguments); };
-const service = require(root + '/backend/stripe/stripeService.js'); Module._load = originalLoad;
+const service = require(root + '/backend/stripe/stripeService.js');
+const relay = require(root + '/backend/jobs/deliverWalletSettlement.js'); Module._load = originalLoad;
 async function command(n) {
   const preview = await service.previewTip({ gigId: uid(100 + n), payerId: payer });
   assert.equal(preview.eligible, true);
@@ -140,6 +149,8 @@ const providerFor = cmd => [...intents.values()].find(i => i.metadata.tip_reques
       INSERT INTO public."StripeAccount"(user_id,stripe_account_id) VALUES(${quote(worker)},'acct_tiporiginalsql');
       INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,owner_confirmed_at) VALUES ${Array.from({ length: 18 }, (_, i) =>
         `(${quote(uid(101 + i))},${quote(payer)},${quote(payer)},'Tip original','Synthetic',0,'completed',${quote(worker)},now())`).join(',')}; COMMIT;`); seeded = true;
+    await sql(`INSERT INTO public."MailPreferences"(user_id,push_notifications) VALUES(${quote(worker)},true)
+      ON CONFLICT(user_id) DO UPDATE SET push_notifications=true;`);
     let cmd = await command(1), result = await service.createTipPayment(cmd);
     assert.equal(result.status, 'succeeded'); assert.equal(result.receipt.amountChargedCents, 500); assert.equal(customerCalls, 1);
     assert.equal(await sql(`SELECT amount_to_payee FROM public."Payment" WHERE id=${quote(cmd.requestId)};`), '500');
@@ -249,16 +260,34 @@ const providerFor = cmd => [...intents.values()].find(i => i.metadata.tip_reques
     assert.equal(await sql(`SELECT count(*) FROM public."Payment" WHERE id=${quote(cmd.requestId)};`), '1');
     assert.deepEqual({ createCalls, customerCalls }, beforeLegacy);
     pass('concurrent historical adoption retains one payment and no legacy scenario creates a provider payment or customer');
+    const pending = JSON.parse(await sql(`SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'note',metadata->'gig_tip_delivery_v1'->>'notification_id')),'[]') FROM public."Payment" WHERE id::text LIKE 'aad30000-%' AND metadata->'gig_tip_delivery_v1'->>'state'='pending';`));
+    assert.ok(pending.length > 0); assert.equal(notices, 0);
+    const noteCount = Number(await sql(`SELECT count(*) FROM public."Notification" WHERE user_id=${quote(worker)} AND type='tip_received';`));
+    assert.equal(noteCount, pending.length);
+    for (const row of pending) assert.equal(await sql(`SELECT count(*) FROM public."Notification" WHERE id=${quote(row.note)} AND metadata->>'payment_id'=${quote(row.id)};`), '1');
+    pass('actual capture transactions commit one exact notice each even across lost service replies, without best-effort sends');
+    assert.equal((await relay()).processed, pending.length); assert.equal(notices, pending.length);
+    assert.equal((await relay()).processed, 0);
+    pass('actual scheduled relay retains unknown transport outcomes under the same notification and honors SQL backoff');
+    await sql(`BEGIN; SET LOCAL app.gig_tip_delivery='on'; UPDATE public."Payment" SET metadata=jsonb_set(metadata,'{gig_tip_delivery_v1,retry_at}',to_jsonb(clock_timestamp()-interval '1 second')) WHERE id::text LIKE 'aad30000-%' AND metadata->'gig_tip_delivery_v1'->>'state'='pending'; COMMIT;`);
+    deliveryUnknown = false; loseDeliveryAck = true;
+    await assert.rejects(relay(), /storage unavailable/);
+    assert.equal(Number(await sql(`SELECT count(*) FROM public."Payment" WHERE id::text LIKE 'aad30000-%' AND metadata->'gig_tip_delivery_v1'->>'state'='done';`)), 1);
+    assert.equal((await relay()).processed, pending.length - 1);
+    assert.equal((await relay()).processed, 0);
+    assert.equal(notices, pending.length * 2);
+    assert.equal(Number(await sql(`SELECT count(*) FROM public."Notification" WHERE user_id=${quote(worker)} AND type='tip_received';`)), noteCount);
+    pass('lost final SQL acknowledgement recovers committed delivery without another notice or another send');
     console.log(JSON.stringify({ scenarios, queries, createCalls, distinctIntents: intents.size, cancelCalls, customerCalls, notices,
       boundary: 'Actual StripeService and PostgreSQL RPCs via local psql adapter; synthetic provider and notice transport, no hosted/provider acceptance' }));
   } finally {
     if (releaseCreate) releaseCreate();
     if (seeded) {
       await sql(`BEGIN; SET LOCAL session_replication_role=replica; DELETE FROM public."Payment" WHERE id IN(${Array.from({ length: 18 }, (_, i) => quote(uid(301 + i))).join(',')});
-        SET LOCAL session_replication_role=origin; DELETE FROM public."Gig" WHERE id IN(${Array.from({ length: 18 }, (_, i) => quote(uid(101 + i))).join(',')});
+        SET LOCAL session_replication_role=origin; DELETE FROM public."Notification" WHERE user_id=${quote(worker)} AND type='tip_received'; DELETE FROM public."Gig" WHERE id IN(${Array.from({ length: 18 }, (_, i) => quote(uid(101 + i))).join(',')});
         DELETE FROM public."StripeAccount" WHERE user_id=${quote(worker)}; DELETE FROM public."User" WHERE id IN(${quote(payer)},${quote(worker)});
         DELETE FROM auth.users WHERE id IN(${quote(payer)},${quote(worker)}); COMMIT;`);
-      assert.equal(await sql(`SELECT (SELECT count(*) FROM public."Payment" WHERE id::text LIKE 'aad30000-%')+(SELECT count(*) FROM public."Gig" WHERE id::text LIKE 'aad30000-%')+(SELECT count(*) FROM public."User" WHERE id::text LIKE 'aad30000-%')+(SELECT count(*) FROM auth.users WHERE id::text LIKE 'aad30000-%');`), '0');
+      assert.equal(await sql(`SELECT (SELECT count(*) FROM public."Payment" WHERE id::text LIKE 'aad30000-%')+(SELECT count(*) FROM public."Gig" WHERE id::text LIKE 'aad30000-%')+(SELECT count(*) FROM public."User" WHERE id::text LIKE 'aad30000-%')+(SELECT count(*) FROM auth.users WHERE id::text LIKE 'aad30000-%')+(SELECT count(*) FROM public."Notification" WHERE user_id=${quote(worker)});`), '0');
       console.log('PASS: exact synthetic fixture cleanup verified');
     }
   }

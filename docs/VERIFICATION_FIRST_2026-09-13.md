@@ -2612,3 +2612,72 @@ privately and mirrored in the existing audit directory. This checkpoint is not a
 full installed UI or actual-provider journey. No Android emulator was started;
 the owned iOS simulator is stopped. No hosted/provider change ran. Current-head
 CI, durable tip delivery and the remaining paid/all-app acceptance stay open.
+
+
+## Existing tip notifications reuse the payment delivery worker
+
+September14 continuation after cold-entry `7791bb16f`: the existing
+`_notifyTipReceivedIfNeeded` ran after capture, created/sent a best-effort notice,
+and wrote a stale Payment metadata object without checking the write result.
+Terminal command replay could skip it; a crash or uncertain push could strand
+notification delivery. Existing Notification idempotency and the stored-notice
+sender/scheduled wallet relay already provide the required storage/transport pieces.
+The wallet outbox table requires a wallet settlement, so it cannot represent tip
+capture. Existing typed Home/assignment/stop outboxes have different ownership.
+
+The repair extends Payment metadata, Notification and the existing scheduled relay.
+A new capture atomically inserts the existing tip notice and its immutable financial/
+content snapshot and capture-time preference. Failure to store that notice rolls
+back the local capture write; existing provider/read recovery retains the same
+payment. The worker claims one row immediately before delivery, checks the exact
+leased note and current payment, then uses the existing receipt transport and
+current preference/token ownership checks. Unknown delivery retries the same
+Notification ID after backoff; accepted/suppressed outcomes are durable. A lost
+acknowledgement is recovered from the stored event. Delivery updates merge under
+the Payment row lock and preserve newer metadata and original request terms.
+
+Read notices retain their read flag. Deleted/changed notices, changed recipients
+or refund/dispute state suppress an unsent alert. Existing notices keep their
+identity/content/read state and are not re-alerted. Historical captures are not
+backfilled on adoption/replay. One forward function/trigger/index migration,
+`20260914060000_gig_tip_notification_delivery.sql`, preserves earlier migration
+history and adds no table/column. Ten existing source/test files change alongside
+that migration; no UI or screen design changes. The competing best-effort service
+method is removed. Both existing cron and pg-boss registrations reuse their current
+worker, with a bounded25 events per queue per run.
+
+Verification:
+
+- 181 backend assertions pass:102 tip/transport/webhook checks and79 existing
+  critical routes, paid-delivery and wallet compatibility checks. Capture-time
+  consent, current opt-out, missing preference proof, unknown transport, deleted/
+  changed eligibility and failed acknowledgement are covered.
+- All65 SQL contracts pass; the final extended tip contract also passes after
+  adding authenticated/anonymous privilege denial and existing read-notice
+  preservation. Generated pgTAP wrappers synchronize. Local migration policy passes.
+- Actual StripeService, existing relay and owned PostgreSQL pass22 scenarios with
+  235 queries. Eight committed local notices survive16 synthetic transport attempts
+  (one unknown attempt and one accepted attempt each); lost final SQL acknowledgement
+  creates no extra notice or send. The preserved charge scenarios still make ten
+  create calls/nine modern intents, six pre-existing legacy intent fixtures, two
+  cancellations and one customer; no historical replacement charge is created.
+- Thirteen separate-connection cases pass, including skipped locked delivery,
+  expired-lease reclamation, stale-worker denial and observed row-lock waiting
+  while preserving newer Payment metadata. Exact fixture cleanup is zero.
+- Function lint:363 functions/108 bindings, zero errors/eight existing warnings.
+
+R1 backend failures were stale tests spying on the removed best-effort helper;
+R2 retained stale assertions and exited139. Corrected R3 passes102, and the separate
+compatibility run passes79. Service/concurrency R1 adapters could not parse SQL NULL
+for an empty queue; corrected R2 both pass. Initial owned-local migration application
+reported SET LOCAL outside a transaction; all object creation succeeded. Full fresh
+schema replay remains a current-head CI gate. These failures are retained, not
+counted as passing attempts.
+
+Private `existing-tip-provider-proof-r1/tip-delivery-source-binding-r1.json` binds
+all11 implementation/test/migration hashes and run files. Evidence is mirrored in
+the existing private audit directory. Actual external provider/push transport and
+full installed tip/notification returns remain unverified. No hosted migration,
+deployment, provider activation or physical-phone operation ran. PR34, the paid
+scope, R05/R06 and the wider app remain incomplete. Next: existing installed tip
+recovery journeys, then remaining paid-policy/acceptance rows, reusing accepted work.

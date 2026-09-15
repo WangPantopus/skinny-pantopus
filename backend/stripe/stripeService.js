@@ -36,49 +36,6 @@ class StripeService {
     return data || null;
   }
 
-  async _notifyTipReceivedIfNeeded(payment) {
-    if (!payment || payment.payment_type !== 'tip') return false;
-
-    const metadata = payment.metadata || {};
-    if (metadata.tip_notification_sent_at) {
-      return false;
-    }
-
-    const gig = await this._getGigInfo(payment.gig_id);
-    const notification = await createNotification({
-      userId: payment.payee_id,
-      type: 'tip_received',
-      ...(metadata.gig_tip_original_v1 ? { idempotencyKey: `gig-tip-received:${payment.id}` } : {}),
-      title: 'You received a tip!',
-      body: `The poster of "${gig?.title || 'a gig'}" sent you a $${(payment.amount_total / 100).toFixed(2)} tip. 🎉`,
-      icon: '💰',
-      link: payment.gig_id ? `/gigs/${payment.gig_id}` : null,
-      metadata: {
-        gig_id: payment.gig_id,
-        amount: payment.amount_total,
-        payment_id: payment.id,
-      },
-    });
-
-    if (notification === null) {
-      return false;
-    }
-
-    await supabaseAdmin
-      .from('Payment')
-      .update({
-        metadata: {
-          ...metadata,
-          tip_notification_id: notification?.id || null,
-          tip_notification_sent_at: new Date().toISOString(),
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', payment.id);
-
-    return true;
-  }
-
   /**
    * Best-effort reconciliation for tip payments after Stripe confirms the
    * PaymentIntent. This is used by both webhooks and the mobile post-sheet
@@ -107,7 +64,6 @@ class StripeService {
         amount: payment.amount_total, paymentMethodId: original.payment_method_id, expectedTerms: original.terms,
         sessionScope: original.original_session_scope, mode: 'check' });
       const saved = await this._tipRpc('read_gig_tip_original', { p_request_id: payment.id, p_actor_id: payment.payer_id });
-      if (progress.status === 'succeeded') await this._notifyTipReceivedIfNeeded(saved.payment);
       return { payment_status: saved.payment.payment_status, stripe_status: progress.providerStatus, payment: saved.payment };
     }
 
@@ -140,7 +96,6 @@ class StripeService {
         { code: 'TIP_PROVIDER_REVIEW', statusCode: 409 });
       const { data: current, error } = await matchPaymentSnapshot(supabaseAdmin.from('Payment').select('*'), payment).single();
       if (error || !current) throw new Error('The tip changed during verification. Check the original payment again.');
-      await this._notifyTipReceivedIfNeeded(current);
       return { payment_status: current.payment_status, payment: current };
     }
 
@@ -202,7 +157,6 @@ class StripeService {
     if (refreshError || !refreshed || !alreadySucceededStates.has(refreshed.payment_status) || !refreshed.payment_succeeded_at) {
       throw new Error('The tip status is not confirmed. Check the original payment again.');
     }
-    await this._notifyTipReceivedIfNeeded(refreshed);
 
     return {
       payment_status: refreshed.payment_status,
@@ -1401,9 +1355,8 @@ class StripeService {
         data = await this._tipRpc('record_gig_tip_original', { ...leased, p_proof: checkoutProof.proof });
       }
       const result = projectTipOriginal(data);
-      if (result.status === 'succeeded') {
-        try { await this._notifyTipReceivedIfNeeded(data.payment); } catch (_) { /* Durable payment remains recoverable by the existing notice path. */ }
-      }
+      // Capture commits its existing Notification and retry state atomically.
+      // The scheduled payment relay delivers it even if this response is lost.
       if (!legacy && mode !== 'cancel' && !['succeeded', 'canceled'].includes(result.status)
           && ['requires_payment_method', 'requires_confirmation', 'requires_action'].includes(checkoutProof.intent.status)) {
         const secret = checkoutProof.intent.client_secret;

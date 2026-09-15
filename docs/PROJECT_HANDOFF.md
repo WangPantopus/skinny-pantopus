@@ -26,14 +26,15 @@ matched master. No hosted deployment, migration adoption or provider activation 
 **Remaining open PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
 remains draft. Its isolated integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
-the canonical PR branch is `codex/staging-paid-gig`. The current legacy recovery
-checkpoint is `e700862f1`, following coordinated Android `c6b1f830e`, iOS `b98cc283c`,
+the canonical PR branch is `codex/staging-paid-gig`. The current pushed cold-entry checkpoint is `7791bb16f`, following legacy recovery
+`e700862f1` and coordinated Android `c6b1f830e`, iOS `b98cc283c`,
 web `1b9ff598e` and backend `410ae2767`. It incorporates actual PR43/44/45 master.
 The preceding coordinated head `8203a3ea7db551cce24041815aa7cd4302a9502d` passes
 all15 applicable checks/one Seeder skip in [CI34907347192](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34907347192).
-Current `14b8c3ae5` CI34918875520 has passed backend, web, safeguards and complete
-schema replay; native jobs are still running. The following cold-entry checkpoint
-requires its own current-head CI.
+Current cold-entry `7791bb16f` [CI34920129205](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34920129205)
+has passed backend, web, safeguards and complete schema replay; native jobs are
+still running. The prior `14b8c3ae5` run was superseded/canceled by the new push.
+The following durable-notice checkpoint requires its own current-head CI.
 Do not merge/deploy PR34 yet.
 
 **Current original-tip behavior:** the existing Payment.id and financial fields
@@ -120,10 +121,26 @@ versions moved byte-for-byte to14020100–14020900 after current Home master. No
 master migration was rewritten; correct `MIGRATION_BASE_SHA` policy and prior
 complete-schema CI validate ordering. Earlier failed attempts remain recorded.
 
-**Next:** repair durable tip delivery using existing payment/notification and
-worker implementations, then actual installed all-platform/provider journeys and
-final current-head CI. Legacy commands and cold discovery are locally verified;
-remaining acceptance limits are not a claim that the feature is missing. Recheck existing implementations before each change.
+**Durable tip delivery:** the existing Payment capture now atomically stores its
+existing Notification and retry state in Payment metadata. The existing scheduled
+wallet-delivery worker also leases these tip notices and uses its stored-notice
+transport. Same-ID retries preserve read/deleted notices, current financial proof,
+capture-time/current push preferences and newer Payment metadata. The competing
+best-effort StripeService notice write is removed. One forward function/trigger/
+index migration `20260914060000_gig_tip_notification_delivery.sql` adds no table or
+column and does not backfill historical captures. See the [delivery evidence](VERIFICATION_FIRST_2026-09-13.md#existing-tip-notifications-reuse-the-payment-delivery-worker).
+
+Local checks pass181 backend assertions,65 SQL contracts,22 actual-service/local-SQL
+scenarios (235 queries) and13 separate-connection cases. Eight actual local notices
+survive16 synthetic transport attempts including unknown delivery and lost final
+acknowledgement. Function lint:363 functions/108 bindings, zero errors/eight existing
+warnings. Actual push/provider and full installed tip acceptance remain open.
+
+**Next:** verify existing installed all-platform tip recovery/notification journeys,
+then remaining started-work/no-show/fee/completion and paid-gig policy flows. Finish
+current-head CI and real-provider acceptance before any activation. Legacy commands,
+cold discovery and durable delivery are locally verified; remaining acceptance
+limits are not a claim that the feature is missing. Recheck existing implementations before each change.
 P01–P03/P07–P09, R05/R06 and the wider80-row inventory remain open within their
 stated limits. After the paid scope, continue the remaining existing-feature
 inventory; preserve accepted subjourneys and screen designs.

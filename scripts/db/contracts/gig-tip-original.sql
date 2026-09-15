@@ -245,8 +245,92 @@ DO $$ DECLARE d jsonb; snap jsonb; proof jsonb; patch jsonb; lease uuid; BEGIN
  PERFORM pg_temp.tip_assert(((d->'payment')-'metadata'-'updated_at'-'stripe_payment_method_id')=(snap-'metadata'-'updated_at'-'stripe_payment_method_id'),
   'Historical financial status, capture/cooldown, refund or transfer data overwritten');
 END $$;
+-- Existing Payment capture commits one notice and a retryable delivery marker.
+DO $$ DECLARE p public."Payment"; d jsonb; e jsonb; r jsonb; original jsonb; note_id uuid; BEGIN
+ SELECT * INTO p FROM public."Payment" WHERE id=pg_temp.tip_id(310); d:=p.metadata->'gig_tip_delivery_v1';
+ original:=p.metadata->'gig_tip_original_v1'; note_id:=(d->>'notification_id')::uuid;
+ PERFORM pg_temp.tip_assert(d->>'state'='pending' AND d->>'push_allowed_at_capture'='false','Capture did not atomically retain its notice and consent');
+ PERFORM pg_temp.tip_assert((SELECT count(*)=1 FROM public."Notification" WHERE metadata->>'payment_id'=p.id::text),'Capture/replay created duplicate notices');
+ PERFORM pg_temp.tip_assert(NOT EXISTS(SELECT FROM public."Payment" WHERE id IN(pg_temp.tip_id(311),pg_temp.tip_id(704)) AND metadata ? 'gig_tip_delivery_v1'),'Canceled/historical capture was backfilled');
+ BEGIN UPDATE public."Payment" SET metadata=metadata-'gig_tip_delivery_v1' WHERE id=p.id;
+  RAISE EXCEPTION 'Stale metadata erased delivery'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ e:=public.claim_gig_tip_delivery();
+ PERFORM pg_temp.tip_assert(e->>'id'=p.id::text AND public.claim_gig_tip_delivery() IS NULL,'Live notice lease claimed twice');
+ r:=public.read_gig_tip_delivery(p.id,(e->>'lease_id')::uuid);
+ PERFORM pg_temp.tip_assert(r->>'eligible'='true' AND r->'notification'->>'id'=note_id::text,'Exact captured notice not eligible');
+ UPDATE public."Notification" SET is_read=true WHERE id=note_id;
+ PERFORM pg_temp.tip_assert(public.read_gig_tip_delivery(p.id,(e->>'lease_id')::uuid)->>'eligible'='true','Reading notice invalidated delivery');
+ UPDATE public."Payment" SET metadata=metadata||'{"unrelated_new_metadata":"retained"}' WHERE id=p.id;
+ PERFORM pg_temp.tip_assert(NOT public.finish_gig_tip_delivery(p.id,gen_random_uuid(),'done'),'Wrong lease completed delivery');
+ PERFORM pg_temp.tip_assert(public.finish_gig_tip_delivery(p.id,(e->>'lease_id')::uuid,'retry','provider_outcome_unknown'),'Unknown outcome not retained');
+ SELECT pay.* INTO p FROM public."Payment" pay WHERE pay.id=pg_temp.tip_id(310);
+ PERFORM pg_temp.tip_assert(p.metadata->>'unrelated_new_metadata'='retained' AND p.metadata->'gig_tip_original_v1'=original,'Delivery receipt overwrote current metadata/original');
+ PERFORM pg_temp.tip_assert(public.claim_gig_tip_delivery() IS NULL,'Retry backoff bypassed');
+ PERFORM set_config('app.gig_tip_delivery','on',true);
+ UPDATE public."Payment" SET metadata=jsonb_set(metadata,'{gig_tip_delivery_v1,retry_at}',to_jsonb(clock_timestamp()-interval '1 second')) WHERE id=p.id;
+ PERFORM set_config('app.gig_tip_delivery','off',true);
+ r:=public.claim_gig_tip_delivery();
+ PERFORM pg_temp.tip_assert(r->>'id'=p.id::text AND r->>'lease_id'<>e->>'lease_id','Retry changed payment or reused old lease');
+ PERFORM pg_temp.tip_assert(NOT public.finish_gig_tip_delivery(p.id,(e->>'lease_id')::uuid,'done'),'Old lease acknowledged newer attempt');
+ PERFORM pg_temp.tip_assert(public.finish_gig_tip_delivery(p.id,(r->>'lease_id')::uuid,'done'),'Matching delivery receipt not saved');
+ UPDATE public."Payment" SET updated_at=now() WHERE id=p.id;
+ PERFORM pg_temp.tip_assert(public.claim_gig_tip_delivery() IS NULL AND (SELECT is_read FROM public."Notification" WHERE id=note_id),'Terminal replay redelivered/reset a read notification');
+ DELETE FROM public."Notification" WHERE id=note_id;
+ UPDATE public."Payment" SET updated_at=now() WHERE id=p.id;
+ PERFORM pg_temp.tip_assert(NOT EXISTS(SELECT FROM public."Notification" WHERE id=note_id),'Deleted terminal notice recreated');
+END $$;
+-- Fresh capture rows exercise queue suppression and transaction rollback, without
+-- pretending historical adoption is a newly captured charge.
+INSERT INTO public."MailPreferences"(user_id,push_notifications) VALUES(pg_temp.tip_id(2),true)
+ ON CONFLICT(user_id) DO UPDATE SET push_notifications=true;
+CREATE FUNCTION pg_temp.capture_tip(i integer) RETURNS void LANGUAGE sql AS $$
+ INSERT INTO public."Payment"(id,gig_id,payer_id,payee_id,payment_type,amount_total,amount_subtotal,amount_platform_fee,amount_to_payee,
+  tip_amount,currency,payment_status,payment_succeeded_at,captured_at,stripe_charge_id,stripe_payment_intent_id,metadata)
+ VALUES(pg_temp.tip_id(i),pg_temp.tip_id(110),pg_temp.tip_id(1),pg_temp.tip_id(2),'tip',500,500,0,500,500,'usd','captured_hold',
+  now(),now(),'ch_delivery'||i,'pi_delivery'||i,'{}') $$;
+DO $$ DECLARE i integer; e jsonb; r jsonb; note_id uuid; BEGIN
+ FOR i IN 810..814 LOOP
+  PERFORM pg_temp.capture_tip(i); e:=public.claim_gig_tip_delivery();
+  PERFORM pg_temp.tip_assert(e->>'id'=pg_temp.tip_id(i)::text,'Wrong capture claimed');
+  r:=public.read_gig_tip_delivery(pg_temp.tip_id(i),(e->>'lease_id')::uuid); note_id:=(r->'notification'->>'id')::uuid;
+  PERFORM pg_temp.tip_assert(r->>'pushAllowedAtCapture'='true' AND r->>'eligible'='true','Enabled capture consent missing');
+  CASE i
+   WHEN 810 THEN DELETE FROM public."Notification" WHERE id=note_id;
+   WHEN 811 THEN UPDATE public."Notification" SET link='/gigs/other' WHERE id=note_id;
+   WHEN 812 THEN UPDATE public."Notification" SET metadata=metadata||'{"amount":1}' WHERE id=note_id;
+   WHEN 813 THEN UPDATE public."Payment" SET payment_status='refunded_partial',refunded_amount=100 WHERE id=pg_temp.tip_id(i);
+   WHEN 814 THEN UPDATE public."Payment" SET payee_id=pg_temp.tip_id(3) WHERE id=pg_temp.tip_id(i);
+  END CASE;
+  PERFORM pg_temp.tip_assert(public.read_gig_tip_delivery(pg_temp.tip_id(i),(e->>'lease_id')::uuid)->>'eligible'='false','Changed/deleted financial notice remained deliverable');
+  PERFORM pg_temp.tip_assert(public.finish_gig_tip_delivery(pg_temp.tip_id(i),(e->>'lease_id')::uuid,'suppressed'),'Suppression not durable');
+ END LOOP;
+ -- Conflicting note storage fails the entire capture, leaving no partial payment.
+ INSERT INTO public."Notification"(user_id,type,title,idempotency_key) VALUES(pg_temp.tip_id(3),'tip_received','Synthetic conflict','gig-tip-received:'||pg_temp.tip_id(815));
+ BEGIN PERFORM pg_temp.capture_tip(815); RAISE EXCEPTION 'Capture committed without its exact notice'; EXCEPTION WHEN unique_violation THEN NULL; END;
+ PERFORM pg_temp.tip_assert(NOT EXISTS(SELECT FROM public."Payment" WHERE id=pg_temp.tip_id(815)),'Failed notice storage left partial capture');
+ DELETE FROM public."Notification" WHERE idempotency_key='gig-tip-received:'||pg_temp.tip_id(815);
+ PERFORM pg_temp.capture_tip(815); e:=public.claim_gig_tip_delivery();
+ PERFORM pg_temp.tip_assert(e->>'id'=pg_temp.tip_id(815)::text,'Exact capture retry did not recover notice');
+ PERFORM public.finish_gig_tip_delivery(pg_temp.tip_id(815),(e->>'lease_id')::uuid,'done');
+END $$;
+-- An older in-app notice keeps its identity/read state and is never re-alerted.
+DO $$ DECLARE note_id uuid; d jsonb; BEGIN
+ INSERT INTO public."Notification"(user_id,type,title,metadata,is_read) VALUES(pg_temp.tip_id(2),'tip_received','Existing historical notice',
+  jsonb_build_object('payment_id',pg_temp.tip_id(816)),true) RETURNING id INTO note_id;
+ PERFORM pg_temp.capture_tip(816);
+ SELECT metadata->'gig_tip_delivery_v1' INTO d FROM public."Payment" WHERE id=pg_temp.tip_id(816);
+ PERFORM pg_temp.tip_assert(d->>'notification_id'=note_id::text AND d->>'state'='suppressed','Existing notice was replaced/requeued');
+ PERFORM pg_temp.tip_assert((SELECT is_read AND title='Existing historical notice' FROM public."Notification" WHERE id=note_id),'Existing notice content/read state changed');
+ PERFORM pg_temp.tip_assert(public.claim_gig_tip_delivery() IS NULL,'Historical notice replayed');
+ PERFORM pg_temp.tip_assert(NOT has_function_privilege('anon','public.claim_gig_tip_delivery()','EXECUTE')
+  AND NOT has_function_privilege('anon','public.read_gig_tip_delivery(uuid,uuid)','EXECUTE')
+  AND NOT has_function_privilege('anon','public.finish_gig_tip_delivery(uuid,uuid,text,text)','EXECUTE'),'Anonymous tip delivery privilege');
+END $$;
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
+ BEGIN PERFORM public.claim_gig_tip_delivery(); RAISE EXCEPTION 'Client claimed tip delivery'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN PERFORM public.read_gig_tip_delivery(NULL,NULL); RAISE EXCEPTION 'Client read tip delivery'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN PERFORM public.finish_gig_tip_delivery(NULL,NULL,'done'); RAISE EXCEPTION 'Client finished tip delivery'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.register_legacy_gig_tip(NULL,NULL,NULL,NULL,NULL,NULL); RAISE EXCEPTION 'Client registered legacy payment'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.preview_gig_tip(NULL,NULL); RAISE EXCEPTION 'Client preview RPC bypassed API scope'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.read_gig_tip_original(NULL,NULL); RAISE EXCEPTION 'Client read original RPC'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;

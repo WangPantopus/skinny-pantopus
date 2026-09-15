@@ -50,6 +50,7 @@ describe('durable wallet settlement relay', () => {
       }
       if (name === 'read_wallet_settlement_delivery') return { data: missingLease ? { error: 'LEASE_LOST' } : { eligible, notification: note } };
       if (name === 'finish_wallet_settlement_delivery') return { data: !failedAck };
+      if (name === 'claim_gig_tip_delivery') return { data: null };
       throw new Error('Unexpected RPC');
     });
     db.setRpcMock(rpc); return rpc;
@@ -84,5 +85,58 @@ describe('durable wallet settlement relay', () => {
     notificationMock.deliverStoredGigNotification.mockResolvedValue(receipt);
     await relay();
     expect(rpc).toHaveBeenCalledWith('finish_wallet_settlement_delivery', expect.objectContaining({ p_outcome: 'retry' }));
+  });
+});
+
+
+describe('existing payment relay handles committed tip notices', () => {
+  const tip = { ...note, type: 'tip_received', link: '/gigs/gig', metadata: { payment_id: 'payment', amount: 750 } };
+  function fixture({ eligible = true, ack = true, allowed = true, lostLease = false } = {}) {
+    let claimed = false;
+    const rpc = jest.fn(async name => {
+      if (name === 'claim_wallet_settlement_delivery') return { data: null };
+      if (name === 'claim_gig_tip_delivery') {
+        if (claimed) return { data: null }; claimed = true;
+        return { data: { id: 'payment', lease_id: 'tip-lease' } };
+      }
+      if (name === 'read_gig_tip_delivery') return { data: lostLease ? { error: 'LEASE_LOST' }
+        : { eligible, notification: tip, pushAllowedAtCapture: allowed } };
+      if (name === 'finish_gig_tip_delivery') return { data: ack };
+      throw new Error('Unexpected RPC');
+    });
+    db.setRpcMock(rpc); return rpc;
+  }
+  test('delivers the committed tip with its capture-time preference and exact lease', async () => {
+    const rpc = fixture(); expect(await relay()).toEqual({ processed: 1 });
+    expect(notificationMock.deliverStoredGigNotification).toHaveBeenCalledWith(tip, { pushAllowedAtCapture: true });
+    expect(rpc).toHaveBeenCalledWith('finish_gig_tip_delivery', { p_id: 'payment', p_lease_id: 'tip-lease', p_outcome: 'done', p_error: null });
+    expect(db.getTable('Notification')).toEqual([note]);
+  });
+  test.each([{ eligible: false }, { lostLease: true }])('deleted/changed notice or lost lease cannot send: %j', async options => {
+    fixture(options); await relay(); expect(notificationMock.deliverStoredGigNotification).not.toHaveBeenCalled();
+  });
+  test('unknown transport stays pending for the same notification', async () => {
+    const rpc = fixture(); notificationMock.deliverStoredGigNotification.mockResolvedValue({ acceptedCount: 1, unresolvedCount: 1 });
+    await relay(); expect(rpc).toHaveBeenCalledWith('finish_gig_tip_delivery', expect.objectContaining({ p_outcome: 'retry' }));
+  });
+  test('lost durable acknowledgement is not reported as successful delivery', async () => {
+    fixture({ ack: false }); await expect(relay()).rejects.toThrow('receipt not saved');
+  });
+  test.each([false, true])('stored tip respects capture-time push permission=%s', async allowed => {
+    db.seedTable('Notification', [tip]);
+    const receipt = await notify.deliverStoredGigNotification(tip, { pushAllowedAtCapture: allowed });
+    expect(receipt.suppressed).toBe(!allowed);
+    expect(push.sendToUserWithReceipt).toHaveBeenCalledTimes(allowed ? 1 : 0);
+    expect(db.getTable('Notification')).toEqual([tip]);
+  });
+  test.each(['global', 'gig'])('current %s opt-out suppresses a tip captured with push enabled', async kind => {
+    if (kind === 'global') db.getTable('MailPreferences')[0].push_notifications = false;
+    else db.seedTable('UserNotificationPreferences', [{ user_id: 'worker', gig_updates_enabled: false }]);
+    expect((await notify.deliverStoredGigNotification(tip, { pushAllowedAtCapture: true })).suppressed).toBe(true);
+    expect(push.sendToUserWithReceipt).not.toHaveBeenCalled();
+  });
+  test('missing capture-time consent fails closed', async () => {
+    await expect(notify.deliverStoredGigNotification(tip)).rejects.toThrow('preference receipt unavailable');
+    expect(push.sendToUserWithReceipt).not.toHaveBeenCalled();
   });
 });

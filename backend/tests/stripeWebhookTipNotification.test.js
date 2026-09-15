@@ -35,7 +35,7 @@ describe('Stripe webhook tip notifications', () => {
     jest.clearAllMocks();
   });
 
-  test('payment_intent.succeeded notifies the worker only after a tip actually succeeds', async () => {
+  test('payment_intent.succeeded records capture without a competing best-effort notice', async () => {
     seedTable('Gig', [{
       id: 'gig-tip-001',
       title: 'Test Gig',
@@ -108,25 +108,13 @@ describe('Stripe webhook tip notifications', () => {
       .send('{}');
 
     expect(res.status).toBe(200);
-    expect(createNotification).toHaveBeenCalledTimes(1);
-    expect(createNotification).toHaveBeenCalledWith({
-      userId: 'worker-001',
-      type: 'tip_received',
-      title: 'You received a tip!',
-      body: 'The poster of "Test Gig" sent you a $7.50 tip. 🎉',
-      icon: '💰',
-      link: '/gigs/gig-tip-001',
-      metadata: {
-        gig_id: 'gig-tip-001',
-        amount: 750,
-        payment_id: 'pay-tip-001',
-      },
-    });
+    // The real SQL capture transaction, tested by the SQL contract, owns the
+    // notice. A webhook callback must not insert/send another notification.
+    expect(createNotification).not.toHaveBeenCalled();
 
     const payment = getTable('Payment').find((row) => row.id === 'pay-tip-001');
     expect(payment.payment_status).toBe(PAYMENT_STATES.CAPTURED_HOLD);
     expect(payment.payment_succeeded_at).toBeTruthy();
-    expect(payment.metadata.tip_notification_sent_at).toBeTruthy();
 
     const secondRes = await request(app)
       .post('/api/webhooks/stripe')
@@ -135,6 +123,6 @@ describe('Stripe webhook tip notifications', () => {
       .send('{}');
 
     expect(secondRes.status).toBe(200);
-    expect(createNotification).toHaveBeenCalledTimes(1);
+    expect(createNotification).not.toHaveBeenCalled();
   });
 });
