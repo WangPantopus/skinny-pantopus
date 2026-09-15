@@ -441,7 +441,10 @@ function startJobs(options = {}) {
     timezone: 'UTC',
   });
 
-  scheduleCron('*/5 * * * *', wrapJob('homeDocumentRecovery', homeDocumentRecovery), {
+  scheduleCron('*/5 * * * *', wrapJob('homeDocumentRecovery', async () => {
+    const results = await Promise.allSettled([homeDocumentRecovery(), homeDocumentRecovery.completionFiles()]);
+    if (results.some(result => result.status === 'rejected')) throw new Error('Private file recovery incomplete');
+  }), {
     scheduled: true,
     timezone: 'UTC',
   });

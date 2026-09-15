@@ -1033,6 +1033,9 @@ final class GigDetailViewModelTests: XCTestCase {
         XCTAssertFalse(first)
         XCTAssertTrue(retry)
         XCTAssertEqual(proofRequests("/api/files/upload").count, 1)
+        let uploadBody = try XCTUnwrap(proofRequests("/api/files/upload").first?.httpBodyData())
+        let uploadText = try XCTUnwrap(String(data: uploadBody, encoding: .utf8))
+        XCTAssertTrue(uploadText.contains("name=\"gig_id\"\r\n\r\ng1\r\n"))
         XCTAssertEqual(proofRequests("/api/gigs/g1/mark-completed").count, 2)
         let bodies = try proofRequests("/api/gigs/g1/mark-completed").map { request -> NSDictionary in
             let data = try XCTUnwrap(request.httpBodyData())

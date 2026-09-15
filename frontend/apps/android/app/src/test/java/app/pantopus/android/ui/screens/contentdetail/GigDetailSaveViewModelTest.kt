@@ -769,7 +769,7 @@ class GigDetailSaveViewModelTest {
                     UserDto(id = "u1", email = "proof@example.invalid", displayName = "Worker", avatarUrl = null),
                 ),
             )
-        coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any()) } returns uploadedProof()
+        coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } returns uploadedProof()
         coEvery { repo.markCompleted(any(), any(), any()) } returns NetworkResult.Success(MarkCompletedResponse())
         return lifecycleVm(assignedGig(acceptedBy = "u1").copy(status = status), checkoutIdentity = identity)
     }
@@ -794,7 +794,7 @@ class GigDetailSaveViewModelTest {
             val photos = listOf(deliveryPhoto())
             assertFalse(submitProof(vm, photos))
             assertTrue(submitProof(vm, photos))
-            coVerify(exactly = 1) { filesRepo.uploadFile(any(), any(), any(), "gig_completion", "private") }
+            coVerify(exactly = 1) { filesRepo.uploadFile(any(), any(), any(), "gig_completion", "private", "g1") }
             coVerify(exactly = 2) { repo.markCompleted("g1", "Original note", listOf("https://proof.test/one.jpg")) }
         }
 
@@ -802,7 +802,7 @@ class GigDetailSaveViewModelTest {
     fun partial_delivery_upload_keeps_the_first_file_for_retry() =
         runTest {
             val vm = deliveryVm()
-            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any()) } returnsMany
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } returnsMany
                 listOf(
                     uploadedProof(), NetworkResult.Failure(NetworkError.Server(503, null)), uploadedProof("two"),
                 )
@@ -810,7 +810,7 @@ class GigDetailSaveViewModelTest {
             assertFalse(submitProof(vm, photos))
             coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }
             assertTrue(submitProof(vm, photos))
-            coVerify(exactly = 3) { filesRepo.uploadFile(any(), any(), any(), any(), any()) }
+            coVerify(exactly = 3) { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") }
             coVerify(
                 exactly = 1,
             ) { repo.markCompleted("g1", "Original note", listOf("https://proof.test/one.jpg", "https://proof.test/two.jpg")) }
@@ -823,7 +823,7 @@ class GigDetailSaveViewModelTest {
             val vm = deliveryVm(identity = { identity })
             val started = CompletableDeferred<Unit>()
             val held = CompletableDeferred<NetworkResult<FileUploadResponse>>()
-            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any()) } coAnswers {
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } coAnswers {
                 started.complete(Unit)
                 held.await()
             }
@@ -842,7 +842,7 @@ class GigDetailSaveViewModelTest {
             val vm = deliveryVm()
             val started = CompletableDeferred<Unit>()
             val held = CompletableDeferred<NetworkResult<FileUploadResponse>>()
-            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any()) } coAnswers {
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } coAnswers {
                 started.complete(Unit)
                 held.await()
             }
@@ -853,7 +853,7 @@ class GigDetailSaveViewModelTest {
             vm.retireDeliveryProof()
             held.complete(uploadedProof())
             assertFalse(result.await())
-            coVerify(exactly = 1) { filesRepo.uploadFile(any(), any(), any(), any(), any()) }
+            coVerify(exactly = 1) { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") }
             coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }
         }
 
@@ -862,7 +862,7 @@ class GigDetailSaveViewModelTest {
         runTest {
             val vm = deliveryVm()
             val uploads = listOf(uploadedProof(), uploadedProof("changed"))
-            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any()) } returnsMany uploads
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } returnsMany uploads
             coEvery { repo.markCompleted(any(), any(), any()) } returnsMany
                 listOf(
                     NetworkResult.Failure(NetworkError.Server(503, null)), NetworkResult.Success(MarkCompletedResponse()),
@@ -871,7 +871,7 @@ class GigDetailSaveViewModelTest {
             assertFalse(submitProof(vm, listOf(photo)))
             photo.bytes[0] = 1
             assertTrue(submitProof(vm, listOf(photo)))
-            coVerify(exactly = 2) { filesRepo.uploadFile(any(), any(), any(), any(), any()) }
+            coVerify(exactly = 2) { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") }
             coVerify(exactly = 1) { repo.markCompleted("g1", "Original note", listOf("https://proof.test/changed.jpg")) }
         }
 
@@ -880,7 +880,7 @@ class GigDetailSaveViewModelTest {
         runTest {
             val vm = deliveryVm(status = "completed")
             assertFalse(submitProof(vm, listOf(deliveryPhoto())))
-            coVerify(exactly = 0) { filesRepo.uploadFile(any(), any(), any(), any(), any()) }
+            coVerify(exactly = 0) { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") }
             coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }
         }
 
@@ -888,7 +888,7 @@ class GigDetailSaveViewModelTest {
     fun missing_upload_reference_does_not_mark_work_complete() =
         runTest {
             val vm = deliveryVm()
-            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any()) } returns
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } returns
                 NetworkResult.Success(FileUploadResponse("Uploaded", FileUploadResponse.FileRef("file-one", "")))
             assertFalse(submitProof(vm, listOf(deliveryPhoto())))
             coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }

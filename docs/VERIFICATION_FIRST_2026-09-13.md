@@ -3262,3 +3262,85 @@ source bindings explicitly reuse unchanged ViewModel/test checks; the later iOS
 UI-test helper and two accessibility modifiers are bound to the passing installed
 journey. All10 modified client/test files already existed. Failed runs and the
 accepted evidence are preserved and mirrored under existing-tip-provider-proof-r1.
+
+
+## Existing completion proof uses private bytes
+
+September15: the configured CloudFront probe established anonymous access to new
+completion objects despite File.visibility=private. The repair extends the existing
+File/quota records, S3 service's completion helpers, both upload endpoints, Gig
+reader and private-file recovery job. Existing Home document/task/claim/lease
+storage, their migrations, archived code and other branches were compared first.
+Their transactions authorize Home actors and cannot bind the current Gig worker
+and assignment. One forward migration extends existing records with service-only
+reservation/read/cleanup functions, guards and a restrictive raw-File read policy.
+No table, replacement service or screen is added; applied history stays unchanged.
+
+Both native callers now send the existing gig ID with their existing multipart
+upload. New proof requires an explicitly configured private GIG_COMPLETION_BUCKET;
+unavailable or public storage fails closed with no S3/CDN fallback. Same actor,
+gig, MIME and bytes select the same existing File ID after an unknown upload reply.
+The reservation locks current assignment terms and uses existing quota accounting.
+Provider uploads never overwrite; an unknown receipt requires exact stored size
+and SHA256. Finalization rechecks assignment. Completion binds ready, undeleted
+proof under the same locks; retirement cannot race it into publishing deleted bytes.
+
+Readers authorize before and after fetching exact private bytes. They send no-store
+responses, while web retains its existing photo dimensions, classes and full-image
+links using temporary blob URLs. Session replacement retires pending requests and
+URLs. Existing published legacy URLs retain their prior rendering behavior; their
+historical exposure is not declared fixed. Unsubmitted files expire through the
+existing private-file worker. Parent deletion preserves immutable cleanup records;
+quota refunds once, exact deletion retries and later object writes are reconciled.
+
+Local evidence:206 focused backend checks/four suites and privacy gates (including15
+audience checks) pass. The full backend run passes6015 with16 skips and one obsolete
+standalone-upload expectation; that existing test is updated to require private
+Gig delegation and zero public writes, and all33 compatibility checks then pass.
+The initial full run is retained as failed;6016 distinct tests are verified across
+the full and corrected focused run. Current-head CI must repeat the complete suite.
+All65 SQL contracts pass, with the later unchanged-reference/changed-assignment
+refinement additionally passing the paid contract. Generated wrappers synchronize.
+A transaction applies the complete new migration over reconstructed preceding
+function/constraint definitions and rolls back successfully. Function lint checks
+372 functions/112 trigger bindings: zero errors/eight existing warnings. Migration
+policy passes; full fresh-schema replay remains a current-head CI requirement.
+
+Eight actual HTTP/SQL/Supabase Storage SDK cases pass (34 SQL calls/20 synthetic
+storage calls), including unknown upload acknowledgement, same-file native/web
+recovery, unauthorized/unsubmitted-owner denial, lost completion acknowledgement,
+authority revoked during byte delivery, public-bucket/corrupt-byte rejection and
+exact retired-object cleanup. Six observed separate-connection waits verify quota,
+rollback, changed bytes, completion-versus-expiry and worker replacement. Exact
+fixture cleanup passes. Authentication and object storage are synthetic; routes,
+SDKs and owned PostgreSQL transactions are real. No financial provider call runs.
+
+Web112 rendered checks, TypeScript and scoped lint pass (zero errors/eight existing
+warnings). Chrome verifies existing upload/note/503/retry controls with one upload,
+one private object POST, two identical completion requests, the original timestamp
+and one actual owner notification. All three existing owner photo surfaces render
+authenticated, no-store bytes at their prior sizes; sign-out clears temporary URLs.
+The temporary page is removed and prior configs restored. Failed harness cookie-
+authentication and Cancel-selector attempts remain recorded; owner R3 passes.
+
+iOS46 focused tests, format/strict lint, build and installed Photos/note/error/retry/
+confirmation/Back journey pass. One upload/two identical completion requests retain
+one timestamp/notice. All679 installed bundle files match the retained product.
+The old shared package checkout had missing files; only an owned cache is restored
+from the same seven pinned revisions. No dependency version changes. Initial build
+and stalled test-attachment failures remain recorded; build R2/unit R2/UI R1 pass.
+Android72 selected JVM checks, formatting/Detekt, build and installed system-picker/
+note/error/retry/confirmation/Back journey pass. Empty-proof submission sends nothing;
+matching retry retains one private object/upload, two identical completion requests,
+one timestamp and one notification. The installed Debug APK matches the retained
+product. Both owned simulators are stopped, exact fixture rows are cleaned, and the
+hash-checked synthetic Android photo is removed. Other device data is preserved.
+
+Private completion-private-* fixtures, commands, results and source/product hashes
+remain outside Git and are mirrored under existing-tip-provider-proof-r1. Current
+PR34 remains draft. Hosted private-bucket adoption/anonymous-denial verification,
+historical CDN reconciliation, broader generic private-file purposes, client
+restart/draft recovery, completion transport and Home provenance remain open.
+Existing native owner models currently do not expose completion photo/note fields;
+this milestone verifies their existing submission flow, not a new native reader.
+No hosted migration, bucket configuration or deployment runs in this checkpoint.

@@ -395,4 +395,94 @@ BEGIN
  END LOOP;
 END $$;
 RESET ROLE;
+-- Existing File reservation, authority, quota, publication and cleanup contract.
+INSERT INTO auth.users(id,email) SELECT ('aaef0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+ 'completion-file-contract-'||n||'@example.invalid' FROM generate_series(1,3) n;
+INSERT INTO public."User"(id,email,username,name) SELECT id,email,'completion_file_contract_'||right(id::text,1),'Completion File Contract'
+ FROM auth.users WHERE id::text LIKE 'aaef0000-%';
+INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,accepted_at,started_at)
+ VALUES('aaef0000-0000-4000-8000-000000000100','aaef0000-0000-4000-8000-000000000001','aaef0000-0000-4000-8000-000000000001',
+ 'Private proof contract','Synthetic only',0,'in_progress','aaef0000-0000-4000-8000-000000000002','2026-09-15T00:00:00Z','2026-09-15T00:01:00Z');
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE g uuid:='aaef0000-0000-4000-8000-000000000100'; worker uuid:='aaef0000-0000-4000-8000-000000000002';
+ owner_id uuid:='aaef0000-0000-4000-8000-000000000001'; foreign_id uuid:='aaef0000-0000-4000-8000-000000000003';
+ fid uuid:='aaef0000-0000-4000-8000-000000000200'; other_fid uuid:='aaef0000-0000-4000-8000-000000000201';
+ body jsonb:=jsonb_build_object('sha256',repeat('a',64),'bucket','test-private-completion','mime_type','text/plain','file_size',32,'file_name','proof.txt');
+ r jsonb; f public."File"%ROWTYPE; quota bigint; terms jsonb; proof jsonb; claim uuid; raw record;
+BEGIN
+ IF public.mutate_gig_completion_file(g,owner_id,fid,'reserve',body)->>'error' IS DISTINCT FROM 'FORBIDDEN'
+  OR public.mutate_gig_completion_file(g,foreign_id,fid,'reserve',body)->>'error' IS DISTINCT FROM 'FORBIDDEN' THEN RAISE EXCEPTION 'Nonworker reserved proof'; END IF;
+ r:=public.mutate_gig_completion_file(g,worker,fid,'reserve',body);
+ IF r->'file'->>'processing_status' IS DISTINCT FROM 'uploading' THEN RAISE EXCEPTION 'Proof was not reserved: %',r; END IF;
+ SELECT * INTO f FROM public."File" WHERE id=fid;
+ SELECT storage_used INTO quota FROM public."FileQuota" WHERE user_id=worker;
+ IF quota<>32 THEN RAISE EXCEPTION 'Reservation did not account bytes'; END IF;
+ r:=public.mutate_gig_completion_file(g,worker,fid,'reserve',body||'{"file_name":"renamed-retry.txt"}');
+ IF r->'file'->>'id' IS DISTINCT FROM fid::text OR (SELECT storage_used FROM public."FileQuota" WHERE user_id=worker)<>quota THEN RAISE EXCEPTION 'Retry repeated quota'; END IF;
+ IF public.mutate_gig_completion_file(g,worker,fid,'reserve',body||'{"file_size":33}')->>'error' IS DISTINCT FROM 'COMPLETION_FILE_CHANGED' THEN RAISE EXCEPTION 'Replacement bytes admitted'; END IF;
+ IF public.get_gig_completion_file(g,worker,fid)->>'error' IS DISTINCT FROM 'NOT_FOUND' THEN RAISE EXCEPTION 'Unready proof readable'; END IF;
+ IF public.soft_delete_file(fid,worker)->>'success' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'Generic delete retired private proof'; END IF;
+ BEGIN UPDATE public."File" SET visibility='public' WHERE id=fid; RAISE EXCEPTION 'Public proof allowed'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."File" SET file_path='other' WHERE id=fid; RAISE EXCEPTION 'Private path replacement allowed'; EXCEPTION WHEN check_violation THEN NULL; END;
+ UPDATE public."FileQuota" SET max_files=1 WHERE user_id=worker;
+ BEGIN PERFORM public.mutate_gig_completion_file(g,worker,other_fid,'reserve',body); RAISE EXCEPTION 'Quota bypassed';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'FILE_QUOTA_EXCEEDED' THEN RAISE; END IF; END;
+ IF EXISTS(SELECT FROM public."File" WHERE id=other_fid) THEN RAISE EXCEPTION 'Denied quota left reservation'; END IF;
+ UPDATE public."FileQuota" SET max_files=1000 WHERE user_id=worker;
+ UPDATE public."Gig" SET started_at=started_at+interval '1 second' WHERE id=g;
+ IF public.mutate_gig_completion_file(g,worker,fid,'finalize')->>'error' IS DISTINCT FROM 'COMPLETION_FILE_CHANGED' THEN RAISE EXCEPTION 'Changed assignment finalized proof'; END IF;
+ UPDATE public."Gig" SET started_at=started_at-interval '1 second' WHERE id=g;
+ r:=public.mutate_gig_completion_file(g,worker,fid,'finalize');
+ IF r->'file'->>'processing_status' IS DISTINCT FROM 'completed' THEN RAISE EXCEPTION 'Proof finalize failed: %',r; END IF;
+ IF public.get_gig_completion_file(g,worker,fid)->'file'->>'id' IS DISTINCT FROM fid::text
+  OR public.get_gig_completion_file(g,owner_id,fid)->>'error' IS DISTINCT FROM 'FORBIDDEN'
+  OR public.get_gig_completion_file(g,foreign_id,fid)->>'error' IS DISTINCT FROM 'FORBIDDEN' THEN RAISE EXCEPTION 'Unsubmitted proof access incorrect'; END IF;
+ SELECT jsonb_build_object('user_id',user_id,'accepted_by',accepted_by,'price',price,'payment_id',payment_id,'accepted_at',accepted_at,'started_at',started_at) INTO terms FROM public."Gig" WHERE id=g;
+ proof:=jsonb_build_object('completion_note','Synthetic proof','completion_photos',jsonb_build_array(f.file_url),'completion_checklist','[]'::jsonb);
+ r:=public.mark_gig_completed(g,worker,terms,proof);
+ IF r->'gig'->>'status' IS DISTINCT FROM 'completed' THEN RAISE EXCEPTION 'Private proof not bound to completion: %',r; END IF;
+ IF public.get_gig_completion_file(g,owner_id,fid)->'file'->>'id' IS DISTINCT FROM fid::text THEN RAISE EXCEPTION 'Owner cannot review saved proof'; END IF;
+ -- Reopening with identical photo strings must still bind the original assignment.
+ UPDATE public."Gig" SET status='in_progress',worker_completed_at=NULL,started_at=started_at+interval '1 second' WHERE id=g;
+ SELECT jsonb_build_object('user_id',user_id,'accepted_by',accepted_by,'price',price,'payment_id',payment_id,'accepted_at',accepted_at,'started_at',started_at) INTO terms FROM public."Gig" WHERE id=g;
+ BEGIN PERFORM public.mark_gig_completed(g,worker,terms,proof); RAISE EXCEPTION 'Unchanged proof strings bypassed assignment binding'; EXCEPTION WHEN check_violation THEN NULL; END;
+ UPDATE public."Gig" SET status='completed',worker_completed_at=(r->'gig'->>'worker_completed_at')::timestamptz,started_at=started_at-interval '1 second' WHERE id=g;
+ UPDATE public."File" SET updated_at=clock_timestamp()-interval '2 days' WHERE id=fid;
+ IF public.claim_gig_completion_file_cleanup(fid,'test-private-completion') IS NOT NULL THEN RAISE EXCEPTION 'Saved proof cleanup admitted'; END IF;
+ IF public.mutate_gig_completion_file(g,worker,fid,'reserve',body)->>'reused' IS DISTINCT FROM 'true'
+  OR public.mutate_gig_completion_file(g,worker,other_fid,'reserve',body)->>'error' IS DISTINCT FROM 'COMPLETION_FILE_CHANGED' THEN RAISE EXCEPTION 'Completed upload recovery/replacement incorrect'; END IF;
+ UPDATE public."Gig" SET accepted_by=foreign_id WHERE id=g;
+ IF public.get_gig_completion_file(g,worker,fid)->>'error' IS DISTINCT FROM 'FORBIDDEN' THEN RAISE EXCEPTION 'Former worker still reads proof'; END IF;
+ UPDATE public."Gig" SET accepted_by=worker WHERE id=g;
+ -- Preserve a separate private File through both parent cascades and delayed cleanup.
+ INSERT INTO public."File"(id,user_id,gig_id,filename,original_filename,file_path,file_url,file_size,mime_type,file_extension,file_type,file_context,visibility,processing_status,is_deleted,created_at,updated_at,metadata)
+ SELECT other_fid,user_id,gig_id,filename,original_filename,replace(file_path,fid::text,other_fid::text),replace(file_url,fid::text,other_fid::text),file_size,mime_type,file_extension,file_type,file_context,visibility,'uploading',false,
+  clock_timestamp()-interval '2 days',clock_timestamp()-interval '2 days',metadata FROM public."File" WHERE id=fid;
+ r:=public.claim_gig_completion_file_cleanup(other_fid,'test-private-completion'); claim:=(r->'metadata'->>'storage_cleanup_claim')::uuid;
+ IF r->>'is_deleted' IS DISTINCT FROM 'true' OR claim IS NULL THEN RAISE EXCEPTION 'Expired unused proof not retired'; END IF;
+ IF public.finish_gig_completion_file_cleanup(other_fid,gen_random_uuid(),true) THEN RAISE EXCEPTION 'Foreign cleanup claim accepted'; END IF;
+ IF NOT public.finish_gig_completion_file_cleanup(other_fid,claim,false) THEN RAISE EXCEPTION 'Failed cleanup not retained'; END IF;
+ IF (SELECT storage_used FROM public."FileQuota" WHERE user_id=worker)<>quota THEN RAISE EXCEPTION 'Retirement quota incorrect'; END IF;
+ BEGIN DELETE FROM public."File" WHERE id=other_fid; RAISE EXCEPTION 'Cleanup tombstone deleted'; EXCEPTION WHEN check_violation THEN NULL; END;
+ DELETE FROM public."Gig" WHERE id=g;
+ SELECT * INTO f FROM public."File" WHERE id=fid;
+ IF NOT f.is_deleted OR f.gig_id IS NOT NULL OR f.metadata->>'storage_cleanup_pending' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Gig cascade lost cleanup identity'; END IF;
+ DELETE FROM public."User" WHERE id=worker;
+ IF (SELECT user_id FROM public."File" WHERE id=fid) IS NOT NULL OR (SELECT count(*) FROM public."File" WHERE id IN(fid,other_fid))<>2 THEN RAISE EXCEPTION 'User cascade lost tombstones'; END IF;
+ FOR raw IN SELECT oid::regprocedure signature FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN('mutate_gig_completion_file','get_gig_completion_file',
+  'gig_completion_file_cleanup_candidates','claim_gig_completion_file_cleanup','finish_gig_completion_file_cleanup') LOOP
+  IF has_function_privilege('authenticated',raw.signature,'EXECUTE') OR has_function_privilege('anon',raw.signature,'EXECUTE') THEN RAISE EXCEPTION 'Completion storage routine exposed'; END IF;
+ END LOOP;
+END $$;
+RESET ROLE;
+INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by) VALUES
+ ('aaef0000-0000-4000-8000-000000000101','aaef0000-0000-4000-8000-000000000001','aaef0000-0000-4000-8000-000000000001',
+ 'Raw private File denial','Synthetic only',0,'in_progress','aaef0000-0000-4000-8000-000000000003');
+SELECT public.mutate_gig_completion_file('aaef0000-0000-4000-8000-000000000101','aaef0000-0000-4000-8000-000000000003',
+ 'aaef0000-0000-4000-8000-000000000202','reserve',jsonb_build_object('sha256',repeat('b',64),'bucket','test-private-completion','mime_type','text/plain','file_size',32,'file_name','proof.txt'));
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','aaef0000-0000-4000-8000-000000000003',true);
+DO $$ BEGIN IF EXISTS(SELECT FROM public."File" WHERE metadata->>'storage_contract'='gig_completion_v1') THEN RAISE EXCEPTION 'Raw private File exposed'; END IF; END $$;
+RESET ROLE;
 ROLLBACK;

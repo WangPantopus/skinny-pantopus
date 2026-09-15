@@ -17,7 +17,12 @@ integration candidate includes current master. Refresh remote CI and the handoff
 before relying on older Git state below. Counts remain8 closed and72 partial/open. Renewal/schema drafts
 remain paused pending an existing-implementation comparison.
 
-Updated September 14, 2026 after the coordinated original-tip client checkpoint.
+Updated September15,2026. The existing completion-private-storage checkpoint
+extends File/quota and current clients without a new table or screen. Local SQL,
+HTTP/SDK, browser and native evidence is tracked in the [private proof report](VERIFICATION_FIRST_2026-09-13.md#existing-completion-proof-uses-private-bytes).
+Hosted bucket adoption, historical CDN reconciliation, other generic private-file
+purposes, restart recovery and completion transport/provenance remain open. These
+accepted subjourneys do not close the broader payment or release rows.
 Start with [the current handoff](PROJECT_HANDOFF.md) and
 [resume guide](SESSION_RESUME_2026-09-10.md). This is the authoritative ordered
 acceptance inventory; older dated reports retain their historical limits.

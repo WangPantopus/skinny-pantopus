@@ -5449,6 +5449,17 @@ router.post('/:gigId/worker-release', verifyToken, stopCommand('worker_release')
  * Worker marks gig completed: in_progress -> completed
  * Body: { note?, photos?: string[], checklist?: { item: string, done: boolean }[] }
  */
+router.get('/:gigId/completion-files/:fileId', verifyToken, async (req, res) => {
+  res.set({ 'Cache-Control': 'private, no-store', 'Pragma': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
+  try {
+    const { file, bytes } = await require('../services/s3Service').readAuthorizedGigCompletionFile(req.params.gigId, req.user.id, req.params.fileId);
+    res.set({ 'Content-Type': file.mime_type, 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(file.original_filename || 'proof')}` });
+    return res.send(bytes);
+  } catch (error) {
+    return res.status(error.statusCode || 503).json({ error: 'Completion proof is unavailable. Refresh this task and try again.' });
+  }
+});
+
 router.post('/:gigId/mark-completed', verifyToken, async (req, res) => {
   try {
     const { gigId } = req.params;

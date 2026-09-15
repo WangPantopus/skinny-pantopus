@@ -1647,6 +1647,7 @@ class GigDetailViewModel
                         bytes = bytes,
                         fileType = "gig_completion",
                         visibility = "private",
+                        gigId = gigId,
                     )
                 if (!current()) return null
                 if (uploaded !is NetworkResult.Success || uploaded.data.file.url.isBlank()) return null

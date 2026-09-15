@@ -8,9 +8,9 @@ import CompletionFlow, { type CompletionFlowHandle } from '../src/components/gig
 const router = { push: jest.fn(), replace: jest.fn() };
 jest.mock('next/navigation', () => ({ useRouter: () => router }));
 jest.mock('next/image', () => () => null);
-jest.mock('../src/components/FileUpload', () => function MockFileUpload({ onFilesSelected }: { onFilesSelected: (files: File[]) => void }) {
+jest.mock('../src/components/FileUpload', () => ({ __esModule: true, CompletionProofImage: () => null, default: function MockFileUpload({ onFilesSelected }: { onFilesSelected: (files: File[]) => void }) {
   return <button onClick={() => onFilesSelected([new File(['proof'], 'work.jpg', { type: 'image/jpeg' })])}>Pick synthetic proof</button>;
-});
+} }));
 jest.mock('../src/components/payments/StripeConnectOnboarding', () => () => null);
 jest.mock('../src/components/ui/toast-store', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 

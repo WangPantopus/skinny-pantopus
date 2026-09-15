@@ -602,3 +602,172 @@ describe('worker completion recovers the saved result', () => {
     expect(notifications.createBulkNotifications).not.toHaveBeenCalled();
   });
 });
+
+
+describe('completion private byte storage reuses the existing provider client', () => {
+  const storage = require('../../services/s3Service');
+  const crypto = require('crypto');
+  const bytes = Buffer.from('synthetic private completion proof');
+  const gigId = 'aaef0000-0000-4000-8000-000000000001';
+  const actorId = 'aaef0000-0000-4000-8000-000000000002';
+  const id = 'aaef0000-0000-4000-8000-000000000003';
+  const digest = crypto.createHash('sha256').update(bytes).digest('hex');
+  let bucket, previousBucket, file;
+  beforeEach(() => {
+    previousBucket = process.env.GIG_COMPLETION_BUCKET;
+    process.env.GIG_COMPLETION_BUCKET = 'test-private-completion';
+    bucket = { upload: jest.fn().mockResolvedValue({ data: {} }),
+      download: jest.fn().mockResolvedValue({ data: new Blob([bytes]) }), remove: jest.fn().mockResolvedValue({ data: [] }) };
+    db.storage = { getBucket: jest.fn().mockResolvedValue({ data: { public: false } }), from: jest.fn().mockReturnValue(bucket) };
+    file = { id, user_id: actorId, gig_id: gigId, file_path: `gig-completion/${gigId}/${actorId}/${id}/${digest}`,
+      file_url: `/api/gigs/${gigId}/completion-files/${id}`, file_type: 'gig_attachment', file_context: 'gig_completion',
+      visibility: 'private', is_deleted: false, processing_status: 'uploading', mime_type: 'text/plain', file_size: bytes.length,
+      metadata: { storage_contract: 'gig_completion_v1', storage_bucket: 'test-private-completion',
+        original_gig_id: gigId, original_user_id: actorId, upload_sha256: digest } };
+  });
+  afterEach(() => {
+    if (previousBucket === undefined) delete process.env.GIG_COMPLETION_BUCKET;
+    else process.env.GIG_COMPLETION_BUCKET = previousBucket;
+    delete db.storage;
+  });
+  test('resolves an explicitly private bucket and stores exact bytes without an S3 or public URL call', async () => {
+    expect(await storage.preparePrivateGigCompletionFile()).toBe('test-private-completion');
+    await storage.uploadPrivateGigCompletionFile(file, bytes);
+    expect(bucket.upload).toHaveBeenCalledWith(file.file_path, bytes, { contentType: 'text/plain', cacheControl: '0', upsert: false });
+    expect(mockS3Head).not.toHaveBeenCalled(); expect(bucket.download).not.toHaveBeenCalled();
+    file.processing_status = 'completed';
+    expect(await storage.downloadPrivateGigCompletionFile(file)).toEqual(bytes);
+  });
+  test.each([true, null, undefined])('a bucket without private metadata (%s) cannot upload or download', async publicFlag => {
+    db.storage.getBucket.mockResolvedValue({ data: { public: publicFlag } });
+    await expect(storage.uploadPrivateGigCompletionFile(file, bytes)).rejects.toMatchObject({ statusCode: 503 });
+    file.processing_status = 'completed';
+    await expect(storage.downloadPrivateGigCompletionFile(file)).rejects.toMatchObject({ statusCode: 503 });
+    expect(bucket.upload).not.toHaveBeenCalled(); expect(bucket.download).not.toHaveBeenCalled();
+  });
+  test('missing configuration and thrown bucket reads fail closed', async () => {
+    delete process.env.GIG_COMPLETION_BUCKET;
+    await expect(storage.preparePrivateGigCompletionFile()).rejects.toMatchObject({ statusCode: 503 });
+    expect(db.storage.getBucket).not.toHaveBeenCalled();
+    process.env.GIG_COMPLETION_BUCKET = 'test-private-completion';
+    db.storage.getBucket.mockRejectedValue(new Error('synthetic outage'));
+    await expect(storage.preparePrivateGigCompletionFile()).rejects.toMatchObject({ statusCode: 503 });
+  });
+  test.each(['error', 'throw'])('lost upload response (%s) recovers only matching existing bytes', async outcome => {
+    if (outcome === 'throw') bucket.upload.mockRejectedValue(new Error('reply lost'));
+    else bucket.upload.mockResolvedValue({ error: { message: 'reply lost' } });
+    await storage.uploadPrivateGigCompletionFile(file, bytes);
+    expect(bucket.download).toHaveBeenCalledWith(file.file_path); expect(bucket.upload).toHaveBeenCalledTimes(1);
+    bucket.download.mockResolvedValue({ data: new Blob([Buffer.alloc(bytes.length)]) });
+    await expect(storage.uploadPrivateGigCompletionFile(file, bytes)).rejects.toMatchObject({ statusCode: 503 });
+  });
+  test.each([
+    { file_path: '../foreign' }, { file_url: 'https://example.invalid/object' }, { user_id: gigId },
+    { gig_id: actorId }, { visibility: 'public' }, { file_context: 'gig_photo' }, { file_size: 0 },
+    { mime_type: 'text/html' }, { id: '../file' }, { is_deleted: true }, { processing_status: 'completed' },
+  ])('unverified upload reference is denied before provider calls: %j', async patch => {
+    Object.assign(file, patch);
+    await expect(storage.uploadPrivateGigCompletionFile(file, bytes)).rejects.toMatchObject({ statusCode: 400 });
+    expect(db.storage.getBucket).not.toHaveBeenCalled(); expect(mockS3Head).not.toHaveBeenCalled();
+  });
+  test('bucket mismatch, payload replacement and corrupt downloads never succeed', async () => {
+    file.metadata.storage_bucket = 'foreign-bucket';
+    await expect(storage.uploadPrivateGigCompletionFile(file, bytes)).rejects.toMatchObject({ statusCode: 503 });
+    file.metadata.storage_bucket = 'test-private-completion';
+    await expect(storage.uploadPrivateGigCompletionFile(file, Buffer.alloc(bytes.length))).rejects.toMatchObject({ statusCode: 400 });
+    file.processing_status = 'completed'; bucket.download.mockResolvedValue({ data: new Blob(['truncated']) });
+    await expect(storage.downloadPrivateGigCompletionFile(file)).rejects.toMatchObject({ statusCode: 503 });
+  });
+  test('only a retired exact object can be removed, including after parent detachment', async () => {
+    await expect(storage.removePrivateGigCompletionFile(file)).rejects.toMatchObject({ statusCode: 400 });
+    expect(bucket.remove).not.toHaveBeenCalled();
+    file.is_deleted = true; file.gig_id = null; file.user_id = null;
+    await storage.removePrivateGigCompletionFile(file);
+    expect(bucket.remove).toHaveBeenCalledWith([file.file_path]);
+    bucket.remove.mockResolvedValue({ error: { message: 'unknown result' } });
+    await expect(storage.removePrivateGigCompletionFile(file)).rejects.toMatchObject({ statusCode: 503 });
+  });
+  const uploads = express(); uploads.use(express.json());
+  uploads.use('/api/files', require('../../routes/files'));
+  uploads.use('/api/upload', require('../../routes/upload'));
+  function reserveProvider() {
+    let stored;
+    const rpc = jest.fn(async (name, args) => {
+      if (name !== 'mutate_gig_completion_file') throw new Error('Unexpected command');
+      if (args.p_action === 'reserve' && !stored) {
+        stored = structuredClone(file); stored.id = args.p_file_id;
+        stored.file_path = `gig-completion/${gigId}/${actorId}/${stored.id}/${digest}`;
+        stored.file_url = `/api/gigs/${gigId}/completion-files/${stored.id}`;
+      }
+      if (args.p_action === 'finalize') stored.processing_status = 'completed';
+      return { data: { file: structuredClone(stored) } };
+    });
+    setRpcMock(rpc); return rpc;
+  }
+  test('native endpoint stores privately and a lost HTTP receipt discovers the same ready File', async () => {
+    const rpc = reserveProvider();
+    const upload = () => request(uploads).post('/api/files/upload').set('x-test-user-id', actorId)
+      .field('gig_id', gigId).field('file_type', 'gig_completion').field('visibility', 'private')
+      .attach('file', bytes, { filename: 'proof.txt', contentType: 'text/plain' });
+    const first = await upload(); expect(first.status).toBe(201);
+    const next = await upload(); expect(next.status).toBe(201); expect(next.body.file).toEqual(first.body.file);
+    expect(first.body.file.url).toMatch(/^\/api\/gigs\//);
+    expect(bucket.upload).toHaveBeenCalledTimes(1); expect(mockS3Head).not.toHaveBeenCalled();
+    expect(rpc.mock.calls.map(([, args]) => args.p_action)).toEqual(['reserve', 'finalize', 'reserve']);
+  });
+  test('web endpoint uses the same reservation without a public thumbnail', async () => {
+    reserveProvider(); seedTable('Gig', [{ id: gigId, user_id: 'owner', accepted_by: actorId }]);
+    const result = await request(uploads).post(`/api/upload/gig-completion-media/${gigId}`).set('x-test-user-id', actorId)
+      .attach('files', bytes, { filename: 'proof.txt', contentType: 'text/plain' });
+    expect(result.status).toBe(200); expect(result.body.media).toHaveLength(1);
+    expect(result.body.media[0]).toMatchObject({ file_key: '', thumbnail_url: null, file_size: bytes.length });
+    expect(result.body.media[0].file_url).toMatch(/^\/api\/gigs\//); expect(mockS3Head).not.toHaveBeenCalled();
+  });
+  test('old native request without a task fails before reservation or any provider write', async () => {
+    const rpc = reserveProvider();
+    const result = await request(uploads).post('/api/files/upload').set('x-test-user-id', actorId)
+      .field('file_type', 'gig_completion').attach('file', bytes, { filename: 'proof.txt', contentType: 'text/plain' });
+    expect(result.status).toBe(400); expect(rpc).not.toHaveBeenCalled(); expect(bucket.upload).not.toHaveBeenCalled(); expect(mockS3Head).not.toHaveBeenCalled();
+  });
+  test('unknown reservation cannot write bytes; unknown finalize is recoverable on retry', async () => {
+    const args = { buffer: bytes, mimetype: 'text/plain', originalname: 'proof.txt' };
+    setRpcMock(async () => ({ error: { message: 'lost reservation acknowledgement' } }));
+    await expect(storage.createPrivateGigCompletionFile(gigId, actorId, args)).rejects.toMatchObject({ statusCode: 503 });
+    expect(bucket.upload).not.toHaveBeenCalled();
+    const rpc = reserveProvider(); const execute = rpc.getMockImplementation(); let lost = false;
+    rpc.mockImplementation(async (name, payload) => {
+      const result = await execute(name, payload);
+      if (payload.p_action === 'finalize' && !lost) { lost = true; return { error: { message: 'lost final acknowledgement' } }; }
+      return result;
+    });
+    await expect(storage.createPrivateGigCompletionFile(gigId, actorId, args)).rejects.toMatchObject({ statusCode: 503 });
+    expect((await storage.createPrivateGigCompletionFile(gigId, actorId, args)).processing_status).toBe('completed');
+    expect(bucket.upload).toHaveBeenCalledTimes(1);
+  });
+  test('download rechecks authority after the private provider read and emits no bytes after revocation', async () => {
+    file.processing_status = 'completed'; let reads = 0;
+    setRpcMock(async () => (++reads === 1 ? { data: { file } } : { data: { error: 'FORBIDDEN' } }));
+    const denied = await request(app).get(file.file_url).set('x-test-user-id', actorId);
+    expect(denied.status).toBe(403); expect(denied.text).not.toContain(bytes.toString()); expect(denied.headers['cache-control']).toBe('private, no-store');
+    setRpcMock(async () => ({ data: { file } }));
+    const allowed = await request(app).get(file.file_url).set('x-test-user-id', actorId);
+    expect(allowed.status).toBe(200); expect(allowed.text).toBe(bytes.toString());
+    expect(allowed.headers['x-content-type-options']).toBe('nosniff'); expect(allowed.headers['content-disposition']).toMatch(/^attachment;/);
+  });
+  test('existing recovery worker retains unknown cleanup outcomes and exact tombstones', async () => {
+    file.is_deleted = true; file.metadata.storage_cleanup_claim = 'aaef0000-0000-4000-8000-000000000004';
+    const rpc = jest.fn(async (name) => {
+      if (name === 'gig_completion_file_cleanup_candidates') return { data: [id] };
+      if (name === 'claim_gig_completion_file_cleanup') return { data: file };
+      if (name === 'finish_gig_completion_file_cleanup') return { data: true };
+      throw new Error('Unexpected cleanup');
+    });
+    setRpcMock(rpc); const job = require('../../jobs/homeDocumentRecovery').completionFiles;
+    bucket.remove.mockRejectedValueOnce(new Error('unknown provider result'));
+    expect(await job()).toMatchObject({ selected: 1, pending: 1, removed: 0 });
+    expect(rpc).toHaveBeenLastCalledWith('finish_gig_completion_file_cleanup', expect.objectContaining({ p_succeeded: false }));
+    expect(await job()).toMatchObject({ selected: 1, pending: 0, removed: 1 });
+    expect(bucket.remove).toHaveBeenLastCalledWith([file.file_path]);
+  });
+
+});

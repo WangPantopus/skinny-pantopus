@@ -1313,7 +1313,7 @@ public final class GigDetailViewModel {
                         mimeType: photo.mimeType,
                         data: photo.data
                     ),
-                    formFields: ["file_type": "gig_completion", "visibility": "private"]
+                    formFields: ["file_type": "gig_completion", "visibility": "private", "gig_id": gig.id]
                 )
                 guard current(), !response.file.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
                 completionUploads[photo] = response.file.url

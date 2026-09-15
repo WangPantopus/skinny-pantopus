@@ -9,9 +9,8 @@ import {
   Square,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import * as api from '@pantopus/api';
-import FileUpload from '@/components/FileUpload';
+import FileUpload, { CompletionProofImage } from '@/components/FileUpload';
 import StripeConnectOnboarding from '@/components/payments/StripeConnectOnboarding';
 import TipModal, { tipId, tipRecoverySlot, verifyTipPreview } from '@/components/payments/TipModal';
 import AssignedGigAuthorization from '@/components/payments/AssignedGigAuthorization';
@@ -377,9 +376,9 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
           {completionPhotos.length > 0 && (
             <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
               {completionPhotos.slice(0, 4).map((url: string, i: number) => (
-                <Image
+                <CompletionProofImage
                   key={i}
-                  src={url}
+                  reference={url}
                   alt={`Proof ${i + 1}`}
                   width={56}
                   height={56}
@@ -594,9 +593,10 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
                       <p className="text-xs text-app-text-secondary mb-1">Photos ({completionPhotos.length}):</p>
                       <div className="grid grid-cols-3 gap-2">
                         {completionPhotos.map((url: string, i: number) => (
-                          <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                            <Image
-                              src={url}
+                            <CompletionProofImage
+                              key={i}
+                              openFull
+                              reference={url}
                               alt={`Proof ${i + 1}`}
                               width={200}
                               height={96}
@@ -605,7 +605,6 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
                               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                               quality={80}
                             />
-                          </a>
                         ))}
                       </div>
                     </div>
