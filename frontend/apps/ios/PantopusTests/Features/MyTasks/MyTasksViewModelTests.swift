@@ -297,7 +297,7 @@ final class MyTasksViewModelTests: XCTestCase {
         XCTAssertEqual(vm.banner?.title, "4 new bids since yesterday")
     }
 
-    func testBoostFlipsExpiresAtInCache() async {
+    func testSuccessfulBoostRefreshesExistingList() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: """
             {"gigs":[
@@ -306,7 +306,8 @@ final class MyTasksViewModelTests: XCTestCase {
                "created_at":"2026-05-13T09:00:00Z"}
             ],"total":1}
             """),
-            .status(200, body: "{\"boost_expires_at\":\"2026-05-16T12:00:00Z\"}")
+            .status(200, body: "{\"boost_expires_at\":\"2026-05-16T12:00:00Z\"}"),
+            .status(200, body: #"{"gigs":[{"id":"g1","title":"Server refreshed task","status":"open"}]}"#)
         ]
         let vm = makeVM()
         await vm.load()
@@ -329,7 +330,8 @@ final class MyTasksViewModelTests: XCTestCase {
             XCTFail("Expected .loaded after boost")
             return
         }
-        XCTAssertEqual(sections.first?.rows.first?.id, "g1")
+        XCTAssertEqual(sections.first?.rows.first?.title, "Server refreshed task")
+        XCTAssertEqual(SequencedURLProtocol.captured(path: "/api/gigs/my-gigs").count, 2)
     }
 
     func testListedConfirmationRetainsLoadedReview() async throws {

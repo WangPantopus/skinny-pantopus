@@ -423,12 +423,22 @@ files change and one focused Android test file is added to preserve the unchange
 test-class size limit; no new application screen, service or schema. See
 [account/lifetime evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-mytasks-account-and-view-lifetime).
 These are compiled-model/APIClient checks; full installed account-switch/owner UI
-is still open. The adjacent rebook rail has its own reader and is not covered by
-this main-list acceptance. Require the combined checkpoint's own CI before merge.
+is still open. The combined checkpoint a943a0dab passes all15 applicable jobs/one
+Seeder skip in [CI34969633236](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34969633236).
 
-**Next:** run the combined checkpoint CI and verify the existing rebook rail,
-boost rollback ordering and completion draft/restart behavior. Inspect existing
-implementations first and preserve screen designs.
+**Rebooking/boost follow-up:** both existing native rebook readers now retire
+history/actions with their session and view, and ignore older refresh responses.
+A failed boost no longer restores an obsolete whole list; successful boosts refresh
+the existing list from the server. Baselines reproduce two Android defects and
+three iOS failures. Final57 Android/55 iOS checks, static gates and builds pass.
+All nine changed source/test files already existed; no layout, backend or schema
+change. See [the evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-native-rebooking-history-and-boost-refresh).
+The owned iOS simulator is shut down; the separate user simulator is preserved.
+This follow-up needs its own CI; PR34 remains draft.
+
+**Next:** verify the existing web My Gigs readers/actions, then completion
+draft/restart behavior. Inspect existing implementations first and preserve screen
+designs. There is no active web rebook/boost caller to rebuild.
 Full installed native MyTasks/owner lifetime remains open. Continue completion
 draft/restart verification using existing storage first. Generic maintenance granular authority/raw RLS, Home-origin admission
 and full maintenance UI acceptance remain separate follow-ups; this bounded history

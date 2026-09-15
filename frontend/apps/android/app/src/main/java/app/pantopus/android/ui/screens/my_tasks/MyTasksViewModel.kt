@@ -624,22 +624,11 @@ class MyTasksViewModel
         fun boost(dto: MyGigDto) {
             val generation = screenGeneration
             val identity = loadedIdentity ?: return
-            if (!scopeIsCurrent(generation)) return
-            val index = gigs.indexOfFirst { it.id == dto.id }
-            if (index < 0) return
-            val previous = gigs
-            gigs = gigs.toMutableList().also { it[index] = boostedCopy(gigs[index], nowProvider()) }
-            applyState()
+            if (!scopeIsCurrent(generation) || gigs.none { it.id == dto.id }) return
             viewModelScope.launch {
                 if (!isCurrent(generation, identity)) return@launch
-                when (gigsRepo.boostGig(dto.id)) {
-                    is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        if (!isCurrent(generation, identity)) return@launch
-                        gigs = previous
-                        applyState()
-                    }
-                }
+                val result = gigsRepo.boostGig(dto.id)
+                if (result is NetworkResult.Success && isCurrent(generation, identity)) refresh()
             }
         }
 

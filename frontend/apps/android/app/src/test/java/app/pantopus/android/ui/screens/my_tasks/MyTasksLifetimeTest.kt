@@ -2,11 +2,15 @@
 
 package app.pantopus.android.ui.screens.my_tasks
 
+import app.pantopus.android.data.api.models.gigs.BoostGigResponse
 import app.pantopus.android.data.api.models.gigs.CompleteGigResponse
 import app.pantopus.android.data.api.models.gigs.MyGigDto
 import app.pantopus.android.data.api.models.gigs.MyGigsResponse
+import app.pantopus.android.data.api.models.gigs.RebookableGigDto
+import app.pantopus.android.data.api.models.gigs.RebookableGigsResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.gigs.GigExtrasRepository
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.ui.screens.gigs.checkout.GigCheckoutIdentity
 import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
@@ -47,6 +51,120 @@ class MyTasksLifetimeTest {
         id: String,
         status: String = "open",
     ) = MyGigDto(id = id, title = "Work", status = status, userId = "u_me")
+
+    @Test
+    fun rebook_history_clears_on_signout_and_loads_current_owner() =
+        runTest {
+            var identity: Pair<String, String?>? = "u_me" to "session"
+            val identities = gigIdentityFixture { identity }
+            val changes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+            every { identities.changes } returns changes
+            val repo: GigExtrasRepository = mockk()
+            var reads = 0
+            coEvery { repo.rebookable() } coAnswers {
+                reads += 1
+                NetworkResult.Success(RebookableGigsResponse(listOf(RebookableGigDto(id = "owner-$reads"))))
+            }
+            val rail = RebookRailViewModel(repo, identities)
+            rail.load()
+            val old = rail.state.value as RebookRailViewModel.State.Loaded
+            var opened = 0
+            identity = null
+            changes.emit(Unit)
+            assertTrue(rail.state.value is RebookRailViewModel.State.Unavailable)
+            rail.rebook(old.items.first(), old.viewGeneration) { opened += 1 }
+            assertEquals(0, opened)
+            assertEquals(1, reads)
+            identity = "new-owner" to "new-session"
+            changes.emit(Unit)
+            val current = rail.state.value as RebookRailViewModel.State.Loaded
+            assertEquals("owner-2", current.items.first().id)
+            rail.rebook(current.items.first(), current.viewGeneration) { opened += 1 }
+            assertEquals(1, opened)
+        }
+
+    @Test
+    fun retired_rebook_read_cannot_populate_reentered_view() =
+        runTest {
+            val repo: GigExtrasRepository = mockk()
+            val pending = CompletableDeferred<NetworkResult<RebookableGigsResponse>>()
+            var reads = 0
+            coEvery { repo.rebookable() } coAnswers {
+                reads += 1
+                if (reads == 1) {
+                    pending.await()
+                } else {
+                    NetworkResult.Success(RebookableGigsResponse(listOf(RebookableGigDto(id = "new"))))
+                }
+            }
+            val rail = RebookRailViewModel(repo, gigIdentityFixture())
+            rail.load()
+            rail.retire()
+            rail.load()
+            pending.complete(NetworkResult.Success(RebookableGigsResponse(listOf(RebookableGigDto(id = "old")))))
+            assertEquals("new", (rail.state.value as RebookRailViewModel.State.Loaded).items.first().id)
+        }
+
+    @Test
+    fun rebook_action_requires_the_current_view_even_when_history_is_identical() =
+        runTest {
+            val repo: GigExtrasRepository = mockk()
+            coEvery { repo.rebookable() } returns NetworkResult.Success(RebookableGigsResponse(listOf(RebookableGigDto(id = "g1"))))
+            val rail = RebookRailViewModel(repo, gigIdentityFixture())
+            rail.load()
+            val old = rail.state.value as RebookRailViewModel.State.Loaded
+            rail.retire()
+            rail.load()
+            val current = rail.state.value as RebookRailViewModel.State.Loaded
+            assertEquals(old.items, current.items)
+            assertTrue(old != current)
+            var opened = 0
+            rail.rebook(old.items.first(), old.viewGeneration) { opened += 1 }
+            assertEquals(0, opened)
+            rail.rebook(current.items.first(), current.viewGeneration) { opened += 1 }
+            assertEquals(1, opened)
+        }
+
+    @Test
+    fun older_rebook_response_cannot_replace_newer_history() =
+        runTest {
+            val repo: GigExtrasRepository = mockk()
+            val pending = CompletableDeferred<NetworkResult<RebookableGigsResponse>>()
+            var reads = 0
+            coEvery { repo.rebookable() } coAnswers {
+                reads += 1
+                if (reads == 1) {
+                    pending.await()
+                } else {
+                    NetworkResult.Success(RebookableGigsResponse(listOf(RebookableGigDto(id = "new"))))
+                }
+            }
+            val rail = RebookRailViewModel(repo, gigIdentityFixture())
+            rail.load()
+            rail.refresh()
+            pending.complete(NetworkResult.Success(RebookableGigsResponse(listOf(RebookableGigDto(id = "old")))))
+            assertEquals("new", (rail.state.value as RebookRailViewModel.State.Loaded).items.first().id)
+        }
+
+    @Test
+    fun failed_boost_cannot_restore_a_list_replaced_by_refresh() =
+        runTest {
+            val pending = CompletableDeferred<NetworkResult<BoostGigResponse>>()
+            var reads = 0
+            coEvery { gigsRepo.myGigs(any(), any()) } coAnswers {
+                reads += 1
+                val id = if (reads == 1) "old" else "new"
+                NetworkResult.Success(MyGigsResponse(gigs = listOf(dto(id = id))))
+            }
+            coEvery { gigsRepo.boostGig("old") } coAnswers { pending.await() }
+            val viewModel = vm()
+            viewModel.load()
+            viewModel.boost(dto(id = "old"))
+            viewModel.refresh()
+            assertEquals("new", (viewModel.state.value as ListOfRowsUiState.Loaded).sections.first().rows.first().id)
+            pending.complete(NetworkResult.Failure(NetworkError.Server(503, "Boost failed")))
+            assertEquals("new", (viewModel.state.value as ListOfRowsUiState.Loaded).sections.first().rows.first().id)
+        }
 
     @Test
     fun response_order_is_rechecked_after_waiting_for_session_identity() =

@@ -3863,3 +3863,47 @@ The main-list acceptance does not cover the adjacent rebook rail's separate read
 optimistic boost rollback ordering or completion draft/restart. Those are next.
 0654e856e's complete CI remains green; the combined native checkpoint needs its own
 CI. PR34 stays draft and the wider inventory remains open.
+
+## Existing native rebooking history and boost refresh
+
+The Android baseline reproduces an older rebook response replacing newer history
+and a failed boost restoring an obsolete whole list after a successful refresh:
+two distinct failures across six configured retry executions. iOS reproduces
+retained history after actual AuthManager sign-out, a held read repopulating a
+replacement session, and the same boost rollback defect (three tests/five failed
+assertions). HTTP/repository responses are synthetic. The existing iOS test
+transport gains an optional response gate so a newer GET can finish while the
+boost POST is held; its existing ungated behavior/default initializer are preserved.
+
+The existing rebook models reuse the current native identity helpers and retire
+state/actions on session change and view departure. Read generations reject older
+responses, including after an awaited Android identity lookup. Reentry reloads;
+identical Android history still publishes the new view generation so current cards
+work and retained old actions stay silent. iOS requires a fresh entry after a new
+session. Existing card styles and navigation destinations are unchanged.
+
+Both boost handlers remove the whole-list optimistic rollback and refresh through
+their existing loader after success. The current cards did not display those
+optimistic fields. A failure therefore leaves the latest accepted list intact,
+and successful-boost tests require the server's refreshed title and a second read.
+All nine changed application/test files already existed. No new screen, endpoint,
+table, migration or identity service is added.
+
+Final Android R2 passes57 tests (46 main-list/11 lifetime), detekt, ktlint and
+compilation. iOS R1 passes55 tests (37 main-list/8 Magic Task/10 lifetime), build,
+SwiftFormat and strict SwiftLint. Two test classes share the existing Magic Task
+test file to preserve the300-line class limit. Android R1 stopped at an unchanged
+condition-complexity rule; splitting that condition retains its post-await checks.
+The first iOS baseline build exposed a test-helper initializer compatibility issue;
+the defaulted initializer fixed it before the successful R2 baseline build and
+expected failing R2 tests. Failed runs remain preserved, not relabeled as passing.
+
+Source hashes, baseline/final logs, Android XML, iOS result bundles and exact device
+cleanup are retained under `existing-tip-provider-proof-r1/my-tasks-rebook-boost-*`
+and its durable private mirror. The owned iOS simulator is shut down; the separate
+user simulator remains untouched. These compiled-model/APIClient checks do not
+establish installed rebooking/boost account-switch UI or actual provider acceptance.
+No database, hosted or provider operation ran in this scope. The preceding
+a943a0dab checkpoint passes all15 applicable jobs/one Seeder skip in
+[CI34969633236](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34969633236).
+This follow-up needs its own CI. PR34 and the wider inventory remain unfinished.

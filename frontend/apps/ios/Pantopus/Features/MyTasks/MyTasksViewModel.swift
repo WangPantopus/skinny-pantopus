@@ -727,26 +727,15 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
 
     // MARK: - Mutations
 
-    /// Optimistically boost the gig. The chip stays the same (Reviewing /
-    /// No bids) but the row's `boost_expires_at` is updated locally so
-    /// future renders can surface a "Boosted" hint.
+    /// Refresh the existing list from the server after a successful boost.
     public func boost(_ dto: MyGigDTO) async {
         let generation = screenGeneration
-        guard isCurrent(generation) else { return }
-        guard let index = gigs.firstIndex(where: { $0.id == dto.id }) else { return }
-        let previous = gigs
-        gigs[index] = Self.boostedCopy(of: gigs[index], now: now())
-        rebuild()
+        guard isCurrent(generation), gigs.contains(where: { $0.id == dto.id }) else { return }
         do {
-            _ = try await api.request(
-                GigsEndpoints.boostGig(gigId: dto.id),
-                as: BoostGigResponse.self
-            )
-        } catch {
+            _ = try await api.request(GigsEndpoints.boostGig(gigId: dto.id), as: BoostGigResponse.self)
             guard isCurrent(generation) else { return }
-            gigs = previous
-            rebuild()
-        }
+            await refresh()
+        } catch { return }
     }
 
     /// Confirm only worker-submitted work and keep the row active until a receipt.

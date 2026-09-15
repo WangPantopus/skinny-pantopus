@@ -124,9 +124,15 @@ is retained as failure evidence, not a still-unresolved defect. The native refre
 follow-up is committed at f32c8e66b. Main-list account/departure handlers now pass52
 Android and50 iOS checks plus static/compilation gates using existing identity
 helpers. See [native lifetime evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-mytasks-account-and-view-lifetime).
-The separate rebook reader, boost rollback ordering, full installed owner/account
-journeys and current combined CI remain open. No application screen or schema is
-added; one Android regression file preserves the existing test-class size rule.
+The combined main-list checkpoint a943a0dab passes all15 applicable CI34969633236
+jobs/one Seeder skip. The separate rebook reader and boost ordering now pass57
+Android/55 iOS checks, static gates and builds after reproduced baseline failures.
+All nine follow-up files already existed; no screen, layout or schema change.
+See [rebooking/boost evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-rebooking-history-and-boost-refresh).
+Full installed owner/account journeys, completion draft/restart and this follow-up's
+own CI remain open. Web My Gigs reader/action lifetime is next to verify.
+The preceding main-list change added one Android regression file to preserve the
+existing test-class size rule.
 No inventory row is closed by these bounded checks.
 
 

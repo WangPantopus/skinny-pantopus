@@ -476,18 +476,23 @@ class MyTasksViewModelTest {
     // MARK: - Optimistic boost
 
     @Test
-    fun boost_updates_in_cache_and_calls_endpoint() =
+    fun successful_boost_refreshes_the_existing_list() =
         runTest {
-            coEvery { gigsRepo.myGigs(any(), any()) } returns
-                NetworkResult.Success(MyGigsResponse(gigs = listOf(dto(id = "g1", status = "open", bidCount = 0))))
+            var reads = 0
+            coEvery { gigsRepo.myGigs(any(), any()) } coAnswers {
+                reads += 1
+                val gig = dto(id = "g1").copy(title = if (reads == 1) "Initial task" else "Server refreshed task")
+                NetworkResult.Success(MyGigsResponse(gigs = listOf(gig)))
+            }
             coEvery { gigsRepo.boostGig("g1") } returns
                 NetworkResult.Success(BoostGigResponse(boostExpiresAt = "2026-05-16T12:00:00Z"))
             val viewModel = vm()
             viewModel.load()
-            viewModel.boost(dto(id = "g1", status = "open"))
-            // Row stays on Open tab; boost is a soft signal that doesn't change tab.
+            viewModel.boost(dto(id = "g1"))
             val state = viewModel.state.value as ListOfRowsUiState.Loaded
-            assertEquals(1, state.sections.first().rows.size)
+            assertEquals("Server refreshed task", state.sections.first().rows.first().title)
+            assertEquals(2, reads)
+            coVerify(exactly = 1) { gigsRepo.boostGig("g1") }
         }
 
     // MARK: - T6.0b Magic Task chrome
