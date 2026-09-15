@@ -186,8 +186,16 @@ no schema/client/layout/control store is added. See [notice evidence](VERIFICATI
 Next verify completion draft/restart against existing forms/storage and canonical
 saved state, preserving already accepted upload recovery. Transport remains best
 effort; real push, consent/raw participant access and installed tracking remain open.
-d01 CI34990349201 passes15 applicable jobs/one skip. c7d45dd09 CI34993419890 is running;
+d01 CI34990349201 and c7d45dd09 CI34993419890 each pass15 applicable jobs/one skip;
 urgent writer341da82c6 and the notice follow-up are not yet covered by that run.
+The existing web Start Work control now passes180 web regressions/types/scoped lint
+and seven compiled Chrome cases after ten failed baselines. It admits one pending
+request, checks a matching saved receipt and retires stale assignment/session
+responses. Three existing source/test files change; no screen/layout/schema change.
+See [Start Work evidence](VERIFICATION_FIRST_2026-09-13.md#existing-web-start-work-control).
+Next verify existing backend/native Start Work recovery before completion restart.
+HTTP outcomes in this browser check are synthetic; full task/provider acceptance
+and current combined-head CI remain open.
 No full inventory row is closed by these bounded checks.
 The preceding main-list change added one Android regression file to preserve the
 existing test-class size rule.

@@ -390,8 +390,8 @@ export async function getGigChatRoom(
 /**
  * Worker starts the gig: assigned -> in_progress
  */
-export async function startGig(gigId: string): Promise<{ gig: Gig }> {
-  return post<{ gig: Gig }>(`/api/gigs/${gigId}/start`);
+export async function startGig(gigId: string): Promise<{ gig: GigSchema }> {
+  return post<{ gig: GigSchema }>(`/api/gigs/${gigId}/start`);
 }
 
 /**

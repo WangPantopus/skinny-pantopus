@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createRef } from 'react';
 import * as api from '@pantopus/api';
 import AssignedGigAuthorization from '../src/components/payments/AssignedGigAuthorization';
+import { toast } from '../src/components/ui/toast-store';
 import CompletionFlow, { type CompletionFlowHandle } from '../src/components/gig-detail/CompletionFlow';
 
 const listeners = new Set<() => void>();
@@ -19,8 +20,10 @@ jest.mock('@pantopus/api', () => ({
   getAuthToken: () => '__session__', getApiBaseUrl: () => 'https://app.test', AUTH_SESSION_CHANGE_KEY: 'session-change',
   onTokenChange: (fn: () => void) => { listeners.add(fn); return () => listeners.delete(fn); },
   payments: { getPaymentForGig: jest.fn(), refreshPaymentStatus: jest.fn(), continueAuthorization: jest.fn() },
-  gigs: { checkNoShow: jest.fn().mockResolvedValue(null) },
+  gigs: { checkNoShow: jest.fn().mockResolvedValue(null), startGig: jest.fn() },
 }));
+
+jest.mock('../src/components/ui/toast-store', () => ({ toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() } }));
 
 const actor = '11111111-1111-4111-8111-111111111111';
 const payer = '22222222-2222-4222-8222-222222222222';
@@ -189,4 +192,93 @@ test('a cancelled task does not offer an authorization restart', () => {
     isOwner isWorker={false} currentUserId={actor} gigStatus="cancelled" paymentLifecycleStatus="canceled" onOpenChat={() => {}} />);
   expect(screen.queryByRole('region', { name: 'Assigned payment authorization' })).not.toBeInTheDocument();
   expect(api.payments.refreshPaymentStatus).not.toHaveBeenCalled();
+});
+
+
+describe('existing worker start control', () => {
+  const started = { gig: { id: gig, status: 'in_progress', accepted_by: worker, started_at: '2026-09-15T12:00:00Z' } };
+  const typed = (value: unknown) => value as Awaited<ReturnType<typeof api.gigs.startGig>>;
+  const changed = jest.fn();
+  const props = { gigId: gig, gig: { price: 0, accepted_by: worker, accepted_at: '2026-09-01T00:00:00Z' },
+    isOwner: false, isWorker: true, currentUserId: worker, gigStatus: 'assigned', paymentLifecycleStatus: 'none',
+    onStatusChange: changed, onOpenChat: jest.fn() };
+  function showStart() {
+    const ref = createRef<CompletionFlowHandle>();
+    return { ...render(<CompletionFlow {...props} ref={ref} />), ref };
+  }
+  beforeEach(() => jest.mocked(api.gigs.startGig).mockResolvedValue(typed(started)));
+  test.each([{}, { gig: { ...started.gig, id: 'another-task' } }, { gig: { ...started.gig, accepted_by: payer } },
+    { gig: { ...started.gig, started_at: null } }])('does not report success for an invalid start receipt %j', async receipt => {
+    jest.mocked(api.gigs.startGig).mockResolvedValueOnce(typed(receipt));
+    showStart(); await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start Work' })));
+    expect(changed).not.toHaveBeenCalled(); expect(toast.success).not.toHaveBeenCalled();
+  });
+  test.each(['session', 'marker', 'unmount', 'assignment'])('ignores a late start result after %s changes', async change => {
+    let release!: (value: Awaited<ReturnType<typeof api.gigs.startGig>>) => void;
+    jest.mocked(api.gigs.startGig).mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
+    const view = showStart(); fireEvent.click(screen.getByRole('button', { name: 'Start Work' }));
+    expect(api.gigs.startGig).toHaveBeenCalledTimes(1);
+    act(() => {
+      if (change === 'session') [...listeners].forEach(fn => fn());
+      if (change === 'marker') localStorage.setItem(api.AUTH_SESSION_CHANGE_KEY, 'replacement');
+      if (change === 'unmount') view.unmount();
+      if (change === 'assignment') view.rerender(<CompletionFlow {...props} gig={{ ...props.gig, accepted_at: '2026-09-02T00:00:00Z' }} ref={view.ref} />);
+    });
+    await act(async () => release(typed(started)));
+    expect(changed).not.toHaveBeenCalled(); expect(toast.success).not.toHaveBeenCalled();
+  });
+  test('one pending click owns the start request', async () => {
+    let release!: (value: Awaited<ReturnType<typeof api.gigs.startGig>>) => void;
+    jest.mocked(api.gigs.startGig).mockReturnValue(new Promise(resolve => { release = resolve; }));
+    showStart(); const button = screen.getByRole('button', { name: 'Start Work' });
+    fireEvent.click(button); fireEvent.click(button);
+    try { expect(api.gigs.startGig).toHaveBeenCalledTimes(1); }
+    finally { await act(async () => release(typed(started))); }
+  });
+  test('a retired imperative control cannot start work', async () => {
+    const view = showStart(); act(() => [...listeners].forEach(fn => fn()));
+    await act(async () => view.ref.current!.startWork());
+    expect(api.gigs.startGig).not.toHaveBeenCalled();
+  });
+  test('the current matching receipt refreshes the existing page once', async () => {
+    showStart(); await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start Work' })));
+    expect(changed).toHaveBeenCalledTimes(1); expect(toast.success).toHaveBeenCalledWith('Work started!');
+  });
+  test('an old failed request cannot clear the new assignment pending control', async () => {
+    let failOld!: (error: Error) => void, finishNew!: (value: Awaited<ReturnType<typeof api.gigs.startGig>>) => void;
+    jest.mocked(api.gigs.startGig).mockReturnValueOnce(new Promise((_, reject) => { failOld = reject; }))
+      .mockReturnValueOnce(new Promise(resolve => { finishNew = resolve; }));
+    const view = showStart(); fireEvent.click(screen.getByRole('button', { name: 'Start Work' }));
+    view.rerender(<CompletionFlow {...props} gig={{ ...props.gig, accepted_at: '2026-09-02T00:00:00Z' }} ref={view.ref} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start Work' }));
+    await act(async () => failOld(new Error('Old request failed')));
+    expect(toast.error).not.toHaveBeenCalled(); expect(screen.getByRole('button', { name: 'Start Work' })).toBeDisabled();
+    await act(async () => view.ref.current!.startWork());
+    expect(api.gigs.startGig).toHaveBeenCalledTimes(2);
+    await act(async () => finishNew(typed(started)));
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+  test('a failed current request allows an explicit retry', async () => {
+    jest.mocked(api.gigs.startGig).mockRejectedValueOnce(new Error('Connection interrupted'));
+    showStart(); await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start Work' })));
+    expect(toast.error).toHaveBeenCalledWith('Connection interrupted'); expect(changed).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Start Work' })).toBeEnabled();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start Work' })));
+    expect(changed).toHaveBeenCalledTimes(1); expect(api.gigs.startGig).toHaveBeenCalledTimes(2);
+  });
+  test.each([
+    { isWorker: false }, { gigStatus: 'completed' },
+    { gig: { ...props.gig, accepted_by: payer } },
+    { gig: { ...props.gig, price: 12 }, paymentLifecycleStatus: 'authorize_pending' },
+  ])('the imperative control respects current eligibility %j', async overrides => {
+    const ref = createRef<CompletionFlowHandle>(); render(<CompletionFlow {...props} {...overrides} ref={ref} />);
+    await act(async () => ref.current!.startWork()); expect(api.gigs.startGig).not.toHaveBeenCalled();
+  });
+  test('an old imperative handle stays retired when an assignment returns to its prior values', async () => {
+    const view = showStart(), old = view.ref.current!;
+    view.rerender(<CompletionFlow {...props} gig={{ ...props.gig, accepted_at: '2026-09-02T00:00:00Z' }} ref={view.ref} />);
+    view.rerender(<CompletionFlow {...props} ref={view.ref} />);
+    await act(async () => old.startWork()); expect(api.gigs.startGig).not.toHaveBeenCalled();
+    await act(async () => view.ref.current!.startWork()); expect(changed).toHaveBeenCalledTimes(1);
+  });
 });

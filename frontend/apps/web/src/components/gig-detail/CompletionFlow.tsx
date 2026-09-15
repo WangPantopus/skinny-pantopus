@@ -1,7 +1,7 @@
 'use client';
 
 import { getErrorMessage } from '@pantopus/utils';
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import {
   Wrench,
   CheckCircle,
@@ -42,7 +42,6 @@ interface CompletionGigData {
 
 /** Extended gig API methods not in base type definitions */
 interface GigsCompletionApiExt {
-  startGig: (gigId: string) => Promise<unknown>;
   markGigCompleted: (gigId: string, data: Record<string, any>) => Promise<unknown>;
   confirmGigCompletion?: (gigId: string, data: Record<string, any>) => Promise<unknown>;
   completeGig?: (gigId: string, data: Record<string, any>) => Promise<unknown>;
@@ -130,6 +129,18 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
     && completionScope.current === scope && scope.actor === currentUserId && scope.gigId === gigId
     && scope.token === api.getAuthToken() && scope.origin === api.getApiBaseUrl() && scope.marker === completionSessionMarker());
 
+  const [startingWork, setStartingWork] = useState(false);
+  const startAttempt = useRef<object | null>(null);
+  const startContext = useMemo(() => ({ gigId, currentUserId, isWorker, gigStatus, acceptedBy,
+    acceptedAt: gig.accepted_at, price: gig.price, paymentId: gig.payment_id, paymentLifecycleStatus }),
+  [gigId, currentUserId, isWorker, gigStatus, acceptedBy, gig.accepted_at, gig.price, gig.payment_id, paymentLifecycleStatus]);
+  const currentStartContext = useRef<typeof startContext | null>(null);
+  useEffect(() => {
+    currentStartContext.current = startContext;
+    startAttempt.current = null; setStartingWork(false);
+    return () => { currentStartContext.current = null; startAttempt.current = null; };
+  }, [startContext]);
+
   useEffect(() => {
     completionScope.current = { actor: currentUserId, gigId, token: api.getAuthToken(), origin: api.getApiBaseUrl(), marker: completionSessionMarker() };
     completionAttempt.current = null; completionUploads.current = new WeakMap();
@@ -137,6 +148,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
     setShowConfirmModal(false); setConfirmNote(''); setConfirmSatisfaction(0); setSubmittingConfirm(false); setShowTipModal(false);
     const retire = () => {
       completionScope.current = null; completionAttempt.current = null; completionUploads.current = new WeakMap();
+      startAttempt.current = null; setStartingWork(false);
       setShowCompletionModal(false); setCompletionNote(''); setCompletionFiles([]); setSubmittingCompletion(false);
       setShowConfirmModal(false); setConfirmNote(''); setConfirmSatisfaction(0); setSubmittingConfirm(false); setShowTipModal(false);
     };
@@ -219,19 +231,33 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   };
 
   const handleStartWork = async () => {
+    const scope = completionScope.current;
+    if (startAttempt.current || currentStartContext.current !== startContext
+      || !completionScopeIsCurrent(scope) || !iAmWorkerAssigned
+      || acceptedBy !== currentUserId || workerBlockedByPaymentAuth) return;
+    const attempt = {}; startAttempt.current = attempt; setStartingWork(true);
+    const current = () => startAttempt.current === attempt && currentStartContext.current === startContext
+      && completionScopeIsCurrent(scope);
     try {
-      const gigsExt = api.gigs as unknown as GigsCompletionApiExt;
-      await gigsExt.startGig(gigId);
+      const response = await api.gigs.startGig(gigId);
+      if (!current()) return;
+      const receipt = response?.gig;
+      if (!receipt || receipt.id !== gigId || receipt.status !== 'in_progress'
+        || receipt.accepted_by !== currentUserId || !Number.isFinite(Date.parse(receipt.started_at || ''))) {
+        throw new Error('Work start could not be confirmed. Refresh the task to check its current status.');
+      }
       onStatusChange?.();
       toast.success('Work started!');
     } catch (err: unknown) {
-      console.error('Start work failed:', err);
+      if (!current()) return;
       const errData = err && typeof err === 'object' ? (err as Record<string, any>) : null;
       if ((errData?.data as Record<string, any>)?.code === 'payer_authorization_required') {
         toast.warning('Waiting for requester payment authorization. Ask the gig owner to complete payment on the gig page.');
       } else {
         toast.error(err instanceof Error ? err.message : 'Failed to start work');
       }
+    } finally {
+      if (current()) { startAttempt.current = null; setStartingWork(false); }
     }
   };
 
@@ -450,7 +476,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
                   if (workerBlockedByPaymentAuth) return;
                   handleStartWork();
                 }}
-                disabled={workerBlockedByPaymentAuth}
+                disabled={workerBlockedByPaymentAuth || startingWork}
                 className={`flex-1 py-2 rounded-lg font-semibold ${
                   workerBlockedByPaymentAuth
                     ? 'bg-app-surface-sunken border border-app-border text-app-text-secondary cursor-not-allowed'

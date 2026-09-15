@@ -572,10 +572,26 @@ All ab17 fixtures/API18109 are cleaned. Two existing source/test files change; n
 new schema/client/layout/control metadata. See [notice evidence](VERIFICATION_FIRST_2026-09-13.md#existing-urgent-notification-retry-identity).
 Transport remains best effort; saved state is not proof of push delivery. Historical
 unkeyed events are preserved, without a claim of deduplication across old/new handlers.
-The prior c7d45dd09 CI34993419890 is still running; urgent341da82c6 and this follow-up
-will need subsequent canonical CI.
+The prior c7d45dd09 [CI34993419890](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34993419890)
+now passes all15 applicable jobs/one Seeder skip. Urgent341da82c6 and notice4c5655217
+need subsequent canonical CI with the Start Work follow-up below.
 
-**Next:** verify existing completion draft/restart behavior against the actual forms
+**Existing web Start Work control:** ten failing baselines reproduce duplicate
+pending requests, stale success and acceptance of invalid receipts. The existing
+CompletionFlow now reuses its session guard, retires changed assignment/payment
+contexts, admits one pending request and verifies the returned Gig/worker/status/
+start timestamp. The SDK type now matches the existing raw Gig response.180 web
+regressions, TypeScript and scoped lint pass (zero errors/six existing warnings).
+Seven compiled Chrome checks pass with synthetic HTTP/authentication, including
+actual cross-tab retirement. Three existing source/test files change; screen labels,
+styles, layouts, upload recovery and backend/schema remain unchanged. See
+[Start Work evidence](VERIFICATION_FIRST_2026-09-13.md#existing-web-start-work-control).
+This is bounded client acceptance; backend lost-reply/concurrency, native and full
+installed/provider Start Work acceptance remain open.
+
+**Next:** verify the existing Start Work endpoint and native callers for saved-result
+recovery, assignment changes and truthful completion before extending them. Then
+verify existing completion draft/restart behavior against the actual forms
 and their current storage before changing it. Preserve accepted upload recovery and
 saved-completion journeys; absence of unsent-draft autosave alone does not establish
 a broken promised feature. Check lost replies/restart against canonical saved state

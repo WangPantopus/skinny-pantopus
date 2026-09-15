@@ -4489,5 +4489,55 @@ has the existing best-effort limitation. Existing unkeyed historical notices are
 rewritten/backfilled, and cross-version deduplication is not claimed. A same-step ETA
 change keeps the earlier stage notice; live/current status remains separately readable.
 Continue actual completion/restart and remaining provider/release acceptance. PR34
-stays draft. c7d45dd09 CI34993419890 is running; this and urgent341da82c6 need a later
+stays draft. c7d45dd09 CI34993419890 has since passed15 applicable jobs/one skip;
+this and urgent341da82c6 need a later
 canonical CI run without canceling the in-flight native checks.
+
+
+## Existing web Start Work control
+
+September15 continuation from integration4c5655217. Inspection followed the existing
+CompletionFlow button/imperative control, SDK startGig, POST /api/gigs/:id/start,
+existing Gig fields and paid authorization check. No replacement flow is needed.
+Ten baseline checks fail: four invalid receipts, late replies after session/marker/
+departure/assignment changes, duplicate pending clicks and a retired imperative
+control. The ordinary matching response already works.
+
+Three existing source/test files change. CompletionFlow reuses its identity guard,
+retains one request per current assignment/payment context and ignores retired
+success/error/finally callbacks. The returned Gig must match the task, worker,
+in-progress status and a valid start timestamp before refresh/success. Existing
+payment eligibility also applies to the imperative entry. Pending disables the
+existing button without changing its label, styles or layout. SDK startGig now uses
+the existing raw GigSchema, as neighboring lifecycle methods already do. Existing
+completion proof/tip storage and backend/schema are untouched.
+
+R1 passes39 existing authorization/start tests; R2 passes180 tests across existing
+authorization, tip/completion and stop-entry suites, plus TypeScript. Scoped lint
+has zero errors/six existing any warnings. Additional checks cover an old failed
+request during a newer pending assignment, explicit retry, ineligible imperative
+entry and assignment values returning to their previous values.
+
+Seven actual compiled Chrome cases pass in R4: matching success, invalid receipt
+then retry, pending duplicate, late session/assignment/departure responses and a
+real cross-tab session signal. The actual component, SDK HTTP requests and root
+toast run with a private entry wrapper and synthetic HTTP/authentication. This is
+not backend/SQL, real payment, native or full task-workflow acceptance. The wrapper's
+refresh counter stands in for the parent refresh; it does not prove saved-state
+reload. Stripe network loading is intentionally blocked and the existing payout
+account read receives a synthetic404; no provider activation runs.
+
+Earlier browser attempts are retained: R1 reached the server-rendered wrapper but
+missed hydration within five seconds; R2 increased the wait but had an output-root
+typo and its owned driver was explicitly terminated; R3 reached successful Start
+Work but rejected an unconfigured existing payout-account read. R4 supplies that
+fixture and passes all seven cases with unchanged application bytes. No failed run
+is relabeled passing. Owned Next3107/browser fixtures are stopped, the temporary
+wrapper is removed, configs restored and compiled products archived with hashes.
+Private start-work-* evidence is mirrored under the existing recovery audit root.
+
+Prior c7d45dd09 CI34993419890 passes15 applicable jobs/one Seeder skip. The combined
+urgent341da82c6, notice4c5655217 and this client scope require subsequent canonical
+CI; PR34 remains draft. Next inspect/reproduce existing Start Work backend/native
+saved-result recovery and assignment races, then continue completion restart and
+the consent/payment/Home/release backlog. No complete inventory row closes here.
