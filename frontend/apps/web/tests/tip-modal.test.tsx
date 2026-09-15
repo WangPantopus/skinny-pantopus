@@ -92,6 +92,10 @@ beforeEach(() => {
 describe('existing completion submission retries', () => {
   const submitted = jest.fn();
   const uploadProof = jest.mocked(upload.uploadGigCompletionMedia), mark = jest.mocked(gigs.markGigCompleted);
+  const completionReceipt = (note: string | null = null, photos = ['https://proof.test/original.jpg']) => ({
+    id: gig, user_id: actor, title: 'Existing task', description: 'Synthetic task', price: 0,
+    status: 'completed' as const, accepted_by: worker, worker_completed_at: '2026-09-15T12:00:00Z', completion_note: note, completion_photos: photos,
+  });
   function openProof(pick = true) {
     const ref = React.createRef<CompletionFlowHandle>();
     const result = render(<CompletionFlow ref={ref} gigId={gig} gig={{ accepted_by: worker, price: 0 }}
@@ -104,13 +108,31 @@ describe('existing completion submission retries', () => {
   const clickSubmit = async () => act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Mark Complete' })); });
   beforeEach(() => {
     uploadProof.mockResolvedValue({ media: [{ file_url: 'https://proof.test/original.jpg' }] } as Awaited<ReturnType<typeof upload.uploadGigCompletionMedia>>);
-    mark.mockResolvedValue({ gig: { id: gig, status: 'completed' } } as Awaited<ReturnType<typeof gigs.markGigCompleted>>);
+    mark.mockImplementation(async (_id, proof) => ({ gig: completionReceipt(proof?.note ?? null, proof?.photos ?? []) } as Awaited<ReturnType<typeof gigs.markGigCompleted>>));
   });
   test('a lost completion reply retries the same uploaded references', async () => {
     mark.mockRejectedValueOnce(new Error('Lost completion reply')); openProof();
     await clickSubmit(); await waitFor(() => expect(screen.getByRole('button', { name: 'Mark Complete' })).toBeEnabled());
     await clickSubmit(); await waitFor(() => expect(submitted).toHaveBeenCalledTimes(1));
     expect(uploadProof).toHaveBeenCalledTimes(1); expect(mark).toHaveBeenCalledTimes(2);
+    expect(mark.mock.calls[1]).toEqual(mark.mock.calls[0]);
+  });
+  test('an empty completion receipt cannot close or clear the worker proof draft', async () => {
+    mark.mockResolvedValueOnce({} as Awaited<ReturnType<typeof gigs.markGigCompleted>>);
+    openProof(); await clickSubmit();
+    expect(submitted).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Mark Complete' })).toBeEnabled();
+  });
+  test.each([
+    { id: 'another-gig' }, { status: 'in_progress' }, { accepted_by: 'another-worker' },
+    { worker_completed_at: null }, { worker_completed_at: 'invalid' },
+    { completion_photos: ['https://proof.test/different.jpg'] }, { completion_note: 'Different note' },
+  ])('a mismatched completion receipt %p preserves the same upload for retry', async mismatch => {
+    mark.mockResolvedValueOnce({ gig: { ...completionReceipt(), ...mismatch } } as Awaited<ReturnType<typeof gigs.markGigCompleted>>);
+    openProof(); await clickSubmit();
+    expect(submitted).not.toHaveBeenCalled();
+    await clickSubmit(); expect(submitted).toHaveBeenCalledTimes(1);
+    expect(uploadProof).toHaveBeenCalledTimes(1);
     expect(mark.mock.calls[1]).toEqual(mark.mock.calls[0]);
   });
   test('an upload returned after account change cannot submit completion', async () => {

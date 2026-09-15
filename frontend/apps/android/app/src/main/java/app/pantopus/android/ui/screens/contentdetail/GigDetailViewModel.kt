@@ -20,6 +20,7 @@ import app.pantopus.android.data.api.models.gigs.GigQuestionDto
 import app.pantopus.android.data.api.models.gigs.GigReportReason
 import app.pantopus.android.data.api.models.gigs.PlaceBidBody
 import app.pantopus.android.data.api.models.gigs.ViewerBidStatus
+import app.pantopus.android.data.api.models.gigs.WorkerCompletionReceipt
 import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.data.api.models.offers.UpdateBidBody
 import app.pantopus.android.data.api.models.payments.TipValidation
@@ -1576,7 +1577,7 @@ class GigDetailViewModel
                         if (!current()) return@launch
                         val result = repo.markCompleted(gigId, note, urls)
                         if (!current()) return@launch
-                        if (result is NetworkResult.Success) {
+                        if (result is NetworkResult.Success && matchesWorkerReceipt(result.data.gig, actor, note, urls)) {
                             completionUploads.clear()
                             load()
                             succeeded = true
@@ -1585,6 +1586,19 @@ class GigDetailViewModel
                         onResult(finishCompletionAttempt(succeeded, actor, marker, generation))
                     }
                 }
+        }
+
+        private fun matchesWorkerReceipt(
+            receipt: WorkerCompletionReceipt?,
+            actor: String,
+            note: String?,
+            urls: List<String>,
+        ): Boolean {
+            if (receipt == null) return false
+            val sameTask = receipt.id == gigId && receipt.status == "completed" && receipt.acceptedBy == actor
+            val expectedNote = note?.take(2000)?.takeIf { it.isNotEmpty() }
+            val sameProof = receipt.completionNote == expectedNote && receipt.completionPhotos.orEmpty() == urls
+            return sameTask && sameProof && parseEpochMillis(receipt.workerCompletedAt) != null
         }
 
         private suspend fun completionIsCurrent(

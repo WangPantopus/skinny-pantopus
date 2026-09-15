@@ -1320,11 +1320,17 @@ public final class GigDetailViewModel {
                 urls.append(response.file.url)
             }
             guard current() else { return false }
-            _ = try await api.request(
+            let response = try await api.request(
                 GigsEndpoints.markCompleted(gigId: gig.id, note: note, photos: urls),
-                as: EmptyResponse.self
+                as: GigWorkerCompletionResponse.self
             )
-            guard current() else { return false }
+            let expectedNote = note.flatMap { $0.isEmpty ? nil : String(decoding: $0.utf16.prefix(2000), as: UTF16.self) }
+            guard current(), let receipt = response.gig,
+                  receipt.id == gig.id, receipt.status == "completed", receipt.acceptedBy == currentUserId,
+                  Self.parseTimestamp(receipt.workerCompletedAt) != nil,
+                  receipt.completionNote == expectedNote,
+                  (receipt.completionPhotos ?? []) == urls
+            else { return false }
             completionUploads.removeAll()
             await load()
             return current()

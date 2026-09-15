@@ -443,6 +443,28 @@ public struct GigDetailResponse: Decodable, Sendable {
     public let gig: GigDTO
 }
 
+/// Saved proof returned by the existing worker-completion endpoint.
+struct GigWorkerCompletionResponse: Decodable {
+    let gig: Receipt?
+
+    struct Receipt: Decodable {
+        let id: String
+        let status: String?
+        let acceptedBy: String?
+        let workerCompletedAt: String?
+        let completionNote: String?
+        let completionPhotos: [String]?
+
+        enum CodingKeys: String, CodingKey {
+            case id, status
+            case acceptedBy = "accepted_by"
+            case workerCompletedAt = "worker_completed_at"
+            case completionNote = "completion_note"
+            case completionPhotos = "completion_photos"
+        }
+    }
+}
+
 /// One bid on a gig.
 public struct GigBidDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String

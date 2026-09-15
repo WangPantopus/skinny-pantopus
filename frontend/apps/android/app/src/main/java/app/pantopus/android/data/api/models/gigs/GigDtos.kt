@@ -377,6 +377,18 @@ data class MarkCompletedBody(
 @JsonClass(generateAdapter = true)
 data class MarkCompletedResponse(
     val message: String? = null,
+    val gig: WorkerCompletionReceipt? = null,
+)
+
+/** Saved proof returned by the existing worker-completion endpoint. */
+@JsonClass(generateAdapter = true)
+data class WorkerCompletionReceipt(
+    val id: String,
+    val status: String? = null,
+    @Json(name = "accepted_by") val acceptedBy: String? = null,
+    @Json(name = "worker_completed_at") val workerCompletedAt: String? = null,
+    @Json(name = "completion_note") val completionNote: String? = null,
+    @Json(name = "completion_photos") val completionPhotos: List<String>? = null,
 )
 
 /**

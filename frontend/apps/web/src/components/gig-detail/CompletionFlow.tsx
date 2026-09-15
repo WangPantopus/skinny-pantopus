@@ -267,12 +267,18 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       }
       if (!current()) return;
       const photoUrls = files.map(file => completionUploads.current.get(file)!);
-      const gigsExt = api.gigs as unknown as GigsCompletionApiExt;
-      await gigsExt.markGigCompleted(gigId, {
+      const response = await api.gigs.markGigCompleted(gigId, {
         note: completionNote || undefined,
         photos: photoUrls.length > 0 ? photoUrls : undefined,
       });
       if (!current()) return;
+      const receipt = response?.gig;
+      if (!receipt || receipt.id !== gigId || receipt.status !== 'completed' || receipt.accepted_by !== currentUserId
+        || !Number.isFinite(Date.parse(receipt.worker_completed_at || ''))
+        || (receipt.completion_note ?? null) !== (completionNote.slice(0, 2000) || null)
+        || JSON.stringify(receipt.completion_photos ?? []) !== JSON.stringify(photoUrls)) {
+        throw new Error('Completion could not be confirmed. Your proof is kept here so you can retry.');
+      }
       completionUploads.current = new WeakMap();
       setShowCompletionModal(false);
       setCompletionFiles([]);

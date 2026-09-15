@@ -130,14 +130,19 @@ Android/55 iOS checks, static gates and builds after reproduced baseline failure
 All nine follow-up files already existed; no screen, layout or schema change.
 See [rebooking/boost evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-rebooking-history-and-boost-refresh).
 Full installed owner/account journeys and completion draft/restart remain open.
-Native rebooking/boost checkpoint8ea69bbe4 is running CI34972981459. Web My Gigs
+Native rebooking/boost checkpoint8ea69bbe4 passes all15 applicable CI34972981459 jobs/one Seeder skip. Web My Gigs
 reader/action lifetime now passes101 focused checks and seven actual Chrome cases,
 with TypeScript/scoped lint, after five reproduced baseline failures. One small
 shared hook reuses existing authentication signals across the two existing pages;
 no screen, layout, endpoint or schema is replaced. See
 [web lifetime evidence](VERIFICATION_FIRST_2026-09-13.md#existing-web-my-gigs-cache-reads-and-actions).
-The web follow-up needs its own CI after the native run; completion drafts/restart
-using existing storage are next to verify.
+The locally committed web4ddcdaa65 follow-up shares the next CI push with worker
+receipt validation:46 Android/53 iOS/107 web checks, build/static/type gates pass
+after each client reproduced empty-reply false success. Nine existing files change;
+no screen, storage service or schema is added. See [worker receipt evidence](VERIFICATION_FIRST_2026-09-13.md#existing-worker-completion-receipt-validation).
+My bids has six reproduced reader/action/receipt failures and is under local
+verification. The other active web completion caller and draft/restart behavior
+remain next; existing content-addressed File upload recovery is preserved.
 The preceding main-list change added one Android regression file to preserve the
 existing test-class size rule.
 No inventory row is closed by these bounded checks.

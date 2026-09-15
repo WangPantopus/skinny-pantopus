@@ -10,6 +10,7 @@ import { submitGigStopRequest } from './gigStop';
 import type { GigStopCommand, GigStopProgress } from './gigStop';
 import type {
   Gig,
+  GigSchema,
   GigBid,
   GigListItem,
   GigWithDetails,
@@ -400,8 +401,8 @@ export async function startGig(gigId: string): Promise<{ gig: Gig }> {
 export async function markGigCompleted(
   gigId: string,
   proof?: { note?: string; photos?: string[]; checklist?: { item: string; done: boolean }[] }
-): Promise<{ gig: Gig }> {
-  return post<{ gig: Gig }>(`/api/gigs/${gigId}/mark-completed`, proof || {});
+): Promise<{ gig: GigSchema }> {
+  return post<{ gig: GigSchema }>(`/api/gigs/${gigId}/mark-completed`, proof || {});
 }
 
 /**

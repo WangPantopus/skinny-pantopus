@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.contentdetail
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.notifications.GigActiveNotification
 import app.pantopus.android.core.notifications.GigActiveNotifier
 import app.pantopus.android.data.api.models.gigs.CompleteGigResponse
@@ -26,6 +27,7 @@ import app.pantopus.android.data.api.models.gigs.MyGigDto
 import app.pantopus.android.data.api.models.gigs.NoShowCheckResponse
 import app.pantopus.android.data.api.models.gigs.RescheduleGigResponse
 import app.pantopus.android.data.api.models.gigs.WorkerAckResponse
+import app.pantopus.android.data.api.models.gigs.WorkerCompletionReceipt
 import app.pantopus.android.data.api.models.homes.FileUploadResponse
 import app.pantopus.android.data.api.models.offers.MyBidsResponse
 import app.pantopus.android.data.api.models.users.UserDto
@@ -50,9 +52,12 @@ import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -104,6 +109,7 @@ class GigDetailSaveViewModelTest {
     private val gigsV2Repo: app.pantopus.android.data.gigs.GigsV2Repository = mockk(relaxed = true)
     private val socket: SocketManager = mockk(relaxed = true)
     private val activeNotifier = RecordingActiveNotifier()
+    private val viewModels = mutableListOf<GigDetailViewModel>()
 
     @Before
     fun setUp() {
@@ -121,6 +127,11 @@ class GigDetailSaveViewModelTest {
 
     @After
     fun tearDown() {
+        runBlocking {
+            val jobs = viewModels.mapNotNull { it.viewModelScope.coroutineContext[Job] }
+            jobs.forEach { it.cancel() }
+            jobs.joinAll()
+        }
         Dispatchers.resetMain()
     }
 
@@ -158,6 +169,7 @@ class GigDetailSaveViewModelTest {
                 stopFactory = mockk(relaxed = true),
                 tipStore = mockk(relaxed = true),
             )
+        viewModels.add(vm)
         vm.load()
         return vm
     }
@@ -287,6 +299,7 @@ class GigDetailSaveViewModelTest {
                 stopFactory = mockk(relaxed = true),
                 tipStore = mockk(relaxed = true),
             )
+        viewModels.add(vm)
         vm.load()
         return vm
     }
@@ -377,6 +390,7 @@ class GigDetailSaveViewModelTest {
                     stopFactory = mockk(relaxed = true),
                     tipStore = mockk(relaxed = true),
                 )
+            viewModels.add(vm)
             vm.load()
             assertTrue(vm.canInstantAccept())
             val content = (vm.state.value as ContentDetailUiState.Loaded).content
@@ -458,6 +472,7 @@ class GigDetailSaveViewModelTest {
                 stopFactory = mockk(relaxed = true),
                 tipStore = mockk(relaxed = true),
             )
+        viewModels.add(vm)
         vm.load()
         return vm
     }
@@ -861,7 +876,9 @@ class GigDetailSaveViewModelTest {
                 ),
             )
         coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } returns uploadedProof()
-        coEvery { repo.markCompleted(any(), any(), any()) } returns NetworkResult.Success(MarkCompletedResponse())
+        coEvery { repo.markCompleted(any(), any(), any()) } coAnswers {
+            NetworkResult.Success(completedProof(secondArg(), thirdArg()))
+        }
         return lifecycleVm(assignedGig(acceptedBy = "u1").copy(status = status), checkoutIdentity = identity)
     }
 
@@ -874,13 +891,83 @@ class GigDetailSaveViewModelTest {
         return response.await()
     }
 
+    private fun completedProof(
+        note: String? = "Original note",
+        urls: List<String> = listOf("https://proof.test/one.jpg"),
+    ): MarkCompletedResponse =
+        MarkCompletedResponse(
+            gig = WorkerCompletionReceipt("g1", "completed", "u1", "2026-09-15T12:00:00Z", note, urls),
+        )
+
+    @Test
+    fun empty_completion_receipt_cannot_report_delivery_submitted() =
+        runTest {
+            val vm = deliveryVm()
+            coEvery { repo.markCompleted(any(), any(), any()) } returns NetworkResult.Success(MarkCompletedResponse())
+            assertFalse(submitProof(vm, listOf(deliveryPhoto())))
+        }
+
+    @Test
+    fun mismatched_completion_receipts_preserve_uploads_for_retry() =
+        runTest {
+            val vm = deliveryVm()
+            val receipt = requireNotNull(completedProof().gig)
+            val invalid =
+                listOf(
+                    receipt.copy(id = "other"),
+                    receipt.copy(status = "in_progress"),
+                    receipt.copy(acceptedBy = "other"),
+                    receipt.copy(workerCompletedAt = null),
+                    receipt.copy(workerCompletedAt = "invalid"),
+                    receipt.copy(completionNote = "Different note"),
+                    receipt.copy(completionPhotos = listOf("other")),
+                )
+            var response = completedProof()
+            coEvery { repo.markCompleted(any(), any(), any()) } coAnswers { NetworkResult.Success(response) }
+            invalid.forEach { changed ->
+                response = MarkCompletedResponse(gig = changed)
+                val photos = listOf(deliveryPhoto())
+                assertFalse(submitProof(vm, photos))
+                response = completedProof()
+                assertTrue(submitProof(vm, photos))
+            }
+            coVerify(exactly = invalid.size) { filesRepo.uploadFile(any(), any(), any(), "gig_completion", "private", "g1") }
+            coVerify(exactly = invalid.size * 2) { repo.markCompleted("g1", "Original note", listOf("https://proof.test/one.jpg")) }
+        }
+
+    @Test
+    fun worker_completion_response_decodes_the_existing_saved_proof_fields() {
+        val adapter = com.squareup.moshi.Moshi.Builder().build().adapter(MarkCompletedResponse::class.java)
+        val response =
+            adapter.fromJson(
+                """
+                {"gig":{"id":"g1","status":"completed","accepted_by":"u1",
+                "worker_completed_at":"2026-09-15T12:00:00Z","completion_note":"Original note",
+                "completion_photos":["https://proof.test/one.jpg"]}}
+                """.trimIndent(),
+            )
+        assertEquals(completedProof(), response)
+        assertEquals(null, adapter.fromJson("{}")?.gig)
+    }
+
+    @Test
+    fun worker_receipt_preserves_the_existing_server_note_limit() =
+        runTest {
+            val vm = deliveryVm()
+            val note = "🙂".repeat(1001)
+            coEvery { repo.markCompleted(any(), any(), any()) } returns NetworkResult.Success(completedProof(note = note.take(2000)))
+            val result = CompletableDeferred<Boolean>()
+            vm.submitDeliveryProof(listOf(deliveryPhoto()), note) { result.complete(it) }
+            assertTrue(result.await())
+        }
+
     @Test
     fun delivery_proof_retry_reuses_the_original_upload() =
         runTest {
             val vm = deliveryVm()
             coEvery { repo.markCompleted(any(), any(), any()) } returnsMany
                 listOf(
-                    NetworkResult.Failure(NetworkError.Server(503, null)), NetworkResult.Success(MarkCompletedResponse()),
+                    NetworkResult.Failure(NetworkError.Server(503, null)), NetworkResult.Success(completedProof()),
                 )
             val photos = listOf(deliveryPhoto())
             assertFalse(submitProof(vm, photos))
@@ -956,7 +1043,8 @@ class GigDetailSaveViewModelTest {
             coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } returnsMany uploads
             coEvery { repo.markCompleted(any(), any(), any()) } returnsMany
                 listOf(
-                    NetworkResult.Failure(NetworkError.Server(503, null)), NetworkResult.Success(MarkCompletedResponse()),
+                    NetworkResult.Failure(NetworkError.Server(503, null)),
+                    NetworkResult.Success(completedProof(urls = listOf("https://proof.test/changed.jpg"))),
                 )
             val photo = deliveryPhoto()
             assertFalse(submitProof(vm, listOf(photo)))

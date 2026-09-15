@@ -3956,6 +3956,56 @@ chunks and cleanup are retained under `existing-tip-provider-proof-r1/my-gigs-we
 and the durable private mirror. The temporary route/build cache are removed, the
 Next-modified tsconfig is restored byte-for-byte and port3107 is released. No database,
 hosted or provider operation ran in this scope. The preceding native head8ea69bbe4
-is running [CI34972981459](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34972981459);
+passes all15 applicable jobs/one Seeder skip in [CI34972981459](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34972981459);
 this web follow-up needs its own CI. PR34 remains draft. Completion draft/restart,
 full paid/account journeys and the broader inventory remain open.
+
+
+## Existing worker completion receipt validation
+
+The three existing completion-proof handlers treated an empty200 reply as success:
+web closed the proof form, Android accepted its message-only response and iOS decoded
+EmptyResponse. The baseline records one failing web case, one distinct Android
+failure executed three times by the configured retry rule, and one failing iOS case.
+Earlier positive retry fixtures also returned empty responses; they now represent
+the actual backend's saved Gig fields. These are concrete client/fixture defects,
+not evidence that a new completion service or screen was missing.
+
+Existing handlers now require the original task/worker, completed status, valid
+completion time and matching note/photo URLs before clearing upload references or
+reporting success. Missing/mismatched receipts retain the current draft and existing
+upload references for retry. Existing account/screen guards remain in place. Native
+response models extend their existing DTO files; the web SDK uses the already
+exported raw GigSchema type. Note comparison follows the existing server2000 UTF-16
+unit limit, including a native emoji boundary check. Sent notes and screen controls
+are unchanged. Nine existing source/test files change; no new file, route, storage
+service, table or migration is introduced.
+
+Final R7 Android passes46 tests with zero failures/errors, compilation, detekt and
+ktlint. Final R7 iOS passes53 tests, build, SwiftFormat and strict SwiftLint. Final
+web R4 passes107 tests, TypeScript has zero errors and scoped ESLint has zero errors/
+six existing warnings. Coverage includes empty and seven mismatched receipt shapes,
+matching retries without duplicate uploads, real DTO decoding, partial-upload retry,
+changed photo bytes, and existing owner/session compatibility.
+
+Earlier native candidates stopped at formatting/static rules without weakening any
+rule. Android R4 returned gradle success only after two failed executions retried;
+R6 had one failed execution from background work surviving test teardown. Neither
+is counted as zero-failure acceptance. The fixture now stops and joins its created
+view-model jobs before resetting Main; the mismatch table also avoids reconfiguring
+MockK while a refresh runs. R7 is clean. Early web type checks exposed the repository's
+legacy Gig versus raw GigSchema distinction and an outdated post generic; both now
+reuse the correct existing type. One wrapper stopped before tests because its old
+command record omitted cwd; the corrected explicit-worktree R4 runner passes.
+
+Source hashes, final source copies, baselines, all failed/final logs, Android XML,
+iOS result bundles and exact device cleanup are retained under
+`existing-tip-provider-proof-r1/worker-receipt-*` and the durable private mirror.
+The owned iOS simulator is shut down; the separate user simulator is unchanged.
+No backend/SQL/provider fixture or hosted operation ran for this receipt scope.
+These compiled-model/component tests do not establish full installed worker/owner
+lifecycle or real-provider acceptance. Existing content-addressed completion File
+upload recovery already handles unknown upload replies and is preserved. My bids,
+the reachable v2 active-task completion caller, completion drafts/restart and the
+broader inventory remain under verification. PR34 stays draft; this follow-up and
+local web4ddcdaa65 require their combined CI push.

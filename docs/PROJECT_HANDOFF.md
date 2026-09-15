@@ -436,7 +436,7 @@ change. See [the evidence and limits](VERIFICATION_FIRST_2026-09-13.md#existing-
 The owned iOS simulator is shut down; the separate user simulator is preserved.
 Both branches now contain 8ea69bbe4, with
 [CI34972981459](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34972981459)
-running. PR34 remains draft.
+passes all15 applicable jobs/one Seeder skip. PR34 remains draft.
 
 **Web My Gigs lifetime:** both existing pages now retire private lists and pending
 actions with the current session/page. Five baseline cases reproduce retained
@@ -448,11 +448,25 @@ shared hook joins the existing auth signals; three other source/test files alrea
 existed. Layouts, routes, backend and schema are preserved. See
 [web evidence](VERIFICATION_FIRST_2026-09-13.md#existing-web-my-gigs-cache-reads-and-actions).
 The temporary route/build are removed, original tsconfig restored and port3107
-released. This web follow-up needs its own CI after the current native run finishes.
+released. This web follow-up is committed locally at4ddcdaa65 and will share the next CI push with the worker-receipt fix.
 
-**Next:** verify completion draft/restart behavior. Inspect existing storage and
-implementations first and preserve screen designs. There is no active web
-rebook/boost caller to rebuild.
+**Worker completion receipts:** the existing web, iOS and Android proof handlers
+now require the matching saved task, worker, completion time, note and photo URLs
+before clearing their draft or reporting success. All three baselines reproduced
+false success from an empty200 reply. Final46 Android/53 iOS/107 web checks and
+native build/static plus web types/lint pass; Android has zero failed retries.
+Nine existing source/test files change, with no new backend, schema or screen.
+The SDK reuses the existing raw GigSchema type, and notes respect the existing
+server2000 UTF-16-unit limit. See [receipt evidence](VERIFICATION_FIRST_2026-09-13.md#existing-worker-completion-receipt-validation).
+The owned iOS simulator is shut down; the separate user simulator is preserved.
+This locally accepted follow-up needs CI with the preceding web4ddcdaa65 commit.
+
+**Next:** finish My bids reader/action and receipt verification, then inspect the
+other existing v2 active-task caller and completion draft/restart behavior. My bids
+has six reproduced failures and a repair under local verification; do not count
+it accepted yet. The existing upload service already content-addresses completion
+File records and recovers unknown upload replies. Reuse it; no replacement upload
+store/table is required. There is no active web rebook/boost caller to rebuild.
 Full installed native MyTasks/owner lifetime remains open. Continue completion
 draft/restart verification using existing storage first. Generic maintenance granular authority/raw RLS, Home-origin admission
 and full maintenance UI acceptance remain separate follow-ups; this bounded history
