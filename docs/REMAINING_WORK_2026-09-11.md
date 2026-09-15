@@ -202,6 +202,12 @@ existing test-class size rule.
 No inventory row is closed by these bounded checks.
 
 
+The owner's September15 physical-device update is complete: latest committed iOS
+source at c9cb69825 is installed as1.0.0(3), preserving the existing staging and
+signing/data-access identities. Build/signature/install/inventory checks pass;
+no physical workflow, backend rollout or additional inventory row is accepted by
+this update. See [the device record](physical-iphone-refresh-2026-09-11.md#september-15-2026--latest-committed-client).
+
 ## 1. Home identity and current access — active work
 
 - [x] H01 **Implemented and locally verified:** Detail/property-detail current authority and held-result retirement pass real SDK/HTTP/SQL acceptance. See [the bounded repair](home-detail-authority-2026-09-11.md); final-head CI remains G05. H02/H06 are also locally verified; H03/H04 projections are now locally verified; H05 native identity is now locally verified; H07/H08 remain partial.

@@ -9,6 +9,17 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 ## Current state — September15
 
+**Requested physical iPhone update:** all code through `c9cb69825` is committed and
+pushed to both integration/canonical branches. Pantopus1.0.0(3) is now installed
+in place over build2 on the owner's iPhone16Pro, using the existing HTTPS staging
+configuration and matching app/Keychain/app-group/APNs identities. Device inventory
+confirms build3. The signed product and private evidence are durably mirrored; no
+uninstall/data clear, launch, hosted migration/deployment or provider activation ran.
+See [the installation record](physical-iphone-refresh-2026-09-11.md#september-15-2026--latest-committed-client).
+CI34998717315 on c9cb69825 is still running; prior c7d45dd09 CI passes15 jobs/one skip.
+This documentation follow-up is pushed on integration while canonical CI finishes.
+Backend-dependent features and the broader app acceptance remain incomplete.
+
 **Master:** `e775af9ae393c1e961df8f0043e3aed734326196` after authorized
 [PR45](https://github.com/WangPantopus/skinny-pantopus/pull/45). All15 applicable
 checks pass/one Seeder path skip in [CI34886464860](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34886464860).
