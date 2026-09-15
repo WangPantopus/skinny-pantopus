@@ -2486,3 +2486,88 @@ Owned AVD emulator-5554 is stopped with data retained, no global registration wa
 created and other devices remain untouched. Build products and evidence are
 preserved privately. PR34 stays draft: legacy recovery, durable delivery,
 all-platform installed/provider acceptance and final current-head CI remain open.
+
+
+## Existing legacy tip recovery without replacement charges
+
+September14 checkpoint `e700862f1` repairs a concrete gap in the existing tip flow:
+preview returned `legacyPaymentId`, the local original read rejected it, and all
+three clients directed users to payment history without retaining/checking that
+payment. Historical rows already owned the financial identity. They are now read
+as candidates and registered only after fresh matching PaymentIntent/Charge proof
+and an unchanged full Payment snapshot under a row lock. Local reads never imply
+capture or cancellation. The same Payment.id remains both request and payment ID;
+unknown original confirmation/method remain null. Legacy originals allow check or
+explicit confirmed zero-charge cancellation, never new creation/discovery or SDK
+confirmation. A missing provider ID stays unresolved. Changed provider identity,
+amount/customer/currency/mode/metadata and stale financial snapshots fail closed.
+
+The existing original receipt transaction preserves historical successful/refunded/
+disputed/transferred states, capture/cooldown and transfer data. Uppercase historical
+currency stays stored while the response uses `usd`. Multiple historical pending
+rows can each register; preview still prevents a new charge until all resolve.
+Existing pickers, protected stores, receipt validators and session retirement guards
+are extended. New-charge eligibility still requires current confirmed terms. Native
+encoders may omit a null historical date; the route normalizes that omission before
+the legacy check/cancel boundary. A different current Charge cannot validate an
+already recorded capture.
+
+Only one new file is added: the310-line forward function/index update
+`20260914050000_gig_tip_legacy_recovery.sql`. It adds no table/column, service or
+screen. Five existing functions are extended and one exact existing-row admission
+function is added. This preserves the preceding reservation migration's rehearsal
+history. The other19 source/test files are existing implementations. No screen
+layout or design is replaced.
+
+Verification on this source:
+
+- Backend100 focused assertions across five existing suites pass:64 service/mobile/
+  read/webhook assertions plus36 critical payment-route regressions. The added cases cover historical read-only identity, resume rejection,
+  missing intent, no SDK credentials, explicit same-intent cancellation, four proof
+  mismatches, lost/uncommitted adoption replies, native null/omitted date and wrong
+  Charge rejection. The prior unchanged compatibility evidence remains available.
+- Actual StripeService plus owned PostgreSQL passes19 scenarios/176 queries.
+  Ten synthetic create calls produce nine modern intents; six historical provider
+  fixtures are pre-existing, for15 total fixture intents. Legacy cases create no
+  intent or customer. Two explicit cancellations occur (one modern, one historical).
+  Provider/notice transports remain synthetic. Exact fixture cleanup is zero.
+- All65 SQL contracts and generated pgTAP source synchronization pass. Ten
+  separate-connection cases include concurrent historical registration and an
+  observed row-lock wait where a changed amount rejects stale adoption. Exact
+  fixture cleanup is zero. Function lint checks359 functions/107 bindings with
+  zero errors/eight existing warnings. Migration ordering policy passes; complete
+  fresh-database replay remains a current-head CI gate.
+- Web53 rendered/validator assertions pass; standalone TypeScript passes. Scoped
+  lint has zero errors/one existing cleanup-ref warning. The new source is not
+  claimed as a real-browser/actual-provider journey; earlier storage mechanism
+  evidence remains bound to its unchanged implementation.
+- iOS24 focused tip tests pass in `legacy-tip-ios-r1.xcresult`; SwiftFormat/strict
+  SwiftLint pass. Android41 focused unit tests pass (30 recovery,6 protected-store,
+  5 view-model checks); format/detekt pass. Both compile their current app/test
+  source. Legacy API/provider outcomes are synthetic. No full installed historical
+  payment journey or actual Stripe acceptance is claimed.
+
+Earlier attempts remain retained: SQL R1/R2 failed due to a test-only column name
+and JSON operator grouping; R3 and complete contracts pass. Android R1 failed test
+formatting; corrected R2 passes. iOS initial static checks failed optional/style
+rules; corrected checks and the single native test run pass. Web R1/R2 did not
+start Jest because of command/bin resolution; R3 passes using the existing linked
+Jest package. No dependencies were installed and no assertion was disabled.
+
+Private source binding `existing-tip-provider-proof-r1/legacy-tip-source-binding-r1.json`
+links source hashes and run files; `legacy-tip-*` logs/results and SQL rehearsals
+are preserved alongside it and mirrored in the existing private audit directory.
+The owned iOS device is shut down, and no Android emulator or application server
+was started. No hosted migration, deployment or provider activation ran.
+
+Remaining: cold historical discovery when the current worker/confirmation has
+changed and this client has no saved original, durable tip notices, full installed/
+provider journeys and current-head CI. Existing detail gates currently hide the
+native tip entry in that cold case; fix the recovery entry without enabling a new
+charge against changed terms. Notification review found that terminal replay skips
+notice recovery, duplicate creation returns null, and the best-effort metadata
+write can use a stale Payment snapshot. The existing stored-notification receipt
+sender and scheduled wallet-delivery worker provide reusable transport/retry code;
+the wallet settlement delivery table itself requires a settlement and must not be
+repurposed for tip capture. No delivery implementation changed in this checkpoint.
+PR34, paid launch, R05/R06 and the app remain incomplete.

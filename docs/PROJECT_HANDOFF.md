@@ -26,13 +26,13 @@ matched master. No hosted deployment, migration adoption or provider activation 
 **Remaining open PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
 remains draft. Its isolated integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
-the canonical PR branch is `codex/staging-paid-gig`. The coordinated Android
-checkpoint is `c6b1f830e9878ee54dd30e5d83021a331d3a474b`, following iOS `b98cc283c`, web
-`1b9ff598e`, backend `410ae2767` and reservation `ff51584d5`. It incorporates
-actual PR43/44/45 master. The preceding pushed `89658c9e6` passed all15 applicable
-checks/one Seeder skip in [CI34893989362](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34893989362).
-The newer coordinated source requires its own CI; inspect the actual PR head and
-checks before relying on that earlier green run. Do not merge/deploy PR34 yet.
+the canonical PR branch is `codex/staging-paid-gig`. The current legacy recovery
+checkpoint is `e700862f1`, following coordinated Android `c6b1f830e`, iOS `b98cc283c`,
+web `1b9ff598e` and backend `410ae2767`. It incorporates actual PR43/44/45 master.
+The preceding coordinated head `8203a3ea7db551cce24041815aa7cd4302a9502d` passes
+all15 applicable checks/one Seeder skip in [CI34907347192](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34907347192).
+The new legacy checkpoint requires its own current-head CI and full schema replay.
+Do not merge/deploy PR34 yet.
 
 **Current original-tip behavior:** the existing Payment.id and financial fields
 reserve one request before provider creation. Metadata retains missing original
@@ -84,6 +84,28 @@ and [iOS evidence](VERIFICATION_FIRST_2026-09-13.md#existing-ios-tip-handler-and
 Private source/product/run bindings are under `existing-tip-provider-proof-r1`.
 Android format/static failures in R1/R2 are preserved; the corrected R3/R4 runs pass.
 
+**Existing legacy-tip recovery:** `e700862f1` extends the same Payment/service
+and three existing pickers. Local historical reads retain the existing Payment.id,
+amount and worker with unknown confirmation time. Fresh matching provider evidence
+and a locked unchanged Payment snapshot register that same row; legacy commands
+can only check or explicitly cancel the existing intent. They never create another
+intent or expose SDK confirmation. Historical currency, capture/cooldown, refund,
+dispute and transfer fields are preserved. One forward function/index migration
+`20260914050000_gig_tip_legacy_recovery.sql` adds no table or column; the preceding
+reservation migration is unchanged. Multiple old pending rows stay recoverable and
+continue blocking a new tip until each is reconciled.
+
+Focused checks pass100 backend assertions,53 web assertions,24 iOS tests and41 Android
+unit tests. Web types/scoped lint and native format/static checks pass within the
+recorded warning limits. Actual service/local SQL passes19 scenarios with synthetic
+provider/notice transport,10 separate-connection cases pass, all65 SQL contracts
+pass and function lint has359 functions/107 bindings, zero errors/eight existing
+warnings. See the [legacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-legacy-tip-recovery-without-replacement-charges).
+Full installed/provider acceptance remains open. Concrete next entry check: a fresh
+client without a retained original can still lose the detail tip entry after the
+current worker/confirmation disappears; reuse the existing payment/detail screens
+to recover the historical payment without loosening new-charge eligibility.
+
 **Other paid work preserved:** the existing cancellation Other explanation is
 private in the original GigStopRequest and encrypted web recovery. Public receipts
 carry only its hash; the forward14030000 function update removes public free text.
@@ -93,9 +115,10 @@ versions moved byte-for-byte to14020100–14020900 after current Home master. No
 master migration was rewritten; correct `MIGRATION_BASE_SHA` policy and prior
 complete-schema CI validate ordering. Earlier failed attempts remain recorded.
 
-**Next:** finish legacy tip recovery in the existing Payment/service/client paths,
-then durable tip delivery, actual installed all-platform/provider journeys and
-final current-head CI. Recheck existing implementations before each change.
+**Next:** complete cold historical-tip discovery in existing screens, then durable
+tip delivery, actual installed all-platform/provider journeys and final current-head
+CI. The legacy command/receipt checkpoint above is locally verified; remaining entry
+and acceptance limits are not a claim that the feature is missing. Recheck existing implementations before each change.
 P01–P03/P07–P09, R05/R06 and the wider80-row inventory remain open within their
 stated limits. After the paid scope, continue the remaining existing-feature
 inventory; preserve accepted subjourneys and screen designs.
