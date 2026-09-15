@@ -8,6 +8,7 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const stripeService = require('../stripe/stripeService');
+const { publicPayment } = require('../stripe/gigPaymentProof');
 const verifyToken = require('../middleware/verifyToken');
 const { requireAdmin } = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -622,7 +623,7 @@ router.post('/intent', verifyToken, validate(createPaymentSchema), async (req, r
     res.status(existingIntent?.reused ? 200 : 201).json({
       clientSecret: result.clientSecret,
       paymentIntentId: result.paymentIntentId,
-      payment: result.payment,
+      payment: publicPayment(result.payment),
       paymentId: result.paymentId,
       customer,
       ephemeralKey,
@@ -705,7 +706,7 @@ router.get('/', verifyToken, paymentHistoryReadLimiter, async (req, res) => {
       const payerAmount = Number(payment?.amount_total || 0) || 0;
       const payeeAmount = Number(payment?.amount_to_payee ?? payment?.amount_total ?? 0) || 0;
       return {
-        ...payment,
+        ...publicPayment(payment),
         amount_cents: isSender ? payerAmount : payeeAmount,
         _isSender: isSender,
         direction: isSender ? 'debit' : 'credit',
@@ -811,7 +812,7 @@ router.get('/history', verifyToken, paymentHistoryReadLimiter, async (req, res) 
       const payerAmount = Number(payment?.amount_total || 0) || 0;
       const payeeAmount = Number(payment?.amount_to_payee ?? payment?.amount_total ?? 0) || 0;
       return {
-        ...payment,
+        ...publicPayment(payment),
         id: payment.id,
         entry_type: 'payment',
         amount_cents: isSender ? payerAmount : payeeAmount,
@@ -1229,7 +1230,7 @@ router.get('/:paymentId', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    res.json({ payment });
+    res.json({ payment: publicPayment(payment) });
 
   } catch (err) {
     logger.error('Get payment error', { error: err.message });

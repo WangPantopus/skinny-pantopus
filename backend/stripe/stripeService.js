@@ -1047,12 +1047,35 @@ class StripeService {
     if (expectedTerms || isGig) assertPaymentTerms(payment, expectedTerms || {
       gigId: payment.gig_id, payerId: payment.payer_id, payeeId: payment.payee_id, amount: payment.amount_total,
     });
-    if (!['authorized', 'capture_pending', 'captured_hold'].includes(payment.payment_status)) {
+    if (!['authorized', 'capture_pending', 'captured_hold'].includes(payment.payment_status)
+      && !(payment.payment_status === 'canceled' && payment.gig_completion_original?.state === 'pending')) {
       throw conflict(`Cannot capture: payment is in ${payment.payment_status} state`);
     }
     // Always read the provider first, including retries after an unknown capture
     // response or failed local commit. A canceled PI can never prove capture.
     let intent = assertIntentBinding(payment, await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id, { expand: ['latest_charge'] }));
+    if (isGig && payment.gig_completion_original?.state === 'pending' && intent.status === 'canceled') {
+      // A fresh canceled intent plus zero captured charge releases the existing
+      // approval. Unknown provider outcomes keep it pending for the same retry.
+      if (intent.amount_received !== 0 || intent.amount_capturable !== 0) throw conflict('Canceled payment needs reconciliation');
+      const chargeId = providerId(intent.latest_charge) || null;
+      if (chargeId) {
+        const charge = await stripe.charges.retrieve(chargeId);
+        if (charge?.id !== chargeId || providerId(charge.payment_intent) !== intent.id
+          || providerId(charge.customer) !== payment.stripe_customer_id || charge.amount !== payment.amount_total
+          || charge.currency !== String(payment.currency).toLowerCase() || charge.captured !== false
+          || charge.refunded !== false || charge.amount_refunded !== 0 || charge.disputed !== false) throw conflict('Canceled charge needs reconciliation');
+      }
+      const { data, error } = await supabaseAdmin.rpc('record_gig_completion_canceled', {
+        p_payment_id: payment.id, p_intent_id: intent.id, p_customer_id: providerId(intent.customer),
+        p_amount: intent.amount, p_currency: intent.currency, p_charge_id: chargeId,
+        p_received: intent.amount_received, p_capturable: intent.amount_capturable,
+      });
+      if (error || data?.error || data?.payment?.gig_completion_original?.state !== 'canceled') {
+        throw Object.assign(new Error('Canceled authorization awaits local confirmation. Please retry.'), { statusCode: 503 });
+      }
+      return { success: false, canceled: true };
+    }
     if (intent.status !== 'succeeded') {
       if (payment.payment_status === PAYMENT_STATES.CAPTURED_HOLD) throw conflict('Local capture requires provider reconciliation');
       assertAuthorizedIntent(payment, intent);
@@ -1081,6 +1104,14 @@ class StripeService {
       }
     }
     assertCapturedIntent(payment, intent);
+    if (isGig && payment.gig_completion_original) {
+      const chargeId = providerId(intent.latest_charge);
+      const charge = await stripe.charges.retrieve(chargeId);
+      assertCapturedIntent(payment, { ...intent, latest_charge: charge });
+      if (charge?.id !== chargeId || providerId(charge.customer) !== payment.stripe_customer_id
+        || charge.currency !== String(payment.currency).toLowerCase() || charge.refunded !== false
+        || charge.amount_refunded !== 0 || charge.disputed !== false) throw conflict('Captured charge needs reconciliation');
+    }
     const chargeId = providerId(intent.latest_charge);
     if (isGig) {
       const { data, error } = await supabaseAdmin.rpc('record_paid_gig_capture', {
@@ -1090,7 +1121,10 @@ class StripeService {
       if (error || data?.error || !data?.payment?.captured_at || data.payment.payment_status !== PAYMENT_STATES.CAPTURED_HOLD) {
         throw Object.assign(new Error('Capture is awaiting local confirmation. Please retry.'), { statusCode: 503 });
       }
-      return { success: true, alreadyCaptured: Boolean(data.reused), chargeId };
+      if (payment.gig_completion_original && !data.confirmation?.gig?.owner_confirmed_at) {
+        throw Object.assign(new Error('Capture is awaiting original completion confirmation. Please retry.'), { statusCode: 503 });
+      }
+      return { success: true, alreadyCaptured: Boolean(data.reused), chargeId, confirmation: data.confirmation };
     }
     if (payment.payment_status !== PAYMENT_STATES.CAPTURED_HOLD) {
       const now = new Date();

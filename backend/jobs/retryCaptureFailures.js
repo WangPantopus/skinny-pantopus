@@ -1,7 +1,7 @@
 // ============================================================
 // JOB: Retry Capture Failures
 // Runs every 15 minutes. Finds gigs where the owner confirmed
-// completion (owner_confirmed_at IS SET) but the associated
+// completion or admitted an original approval, but the associated
 // Payment is still in 'authorized' state, meaning a previous
 // capture attempt failed. Reconciles provider proof before capped capture retries.
 // ============================================================
@@ -17,7 +17,25 @@ const logger = require('../utils/logger');
 const BATCH_SIZE = 100;
 
 async function retryCaptureFailures() {
-  // Find gigs where owner confirmed but payment is still authorized
+  // New capture-first approvals survive a process/HTTP failure before the
+  // visible confirmation. The existing service owns their receipt and effects.
+  const { data: originals, error: originalError } = await supabaseAdmin.from('Payment')
+    .select('id, gig_id').eq('gig_completion_original->>state', 'pending')
+    .order('created_at', { ascending: true }).limit(BATCH_SIZE);
+  if (originalError) logger.error('retryCaptureFailures: failed to query original approvals', { error: originalError.message });
+  const handled = new Set();
+  for (const payment of originals || []) {
+    handled.add(payment.id);
+    try {
+      await stripeService.capturePayment(payment.id);
+    } catch (error) {
+      logger.error('retryCaptureFailures: original approval needs reconciliation', {
+        paymentId: payment.id, gigId: payment.gig_id, error: error.message,
+      });
+    }
+  }
+
+  // Preserve recovery for historical gigs confirmed before capture.
   const { data: orphanedGigs, error } = await supabaseAdmin
     .from('Gig')
     .select('id, title, user_id, payment_id')
@@ -44,6 +62,7 @@ async function retryCaptureFailures() {
   }
 
   for (const gig of orphanedGigs) {
+    if (handled.has(gig.payment_id)) continue;
     try {
       // Fetch the payment to check capture_attempts
       const { data: payment } = await supabaseAdmin

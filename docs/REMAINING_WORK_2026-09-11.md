@@ -103,6 +103,14 @@ and passes65 SQL contracts, pgTAP and migration policy. See [MyTasks evidence](V
 Existing native detail owner callbacks now pass42 Android/50 iOS checks with static/
 build gates; incomplete receipts, duplicate pending commands and retired callbacks
 are covered using existing scope mechanisms. See [native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-owner-confirmation-retires-stale-callbacks).
+The owner-capture post-server-read race is now locally repaired in the existing
+Payment/capture/confirmation/retry flow, with one private nullable approval field
+and no replacement table/service/screen.6081 full backend tests/16 skips,296 focused
+checks,65 SQL contracts, ten actual local HTTP/SQL recovery cases, seven observed
+lock waits, effect rollback and four-row historical preservation pass. See the
+[capture evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-capture-original-and-recovery).
+Complete-schema checkpoint CI and real-provider/operator/release acceptance remain
+required; a local bound does not close R05 or all paid-flow rows.
 Native MyTasks request lifetime, installed full owner lifecycle and real provider/
 release acceptance remain open. Four post-server-read capture races are reproduced
 with actual HTTP/SQL and synthetic Stripe, and remain unresolved; see [capture baseline](VERIFICATION_FIRST_2026-09-13.md#existing-owner-capture-interleaving-baseline).

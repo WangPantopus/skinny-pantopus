@@ -46,6 +46,7 @@ function assigned(status = 'assigned') {
 // Model only the RPC boundary for route tests. Transaction/rollback/recipient
 // behavior is verified against PostgreSQL in paid-gig-acceptance.sql.
 beforeEach(() => setRpcMock(async (name, args) => {
+  if (name === 'prepare_gig_completion_original') return { data: { payment: { ...getTable('Payment')[0] } } };
   if (name !== 'mark_gig_completed') return { data: null };
   const expected = args.p_expected;
   const bind = query => {
@@ -173,7 +174,7 @@ describe('worker start and owner capture boundaries', () => {
   });
   test('lost durable capture receipt cannot confirm the gig', async () => {
     assigned('completed');
-    setRpcMock(async (name) => name === 'prepare_paid_gig_capture'
+    setRpcMock(async (name) => ['prepare_gig_completion_original', 'prepare_paid_gig_capture'].includes(name)
       ? { data: { payment: { ...getTable('Payment')[0], payment_status: 'capture_pending' } } }
       : { error: { code: '08006' } });
     mockCapture.mockResolvedValue({ ...pi, status: 'succeeded', amount_received: 1250 });
@@ -235,21 +236,20 @@ describe('workflow writes bind the payment snapshot checked before provider awai
   test.each([
     ['payment_id', 'replacement'], ['price', 99], ['user_id', 'foreign'], ['accepted_by', 'replacement-worker'],
     ['worker_completed_at', '2026-09-14T14:00:00Z'], ['accepted_at', '2026-09-14T12:00:00Z'], ['started_at', '2026-09-14T12:01:00Z'],
-  ])('owner confirmation sends its original %s to the atomic decision after capture', async (field, value) => {
+  ])('owner confirmation binds its original %s before any capture', async (field, value) => {
     assigned('completed');
     const original = getTable('Gig')[0][field] ?? null;
     const rpc = jest.fn(async (name, args) => {
-      expect(name).toBe('confirm_gig_completion');
+      expect(name).toBe('prepare_gig_completion_original');
       expect(args.p_expected[field]).toEqual(original);
       expect(args.p_actor_id).toBe('payer');
+      getTable('Gig')[0] = { ...getTable('Gig')[0], [field]: value };
       return { data: { error: 'COMPLETION_CHANGED' } };
     });
     setRpcMock(rpc);
-    jest.spyOn(service, 'capturePayment').mockImplementation(async () => {
-      getTable('Gig')[0] = { ...getTable('Gig')[0], [field]: value };
-      return { success: true };
-    });
+    const capture = jest.spyOn(service, 'capturePayment');
     expect((await post('gig/confirm-completion')).status).toBe(409);
+    expect(capture).not.toHaveBeenCalled();
     expect(getTable('Gig')[0].owner_confirmed_at).toBeNull();
   });
 });
@@ -310,11 +310,8 @@ describe('a concurrent owner receipt must still describe the reviewed completion
       const next = { ...getTable('Gig')[0], owner_confirmed_at: '2026-09-14T15:00:00Z' };
       if (field !== 'unchanged') next[field] = value;
       getTable('Gig')[0] = next;
-      return { success: true };
+      return { success: true, confirmation: { gig: next, reused: true, notifications: [] } };
     });
-    setRpcMock(async () => ({ data: field === 'unchanged'
-      ? { gig: getTable('Gig')[0], reused: true, notifications: [] }
-      : { error: 'COMPLETION_CHANGED' } }));
     expect((await post('gig/complete')).status).toBe(expectedStatus);
     expect(getTable('Gig')[0].owner_confirmed_at).toBe('2026-09-14T15:00:00Z');
   });
@@ -338,20 +335,21 @@ describe('owner confirmation commits existing effects through one database decis
     expect(mockCapture).not.toHaveBeenCalled();
   });
   test('a lost committed reply retries the saved confirmation without recapture or another notice', async () => {
-    assigned('completed'); const capture = jest.spyOn(service, 'capturePayment').mockResolvedValue({ success: true });
-    const rpc = jest.fn(async () => {
+    assigned('completed');
+    const capture = jest.spyOn(service, 'capturePayment').mockImplementation(async () => {
       getTable('Gig')[0] = { ...getTable('Gig')[0], owner_confirmed_at: '2026-09-14T15:00:00Z' };
-      return { error: { code: '08006' } };
-    }); setRpcMock(rpc);
+      throw Object.assign(new Error('Lost committed response'), { statusCode: 503 });
+    });
+    const rpc = jest.fn(async () => ({ data: { payment: getTable('Payment')[0] } })); setRpcMock(rpc);
     expect((await post('gig/confirm-completion')).status).toBe(503);
     expect((await post('gig/complete')).status).toBe(200);
     expect(capture).toHaveBeenCalledTimes(1); expect(rpc).toHaveBeenCalledTimes(1);
     expect(notifications.deliverStoredGigNotification).not.toHaveBeenCalled();
   });
   test('the request leaves committed delivery to the existing worker without another notice', async () => {
-    assigned('completed'); jest.spyOn(service, 'capturePayment').mockResolvedValue({ success: true });
-    setRpcMock(async () => ({ data: { gig: { ...getTable('Gig')[0], owner_confirmed_at: '2026-09-14T15:00:00Z' },
-      notifications: [{ id: 'stored-notice', user_id: 'worker', type: 'gig_confirmed' }], reused: false } }));
+    assigned('completed'); jest.spyOn(service, 'capturePayment').mockResolvedValue({ success: true,
+      confirmation: { gig: { ...getTable('Gig')[0], owner_confirmed_at: '2026-09-14T15:00:00Z' },
+        notifications: [{ id: 'stored-notice', user_id: 'worker', type: 'gig_confirmed' }], reused: false } });
     notifications.deliverStoredGigNotification.mockRejectedValueOnce(new Error('synthetic unavailable transport'));
     expect((await post('gig/complete')).status).toBe(200);
     expect(notifications.createNotification).not.toHaveBeenCalled();
@@ -362,6 +360,24 @@ describe('owner confirmation commits existing effects through one database decis
     expect((await post('gig/confirm-completion')).status).toBe(403);
     expect(getTable('Gig')[0].owner_confirmed_at).toBeNull();
     expect(notifications.deliverStoredGigNotification).not.toHaveBeenCalled();
+  });
+  test('a manager revoked after admitted capture does not receive the private receipt', async () => {
+    assigned('completed'); getTable('User')[0].account_type = 'business';
+    const permission = require('../../utils/businessPermissions').hasPermission;
+    permission.mockResolvedValue(true);
+    const capture = jest.spyOn(service, 'capturePayment').mockImplementation(async () => {
+      permission.mockResolvedValue(false);
+      return { success: true, confirmation: { gig: { ...getTable('Gig')[0], owner_confirmed_at: '2026-09-15T10:00:00Z' } } };
+    });
+    const response = await post('gig/confirm-completion', 'manager');
+    expect(response.status).toBe(403); expect(response.body.gig).toBeUndefined();
+    expect(capture).toHaveBeenCalledTimes(1);
+  });
+  test('unknown provider failure preserves retry without exposing its raw message', async () => {
+    assigned('completed'); jest.spyOn(service, 'capturePayment').mockRejectedValue(new Error('Synthetic provider internals'));
+    const response = await post('gig/confirm-completion');
+    expect(response.status).toBe(503); expect(response.body.error).toBe('Completion payment could not be verified. Please retry.');
+    expect(getTable('Gig')[0].owner_confirmed_at).toBeNull();
   });
 });
 

@@ -149,3 +149,22 @@ describe('retryCaptureFailures job', () => {
     expect(stripeService.capturePayment).not.toHaveBeenCalled();
   });
 });
+
+describe('capture-first original recovery discovery', () => {
+  test.each(['authorized', 'capture_pending', 'captured_hold', 'canceled'])('pending original in %s is recovered before a visible confirmation', async paymentStatus => {
+    seedCaptureScenario({ ownerConfirmedAt: null, paymentStatus });
+    getTable('Payment')[0].gig_completion_original = { state: 'pending' };
+    await retryCaptureFailures();
+    expect(stripeService.capturePayment).toHaveBeenCalledTimes(1);
+    expect(stripeService.capturePayment).toHaveBeenCalledWith('pay-cap-001');
+  });
+  test.each(['confirmed', 'canceled'])('terminal %s original never creates a new approval', async state => {
+    seedCaptureScenario({ ownerConfirmedAt: null });
+    getTable('Payment')[0].gig_completion_original = { state };
+    await retryCaptureFailures(); expect(stripeService.capturePayment).not.toHaveBeenCalled();
+  });
+  test('an overlapping legacy row is processed once', async () => {
+    seedCaptureScenario(); getTable('Payment')[0].gig_completion_original = { state: 'pending' };
+    await retryCaptureFailures(); expect(stripeService.capturePayment).toHaveBeenCalledTimes(1);
+  });
+});

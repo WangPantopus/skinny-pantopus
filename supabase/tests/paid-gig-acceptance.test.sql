@@ -121,7 +121,9 @@ BEGIN
  IF r->'gig'->>'status' IS DISTINCT FROM 'assigned' OR r->'gig'->>'price' IS DISTINCT FROM '12.50' THEN RAISE EXCEPTION 'Valid paid assignment failed: %',r; END IF;
  IF public.finalize_paid_gig_acceptance(g,b,u,p)->>'reused' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Lost-response assignment retry failed'; END IF;
  IF public.prepare_paid_gig_capture(p)->>'error' IS DISTINCT FROM 'TERMS_CHANGED' THEN RAISE EXCEPTION 'Capture before worker completion admitted'; END IF;
- UPDATE public."Gig" SET status='completed',worker_completed_at=now() WHERE id=g;
+ -- Preserve the legacy already-confirmed capture retry contract. New approvals
+ -- are tested separately below and never invent this old confirmation.
+ UPDATE public."Gig" SET status='completed',worker_completed_at=now(),owner_confirmed_at=now() WHERE id=g;
  r:=public.prepare_paid_gig_capture(p);
  IF r->'payment'->>'payment_status' IS DISTINCT FROM 'capture_pending' THEN RAISE EXCEPTION 'Capture not durably prepared'; END IF;
  IF public.record_paid_gig_capture(p,'pi_foreign','ch_contract',1250,'cus_contract1','usd')->>'error' IS DISTINCT FROM 'TERMS_CHANGED'
@@ -169,7 +171,8 @@ DO $$ DECLARE r text; fn regprocedure; BEGIN
   IF has_table_privilege(r,'public."Payment"','INSERT,UPDATE,DELETE,TRUNCATE') THEN RAISE EXCEPTION 'Client retained financial mutation privileges'; END IF;
   FOR fn IN SELECT p.oid::regprocedure FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'
    AND p.proname IN ('begin_paid_gig_acceptance','accept_free_gig_bid','bind_paid_gig_acceptance','finalize_paid_gig_acceptance',
-    'cancel_paid_gig_acceptance','prepare_paid_gig_capture','record_paid_gig_capture','confirm_gig_completion') LOOP
+    'cancel_paid_gig_acceptance','prepare_paid_gig_capture','record_paid_gig_capture','confirm_gig_completion',
+    'prepare_gig_completion_original','record_gig_completion_canceled','gig_completion_snapshot','gig_completion_snapshot_hash') LOOP
    IF has_function_privilege(r,fn,'EXECUTE') THEN RAISE EXCEPTION 'Client acquired service RPC'; END IF;
   END LOOP;
  END LOOP;
@@ -190,7 +193,12 @@ DECLARE g uuid:='aae10000-0000-4000-8000-000000000101'; u uuid:='aae10000-0000-4
  worker uuid:='aae10000-0000-4000-8000-000000000002'; expected jsonb; r jsonb; receipt jsonb;
  before_payment jsonb; stage text; changed jsonb; note_count integer;
 BEGIN
+ -- Arrange the separate historical captured-but-unconfirmed fixture.
+ UPDATE public."Gig" SET owner_confirmed_at=NULL WHERE id=g;
  SELECT to_jsonb(x) INTO expected FROM public."Gig" x WHERE id=g;
+ r:=public.prepare_gig_completion_original(g,u,expected,repeat('a',64),5,'review');
+ IF r->'payment'->'gig_completion_original'->>'state' IS DISTINCT FROM 'pending' THEN
+  RAISE EXCEPTION 'Original review was not admitted: %',r; END IF;
  SELECT to_jsonb(x) INTO before_payment FROM public."Payment" x WHERE id=(expected->>'payment_id')::uuid;
  SELECT count(*) INTO note_count FROM public."Notification" WHERE metadata->>'gig_id'=g::text;
  IF public.confirm_gig_completion(g,worker,expected,5,'review')->>'error' IS DISTINCT FROM 'FORBIDDEN' THEN
@@ -566,7 +574,7 @@ BEGIN
  -- Owner confirmation makes the earlier review request obsolete and queues
  -- both the worker confirmation and the already-closed standby bid notice.
  SELECT * INTO g FROM public."Gig" WHERE id=g.id;
- terms:=terms||jsonb_build_object('worker_completed_at',g.worker_completed_at);
+ terms:=to_jsonb(g);
  r:=public.confirm_gig_completion(g.id,owner_id,terms,NULL,NULL);
  IF jsonb_array_length(r->'notifications')<>2 THEN RAISE EXCEPTION 'Owner completion did not retain both notices'; END IF;
  FOR rec IN SELECT * FROM public."Notification" WHERE metadata->>'gig_id'=g.id::text AND type IN ('gig_confirmed','bid_rejected') ORDER BY created_at,id LOOP
@@ -610,8 +618,7 @@ DO $$ DECLARE g public."Gig"; h public."HomeMaintenanceLog"; r jsonb; terms json
  owner_id uuid:='aafa0000-0000-4000-8000-000000000001'; fixture_home uuid:='aafa0000-0000-4000-8000-000000000300';
 BEGIN
  SELECT * INTO g FROM public."Gig" WHERE id='aafa0000-0000-4000-8000-000000000100';
- terms:=jsonb_build_object('user_id',g.user_id,'accepted_by',g.accepted_by,'price',g.price,'payment_id',g.payment_id,
-  'accepted_at',g.accepted_at,'started_at',g.started_at,'worker_completed_at',g.worker_completed_at);
+ SELECT to_jsonb(x) INTO terms FROM public."Gig" x WHERE id=g.id;
  r:=public.confirm_gig_completion(g.id,owner_id,terms,5,'Reviewed');
  IF r->'gig'->>'owner_confirmed_at' IS NULL THEN RAISE EXCEPTION 'Home completion failed: %',r; END IF;
  SELECT * INTO h FROM public."HomeMaintenanceLog" WHERE gig_id=g.id;
@@ -641,8 +648,7 @@ BEGIN
   ELSIF mode='historical' THEN UPDATE public."Gig" SET owner_confirmed_at=clock_timestamp() WHERE id=g.id;
   ELSIF mode='private_source' THEN UPDATE public."Gig" SET origin_home_id=NULL WHERE id=g.id;
   END IF;
-  terms:=jsonb_build_object('user_id',g.user_id,'accepted_by',g.accepted_by,'price',g.price,'payment_id',g.payment_id,
-   'accepted_at',g.accepted_at,'started_at',g.started_at,'worker_completed_at',g.worker_completed_at);
+  SELECT to_jsonb(x) INTO terms FROM public."Gig" x WHERE id=g.id;
   r:=public.confirm_gig_completion(g.id,owner_id,terms,NULL,NULL);
   IF r->'gig'->>'owner_confirmed_at' IS NULL THEN RAISE EXCEPTION 'Home history suppression blocked gig: %',r; END IF;
   IF EXISTS(SELECT FROM public."HomeMaintenanceLog" WHERE gig_id=g.id) THEN RAISE EXCEPTION 'Unauthorized or historical Home provenance: %',mode; END IF;
@@ -655,8 +661,7 @@ BEGIN
  INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,worker_completed_at,origin_home_id)
  VALUES('aafa0000-0000-4000-8000-000000000108',owner_id,owner_id,'Retained history','Synthetic',0,'completed',
  'aafa0000-0000-4000-8000-000000000002',clock_timestamp(),fixture_home) RETURNING * INTO g;
- terms:=jsonb_build_object('user_id',g.user_id,'accepted_by',g.accepted_by,'price',g.price,'payment_id',g.payment_id,
-  'accepted_at',g.accepted_at,'started_at',g.started_at,'worker_completed_at',g.worker_completed_at);
+ SELECT to_jsonb(x) INTO terms FROM public."Gig" x WHERE id=g.id;
  PERFORM public.confirm_gig_completion(g.id,owner_id,terms,NULL,NULL);
  DELETE FROM public."User" WHERE id=g.accepted_by;
  IF NOT EXISTS(SELECT FROM public."HomeMaintenanceLog" WHERE gig_id=g.id AND performed_by IS NULL) THEN RAISE EXCEPTION 'Worker deletion did not erase historical identity'; END IF;
@@ -672,6 +677,97 @@ DO $$ BEGIN
   INSERT INTO public."HomeMaintenanceLog"(home_id,task,gig_id) VALUES('aafa0000-0000-4000-8000-000000000300','Fabricated','aafa0000-0000-4000-8000-000000000100');
   RAISE EXCEPTION 'Raw actor fabricated Gig history';
  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
+
+-- Original paid approval admission, private reads and immutable recovery.
+RESET ROLE;
+INSERT INTO auth.users(id,email) SELECT ('ab050000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+ 'original-approval-'||n||'@example.invalid' FROM generate_series(1,3)n;
+INSERT INTO public."User"(id,email,username,name,account_type) SELECT id,email,'original_approval_'||right(id::text,1),
+ 'Original approval',CASE WHEN right(id::text,1)='1' THEN 'business' ELSE 'individual' END FROM auth.users WHERE id::text LIKE 'ab050000-%';
+INSERT INTO public."BusinessTeam"(business_user_id,user_id,role_base,is_active) VALUES
+ ('ab050000-0000-4000-8000-000000000001','ab050000-0000-4000-8000-000000000003','staff',true);
+INSERT INTO public."BusinessPermissionOverride"(business_user_id,user_id,permission,allowed) VALUES
+ ('ab050000-0000-4000-8000-000000000001','ab050000-0000-4000-8000-000000000003','gigs.manage',true);
+INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,accepted_at,started_at,worker_completed_at,completion_note)
+ SELECT ('ab050000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'ab050000-0000-4000-8000-000000000001',
+ 'ab050000-0000-4000-8000-000000000003','Original approval','Synthetic',12.5,'completed',
+ 'ab050000-0000-4000-8000-000000000002','2026-09-01 00:00:00.123456Z','2026-09-01 01:00:00.123456Z','2026-09-01 02:00:00.123456Z','Original proof'
+ FROM generate_series(100,101)n;
+INSERT INTO public."Payment"(id,gig_id,payer_id,payee_id,payment_type,payment_status,amount_total,amount_subtotal,amount_to_payee,
+ amount_platform_fee,currency,stripe_customer_id,stripe_payment_intent_id,stripe_charge_id,metadata)
+ SELECT ('ab050000-0000-4000-8000-'||lpad((n+300)::text,12,'0'))::uuid,('ab050000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+ 'ab050000-0000-4000-8000-000000000001','ab050000-0000-4000-8000-000000000002','gig_payment','authorized',1250,1250,1062,188,'USD',
+ 'cus_original','pi_original'||n,'ch_original'||n,'{"existing":"preserved"}'::jsonb FROM generate_series(100,101)n;
+UPDATE public."Gig" g SET payment_id=p.id FROM public."Payment" p WHERE p.gig_id=g.id AND g.id::text LIKE 'ab050000-%';
+SET LOCAL ROLE service_role;
+DO $$ DECLARE g public."Gig"; p public."Payment"; r jsonb; original jsonb; changed jsonb; key text; receipt jsonb;
+ actor uuid:='ab050000-0000-4000-8000-000000000003';
+BEGIN
+ SELECT * INTO g FROM public."Gig" WHERE id='ab050000-0000-4000-8000-000000000100';
+ IF public.prepare_paid_gig_capture(g.payment_id)->>'error' IS DISTINCT FROM 'COMPLETION_NOT_PREPARED' THEN RAISE EXCEPTION 'Unapproved capture admitted'; END IF;
+ FOREACH key IN ARRAY ARRAY['title','description','completion_note','worker_completed_at','origin_home_id','completion_photos','completion_checklist'] LOOP
+  changed:=jsonb_set(to_jsonb(g),ARRAY[key],CASE WHEN key='worker_completed_at' THEN to_jsonb('2026-09-01T02:00:00.123455Z'::text)
+   WHEN key='origin_home_id' THEN to_jsonb('ab050000-0000-4000-8000-000000000099'::text)
+   WHEN key IN ('completion_photos','completion_checklist') THEN '["different"]'::jsonb ELSE '"Different proof"'::jsonb END);
+  IF public.prepare_gig_completion_original(g.id,actor,changed,repeat('a',64),5,'original')->>'error' IS DISTINCT FROM 'COMPLETION_CHANGED' THEN
+   RAISE EXCEPTION 'Unreviewed % admitted',key; END IF;
+ END LOOP;
+ r:=public.prepare_gig_completion_original(g.id,actor,to_jsonb(g),repeat('a',64),5,'original');original:=r->'payment'->'gig_completion_original';
+ IF original->>'state' IS DISTINCT FROM 'pending' OR original->>'actor_id'<>actor::text THEN RAISE EXCEPTION 'Approval not admitted: %',r; END IF;
+ r:=public.prepare_gig_completion_original(g.id,g.user_id,to_jsonb(g),repeat('a',64),1,'replacement');
+ IF r->>'reused' IS DISTINCT FROM 'true' OR r->'payment'->'gig_completion_original' IS DISTINCT FROM original THEN RAISE EXCEPTION 'Retry replaced actor or feedback'; END IF;
+ BEGIN UPDATE public."Gig" SET completion_note='Unreviewed change' WHERE id=g.id; RAISE EXCEPTION 'Pending proof changed'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."Gig" SET worker_completed_at=worker_completed_at-interval '1 microsecond' WHERE id=g.id; RAISE EXCEPTION 'Pending date changed'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."Gig" SET owner_confirmed_at=clock_timestamp() WHERE id=g.id; RAISE EXCEPTION 'Forged confirmation'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN DELETE FROM public."Gig" WHERE id=g.id; RAISE EXCEPTION 'Pending gig erased'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN DELETE FROM public."Payment" WHERE id=g.payment_id; RAISE EXCEPTION 'Pending payment erased'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN DELETE FROM public."User" WHERE id=g.accepted_by; RAISE EXCEPTION 'Pending worker erased'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."Payment" SET amount_total=1300 WHERE id=g.payment_id; RAISE EXCEPTION 'Pending price changed'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."Payment" SET gig_completion_original=NULL WHERE id=g.payment_id; RAISE EXCEPTION 'Original erased'; EXCEPTION WHEN check_violation THEN NULL; END;
+ UPDATE public."BusinessTeam" SET is_active=false WHERE business_user_id=g.user_id;
+ IF public.prepare_gig_completion_original(g.id,actor,to_jsonb(g),repeat('a',64),5,'original')->>'error' IS DISTINCT FROM 'FORBIDDEN' THEN RAISE EXCEPTION 'Revoked actor admitted fresh request'; END IF;
+ -- Recovery executes already admitted consent, and pending lease prevents a
+ -- concurrent capture command even if the prior caller lost its response.
+ r:=public.prepare_paid_gig_capture(g.payment_id);
+ IF r->'payment'->>'payment_status' IS DISTINCT FROM 'capture_pending' THEN RAISE EXCEPTION 'Original not recoverable after revocation'; END IF;
+ IF public.prepare_paid_gig_capture(g.payment_id)->>'error' IS DISTINCT FROM 'CAPTURE_IN_PROGRESS' THEN RAISE EXCEPTION 'Duplicate capture lease'; END IF;
+ r:=public.record_paid_gig_capture(g.payment_id,'pi_original100','ch_original100',1250,'cus_original','usd');receipt:=r->'confirmation'->'gig';
+ IF receipt->>'owner_confirmed_at' IS NULL OR receipt->>'owner_confirmation_note' IS DISTINCT FROM 'original'
+  OR r->'payment'->'gig_completion_original'->>'state' IS DISTINCT FROM 'confirmed'
+  OR (SELECT gigs_completed FROM public."User" WHERE id=g.accepted_by)<>1 THEN RAISE EXCEPTION 'Approval did not finish atomically: %',r; END IF;
+ r:=public.record_paid_gig_capture(g.payment_id,'pi_original100','ch_original100',1250,'cus_original','usd');
+ IF r->'confirmation'->>'reused' IS DISTINCT FROM 'true' OR r->'confirmation'->'gig' IS DISTINCT FROM receipt
+  OR (SELECT gigs_completed FROM public."User" WHERE id=g.accepted_by)<>1 THEN RAISE EXCEPTION 'Original replay duplicated effects'; END IF;
+ -- Ordinary edits after a finished approval retain their existing behavior.
+ UPDATE public."Gig" SET description='Existing completed content remains editable' WHERE id=g.id;
+ SELECT * INTO g FROM public."Gig" WHERE id='ab050000-0000-4000-8000-000000000101';
+ r:=public.prepare_gig_completion_original(g.id,g.user_id,to_jsonb(g),repeat('b',64),NULL,NULL);
+ IF r->'payment'->'gig_completion_original'->>'state' IS DISTINCT FROM 'pending' THEN RAISE EXCEPTION 'Second approval failed'; END IF;
+ IF public.record_gig_completion_canceled(g.payment_id,'pi_foreign','cus_original',1250,'usd','ch_original101',0,0)->>'error' IS DISTINCT FROM 'PAYMENT_CHANGED'
+  OR public.record_gig_completion_canceled(g.payment_id,'pi_original101','cus_original',1250,'usd','ch_original101',1,0)->>'error' IS DISTINCT FROM 'PAYMENT_CHANGED' THEN RAISE EXCEPTION 'Canceled original used foreign/nonzero proof'; END IF;
+ r:=public.record_gig_completion_canceled(g.payment_id,'pi_original101','cus_original',1250,'usd','ch_original101',0,0);
+ IF r->'payment'->'gig_completion_original'->>'state' IS DISTINCT FROM 'canceled' THEN RAISE EXCEPTION 'Known-zero original stayed frozen: %',r; END IF;
+ UPDATE public."Gig" SET completion_note='Existing edit after known-zero cancellation' WHERE id=g.id;
+ IF (SELECT owner_confirmed_at IS NOT NULL FROM public."Gig" WHERE id=g.id) THEN RAISE EXCEPTION 'Canceled charge confirmed'; END IF;
+END $$;
+RESET ROLE;
+DO $$ DECLARE role_name text; key text; BEGIN
+ FOREACH role_name IN ARRAY ARRAY['anon','authenticated'] LOOP
+  IF has_column_privilege(role_name,'public."Payment"','gig_completion_original','SELECT') THEN RAISE EXCEPTION 'Private original readable by %',role_name; END IF;
+ END LOOP;
+ FOR key IN SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='Payment'
+  AND column_name<>'gig_completion_original' LOOP
+  IF NOT has_column_privilege('authenticated','public."Payment"',key,'SELECT') THEN RAISE EXCEPTION 'Existing column read lost: %',key; END IF;
+ END LOOP;
+END $$;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','ab050000-0000-4000-8000-000000000001',true);
+DO $$ BEGIN
+ IF (SELECT metadata->>'existing' FROM public."Payment" WHERE id='ab050000-0000-4000-8000-000000000400') IS DISTINCT FROM 'preserved' THEN RAISE EXCEPTION 'Existing metadata lost'; END IF;
+ BEGIN PERFORM gig_completion_original FROM public."Payment" WHERE id='ab050000-0000-4000-8000-000000000400';
+  RAISE EXCEPTION 'Direct original read succeeded'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
 

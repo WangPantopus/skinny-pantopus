@@ -346,3 +346,62 @@ describe('expiration preserves durable checkout recovery', () => {
     expect(getTable('GigBid')[0].pending_payment_intent_id).toBe('pay');
   });
 });
+
+describe('original completion capture recovery', () => {
+  const original = { version: 1, state: 'pending', actor_id: 'payer', review: 'a'.repeat(64),
+    snapshot: 'b'.repeat(64), note: 'Original review', satisfaction: 5 };
+  const receipt = { gig: { id: 'gig', status: 'completed', owner_confirmed_at: '2026-09-15T10:00:00Z' } };
+  const charge = (extra = {}) => ({ id: 'ch_one', payment_intent: 'pi_one', customer: 'cus_payer', amount: 1250,
+    currency: 'usd', captured: true, paid: true, refunded: false, amount_refunded: 0, disputed: false, ...extra });
+  beforeEach(() => {
+    seedTable('Payment', [payment({ payment_status: 'capture_pending', gig_completion_original: { ...original } })]);
+    mockRetrieve.mockResolvedValue(captured()); mockCharge.mockResolvedValue(charge());
+  });
+  test('known capture finishes the saved approval without another provider command', async () => {
+    const rpc = jest.fn(async name => {
+      expect(name).toBe('record_paid_gig_capture');
+      return { data: { payment: { ...getTable('Payment')[0], payment_status: 'captured_hold',
+        captured_at: receipt.gig.owner_confirmed_at }, confirmation: receipt } };
+    }); setRpcMock(rpc);
+    expect(await service.capturePayment('pay')).toMatchObject({ success: true, confirmation: receipt });
+    expect(mockCapture).not.toHaveBeenCalled(); expect(mockCharge).toHaveBeenCalledWith('ch_one');
+  });
+  test('a payment status without its atomic completion receipt is not success', async () => {
+    captureRpc(); await expect(service.capturePayment('pay')).rejects.toMatchObject({ statusCode: 503 });
+    expect(mockCapture).not.toHaveBeenCalled();
+  });
+  test.each([{ customer: 'other' }, { currency: 'eur' }, { captured: false }, { refunded: true },
+    { amount_refunded: 1 }, { disputed: true }, { payment_intent: 'other' }, { id: 'ch_other' }])(
+    'fresh charge mismatch %j cannot confirm the original', async extra => {
+      const rpc = jest.fn(); setRpcMock(rpc); mockCharge.mockResolvedValue(charge(extra));
+      await expect(service.capturePayment('pay')).rejects.toMatchObject({ statusCode: 409 });
+      expect(rpc).not.toHaveBeenCalled(); expect(mockCapture).not.toHaveBeenCalled();
+    });
+  test.each(['authorized', 'capture_pending', 'canceled'])('known-zero canceled provider releases a %s local original', async status => {
+    Object.assign(getTable('Payment')[0], { payment_status: status, stripe_charge_id: 'ch_one' });
+    mockRetrieve.mockResolvedValue(intent({ status: 'canceled', amount_received: 0, amount_capturable: 0 }));
+    mockCharge.mockResolvedValue(charge({ captured: false }));
+    const rpc = jest.fn(async name => {
+      expect(name).toBe('record_gig_completion_canceled');
+      return { data: { payment: { gig_completion_original: { ...original, state: 'canceled' } } } };
+    }); setRpcMock(rpc);
+    expect(await service.capturePayment('pay')).toEqual({ success: false, canceled: true });
+    expect(mockCancel).not.toHaveBeenCalled(); expect(mockCapture).not.toHaveBeenCalled();
+  });
+  test.each([{ amount_received: 1 }, { amount_capturable: 1 }])('canceled intent with nonzero amounts %j keeps approval pending', async extra => {
+    mockRetrieve.mockResolvedValue(intent({ status: 'canceled', amount_received: 0, amount_capturable: 0, ...extra }));
+    const rpc = jest.fn(); setRpcMock(rpc);
+    await expect(service.capturePayment('pay')).rejects.toMatchObject({ statusCode: 409 }); expect(rpc).not.toHaveBeenCalled();
+  });
+  test('canceled intent cannot hide a captured charge', async () => {
+    mockRetrieve.mockResolvedValue(intent({ status: 'canceled', amount_received: 0, amount_capturable: 0 }));
+    const rpc = jest.fn(); setRpcMock(rpc);
+    await expect(service.capturePayment('pay')).rejects.toMatchObject({ statusCode: 409 }); expect(rpc).not.toHaveBeenCalled();
+  });
+  test('a lost canceled receipt remains recoverable', async () => {
+    mockRetrieve.mockResolvedValue(intent({ status: 'canceled', amount_received: 0, amount_capturable: 0, latest_charge: null }));
+    setRpcMock(async () => ({ error: { code: '08006' } }));
+    await expect(service.capturePayment('pay')).rejects.toMatchObject({ statusCode: 503 });
+    expect(getTable('Payment')[0].gig_completion_original).toEqual(original);
+  });
+});

@@ -62,3 +62,16 @@ describe('Payment routes hardening', () => {
     expect(res.body.refundRequest.requestId).toBe('retained');
   });
 });
+
+describe('private original approval stays outside existing payment DTOs', () => {
+  test.each(['/api/payments', '/api/payments/private-payment'])('%s preserves old fields without approval details', async path => {
+    resetTables();
+    seedTable('Payment', [{ id: 'private-payment', payer_id: 'aaaaaaaa-aaaa-1aaa-8aaa-aaaaaaaaaaaa',
+      payee_id: 'bbbbbbbb-bbbb-1bbb-8bbb-bbbbbbbbbbbb', amount_total: 1250, metadata: { existing: 'unchanged' },
+      gig_completion_original: { actor_id: 'private-business-manager', note: 'Private approval' } }]);
+    const response = await request(buildApp()).get(path); expect(response.status).toBe(200);
+    const payment = response.body.payment || response.body.payments[0];
+    expect(payment).toMatchObject({ id: 'private-payment', amount_total: 1250, metadata: { existing: 'unchanged' } });
+    expect(payment).not.toHaveProperty('gig_completion_original');
+  });
+});

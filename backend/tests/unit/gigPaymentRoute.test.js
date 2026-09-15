@@ -228,3 +228,13 @@ describe('exact shared worker release projection', () => {
     expect(res.status).toBe(503); expect(res.body.payment).toBeUndefined();
   });
 });
+
+describe('gig payment hides the private original approval', () => {
+  beforeEach(() => { resetTables(); jest.clearAllMocks(); jest.restoreAllMocks(); });
+  test.each([POSTER_ID, WORKER_ID])('existing reader %s retains its payment projection', async actor => {
+    releaseFixture({ gig_completion_original: { actor_id: 'private-manager', note: 'Private approval' } });
+    const result = await request(createApp()).get(`/api/gigs/${GIG_ID}/payment`).set('x-test-user-id', actor);
+    expect(result.status).toBe(200); expect(result.body.payment.id).toBe(MAIN_PAYMENT_ID);
+    expect(result.body.payment).not.toHaveProperty('gig_completion_original');
+  });
+});

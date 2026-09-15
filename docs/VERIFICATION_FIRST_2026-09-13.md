@@ -3675,9 +3675,9 @@ Private native-owner-confirmation-* evidence retains baseline attempts, source
 and product hashes, commands and final results. The five application/test files
 already existed. The unrelated simulator and owner checkout remain untouched.
 The preceding loaded-review/MyTasks checkpoint48df046f6 passes all15 applicable
-jobs/one Seeder skip in CI34957710591; require this native checkpoint's own CI
-before integration. PR34 stays
-draft. Native MyTasks account/request lifetime remains a separate pending check.
+jobs/one Seeder skip in CI34957710591. Native checkpoint `c12c55e099` now passes
+all15 applicable jobs/one Seeder skip in [CI34960015092](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34960015092).
+PR34 stays draft. Native MyTasks account/request lifetime remains a separate pending check.
 
 ## Existing owner capture interleaving baseline
 
@@ -3690,12 +3690,90 @@ leaving the task unconfirmed. Both confirmation aliases are exercised. Auth,
 business directory and Stripe are synthetic; routes/services and owned PostgreSQL
 are actual. Exact ab03 cleanup passes and API18109 is stopped.
 
-This is an unresolved blocker, not a completed repair. The existing capture
-preparation locks/checks financial terms but does not bind the reviewed proof;
+This records the failing baseline; the locally verified repair follows below.
+At this baseline, capture preparation locks/checks financial terms but does not bind the reviewed proof;
 final confirmation checks only the earlier assignment fields. Existing stop/expiry
 guards cover their own requests. The existing capture retry job also only selects
 already-confirmed tasks, missing newly ambiguous captures before confirmation.
 Compare and extend the existing Payment metadata, capture functions and retry job
 before proposing new persistence. Preserve the separate booking-payment caller.
 Private owner-capture-interleaving-* baseline and reuse records retain the exact
-commands/results. No new capture implementation or migration is claimed here.
+commands/results. The following section records the subsequent source change and its limits.
+
+
+## Existing owner capture original and recovery
+
+The existing route checked loaded review before a provider await, but capture
+preparation and final confirmation did not bind all the reviewed proof. The four
+actual baseline races above could confirm changed work or reject only after capture.
+The existing retry job also missed unconfirmed originals after a process failure.
+Current/archive/history comparison found no private original-approval field.
+Payment.metadata is part of existing involved-user API and direct SQL reads, so it
+cannot safely hold private approving-manager identity and original feedback.
+
+The forward `20260915050000_gig_completion_original.sql` extends the existing Payment
+with one nullable private JSONB field, preserving every old column grant and all
+historical rows. Its original contains actor, review/snapshot hashes and feedback;
+it does not duplicate raw worker proof. Existing APIs omit this field. No table,
+service, screen or layout is replaced. Existing reviewed Gig fields, capture
+preparation/receipt, confirmation counter/notices/Home history and retry job remain
+the implementation. Free completion and historical already-confirmed capture remain
+supported; the separate booking branch is unchanged.
+
+Current locked authority admits one full reviewed snapshot before external work.
+Pending approval prevents edits/deletion of its work/payment identity, retains the
+first actor/note/rating and leases capture preparation. Stable provider identity and
+idempotency key remain unchanged. A fresh matching charge is required. Capture and
+confirmation effects commit in one transaction; a lost provider/local response is
+recovered by the existing job with the same original. Later revocation cannot undo
+an admitted financial operation; HTTP access still requires current permission and
+Home history uses current Home authority. A fresh canceled provider intent plus
+zero captured-charge proof can release pending edits without confirming completion.
+Existing content edits resume after a terminal original.
+
+Validation uses the owned PostgreSQL17.6 database on64522 only:
+
+- 296 focused backend checks pass. Full backend passes6081 tests/16 existing skips
+ across339 suites, exit0; all154 final route checks pass, including two additions for revoked-reader
+ suppression and safe unknown-provider errors. These unit boundaries use synthetic
+ repositories/provider replies; they do not replace SQL acceptance.
+- All65 SQL contracts and generated paid pgTAP pass, including original/feedback
+ immutability, complete proof/microsecond binding, current admission versus revoked
+ recovery, one counter/notice, delete fences, canceled-zero release and direct
+ private-column denial while every old column remains readable. Privacy gates pass.
+- Ten actual Gig HTTP/StripeService/retry-worker/SQL cases pass, with131 recorded SQL
+ calls before two cleanup queries and eight synthetic captures. Four interleaved
+ mutations are blocked; a pre-admission edit gets409/capture0. Lost capture/commit
+ responses recover one original, one counter and one notice. A held concurrent tap
+ gets409 while the admitted command finishes. Canceled zero-charge work stays
+ unconfirmed and becomes editable. Auth/business directory and provider are synthetic.
+- Seven separate-connection lock waits are observed: edit/admission both orders,
+ revocation/admission both orders, duplicate original, duplicate capture lease and
+ duplicate capture receipt. A forced failure after capture effects rolls back status,
+ original completion, counter and notices. Exact ab04/ab06 fixtures are cleaned and
+ every owned connection/API18109 closes.
+- A transaction rehearses the prior schema/functions and the complete new migration
+ with four old authorized/canceled/captured/refunded rows. All Payment and Gig fields
+ survive exactly; zero historical approvals are manufactured. It rolls back with
+ exact ab07 cleanup. Function lint checks381 functions/116 attached bindings with
+ zero errors/eight existing warnings. Migration policy and wrapper synchronization
+ pass; complete fresh schema replay remains required in this checkpoint's CI.
+
+Preserved failed attempts: focusedR1/R2 used old post-capture RPC fixtures; R3's two
+privacy cases inherited a previous unavailable-projection spy, fixed with existing
+reset hooks. HTTPR1 exposed an unknown provider error returned as500; the existing
+route now returns a safe retryable503, and R2 passes. SQLcontractR2 used an invalid
+fixture account type; R3 uses the existing individual type. Forward-replayR1 used a
+nonexistent canceled_at fixture field; R2 preserves existing fields successfully.
+The first lint identified two unused variables; removing those declarations restores
+the previous eight warnings. Failed evidence is retained rather than relabeled.
+
+Private owner-original-* files retain commands, failures, source bindings and final
+results in the existing evidence root and durable mirror. Screens/client source did
+not change; accepted native/browser design evidence is reused. No hosted migration,
+deployment or real provider operation ran. Cutover must drain old capture handlers
+and activate all original-aware backend readers before admitting new originals.
+Do not roll back to raw old serializers while private originals exist. Exhausted
+capture caps, provider disputes/refunds, operator resolution, hosted adoption and the
+full installed owner lifecycle remain wider acceptance gates; PR34 remains draft.
+Native MyTasks lifetime and completion draft/restart are the next bounded checks.

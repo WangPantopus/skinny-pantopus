@@ -321,7 +321,8 @@ function createQueryBuilder(tableName) {
     },
     eq(field, value) {
       const f = fieldFor(field);
-      filters.push((row) => row[f] === value);
+      const [column, jsonKey] = f.split('->>');
+      filters.push((row) => (jsonKey ? row[column]?.[jsonKey] : row[column]) === value);
       return builder;
     },
     ilike(field, pattern) {

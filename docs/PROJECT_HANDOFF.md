@@ -364,7 +364,10 @@ simulator is shutdown and all679 test-host files match the retained build. Nativ
 SDK tests are not installed paid-lifecycle UI or actual-provider acceptance.
 See [MyTasks evidence](VERIFICATION_FIRST_2026-09-13.md#existing-mytasks-waits-for-owner-confirmation).
 
-**Native owner callback checkpoint:** the existing detail handlers now require a
+**Native owner callback checkpoint:** `c12c55e099` is pushed to both integration
+and canonical PR branches; all15 applicable jobs/one Seeder skip pass in
+[CI34960015092](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34960015092).
+The existing detail handlers now require a
 matching receipt and current owner/session/screen before success/refetch, suppress
 pending duplicate requests, and distinguish ignored callbacks from success.42
 Android and50 iOS detail checks/static/build gates pass, including existing worker
@@ -372,12 +375,31 @@ proof behavior. Five existing native files change; layouts are preserved. All679
 iOS test-host files match the retained build; this is not installed full owner UI
 or actual provider acceptance. See [native callback evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-owner-confirmation-retires-stale-callbacks).
 
-**Next:** require the native callback checkpoint's own CI before integration. Four actual HTTP/SQL
-post-server-read races are now reproduced: changed proof can still be confirmed,
-and changed completion time can reject only after capture. Extend existing capture
-preparation/original Payment metadata/retry handling and verify concurrency, current
-authority and ambiguous provider recovery; preserve the booking caller. See the
-[capture baseline](VERIFICATION_FIRST_2026-09-13.md#existing-owner-capture-interleaving-baseline).
+**Owner capture original checkpoint:** the reproduced post-server-read race is
+locally repaired in the existing Payment, capture functions, confirmation transaction
+and retry job. One private nullable Payment field holds the original approval; no
+new table, service or screen. Current authority admits the complete reviewed
+snapshot before provider work. Pending originals fence proof changes, preserve
+feedback and serialize capture; fresh matching provider proof commits capture and
+confirmation effects together. The existing job recovers lost responses and
+known-zero canceled authorization without inventing a confirmation. Existing-column
+reads and historical rows remain intact; API projections omit the private field.
+
+Validation:6081 full backend tests/16 existing skips,296 focused checks,65 SQL
+contracts/generated paid pgTAP and privacy gates pass. Ten actual HTTP/service/SQL
+cases use synthetic provider/auth, including four blocked mutations and lost-response
+recovery; seven observed lock waits and a forced effect rollback pass. Forward replay
+preserves four historical payments/gigs without approval backfill. Function lint381
+functions/116 bindings has zero errors/eight existing warnings. See the
+[original capture evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-capture-original-and-recovery).
+This is local acceptance; require this checkpoint's own complete-schema/native CI.
+Drain old capture handlers and coordinate the new backend/schema before hosted
+admission; no hosted activation ran. Real-provider, refund/dispute/cap-exhaustion
+operations and full installed paid lifecycle remain release gates.
+
+**Next:** finish the capture checkpoint CI, then verify the existing native MyTasks
+account/request lifetime and completion draft/restart behavior. Inspect existing
+implementations first and preserve screen designs.
 Native MyTasks account/request lifetime remains open. Continue completion
 draft/restart verification using existing storage first. Generic maintenance granular authority/raw RLS, Home-origin admission
 and full maintenance UI acceptance remain separate follow-ups; this bounded history

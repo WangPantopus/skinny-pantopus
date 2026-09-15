@@ -28,6 +28,7 @@ const {
   eventDetailsSchema,
 } = require('../utils/moduleSchemas');
 const stripeService = require('../stripe/stripeService');
+const { publicPayment } = require('../stripe/gigPaymentProof');
 const paidGigAcceptance = require('../services/gigPaymentAcceptance');
 const gigStop = require('../services/gigStopService');
 const { PAYMENT_STATES, getPaymentStateInfo } = require('../stripe/paymentStateMachine');
@@ -5592,20 +5593,31 @@ async function confirmCompletionHelper(req, { gigId, userId, satisfaction, note,
   if (!Number.isFinite(price) || price < 0 || (price > 0 && !gig.payment_id)) {
     throw Object.assign(new Error('The agreed payment must be verified before confirmation'), { statusCode: 409 });
   }
-  if (gig.payment_id) {
-    await stripeService.capturePayment(gig.payment_id,
-      paidGigAcceptance.terms(gig, gig.accepted_by, Math.round(price * 100)));
-  }
-
   const rating = parseInt(satisfaction, 10);
-  const { data: confirmation, error: confirmationError } = await supabaseAdmin.rpc('confirm_gig_completion', {
-    p_gig_id: gigId,
-    p_actor_id: userId,
-    p_expected: Object.fromEntries(['user_id', 'accepted_by', 'price', 'payment_id',
-      'accepted_at', 'started_at', 'worker_completed_at'].map(key => [key, gig[key] ?? null])),
+  const approval = {
+    p_gig_id: gigId, p_actor_id: userId,
+    p_expected: paidGigAcceptance.completionExpected(gig),
     p_satisfaction: Number.isFinite(rating) ? Math.min(5, Math.max(1, rating)) : null,
     p_note: note ? String(note).slice(0, 1000) : null,
-  });
+  };
+  let confirmation, confirmationError;
+  if (gig.payment_id) {
+    await paidGigAcceptance.rpc('prepare_gig_completion_original', {
+      ...approval, p_review: expectedReview,
+    }, 'payment');
+    let capture;
+    try {
+      capture = await stripeService.capturePayment(gig.payment_id,
+        paidGigAcceptance.terms(gig, gig.accepted_by, Math.round(price * 100)));
+    } catch (error) {
+      if (error.statusCode) throw error;
+      throw Object.assign(new Error('Completion payment could not be verified. Please retry.'), { statusCode: 503 });
+    }
+    if (capture.canceled) throw Object.assign(new Error('The payment authorization expired or was canceled. No completion was confirmed.'), { statusCode: 409 });
+    confirmation = capture.confirmation;
+  } else {
+    ({ data: confirmation, error: confirmationError } = await supabaseAdmin.rpc('confirm_gig_completion', approval));
+  }
   if (confirmationError || !confirmation) {
     throw Object.assign(new Error('Completion could not be confirmed. Please retry.'), { statusCode: 503 });
   }
@@ -5614,8 +5626,14 @@ async function confirmCompletionHelper(req, { gigId, userId, satisfaction, note,
     throw Object.assign(new Error('Completion changed or its payment could not be verified'), { statusCode });
   }
   const updatedGig = confirmation.gig;
-  if (!updatedGig?.owner_confirmed_at) {
+  if (!updatedGig?.owner_confirmed_at || !Number.isFinite(Date.parse(updatedGig.owner_confirmed_at))) {
     throw Object.assign(new Error('Completion receipt unavailable. Please retry.'), { statusCode: 503 });
+  }
+  if (updatedGig.id !== gigId || paidGigAcceptance.completionReview(updatedGig) !== expectedReview) {
+    throw Object.assign(new Error('The completion receipt changed. Please reload the task.'), { statusCode: 409 });
+  }
+  if (!(await getGigOwnerAccess(gig.user_id, userId, 'gigs.manage')).allowed) {
+    throw Object.assign(new Error('Your permission to view this completion changed.'), { statusCode: 403 });
   }
   if (confirmation.reused) return updatedGig;
 
@@ -7372,7 +7390,7 @@ router.post('/:gigId/complete-payment-setup', verifyToken, async (req, res) => {
     emitGigUpdate(req, gigId, 'payment-update');
     res.json({
       success: true,
-      payment: payment || null,
+      payment: publicPayment(payment) || null,
       message: 'Card saved successfully. Payment will be authorized before the gig starts.',
       paymentMethodId: result.paymentMethodId,
     });
@@ -7516,7 +7534,7 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
       ? getPaymentStateInfo(payment.payment_status)
       : null;
 
-    res.json({ payment: payment || null, stateInfo });
+    res.json({ payment: publicPayment(payment) || null, stateInfo });
   } catch (err) {
     logger.error('Get gig payment error', { error: err.message });
     res.status(err.statusCode === 503 ? 503 : 500).json({ error: 'Failed to get payment details' });

@@ -45,4 +45,10 @@ function assertCapturedIntent(payment, intent) {
   }
   return intent;
 }
-module.exports = { conflict, providerId, assertPaymentTerms, assertIntentBinding, assertAuthorizedIntent, assertCapturedIntent };
+// This private transaction field is never part of any existing client DTO.
+function publicPayment(payment) {
+  if (!payment) return payment;
+  const { gig_completion_original: _original, ...visible } = payment;
+  return visible;
+}
+module.exports = { publicPayment, conflict, providerId, assertPaymentTerms, assertIntentBinding, assertAuthorizedIntent, assertCapturedIntent };

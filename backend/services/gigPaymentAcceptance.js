@@ -31,6 +31,15 @@ function completionReview(gig) {
   ])).digest('hex');
 }
 
+// Include every existing reviewed field; the transaction compares the same
+// snapshot while it owns the Gig lock, before any provider operation.
+function completionExpected(gig) {
+  return Object.fromEntries(['id', 'user_id', 'accepted_by', 'payment_id', 'price',
+    'origin_home_id', 'title', 'description', 'status', 'accepted_at', 'started_at',
+    'worker_completed_at', 'completion_note', 'completion_photos', 'completion_checklist']
+    .map(key => [key, gig[key] ?? null]));
+}
+
 async function begin(gig, bid, actorId = gig.user_id) {
   const { attempt, reused } = await rpc('begin_paid_gig_acceptance_as_actor', {
     p_gig_id: gig.id, p_bid_id: bid.id, p_payer_id: gig.user_id, p_actor_id: actorId,
@@ -134,4 +143,4 @@ async function abort(gig, bid, actorId = gig.user_id) {
   await stripeService.cancelAuthorization(result.attempt.payment_id);
   return rpc('cancel_paid_gig_acceptance_as_actor', { ...args, p_complete: true }, 'bid');
 }
-module.exports = { begin, finalize, abort, terms, rpc, completionReview };
+module.exports = { begin, finalize, abort, terms, rpc, completionReview, completionExpected };
