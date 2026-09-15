@@ -367,6 +367,8 @@ export interface GigTipPreview {
   remainingTipSlots: number;
 }
 export interface GigTipRequest {
+  /** Existing historical payment; check/cancel only, never new checkout. */
+  source?: 'legacy';
   requestId: string;
   paymentId: string;
   gigId: string;

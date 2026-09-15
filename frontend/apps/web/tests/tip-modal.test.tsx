@@ -211,10 +211,46 @@ test('recovery from a provider return is a local read and never trusts a URL suc
   expect(read).toHaveBeenCalledWith(requestId); expect(getPreview).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled(); expect(onSuccess).not.toHaveBeenCalled();
 });
 
-test('unresolved legacy tips prevent a replacement command', async () => {
-  getPreview.mockResolvedValue({ ...preview, eligible: false, unavailableReason: 'legacy_pending', legacyPaymentId: otherId }); show();
-  await screen.findByText(/earlier tip needs to be checked/); fireEvent.click(screen.getByRole('button', { name: '$5' }));
-  expect(screen.getByRole('button', { name: 'Tip $5.00' })).toBeDisabled(); expect(create).not.toHaveBeenCalled();
+const legacyOriginal: GigTipRequest = { ...original, source: 'legacy', terms: { ...original.terms, ownerConfirmedAt: null } };
+const legacyPending: GigTipProgress = { ...pending, request: legacyOriginal, status: 'needs_review' };
+test('older tip preview recovers the existing protected identity and check-only command', async () => {
+  getPreview.mockResolvedValue({ ...preview, eligible: false, unavailableReason: 'LEGACY_REVIEW', legacyPaymentId: requestId });
+  read.mockResolvedValue(legacyPending); create.mockResolvedValue(legacyPending); show();
+  const button = await screen.findByRole('button', { name: 'Check tip status' });
+  await waitFor(() => expect(button).toBeEnabled()); expect(mockSaved.get(key)?.value).toEqual(legacyOriginal);
+  expect(create).not.toHaveBeenCalled(); expect(screen.getByRole('button', { name: '$10' })).toBeDisabled();
+  fireEvent.click(button);
+  await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ requestId, mode: 'check', amount: 500,
+    expectedTerms: { ...original.terms, ownerConfirmedAt: null } })));
+  expect(crypto.randomUUID).not.toHaveBeenCalled(); expect(screen.queryByText(/Existing card confirmation/)).not.toBeInTheDocument();
+});
+test('older canceled receipt clears only the existing protected original', async () => {
+  seed(legacyOriginal); read.mockResolvedValue(legacyPending);
+  create.mockResolvedValue({ ...canceled, request: legacyOriginal, paymentIntentId: 'pi_tip', providerStatus: 'canceled',
+    receipt: { ...canceled.receipt!, paymentIntentId: 'pi_tip' } }); show();
+  const button = await screen.findByRole('button', { name: 'Cancel tip' });
+  await waitFor(() => expect(button).toBeEnabled()); fireEvent.click(button);
+  await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  expect(create).toHaveBeenCalledWith(expect.objectContaining({ requestId, mode: 'cancel' }));
+  expect(mockSaved.size).toBe(0); expect(onSuccess).not.toHaveBeenCalled();
+});
+test('older missing provider identity closes the picker while keeping recovery', async () => {
+  seed(legacyOriginal); read.mockResolvedValue({ ...legacyPending, paymentIntentId: null, canCancel: false }); show();
+  const button = await screen.findByRole('button', { name: 'Close' });
+  await waitFor(() => expect(button).toBeEnabled()); fireEvent.click(button);
+  expect(onClose).toHaveBeenCalledTimes(1); expect(create).not.toHaveBeenCalled(); expect(mockSaved.get(key)?.value).toEqual(legacyOriginal);
+});
+test.each([{ canRetry: true }, { checkout: checkout.checkout }, { request: { ...legacyOriginal, source: undefined } },
+  { request: { ...legacyOriginal, terms: original.terms } }, { request: { ...legacyOriginal, paymentMethodId: 'pm_tip' } }])(
+  'older malformed or confirmable response cannot replace recovery: %j', patch => {
+    expect(() => verifyTipProgress({ ...legacyPending, ...patch }, gig, actor, requestId, session, legacyOriginal)).toThrow();
+  });
+test('older original surviving a local404 never enables a new charge', async () => {
+  seed(legacyOriginal); read.mockRejectedValueOnce({ statusCode: 404 }); show();
+  const button = await screen.findByRole('button', { name: 'Check tip status' });
+  await waitFor(() => expect(button).toBeEnabled()); create.mockResolvedValue(legacyPending); fireEvent.click(button);
+  await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ requestId, mode: 'check' })));
+  expect(crypto.randomUUID).not.toHaveBeenCalled(); expect(mockSaved.get(key)?.value).toEqual(legacyOriginal);
 });
 
 test('SDK confirmation is checked both before and after, and success awaits a matching receipt', async () => {

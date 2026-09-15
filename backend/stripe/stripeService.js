@@ -1260,6 +1260,9 @@ class StripeService {
       const failure = Object.assign(new Error('The original tip needs to be checked before continuing.'),
         { code: data.error.startsWith('TIP_') ? data.error : `TIP_${data.error}`, statusCode: data.error === 'FORBIDDEN' ? 403 : data.error === 'NOT_FOUND' ? 404 : 409 });
       if (data.error === 'TIP_ACTIVE') Object.assign(failure, { code: 'TIP_ACTIVE', activeRequestId: data.requestId || null });
+      // Internal-only snapshot from the payer-authorized SQL read. It is never
+      // included in an HTTP error or treated as a confirmed payment outcome.
+      if (data.error === 'LEGACY_REVIEW') failure.legacyPayment = data.payment;
       throw failure;
     }
     return data;
@@ -1270,7 +1273,21 @@ class StripeService {
   }
 
   async readTipRequest({ requestId, payerId }) {
-    return projectTipOriginal(await this._tipRpc('read_gig_tip_original', { p_request_id: requestId, p_actor_id: payerId }));
+    return projectTipOriginal(await this._readTipData({ p_request_id: requestId, p_actor_id: payerId }));
+  }
+
+  async _readTipData(args) {
+    try { return await this._tipRpc('read_gig_tip_original', args); }
+    catch (error) {
+      const payment = error.legacyPayment;
+      if (error.code !== 'TIP_LEGACY_REVIEW' || payment?.id !== args.p_request_id
+          || payment.payer_id !== args.p_actor_id || payment.payment_type !== 'tip') throw error;
+      // A local historical read is only a candidate, never a capture/cancel
+      // receipt. Unknown confirmation and original method stay unknown.
+      return { payment, original: { version: 1, source: 'legacy', state: 'needs_review',
+        terms: { gigId: payment.gig_id, payerId: payment.payer_id, payeeId: payment.payee_id, ownerConfirmedAt: null },
+        payment_method_id: null, stripe_account_id: null, livemode: expectedTipLiveMode() } };
+    }
   }
 
   async createTipPayment({ requestId, payerId, gigId, amount, paymentMethodId = null, sessionScope, expectedTerms, mode = 'resume' }) {
@@ -1281,10 +1298,13 @@ class StripeService {
     const live = expectedTipLiveMode();
     // A check cannot reserve a replacement. Explicit cancellation may reserve
     // the same UUID locally, so a late first submission sees its canceled receipt.
-    let data = mode !== 'check'
+    if (expectedTerms.ownerConfirmedAt === null && mode === 'resume') {
+      throw Object.assign(new Error('An earlier tip can only be checked or canceled.'), { code: 'TIP_LEGACY_CHECK_ONLY', statusCode: 409 });
+    }
+    let data = mode !== 'check' && expectedTerms.ownerConfirmedAt !== null
       ? await this._tipRpc('reserve_gig_tip_original', { ...args, p_gig_id: gigId, p_amount: amount,
         p_payment_method_id: paymentMethodId, p_expected: expectedTerms, p_session_scope: sessionScope, p_livemode: live })
-      : await this._tipRpc('read_gig_tip_original', args);
+      : await this._readTipData(args);
     const sameCommand = candidate => {
       const original = originalTipRequest(candidate);
       if (original.id !== requestId || original.gig_id !== gigId || original.payer_id !== payerId || original.amount_cents !== amount
@@ -1295,6 +1315,24 @@ class StripeService {
       return original;
     };
     sameCommand(data);
+    const legacy = data.original.source === 'legacy';
+    if (legacy && mode === 'resume') {
+      throw Object.assign(new Error('An earlier tip can only be checked or canceled.'), { code: 'TIP_LEGACY_CHECK_ONLY', statusCode: 409 });
+    }
+    if (legacy && !data.payment.metadata?.gig_tip_original_v1) {
+      try {
+        const current = await readTipProof(stripe, data.payment, sameCommand(data), live);
+        data = await this._tipRpc('register_legacy_gig_tip', { ...args, p_session_scope: sessionScope,
+          p_livemode: live, p_expected_payment: data.payment, p_proof: current.proof });
+        sameCommand(data);
+      } catch (_) {
+        // Lost adoption acknowledgement may have committed. Read only this
+        // payment again; missing/mismatched evidence never frees its tip slot.
+        const saved = await this._readTipData(args);
+        sameCommand(saved);
+        return { ...projectTipOriginal(saved), canRetry: false };
+      }
+    }
     if (['succeeded', 'canceled'].includes(data.original.state)) {
       if (mode === 'check' && data.payment.stripe_payment_intent_id) {
         const current = await readTipProof(stripe, data.payment, sameCommand(data), live);
@@ -1314,13 +1352,13 @@ class StripeService {
     const leased = { ...args, p_lease_id: leaseId };
     let checkoutProof = null;
     try {
-      if (mode === 'cancel' && !data.original.provider_started_at && !data.payment.stripe_payment_intent_id) {
+      if (!legacy && mode === 'cancel' && !data.original.provider_started_at && !data.payment.stripe_payment_intent_id) {
         data = await this._tipRpc('cancel_unstarted_gig_tip', leased);
         return projectTipOriginal(data);
       }
       let intentId = data.payment.stripe_payment_intent_id || null;
-      if (!intentId && data.original.provider_started_at) intentId = await discoverOriginalTip(stripe, data);
-      if (!intentId && mode === 'resume') {
+      if (!legacy && !intentId && data.original.provider_started_at) intentId = await discoverOriginalTip(stripe, data);
+      if (!legacy && !intentId && mode === 'resume') {
         // Reuse the existing durable customer CAS. No PaymentIntent exists
         // before Payment reservation and provider preparation commit.
         const customer = data.payment.stripe_customer_id || await this.getOrCreateCustomer(payerId);
@@ -1366,7 +1404,7 @@ class StripeService {
       if (result.status === 'succeeded') {
         try { await this._notifyTipReceivedIfNeeded(data.payment); } catch (_) { /* Durable payment remains recoverable by the existing notice path. */ }
       }
-      if (mode !== 'cancel' && !['succeeded', 'canceled'].includes(result.status)
+      if (!legacy && mode !== 'cancel' && !['succeeded', 'canceled'].includes(result.status)
           && ['requires_payment_method', 'requires_confirmation', 'requires_action'].includes(checkoutProof.intent.status)) {
         const secret = checkoutProof.intent.client_secret;
         if (typeof secret === 'string' && secret.startsWith(`${intentId}_secret_`)) {
@@ -1387,7 +1425,7 @@ class StripeService {
       if (['TIP_PROVIDER_REVIEW', 'TIP_PROVIDER_OUTCOME_UNKNOWN', 'TIP_CUSTOMER_CHANGED', 'TIP_TERMS_CHANGED', 'TIP_PAYMENT_CHANGED', 'TIP_INVALID_PROOF'].includes(error.code)) {
         return { ...result, status: 'needs_review', canRetry: false };
       }
-      return { ...result, canRetry: error.code !== 'TIP_LEASE_LOST' };
+      return { ...result, canRetry: !legacy && error.code !== 'TIP_LEASE_LOST' };
     } finally {
       // Lease release cannot erase provider start, original identity or a
       // terminal receipt, including when another worker already recovered it.

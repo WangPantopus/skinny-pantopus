@@ -102,12 +102,37 @@ try:
  second=decode(l,reserve(106,396));assert second['error']=='TIP_ACTIVE';w.run('COMMIT;')
  second=decode(l,reserve(106,396));assert second['payment']['id']==uid(396) and canceled['original']['receipt']['amountChargedCents']==0
  print('PASS: a tip slot opens only after zero-provider cancellation commits',flush=True)
+ # Existing historical rows can be registered concurrently, without replacement
+ # or accepting a stale financial snapshot after a concrete row-lock wait.
+ for n in [601,602]:
+  w.run('INSERT INTO public."Payment"(id,gig_id,payer_id,payee_id,payment_type,payment_status,amount_total,amount_subtotal,amount_to_payee,amount_platform_fee,amount_processing_fee,tip_amount,currency,stripe_customer_id,stripe_payment_intent_id,metadata) VALUES ('+
+   ','.join([lit(uid(n)),lit(uid(107)),lit(uid(1)),lit(uid(2)),"'tip'","'authorize_pending'",'500','500','500','0','44','500',"'USD'","'cus_tiprace'",lit('pi_legacyrace'+str(n)),'NULL'])+');')
+ def adopt(n,snapshot):
+  proof={'id':'pi_legacyrace'+str(n),'customer':'cus_tiprace','livemode':False,'amount':500,'currency':'usd',
+   'capture_method':'automatic','confirmation_method':'automatic','status':'requires_action','amount_received':0,'amount_capturable':0,
+   'payer_id':uid(1),'payee_id':uid(2),'gig_id':uid(107),'payment_type':'tip','platform_fee':'0','request_id':None,'payment_id':None,
+   'stripe_account_id':None,'transfer_data':None,'on_behalf_of':None,'application_fee_amount':None,'charge_id':None,'charge_paid':False,
+   'charge_captured':False,'charge_amount_captured':0,'charge_amount_refunded':0,'charge_refunded':False,'charge_disputed':False,
+   'charge_dispute_id':None,'charge_transfer':None,'charge_destination':None,'charge_application_fee':None,'charge_application_fee_amount':None,
+   'payment_method_id':None,'captured_at':None}
+  return rpc('register_legacy_gig_tip',lit(uid(n)),lit(uid(1)),lit('b'*64),'false',lit(json.dumps(snapshot)),lit(json.dumps(proof)))
+ snapshot=decode(w,rpc('read_gig_tip_original',lit(uid(601)),lit(uid(1))))['payment']
+ w.run('BEGIN;');first=decode(w,adopt(601,snapshot));second=finish(start_wait(adopt(601,snapshot)))
+ assert first==second and first['original']['source']=='legacy' and first['original']['state']=='pending'
+ print('PASS: concurrent legacy registration reuses the same protected historical Payment after an observed lock wait',flush=True)
+ snapshot=decode(w,rpc('read_gig_tip_original',lit(uid(602)),lit(uid(1))))['payment']
+ w.run('BEGIN; UPDATE public."Payment" SET amount_total=600,amount_subtotal=600,amount_to_payee=600,tip_amount=600 WHERE id='+lit(uid(602))+';')
+ second=finish(start_wait(adopt(602,snapshot)))
+ assert second['error']=='PAYMENT_CHANGED'
+ assert decode(w,rpc('read_gig_tip_original',lit(uid(602)),lit(uid(1))))['payment']['metadata'] is None
+ print('PASS: changed historical amount wins its row lock and blocks stale provider-proof adoption',flush=True)
+
 finally:
  w.close();l.close()
  if setup:
   # Originals intentionally resist normal deletion. Remove only these exact
   # fixture Payments in this disposable DB; normal FK cleanup follows.
-  cleanup='BEGIN; SET LOCAL session_replication_role=replica; DELETE FROM public."Payment" WHERE id IN ('+','.join(lit(uid(n)) for n in [301,302,303,305,306,396])+'); SET LOCAL session_replication_role=origin;'
+  cleanup='BEGIN; SET LOCAL session_replication_role=replica; DELETE FROM public."Payment" WHERE id IN ('+','.join(lit(uid(n)) for n in [301,302,303,305,306,396,601,602])+'); SET LOCAL session_replication_role=origin;'
   cleanup+='DELETE FROM public."Gig" WHERE id IN ('+','.join(lit(uid(n)) for n in range(101,108))+');'
   cleanup+='DELETE FROM public."StripeAccount" WHERE user_id='+lit(uid(2))+';'
   cleanup+='DELETE FROM public."User" WHERE id IN ('+lit(uid(1))+','+lit(uid(2))+'); DELETE FROM auth.users WHERE id IN ('+lit(uid(1))+','+lit(uid(2))+'); COMMIT;'

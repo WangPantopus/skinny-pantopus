@@ -15,15 +15,16 @@ const payer = uid(1), worker = uid(2), customer = 'cus_tiporiginalsql';
 const quote = v => v == null ? 'NULL' : "'" + String(typeof v === 'object' ? JSON.stringify(v) : v).replaceAll("'", "''") + "'";
 const ident = v => { assert.match(v, /^[a-zA-Z_][a-zA-Z0-9_]*$/); return `"${v}"`; };
 let queries = 0, createCalls = 0, cancelCalls = 0, customerCalls = 0, notices = 0, loseCreate = false, hideList = false, loseRecord = false, failRecord = false;
+let loseAdoption = false;
 let initialStatus = 'succeeded', holdCreate = null, releaseCreate = null;
-const keys = new Map(), intents = new Map(), parameters = new Map();
+const keys = new Map(), intents = new Map(), parameters = new Map(), legacyRequests = new Map();
 async function sql(query) {
   queries++;
   const { stdout } = await run('psql', ['-XqAt', '-v', 'ON_ERROR_STOP=1', '-c', `SET statement_timeout='12s'; SET lock_timeout='5s'; ${query}`]);
   return stdout.trim();
 }
 const allowed = new Set(['preview_gig_tip', 'reserve_gig_tip_original', 'read_gig_tip_original', 'claim_gig_tip_original',
-  'prepare_gig_tip_provider', 'record_gig_tip_original', 'release_gig_tip_original', 'cancel_unstarted_gig_tip', 'bind_payment_customer']);
+  'prepare_gig_tip_provider', 'record_gig_tip_original', 'release_gig_tip_original', 'cancel_unstarted_gig_tip', 'bind_payment_customer', 'register_legacy_gig_tip']);
 const tables = new Set(['User', 'PaymentMethod', 'Payment', 'Gig']);
 const db = {
   async rpc(name, args) {
@@ -33,6 +34,7 @@ const db = {
     try {
       const data = JSON.parse(await sql(`SET ROLE service_role; SELECT to_jsonb(public.${name}(${params}));`));
       if (name === 'record_gig_tip_original' && loseRecord) { loseRecord = false; return { error: { message: 'Synthetic lost acknowledgement' } }; }
+      if (name === 'register_legacy_gig_tip' && loseAdoption) { loseAdoption = false; return { error: { message: 'Synthetic lost adoption acknowledgement' } }; }
       return { data };
     } catch (error) { return { error: { message: error.message } }; }
   },
@@ -99,7 +101,7 @@ const stripe = {
     },
     async cancel(id, params, options) {
       cancelCalls++; const intent = intents.get(id); assert.ok(intent);
-      assert.equal(options.idempotencyKey, `gig-tip-cancel:${intent.metadata.tip_request_id}:${id}`);
+      assert.equal(options.idempotencyKey, `gig-tip-cancel:${intent.metadata.tip_request_id || legacyRequests.get(id)}:${id}`);
       assert.equal(params.cancellation_reason, 'requested_by_customer'); setStatus(intent, 'canceled'); return copy(intent);
     },
   },
@@ -136,7 +138,7 @@ const providerFor = cmd => [...intents.values()].find(i => i.metadata.tip_reques
     await sql(`BEGIN; INSERT INTO auth.users(id,email) VALUES(${quote(payer)},'tip-original-payer@example.invalid'),(${quote(worker)},'tip-original-worker@example.invalid');
       INSERT INTO public."User"(id,email,username,name) SELECT id,email,'tip_original_sql_'||right(id::text,1),'Synthetic tip' FROM auth.users WHERE id IN(${quote(payer)},${quote(worker)});
       INSERT INTO public."StripeAccount"(user_id,stripe_account_id) VALUES(${quote(worker)},'acct_tiporiginalsql');
-      INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,owner_confirmed_at) VALUES ${Array.from({ length: 12 }, (_, i) =>
+      INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,owner_confirmed_at) VALUES ${Array.from({ length: 18 }, (_, i) =>
         `(${quote(uid(101 + i))},${quote(payer)},${quote(payer)},'Tip original','Synthetic',0,'completed',${quote(worker)},now())`).join(',')}; COMMIT;`); seeded = true;
     let cmd = await command(1), result = await service.createTipPayment(cmd);
     assert.equal(result.status, 'succeeded'); assert.equal(result.receipt.amountChargedCents, 500); assert.equal(customerCalls, 1);
@@ -189,13 +191,71 @@ const providerFor = cmd => [...intents.values()].find(i => i.metadata.tip_reques
     assert.equal(result.status, 'canceled'); assert.equal(result.receipt.amountChargedCents, 0);
     result = await service.createTipPayment(cmd); assert.equal(result.status, 'canceled'); assert.equal(createCalls, beforeTombstone);
     pass('cancel before first admission saves the same UUID and prevents a delayed original submission from charging');
+    const beforeLegacy = { createCalls, customerCalls };
+    async function legacyCommand(n, status = 'requires_action', withIntent = true) {
+      const requestId = uid(300 + n), gigId = uid(100 + n), intentId = 'pi_legacytip' + n;
+      const intent = { id: intentId, customer, livemode: false, amount: 500, currency: 'usd',
+        capture_method: 'automatic', confirmation_method: 'automatic', amount_capturable: 0, transfer_data: null,
+        on_behalf_of: null, application_fee_amount: null, payment_method: 'pm_legacytip',
+        metadata: { gig_id: gigId, payer_id: payer, payee_id: worker, payment_type: 'tip', platform_fee: '0' },
+        client_secret: intentId + '_secret_synthetic', created: 1710000000 };
+      setStatus(intent, status); intents.set(intentId, intent); legacyRequests.set(intentId, requestId);
+      await sql(`INSERT INTO public."Payment"(id,gig_id,payer_id,payee_id,payment_type,payment_status,amount_total,amount_subtotal,
+        amount_to_payee,amount_platform_fee,amount_processing_fee,tip_amount,currency,stripe_customer_id,stripe_payment_intent_id,metadata)
+        VALUES(${quote(requestId)},${quote(gigId)},${quote(payer)},${quote(worker)},'tip','authorize_pending',500,500,500,0,44,500,'USD',
+        ${quote(customer)},${quote(withIntent ? intentId : null)},NULL);
+        UPDATE public."Gig" SET accepted_by=NULL,owner_confirmed_at=NULL WHERE id=${quote(gigId)};`);
+      const local = await service.readTipRequest({ requestId, payerId: payer });
+      assert.equal(local.status, 'needs_review'); assert.equal(local.receipt, null); assert.equal(local.request.source, 'legacy');
+      assert.equal(local.request.terms.ownerConfirmedAt, null); assert.equal(local.request.payeeId, worker);
+      return { requestId, gigId, payerId: payer, amount: 500, paymentMethodId: null, expectedTerms: local.request.terms,
+        sessionScope: 'b'.repeat(64), mode: 'check' };
+    }
+    cmd = await legacyCommand(13); result = await service.createTipPayment(cmd);
+    assert.equal(result.status, 'requires_action'); assert.equal(result.canRetry, false); assert.equal(result.checkout, undefined);
+    await assert.rejects(service.createTipPayment({ ...cmd, mode: 'resume' }), e => e.code === 'TIP_LEGACY_CHECK_ONLY');
+    pass('older pending tip registers exact existing provider identity without current worker, confirmation or SDK credentials');
+    result = await service.createTipPayment({ ...cmd, mode: 'cancel' });
+    assert.equal(result.status, 'canceled'); assert.equal(result.receipt.amountChargedCents, 0);
+    assert.equal((await read(cmd)).receipt.paymentIntentId, 'pi_legacytip13');
+    pass('older explicit cancellation uses the same provider ID and commits a current zero-charge receipt');
+    cmd = await legacyCommand(14, 'succeeded'); loseAdoption = true; result = await service.createTipPayment(cmd);
+    assert.equal(result.status, 'succeeded'); assert.equal(result.receipt.amountChargedCents, 500);
+    assert.equal(result.request.currency, 'usd');
+    assert.equal(await sql(`SELECT currency FROM public."Payment" WHERE id=${quote(cmd.requestId)};`), 'USD');
+    pass('lost historical capture registration reply recovers exact committed receipt and preserves raw currency');
+    cmd = await legacyCommand(15, 'succeeded');
+    await sql(`UPDATE public."Payment" SET payment_status='transferred',stripe_charge_id='ch_legacytip15',
+      captured_at='2024-01-01Z',payment_succeeded_at='2024-01-01Z',cooling_off_ends_at='2024-01-03Z',
+      transfer_completed_at='2024-01-04Z',transfer_status='paid' WHERE id=${quote(cmd.requestId)};`);
+    const history = JSON.parse(await sql(`SELECT to_jsonb(p) FROM public."Payment" p WHERE id=${quote(cmd.requestId)};`));
+    result = await service.createTipPayment(cmd); assert.equal(result.status, 'succeeded'); assert.equal(result.paymentStatus, 'transferred');
+    const after = JSON.parse(await sql(`SELECT to_jsonb(p) FROM public."Payment" p WHERE id=${quote(cmd.requestId)};`));
+    for (const field of ['currency', 'captured_at', 'payment_succeeded_at', 'cooling_off_ends_at', 'transfer_completed_at', 'transfer_status']) {
+      assert.equal(after[field], history[field]);
+    }
+    pass('historical transferred payment retains its capture, cooldown and transfer history');
+    cmd = await legacyCommand(16, 'requires_action', false); result = await service.createTipPayment({ ...cmd, mode: 'cancel' });
+    assert.equal(result.status, 'needs_review'); assert.equal(result.receipt, null); assert.equal(result.canCancel, false);
+    assert.equal(await sql(`SELECT metadata IS NULL FROM public."Payment" WHERE id=${quote(cmd.requestId)};`), 't');
+    pass('missing older provider identity remains unresolved and unregistered');
+    cmd = await legacyCommand(17); intents.get('pi_legacytip17').amount = 600; result = await service.createTipPayment(cmd);
+    assert.equal(result.status, 'needs_review'); assert.equal(result.receipt, null);
+    assert.equal(await sql(`SELECT metadata IS NULL FROM public."Payment" WHERE id=${quote(cmd.requestId)};`), 't');
+    pass('wrong historical provider amount leaves the existing row unregistered');
+    cmd = await legacyCommand(18); const firstAdoption = service.createTipPayment(cmd), secondAdoption = service.createTipPayment(cmd);
+    const adopted = await Promise.all([firstAdoption, secondAdoption]);
+    assert.ok(adopted.every(r => r.request.requestId === cmd.requestId && r.canRetry === false && r.checkout === undefined));
+    assert.equal(await sql(`SELECT count(*) FROM public."Payment" WHERE id=${quote(cmd.requestId)};`), '1');
+    assert.deepEqual({ createCalls, customerCalls }, beforeLegacy);
+    pass('concurrent historical adoption retains one payment and no legacy scenario creates a provider payment or customer');
     console.log(JSON.stringify({ scenarios, queries, createCalls, distinctIntents: intents.size, cancelCalls, customerCalls, notices,
       boundary: 'Actual StripeService and PostgreSQL RPCs via local psql adapter; synthetic provider and notice transport, no hosted/provider acceptance' }));
   } finally {
     if (releaseCreate) releaseCreate();
     if (seeded) {
-      await sql(`BEGIN; SET LOCAL session_replication_role=replica; DELETE FROM public."Payment" WHERE id IN(${Array.from({ length: 12 }, (_, i) => quote(uid(301 + i))).join(',')});
-        SET LOCAL session_replication_role=origin; DELETE FROM public."Gig" WHERE id IN(${Array.from({ length: 12 }, (_, i) => quote(uid(101 + i))).join(',')});
+      await sql(`BEGIN; SET LOCAL session_replication_role=replica; DELETE FROM public."Payment" WHERE id IN(${Array.from({ length: 18 }, (_, i) => quote(uid(301 + i))).join(',')});
+        SET LOCAL session_replication_role=origin; DELETE FROM public."Gig" WHERE id IN(${Array.from({ length: 18 }, (_, i) => quote(uid(101 + i))).join(',')});
         DELETE FROM public."StripeAccount" WHERE user_id=${quote(worker)}; DELETE FROM public."User" WHERE id IN(${quote(payer)},${quote(worker)});
         DELETE FROM auth.users WHERE id IN(${quote(payer)},${quote(worker)}); COMMIT;`);
       assert.equal(await sql(`SELECT (SELECT count(*) FROM public."Payment" WHERE id::text LIKE 'aad30000-%')+(SELECT count(*) FROM public."Gig" WHERE id::text LIKE 'aad30000-%')+(SELECT count(*) FROM public."User" WHERE id::text LIKE 'aad30000-%')+(SELECT count(*) FROM auth.users WHERE id::text LIKE 'aad30000-%');`), '0');

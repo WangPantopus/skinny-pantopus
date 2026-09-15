@@ -32,16 +32,21 @@ function validTerms(v: unknown, gigId: string, actorId: string, ready = false): 
     && (typeof v.ownerConfirmedAt === 'string' && Number.isFinite(Date.parse(v.ownerConfirmedAt)) || !ready && v.ownerConfirmedAt === null);
 }
 function validOriginal(v: unknown, gigId: string, actorId: string): v is GigTipRequest {
-  return object(v) && Object.keys(v).length === originalKeys.length && tipId(v.requestId) && v.paymentId === v.requestId
+  const legacy = object(v) && v.source === 'legacy';
+  return object(v) && (v.source === undefined || legacy)
+    && Object.keys(v).length === originalKeys.length + (legacy ? 1 : 0) && tipId(v.requestId) && v.paymentId === v.requestId
     && v.gigId === gigId && v.payerId === actorId && tipId(v.payeeId) && v.payeeId !== actorId && v.currency === 'usd'
     && typeof v.amountCents === 'number' && Number.isSafeInteger(v.amountCents) && v.amountCents >= 50 && v.amountCents <= 99999999
-    && validTerms(v.terms, gigId, actorId, true) && v.terms.payeeId === v.payeeId
+    && validTerms(v.terms, gigId, actorId, !legacy) && v.terms.payeeId === v.payeeId
+    && (!legacy || v.terms.ownerConfirmedAt === null && v.paymentMethodId === null)
     && (v.paymentMethodId === null || providerId(v.paymentMethodId, 'pm'));
 }
 const sameTerms = (a: GigTipTerms, b: GigTipTerms) => termsKeys.every(key => a[key] === b[key]);
-const sameOriginal = (a: GigTipRequest, b: GigTipRequest) => originalKeys.every(key => key === 'terms' ? sameTerms(a.terms, b.terms) : a[key] === b[key]);
+const sameOriginal = (a: GigTipRequest, b: GigTipRequest) => a.source === b.source
+  && originalKeys.every(key => key === 'terms' ? sameTerms(a.terms, b.terms) : a[key] === b[key]);
 function originalOnly(value: GigTipRequest): GigTipRequest {
   return { requestId: value.requestId, paymentId: value.paymentId, gigId: value.gigId, payerId: value.payerId,
+    ...(value.source === 'legacy' ? { source: 'legacy' as const } : {}),
     payeeId: value.payeeId, amountCents: value.amountCents, currency: 'usd', paymentMethodId: value.paymentMethodId,
     terms: { gigId: value.terms.gigId, payerId: value.terms.payerId, payeeId: value.terms.payeeId, ownerConfirmedAt: value.terms.ownerConfirmedAt } };
 }
@@ -68,6 +73,7 @@ export function verifyTipProgress(value: GigTipProgress, gigId: string, actorId:
   if (!value || !validOriginal(value.request, gigId, actorId) || value.request.requestId !== requestId
     || expected && !sameOriginal(value.request, expected) || !['pending', 'requires_action', 'needs_review', 'succeeded', 'canceled'].includes(value.status)
     || typeof value.paymentStatus !== 'string' || typeof value.canRetry !== 'boolean' || typeof value.canCancel !== 'boolean'
+    || value.request.source === 'legacy' && (value.canRetry || value.checkout)
     || !(value.paymentIntentId === null || providerId(value.paymentIntentId, 'pi'))
     || !(value.providerStatus === null || typeof value.providerStatus === 'string')) throw new Error('The original tip result could not be verified. Keep the same request.');
   verifyScope(value, actorId, session);
@@ -179,7 +185,8 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
     }
     setProgress(verified); setMayResume(verified.canRetry && verified.paymentIntentId === null);
     if (exposeCheckout) setCheckout(verified.checkout || null);
-    setError(verified.status === 'needs_review' ? 'This original tip needs review. Check payment history before continuing.'
+    setError(verified.request.source === 'legacy' ? 'This earlier tip keeps its original amount and worker. Check its status or cancel it before sending another.'
+      : verified.status === 'needs_review' ? 'This original tip needs review. Check payment history before continuing.'
       : verified.checkout && exposeCheckout ? null : 'This tip is not confirmed as paid. Continue or check the same tip before sending another.');
     return verified;
   }
@@ -205,17 +212,18 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
     if (!valid()) return;
     verifyTipPreview(next, gigId, actorId, serverSession.current); serverSession.current = next.sessionScope; setPreview(next);
     if (original) {
-      setMayResume(next.eligible && sameTerms(original.value.terms, next.terms));
+      setMayResume(original.value.source !== 'legacy' && next.eligible && sameTerms(original.value.terms, next.terms));
       setError('The original request is not yet confirmed. Keep its amount and request when retrying.'); return;
     }
-    if (next.activeRequestId) {
-      const value = await payments.getTipRequest(next.activeRequestId);
+    const existingId = next.activeRequestId || next.legacyPaymentId;
+    if (existingId) {
+      const value = await payments.getTipRequest(existingId);
       if (!valid()) return;
-      verifyTipProgress(value, gigId, actorId, next.activeRequestId, serverSession.current);
+      verifyTipProgress(value, gigId, actorId, existingId, serverSession.current);
+      if (next.legacyPaymentId && value.request.source !== 'legacy') throw new Error('The earlier tip identity could not be verified.');
       original = await slot.current.retain(originalOnly(value.request), valid);
       if (!valid()) return; remember(original); await accept(value, original, valid);
-    } else if (next.legacyPaymentId) setError('An earlier tip needs to be checked in payment history before another tip can be sent.');
-    else if (!next.eligible || next.terms.payeeId !== workerId) setError('The current task is not available for this tip. Reopen its details before continuing.');
+    } else if (!next.eligible || next.terms.payeeId !== workerId) setError('The current task is not available for this tip. Reopen its details before continuing.');
   }
 
   useEffect(() => {
@@ -255,6 +263,7 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
         }
       }
       const value = original.value;
+      if (value.source === 'legacy' && mode === 'resume') throw new Error('This earlier tip can only be checked or canceled.');
       const result = await payments.createTip({ requestId: value.requestId, gigId: value.gigId, amount: value.amountCents,
         paymentMethodId: value.paymentMethodId, expectedActorId: actorId, expectedSessionScope: serverSession.current,
         expectedTerms: value.terms, mode });
@@ -273,7 +282,7 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
         } catch { /* Preserve the old original if the other receipt cannot be verified. */ }
       }
       if (work.valid()) {
-        if (original && mode === 'resume') setMayResume(true);
+        if (original && original.value.source !== 'legacy' && mode === 'resume') setMayResume(true);
         setError(cause instanceof Error ? cause.message : 'The tip result is unknown. Keep and check the same request.');
       }
       return null;
@@ -293,7 +302,7 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
   const handlePresetClick = (amount: number) => { if (!savedRef.current) { setSelectedPreset(amount); setCustomAmount(''); } };
   const handleCustomChange = (value: string) => { if (!savedRef.current && (value === '' || /^\d*\.?\d{0,2}$/.test(value))) { setCustomAmount(value); setSelectedPreset(null); } };
   const handleSubmit = () => conflict ? adoptConflict() : perform(savedRef.current && !mayResume ? 'check' : 'resume');
-  const handleCancel = () => complete || !savedRef.current ? close() : void perform('cancel', false);
+  const handleCancel = () => retired || complete || !savedRef.current || progress?.canCancel === false ? close() : void perform('cancel', false);
   const actionLabel = complete ? 'Tip recorded' : conflict ? 'View pending tip' : saved ? mayResume ? 'Retry same tip' : 'Check tip status'
     : isValid ? `Tip $${(tipAmount / 100).toFixed(2)}` : 'Enter amount';
 
@@ -389,7 +398,7 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
               disabled={processing}
               className="flex-1 px-4 py-2.5 border border-app-border rounded-lg text-app-text-strong font-medium hover:bg-app-hover transition disabled:opacity-50"
             >
-              {attempted ? complete ? 'Close' : 'Cancel tip' : 'Skip'}
+              {attempted ? complete || progress?.canCancel === false ? 'Close' : 'Cancel tip' : 'Skip'}
             </button>
             <button
               onClick={handleSubmit}

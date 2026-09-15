@@ -1092,7 +1092,9 @@ const tipSchema = Joi.object({
   expectedActorId: Joi.string().uuid().required(),
   expectedSessionScope: Joi.string().pattern(/^[a-f0-9]{64}$/).required(),
   expectedTerms: Joi.object({ gigId: Joi.string().uuid().required(), payerId: Joi.string().uuid().required(),
-    payeeId: Joi.string().uuid().required(), ownerConfirmedAt: Joi.string().isoDate().required() }).required(),
+    // Native encoders omit absent optional fields. Only legacy check/cancel
+    // accepts an unknown date; new reservation still requires current terms.
+    payeeId: Joi.string().uuid().required(), ownerConfirmedAt: Joi.string().isoDate().allow(null).default(null) }).required(),
   mode: Joi.string().valid('resume', 'check', 'cancel').required(),
 });
 function tipError(res, error) {

@@ -176,16 +176,91 @@ extension GigTipTests {
         XCTAssertTrue(vm.tipMessage.contains("history"))
     }
 
-    func testLegacyPendingBlocksNewTip() async throws {
+    private var legacyOriginal: [String: Any] {
+        var value = original
+        var historicalTerms = terms
+        historicalTerms["ownerConfirmedAt"] = NSNull()
+        value["terms"] = historicalTerms
+        value["source"] = "legacy"
+        return value
+    }
+
+    private var legacyPending: [String: Any] {
+        response(["request": legacyOriginal, "status": "needs_review", "canRetry": false, "checkout": NSNull()])
+    }
+
+    func testLegacyPreviewRecoversOnlyExistingOriginalAndCheckCommand() async throws {
         var unavailable = preview
         unavailable["eligible"] = false
-        unavailable["unavailableReason"] = "legacy_pending"
-        unavailable["legacyPaymentId"] = otherId
-        let vm = try make(previewFields: unavailable)
+        unavailable["unavailableReason"] = "LEGACY_REVIEW"
+        unavailable["legacyPaymentId"] = requestId
+        let store = InMemoryStore(), presenter = StubTipPresenter()
+        let vm = try make(
+            posts: [.status(202, body: json(legacyPending))],
+            reads: [.status(200, body: json(legacyPending))],
+            store: store,
+            presenter: presenter,
+            previewFields: unavailable
+        )
         await vm.load()
-        await vm.sendTip(amountCents: 1000)
+        await vm.prepareTip()
         XCTAssertTrue(tipPosts.isEmpty)
-        XCTAssertTrue(vm.tipMessage.contains("earlier tip"))
+        XCTAssertTrue(vm.hasTipOriginal)
+        XCTAssertFalse(vm.mayChooseTip)
+        XCTAssertEqual(vm.tipActionTitle, "Check tip status")
+        let saved = try JSONDecoder().decode(TipOriginal.self, from: XCTUnwrap(store.readData(scope)))
+        XCTAssertTrue(saved.isLegacy)
+        XCTAssertNil(saved.terms.ownerConfirmedAt)
+        await vm.sendTip(amountCents: 1000)
+        XCTAssertEqual(try bodies().first?["mode"] as? String, "check")
+        XCTAssertEqual(try bodies().first?["requestId"] as? String, requestId)
+        XCTAssertNotEqual(vm.tipStatus, .succeeded)
+        XCTAssertNotNil(try store.readData(scope))
+    }
+
+    func testLegacyReceiptClearsExactOriginalAndPreservesHistoryState() async throws {
+        let store = InMemoryStore()
+        try store.setData(JSONSerialization.data(withJSONObject: legacyOriginal), for: scope)
+        var result = done
+        result["request"] = legacyOriginal
+        result["paymentStatus"] = "refunded_full"
+        let vm = try make(reads: [.status(200, body: json(result))], store: store)
+        await vm.prepareTip()
+        XCTAssertNil(try store.readData(scope))
+        XCTAssertNotEqual(vm.tipStatus, .succeeded)
+        XCTAssertTrue(tipPosts.isEmpty)
+    }
+
+    func testMissingLegacyProviderKeepsOriginalWithoutCanceling() async throws {
+        let store = InMemoryStore()
+        try store.setData(JSONSerialization.data(withJSONObject: legacyOriginal), for: scope)
+        var result = legacyPending
+        result["paymentIntentId"] = NSNull()
+        result["canCancel"] = false
+        let vm = try make(reads: [.status(200, body: json(result))], store: store)
+        await vm.prepareTip()
+        XCTAssertFalse(vm.mayCancelTip)
+        await vm.cancelOriginalTip()
+        XCTAssertTrue(tipPosts.isEmpty)
+        XCTAssertNotNil(try store.readData(scope))
+    }
+
+    func testLegacyValidationRejectsCheckoutRetryAndInventedOriginalTerms() throws {
+        let old = try decoded(legacyOriginal, as: TipOriginal.self)
+        for patch: [String: Any] in try [
+            ["canRetry": true],
+            ["checkout": XCTUnwrap(response()["checkout"])],
+            ["request": original]
+        ] {
+            var value = legacyPending
+            value.merge(patch) { _, next in next }
+            XCTAssertFalse(try decoded(value, as: TipResponse.self).matches(
+                gig: gig, actor: actor, requestId: requestId, session: session, original: old
+            ))
+        }
+        var wrong = legacyOriginal
+        wrong["terms"] = terms
+        XCTAssertFalse(try decoded(wrong, as: TipOriginal.self).matches(gig: gig, actor: actor))
     }
 
     func testRealKeychainRetainsOnlyOriginalAcrossStoreInstances() throws {

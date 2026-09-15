@@ -613,9 +613,9 @@ public struct GigDetailView: View {
             .disabled(customTipCents == nil || (!viewModel.mayChooseTip && !viewModel.mayContinueTip))
             .buttonStyle(.plain)
             .accessibilityIdentifier("tip.amount.customSubmit")
-            Button(viewModel.hasTipOriginal ? "Cancel tip" : "Not now") {
+            Button(viewModel.mayCancelTip ? "Cancel tip" : "Not now") {
                 showTipSheet = false
-                if viewModel.hasTipOriginal { Task { await viewModel.cancelOriginalTip() } }
+                if viewModel.mayCancelTip { Task { await viewModel.cancelOriginalTip() } }
             }
             .disabled(viewModel.tipBusy)
             .font(.system(size: 13, weight: .semibold))

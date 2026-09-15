@@ -164,6 +164,11 @@ public struct TipOriginal: Codable, Sendable, Hashable {
     public let currency: String
     public let terms: TipTerms
     public let paymentMethodId: String?
+    public var source: String?
+
+    var isLegacy: Bool {
+        source == "legacy"
+    }
 
     static func identifier(_ value: String) -> Bool {
         value.range(
@@ -179,7 +184,9 @@ public struct TipOriginal: Codable, Sendable, Hashable {
     func matches(gig: String, actor: String) -> Bool {
         Self.identifier(requestId) && requestId == paymentId && gigId == gig && payerId == actor
             && Self.identifier(payeeId) && payeeId != actor && (50...99_999_999).contains(amountCents)
-            && currency == "usd" && terms.matches(gig: gig, actor: actor, ready: true) && terms.payeeId == payeeId
+            && (source == nil || isLegacy)
+            && currency == "usd" && terms.matches(gig: gig, actor: actor, ready: !isLegacy) && terms.payeeId == payeeId
+            && (!isLegacy || (terms.ownerConfirmedAt == nil && paymentMethodId == nil))
             && (paymentMethodId == nil || Self.provider(paymentMethodId, prefix: "pm"))
     }
 }
@@ -296,6 +303,7 @@ public struct TipResponse: Decodable, Sendable {
         guard Self.scope(actorId, sessionScope, actor: actor, session: session), request.matches(gig: gig, actor: actor),
               request.requestId == requestId, original == nil || original == request,
               ["pending", "requires_action", "needs_review", "succeeded", "canceled"].contains(status),
+              !request.isLegacy || (!canRetry && checkout == nil),
               paymentIntentId == nil || TipOriginal.provider(paymentIntentId, prefix: "pi") else { return false }
         if terminal {
             guard let receipt, !canRetry, !canCancel, checkout == nil,

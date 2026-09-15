@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.payments.TipReceipt
 import app.pantopus.android.data.api.models.payments.TipRequest
 import app.pantopus.android.data.api.models.payments.TipResponse
 import app.pantopus.android.data.api.models.payments.TipTerms
+import app.pantopus.android.data.api.models.payments.TipValidation
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.payments.PaymentsRepository
@@ -210,17 +211,82 @@ class GigTipRecoveryTest {
             coVerify(exactly = 1) { repository.tip(any()) }
         }
 
-    @Test fun legacyUnresolvedPaymentBlocksReplacement() =
+    private val legacyOriginal = original.copy(source = "legacy", terms = terms.copy(ownerConfirmedAt = null))
+    private val legacyPending = pending.copy(request = legacyOriginal, checkout = null, status = "needs_review")
+
+    @Test fun legacyPreviewRetainsExistingOriginalAndOnlyChecksIt() =
         runTest {
             val flow = flow()
-            coEvery { repository.tipPreview(gig) } returns NetworkResult.Success(preview.copy(eligible = false, legacyPaymentId = otherId))
+            val unavailable = preview.copy(eligible = false, legacyPaymentId = requestId)
+            coEvery { repository.tipPreview(gig) } returns NetworkResult.Success(unavailable)
+            coEvery { repository.tipOriginal(requestId) } returns NetworkResult.Success(legacyPending)
+            coEvery { repository.tip(any()) } returns NetworkResult.Success(legacyPending)
+            flow.prepare()
+            runCurrent()
+            assertEquals(legacyOriginal, store.value)
+            assertFalse(flow.state.value.canChoose)
+            coVerify(exactly = 0) { repository.tip(any()) }
+            flow.send(500, snapshot)
+            runCurrent()
+            coVerify(exactly = 1) {
+                repository.tip(match { it.requestId == requestId && it.mode == "check" && it.expectedTerms.ownerConfirmedAt == null })
+            }
+            assertNull(flow.state.value.presentation)
+            assertEquals(legacyOriginal, store.value)
+        }
+
+    @Test fun legacy404AndUnknownOutcomeCannotTurnIntoResume() =
+        runTest {
+            val flow = flow()
+            store.value = legacyOriginal
+            coEvery { repository.tipOriginal(requestId) } returns NetworkResult.Failure(NetworkError.NotFound)
+            coEvery { repository.tip(any()) } returns NetworkResult.Success(legacyPending)
             flow.prepare()
             runCurrent()
             flow.send(500, snapshot)
             runCurrent()
-            assertFalse(flow.state.value.canChoose)
-            coVerify(exactly = 0) { repository.tip(any()) }
+            coVerify(exactly = 1) { repository.tip(match { it.mode == "check" && it.requestId == requestId }) }
+            assertNull(flow.state.value.presentation)
+            assertEquals(legacyOriginal, store.value)
         }
+
+    @Test fun legacyCanceledReceiptClearsOnlyExistingOriginal() =
+        runTest {
+            val flow = flow()
+            store.value = legacyOriginal
+            coEvery { repository.tipOriginal(requestId) } returns NetworkResult.Success(legacyPending)
+            val canceled =
+                legacyPending.copy(
+                    status = "canceled",
+                    paymentStatus = "canceled",
+                    providerStatus = "canceled",
+                    canCancel = false,
+                    receipt = receipt.copy(status = "canceled", chargeId = null, amountChargedCents = 0),
+                )
+            coEvery { repository.tip(any()) } returns NetworkResult.Success(canceled)
+            flow.prepare()
+            runCurrent()
+            flow.cancel()
+            runCurrent()
+            coVerify(exactly = 1) { repository.tip(match { it.mode == "cancel" && it.requestId == requestId }) }
+            assertNull(store.value)
+            assertEquals(TipStatus.Canceled, flow.status.value)
+        }
+
+    @Test fun legacyCannotAcceptCheckoutRetryOrChangedSource() {
+        val variants =
+            listOf(
+                legacyPending.copy(canRetry = true),
+                legacyPending.copy(checkout = checkout),
+                legacyPending.copy(request = original),
+                legacyPending.copy(request = legacyOriginal.copy(terms = terms)),
+                legacyPending.copy(request = legacyOriginal.copy(paymentMethodId = "pm_tip")),
+            )
+        variants.forEach { assertFalse(TipValidation.progress(it, gig, actor, requestId, session, legacyOriginal)) }
+        val adapter = com.squareup.moshi.Moshi.Builder().build().adapter(TipOriginal::class.java)
+        assertEquals(legacyOriginal, adapter.fromJson(adapter.toJson(legacyOriginal)))
+        assertTrue(TipValidation.original(legacyOriginal, gig, actor))
+    }
 
     @Test fun sdkPaidWithoutCommittedReceiptCannotReportSuccessOrClearOriginal() =
         runTest {

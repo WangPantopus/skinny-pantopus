@@ -118,6 +118,7 @@ data class TipOriginal(
     val currency: String,
     val terms: TipTerms,
     val paymentMethodId: String? = null,
+    val source: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -260,7 +261,9 @@ object TipValidation {
     ): Boolean =
         identifier(value.requestId) && value.paymentId == value.requestId && value.gigId == gig && value.payerId == actor &&
             identifier(value.payeeId) && value.payeeId != actor && value.amountCents in MIN_CENTS..MAX_CENTS && value.currency == "usd" &&
-            terms(value.terms, gig, actor, true) && value.terms.payeeId == value.payeeId &&
+            (value.source == null || value.source == "legacy") &&
+            terms(value.terms, gig, actor, value.source != "legacy") && value.terms.payeeId == value.payeeId &&
+            (value.source != "legacy" || value.terms.ownerConfirmedAt == null && value.paymentMethodId == null) &&
             (value.paymentMethodId == null || provider(value.paymentMethodId, "pm"))
 
     fun preview(
@@ -291,7 +294,8 @@ object TipValidation {
             scope(value.actorId, value.sessionScope, actor, session) && original(value.request, gig, actor) &&
                 value.request.requestId == requestId && (expected == null || expected == value.request)
         val stateValid = value.status in statuses && (value.paymentIntentId == null || provider(value.paymentIntentId, "pi"))
-        return identityValid && stateValid && receipt(value) && checkout(value)
+        val legacySafe = value.request.source != "legacy" || !value.canRetry && value.checkout == null
+        return identityValid && stateValid && legacySafe && receipt(value) && checkout(value)
     }
 
     private fun receipt(value: TipResponse): Boolean {

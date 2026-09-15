@@ -58,6 +58,8 @@ function assertTipIntent(payment, request, intent, expectedLive) {
 
 function assertTipCharge(payment, request, intent, charge, expectedLive) {
   const chargeId = providerId(intent.latest_charge);
+  if (payment.stripe_charge_id && (payment.payment_succeeded_at || payment.captured_at || request.source === 'legacy')
+      && payment.stripe_charge_id !== chargeId) throw fail();
   if (intent.latest_charge === null) {
     if (intent.status === 'succeeded' || charge !== null || intent.amount_received !== 0) throw fail();
     return;
@@ -124,19 +126,22 @@ function originalTipRequest(data) {
   const payment = data?.payment;
   const original = data?.original;
   const terms = original?.terms;
+  const legacy = original?.source === 'legacy';
   if (!payment?.id || payment.payment_type !== 'tip' || original?.version !== 1
       || terms?.gigId !== payment.gig_id || terms.payerId !== payment.payer_id || terms.payeeId !== payment.payee_id
-      || typeof terms.ownerConfirmedAt !== 'string' || !Number.isFinite(Date.parse(terms.ownerConfirmedAt))
+      || (legacy ? terms.ownerConfirmedAt !== null
+        : typeof terms.ownerConfirmedAt !== 'string' || !Number.isFinite(Date.parse(terms.ownerConfirmedAt)))
       || !Number.isSafeInteger(payment.amount_total) || payment.amount_total < MINIMUM_TIP_CENTS
-      || payment.amount_total > MAXIMUM_TIP_CENTS || payment.currency !== 'usd'
+      || payment.amount_total > MAXIMUM_TIP_CENTS || (legacy ? String(payment.currency).toLowerCase() : payment.currency) !== 'usd'
       || payment.amount_subtotal !== payment.amount_total || payment.tip_amount !== payment.amount_total
       || payment.amount_platform_fee !== 0 || payment.amount_to_payee !== payment.amount_total
-      || typeof original.livemode !== 'boolean' || !id(original.stripe_account_id, 'acct')
+      || typeof original.livemode !== 'boolean' || (!legacy && !id(original.stripe_account_id, 'acct'))
+      || (legacy && (original.payment_method_id !== null || original.provider_params || original.provider_started_at))
       || !['reserved', 'creating', 'pending', 'canceling', 'needs_review', 'succeeded', 'canceled'].includes(original.state)
       || (original.payment_method_id !== null && !id(original.payment_method_id, 'pm'))) throw fail();
-  return { id: payment.id, source: 'original', payment_id: payment.id, gig_id: payment.gig_id,
+  return { id: payment.id, source: legacy ? 'legacy' : 'original', payment_id: payment.id, gig_id: payment.gig_id,
     payer_id: payment.payer_id, payee_id: payment.payee_id, amount_cents: payment.amount_total,
-    currency: payment.currency, stripe_account_id: original.stripe_account_id, livemode: original.livemode,
+    currency: String(payment.currency).toLowerCase(), stripe_account_id: original.stripe_account_id, livemode: original.livemode,
     intent_id: payment.stripe_payment_intent_id || null };
 }
 
@@ -147,25 +152,28 @@ function projectTipOriginal(data) {
   const receipt = original.receipt || null;
   if (terminal && (!receipt || receipt.requestId !== request.id || receipt.paymentId !== payment.id
       || receipt.gigId !== payment.gig_id || receipt.payerId !== payment.payer_id || receipt.payeeId !== payment.payee_id
-      || receipt.amountCents !== payment.amount_total || receipt.currency !== payment.currency || receipt.status !== original.state
+      || receipt.amountCents !== payment.amount_total || receipt.currency !== request.currency || receipt.status !== original.state
       || receipt.paymentIntentId !== (payment.stripe_payment_intent_id || null)
       || receipt.chargeId !== (payment.stripe_charge_id || null)
       || receipt.amountChargedCents !== (original.state === 'succeeded' ? payment.amount_total : 0)
       || (original.state === 'succeeded' && (!id(receipt.paymentIntentId, 'pi') || !id(receipt.chargeId, 'ch') || !payment.payment_succeeded_at)))) throw fail();
   return { request: { requestId: payment.id, paymentId: payment.id, gigId: payment.gig_id,
-    payerId: payment.payer_id, payeeId: payment.payee_id, amountCents: payment.amount_total, currency: payment.currency,
+    ...(request.source === 'legacy' ? { source: 'legacy' } : {}),
+    payerId: payment.payer_id, payeeId: payment.payee_id, amountCents: payment.amount_total, currency: request.currency,
     terms: original.terms, paymentMethodId: original.payment_method_id },
   status: terminal ? original.state : original.state === 'needs_review' ? 'needs_review'
     : original.provider_status === 'requires_action' ? 'requires_action' : 'pending',
   paymentStatus: payment.payment_status, providerStatus: original.provider_status || null,
   paymentIntentId: payment.stripe_payment_intent_id || null,
-  canRetry: !terminal && original.state !== 'needs_review', canCancel: !terminal, receipt: terminal ? receipt : null };
+  canRetry: request.source !== 'legacy' && !terminal && original.state !== 'needs_review',
+  canCancel: !terminal && (request.source !== 'legacy' || id(request.intent_id, 'pi')), receipt: terminal ? receipt : null };
 }
 
 // Validate the complete frozen create payload before handing it to Stripe.
 // Future code changes must keep retrying this saved payload unchanged.
 function tipProviderParams(data) {
   const request = originalTipRequest(data);
+  if (request.source === 'legacy') throw fail();
   const { payment, original } = data;
   assertTipTerms(payment, request, original.livemode);
   const expected = { amount: payment.amount_total, currency: 'usd', customer: payment.stripe_customer_id,
@@ -183,6 +191,7 @@ function tipProviderParams(data) {
 
 async function discoverOriginalTip(stripe, data) {
   const request = originalTipRequest(data);
+  if (request.source === 'legacy') throw fail();
   const { payment, original } = data;
   if (!original.provider_started_at || !id(payment.stripe_customer_id, 'cus')) return null;
   const found = [];

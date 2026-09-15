@@ -214,6 +214,10 @@ public final class GigDetailViewModel {
         tipIsCurrent && !tipBusy && hasTipOriginal && tipServerSession != nil
     }
 
+    var mayCancelTip: Bool {
+        hasTipOriginal && tipProgress?.canCancel != false
+    }
+
     var tipActionTitle: String {
         if tipConflict != nil { return "View pending tip" }
         if tipMayResume || tipProgress?.checkout != nil { return "Continue original tip" }
@@ -1026,7 +1030,7 @@ public final class GigDetailViewModel {
                     return
                 } catch APIError.notFound {
                     let next = try await readTipPreview()
-                    tipMayResume = next.eligible && next.terms == original.terms
+                    tipMayResume = !original.isLegacy && next.eligible && next.terms == original.terms
                     if let other = next.activeRequestId, other != original.requestId {
                         tipConflict = try await readOtherTip(other)
                     }
@@ -1035,13 +1039,12 @@ public final class GigDetailViewModel {
                 }
             }
             let next = try await readTipPreview()
-            if let active = next.activeRequestId {
+            if let active = next.activeRequestId ?? next.legacyPaymentId {
                 let result = try await readOtherTip(active)
+                guard next.legacyPaymentId == nil || result.request.isLegacy else { throw APIError.invalidResponse }
                 try retainTip(result.request, replacing: nil)
                 tipOriginal = result.request
                 try acceptTip(result, original: result.request)
-            } else if next.legacyPaymentId != nil {
-                tipMessage = "An earlier tip needs checking in payment history before another tip can be sent."
             } else if !next.eligible {
                 tipMessage = "This task is not currently available for a tip. Reopen its details before continuing."
             }
@@ -1064,7 +1067,7 @@ public final class GigDetailViewModel {
     }
 
     func cancelOriginalTip() async {
-        guard hasTipOriginal, let original = tipOriginal else { return }
+        guard mayCancelTip, let original = tipOriginal else { return }
         await performTip(mode: "cancel", amount: original.amountCents)
     }
 
@@ -1108,7 +1111,7 @@ public final class GigDetailViewModel {
                     if let other = next.activeRequestId, other != tipOriginal?.requestId { tipConflict = try await readOtherTip(other) }
                 } catch { /* Keep the saved original if conflict recovery cannot be verified. */ }
             }
-            if mode == "resume", tipIsCurrent { tipMayResume = true }
+            if mode == "resume", tipIsCurrent, tipOriginal?.isLegacy != true { tipMayResume = true }
             failTip("The tip result is unconfirmed. Reopen and check the same original request.")
         }
     }
@@ -1134,6 +1137,7 @@ public final class GigDetailViewModel {
 
     private func tipCommand(_ mode: String, original: TipOriginal) async throws -> TipResponse {
         try requireCurrentTip()
+        guard !original.isLegacy || mode != "resume" else { throw APIError.invalidResponse }
         guard let session = tipServerSession, try readStoredTip() == original else { throw APIError.invalidResponse }
         let result: TipResponse = try await api.request(PaymentsEndpoints.tip(body: TipRequest(
             original: original,
@@ -1201,7 +1205,8 @@ public final class GigDetailViewModel {
             tipMessage = "The original tip is canceled with no charge."
         } else {
             tipStatus = .idle
-            tipMessage = result.status == "needs_review" ? "This original tip needs review. Check payment history before continuing."
+            tipMessage = original.isLegacy ? "Check or cancel this earlier tip before sending another. Its amount and worker stay the same."
+                : result.status == "needs_review" ? "This original tip needs review. Check payment history before continuing."
                 : "This tip is not confirmed as paid. Continue or check the same original before sending another."
         }
     }

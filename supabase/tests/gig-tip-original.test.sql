@@ -191,8 +191,69 @@ DO $$ DECLARE d jsonb; lease uuid; proof jsonb; patch jsonb; receipt jsonb; BEGI
  PERFORM pg_temp.tip_assert(d->'payment'->>'payment_status'='refunded_partial' AND d->'payment'->>'refunded_amount'='200'
   AND d->'original'->'receipt'->>'amountChargedCents'='500','Existing capture and later refund conflated');
 END $$;
+-- Legacy recovery uses the same Payment identity and receipt transaction.
+INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,owner_confirmed_at)
+ SELECT pg_temp.tip_id(200+i),pg_temp.tip_id(1),pg_temp.tip_id(1),'Legacy tip','Synthetic',0,'completed',pg_temp.tip_id(3),NULL FROM generate_series(1,3) i;
+INSERT INTO public."Payment"(id,gig_id,payer_id,payee_id,payment_type,amount_total,amount_subtotal,amount_platform_fee,amount_to_payee,
+ amount_processing_fee,tip_amount,currency,payment_status,stripe_customer_id,stripe_payment_intent_id,metadata)
+ SELECT pg_temp.tip_id(700+i),pg_temp.tip_id(CASE WHEN i<=2 THEN 201 ELSE 202 END),pg_temp.tip_id(1),pg_temp.tip_id(2),
+ 'tip',500,500,0,500,44,500,'USD','authorize_pending','cus_changed','pi_tiporiginal'||(700+i),NULL FROM generate_series(1,4) i;
+CREATE FUNCTION pg_temp.legacy_proof(n integer,gig integer,status text DEFAULT 'requires_action') RETURNS jsonb LANGUAGE sql AS $$
+ SELECT pg_temp.tip_proof(n,gig)||jsonb_build_object('request_id',NULL,'payment_id',NULL,'stripe_account_id',NULL,'status',status)
+  ||CASE WHEN status='succeeded' THEN '{}'::jsonb ELSE
+  '{"amount_received":0,"charge_id":null,"charge_paid":false,"charge_captured":false,"charge_amount_captured":0,"captured_at":null}'::jsonb END $$;
+CREATE FUNCTION pg_temp.register_tip(n integer,proof jsonb,actor integer DEFAULT 1) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT public.register_legacy_gig_tip(pg_temp.tip_id(n),pg_temp.tip_id(actor),repeat('b',64),false,to_jsonb(p),proof)
+ FROM public."Payment" p WHERE id=pg_temp.tip_id(n) $$;
+DO $$ DECLARE d jsonb; snap jsonb; proof jsonb; patch jsonb; lease uuid; BEGIN
+ d:=public.read_gig_tip_original(pg_temp.tip_id(701),pg_temp.tip_id(1));snap:=d->'payment';
+ PERFORM pg_temp.tip_assert(d->>'error'='LEGACY_REVIEW' AND snap->>'currency'='USD','Legacy read invented an outcome or changed historical data');
+ PERFORM pg_temp.tip_assert(NOT(public.read_gig_tip_original(pg_temp.tip_id(701),pg_temp.tip_id(2)) ? 'payment'),'Legacy snapshot exposed to nonpayer');
+ PERFORM pg_temp.tip_assert(pg_temp.register_tip(701,pg_temp.legacy_proof(701,201),2)->>'error'='FORBIDDEN','Nonpayer registered legacy tip');
+ PERFORM pg_temp.tip_assert(public.claim_gig_tip_original(pg_temp.tip_id(701),pg_temp.tip_id(1))->>'error'='LEGACY_REVIEW','Lease implicitly adopted unverified history');
+ proof:=pg_temp.legacy_proof(701,201);
+ FOREACH patch IN ARRAY ARRAY['{"amount":501}'::jsonb,'{"customer":"cus_other"}','{"livemode":true}','{"currency":"eur"}',
+  '{"request_id":"modern"}','{"payment_id":"modern"}','{"gig_id":null}','{"charge_amount_captured":1}',
+  '{"id":"pi_other"}','{"application_fee_amount":5}'] LOOP
+  d:=pg_temp.register_tip(701,proof||patch);
+  PERFORM pg_temp.tip_assert(d->>'error'='INVALID_PROOF','Legacy mismatched proof admitted: '||patch::text);
+  PERFORM pg_temp.tip_assert((SELECT metadata IS NULL FROM public."Payment" WHERE id=pg_temp.tip_id(701)),'Rejected adoption left a marker');
+ END LOOP;
+ UPDATE public."Payment" SET failure_message='Concurrent historical update' WHERE id=pg_temp.tip_id(701);
+ PERFORM pg_temp.tip_assert(public.register_legacy_gig_tip(pg_temp.tip_id(701),pg_temp.tip_id(1),repeat('b',64),false,snap,proof)->>'error'='PAYMENT_CHANGED','Stale historical snapshot adopted');
+ d:=pg_temp.register_tip(701,proof);
+ PERFORM pg_temp.tip_assert(d->'original'->>'source'='legacy' AND d->'original'->>'state'='pending'
+  AND d->'original'->'terms'->'ownerConfirmedAt'='null'::jsonb AND d->'original'->'terms'->>'payeeId'=pg_temp.tip_id(2)::text,'Historical identity replaced by current Gig terms');
+ PERFORM pg_temp.tip_assert(d->'payment'->>'currency'='USD' AND NOT(d->'original' ? 'provider_started_at')
+  AND NOT(d->'original' ? 'receipt') AND NOT(d->'original' ? 'lease_id'),'Pending legacy registration invented provider start, receipt or retained lease');
+ d:=pg_temp.register_tip(702,pg_temp.legacy_proof(702,201));
+ PERFORM pg_temp.tip_assert(d->'original'->>'source'='legacy','Second existing pending payment lost to modern unique index');
+ PERFORM pg_temp.tip_assert(public.preview_gig_tip(pg_temp.tip_id(201),pg_temp.tip_id(1))->>'eligible'='false','Unresolved legacy payments freed a new tip');
+ d:=public.claim_gig_tip_original(pg_temp.tip_id(701),pg_temp.tip_id(1));lease:=(d->'original'->>'lease_id')::uuid;
+ PERFORM pg_temp.tip_assert(public.prepare_gig_tip_provider(pg_temp.tip_id(701),pg_temp.tip_id(1),lease,'cus_changed')->>'error'='LEGACY_CHECK_ONLY','Legacy payment prepared a new charge');
+ PERFORM pg_temp.tip_assert(public.cancel_unstarted_gig_tip(pg_temp.tip_id(701),pg_temp.tip_id(1),lease)->>'error'='PROVIDER_OUTCOME_UNKNOWN','Legacy payment used unstarted cancellation');
+ d:=public.record_gig_tip_original(pg_temp.tip_id(701),pg_temp.tip_id(1),lease,pg_temp.legacy_proof(701,201,'canceled'));
+ PERFORM pg_temp.tip_assert(d->'original'->'receipt'->>'amountChargedCents'='0' AND d->'original'->'receipt'->>'currency'='usd','Verified historical cancellation lacked normalized receipt');
+ PERFORM pg_temp.tip_assert(public.preview_gig_tip(pg_temp.tip_id(201),pg_temp.tip_id(1))->>'activeRequestId'=pg_temp.tip_id(702)::text,'Canceling one history row hid another pending tip');
+ BEGIN UPDATE public."Payment" SET metadata=metadata-'gig_tip_original_v1' WHERE id=pg_temp.tip_id(701);
+  RAISE EXCEPTION 'Legacy original erased'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."Payment" SET stripe_payment_intent_id='pi_new' WHERE id=pg_temp.tip_id(702);
+  RAISE EXCEPTION 'Legacy provider replaced'; EXCEPTION WHEN check_violation THEN NULL; END;
+ -- Missing provider identity stays unregistered, even with a forged proof.
+ UPDATE public."Payment" SET stripe_payment_intent_id=NULL WHERE id=pg_temp.tip_id(703);
+ PERFORM pg_temp.tip_assert(pg_temp.register_tip(703,pg_temp.legacy_proof(703,202))->>'error'='PROVIDER_OUTCOME_UNKNOWN','Missing legacy identity treated as no charge');
+ UPDATE public."Payment" SET payment_status='refunded_partial',refunded_amount=100,payment_succeeded_at='2025-01-01Z',
+  captured_at='2025-01-01Z',cooling_off_ends_at='2025-01-03Z',stripe_charge_id='ch_tiporiginal704',transfer_status='paid',
+  transfer_completed_at='2025-01-04Z',dispute_id='dp_historical' WHERE id=pg_temp.tip_id(704);
+ SELECT to_jsonb(p) INTO snap FROM public."Payment" p WHERE id=pg_temp.tip_id(704);
+ d:=pg_temp.register_tip(704,pg_temp.legacy_proof(704,202,'succeeded')||'{"charge_amount_refunded":100}');
+ PERFORM pg_temp.tip_assert(d->'original'->>'state'='succeeded' AND d->'original'->'receipt'->>'amountChargedCents'='500','Historical capture not proven');
+ PERFORM pg_temp.tip_assert(((d->'payment')-'metadata'-'updated_at'-'stripe_payment_method_id')=(snap-'metadata'-'updated_at'-'stripe_payment_method_id'),
+  'Historical financial status, capture/cooldown, refund or transfer data overwritten');
+END $$;
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
+ BEGIN PERFORM public.register_legacy_gig_tip(NULL,NULL,NULL,NULL,NULL,NULL); RAISE EXCEPTION 'Client registered legacy payment'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.preview_gig_tip(NULL,NULL); RAISE EXCEPTION 'Client preview RPC bypassed API scope'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.read_gig_tip_original(NULL,NULL); RAISE EXCEPTION 'Client read original RPC'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.reserve_gig_tip_original(NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL); RAISE EXCEPTION 'Client reserved original RPC'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;

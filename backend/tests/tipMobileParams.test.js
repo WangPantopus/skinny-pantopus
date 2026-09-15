@@ -56,6 +56,15 @@ beforeEach(() => {
 });
 
 describe('POST /api/payments/tip — existing mobile PaymentSheet params', () => {
+  test.each(['null', 'omitted'])('historical check preserves %s confirmation time through the scoped command', async encoding => {
+    const cmd = tipCommand(); cmd.expectedTerms.ownerConfirmedAt = null;
+    if (encoding === 'omitted') delete cmd.expectedTerms.ownerConfirmedAt;
+    stripeService.createTipPayment.mockResolvedValue({ status: 'needs_review', receipt: null });
+    const res = await request(buildApp()).post('/api/payments/tip').send(cmd);
+    expect(res.status).toBe(202); expect(res.body.receipt).toBeNull();
+    expect(stripeService.createTipPayment).toHaveBeenCalledWith(expect.objectContaining({
+      expectedTerms: expect.objectContaining({ ownerConfirmedAt: null }), mode: 'check', payerId: POSTER_ID }));
+  });
   test('pending scoped command carries transient checkout without asserting payment success', async () => {
     const checkout = { paymentIntentId: 'pi_tip', clientSecret: 'pi_tip_secret_fixture', customer: 'cus_tip',
       ephemeralKey: 'ek_fixture', publishableKey: 'pk_test_fixture' };

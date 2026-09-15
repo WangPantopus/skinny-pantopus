@@ -147,7 +147,7 @@ class GigTipRecovery(
                         accept(value, saved)
                     } catch (_: NetworkError.NotFound) {
                         val next = readPreview()
-                        mayResume = next.eligible && next.terms == saved.terms
+                        mayResume = saved.source != "legacy" && next.eligible && next.terms == saved.terms
                         if (next.activeRequestId != null && next.activeRequestId != saved.requestId) {
                             conflict = readOther(next.activeRequestId)
                         }
@@ -155,15 +155,15 @@ class GigTipRecovery(
                     }
                 } else if (!retainedOnly) {
                     val next = readPreview()
+                    val existingId = next.activeRequestId ?: next.legacyPaymentId
                     when {
-                        next.activeRequestId != null -> {
-                            val active = readOther(next.activeRequestId)
+                        existingId != null -> {
+                            val active = readOther(existingId)
+                            check(next.legacyPaymentId == null || active.request.source == "legacy")
                             retain(active.request, null)
                             original = active.request
                             accept(active, active.request)
                         }
-                        next.legacyPaymentId != null ->
-                            message = "An earlier tip needs checking in payment history before another tip can be sent."
                         !next.eligible -> message = "This task is not currently available for a tip. Reopen its details before continuing."
                     }
                 }
@@ -300,7 +300,7 @@ class GigTipRecovery(
         } catch (error: Throwable) {
             if (isCurrentMarker()) {
                 recoverConflict(error)
-                if (original != null && progress?.paymentIntentId == null) mayResume = true
+                if (original != null && original?.source != "legacy" && progress?.paymentIntentId == null) mayResume = true
                 message = "The tip result is unconfirmed. Reopen and check the same original request."
                 _status.value = TipStatus.Failed(message)
             } else {
@@ -350,6 +350,7 @@ class GigTipRecovery(
     ): TipResponse {
         requireCurrent()
         check(readStored() == saved)
+        check(saved.source != "legacy" || mode != "resume")
         val command =
             TipRequest(
                 saved.requestId,
@@ -411,6 +412,8 @@ class GigTipRecovery(
         message =
             when {
                 result.changedAfterCapture -> "This tip has a payment record. Check history for its refund or dispute status."
+                result.request.source == "legacy" && !result.terminal ->
+                    "This earlier tip keeps its original amount and worker. Check its status or cancel it before sending another."
                 result.status == "needs_review" -> "This original tip needs review. Check payment history before continuing."
                 result.status == "canceled" -> "The original tip is canceled with no charge."
                 result.status == "succeeded" -> "The original tip is confirmed."
