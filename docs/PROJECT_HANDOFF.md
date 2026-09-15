@@ -193,6 +193,23 @@ the immediate direction unless the owner changes priorities.
 
 ## Evidence index and local continuation
 
+September 9 product-design addition: [Places and social conversations](pantopus-place-social-design-2026-09-09.md)
+specifies canonical public place identity, original-post/reply continuity,
+map/list behavior, quiet and viral places, sensitive-location safeguards, and
+a phased implementation. It preserves existing features and the nationwide
+utility direction. This is design only; the operational backlog above continues.
+The expanded [place-page concept](designs/pantopus-place-page-concept-2026-09-09.html)
+adds Recent conditions, contextual Offers, and Visit info with rules/sources.
+Sections 6, 10.6 and 12.1 of the proposal specify the interface, backend contracts,
+and acceptance cases for stale/conflicting reports, offer expiry and corrections.
+The companion uses fictional session-only examples; its export is not application
+implementation or evidence of live status, moderation, redemption or persistence.
+The code audit identifies platform tag/precision parity and alternate-coordinate
+privacy checks to resolve before broader map exposure. The earlier nationwide
+design is preserved on `improve-product-feature` at `6664315bb`, linked from the
+new document; it is not present in this master checkout. No application code,
+deployment, migration, fixture, or private operator state changed in this milestone.
+
 Public, versioned reports contain sanitized findings rather than raw secrets:
 
 - [Recovery, backup/restore, schema gaps and runtime](backend-recovery-2026-09-07.md).
