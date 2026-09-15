@@ -6,6 +6,7 @@ import GigChatActions from '@/components/chat/GigChatActions';
 import MyGigsPage from '@/app/(app)/app/my-gigs/page';
 import MyGigsV2Page from '@/app/(app)/app/my-gigs-v2/page';
 import MyBidsPage from '@/app/(app)/app/my-bids/page';
+import ActiveTaskPanel from '@/components/gig-detail-v2/ActiveTaskPanel';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { toast } from '@/components/ui/toast-store';
 
@@ -21,6 +22,9 @@ const mockStart = jest.fn();
 const mockAcceptCounter = jest.fn();
 const mockDeclineCounter = jest.fn();
 const mockWithdraw = jest.fn();
+const mockActiveStatus = jest.fn();
+const mockUpdateStatus = jest.fn();
+const mockConfirmCompletion = jest.fn();
 const mockRouter = { push: mockPush };
 const mockTokenListeners = new Set<() => void>();
 let mockToken: string | null = 'cookie-session';
@@ -34,6 +38,8 @@ jest.mock('@pantopus/api', () => ({
     getGigBids: (...args: unknown[]) => mockBids(...args), acceptBid: (...args: unknown[]) => mockAccept(...args),
     getMyGigs: (...args: unknown[]) => mockMyGigs(...args), rejectBid: (...args: unknown[]) => mockReject(...args),
     completeGig: (...args: unknown[]) => mockComplete(...args),
+    getActiveStatus: (...args: unknown[]) => mockActiveStatus(...args), updateUrgentStatus: (...args: unknown[]) => mockUpdateStatus(...args),
+    confirmGigCompletion: (...args: unknown[]) => mockConfirmCompletion(...args),
     getMyBids: (...args: unknown[]) => mockMyBids(...args), markGigCompleted: (...args: unknown[]) => mockMark(...args),
     startGig: (...args: unknown[]) => mockStart(...args), acceptCounter: (...args: unknown[]) => mockAcceptCounter(...args),
     declineCounter: (...args: unknown[]) => mockDeclineCounter(...args), withdrawBid: (...args: unknown[]) => mockWithdraw(...args),
@@ -50,7 +56,7 @@ beforeEach(() => {
   jest.clearAllMocks(); mockTokenListeners.clear(); mockToken = 'cookie-session';
   mockMyGigs.mockReset(); mockBids.mockReset(); mockReject.mockReset(); mockComplete.mockReset();
   jest.mocked(confirmStore.open).mockReset();
-  [mockMyBids, mockMark, mockStart, mockAcceptCounter, mockDeclineCounter, mockWithdraw].forEach(mock => mock.mockReset());
+  [mockMyBids, mockMark, mockStart, mockAcceptCounter, mockDeclineCounter, mockWithdraw, mockActiveStatus, mockUpdateStatus, mockConfirmCompletion].forEach(mock => mock.mockReset());
   localStorage.clear(); localStorage.setItem('pantopus:auth-session-change', 'session-a');
 });
 
@@ -337,4 +343,134 @@ test.each([
 test('My bids preserves signed-out navigation without private reads', async () => {
   mockToken = null; renderMyGigs(MyBidsPage); await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/login'));
   expect(mockMyBids).not.toHaveBeenCalled();
+});
+
+
+function activePanel(isOwner = false, onStatusChange = jest.fn(), overrides: Partial<React.ComponentProps<typeof ActiveTaskPanel>> = {}) {
+  mockActiveStatus.mockResolvedValue({ gigId: 'gig-a', fulfillment_status: 'in_progress' });
+  const props = { currentUserId: isOwner ? 'owner-a' : 'worker-a',
+    isOwner, isWorker: !isOwner, socket: null, onOpenChat: jest.fn(), onCancel: jest.fn(), onStatusChange, ...overrides,
+    gig: { ...workerBid.gig, accepted_by: 'worker-a', is_urgent: true, urgent_details: { current_fulfillment_status: 'in_progress' }, ...overrides.gig } };
+  return { props, onStatusChange, ...render(<ActiveTaskPanel {...props} />) };
+}
+
+test('v2 active panel cannot submit a departed worker confirmation', async () => {
+  const held = deferred<boolean>(); jest.mocked(confirmStore.open).mockReturnValue(held.promise);
+  const panel = activePanel(); fireEvent.click(await screen.findByRole('button', { name: 'Task complete' })); panel.unmount();
+  await act(async () => held.resolve(true)); expect(mockMark).not.toHaveBeenCalled();
+});
+
+test('v2 active panel cannot accept an empty worker completion receipt', async () => {
+  jest.mocked(confirmStore.open).mockResolvedValue(true); mockMark.mockResolvedValue({});
+  const panel = activePanel(); fireEvent.click(await screen.findByRole('button', { name: 'Task complete' }));
+  await waitFor(() => expect(mockMark).toHaveBeenCalledTimes(1));
+  expect(panel.onStatusChange).not.toHaveBeenCalled(); expect(toast.error).toHaveBeenCalled();
+});
+
+test('v2 active panel cannot offer owner confirmation before worker completion', async () => {
+  activePanel(true); await screen.findAllByText('In progress');
+  expect(screen.queryByRole('button', { name: 'Mark complete' })).not.toBeInTheDocument();
+});
+
+
+test.each([
+  { id: 'other' }, { status: 'in_progress' }, { accepted_by: 'other' }, { worker_completed_at: null },
+  { worker_completed_at: 'invalid' }, { completion_note: 'Unexpected note' }, { completion_photos: ['other'] },
+])('v2 active panel rejects mismatched worker receipt %p', async mismatch => {
+  jest.mocked(confirmStore.open).mockResolvedValue(true); mockMark.mockResolvedValue({ gig: { ...workerReceipt, ...mismatch } });
+  const panel = activePanel(); fireEvent.click(await screen.findByRole('button', { name: 'Task complete' }));
+  await waitFor(() => expect(toast.error).toHaveBeenCalled()); expect(panel.onStatusChange).not.toHaveBeenCalled();
+});
+
+test('v2 active panel preserves current worker completion with a matching receipt', async () => {
+  jest.mocked(confirmStore.open).mockResolvedValue(true); mockMark.mockResolvedValue({ gig: workerReceipt });
+  const panel = activePanel(); fireEvent.click(await screen.findByRole('button', { name: 'Task complete' }));
+  await waitFor(() => expect(panel.onStatusChange).toHaveBeenCalledTimes(1));
+  expect(mockMark).toHaveBeenCalledWith('gig-a', {}); expect(toast.error).not.toHaveBeenCalled();
+});
+
+test('v2 active panel retires a pending confirmation after role rebinding', async () => {
+  const held = deferred<boolean>(); jest.mocked(confirmStore.open).mockReturnValue(held.promise);
+  const panel = activePanel(); fireEvent.click(await screen.findByRole('button', { name: 'Task complete' }));
+  panel.rerender(<ActiveTaskPanel {...panel.props} currentUserId="replacement" isWorker={false} />);
+  await act(async () => held.resolve(true)); expect(mockMark).not.toHaveBeenCalled();
+});
+
+test('v2 active panel retires its controls and pending confirmation with the session', async () => {
+  const held = deferred<boolean>(); jest.mocked(confirmStore.open).mockReturnValue(held.promise);
+  activePanel(); fireEvent.click(await screen.findByRole('button', { name: 'Task complete' }));act(replaceSession);
+  expect(screen.queryByRole('button', { name: 'Task complete' })).not.toBeInTheDocument();
+  await act(async () => held.resolve(true)); expect(mockMark).not.toHaveBeenCalled();
+});
+
+test('v2 active panel ignores a completion receipt delivered after departure', async () => {
+  const held = deferred<unknown>(); mockMark.mockReturnValue(held.promise); jest.mocked(confirmStore.open).mockResolvedValue(true);
+  const panel = activePanel(); fireEvent.click(await screen.findByRole('button', { name: 'Task complete' }));
+  await waitFor(() => expect(mockMark).toHaveBeenCalledTimes(1)); panel.unmount();
+  await act(async () => held.resolve({ gig: workerReceipt })); expect(panel.onStatusChange).not.toHaveBeenCalled(); expect(toast.error).not.toHaveBeenCalled();
+});
+
+test('v2 active panel cannot advance fulfillment from an empty status receipt', async () => {
+  mockActiveStatus.mockResolvedValueOnce({ fulfillment_status: null }); mockUpdateStatus.mockResolvedValue({});
+  activePanel(false, jest.fn(), { gig: { ...workerBid.gig, urgent_details: null } });
+  fireEvent.click(await screen.findByRole('button', { name: "I'm on the way" }));
+  await waitFor(() => expect(mockUpdateStatus).toHaveBeenCalledTimes(1));
+  expect(screen.queryByRole('button', { name: "I've arrived" })).not.toBeInTheDocument(); expect(toast.error).toHaveBeenCalled();
+});
+
+
+function panelSocket() {
+  const handlers = new Map<string, (value: Record<string, unknown>) => void>();
+  const socket = { on: (event: string, handler: (value: Record<string, unknown>) => void) => handlers.set(event, handler),
+    off: (event: string, handler: (value: Record<string, unknown>) => void) => { if (handlers.get(event) === handler) handlers.delete(event); } };
+  return { socket: socket as unknown as React.ComponentProps<typeof ActiveTaskPanel>['socket'],
+    send: (status: string) => handlers.get('gig_status_update')?.({ gigId: 'gig-a', fulfillmentStatus: status }) };
+}
+const statusReceipt = (status: string) => ({ gig: { id: 'gig-a', urgent_details: { current_fulfillment_status: status } }, fulfillment_status: status });
+
+test('v2 active panel ignores an older read after its current socket update', async () => {
+  const held = deferred<unknown>(); mockActiveStatus.mockReturnValueOnce(held.promise); const socket = panelSocket();
+  const panel = activePanel(false, jest.fn(), { socket: socket.socket, gig: { ...workerBid.gig, urgent_details: null } });
+  await waitFor(() => expect(mockActiveStatus).toHaveBeenCalledTimes(1)); act(() => socket.send('in_progress'));
+  await act(async () => held.resolve({ fulfillment_status: 'on_the_way' }));
+  expect(screen.getByRole('button', { name: 'Task complete' })).toBeInTheDocument(); expect(panel.onStatusChange).toHaveBeenCalledTimes(1);
+});
+
+test('v2 active panel preserves a newer socket status after the previous status reply', async () => {
+  const held = deferred<unknown>(); mockUpdateStatus.mockReturnValue(held.promise); mockActiveStatus.mockResolvedValueOnce({ fulfillment_status: null });
+  const socket = panelSocket(); activePanel(false, jest.fn(), { socket: socket.socket, gig: { ...workerBid.gig, urgent_details: null } });
+  fireEvent.click(await screen.findByRole('button', { name: "I'm on the way" })); await waitFor(() => expect(mockUpdateStatus).toHaveBeenCalledTimes(1));
+  act(() => socket.send('arrived')); await act(async () => held.resolve(statusReceipt('on_the_way')));
+  expect(screen.getByRole('button', { name: 'Task complete' })).toBeInTheDocument();
+});
+
+test('v2 active panel advances its existing controls after a matching status receipt', async () => {
+  mockActiveStatus.mockResolvedValueOnce({ fulfillment_status: null }); mockUpdateStatus.mockResolvedValue(statusReceipt('on_the_way'));
+  activePanel(false, jest.fn(), { gig: { ...workerBid.gig, urgent_details: null } });
+  fireEvent.click(await screen.findByRole('button', { name: "I'm on the way" }));
+  await screen.findByRole('button', { name: "I've arrived" }); expect(mockUpdateStatus).toHaveBeenCalledWith('gig-a', { status: 'on_the_way' }); expect(toast.error).not.toHaveBeenCalled();
+});
+
+test.each([false, true])('v2 active panel applies only a matching owner confirmation (saved=%s)', async saved => {
+  jest.mocked(confirmStore.open).mockResolvedValue(true); mockConfirmCompletion.mockResolvedValue(saved ? { gig: { ...workerReceipt, owner_confirmed_at: '2026-09-15T13:00:00Z' } } : {});
+  const panel = activePanel(true, jest.fn(), { gig: { ...workerBid.gig, status: 'completed', completion_review: 'a'.repeat(64) } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Mark complete' })); await waitFor(() => expect(mockConfirmCompletion).toHaveBeenCalledTimes(1));
+  expect(mockConfirmCompletion).toHaveBeenCalledWith('gig-a', { expectedReview: 'a'.repeat(64) });
+  expect(panel.onStatusChange).toHaveBeenCalledTimes(saved ? 1 : 0); expect(toast.error).toHaveBeenCalledTimes(saved ? 0 : 1);
+});
+
+
+test('v2 active panel does not send ordinary tasks to the urgent-only status endpoint', async () => {
+  mockActiveStatus.mockRejectedValueOnce({ statusCode: 400, message: 'This endpoint is only for urgent tasks' });
+  activePanel(false, jest.fn(), { gig: { ...workerBid.gig, status: 'assigned', is_urgent: false, starts_asap: false, urgent_details: null } });
+  await screen.findByText('Safety');
+  expect(mockActiveStatus).not.toHaveBeenCalled(); expect(screen.queryByRole('button', { name: "I'm on the way" })).not.toBeInTheDocument();
+});
+
+
+test('v2 active panel preserves ordinary worker completion without urgent status requests', async () => {
+  jest.mocked(confirmStore.open).mockResolvedValue(true); mockMark.mockResolvedValue({ gig: workerReceipt });
+  const panel = activePanel(false, jest.fn(), { gig: { ...workerBid.gig, is_urgent: false, starts_asap: false, urgent_details: null } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Task complete' }));
+  await waitFor(() => expect(panel.onStatusChange).toHaveBeenCalledTimes(1)); expect(mockActiveStatus).not.toHaveBeenCalled();
 });

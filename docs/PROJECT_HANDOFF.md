@@ -469,14 +469,25 @@ pass (zero errors/two existing warnings, including the existing ts-nocheck).
 Five actual Chrome cases pass with synthetic responses and the real query provider,
 API client/session signals and root confirmation. Two existing source/test files
 change; no new screen, hook, backend or schema. See [My bids evidence](VERIFICATION_FIRST_2026-09-13.md#existing-my-bids-reader-and-command-lifetime).
-Owned browser fixture/port3107 are cleaned; configs restored exactly. This and the
-worker60bdd6ba6/web4ddcdaa65 checkpoints are ready for the combined CI push.
+Owned browser fixture/port3107 are cleaned; configs restored exactly. This and worker60bdd6ba6/web4ddcdaa65 are pushed together atb513c8184 on both
+branches. CI34980516319 passed backend/schema/web/static gates; native jobs were
+still running at the last check. Preserve that run instead of canceling it.
 
-**Next:** verify the reachable v2 active-task completion caller and containing detail
-page, then completion draft/restart behavior. The existing upload service already
-content-addresses completion File records and recovers unknown upload replies.
-Reuse it; no replacement upload store/table is required. There is no active web
-rebook/boost caller to rebuild.
+**V2 detail/active-panel follow-up:** ten reproduced failures are repaired in the
+existing page/panel: session/departure/rebinding, stale reads, neighboring socket
+listeners, completion/status receipt validation and premature owner confirmation.
+Ordinary tasks now use their existing task status; only urgent tasks call the
+urgent-only endpoint and show its controls.187 tests, types and lint pass (zero
+errors/the same27 baseline warnings), plus six Chrome cases. Five existing files
+change, with no new screen, backend or migration. See [v2 evidence](VERIFICATION_FIRST_2026-09-13.md#existing-v2-task-detail-and-active-panel-lifetime).
+The owned fixture/port3107 are stopped and original configs restored. Current-head
+CI is still required for this local follow-up; PR34 remains draft.
+
+**Next:** verify existing ETA/status sharing, including session retirement, current
+helper location, link privacy and the shared-link destination. Locate its existing
+columns, routes and consumers before changing anything. Completion draft/restart
+continues after that boundary; content-addressed File upload recovery already exists
+and must be reused. There is no active web rebook/boost caller to rebuild.
 Full installed native MyTasks/owner lifetime remains open. Continue completion
 draft/restart verification using existing storage first. Generic maintenance granular authority/raw RLS, Home-origin admission
 and full maintenance UI acceptance remain separate follow-ups; this bounded history

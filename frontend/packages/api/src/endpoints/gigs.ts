@@ -412,8 +412,8 @@ export async function markGigCompleted(
 export async function confirmGigCompletion(
   gigId: string,
   data: { expectedReview: string | null; satisfaction?: number; note?: string }
-): Promise<{ gig: Gig }> {
-  return post<{ gig: Gig }>(`/api/gigs/${gigId}/confirm-completion`, data || {});
+): Promise<{ gig: GigSchema }> {
+  return post<{ gig: GigSchema }>(`/api/gigs/${gigId}/confirm-completion`, data || {});
 }
 
 /**

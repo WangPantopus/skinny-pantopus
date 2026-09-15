@@ -1,3 +1,4 @@
+import { toast } from '@/components/ui/toast-store';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as api from '@pantopus/api';
 import type { GigStopPreview, GigStopProgress, GigStopRequest } from '@pantopus/api';
@@ -15,7 +16,9 @@ const listeners = new Set<() => void>();
 let token: string | null = 'opening-session';
 let origin = 'https://app.test';
 const router = { push: jest.fn(), replace: jest.fn() };
-jest.mock('next/navigation', () => ({ useRouter: () => router, useParams: () => ({ id: gigId }), useSearchParams: () => new URLSearchParams() }));
+let mockRouteGigId = gigId;
+let mockDetailSocket: ReturnType<typeof detailSocket> | null = null;
+jest.mock('next/navigation', () => ({ useRouter: () => router, useParams: () => ({ id: mockRouteGigId }), useSearchParams: () => new URLSearchParams() }));
 jest.mock('next/dynamic', () => () => () => null);
 jest.mock('next/image', () => () => null);
 jest.mock('@pantopus/ui-utils', () => ({ formatTimeAgo: () => 'today' }));
@@ -27,7 +30,7 @@ jest.mock('@pantopus/api', () => ({
     submitGigStopRequest: jest.fn(), checkNoShow: jest.fn(), getGigOffersV2: jest.fn() },
   upload: { getGigMedia: jest.fn() }, payments: { getPaymentForGig: jest.fn() },
 }));
-jest.mock('@/contexts/BadgeContext', () => ({ useBadges: () => ({ socket: null, connected: true }) }));
+jest.mock('@/contexts/BadgeContext', () => ({ useBadges: () => ({ socket: mockDetailSocket, connected: true }) }));
 jest.mock('@/hooks/useBusinessGigAccess', () => ({ useBusinessGigAccess: () => false }));
 jest.mock('@/hooks/usePaymentRedirectCleanup', () => ({ usePaymentRedirectCleanup: () => {} }));
 jest.mock('@/lib/signal-buffer', () => ({ pushSignal: jest.fn() }));
@@ -69,7 +72,7 @@ const done: GigStopProgress = { ...pending, status: 'completed', canRetry: false
     currency: 'usd', action: 'worker_release', gigStatus: 'open', financialStatus: 'none' } };
 
 beforeEach(() => {
-  jest.clearAllMocks(); localStorage.clear(); listeners.clear(); token = 'opening-session'; origin = 'https://app.test';
+  jest.clearAllMocks(); jest.mocked(api.gigs.getGigById).mockReset(); mockDetailSocket = null; mockRouteGigId = gigId; localStorage.clear(); listeners.clear(); token = 'opening-session'; origin = 'https://app.test';
   jest.mocked(api.users.getMyProfile).mockResolvedValue({ id: worker } as never);
   jest.mocked(api.gigs.getGigById).mockResolvedValue({ id: gigId, user_id: owner, accepted_by: null,
     status: 'open', title: 'Current task', price: 0 } as never);
@@ -340,4 +343,74 @@ test('a late profile from a previous gig cannot repopulate a reused entry', asyn
   await act(async () => resolve({ id: worker } as never));
   expect(screen.queryByRole('button', { name: 'View saved action status' })).not.toBeInTheDocument();
   expect(localStorage.getItem(key)).not.toBeNull();
+});
+
+
+function heldDetail<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(done => { resolve = done; });
+  return { promise, resolve };
+}
+function replaceDetailSession() {
+  localStorage.setItem('session-change', 'replacement');
+  for (const listener of listeners) listener();
+}
+
+test('v2 detail retires private task data after same-cookie account replacement', async () => {
+  render(<V2Page />); await screen.findByText('Current task'); act(replaceDetailSession);
+  expect(screen.queryByText('Current task')).not.toBeInTheDocument();
+});
+
+test('v2 detail ignores a held response after account replacement', async () => {
+  const held = heldDetail<never>(); jest.mocked(api.gigs.getGigById).mockReturnValue(held.promise);
+  render(<V2Page />); await waitFor(() => expect(api.gigs.getGigById).toHaveBeenCalledTimes(1));
+  act(replaceDetailSession);
+  await act(async () => held.resolve({ id: gigId, user_id: owner, title: 'Retired private task', status: 'open', price: 0 } as never));
+  expect(screen.queryByText('Retired private task')).not.toBeInTheDocument();
+});
+
+test('v2 detail ignores a delivered read error after page departure', async () => {
+  const held = heldDetail<never>(); jest.mocked(api.gigs.getGigById).mockReturnValue(held.promise);
+  const page = render(<V2Page />); await waitFor(() => expect(api.gigs.getGigById).toHaveBeenCalledTimes(1));page.unmount();
+  await act(async () => held.resolve(Promise.reject(new Error('Retired read')) as never));
+  expect(toast.error).not.toHaveBeenCalled();
+});
+
+
+function detailSocket() {
+  const handlers = new Map<string, Set<() => void>>();
+  return {
+    on: (event: string, handler: () => void) => { const set = handlers.get(event) ?? new Set(); set.add(handler); handlers.set(event, set); },
+    off: (event: string, handler?: () => void) => { if (handler) handlers.get(event)?.delete(handler); else handlers.delete(event); },
+    emit: (event: string) => { for (const handler of handlers.get(event) ?? []) handler(); },
+    handlers,
+  };
+}
+
+test('v2 detail preserves a newer refresh when the older request finishes', async () => {
+  mockDetailSocket = detailSocket(); render(<V2Page />); await screen.findByText('Current task');
+  const held = heldDetail<never>(); jest.mocked(api.gigs.getGigById).mockReturnValueOnce(held.promise)
+    .mockResolvedValueOnce({ id: gigId, user_id: owner, title: 'Newer accepted detail', status: 'open', price: 0 } as never);
+  act(() => { mockDetailSocket!.emit('gig:status-change'); mockDetailSocket!.emit('gig:status-change'); });
+  await screen.findByText('Newer accepted detail');
+  await act(async () => held.resolve({ id: gigId, user_id: owner, title: 'Obsolete detail', status: 'open', price: 0 } as never));
+  expect(screen.queryByText('Obsolete detail')).not.toBeInTheDocument();
+  expect(screen.getByText('Newer accepted detail')).toBeInTheDocument();
+});
+
+test('v2 detail departure preserves another consumer of the same socket topic', async () => {
+  mockDetailSocket = detailSocket(); const listener = jest.fn(); mockDetailSocket.on('gig:bid-update', listener);
+  const page = render(<V2Page />); await screen.findByText('Current task'); page.unmount();
+  mockDetailSocket.emit('gig:bid-update'); expect(listener).toHaveBeenCalledTimes(1);
+});
+
+
+test('v2 detail rebinding cannot adopt a response from the previous task', async () => {
+  const held = heldDetail<never>(); jest.mocked(api.gigs.getGigById).mockReturnValueOnce(held.promise);
+  const page = render(<V2Page />); await waitFor(() => expect(api.gigs.getGigById).toHaveBeenCalledWith(gigId));
+  mockRouteGigId = '77777777-7777-4777-8777-777777777777';
+  jest.mocked(api.gigs.getGigById).mockResolvedValue({ id: mockRouteGigId, user_id: owner, title: 'Current different task', status: 'open', price: 0 } as never);
+  page.rerender(<V2Page />); await screen.findByText('Current different task');
+  await act(async () => held.resolve({ id: gigId, user_id: owner, title: 'Previous task private detail', status: 'open', price: 0 } as never));
+  expect(screen.queryByText('Previous task private detail')).not.toBeInTheDocument(); expect(screen.getByText('Current different task')).toBeInTheDocument();
 });

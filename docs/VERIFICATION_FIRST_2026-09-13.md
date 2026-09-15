@@ -4062,3 +4062,59 @@ under `existing-tip-provider-proof-r1/my-bids-web-*` and its durable private mir
 PR34 remains draft. This and worker60bdd6ba6/web4ddcdaa65 await the combined CI push.
 The reachable v2 active-task caller and its containing detail page remain separate
 verification; no full paid, account, installed or provider journey is closed here.
+
+
+## Existing v2 task detail and active-panel lifetime
+
+The existing reachable detail page and active panel had separate unguarded loaders,
+confirmations and socket handlers. Baseline R2 reproduces eight failures: retired
+worker confirmation sends, empty worker receipt succeeds, premature owner confirmation
+is offered, account replacement retains private detail, a held old response restores
+it, a departed error emits a toast, an older refresh replaces newer data, and page
+cleanup removes another consumer's socket listener. R1's owner assertion initially
+matched two progress labels; R2 corrects that selector and reproduces the button.
+Two further baselines reproduce empty urgent-status receipts advancing the controls
+and ordinary tasks calling the backend's explicitly urgent-only endpoint.
+
+The existing page and panel reuse useGigListSession. Per-loader versions and mounted
+scope checks retire reads/errors/commands; route-id keys retire rebinding. Socket
+cleanup removes only its own callbacks. The panel binds actions to current task,
+actor, role and loaded state, rejects missing/mismatched worker/owner/status receipts,
+and preserves newer socket status over older reads/replies. Ordinary tasks use their
+existing assigned/in-progress state and shared completion action without calling the
+urgent endpoint; urgent tasks retain their existing progression controls. Owner
+confirmation requires completed worker state; the existing CompletionFlow remains
+the actual page's owner entry once the active panel leaves. The SDK's owner response
+reuses the already-exported raw GigSchema. Five existing source/test files change;
+no new file, screen, route, backend, table or migration is introduced. Cards, styles
+and navigation destinations are preserved.
+
+Final R4 passes187 tests across three existing suites, and TypeScript passes. Scoped
+lint has zero errors/the same27 baseline warnings. Earlier new hook dependency/ref
+warnings were corrected without rule waivers; the baseline warning count is retained.
+R1 types exposed the old SDK Gig response shape, corrected to GigSchema before R2
+passed. A wrapper initially omitted its deferred lint command after that type failure;
+the explicit lint runner and subsequent complete command sets pass. Coverage includes
+positive ordinary/urgent completion, matching status/owner receipts, task rebinding,
+retired callbacks, seven mismatched worker receipt fields and socket ordering.
+
+Chrome R4 passes six cases using the actual compiled page, active panel, API client
+session signals and root confirmation: same-cookie reentry, cross-tab held read,
+departed confirmation, invalid/matching receipt retry, owner awaiting worker and
+ordinary completion with zero urgent-status reads. R1 omitted the existing payout
+account GET and failed its fixture coverage assertion after the first scenario; R2
+supplies its expected404 and passes five cases. R3 verifies the hook cleanup refinement.
+Those earlier fixtures did not enforce urgent-only backend admission. R4 explicitly
+marks urgent fixtures, rejects ordinary active-status requests, and adds the ordinary
+case after its separate failing baseline. Responses/authentication/entry controls are
+synthetic; the badge socket is the existing null default, with socket behavior tested
+separately. No full backend/SQL/provider or installed lifecycle is established.
+
+Source hashes, baseline/final runs, browser screenshots and served entry chunks are
+under `existing-tip-provider-proof-r1/v2-task-*` and the durable private mirror.
+Owned server/port3107, fixture route and build cache are cleaned; tsconfig and
+next-env are restored exactly. No native rebuild or hosted operation ran here.
+The preceding b513c8184 is running CI34980516319, with backend/schema/web/static
+checks passing at last inspection; this follow-up needs its own CI. PR34 stays draft.
+Existing ETA/location/share-link privacy and child-action retirement remain separate
+verification, alongside completion drafts/restart and the broader inventory.

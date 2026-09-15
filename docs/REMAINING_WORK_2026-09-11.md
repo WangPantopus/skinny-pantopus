@@ -144,9 +144,15 @@ My bids now passes129 selected web tests and five actual Chrome scenarios after
 six reproduced reader/action/receipt failures. The existing page/test reuse the
 session hook, current receipt and modal attempt guards; types/lint pass within the
 existing ts-nocheck/two-warning limit. See [My bids evidence](VERIFICATION_FIRST_2026-09-13.md#existing-my-bids-reader-and-command-lifetime).
-The v2 active-task caller/containing page and draft/restart behavior remain next;
-existing content-addressed File upload recovery is preserved. These checkpoints
-await combined CI; no full inventory row is closed by them.
+The combined web/worker checkpointb513c8184 is pushed on both branches; CI34980516319
+passes backend/schema/web/static gates with native jobs still running at last check.
+The subsequent v2 detail/panel follow-up passes187 tests, types/lint (same27 baseline
+warnings) and six Chrome cases after ten reproduced failures. Five existing files
+repair lifetime/receipts, urgent-only admission and socket cleanup; no new screen,
+backend or migration. See [v2 evidence](VERIFICATION_FIRST_2026-09-13.md#existing-v2-task-detail-and-active-panel-lifetime).
+Existing ETA/status-sharing privacy and link behavior are next, then draft/restart;
+existing content-addressed File upload recovery is preserved. The v2 follow-up still
+needs its own CI. No full inventory row is closed by these bounded checks.
 The preceding main-list change added one Android regression file to preserve the
 existing test-class size rule.
 No inventory row is closed by these bounded checks.

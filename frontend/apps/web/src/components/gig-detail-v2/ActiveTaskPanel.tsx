@@ -1,7 +1,8 @@
 'use client';
 
 import { getErrorMessage } from '@pantopus/utils';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useGigListSession } from '@/hooks/useGigListSession';
 import {
   Car,
   MapPin,
@@ -29,6 +30,7 @@ type FulfillmentStatus =
   | null;
 
 interface ActiveTaskPanelProps {
+  currentUserId: string;
   gig: any;
   isOwner: boolean;
   isWorker: boolean;
@@ -76,6 +78,7 @@ function getStatusBadge(status: FulfillmentStatus): {
 }
 
 export default function ActiveTaskPanel({
+  currentUserId,
   gig,
   isOwner,
   isWorker,
@@ -88,9 +91,25 @@ export default function ActiveTaskPanel({
     useState<FulfillmentStatus>(null);
   const [helperEta, setHelperEta] = useState<number | null>(null);
   const [updating, setUpdating] = useState(false);
+  const session = useGigListSession();
+  const isUrgent = Boolean(gig.is_urgent || gig.starts_asap);
+  const { isCurrent: isSessionCurrent } = session;
+  const binding = JSON.stringify([gig.id, currentUserId, isOwner, isWorker, gig.status, gig.completion_review, isUrgent]);
+  const latestBinding = useRef(binding);
+  latestBinding.current = binding;
+  const isCurrent = useCallback(() => isSessionCurrent() && latestBinding.current === binding, [isSessionCurrent, binding]);
+  const statusVersion = useRef(0);
+  const updateAttempt = useRef(0);
+  const updatingNow = useRef(false);
+
+  useEffect(() => {
+    updateAttempt.current++; updatingNow.current = false; setUpdating(false);
+  }, [binding]);
 
   // Parse initial status from gig.urgent_details
   useEffect(() => {
+    setFulfillmentStatus(gig.status === 'in_progress' ? 'in_progress' : null); setHelperEta(null);
+    if (!isUrgent) return;
     try {
       const details =
         typeof gig.urgent_details === 'string'
@@ -103,27 +122,33 @@ export default function ActiveTaskPanel({
     } catch {
       // ignore parse errors
     }
-  }, [gig.urgent_details]);
+  }, [gig.id, gig.status, gig.urgent_details, isUrgent]);
 
   // Fetch active status on mount
   useEffect(() => {
+    if (!isCurrent() || !isUrgent) return;
+    const version = ++statusVersion.current;
+    let active = true;
     api.gigs
       .getActiveStatus(gig.id)
       .then((result) => {
+        if (!active || !isCurrent() || statusVersion.current !== version) return;
         setFulfillmentStatus(
           (result.fulfillment_status as FulfillmentStatus) || null,
         );
         setHelperEta(result.helper_eta_minutes);
       })
       .catch(() => {});
-  }, [gig.id]);
+    return () => { active = false; };
+  }, [gig.id, isCurrent, isUrgent]);
 
   // Listen for real-time status updates
   useEffect(() => {
-    if (!socket || !gig.id) return;
+    if (!socket || !gig.id || !isCurrent() || !isUrgent) return;
 
     const onStatusUpdate = (data: any) => {
-      if (data.gigId !== gig.id) return;
+      if (data.gigId !== gig.id || !isCurrent()) return;
+      statusVersion.current++;
       setFulfillmentStatus(data.fulfillmentStatus || null);
       if (data.helper_eta_minutes != null) setHelperEta(data.helper_eta_minutes);
       onStatusChange();
@@ -133,27 +158,35 @@ export default function ActiveTaskPanel({
     return () => {
       socket.off('gig_status_update', onStatusUpdate);
     };
-  }, [socket, gig.id, onStatusChange]);
+  }, [socket, gig.id, onStatusChange, isCurrent, session.active, isUrgent]);
 
   const updateStatus = useCallback(
     async (status: string) => {
-      if (updating) return;
-      setUpdating(true);
+      if (updatingNow.current || !isCurrent() || !isUrgent) return;
+      const attempt = ++updateAttempt.current;
+      const version = ++statusVersion.current;
+      updatingNow.current = true; setUpdating(true);
       try {
-        await api.gigs.updateUrgentStatus(gig.id, {
+        const response = await api.gigs.updateUrgentStatus(gig.id, {
           status: status as any,
         });
+        if (!isCurrent() || statusVersion.current !== version) return;
+        if (response?.gig?.id !== gig.id || response.fulfillment_status !== status
+          || response.gig.urgent_details?.current_fulfillment_status !== status) {
+          throw new Error('Status could not be confirmed. Reopen the task to check its status.');
+        }
         setFulfillmentStatus(status as FulfillmentStatus);
       } catch (err: any) {
-        toast.error(err?.message || 'Failed to update status');
+        if (isCurrent() && statusVersion.current === version) toast.error(err?.message || 'Failed to update status');
       } finally {
-        setUpdating(false);
+        if (isCurrent() && updateAttempt.current === attempt) { updatingNow.current = false; setUpdating(false); }
       }
     },
-    [gig.id, updating],
+    [gig.id, isCurrent, isUrgent],
   );
 
   const handleMarkComplete = useCallback(async () => {
+    if (!isCurrent() || !isWorker || !currentUserId) return;
     const yes = await confirmStore.open({
       title: 'Mark Complete',
       description:
@@ -161,30 +194,45 @@ export default function ActiveTaskPanel({
       confirmLabel: 'Complete',
       variant: 'primary',
     });
-    if (!yes) return;
+    if (!yes || !isCurrent()) return;
     try {
-      await api.gigs.markGigCompleted(gig.id, {});
+      const response = await api.gigs.markGigCompleted(gig.id, {});
+      if (!isCurrent()) return;
+      const receipt = response?.gig;
+      if (!receipt || receipt.id !== gig.id || receipt.status !== 'completed' || receipt.accepted_by !== currentUserId
+        || !Number.isFinite(Date.parse(receipt.worker_completed_at || ''))
+        || (receipt.completion_note ?? null) !== null || (receipt.completion_photos ?? []).length !== 0) {
+        throw new Error('Completion could not be confirmed. Reopen the task to check its status.');
+      }
       onStatusChange();
-    } catch {
-      toast.error('Failed to mark completed');
+    } catch (error) {
+      if (isCurrent()) toast.error(getErrorMessage(error));
     }
-  }, [gig.id, onStatusChange]);
+  }, [gig.id, onStatusChange, isCurrent, isWorker, currentUserId]);
 
   const handleConfirmComplete = useCallback(async () => {
+    if (!isCurrent() || !isOwner || gig.status !== 'completed' || gig.owner_confirmed_at) return;
     const yes = await confirmStore.open({
       title: 'Confirm Completion',
       description: 'Confirm this task is fully complete?',
       confirmLabel: 'Confirm',
       variant: 'primary',
     });
-    if (!yes) return;
+    if (!yes || !isCurrent()) return;
     try {
-      await api.gigs.confirmGigCompletion(gig.id, { expectedReview: gig.completion_review ?? null });
+      const response = await api.gigs.confirmGigCompletion(gig.id, { expectedReview: gig.completion_review ?? null });
+      if (!isCurrent()) return;
+      if (response?.gig?.id !== gig.id || response.gig.status !== 'completed'
+        || !Number.isFinite(Date.parse(response.gig.owner_confirmed_at || ''))) {
+        throw new Error('Completion could not be confirmed. Reopen the task to check its status.');
+      }
       onStatusChange();
     } catch (error) {
-      toast.error(getErrorMessage(error));
+      if (isCurrent()) toast.error(getErrorMessage(error));
     }
-  }, [gig.id, gig.completion_review, onStatusChange]);
+  }, [gig.id, gig.completion_review, gig.status, gig.owner_confirmed_at, onStatusChange, isCurrent, isOwner]);
+
+  if (!session.active) return null;
 
   // User info
   const worker = gig.acceptedBy || gig.accepted_by_user;
@@ -304,7 +352,7 @@ export default function ActiveTaskPanel({
       {/* Action buttons: Chat, Call, Cancel */}
       <div className="flex gap-2">
         <button
-          onClick={onOpenChat}
+          onClick={() => { if (isCurrent()) onOpenChat(); }}
           className="flex-1 flex items-center justify-center gap-2 py-3 border border-app-border rounded-lg text-sm font-semibold text-emerald-600 bg-app-surface hover:bg-app-hover transition"
         >
           <MessageCircle className="w-4 h-4" /> Chat
@@ -318,7 +366,7 @@ export default function ActiveTaskPanel({
           </a>
         )}
         <button
-          onClick={onCancel}
+          onClick={() => { if (isCurrent()) onCancel(); }}
           className="flex-1 flex items-center justify-center gap-2 py-3 border border-red-200 rounded-lg text-sm font-semibold text-red-600 bg-app-surface hover:bg-red-50 transition"
         >
           <XCircle className="w-4 h-4" /> Cancel
@@ -333,7 +381,7 @@ export default function ActiveTaskPanel({
       ) : (
         <div className="space-y-2">
           {/* Worker buttons */}
-          {isWorker && !fulfillmentStatus && (
+          {isWorker && isUrgent && !fulfillmentStatus && (
             <button
               onClick={() => updateStatus('on_the_way')}
               className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition"
@@ -341,7 +389,7 @@ export default function ActiveTaskPanel({
               <Car className="w-4 h-4" /> I&apos;m on the way
             </button>
           )}
-          {isWorker && fulfillmentStatus === 'on_the_way' && (
+          {isWorker && isUrgent && fulfillmentStatus === 'on_the_way' && (
             <button
               onClick={() => updateStatus('arrived')}
               className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition"
@@ -361,7 +409,7 @@ export default function ActiveTaskPanel({
             )}
 
           {/* Poster buttons */}
-          {isOwner && fulfillmentStatus === 'arrived' && (
+          {isOwner && isUrgent && fulfillmentStatus === 'arrived' && (
             <button
               onClick={() => updateStatus('in_progress')}
               className="w-full flex items-center justify-center gap-2 py-3.5 border border-emerald-600 text-emerald-600 rounded-lg font-semibold hover:bg-emerald-50 transition"
@@ -371,7 +419,7 @@ export default function ActiveTaskPanel({
           )}
           {isOwner &&
             fulfillmentStatus === 'in_progress' &&
-            gig.status !== 'completed' && (
+            gig.status === 'completed' && !gig.owner_confirmed_at && (
               <button
                 onClick={handleConfirmComplete}
                 className="w-full flex items-center justify-center gap-2 py-3.5 border border-green-600 text-green-600 rounded-lg font-semibold hover:bg-green-50 transition"
