@@ -580,6 +580,90 @@ BEGIN
  END LOOP;
 END $$;
 
+-- Existing Home maintenance contract and atomic completion history.
+RESET ROLE;
+INSERT INTO auth.users(id,email) SELECT ('aafa0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+ 'completion-history-'||n||'@example.invalid' FROM generate_series(1,3)n;
+INSERT INTO public."User"(id,email,username,name) SELECT id,email,'completion_history_'||right(id::text,1),'History fixture'
+ FROM auth.users WHERE id::text LIKE 'aafa0000-%';
+INSERT INTO public."Home"(id,owner_id,created_by_user_id,address,city,state,zipcode) VALUES
+ ('aafa0000-0000-4000-8000-000000000300','aafa0000-0000-4000-8000-000000000001','aafa0000-0000-4000-8000-000000000001','History fixture','Test','WA','98607');
+INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,age_band,verification_status) VALUES
+ ('aafa0000-0000-4000-8000-000000000300','aafa0000-0000-4000-8000-000000000001','owner','owner','adult','verified');
+INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,worker_completed_at,origin_home_id)
+ SELECT ('aafa0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'aafa0000-0000-4000-8000-000000000001',
+ 'aafa0000-0000-4000-8000-000000000001','Original maintenance work','Synthetic',0,'completed',
+ 'aafa0000-0000-4000-8000-000000000002',clock_timestamp(),'aafa0000-0000-4000-8000-000000000300' FROM generate_series(100,107)n;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE g public."Gig"; h public."HomeMaintenanceLog"; r jsonb; terms jsonb; n integer; mode text;
+ owner_id uuid:='aafa0000-0000-4000-8000-000000000001'; fixture_home uuid:='aafa0000-0000-4000-8000-000000000300';
+BEGIN
+ SELECT * INTO g FROM public."Gig" WHERE id='aafa0000-0000-4000-8000-000000000100';
+ terms:=jsonb_build_object('user_id',g.user_id,'accepted_by',g.accepted_by,'price',g.price,'payment_id',g.payment_id,
+  'accepted_at',g.accepted_at,'started_at',g.started_at,'worker_completed_at',g.worker_completed_at);
+ r:=public.confirm_gig_completion(g.id,owner_id,terms,5,'Reviewed');
+ IF r->'gig'->>'owner_confirmed_at' IS NULL THEN RAISE EXCEPTION 'Home completion failed: %',r; END IF;
+ SELECT * INTO h FROM public."HomeMaintenanceLog" WHERE gig_id=g.id;
+ IF h.id IS NULL OR h.home_id<>fixture_home OR h.task<>g.title OR h.cost<>g.price OR h.performed_by<>g.accepted_by
+  OR h.created_by<>owner_id OR h.performed_at<>(r->'gig'->>'owner_confirmed_at')::timestamptz
+  OR h.status<>'completed' OR h.recurrence<>'one_time' THEN RAISE EXCEPTION 'Incomplete Home receipt'; END IF;
+ IF EXISTS(SELECT FROM public."HomeSystem" WHERE home_id=fixture_home) THEN RAISE EXCEPTION 'Completion guessed system installation'; END IF;
+ PERFORM public.confirm_gig_completion(g.id,owner_id,terms,NULL,NULL);
+ IF (SELECT count(*) FROM public."HomeMaintenanceLog" WHERE gig_id=g.id)<>1 THEN RAISE EXCEPTION 'Duplicated history'; END IF;
+ BEGIN UPDATE public."HomeMaintenanceLog" SET created_by='aafa0000-0000-4000-8000-000000000003' WHERE id=h.id; RAISE EXCEPTION 'History recorder rewritten'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN UPDATE public."HomeMaintenanceLog" SET created_at='2000-01-01' WHERE id=h.id; RAISE EXCEPTION 'History recording backdated'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN UPDATE public."HomeMaintenanceLog" SET cost=100 WHERE id=h.id; RAISE EXCEPTION 'History amount was rewritten'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN UPDATE public."HomeMaintenanceLog" SET home_id='aafa0000-0000-4000-8000-000000000999' WHERE id=h.id; RAISE EXCEPTION 'History Home was rewritten'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ UPDATE public."HomeMaintenanceLog" SET notes='Resident annotation' WHERE id=h.id;
+ DELETE FROM public."HomeMaintenanceLog" WHERE id=h.id;
+ PERFORM public.confirm_gig_completion(g.id,owner_id,terms,NULL,NULL);
+ IF EXISTS(SELECT FROM public."HomeMaintenanceLog" WHERE gig_id=g.id) THEN RAISE EXCEPTION 'Deleted history recreated'; END IF;
+ n:=101;
+ FOREACH mode IN ARRAY ARRAY['foreign','denied','revoked','minor','frozen','historical','private_source'] LOOP
+  SELECT * INTO g FROM public."Gig" WHERE id=('aafa0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+  IF mode='foreign' THEN UPDATE public."Home" SET owner_id='aafa0000-0000-4000-8000-000000000003' WHERE id=fixture_home;
+   UPDATE public."HomeOccupancy" SET user_id='aafa0000-0000-4000-8000-000000000003' WHERE home_id=fixture_home;
+  ELSIF mode='denied' THEN INSERT INTO public."HomePermissionOverride"(home_id,user_id,permission,allowed) VALUES(fixture_home,owner_id,'maintenance.edit',false);
+  ELSIF mode='revoked' THEN UPDATE public."HomeOccupancy" SET verification_status='revoked' WHERE home_id=fixture_home;
+  ELSIF mode='minor' THEN UPDATE public."HomeOccupancy" SET age_band='teen' WHERE home_id=fixture_home;
+  ELSIF mode='frozen' THEN UPDATE public."Home" SET security_state='frozen' WHERE id=fixture_home;
+  ELSIF mode='historical' THEN UPDATE public."Gig" SET owner_confirmed_at=clock_timestamp() WHERE id=g.id;
+  ELSIF mode='private_source' THEN UPDATE public."Gig" SET origin_home_id=NULL WHERE id=g.id;
+  END IF;
+  terms:=jsonb_build_object('user_id',g.user_id,'accepted_by',g.accepted_by,'price',g.price,'payment_id',g.payment_id,
+   'accepted_at',g.accepted_at,'started_at',g.started_at,'worker_completed_at',g.worker_completed_at);
+  r:=public.confirm_gig_completion(g.id,owner_id,terms,NULL,NULL);
+  IF r->'gig'->>'owner_confirmed_at' IS NULL THEN RAISE EXCEPTION 'Home history suppression blocked gig: %',r; END IF;
+  IF EXISTS(SELECT FROM public."HomeMaintenanceLog" WHERE gig_id=g.id) THEN RAISE EXCEPTION 'Unauthorized or historical Home provenance: %',mode; END IF;
+  UPDATE public."Home" SET owner_id='aafa0000-0000-4000-8000-000000000001',security_state='normal' WHERE id=fixture_home;
+  UPDATE public."HomeOccupancy" SET user_id=owner_id,verification_status='verified',age_band='adult' WHERE home_id=fixture_home;
+  DELETE FROM public."HomePermissionOverride" WHERE home_id=fixture_home;
+  n:=n+1;
+ END LOOP;
+ -- FK erasure preserves the historical row while removing deleted identity.
+ INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,worker_completed_at,origin_home_id)
+ VALUES('aafa0000-0000-4000-8000-000000000108',owner_id,owner_id,'Retained history','Synthetic',0,'completed',
+ 'aafa0000-0000-4000-8000-000000000002',clock_timestamp(),fixture_home) RETURNING * INTO g;
+ terms:=jsonb_build_object('user_id',g.user_id,'accepted_by',g.accepted_by,'price',g.price,'payment_id',g.payment_id,
+  'accepted_at',g.accepted_at,'started_at',g.started_at,'worker_completed_at',g.worker_completed_at);
+ PERFORM public.confirm_gig_completion(g.id,owner_id,terms,NULL,NULL);
+ DELETE FROM public."User" WHERE id=g.accepted_by;
+ IF NOT EXISTS(SELECT FROM public."HomeMaintenanceLog" WHERE gig_id=g.id AND performed_by IS NULL) THEN RAISE EXCEPTION 'Worker deletion did not erase historical identity'; END IF;
+ SELECT * INTO h FROM public."HomeMaintenanceLog" WHERE gig_id=g.id;
+ DELETE FROM public."Gig" WHERE id=g.id;
+ IF NOT EXISTS(SELECT FROM public."HomeMaintenanceLog" WHERE id=h.id AND gig_id IS NULL AND task='Retained history') THEN RAISE EXCEPTION 'Gig erasure lost historical maintenance'; END IF;
+END $$;
+-- A direct recipient cannot fabricate provenance, even for a Home they own.
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','aafa0000-0000-4000-8000-000000000001',true);
+DO $$ BEGIN
+ BEGIN
+  INSERT INTO public."HomeMaintenanceLog"(home_id,task,gig_id) VALUES('aafa0000-0000-4000-8000-000000000300','Fabricated','aafa0000-0000-4000-8000-000000000100');
+  RAISE EXCEPTION 'Raw actor fabricated Gig history';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
+
 $contract$, 'paid-gig-acceptance.sql');
 SELECT * FROM finish();
 ROLLBACK;

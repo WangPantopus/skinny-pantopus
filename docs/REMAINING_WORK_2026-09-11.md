@@ -27,6 +27,13 @@ candidate full backend regression passes6035/16 skips; current-head CI and live
 provider acceptance remain open. See the
 [delivery report](VERIFICATION_FIRST_2026-09-13.md#existing-completion-notifications-reuse-the-delivery-worker). These
 accepted subjourneys do not close the broader payment or release rows.
+Existing Home maintenance history now has a locally verified repair: the original
+migration151 fields were absent from canonical replay and prevented real writes.
+The forward repair restores that existing shape and commits authorized history with
+confirmation; existing edit/retry behavior preserves its original performer/time.
+See the [history report](VERIFICATION_FIRST_2026-09-13.md#existing-home-maintenance-history-commits-with-completion).
+Current-head CI, broader maintenance permissions/recovery and UI acceptance remain
+open. This closes no additional inventory row.
 Start with [the current handoff](PROJECT_HANDOFF.md) and
 [resume guide](SESSION_RESUME_2026-09-10.md). This is the authoritative ordered
 acceptance inventory; older dated reports retain their historical limits.

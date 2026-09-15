@@ -3402,3 +3402,76 @@ Accepted private-proof browser/native products are reused because relevant clien
 code/configuration is unchanged. PR34 stays draft. Home maintenance provenance,
 restart recovery, hosted storage/historical reconciliation, live delivery and the
 remaining payment/release scope remain open.
+
+
+## Existing Home maintenance history commits with completion
+
+September15: two actual HTTP/SQL baseline cases confirmed work but stored no Home
+history. The ordinary path failed because HomeMaintenanceLog.task did not exist;
+the lost-acknowledgement retry also skipped the best-effort writer. The screen,
+routes, homeSystemsService and original migration151 already existed. Migration151
+and its archived counterpart were compared with canonical baseline, current tables,
+Home record transactions and all-ref history. Its seven original fields were absent
+from canonical replay. The existing unique gig_id index already guarantees one row
+per Gig; no replacement history table, service or screen is necessary.
+
+One forward migration restores those original fields without rewriting applied
+history. Older performed rows remain completed, retain their original values and
+receive names from existing notes; already-adopted field values are preserved. The
+existing confirmation transaction locks Home/authority before Gig and commits new
+eligible history with confirmation, counters and notices. Current adult maintenance
+edit authority is required; foreign, revoked, frozen, explicitly denied and minor
+Home access cannot add shared history. Private HomeTask publications keep their
+existing null origin_home_id and are not silently copied into the ledger. Replaced
+Home origins conflict. Historical confirmations are not backfilled, deleted history
+is not recreated, and system installation years are never inferred from job labels.
+Raw clients cannot fabricate Gig provenance or change its Home, amount, performer,
+recording actor or original dates. Worker/Gig deletion removes its foreign-key
+identity while preserving the maintenance row. Resident annotations remain possible.
+
+The route's competing best-effort write and now-unused helper are removed. Five
+helper-only mocked tests are superseded by actual SQL history/identity/retention
+assertions in the existing paid contract. The existing maintenance edit route also
+preserves performer/time on a repeated completion or an automatic Gig record, rejects
+replacement automatic costs with409, and compares observed status/update time before
+writing. Six actual HTTP unit cases in its existing test file cover these changes.
+Screens, layout, API envelopes and all client sources are unchanged.
+
+Local verification passes202 tests/four focused suites and privacy gates, including15
+audience checks. All65 SQL contracts pass; the later recorder/time guard and actual
+worker/Gig erasure cases additionally pass the paid contract. Generated wrappers
+synchronize. Legacy-shape forward replay preserves every old column and correct past
+status; full replay over already-adopted fields preserves the complete row. Function
+lint checks377 functions/114 bindings with zero errors/eight existing warnings.
+Current-head CI remains required; the earlier completion-delivery full suite is a
+separate6035-pass/16-skip checkpoint, not a claim of a repeated full suite here.
+
+Five actual HTTP/StripeService/SQL scenarios pass with124 SQL calls and one synthetic
+capture. Lost confirmation replies retain one history row. A simulated lost provider
+capture reply followed by a forced history-write failure leaves the real local
+capture receipt intact; retry confirms and writes history without another capture.
+Another person's Home gets no history. Existing Home list/edit/manual-create/complete/
+retry/delete endpoints work against real SQL; foreign access rejects, original dates
+survive retries, changed automatic cost returns409, and a newer cancellation defeats
+a stale completion edit. Deleting history then retrying confirmation preserves that
+deletion. Authentication and Stripe responses are synthetic; actual Stripe delivery,
+installed maintenance UI and hosted adoption are not claimed.
+
+Six observed separate-connection waits cover competing confirmation, transaction
+rollback, Home revocation/freeze, a changed Gig origin and explicit permission denial.
+They preserve exactly two eligible history rows and five committed completion counters;
+the changed-origin request commits neither. Exact fixture cleanup passes and the owned
+API is stopped. No native build/device, provider activation or hosted schema change
+runs. Accepted client products are retained and reused.
+
+Failed fixtures remain recorded: the initial paid probe used a synthetic charge ID
+with an invalid extra underscore, correctly rejected by the existing capture proof
+contract. Its first cleanup omitted clearing Gig.payment_id; cleanup rolled back,
+then a dedicated exact-ID transaction cleared the reference and verified removal.
+Subsequent fixtures clean correctly; the valid-shape paid case passes. The inherited
+free-fixture service label is corrected with an explicit evidence annotation. A
+wrong-working-directory cleanup search ran no source change; final focused runR4
+passes. Private completion-history-* commands, source/results and prior failures are
+preserved under existing-tip-provider-proof-r1. PR34 stays draft. Generic maintenance
+granular permissions/raw RLS, Home-origin admission, create-command recovery, complete
+maintenance UI acceptance and the remaining paid/release scope remain open.

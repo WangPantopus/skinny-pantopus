@@ -30,7 +30,6 @@ const { resetTables, seedTable, getTable } = require('./__mocks__/supabaseAdmin'
 const {
   getSystemsLedger,
   recordSystem,
-  recordCompletedJob,
   statusFor,
   remainingFraction,
   SYSTEM_KEYS,
@@ -257,71 +256,6 @@ describe('PUT /api/homes/:id/systems/:key', () => {
 });
 
 
-describe('provenance capture from a completed job', () => {
-  beforeEach(() => {
-    resetTables();
-    seedHome();
-  });
-
-  test('records the service history with the gig as evidence', async () => {
-    const r = await recordCompletedJob({
-      homeId: HOME_ID,
-      gigId: 'gig-1',
-      title: 'Gutter clearing',
-      category: 'home_maintenance',
-      price: 180,
-      performedBy: 'worker-1',
-      performedAt: '2026-08-19T17:00:00.000Z',
-    });
-
-    expect(r.ok).toBe(true);
-    const rows = getTable('HomeMaintenanceLog');
-    expect(rows).toHaveLength(1);
-    expect(rows[0].task).toBe('Gutter clearing');
-    expect(rows[0].cost).toBe(180);
-    expect(rows[0].status).toBe('completed');
-    // The gig id is what makes the row verifiable rather than self-reported,
-    // and it lives in its own column (migration 163) with a partial unique
-    // index behind it — so the guarantee does not rest on user-visible text.
-    expect(rows[0].gig_id).toBe('gig-1');
-    expect(rows[0].notes).toBeUndefined();
-  });
-
-  test('is idempotent — re-confirming does not duplicate the history', async () => {
-    const args = { homeId: HOME_ID, gigId: 'gig-1', title: 'Gutter clearing', price: 180 };
-    await recordCompletedJob(args);
-    const second = await recordCompletedJob(args);
-
-    expect(second.ok).toBe(true);
-    expect(second.reason).toBe('already_recorded');
-    expect(getTable('HomeMaintenanceLog')).toHaveLength(1);
-  });
-
-  test('does NOT touch the system install year', async () => {
-    // A completed roofing gig does not say whether the roof was replaced
-    // or a flashing was patched. Guessing would reset a 25-year clock.
-    await recordCompletedJob({ homeId: HOME_ID, gigId: 'gig-2', title: 'Roof repair', category: 'roofing' });
-
-    expect(getTable('HomeSystem')).toHaveLength(0);
-    const ledger = await getSystemsLedger({ id: HOME_ID, year_built: 1979 }, { now: NOW });
-    expect(byKey(ledger, 'roof').source).toBe('estimated');
-    expect(byKey(ledger, 'roof').installed_year).toBe(1979);
-  });
-
-  test('refuses a job with no home to attach to', async () => {
-    const r = await recordCompletedJob({ homeId: null, gigId: 'gig-3', title: 'x' });
-    expect(r.ok).toBe(false);
-    expect(getTable('HomeMaintenanceLog')).toHaveLength(0);
-  });
-
-  test('never throws — provenance must not be able to fail a payment path', async () => {
-    await expect(recordCompletedJob({})).resolves.toEqual(
-      expect.objectContaining({ ok: false }),
-    );
-    await expect(
-      recordCompletedJob({ homeId: HOME_ID, gigId: 'g', price: 'not-a-number' }),
-    ).resolves.toEqual(expect.objectContaining({ ok: true }));
-    // A non-numeric price is stored as null rather than NaN.
-    expect(getTable('HomeMaintenanceLog')[0].cost).toBeNull();
-  });
-});
+// Automatic Gig history now commits inside confirm_gig_completion. Its existing
+// ledger, idempotency, no-install-year inference and missing-source boundaries
+// are exercised against PostgreSQL in paid-gig-acceptance.sql.

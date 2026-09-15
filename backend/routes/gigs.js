@@ -33,7 +33,6 @@ const gigStop = require('../services/gigStopService');
 const { PAYMENT_STATES, getPaymentStateInfo } = require('../stripe/paymentStateMachine');
 const browseCache = require('../services/gig/browseCacheService');
 const affinityService = require('../services/gig/affinityService');
-const { recordCompletedJob } = require('../services/homeSystemsService');
 const rankingService = require('../services/gig/rankingService');
 const optionalAuth = require('../middleware/optionalAuth');
 const homeTaskGigService = require('../services/homeTaskGigService');
@@ -5613,31 +5612,8 @@ async function confirmCompletionHelper(req, { gigId, userId, satisfaction, note 
   }
   if (confirmation.reused) return updatedGig;
 
-  // ─── Provenance capture (non-blocking) ───
-  // Payment has captured and the owner has confirmed, so this is a paid,
-  // dispute-free job at a known address — the one thing about this home
-  // no competitor can reconstruct. Written automatically because a prompt
-  // converts at 20–30% and silent capture converts at 100%, and the
-  // accumulation IS the moat.
-  //
-  // It records the SERVICE HISTORY only. A completed "roofing" gig does
-  // not say whether the roof was replaced or a flashing was patched, so
-  // the system's install year stays the resident's to confirm — guessing
-  // it would reset a 25-year clock on no evidence.
-  //
-  // Fire-and-forget, like the affinity tracking above: provenance must
-  // never be able to fail a payment path.
-  if (gig.origin_home_id) {
-    recordCompletedJob({
-      homeId: gig.origin_home_id,
-      gigId,
-      title: gig.title,
-      category: gig.category,
-      price: gig.price,
-      performedBy: gig.accepted_by,
-      performedAt: updatedGig.owner_confirmed_at,
-    }).catch(() => {});
-  }
+  // New eligible Home history commits with confirmation. A lost reply cannot
+  // omit it, and a replay never recreates a deleted historical record.
 
   // The existing scheduled delivery worker owns these committed notifications;
   // request retries never create a competing delivery or a second notice.
