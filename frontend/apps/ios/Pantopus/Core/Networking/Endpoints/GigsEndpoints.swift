@@ -333,8 +333,8 @@ public enum GigsEndpoints {
     /// Alias of `/confirm-completion`. Route
     /// `backend/routes/gigs.js:6170`. Distinct from `markCompleted(...)`
     /// which is the worker-only `/mark-completed` route.
-    public static func completeGigAsPoster(gigId: String) -> Endpoint {
-        Endpoint(method: .post, path: "/api/gigs/\(gigId)/complete")
+    public static func completeGigAsPoster(gigId: String, expectedReview: String?) -> Endpoint {
+        Endpoint(method: .post, path: "/api/gigs/\(gigId)/complete", body: ConfirmCompletionBody(expectedReview: expectedReview))
     }
 
     /// `POST /api/gigs/:gigId/cancel` — poster cancels the gig. Body
@@ -554,6 +554,11 @@ public struct WithdrawBidBody: Encodable, Sendable {
     public init(reason: WithdrawBidReason?) {
         self.reason = reason?.rawValue
     }
+}
+
+/// The exact review loaded before the owner chose to confirm.
+public struct ConfirmCompletionBody: Encodable, Sendable {
+    public let expectedReview: String?
 }
 
 /// Body for `POST /api/gigs/:gigId/mark-completed`. The backend shape

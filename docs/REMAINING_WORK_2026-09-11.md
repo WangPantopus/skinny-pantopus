@@ -11,10 +11,29 @@ Native reviewer history is accepted and integrated through PR #35 into #32.
 PR #36 current-claims HTTP/SDK/browser/native acceptance is also complete at
 `1c5f7bb1b`, with final CI 34781479982 passing. The existing presentation is restored and integrated from `a68e8f0e5`;
 CI 34785056441 passes all executed checks. See the current-claims report for
-rendering limits. PRs #32/#34 remain drafts; #34 conflicts with master. Counts remain 8 closed and 72 partial/open. Renewal/schema drafts
+rendering limits. PR32 merged through PR43; the incorporated Home chain, file-picker PR44 and
+residency-expiry PR45 are now in master. PR34 remains draft and its updated
+integration candidate includes current master. Refresh remote CI and the handoff
+before relying on older Git state below. Counts remain8 closed and72 partial/open. Renewal/schema drafts
 remain paused pending an existing-implementation comparison.
 
-Updated September 13, 2026 after current-claims integration and design restoration.
+Updated September15,2026. The existing completion-private-storage checkpoint
+extends File/quota and current clients without a new table or screen. Local SQL,
+HTTP/SDK, browser and native evidence is tracked in the [private proof report](VERIFICATION_FIRST_2026-09-13.md#existing-completion-proof-uses-private-bytes).
+Hosted bucket adoption, historical CDN reconciliation, other generic private-file
+purposes, restart recovery and Home provenance remain open. Completion transport now passes
+local HTTP/SQL/worker and concurrency acceptance with synthetic transport; current
+candidate full backend regression passes6035/16 skips; current-head CI and live
+provider acceptance remain open. See the
+[delivery report](VERIFICATION_FIRST_2026-09-13.md#existing-completion-notifications-reuse-the-delivery-worker). These
+accepted subjourneys do not close the broader payment or release rows.
+Existing Home maintenance history now has a locally verified repair: the original
+migration151 fields were absent from canonical replay and prevented real writes.
+The forward repair restores that existing shape and commits authorized history with
+confirmation; existing edit/retry behavior preserves its original performer/time.
+See the [history report](VERIFICATION_FIRST_2026-09-13.md#existing-home-maintenance-history-commits-with-completion).
+Current-head CI, broader maintenance permissions/recovery and UI acceptance remain
+open. This closes no additional inventory row.
 Start with [the current handoff](PROJECT_HANDOFF.md) and
 [resume guide](SESSION_RESUME_2026-09-10.md). This is the authoritative ordered
 acceptance inventory; older dated reports retain their historical limits.
@@ -61,6 +80,127 @@ During H07/H08, [browser authentication readiness](web-auth-form-hydration-2026-
 was repaired after actual pre-hydration native GET leakage with synthetic data.
 All four forms pass disabled/delayed JavaScript checks. This is a bounded
 subjourney; the authentication change itself closes no additional acceptance row.
+
+The existing owner-confirmation web component now retires late responses after
+account/access/departure changes and preserves the normal confirmation/tip flow.
+106 focused checks, TypeScript, scoped lint and five actual Chrome scenarios pass
+within synthetic-response limits. See [web lifetime evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-review-retires-late-web-responses).
+Completion-delivery CI34947875754 passes all15 applicable jobs/one Seeder skip.
+Home-history and this web checkpoint pass all15 applicable jobs/one Seeder skip
+in CI34952128109. Full installed owner confirmation and draft/restart acceptance
+remain open.
+No additional inventory row is closed.
+The loaded owner-review repair now rejects stale completion/price/proof before
+capture using the existing API, helper, DTOs and seven callers. Local backend6053,
+web107, Android82 and iOS78 checks pass; actual Chrome/HTTP/SQL proves stale capture0
+and explicit refreshed review capture1. See [review evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-confirmation-binds-the-loaded-review).
+The combined loaded-review/MyTasks checkpoint48df046f6 passes all15 applicable
+jobs/one Seeder skip in CI34957710591. Existing MyTasks admission and
+receipt feedback now pass45 Android/43 iOS checks, native static/build gates and
+two actual Chrome/HTTP/SQL scenarios. The literal list query exposed missing fields
+from original migration149; the forward restoration preserves existing boost values
+and passes65 SQL contracts, pgTAP and migration policy. See [MyTasks evidence](VERIFICATION_FIRST_2026-09-13.md#existing-mytasks-waits-for-owner-confirmation).
+Existing native detail owner callbacks now pass42 Android/50 iOS checks with static/
+build gates; incomplete receipts, duplicate pending commands and retired callbacks
+are covered using existing scope mechanisms. See [native evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-owner-confirmation-retires-stale-callbacks).
+The owner-capture post-server-read race is now locally repaired in the existing
+Payment/capture/confirmation/retry flow, with one private nullable approval field
+and no replacement table/service/screen.6081 full backend tests/16 skips,296 focused
+checks,65 SQL contracts, ten actual local HTTP/SQL recovery cases, seven observed
+lock waits, effect rollback and four-row historical preservation pass. See the
+[capture evidence](VERIFICATION_FIRST_2026-09-13.md#existing-owner-capture-original-and-recovery).
+Checkpoint0654e856e passes all15 applicable jobs/one Seeder skip in CI34964238115,
+including complete schema replay and native checks. Real-provider/operator/release
+acceptance remains required; this does not close R05 or all paid-flow rows.
+Native MyTasks refresh ordering and canceled iOS confirmation now pass46 Android/
+45 iOS checks and static/build gates. The corrected Android Active-tab fixture
+reproduced a refresh no-op missed by its earlier empty Open-tab fixture. See the
+[bounded follow-up](VERIFICATION_FIRST_2026-09-13.md#existing-mytasks-refresh-order-and-canceled-confirmation).
+Account/screen lifetime, boost rollback ordering, installed full owner lifecycle
+and real provider/release acceptance remain open. The four post-server-read capture
+races are locally repaired by the original-approval checkpoint above; the
+[capture baseline](VERIFICATION_FIRST_2026-09-13.md#existing-owner-capture-interleaving-baseline)
+is retained as failure evidence, not a still-unresolved defect. The native refresh
+follow-up is committed at f32c8e66b. Main-list account/departure handlers now pass52
+Android and50 iOS checks plus static/compilation gates using existing identity
+helpers. See [native lifetime evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-mytasks-account-and-view-lifetime).
+The combined main-list checkpoint a943a0dab passes all15 applicable CI34969633236
+jobs/one Seeder skip. The separate rebook reader and boost ordering now pass57
+Android/55 iOS checks, static gates and builds after reproduced baseline failures.
+All nine follow-up files already existed; no screen, layout or schema change.
+See [rebooking/boost evidence](VERIFICATION_FIRST_2026-09-13.md#existing-native-rebooking-history-and-boost-refresh).
+Full installed owner/account journeys and completion draft/restart remain open.
+Native rebooking/boost checkpoint8ea69bbe4 passes all15 applicable CI34972981459 jobs/one Seeder skip. Web My Gigs
+reader/action lifetime now passes101 focused checks and seven actual Chrome cases,
+with TypeScript/scoped lint, after five reproduced baseline failures. One small
+shared hook reuses existing authentication signals across the two existing pages;
+no screen, layout, endpoint or schema is replaced. See
+[web lifetime evidence](VERIFICATION_FIRST_2026-09-13.md#existing-web-my-gigs-cache-reads-and-actions).
+The locally committed web4ddcdaa65 follow-up shares the next CI push with worker
+receipt validation:46 Android/53 iOS/107 web checks, build/static/type gates pass
+after each client reproduced empty-reply false success. Nine existing files change;
+no screen, storage service or schema is added. See [worker receipt evidence](VERIFICATION_FIRST_2026-09-13.md#existing-worker-completion-receipt-validation).
+My bids now passes129 selected web tests and five actual Chrome scenarios after
+six reproduced reader/action/receipt failures. The existing page/test reuse the
+session hook, current receipt and modal attempt guards; types/lint pass within the
+existing ts-nocheck/two-warning limit. See [My bids evidence](VERIFICATION_FIRST_2026-09-13.md#existing-my-bids-reader-and-command-lifetime).
+The combined web/worker checkpointb513c8184 is pushed on both branches; CI34980516319
+passes all15 applicable jobs/one Seeder skip.
+The subsequent v2 detail/panel follow-up passes187 tests, types/lint (same27 baseline
+warnings) and six Chrome cases after ten reproduced failures. Five existing files
+repair lifetime/receipts, urgent-only admission and socket cleanup; no new screen,
+backend or migration. See [v2 evidence](VERIFICATION_FIRST_2026-09-13.md#existing-v2-task-detail-and-active-panel-lifetime).
+The existing ETA tracker now passes201 focused tests/types/lint and five Chrome
+share cases after seven reproduced failures. It reuses the session hook and existing
+card/SDK; only two existing source/test files change. See [ETA evidence](VERIFICATION_FIRST_2026-09-13.md#existing-eta-tracker-and-share-lifetime).
+General task tracking privacy now passes264 backend/204 web checks, privacy gates
+and actual local HTTP/SQL: six detail viewers/four lists/two consent-disabled readers,
+two direct outsider RLS denials and unchanged stored Gig. Four existing source/test
+files repair the responses and sharing entry, with no schema/native/layout change.
+See [tracking privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-general-task-response-tracking-privacy).
+The missing status destination now opens actual generated links in Chrome. The
+existing share/status endpoints reject stale writes and revoked/expired reads;
+276 backend/212 web checks and nine local HTTP/SQL cases pass, plus seven browser
+checks. One new page reuses existing UI styles; other changes are in existing files.
+See [status-link evidence](VERIFICATION_FIRST_2026-09-13.md#existing-status-links-authority-expiry-and-missing-destination).
+The existing private socket producers now restrict ETA/urgent updates to current
+owner/worker subscriptions after two actual Socket.IO baseline leaks.247 backend
+checks and privacy gates pass; twelve local HTTP/Socket.IO/SQL audience cases and
+an actual public acceptance marker pass. Four existing source/test files change;
+no screen/schema/layout change. See [socket evidence](VERIFICATION_FIRST_2026-09-13.md#existing-private-task-socket-delivery).
+The existing location writer now passes266 backend checks/privacy gates,13 local
+HTTP/SQL cases and a two-request concurrency case after16 unit baseline failures.
+It reuses the geography decoder, compares the current assignment/task/location
+snapshot, validates the receipt and enforces the30-second interval from stored state.
+Three existing source/test files change; no client/schema/layout change. See
+[writer evidence](VERIFICATION_FIRST_2026-09-13.md#existing-helper-location-writer).
+The existing urgent writer/reader follow-up fixes21 reproduced boundary failures.
+289 overlapping compatibility checks and202 final route checks, privacy gates,
+13 HTTP/SQL cases and five concurrency/compatibility cases pass. Four existing
+source/test/mock files change; no client/schema/layout change. See [urgent evidence](VERIFICATION_FIRST_2026-09-13.md#existing-urgent-status-writer-and-private-reader).
+Existing urgent notices now reuse the Notification unique key after two unit/service
+and three actual HTTP/SQL duplicate baselines.243 checks/privacy gates and six actual
+HTTP/service/SQL cases verify retries, read-state preservation, distinct assignments/
+steps and an unchanged historical notice. Two existing source/test files change;
+no schema/client/layout/control store is added. See [notice evidence](VERIFICATION_FIRST_2026-09-13.md#existing-urgent-notification-retry-identity).
+Next verify completion draft/restart against existing forms/storage and canonical
+saved state, preserving already accepted upload recovery. Transport remains best
+effort; real push, consent/raw participant access and installed tracking remain open.
+d01 CI34990349201 and c7d45dd09 CI34993419890 each pass15 applicable jobs/one skip;
+urgent writer341da82c6 and the notice follow-up are not yet covered by that run.
+The existing web Start Work control now passes180 web regressions/types/scoped lint
+and seven compiled Chrome cases after ten failed baselines. It admits one pending
+request, checks a matching saved receipt and retires stale assignment/session
+responses. Three existing source/test files change; no screen/layout/schema change.
+See [Start Work evidence](VERIFICATION_FIRST_2026-09-13.md#existing-web-start-work-control).
+Next verify existing backend/native Start Work recovery before completion restart.
+HTTP outcomes in this browser check are synthetic; full task/provider acceptance
+and current combined-head CI remain open.
+No full inventory row is closed by these bounded checks.
+The preceding main-list change added one Android regression file to preserve the
+existing test-class size rule.
+No inventory row is closed by these bounded checks.
+
 
 ## 1. Home identity and current access — active work
 
@@ -122,13 +262,13 @@ subjourney; the authentication change itself closes no additional acceptance row
 
 ## 7. Payments and paid gigs — PR #34
 
-- [ ] P01 **Fix:** Implement durable tips: atomically reserve exact original request/payment/payer/worker/cents/currency/terms before provider creation; the current contract/helper draft is not wired.
-- [ ] P02 **Fix:** Add tip migration/service/routes and exact provider proof; resolve unknown creation, check/resume/cancel, historical unknown tips and maximum-successful-tip concurrency without duplicate charges.
-- [ ] P03 **Fix:** Implement retained tip commands and truthful SDK/receipt handling in web/iOS/Android, with account/session changes and app restart recovery.
-- [ ] P04 **Fix/Verify:** Finish started-work, no-show, cancellation-fee and completion/reopen policies, immutable displayed terms and exact fee execution. Existing zero-fee unstarted-stop recovery is a bounded completed source milestone.
+- [ ] P01 **Verify (partial):** Existing Payment reservation now retains original request/payer/worker/cents/currency/terms before provider creation. Local SQL/concurrency and service checks pass; hosted adoption/provider acceptance remain open. See the current handoff and tip evidence; do not rebuild this implementation.
+- [ ] P02 **Fix/Verify (partial):** Existing StripeService/routes now implement same-ID resume/check/cancel and matching provider/receipt proof, with local SQL and synthetic-provider verification. Historical same-payment recovery now passes local checks; durable delivery now passes181 backend checks,22 actual-service/local-SQL scenarios and13 connection cases; real provider/installed acceptance remains open; no additional tip table is required.
+- [ ] P03 **Verify (partial):** Existing web/iOS/Android tip controls retain originals and matching receipts. Legacy checkpoint `e700862f1` adds same-payment check/cancel with no replacement charge;100 backend/53 web/24 iOS/41 Android focused checks,19 actual-service/local-SQL scenarios,10 connection cases and65 SQL contracts pass. Cold historical discovery is now locally verified in seven existing files (web87, Android76, iOS26 checks); one installed iOS historical recovery/restart/check journey now passes with real HTTP/SQL and synthetic provider (zero replacement creates, one receipt/notice); Android now passes two installed historical success/cancel journeys and Chrome passes the existing controls with actual local HTTP/SQL and synthetic provider; the stale Android receipt dock is repaired in existing files with38 focused checks. Real-provider/full-site acceptance plus final CI remain open; preserve screen designs and reuse unchanged earlier evidence.
+- [ ] P04 **Fix/Verify:** Finish started-work, no-show, cancellation-fee and completion/reopen policies, immutable displayed terms and exact fee execution. Existing zero-fee unstarted-stop recovery is a bounded completed source milestone. No-show POST now enforces the existing preview timing gates:54 route checks, privacy gates and nine actual local HTTP/SQL denials pass; worker-completion writes now also preserve changed assignments, with93 route checks and11 actual HTTP/SQL cases. Owner-confirmation date comparisons now pass101 route checks and six actual service/HTTP/SQL cases with synthetic provider. Owner confirmation now atomically saves its existing counter, standby closures and in-app notices (116 focused backend checks,14 actual HTTP/SQL scenarios and five observed lock waits); one forward function migration adds no table or screen. The public gig detail now restricts existing proof/confirmation fields to current participants/business managers (155 backend tests and11 actual HTTP/SQL reads); failed override reads cannot become role grants. Existing Gig SQL policies now retire revoked creators, including a reproduced waiting-write race;65 SQL contracts and actual role/lock checks pass without new tables. Existing proof submission now verifies uploader/task paths, native File metadata and current S3 object metadata (178 backend checks and13 actual HTTP/upload/SQL/SDK scenarios), preserving existing upload endpoints. Matching worker completion retries now recover the same saved proof/time (196 backend checks/eight actual HTTP/SQL scenarios), without extra writes or provider checks. Worker proof and owner notices now commit together through one function over existing records:222 focused tests,65 SQL contracts, eight actual HTTP/SQL cases and seven observed lock waits pass. Lost replies retain one durable notice; read/deleted notices are preserved. Real synthetic-object probes confirmed anonymous CDN reads for both existing proof paths despite private S3 controls; both exact objects were removed. Atomic no-show/fee execution, private object access/retention and client proof/session recovery, restart/lost-upload-response recovery, completion push and Home provenance delivery remain open. Existing client retries now pass96 web/72 Android/89 iOS selected checks; actual Chrome and installed iOS/Android preserve one upload, matching saved proof/time and one notice after a lost completion reply. No screen or layout was replaced.
 - [ ] P05 **Fix/Verify:** Settle cancellation-fee residuals under an explicit policy; do not silently treat held money as released earnings or waive fees.
 - [ ] P06 **Fix/Verify:** Finish disputes and dispute-loss accounting, historical Connect transfers/reversals, payout onboarding/withdrawal and operational debt recovery, including contradictory legacy proof.
-- [ ] P07 **Fix/Verify:** Provide support/reconciliation paths for retained unknown financial operations and durable attention; review legacy tip/booking notices separately from the completed paid-gig wallet outbox.
+- [ ] P07 **Fix/Verify:** Provide support/reconciliation paths for retained unknown financial operations and durable attention; tip capture now reuses Payment/Notification metadata and the existing wallet relay without a new table; historical captures are not backfilled. Verify actual push/return paths and remaining legacy booking notices separately.
 - [ ] P08 **Verify:** Run fresh installed/native and browser sandbox journeys: chosen bid → authorization → assignment → worker start/completion → owner capture → wallet release/refund → exact notification return, including all loss/retry/denial paths.
 - [ ] P09 **Verify:** Exercise assigned authorization, refunds and cancel/reopen/release/close through installed clients and actual provider state. Their source/build checkpoints do not replace this acceptance.
 - [ ] P10 **Verify:** Payment worker retries, retained operations, financial records and notification delivery need final workload/capacity/retention checks and safe fixture cleanup.

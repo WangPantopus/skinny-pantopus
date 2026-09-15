@@ -63,6 +63,7 @@ data class GigDto(
     val tags: List<String>? = null,
     @Json(name = "user_id") val userId: String? = null,
     @Json(name = "accepted_by") val acceptedBy: String? = null,
+    @Json(name = "completion_review") val completionReview: String? = null,
     @Json(name = "accepted_at") val acceptedAt: String? = null,
     // Set the moment the worker starts. Both pre-start release routes
     // (`/reopen-bidding`, `/worker-release`) reject once this is non-null.
@@ -71,6 +72,7 @@ data class GigDto(
     @Json(name = "owner_confirmed_at") val ownerConfirmedAt: String? = null,
     @Json(name = "scheduled_start") val scheduledStart: String? = null,
     @Json(name = "payment_status") val paymentStatus: String? = null,
+    @Json(name = "payment_id") val paymentId: String? = null,
     // Phase 5 — worker acknowledgement ("I'm on it") while `assigned`.
     @Json(name = "worker_ack_status") val workerAckStatus: String? = null,
     // Phase 5b — ETA accompanying a `running_late` acknowledgement.
@@ -218,6 +220,7 @@ data class GigBidDto(
     @Json(name = "countered_at") val counteredAt: String? = null,
     val bidder: GigCreator? = null,
     @Json(name = "User") val legacyBidder: GigCreator? = null,
+    @Json(name = "gig_id") val gigId: String? = null,
 ) {
     fun bidderIdentity(): GigCreator? = bidder ?: legacyBidder
 
@@ -323,6 +326,11 @@ data class GigBidAcceptResponse(
     val bid: GigBidDto? = null,
     val message: String? = null,
     val requiresPaymentSetup: Boolean? = null,
+    val authorizationReady: Boolean? = null,
+    val paymentStatus: String? = null,
+    val providerStatus: String? = null,
+    val amountCents: Int? = null,
+    val currency: String? = null,
     val isSetupIntent: Boolean? = null,
     val payment: PaymentPayload? = null,
     val publishableKey: String? = null,
@@ -369,6 +377,18 @@ data class MarkCompletedBody(
 @JsonClass(generateAdapter = true)
 data class MarkCompletedResponse(
     val message: String? = null,
+    val gig: WorkerCompletionReceipt? = null,
+)
+
+/** Saved proof returned by the existing worker-completion endpoint. */
+@JsonClass(generateAdapter = true)
+data class WorkerCompletionReceipt(
+    val id: String,
+    val status: String? = null,
+    @Json(name = "accepted_by") val acceptedBy: String? = null,
+    @Json(name = "worker_completed_at") val workerCompletedAt: String? = null,
+    @Json(name = "completion_note") val completionNote: String? = null,
+    @Json(name = "completion_photos") val completionPhotos: List<String>? = null,
 )
 
 /**

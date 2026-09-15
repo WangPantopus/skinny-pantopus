@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import FileUpload from '../src/components/FileUpload';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import FileUpload, { CompletionProofImage } from '../src/components/FileUpload';
+import { AUTH_SESSION_CHANGE_KEY, getAuthToken, getApiBaseUrl, onTokenChange, upload } from '@pantopus/api';
 
 const photo = (name: string) => new File(['image'], name, { type: 'image/png' });
 const first = photo('first.png');
@@ -95,4 +96,60 @@ test('documents in the existing multi-file list allocate no image preview', () =
   render(<FileUpload files={[new File(['PDF'], 'lease.pdf', { type: 'application/pdf' })]} onFilesSelected={jest.fn()} />);
   expect(screen.getByText('lease.pdf')).toBeInTheDocument();
   expect(createURL).not.toHaveBeenCalled();
+});
+
+
+describe('existing completion preview loads authenticated private bytes', () => {
+  const reference = '/api/gigs/aaef0000-0000-4000-8000-000000000100/completion-files/aaef0000-0000-4000-8000-000000000200';
+  let retire: () => void;
+  beforeEach(() => {
+    localStorage.clear();
+    (getAuthToken as jest.Mock).mockReturnValue('synthetic-proof-session');
+    (getApiBaseUrl as jest.Mock).mockReturnValue('https://synthetic.invalid');
+    (onTokenChange as jest.Mock).mockImplementation(listener => { retire = listener; return () => {}; });
+    (upload.downloadGigCompletionFile as jest.Mock).mockReset().mockResolvedValue(new Blob(['private image'], { type: 'image/jpeg' }));
+  });
+  const picture = (url = reference) => <CompletionProofImage reference={url} alt="Saved proof" width={56} height={56} className="existing-photo" openFull />;
+  test('renders the existing image and full-size link from a temporary authenticated blob only', async () => {
+    const view = render(picture());
+    await waitFor(() => expect(createURL).toHaveBeenCalledTimes(1));
+    expect(upload.downloadGigCompletionFile).toHaveBeenCalledWith(reference, expect.any(AbortSignal));
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'blob:preview-1');
+    expect(screen.getByRole('img')).toHaveClass('existing-photo');
+    expect(screen.getByRole('link')).toHaveAttribute('href', 'blob:preview-1');
+    view.unmount(); expect(revokeURL).toHaveBeenCalledWith('blob:preview-1');
+  });
+  test.each(['session', 'storage', 'unmount'])('late download after %s retirement cannot create or show a preview', async event => {
+    let finish!: (bytes: Blob) => void;
+    (upload.downloadGigCompletionFile as jest.Mock).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(picture());
+    if (event === 'unmount') view.unmount();
+    else if (event === 'session') act(() => { (getAuthToken as jest.Mock).mockReturnValue('replacement'); retire(); });
+    else act(() => { localStorage.setItem(AUTH_SESSION_CHANGE_KEY, 'replacement'); window.dispatchEvent(new StorageEvent('storage', { key: AUTH_SESSION_CHANGE_KEY })); });
+    await act(async () => finish(new Blob(['late private image'])));
+    expect(createURL).not.toHaveBeenCalled(); expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+  test('a loaded preview is revoked immediately on account change', async () => {
+    render(picture()); await waitFor(() => expect(createURL).toHaveBeenCalledTimes(1));
+    act(() => { (getAuthToken as jest.Mock).mockReturnValue('replacement'); retire(); });
+    expect(revokeURL).toHaveBeenCalledWith('blob:preview-1'); expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+  test('a replaced proof cannot render a previous download and revokes its URL', async () => {
+    const view = render(picture()); await waitFor(() => expect(createURL).toHaveBeenCalledTimes(1));
+    const secondReference = reference.replace(/200$/, '201');
+    (upload.downloadGigCompletionFile as jest.Mock).mockImplementation(() => new Promise(() => {}));
+    view.rerender(picture(secondReference));
+    expect(revokeURL).toHaveBeenCalledWith('blob:preview-1'); expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+  test('failed authorized retrieval can be retried without a public fallback', async () => {
+    (upload.downloadGigCompletionFile as jest.Mock).mockRejectedValueOnce(new Error('unavailable'));
+    render(picture()); fireEvent.click(await screen.findByRole('button', { name: 'Retry photo' }));
+    await waitFor(() => expect(createURL).toHaveBeenCalledTimes(1));
+    expect(upload.downloadGigCompletionFile).toHaveBeenCalledTimes(2); expect(screen.getByRole('link')).toHaveAttribute('href', 'blob:preview-1');
+  });
+  test('existing legacy media remains unchanged without private-byte API calls', () => {
+    render(picture('/legacy-proof.jpg'));
+    expect(upload.downloadGigCompletionFile).not.toHaveBeenCalled(); expect(createURL).not.toHaveBeenCalled();
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/legacy-proof.jpg');
+  });
 });

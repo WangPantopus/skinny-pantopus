@@ -9,17 +9,21 @@
 package app.pantopus.android.ui.screens.my_tasks
 
 import app.pantopus.android.data.api.models.gigs.BoostGigResponse
+import app.pantopus.android.data.api.models.gigs.CompleteGigResponse
 import app.pantopus.android.data.api.models.gigs.MyGigDto
 import app.pantopus.android.data.api.models.gigs.MyGigsResponse
 import app.pantopus.android.data.api.models.gigs.TopBidderDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigsRepository
+import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
 import app.pantopus.android.ui.screens.shared.list_of_rows.BidderTone
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowHighlight
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -84,9 +88,112 @@ class MyTasksViewModelTest {
         taskFormat = taskFormat,
     )
 
-    private fun vm(): MyTasksViewModel =
-        MyTasksViewModel(gigsRepo).apply {
+    private fun vm(identity: () -> Pair<String, String?>? = { "u_me" to "test-session" }): MyTasksViewModel =
+        MyTasksViewModel(gigsRepo, gigIdentityFixture(identity)).apply {
             overrideNow { fixedNow }
+        }
+
+    @Test
+    fun listed_confirmation_retains_original_review() =
+        runTest {
+            val loaded = dto(id = "g1", status = "completed").copy(completionReview = "listed-review")
+            coEvery { gigsRepo.myGigs(any(), any()) } returns NetworkResult.Success(MyGigsResponse(gigs = listOf(loaded)))
+            coEvery { gigsRepo.completeGigAsPoster("g1", "listed-review") } returns NetworkResult.Success(CompleteGigResponse())
+            val viewModel = vm()
+            viewModel.load()
+            viewModel.markComplete(loaded)
+            coVerify(exactly = 1) { gigsRepo.completeGigAsPoster("g1", "listed-review") }
+        }
+
+    @Test
+    fun worker_done_remains_active_until_owner_confirms() {
+        val loaded = dto(id = "g1", status = "completed").copy(completionReview = "loaded-review")
+        val status = MyTasksViewModel.derivedStatus(loaded, fixedNow)
+        assertEquals(MyTasksTab.ACTIVE, MyTasksViewModel.tabFor(status))
+    }
+
+    @Test
+    fun premature_list_confirmation_sends_no_financial_command() =
+        runTest {
+            val loaded = dto(id = "g1", status = "in_progress")
+            coEvery { gigsRepo.myGigs(any(), any()) } returns NetworkResult.Success(MyGigsResponse(gigs = listOf(loaded)))
+            coEvery { gigsRepo.completeGigAsPoster("g1", null) } returns
+                NetworkResult.Failure(NetworkError.Server(400, "Worker must complete first"))
+            val viewModel = vm()
+            viewModel.load()
+            viewModel.markComplete(loaded)
+            coVerify(exactly = 0) { gigsRepo.completeGigAsPoster(any(), any()) }
+        }
+
+    @Test
+    fun confirmed_work_can_move_to_done_and_review() {
+        val loaded = dto(id = "g1", status = "completed").copy(ownerConfirmedAt = "2026-09-15T12:00:00Z")
+        val status = MyTasksViewModel.derivedStatus(loaded, fixedNow)
+        assertEquals(MyTasksStatus.AwaitReview, status)
+        assertEquals(MyTasksTab.DONE, MyTasksViewModel.tabFor(status))
+    }
+
+    @Test
+    fun confirmation_waits_for_receipt_and_ignores_duplicate_tap() =
+        runTest {
+            val loaded = dto(id = "g1", status = "completed").copy(completionReview = "original-review")
+            val confirmed = loaded.copy(ownerConfirmedAt = "2026-09-15T12:00:00Z")
+            coEvery { gigsRepo.myGigs(any(), any()) } returnsMany
+                listOf(
+                    NetworkResult.Success(MyGigsResponse(gigs = listOf(loaded))),
+                    NetworkResult.Success(MyGigsResponse(gigs = listOf(confirmed))),
+                )
+            val reply = CompletableDeferred<NetworkResult<CompleteGigResponse>>()
+            coEvery { gigsRepo.completeGigAsPoster("g1", "original-review") } coAnswers { reply.await() }
+            val viewModel = vm()
+            viewModel.load()
+            viewModel.selectTab(MyTasksTab.ACTIVE)
+            viewModel.markComplete(loaded)
+            viewModel.markComplete(loaded)
+            assertEquals(1, viewModel.tabs.value.first { it.id == MyTasksTab.ACTIVE }.count)
+            assertEquals(0, viewModel.tabs.value.first { it.id == MyTasksTab.DONE }.count)
+            coVerify(exactly = 1) { gigsRepo.completeGigAsPoster("g1", "original-review") }
+            reply.complete(NetworkResult.Success(CompleteGigResponse(gig = confirmed)))
+            assertEquals(0, viewModel.tabs.value.first { it.id == MyTasksTab.ACTIVE }.count)
+            assertEquals(1, viewModel.tabs.value.first { it.id == MyTasksTab.DONE }.count)
+        }
+
+    @Test
+    fun older_refresh_cannot_replace_a_newer_task_list() =
+        runTest {
+            val late = CompletableDeferred<NetworkResult<MyGigsResponse>>()
+            var reads = 0
+            coEvery { gigsRepo.myGigs(any(), any()) } coAnswers {
+                reads += 1
+                if (reads == 2) {
+                    late.await()
+                } else {
+                    NetworkResult.Success(MyGigsResponse(gigs = listOf(dto(if (reads == 1) "initial" else "newest"))))
+                }
+            }
+            val viewModel = vm()
+            viewModel.load()
+            viewModel.refresh()
+            viewModel.refresh()
+            late.complete(NetworkResult.Success(MyGigsResponse(gigs = listOf(dto("stale")))))
+            val state = viewModel.state.value as ListOfRowsUiState.Loaded
+            assertEquals("newest", state.sections.first().rows.first().id)
+        }
+
+    @Test
+    fun missing_receipt_opens_existing_task_without_marking_done() =
+        runTest {
+            val loaded = dto(id = "g1", status = "completed").copy(completionReview = "loaded-review")
+            coEvery { gigsRepo.myGigs(any(), any()) } returns NetworkResult.Success(MyGigsResponse(gigs = listOf(loaded)))
+            coEvery { gigsRepo.completeGigAsPoster("g1", "loaded-review") } returns NetworkResult.Success(CompleteGigResponse())
+            val opened = mutableListOf<String>()
+            val viewModel = vm()
+            viewModel.bindCallbacks({ opened.add(it.id) }, {}, {}, {}, {}, {}, {})
+            viewModel.load()
+            viewModel.markComplete(loaded)
+            assertEquals(listOf("g1"), opened)
+            assertEquals(1, viewModel.tabs.value.first { it.id == MyTasksTab.ACTIVE }.count)
+            assertEquals(0, viewModel.tabs.value.first { it.id == MyTasksTab.DONE }.count)
         }
 
     // MARK: - Lifecycle
@@ -228,9 +335,9 @@ class MyTasksViewModelTest {
     }
 
     @Test
-    fun derived_status_completed_is_await_review() {
+    fun derived_status_worker_completed_waits_for_confirmation() {
         val result = MyTasksViewModel.derivedStatus(dto("g", status = "completed"), fixedNow)
-        assertEquals(MyTasksStatus.AwaitReview, result)
+        assertEquals(MyTasksStatus.AwaitingConfirmation, result)
     }
 
     @Test
@@ -369,18 +476,23 @@ class MyTasksViewModelTest {
     // MARK: - Optimistic boost
 
     @Test
-    fun boost_updates_in_cache_and_calls_endpoint() =
+    fun successful_boost_refreshes_the_existing_list() =
         runTest {
-            coEvery { gigsRepo.myGigs(any(), any()) } returns
-                NetworkResult.Success(MyGigsResponse(gigs = listOf(dto(id = "g1", status = "open", bidCount = 0))))
+            var reads = 0
+            coEvery { gigsRepo.myGigs(any(), any()) } coAnswers {
+                reads += 1
+                val gig = dto(id = "g1").copy(title = if (reads == 1) "Initial task" else "Server refreshed task")
+                NetworkResult.Success(MyGigsResponse(gigs = listOf(gig)))
+            }
             coEvery { gigsRepo.boostGig("g1") } returns
                 NetworkResult.Success(BoostGigResponse(boostExpiresAt = "2026-05-16T12:00:00Z"))
             val viewModel = vm()
             viewModel.load()
-            viewModel.boost(dto(id = "g1", status = "open"))
-            // Row stays on Open tab; boost is a soft signal that doesn't change tab.
+            viewModel.boost(dto(id = "g1"))
             val state = viewModel.state.value as ListOfRowsUiState.Loaded
-            assertEquals(1, state.sections.first().rows.size)
+            assertEquals("Server refreshed task", state.sections.first().rows.first().title)
+            assertEquals(2, reads)
+            coVerify(exactly = 1) { gigsRepo.boostGig("g1") }
         }
 
     // MARK: - T6.0b Magic Task chrome

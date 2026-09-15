@@ -12,6 +12,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/query-keys';
 import { ListArchetype } from '@/components/archetypes';
 import { ProBadge } from '@/components/ProBadge';
+import { useGigListSession } from '@/hooks/useGigListSession';
 
 type DashboardTab = 'all' | 'active' | 'in_progress' | 'completed' | 'cancelled';
 
@@ -268,6 +269,8 @@ function TaskDashboardCard({
 export default function MyGigsPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<DashboardTab>('all');
+  const session = useGigListSession();
+  const navigate = (url: string) => { if (session.isCurrent()) router.push(url); };
 
   // Auth guard
   useEffect(() => {
@@ -275,17 +278,23 @@ export default function MyGigsPage() {
   }, [router]);
 
   const gigsQuery = useQuery<GigListItem[]>({
-    queryKey: queryKeys.myGigs(),
+    // A private list cache belongs to this mounted session, never another entry.
+    queryKey: [...queryKeys.myGigs(), session.key],
+    enabled: session.active,
     queryFn: async () => {
+      if (!session.isCurrent()) return [];
       const response = await api.gigs.getMyGigs({ limit: 100 });
+      if (!session.isCurrent()) return [];
       return ((response as Record<string, any>).gigs || []) as GigListItem[];
     },
     staleTime: 30_000,
+    gcTime: 0,
   });
 
-  const gigs = gigsQuery.data ?? [];
-  const loading = gigsQuery.isPending;
-  const fetchError = gigsQuery.error ? 'Failed to load your tasks. Please try again.' : null;
+  const gigs = useMemo(() => session.active ? gigsQuery.data ?? [] : [], [session.active, gigsQuery.data]);
+  const loading = !session.retired && gigsQuery.isPending;
+  const fetchError = session.retired ? 'Your session changed. Reopen My tasks to continue.'
+    : gigsQuery.error ? 'Failed to load your tasks. Please try again.' : null;
 
   const stats = useMemo(
     () => ({
@@ -322,16 +331,16 @@ export default function MyGigsPage() {
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
         <ListArchetype<GigListItem>
           overline="Poster dashboard"
-          title={<span className="inline-flex items-center gap-2">My tasks<ProBadge /></span>}
+          title={<span className="inline-flex items-center gap-2">My tasks{session.active && <ProBadge />}</span>}
           subtitle="Track bids, deadlines, and progress across the tasks you've posted."
           primaryAction={{
             label: 'Post a task',
-            onClick: () => router.push('/app/gigs-v2/new'),
+            onClick: () => navigate('/app/gigs-v2/new'),
           }}
           secondaryActions={[
             {
               label: 'Browse tasks',
-              onClick: () => router.push('/app/gigs'),
+              onClick: () => navigate('/app/gigs'),
               icon: ArrowRight,
             },
           ]}
@@ -349,7 +358,7 @@ export default function MyGigsPage() {
                 <div className="mb-4">
                   <ErrorState
                     message={fetchError}
-                    onRetry={() => { void gigsQuery.refetch(); }}
+                    onRetry={() => { if (session.retired) window.location.reload(); else if (session.isCurrent()) void gigsQuery.refetch(); }}
                   />
                 </div>
               ) : null}
@@ -391,7 +400,7 @@ export default function MyGigsPage() {
           renderRow={(gig) => (
             <TaskDashboardCard
               gig={gig}
-              onViewBids={(gigId) => router.push(`/app/gigs/${gigId}`)}
+              onViewBids={(gigId) => navigate(`/app/gigs/${gigId}`)}
             />
           )}
           emptyState={{
@@ -401,7 +410,7 @@ export default function MyGigsPage() {
             tone: 'personal',
             ctaLabel: emptyState.actionLabel,
             onCtaClick: emptyState.actionHref
-              ? () => router.push(emptyState.actionHref)
+              ? () => navigate(emptyState.actionHref)
               : undefined,
           }}
         />

@@ -25,9 +25,10 @@ data class GigDetailDto(
     val post: Post,
     val otherBids: List<OtherBid>,
     val nextSteps: List<NextStep>,
+    val bidStatus: String? = null,
 ) {
-    /** Optimistic flip into the accepted state when the recipient accepts. */
-    fun accepted(): GigDetailDto = copy(isAccepted = true)
+    /** Apply only after the server returns this exact accepted bid. */
+    fun accepted(): GigDetailDto = copy(isAccepted = true, bidStatus = "accepted")
 
     /** The neighbor who placed the bid. */
     data class Bidder(
@@ -104,6 +105,7 @@ data class GigDetailDto(
                 stringCandidate(payload, "bid_id", "bidId", "bid_offer_id")
                     ?: stringCandidate(bidMap.orEmpty(), "id", "bid_id", "bidId")
             return GigDetailDto(
+                bidStatus = stringCandidate(payload, "bid_status", "bidStatus") ?: stringCandidate(bidMap.orEmpty(), "status"),
                 gigId = gigId,
                 bidId = bidId,
                 isAccepted = payload["is_accepted"] as? Boolean ?: false,

@@ -27,8 +27,10 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
     public let acceptedAt: String?
     /// Set when the poster confirms completion — gates the Block 3D tip
     /// affordance (the `/tip` route requires a completed + confirmed gig).
+    public let completionReview: String?
     public let ownerConfirmedAt: String?
     public let scheduledStart: String?
+    public let paymentId: String?
     public let paymentStatus: String?
     public let engagementMode: String?
     public let scheduleType: String?
@@ -94,8 +96,10 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
         case userId = "user_id"
         case acceptedBy = "accepted_by"
         case acceptedAt = "accepted_at"
+        case completionReview = "completion_review"
         case ownerConfirmedAt = "owner_confirmed_at"
         case scheduledStart = "scheduled_start"
+        case paymentId = "payment_id"
         case paymentStatus = "payment_status"
         case engagementMode = "engagement_mode"
         case scheduleType = "schedule_type"
@@ -143,8 +147,10 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
         userId = try c.decodeIfPresent(String.self, forKey: .userId)
         acceptedBy = try c.decodeIfPresent(String.self, forKey: .acceptedBy)
         acceptedAt = try c.decodeIfPresent(String.self, forKey: .acceptedAt)
+        completionReview = try c.decodeIfPresent(String.self, forKey: .completionReview)
         ownerConfirmedAt = try c.decodeIfPresent(String.self, forKey: .ownerConfirmedAt)
         scheduledStart = try c.decodeIfPresent(String.self, forKey: .scheduledStart)
+        paymentId = try c.decodeIfPresent(String.self, forKey: .paymentId)
         paymentStatus = try c.decodeIfPresent(String.self, forKey: .paymentStatus)
         engagementMode = try c.decodeIfPresent(String.self, forKey: .engagementMode)
         scheduleType = try c.decodeIfPresent(String.self, forKey: .scheduleType)
@@ -225,7 +231,9 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
         cancellationPolicy: String? = nil,
         estimatedDuration: Double? = nil,
         items: [GigItemDTO]? = nil,
-        startsAsap: Bool? = nil
+        startsAsap: Bool? = nil,
+        paymentId: String? = nil,
+        completionReview: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -240,8 +248,10 @@ public struct GigDTO: Decodable, Sendable, Hashable, Identifiable {
         self.userId = userId
         self.acceptedBy = acceptedBy
         self.acceptedAt = acceptedAt
+        self.completionReview = completionReview
         self.ownerConfirmedAt = ownerConfirmedAt
         self.scheduledStart = scheduledStart
+        self.paymentId = paymentId
         self.paymentStatus = paymentStatus
         self.engagementMode = engagementMode
         self.scheduleType = scheduleType
@@ -433,9 +443,32 @@ public struct GigDetailResponse: Decodable, Sendable {
     public let gig: GigDTO
 }
 
+/// Saved proof returned by the existing worker-completion endpoint.
+struct GigWorkerCompletionResponse: Decodable {
+    let gig: Receipt?
+
+    struct Receipt: Decodable {
+        let id: String
+        let status: String?
+        let acceptedBy: String?
+        let workerCompletedAt: String?
+        let completionNote: String?
+        let completionPhotos: [String]?
+
+        enum CodingKeys: String, CodingKey {
+            case id, status
+            case acceptedBy = "accepted_by"
+            case workerCompletedAt = "worker_completed_at"
+            case completionNote = "completion_note"
+            case completionPhotos = "completion_photos"
+        }
+    }
+}
+
 /// One bid on a gig.
 public struct GigBidDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
+    public let gigId: String?
     public let userId: String?
     public let bidAmount: Double?
     public let amount: Double?
@@ -451,6 +484,7 @@ public struct GigBidDTO: Decodable, Sendable, Hashable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case gigId = "gig_id"
         case userId = "user_id"
         case bidAmount = "bid_amount"
         case amount
@@ -466,6 +500,7 @@ public struct GigBidDTO: Decodable, Sendable, Hashable, Identifiable {
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
+        gigId = try c.decodeIfPresent(String.self, forKey: .gigId)
         userId = try c.decodeIfPresent(String.self, forKey: .userId)
         bidAmount = try c.decodeIfPresent(Double.self, forKey: .bidAmount)
         amount = try c.decodeIfPresent(Double.self, forKey: .amount)
@@ -488,9 +523,11 @@ public struct GigBidDTO: Decodable, Sendable, Hashable, Identifiable {
         createdAt: String?,
         bidder: GigCreator?,
         counterAmount: Double? = nil,
-        counterStatus: String? = nil
+        counterStatus: String? = nil,
+        gigId: String? = nil
     ) {
         self.id = id
+        self.gigId = gigId
         self.userId = userId
         self.bidAmount = bidAmount
         self.amount = amount
@@ -616,6 +653,10 @@ public struct GigBidAcceptResponse: Decodable, Sendable, Hashable {
     public let bid: GigBidDTO?
     public let message: String?
     public let requiresPaymentSetup: Bool?
+    public let authorizationReady: Bool?
+    public let paymentStatus: String?
+    public let amountCents: Int?
+    public let currency: String?
     public let isSetupIntent: Bool?
     public let payment: PaymentPayload?
     public let publishableKey: String?
@@ -955,6 +996,11 @@ public struct GigPaymentResponse: Decodable, Sendable {
 /// tips. Sensitive Stripe ids are stripped for the worker server-side.
 public struct GigPaymentDTO: Decodable, Sendable, Hashable {
     public let id: String?
+    public let gigId: String?
+    public let payerId: String?
+    public let payeeId: String?
+    public let currency: String?
+    public let capturedAt: String?
     public let paymentStatus: String?
     public let paymentType: String?
     public let amountTotal: Double?
@@ -966,7 +1012,8 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
     public let refundedAmount: Double?
 
     enum CodingKeys: String, CodingKey {
-        case id
+        case id, currency
+        case gigId = "gig_id", payerId = "payer_id", payeeId = "payee_id", capturedAt = "captured_at"
         case paymentStatus = "payment_status"
         case paymentType = "payment_type"
         case amountTotal = "amount_total"
@@ -980,6 +1027,11 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
 
     public init(
         id: String? = nil,
+        gigId: String? = nil,
+        payerId: String? = nil,
+        payeeId: String? = nil,
+        currency: String? = nil,
+        capturedAt: String? = nil,
         paymentStatus: String? = nil,
         paymentType: String? = nil,
         amountTotal: Double? = nil,
@@ -991,6 +1043,11 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
         refundedAmount: Double? = nil
     ) {
         self.id = id
+        self.gigId = gigId
+        self.payerId = payerId
+        self.payeeId = payeeId
+        self.currency = currency
+        self.capturedAt = capturedAt
         self.paymentStatus = paymentStatus
         self.paymentType = paymentType
         self.amountTotal = amountTotal

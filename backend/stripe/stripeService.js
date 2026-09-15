@@ -8,8 +8,13 @@ const { getStripeClient } = require('./getStripeClient');
 const stripe = getStripeClient();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
-const { PAYMENT_STATES, transitionPaymentStatus } = require('./paymentStateMachine');
+const { PAYMENT_STATES, transitionPaymentStatus, matchPaymentSnapshot } = require('./paymentStateMachine');
 const { createNotification } = require('../services/notificationService');
+const { conflict, providerId, assertPaymentTerms, assertIntentBinding, assertAuthorizedIntent, assertCapturedIntent } = require('./gigPaymentProof');
+const { readGigAuthorizationDeadline, requireLiveAuthorization } = require('./gigAuthorizationDeadline');
+const { expectedTipLiveMode, readTipProof, verifyTipCustomer, originalTipRequest, projectTipOriginal,
+  tipProviderParams, discoverOriginalTip } = require('./gigTipProof');
+const { isDeepStrictEqual } = require('node:util');
 
 // Default platform fee: 15%
 const DEFAULT_PLATFORM_FEE_PCT = 15;
@@ -31,54 +36,12 @@ class StripeService {
     return data || null;
   }
 
-  async _notifyTipReceivedIfNeeded(payment) {
-    if (!payment || payment.payment_type !== 'tip') return false;
-
-    const metadata = payment.metadata || {};
-    if (metadata.tip_notification_sent_at) {
-      return false;
-    }
-
-    const gig = await this._getGigInfo(payment.gig_id);
-    const notification = await createNotification({
-      userId: payment.payee_id,
-      type: 'tip_received',
-      title: 'You received a tip!',
-      body: `The poster of "${gig?.title || 'a gig'}" sent you a $${(payment.amount_total / 100).toFixed(2)} tip. 🎉`,
-      icon: '💰',
-      link: payment.gig_id ? `/gigs/${payment.gig_id}` : null,
-      metadata: {
-        gig_id: payment.gig_id,
-        amount: payment.amount_total,
-        payment_id: payment.id,
-      },
-    });
-
-    if (notification === null) {
-      return false;
-    }
-
-    await supabaseAdmin
-      .from('Payment')
-      .update({
-        metadata: {
-          ...metadata,
-          tip_notification_id: notification?.id || null,
-          tip_notification_sent_at: new Date().toISOString(),
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', payment.id);
-
-    return true;
-  }
-
   /**
    * Best-effort reconciliation for tip payments after Stripe confirms the
    * PaymentIntent. This is used by both webhooks and the mobile post-sheet
    * success path so tips don't remain stuck in authorize_pending.
    */
-  async syncTipPaymentStatus(paymentId, { paymentIntent: providedPaymentIntent } = {}) {
+  async syncTipPaymentStatus(paymentId) {
     if (!paymentId) throw new Error('Payment ID is required');
 
     const { data: payment } = await supabaseAdmin
@@ -95,6 +58,15 @@ class StripeService {
       return { payment_status: payment.payment_status, payment };
     }
 
+    if (payment.metadata?.gig_tip_original_v1) {
+      const original = payment.metadata.gig_tip_original_v1;
+      const progress = await this.createTipPayment({ requestId: payment.id, payerId: payment.payer_id, gigId: payment.gig_id,
+        amount: payment.amount_total, paymentMethodId: original.payment_method_id, expectedTerms: original.terms,
+        sessionScope: original.original_session_scope, mode: 'check' });
+      const saved = await this._tipRpc('read_gig_tip_original', { p_request_id: payment.id, p_actor_id: payment.payer_id });
+      return { payment_status: saved.payment.payment_status, stripe_status: progress.providerStatus, payment: saved.payment };
+    }
+
     const alreadySucceededStates = new Set([
       PAYMENT_STATES.CAPTURED_HOLD,
       PAYMENT_STATES.TRANSFER_SCHEDULED,
@@ -106,40 +78,31 @@ class StripeService {
       PAYMENT_STATES.DISPUTED,
     ]);
 
+    if (!payment.stripe_payment_intent_id && payment.payment_status === PAYMENT_STATES.AUTHORIZE_PENDING) {
+      return { payment_status: payment.payment_status, payment };
+    }
+
+    // Existing tip rows already own the amount, customer and provider ID. Read
+    // current provider evidence even when a webhook/create callback supplied an
+    // older object; local status or a bare succeeded flag is not capture proof.
+    const livemode = expectedTipLiveMode();
+    const original = { source: 'legacy', payment_id: payment.id, gig_id: payment.gig_id,
+      payer_id: payment.payer_id, payee_id: payment.payee_id, amount_cents: payment.amount_total,
+      currency: String(payment.currency).toLowerCase(), intent_id: payment.stripe_payment_intent_id, livemode };
+    const { intent: paymentIntent, charge, proof } = await readTipProof(stripe, payment, original, livemode);
+
     if (alreadySucceededStates.has(payment.payment_status) && payment.payment_succeeded_at) {
-      await this._notifyTipReceivedIfNeeded(payment);
-      return { payment_status: payment.payment_status, payment };
-    }
-
-    if (!payment.stripe_payment_intent_id) {
-      return { payment_status: payment.payment_status, payment };
-    }
-
-    const paymentIntent = providedPaymentIntent || await stripe.paymentIntents.retrieve(
-      payment.stripe_payment_intent_id,
-      { expand: ['latest_charge'] }
-    );
-
-    if (!paymentIntent) {
-      return { payment_status: payment.payment_status, payment };
+      if (paymentIntent.status !== 'succeeded') throw Object.assign(new Error('The original tip outcome needs verification.'),
+        { code: 'TIP_PROVIDER_REVIEW', statusCode: 409 });
+      const { data: current, error } = await matchPaymentSnapshot(supabaseAdmin.from('Payment').select('*'), payment).single();
+      if (error || !current) throw new Error('The tip changed during verification. Check the original payment again.');
+      return { payment_status: current.payment_status, payment: current };
     }
 
     if (paymentIntent.status === 'canceled') {
-      if (payment.payment_status === PAYMENT_STATES.AUTHORIZE_PENDING) {
-        try {
-          await transitionPaymentStatus(payment.id, PAYMENT_STATES.CANCELED);
-        } catch (err) {
-          logger.info('syncTipPaymentStatus: cancel transition skipped', {
-            paymentId: payment.id,
-            error: err.message,
-          });
-        }
-      }
-      return {
-        payment_status: PAYMENT_STATES.CANCELED,
-        stripe_status: paymentIntent.status,
-        payment,
-      };
+      const saved = payment.payment_status === PAYMENT_STATES.CANCELED ? payment
+        : await transitionPaymentStatus(payment.id, PAYMENT_STATES.CANCELED, {}, payment);
+      return { payment_status: saved.payment_status, stripe_status: paymentIntent.status, payment: saved };
     }
 
     if (paymentIntent.status !== 'succeeded') {
@@ -150,15 +113,7 @@ class StripeService {
       };
     }
 
-    const charge =
-      typeof paymentIntent.latest_charge === 'object'
-        ? paymentIntent.latest_charge
-        : paymentIntent.charges?.data?.[0] || null;
-    const capturedAt = charge?.created
-      ? new Date(charge.created * 1000)
-      : paymentIntent.created
-        ? new Date(paymentIntent.created * 1000)
-        : new Date();
+    const capturedAt = new Date(proof.captured_at);
     const coolingOffEnds = new Date(capturedAt.getTime() + COOLING_OFF_MS);
     const paymentMethodId =
       typeof paymentIntent.payment_method === 'string'
@@ -180,55 +135,33 @@ class StripeService {
       payment_method_brand: charge?.payment_method_details?.card?.brand || payment.payment_method_brand || null,
     };
 
-    try {
-      if (payment.payment_status === PAYMENT_STATES.AUTHORIZE_PENDING) {
-        await transitionPaymentStatus(payment.id, PAYMENT_STATES.CAPTURED_HOLD, {
-          captured_at: capturedAt.toISOString(),
-          cooling_off_ends_at: coolingOffEnds.toISOString(),
-          payment_succeeded_at: capturedAt.toISOString(),
-          ...cardUpdates,
-        });
-      } else if (alreadySucceededStates.has(payment.payment_status)) {
-        await supabaseAdmin
-          .from('Payment')
-          .update({
-            ...cardUpdates,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', payment.id);
-      }
-    } catch (err) {
-      logger.warn('syncTipPaymentStatus: capture transition failed, direct update fallback', {
-        paymentId: payment.id,
-        currentStatus: payment.payment_status,
-        error: err.message,
-      });
-
-      await supabaseAdmin
-        .from('Payment')
-        .update({
-          payment_status: PAYMENT_STATES.CAPTURED_HOLD,
-          captured_at: capturedAt.toISOString(),
-          cooling_off_ends_at: coolingOffEnds.toISOString(),
-          payment_succeeded_at: capturedAt.toISOString(),
-          ...cardUpdates,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', payment.id);
+    if (payment.payment_status === PAYMENT_STATES.AUTHORIZE_PENDING) {
+      await transitionPaymentStatus(payment.id, PAYMENT_STATES.CAPTURED_HOLD, {
+        captured_at: capturedAt.toISOString(),
+        cooling_off_ends_at: coolingOffEnds.toISOString(),
+        payment_succeeded_at: capturedAt.toISOString(),
+        ...cardUpdates,
+      }, payment);
+    } else if (alreadySucceededStates.has(payment.payment_status)) {
+      const { data: saved, error } = await matchPaymentSnapshot(supabaseAdmin.from('Payment')
+        .update({ ...cardUpdates, updated_at: new Date().toISOString() }), payment).select().single();
+      if (error || !saved) throw new Error('The tip status could not be saved. Check the original payment again.');
     }
 
-    const { data: refreshed } = await supabaseAdmin
+    const { data: refreshed, error: refreshError } = await supabaseAdmin
       .from('Payment')
       .select('*')
       .eq('id', payment.id)
       .single();
 
-    await this._notifyTipReceivedIfNeeded(refreshed || payment);
+    if (refreshError || !refreshed || !alreadySucceededStates.has(refreshed.payment_status) || !refreshed.payment_succeeded_at) {
+      throw new Error('The tip status is not confirmed. Check the original payment again.');
+    }
 
     return {
-      payment_status: refreshed?.payment_status || PAYMENT_STATES.CAPTURED_HOLD,
+      payment_status: refreshed.payment_status,
       stripe_status: paymentIntent.status,
-      payment: refreshed || payment,
+      payment: refreshed,
     };
   }
 
@@ -533,60 +466,150 @@ class StripeService {
    * delivery may be delayed. If Stripe already shows manual-capture auth
    * success (requires_capture), transition to AUTHORIZED.
    */
+  async _readPayment(paymentId) {
+    const { data, error } = await supabaseAdmin.from('Payment').select('*').eq('id', paymentId).single();
+    if (error || !data) throw conflict('Payment could not be verified');
+    return data;
+  }
+
+  async recoverGigPayment(attempt) {
+    // Provider recovery is scoped to the payer's durable customer, never a
+    // global search or a caller-supplied intent. Absence is not creation proof.
+    const { data: payer, error } = await supabaseAdmin.from('User').select('stripe_customer_id')
+      .eq('id', attempt.payer_id).single();
+    if (error || !payer) throw conflict('The payment customer could not be verified');
+    if (!payer.stripe_customer_id) return null;
+    const createdAt = Date.parse(attempt.created_at);
+    if (!Number.isFinite(createdAt)) throw conflict('The payment operation time could not be verified');
+    const matches = [];
+    let after;
+    for (let page = 0; page < 10; page += 1) {
+      const batch = await stripe.paymentIntents.list({
+        customer: payer.stripe_customer_id, limit: 100,
+        created: { gte: Math.max(0, Math.floor(createdAt / 1000) - 300) },
+        ...(after ? { starting_after: after } : {}),
+      });
+      if (!Array.isArray(batch?.data)) throw conflict('Provider reconciliation is incomplete');
+      for (const candidate of batch.data) {
+        if (candidate.metadata?.acceptance_attempt_id === attempt.id) matches.push(candidate);
+      }
+      if (matches.length > 1) throw conflict('Multiple provider intents need reconciliation for this operation');
+      if (!batch.has_more) break;
+      after = batch.data.at(-1)?.id;
+      if (!after || page === 9) throw conflict('Provider reconciliation is incomplete');
+    }
+    if (matches.length === 0) return null;
+    // Retrieve again: list contents are candidates, not current provider proof.
+    const intent = await stripe.paymentIntents.retrieve(matches[0].id);
+    const platformFeeText = intent?.metadata?.platform_fee;
+    if (!/^\d+$/.test(platformFeeText || '')) throw conflict('Provider fee terms could not be verified');
+    const platformFee = Number(platformFeeText);
+    if (!Number.isSafeInteger(platformFee) || platformFee > attempt.amount) throw conflict('Provider fee terms do not match the operation');
+    const expected = {
+      gig_id: attempt.gig_id, payer_id: attempt.payer_id, payee_id: attempt.payee_id,
+      amount_total: attempt.amount, currency: attempt.currency.toUpperCase(), payment_type: 'gig_payment',
+      stripe_customer_id: payer.stripe_customer_id, stripe_payment_intent_id: intent.id,
+      metadata: { acceptance_attempt_id: attempt.id },
+    };
+    assertPaymentTerms(expected, { gigId: attempt.gig_id, payerId: attempt.payer_id, payeeId: attempt.payee_id, amount: attempt.amount });
+    assertIntentBinding(expected, intent);
+    if (!['requires_payment_method', 'requires_confirmation', 'requires_action', 'requires_capture', 'canceled'].includes(intent.status)) {
+      throw conflict('The provider intent requires explicit reconciliation');
+    }
+    const deadline = intent.status === 'requires_capture'
+      ? requireLiveAuthorization(await readGigAuthorizationDeadline(stripe, expected, intent)) : null;
+    const status = intent.status === 'canceled' ? PAYMENT_STATES.CANCELED
+      : intent.status === 'requires_capture' ? PAYMENT_STATES.AUTHORIZED : PAYMENT_STATES.AUTHORIZE_PENDING;
+    const { data: recovered, error: insertError } = await supabaseAdmin.from('Payment').insert({
+      ...expected, amount_subtotal: attempt.amount, amount_platform_fee: platformFee,
+      amount_to_payee: attempt.amount - platformFee,
+      amount_processing_fee: this.calculateFees(attempt.amount).estimatedStripeFee,
+      payment_status: status, is_escrowed: true,
+      stripe_charge_id: providerId(intent.latest_charge) || null,
+      authorization_expires_at: deadline?.expiresAt || null,
+      payment_attempted_at: new Date(intent.created * 1000 || createdAt).toISOString(),
+    }).select('*').single();
+    if (insertError) {
+      if (insertError.code !== '23505') throw Object.assign(new Error('Could not save recovered payment. Please retry.'), { statusCode: 503 });
+      const { data: winner, error: winnerError } = await supabaseAdmin.from('Payment').select('*')
+        .eq('stripe_payment_intent_id', intent.id).single();
+      if (winnerError || !winner || winner.metadata?.acceptance_attempt_id !== attempt.id) throw conflict('Recovered payment binding changed');
+      assertPaymentTerms(winner, { gigId: attempt.gig_id, payerId: attempt.payer_id, payeeId: attempt.payee_id, amount: attempt.amount });
+      assertIntentBinding(winner, intent);
+      if (winner.amount_platform_fee !== platformFee || winner.amount_to_payee !== attempt.amount - platformFee) {
+        throw conflict('Recovered payment fee terms changed');
+      }
+      return winner;
+    }
+    if (!recovered) throw conflict('Recovered payment receipt is missing');
+    return recovered;
+  }
+
+  async resumeGigPayment(paymentId, terms) {
+    let payment = assertPaymentTerms(await this._readPayment(paymentId), terms);
+    if (!['authorize_pending', 'authorized'].includes(payment.payment_status)) throw conflict('Payment is no longer available for authorization');
+    const intent = assertIntentBinding(payment, await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id));
+    if (!['requires_payment_method', 'requires_confirmation', 'requires_action', 'requires_capture'].includes(intent.status)) {
+      throw conflict('Payment is no longer available for authorization');
+    }
+    const authorizationReady = intent.status === 'requires_capture';
+    if (authorizationReady) {
+      // Return ready only after fresh exact proof and a saved authorized state.
+      payment = (await this.verifyGigAuthorization(payment.id, terms)).payment;
+    } else if (!intent.client_secret) {
+      throw conflict('The payment sheet could not be prepared');
+    }
+    return { success: true, paymentId: payment.id, paymentIntentId: intent.id,
+      clientSecret: authorizationReady ? null : intent.client_secret, payment, reused: true,
+      authorizationReady, paymentStatus: payment.payment_status, providerStatus: intent.status,
+      amountCents: payment.amount_total, currency: payment.currency.toLowerCase() };
+  }
+
+  async verifyGigAuthorization(paymentId, terms) {
+    let payment = assertPaymentTerms(await this._readPayment(paymentId), terms);
+    if (!['authorize_pending', 'authorization_failed', 'authorized'].includes(payment.payment_status)) throw conflict('Payment is not available for authorization');
+    const intent = assertAuthorizedIntent(payment, await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id));
+    const deadline = requireLiveAuthorization(await readGigAuthorizationDeadline(stripe, payment, intent));
+    // A current read also repairs an old estimated expiry. It never starts a new
+    // seven-day window, and a concurrent payment/identity transition cannot win this write.
+    const { data, error } = await supabaseAdmin.from('Payment').update({
+      payment_status: PAYMENT_STATES.AUTHORIZED,
+      authorization_expires_at: deadline.expiresAt,
+      stripe_charge_id: deadline.chargeId,
+      updated_at: new Date().toISOString(),
+    }).eq('id', payment.id).eq('payment_status', payment.payment_status)
+      .eq('stripe_payment_intent_id', intent.id).eq('stripe_customer_id', payment.stripe_customer_id)
+      .eq('payer_id', payment.payer_id).eq('payee_id', payment.payee_id).eq('amount_total', payment.amount_total)
+      .select('*').maybeSingle();
+    if (error) throw Object.assign(new Error('Could not save authorization. Please retry.'), { statusCode: 503 });
+    payment = assertPaymentTerms(data || await this._readPayment(payment.id), terms);
+    if (payment.payment_status !== PAYMENT_STATES.AUTHORIZED || payment.stripe_payment_intent_id !== intent.id
+        || Date.parse(payment.authorization_expires_at) !== deadline.captureBefore * 1000
+        || payment.stripe_charge_id !== deadline.chargeId) throw conflict('Authorization changed while it was being verified');
+    requireLiveAuthorization(deadline);
+    return { payment_status: payment.payment_status, payment };
+  }
+
   async syncPaymentAuthorizationStatus(paymentId) {
-    if (!paymentId) throw new Error('Payment ID is required');
-
-    const { data: payment } = await supabaseAdmin
-      .from('Payment')
-      .select('id, payment_status, stripe_payment_intent_id')
-      .eq('id', paymentId)
-      .single();
-
-    if (!payment) {
-      throw new Error('Payment not found');
+    const payment = await this._readPayment(paymentId);
+    if (payment.payment_type === 'gig_payment' && payment.gig_id) {
+      return this.verifyGigAuthorization(paymentId, {
+        gigId: payment.gig_id, payerId: payment.payer_id, payeeId: payment.payee_id, amount: payment.amount_total,
+      });
     }
-
-    if (
-      payment.payment_status !== PAYMENT_STATES.AUTHORIZE_PENDING ||
-      !payment.stripe_payment_intent_id
-    ) {
+    if (payment.payment_status !== PAYMENT_STATES.AUTHORIZE_PENDING || !payment.stripe_payment_intent_id) {
       return { payment_status: payment.payment_status };
     }
-
-    const paymentIntent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
-    if (!paymentIntent) {
-      return { payment_status: payment.payment_status };
+    const intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
+    if (intent.status === 'requires_capture') {
+      assertAuthorizedIntent(payment, intent);
+      const updated = await transitionPaymentStatus(paymentId, PAYMENT_STATES.AUTHORIZED, {
+        authorization_expires_at: new Date(Date.now() + AUTH_HOLD_MS).toISOString(),
+        stripe_charge_id: providerId(intent.latest_charge),
+      });
+      return { payment_status: updated.payment_status };
     }
-
-    if (paymentIntent.capture_method === 'manual' && paymentIntent.status === 'requires_capture') {
-      const authExpiresAt = new Date(Date.now() + (7 * 24 * 60 * 60 * 1000));
-      try {
-        await transitionPaymentStatus(payment.id, PAYMENT_STATES.AUTHORIZED, {
-          authorization_expires_at: authExpiresAt.toISOString(),
-          stripe_charge_id: paymentIntent.latest_charge,
-        });
-      } catch (err) {
-        logger.info('syncPaymentAuthorizationStatus: transition skipped', {
-          paymentId: payment.id,
-          error: err.message,
-        });
-      }
-      return { payment_status: PAYMENT_STATES.AUTHORIZED };
-    }
-
-    if (paymentIntent.status === 'canceled') {
-      try {
-        await transitionPaymentStatus(payment.id, PAYMENT_STATES.CANCELED);
-      } catch (err) {
-        logger.info('syncPaymentAuthorizationStatus: cancel transition skipped', {
-          paymentId: payment.id,
-          error: err.message,
-        });
-      }
-      return { payment_status: PAYMENT_STATES.CANCELED };
-    }
-
-    return { payment_status: payment.payment_status, stripe_status: paymentIntent.status };
+    return { payment_status: payment.payment_status, stripe_status: intent.status };
   }
 
   // ============ CUSTOMERS ============
@@ -869,6 +892,18 @@ class StripeService {
     idempotencyKey,
   }) {
     try {
+      if (existingPaymentId) {
+        const existing = await this._readPayment(existingPaymentId);
+        if (existing.metadata?.acceptance_attempt_id) {
+          throw conflict('Recover the existing bid authorization before changing its payment');
+        }
+        const { paymentChanged: _paymentChanged, ...result } = await require('../services/legacyGigAuthorization').recover({
+          gigId, actorId: offSession ? null : payerId, scheduler: offSession, mode: 'resume',
+          expectedPaymentId: existingPaymentId, expectedTerms: { payerId, payeeId, amount, currency },
+        });
+        return { ...result, success: result.authorizationReady,
+          ...(!result.authorizationReady && result.recoveryState === 'action_required' ? { error: 'authentication_required' } : {}) };
+      }
       const payeeAccount = await this._getPayeeAccountOptional(payeeId);
       const customerId = await this.getOrCreateCustomer(payerId);
       const feeRate = await this.getEffectiveFeeRate(payeeId);
@@ -916,43 +951,14 @@ class StripeService {
       }
 
       const now = new Date().toISOString();
-      const authExpires = new Date(Date.now() + AUTH_HOLD_MS).toISOString();
+      const authorizedDeadline = initialStatus === PAYMENT_STATES.AUTHORIZED
+        ? requireLiveAuthorization(await readGigAuthorizationDeadline(stripe, {
+          stripe_payment_intent_id: paymentIntent.id, stripe_customer_id: customerId,
+          amount_total: amount, currency: String(currency).toLowerCase(),
+          payer_id: payerId, payee_id: payeeId, gig_id: gigId, metadata,
+        }, paymentIntent)) : null;
 
-      if (existingPaymentId) {
-        // Update existing Payment record (from SetupIntent → PaymentIntent)
-        await transitionPaymentStatus(existingPaymentId, initialStatus, {
-          stripe_payment_intent_id: paymentIntent.id,
-          stripe_payment_method_id: paymentMethodId || null,
-          authorization_expires_at: initialStatus === PAYMENT_STATES.AUTHORIZED ? authExpires : null,
-          payment_attempted_at: now,
-          payment_succeeded_at: initialStatus === PAYMENT_STATES.AUTHORIZED ? now : null,
-          metadata,
-          ...(description ? { description } : {}),
-        });
-
-        const { data: updated } = await supabaseAdmin
-          .from('Payment')
-          .select('*')
-          .eq('id', existingPaymentId)
-          .single();
-
-        logger.info('PaymentIntent created (existing payment)', {
-          paymentIntentId: paymentIntent.id,
-          paymentId: existingPaymentId,
-          status: initialStatus,
-          amount,
-          gigId,
-        });
-
-        return {
-          success: true,
-          clientSecret: paymentIntent.client_secret,
-          paymentIntentId: paymentIntent.id,
-          paymentId: existingPaymentId,
-          payment: updated,
-        };
-
-      } else {
+      {
         // Insert new Payment record
         const { data: payment, error: dbError } = await supabaseAdmin
           .from('Payment')
@@ -965,6 +971,7 @@ class StripeService {
             stripe_customer_id: customerId,
             stripe_payment_method_id: paymentMethodId || null,
             amount_total: amount,
+            currency: String(currency || 'usd').toUpperCase(),
             amount_subtotal: amount,
             amount_platform_fee: fees.platformFee,
             amount_to_payee: fees.amountToPayee,
@@ -972,7 +979,8 @@ class StripeService {
             payment_status: initialStatus,
             payment_type: 'gig_payment',
             is_escrowed: true,
-            authorization_expires_at: initialStatus === PAYMENT_STATES.AUTHORIZED ? authExpires : null,
+            authorization_expires_at: authorizedDeadline?.expiresAt || null,
+            stripe_charge_id: authorizedDeadline?.chargeId || null,
             payment_attempted_at: now,
             payment_succeeded_at: initialStatus === PAYMENT_STATES.AUTHORIZED ? now : null,
             description: description || null,
@@ -1023,22 +1031,6 @@ class StripeService {
       }
 
     } catch (err) {
-      // Handle SCA / authentication_required for off-session
-      if (offSession && err.code === 'authentication_required' && existingPaymentId) {
-        logger.warn('Off-session auth required', { paymentId: existingPaymentId, gigId });
-        await transitionPaymentStatus(existingPaymentId, PAYMENT_STATES.AUTHORIZATION_FAILED, {
-          off_session_auth_required: true,
-          failure_code: err.code,
-          failure_message: err.message,
-        });
-        return {
-          success: false,
-          error: 'authentication_required',
-          paymentId: existingPaymentId,
-          paymentIntentId: err.raw?.payment_intent?.id,
-        };
-      }
-
       logger.error('Error creating PaymentIntent', { error: err.message, gigId });
       throw err;
     }
@@ -1049,177 +1041,111 @@ class StripeService {
    * Called when the requester confirms completion.
    * Transitions to captured_hold and starts the cooling-off timer.
    */
-  async capturePayment(paymentId) {
-    try {
-      const { data: payment } = await supabaseAdmin
-        .from('Payment')
-        .select('*')
-        .eq('id', paymentId)
-        .single();
-
-      if (!payment) throw new Error('Payment not found');
-      if (payment.payment_status !== PAYMENT_STATES.AUTHORIZED) {
-        throw new Error(`Cannot capture: payment is in ${payment.payment_status} state`);
-      }
-
-      // Enforce capture attempt cap to prevent infinite Stripe API spam
-      const currentAttempts = payment.capture_attempts || 0;
-      if (currentAttempts >= MAX_CAPTURE_ATTEMPTS) {
-        const err = new Error(`Capture attempt limit reached (${MAX_CAPTURE_ATTEMPTS}) for payment ${paymentId}`);
-        err.code = 'capture_attempts_exhausted';
-        logger.error('capturePayment: attempt limit reached', {
-          paymentId,
-          attempts: currentAttempts,
-          max: MAX_CAPTURE_ATTEMPTS,
-        });
-        throw err;
-      }
-
-      // Increment capture_attempts counter
-      await supabaseAdmin
-        .from('Payment')
-        .update({ capture_attempts: currentAttempts + 1 })
-        .eq('id', paymentId);
-
-      // Capture on Stripe
-      const captured = await stripe.paymentIntents.capture(payment.stripe_payment_intent_id);
-
-      const now = new Date();
-      const coolingOffEnds = new Date(now.getTime() + COOLING_OFF_MS);
-
-      // Transition state
-      await transitionPaymentStatus(paymentId, PAYMENT_STATES.CAPTURED_HOLD, {
-        captured_at: now.toISOString(),
-        cooling_off_ends_at: coolingOffEnds.toISOString(),
-        stripe_charge_id: captured.latest_charge,
-        payment_succeeded_at: now.toISOString(),
-      });
-
-      logger.info('Payment captured', {
-        paymentId,
-        chargeId: captured.latest_charge,
-        coolingOffEnds: coolingOffEnds.toISOString(),
-      });
-
-      return { success: true, chargeId: captured.latest_charge };
-
-    } catch (err) {
-      // Reconcile local state if Stripe already captured this PI but
-      // our DB transition was missed (e.g., webhook timing/race in dev).
-      if (err?.code === 'payment_intent_unexpected_state' || /already been captured/i.test(err?.message || '')) {
-        try {
-          const { data: payment } = await supabaseAdmin
-            .from('Payment')
-            .select('id, payment_status, stripe_payment_intent_id')
-            .eq('id', paymentId)
-            .single();
-
-          if (payment?.stripe_payment_intent_id && payment.payment_status === PAYMENT_STATES.AUTHORIZED) {
-            const pi = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id, {
-              expand: ['latest_charge'],
-            });
-            const chargeObj = typeof pi.latest_charge === 'object' ? pi.latest_charge : null;
-            const capturedAt = chargeObj?.created
-              ? new Date(chargeObj.created * 1000)
-              : new Date();
-            const coolingOffEnds = new Date(capturedAt.getTime() + COOLING_OFF_MS);
-
-            await transitionPaymentStatus(paymentId, PAYMENT_STATES.CAPTURED_HOLD, {
-              captured_at: capturedAt.toISOString(),
-              cooling_off_ends_at: coolingOffEnds.toISOString(),
-              stripe_charge_id: chargeObj?.id || null,
-              payment_succeeded_at: capturedAt.toISOString(),
-            });
-
-            logger.warn('Capture reconciliation applied after Stripe already-captured response', {
-              paymentId,
-              stripePaymentIntentId: payment.stripe_payment_intent_id,
-            });
-
-            return { success: true, alreadyCaptured: true, chargeId: chargeObj?.id || null };
-          }
-        } catch (reconcileErr) {
-          logger.error('Capture reconciliation failed', {
-            error: reconcileErr.message,
-            paymentId,
-          });
-        }
-      }
-
-      logger.error('Error capturing payment', { error: err.message, paymentId });
-      throw err;
+  async capturePayment(paymentId, expectedTerms) {
+    let payment = await this._readPayment(paymentId);
+    const isGig = payment.payment_type === 'gig_payment' && Boolean(payment.gig_id);
+    if (expectedTerms || isGig) assertPaymentTerms(payment, expectedTerms || {
+      gigId: payment.gig_id, payerId: payment.payer_id, payeeId: payment.payee_id, amount: payment.amount_total,
+    });
+    if (!['authorized', 'capture_pending', 'captured_hold'].includes(payment.payment_status)
+      && !(payment.payment_status === 'canceled' && payment.gig_completion_original?.state === 'pending')) {
+      throw conflict(`Cannot capture: payment is in ${payment.payment_status} state`);
     }
+    // Always read the provider first, including retries after an unknown capture
+    // response or failed local commit. A canceled PI can never prove capture.
+    let intent = assertIntentBinding(payment, await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id, { expand: ['latest_charge'] }));
+    if (isGig && payment.gig_completion_original?.state === 'pending' && intent.status === 'canceled') {
+      // A fresh canceled intent plus zero captured charge releases the existing
+      // approval. Unknown provider outcomes keep it pending for the same retry.
+      if (intent.amount_received !== 0 || intent.amount_capturable !== 0) throw conflict('Canceled payment needs reconciliation');
+      const chargeId = providerId(intent.latest_charge) || null;
+      if (chargeId) {
+        const charge = await stripe.charges.retrieve(chargeId);
+        if (charge?.id !== chargeId || providerId(charge.payment_intent) !== intent.id
+          || providerId(charge.customer) !== payment.stripe_customer_id || charge.amount !== payment.amount_total
+          || charge.currency !== String(payment.currency).toLowerCase() || charge.captured !== false
+          || charge.refunded !== false || charge.amount_refunded !== 0 || charge.disputed !== false) throw conflict('Canceled charge needs reconciliation');
+      }
+      const { data, error } = await supabaseAdmin.rpc('record_gig_completion_canceled', {
+        p_payment_id: payment.id, p_intent_id: intent.id, p_customer_id: providerId(intent.customer),
+        p_amount: intent.amount, p_currency: intent.currency, p_charge_id: chargeId,
+        p_received: intent.amount_received, p_capturable: intent.amount_capturable,
+      });
+      if (error || data?.error || data?.payment?.gig_completion_original?.state !== 'canceled') {
+        throw Object.assign(new Error('Canceled authorization awaits local confirmation. Please retry.'), { statusCode: 503 });
+      }
+      return { success: false, canceled: true };
+    }
+    if (intent.status !== 'succeeded') {
+      if (payment.payment_status === PAYMENT_STATES.CAPTURED_HOLD) throw conflict('Local capture requires provider reconciliation');
+      assertAuthorizedIntent(payment, intent);
+      if (isGig) {
+        const { data, error } = await supabaseAdmin.rpc('prepare_paid_gig_capture', { p_payment_id: payment.id });
+        if (error || !data?.payment || data.error) throw conflict('Capture could not be prepared. Please retry.');
+        payment = data.payment;
+      } else {
+        if ((payment.capture_attempts || 0) >= MAX_CAPTURE_ATTEMPTS) {
+          throw Object.assign(new Error('Capture attempt limit reached'), { code: 'capture_attempts_exhausted' });
+        }
+        const { error } = await supabaseAdmin.from('Payment').update({ capture_attempts: (payment.capture_attempts || 0) + 1 })
+          .eq('id', payment.id);
+        if (error) throw new Error('Could not prepare capture');
+      }
+      try {
+        intent = await stripe.paymentIntents.capture(payment.stripe_payment_intent_id, {}, {
+          idempotencyKey: `gig-capture:${payment.id}:${payment.stripe_payment_intent_id}`,
+        });
+      } catch (error) {
+        // Even a network error can follow a successful provider capture. Only
+        // exact retrieved success proves it; all other states remain retryable.
+        const recovered = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id, { expand: ['latest_charge'] });
+        if (recovered?.status !== 'succeeded') throw error;
+        intent = recovered;
+      }
+    }
+    assertCapturedIntent(payment, intent);
+    if (isGig && payment.gig_completion_original) {
+      const chargeId = providerId(intent.latest_charge);
+      const charge = await stripe.charges.retrieve(chargeId);
+      assertCapturedIntent(payment, { ...intent, latest_charge: charge });
+      if (charge?.id !== chargeId || providerId(charge.customer) !== payment.stripe_customer_id
+        || charge.currency !== String(payment.currency).toLowerCase() || charge.refunded !== false
+        || charge.amount_refunded !== 0 || charge.disputed !== false) throw conflict('Captured charge needs reconciliation');
+    }
+    const chargeId = providerId(intent.latest_charge);
+    if (isGig) {
+      const { data, error } = await supabaseAdmin.rpc('record_paid_gig_capture', {
+        p_payment_id: payment.id, p_intent_id: intent.id, p_charge_id: chargeId,
+        p_amount: intent.amount_received, p_customer_id: providerId(intent.customer), p_currency: intent.currency,
+      });
+      if (error || data?.error || !data?.payment?.captured_at || data.payment.payment_status !== PAYMENT_STATES.CAPTURED_HOLD) {
+        throw Object.assign(new Error('Capture is awaiting local confirmation. Please retry.'), { statusCode: 503 });
+      }
+      if (payment.gig_completion_original && !data.confirmation?.gig?.owner_confirmed_at) {
+        throw Object.assign(new Error('Capture is awaiting original completion confirmation. Please retry.'), { statusCode: 503 });
+      }
+      return { success: true, alreadyCaptured: Boolean(data.reused), chargeId, confirmation: data.confirmation };
+    }
+    if (payment.payment_status !== PAYMENT_STATES.CAPTURED_HOLD) {
+      const now = new Date();
+      await transitionPaymentStatus(payment.id, PAYMENT_STATES.CAPTURED_HOLD, {
+        captured_at: now.toISOString(), cooling_off_ends_at: new Date(now.getTime() + COOLING_OFF_MS).toISOString(),
+        stripe_charge_id: chargeId, payment_succeeded_at: now.toISOString(),
+      });
+    }
+    return { success: true, chargeId };
   }
 
   /**
    * Create an explicit transfer to the provider's Connect account.
-   * Called by the processPendingTransfers background job after cooling off.
-   * Uses source_transaction to link the transfer to the original charge.
+   * Currently disabled; active settlement credits the Pantopus wallet.
    */
-  async createTransfer(paymentId) {
-    try {
-      const { data: payment } = await supabaseAdmin
-        .from('Payment')
-        .select('*')
-        .eq('id', paymentId)
-        .single();
-
-      if (!payment) throw new Error('Payment not found');
-      if (!['captured_hold', 'transfer_scheduled'].includes(payment.payment_status)) {
-        throw new Error(`Cannot transfer: payment is in ${payment.payment_status} state`);
-      }
-      if (!payment.stripe_charge_id) {
-        throw new Error('No charge ID on payment — cannot create transfer');
-      }
-
-      // Get payee's Stripe Connect account
-      const { data: payeeAccount } = await supabaseAdmin
-        .from('StripeAccount')
-        .select('stripe_account_id, payouts_enabled')
-        .eq('user_id', payment.payee_id)
-        .single();
-
-      if (!payeeAccount) {
-        throw new Error('Payee Stripe account not found');
-      }
-      if (!payeeAccount.payouts_enabled) {
-        throw new Error('Payee payouts not enabled — skipping transfer');
-      }
-
-      // Create transfer
-      const transfer = await stripe.transfers.create({
-        amount: payment.amount_to_payee,
-        currency: payment.currency || 'usd',
-        destination: payeeAccount.stripe_account_id,
-        source_transaction: payment.stripe_charge_id,
-        metadata: {
-          payment_id: paymentId,
-          gig_id: payment.gig_id || '',
-          payer_id: payment.payer_id,
-          payee_id: payment.payee_id,
-        },
-      });
-
-      // Transition state
-      await transitionPaymentStatus(paymentId, PAYMENT_STATES.TRANSFER_PENDING, {
-        stripe_transfer_id: transfer.id,
-        transfer_status: 'in_transit',
-        transfer_scheduled_at: new Date().toISOString(),
-      });
-
-      logger.info('Transfer created', {
-        paymentId,
-        transferId: transfer.id,
-        amount: payment.amount_to_payee,
-        destination: payeeAccount.stripe_account_id,
-      });
-
-      return { success: true, transferId: transfer.id };
-
-    } catch (err) {
-      logger.error('Error creating transfer', { error: err.message, paymentId });
-      throw err;
-    }
+  async createTransfer(_paymentId) {
+    // Active gig settlement uses the fenced wallet transaction. The historical
+    // unused Connect helper issued an external transfer before reserving local
+    // state, which could race a refund. Keep it closed until it has its own
+    // durable transfer operation and exact unknown-response reconciliation.
+    throw conflict('Direct Connect transfers require a durable settlement workflow.');
   }
 
   /**
@@ -1244,27 +1170,33 @@ class StripeService {
         PAYMENT_STATES.READY_TO_AUTHORIZE,
       ];
 
+      if (payment.payment_status === PAYMENT_STATES.CANCELED) return { success: true, reused: true };
       if (!cancellableStates.includes(payment.payment_status)) {
         throw new Error(`Cannot cancel authorization: payment is in ${payment.payment_status} state`);
       }
 
-      // Cancel on Stripe if a PaymentIntent exists
+      // Unknown cancellation outcomes retain the durable pending operation.
+      // Never label a captured or still-authorized provider intent canceled.
       if (payment.stripe_payment_intent_id) {
-        try {
-          await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
-        } catch (stripeErr) {
-          // PI might already be canceled or in a non-cancellable state
-          logger.warn('Stripe PI cancel attempt', { error: stripeErr.message, paymentId });
+        let intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
+        assertIntentBinding(payment, intent);
+        if (intent.status !== 'canceled') {
+          try {
+            intent = await stripe.paymentIntents.cancel(intent.id, {}, { idempotencyKey: `gig-cancel:${payment.id}:${intent.id}` });
+          } catch (error) {
+            intent = await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id);
+            if (intent.status !== 'canceled') throw error;
+          }
         }
-      }
-
-      // Cancel SetupIntent if applicable
-      if (payment.stripe_setup_intent_id && !payment.stripe_payment_intent_id) {
-        try {
-          await stripe.setupIntents.cancel(payment.stripe_setup_intent_id);
-        } catch (stripeErr) {
-          logger.warn('Stripe SI cancel attempt', { error: stripeErr.message, paymentId });
-        }
+        assertIntentBinding(payment, intent);
+        if (intent.status !== 'canceled') throw conflict('Provider cancellation has not been confirmed');
+      } else if (payment.stripe_setup_intent_id) {
+        let intent = await stripe.setupIntents.retrieve(payment.stripe_setup_intent_id);
+        if (providerId(intent.customer) !== payment.stripe_customer_id) throw conflict();
+        if (intent.status !== 'canceled') intent = await stripe.setupIntents.cancel(intent.id);
+        if (intent.status !== 'canceled') throw conflict('Provider cancellation has not been confirmed');
+      } else {
+        throw conflict('Payment has no provider cancellation proof');
       }
 
       await transitionPaymentStatus(paymentId, PAYMENT_STATES.CANCELED);
@@ -1289,162 +1221,15 @@ class StripeService {
    * @param {string} reason - Refund reason
    * @param {string} initiatedBy - UUID of who initiated
    */
-  async createSmartRefund(paymentId, amount, reason, initiatedBy) {
-    try {
-      const { data: payment } = await supabaseAdmin
-        .from('Payment')
-        .select('*')
-        .eq('id', paymentId)
-        .single();
-
-      if (!payment) throw new Error('Payment not found');
-
-      const refundAmount = amount || payment.amount_total;
-
-      // Validate refund amount doesn't exceed remaining refundable amount
-      const alreadyRefunded = payment.refunded_amount || 0;
-      const maxRefundable = payment.amount_total - alreadyRefunded;
-      if (refundAmount <= 0) {
-        throw new Error('Refund amount must be positive');
-      }
-      if (refundAmount > maxRefundable) {
-        throw new Error(
-          `Refund amount ($${(refundAmount / 100).toFixed(2)}) exceeds remaining refundable amount ($${(maxRefundable / 100).toFixed(2)})`
-        );
-      }
-
-      const status = payment.payment_status;
-
-      // Scenario 1: Before capture — cancel PI (release hold)
-      if ([PAYMENT_STATES.AUTHORIZED, PAYMENT_STATES.AUTHORIZE_PENDING].includes(status)) {
-        return await this.cancelAuthorization(paymentId);
-      }
-
-      // Scenario 2: After capture, before transfer
-      if ([PAYMENT_STATES.CAPTURED_HOLD, PAYMENT_STATES.TRANSFER_SCHEDULED].includes(status)) {
-        // Move to intermediate state BEFORE any external side effects
-        await transitionPaymentStatus(paymentId, PAYMENT_STATES.REFUND_PENDING, {
-          refund_reason: reason,
-        });
-
-        const refund = await stripe.refunds.create({
-          payment_intent: payment.stripe_payment_intent_id,
-          amount: refundAmount,
-          reason: reason === 'fraudulent' ? 'fraudulent' : 'requested_by_customer',
-          metadata: { payment_id: paymentId, initiated_by: initiatedBy },
-        });
-
-        // Save refund record after Stripe succeeds
-        await supabaseAdmin.from('Refund').insert({
-          payment_id: paymentId,
-          stripe_refund_id: refund.id,
-          amount: refundAmount,
-          reason,
-          refund_status: refund.status,
-          initiated_by: initiatedBy,
-        });
-
-        const isFullRefund = refundAmount >= payment.amount_total;
-        await transitionPaymentStatus(
-          paymentId,
-          isFullRefund ? PAYMENT_STATES.REFUNDED_FULL : PAYMENT_STATES.REFUNDED_PARTIAL,
-          {
-            refunded_amount: (payment.refunded_amount || 0) + refundAmount,
-          }
-        );
-
-        logger.info('Refund created (pre-transfer)', { paymentId, refundAmount, refundId: refund.id });
-        return { success: true, refundId: refund.id };
-      }
-
-      // Scenario 3: After transfer — refund customer + reverse transfer
-      if ([PAYMENT_STATES.TRANSFER_PENDING, PAYMENT_STATES.TRANSFERRED].includes(status)) {
-        // Move to intermediate state BEFORE any external side effects
-        await transitionPaymentStatus(paymentId, PAYMENT_STATES.REFUND_PENDING, {
-          refund_reason: reason,
-        });
-
-        // Step 1: Refund the customer
-        const refund = await stripe.refunds.create({
-          payment_intent: payment.stripe_payment_intent_id,
-          amount: refundAmount,
-          reason: reason === 'fraudulent' ? 'fraudulent' : 'requested_by_customer',
-          metadata: { payment_id: paymentId, initiated_by: initiatedBy },
-        });
-
-        await supabaseAdmin.from('Refund').insert({
-          payment_id: paymentId,
-          stripe_refund_id: refund.id,
-          amount: refundAmount,
-          reason,
-          refund_status: refund.status,
-          initiated_by: initiatedBy,
-        });
-
-        // Step 2: Reverse the transfer to claw back from provider
-        let reversalResult = null;
-        if (payment.stripe_transfer_id) {
-          // Calculate the provider's portion of the refund
-          const providerRefundAmount = Math.min(
-            Math.floor(refundAmount * payment.amount_to_payee / payment.amount_total),
-            payment.amount_to_payee
-          );
-
-          try {
-            const reversal = await stripe.transfers.createReversal(
-              payment.stripe_transfer_id,
-              {
-                amount: providerRefundAmount,
-                metadata: { payment_id: paymentId, reason },
-              }
-            );
-            reversalResult = reversal;
-
-            await supabaseAdmin.from('Payment').update({
-              stripe_transfer_reversal_id: reversal.id,
-            }).eq('id', paymentId);
-
-            logger.info('Transfer reversed', { paymentId, reversalId: reversal.id, amount: providerRefundAmount });
-
-          } catch (reversalErr) {
-            // Reversal failed — connected account has insufficient balance
-            logger.error('Transfer reversal failed — provider may have insufficient balance', {
-              error: reversalErr.message,
-              paymentId,
-              transferId: payment.stripe_transfer_id,
-            });
-            // Record the failure — this becomes a debt the provider owes
-            await supabaseAdmin.from('Payment').update({
-              metadata: {
-                ...payment.metadata,
-                reversal_failed: true,
-                reversal_failure_reason: reversalErr.message,
-                reversal_failed_at: new Date().toISOString(),
-                provider_debt_amount: providerRefundAmount,
-              },
-            }).eq('id', paymentId);
-          }
-        }
-
-        const isFullRefund = refundAmount >= payment.amount_total;
-        await transitionPaymentStatus(
-          paymentId,
-          isFullRefund ? PAYMENT_STATES.REFUNDED_FULL : PAYMENT_STATES.REFUNDED_PARTIAL,
-          {
-            refunded_amount: (payment.refunded_amount || 0) + refundAmount,
-          }
-        );
-
-        logger.info('Refund created (post-transfer)', { paymentId, refundAmount, refundId: refund.id });
-        return { success: true, refundId: refund.id, reversalResult };
-      }
-
-      throw new Error(`Cannot refund: payment is in ${status} state`);
-
-    } catch (err) {
-      logger.error('Error creating smart refund', { error: err.message, paymentId });
-      throw err;
-    }
+  async createSmartRefund(paymentId, amount, reason, initiatedBy, options = {}) {
+    // Existing internal cancellation callers retain policy authority. HTTP
+    // routes explicitly use payer/admin modes in the dedicated service.
+    const normalized = ['duplicate', 'fraudulent', 'requested_by_customer', 'work_not_completed', 'other'].includes(reason) ? reason : 'other';
+    return require('../services/paymentRefundService').create({
+      paymentId, amount: amount ?? null, reason: normalized, actorId: initiatedBy,
+      actorMode: options.actorMode || 'policy', requestId: options.requestId,
+      description: options.description || (normalized !== reason ? reason : null),
+    });
   }
 
   /**
@@ -1455,119 +1240,183 @@ class StripeService {
    * Pantopus also absorbs the Stripe processing fee on tips, so the worker's
    * wallet receives the full tip amount.
    */
-  async createTipPayment({ payerId, payeeId, gigId, amount, paymentMethodId, offSession = false }) {
+  async _tipRpc(name, args) {
+    const { data, error } = await supabaseAdmin.rpc(name, args);
+    if (error || !data) throw Object.assign(new Error('Tip progress could not be saved. Keep the same request and check again.'),
+      { code: 'TIP_RECEIPT_UNKNOWN', statusCode: 503 });
+    if (data.error) {
+      const failure = Object.assign(new Error('The original tip needs to be checked before continuing.'),
+        { code: data.error.startsWith('TIP_') ? data.error : `TIP_${data.error}`, statusCode: data.error === 'FORBIDDEN' ? 403 : data.error === 'NOT_FOUND' ? 404 : 409 });
+      if (data.error === 'TIP_ACTIVE') Object.assign(failure, { code: 'TIP_ACTIVE', activeRequestId: data.requestId || null });
+      // Internal-only snapshot from the payer-authorized SQL read. It is never
+      // included in an HTTP error or treated as a confirmed payment outcome.
+      if (data.error === 'LEGACY_REVIEW') failure.legacyPayment = data.payment;
+      throw failure;
+    }
+    return data;
+  }
+
+  async previewTip({ gigId, payerId }) {
+    return this._tipRpc('preview_gig_tip', { p_gig_id: gigId, p_actor_id: payerId });
+  }
+
+  async readTipRequest({ requestId, payerId }) {
+    return projectTipOriginal(await this._readTipData({ p_request_id: requestId, p_actor_id: payerId }));
+  }
+
+  async _readTipData(args) {
+    try { return await this._tipRpc('read_gig_tip_original', args); }
+    catch (error) {
+      const payment = error.legacyPayment;
+      if (error.code !== 'TIP_LEGACY_REVIEW' || payment?.id !== args.p_request_id
+          || payment.payer_id !== args.p_actor_id || payment.payment_type !== 'tip') throw error;
+      // A local historical read is only a candidate, never a capture/cancel
+      // receipt. Unknown confirmation and original method stay unknown.
+      return { payment, original: { version: 1, source: 'legacy', state: 'needs_review',
+        terms: { gigId: payment.gig_id, payerId: payment.payer_id, payeeId: payment.payee_id, ownerConfirmedAt: null },
+        payment_method_id: null, stripe_account_id: null, livemode: expectedTipLiveMode() } };
+    }
+  }
+
+  async createTipPayment({ requestId, payerId, gigId, amount, paymentMethodId = null, sessionScope, expectedTerms, mode = 'resume' }) {
+    if (!requestId || !expectedTerms || !/^[a-f0-9]{64}$/.test(sessionScope || '') || !['resume', 'check', 'cancel'].includes(mode)) {
+      throw Object.assign(new Error('Refresh the tip preview before continuing.'), { code: 'TIP_TERMS_REQUIRED', statusCode: 409 });
+    }
+    const args = { p_request_id: requestId, p_actor_id: payerId };
+    const live = expectedTipLiveMode();
+    // A check cannot reserve a replacement. Explicit cancellation may reserve
+    // the same UUID locally, so a late first submission sees its canceled receipt.
+    if (expectedTerms.ownerConfirmedAt === null && mode === 'resume') {
+      throw Object.assign(new Error('An earlier tip can only be checked or canceled.'), { code: 'TIP_LEGACY_CHECK_ONLY', statusCode: 409 });
+    }
+    let data = mode !== 'check' && expectedTerms.ownerConfirmedAt !== null
+      ? await this._tipRpc('reserve_gig_tip_original', { ...args, p_gig_id: gigId, p_amount: amount,
+        p_payment_method_id: paymentMethodId, p_expected: expectedTerms, p_session_scope: sessionScope, p_livemode: live })
+      : await this._readTipData(args);
+    const sameCommand = candidate => {
+      const original = originalTipRequest(candidate);
+      if (original.id !== requestId || original.gig_id !== gigId || original.payer_id !== payerId || original.amount_cents !== amount
+          || original.livemode !== live || candidate.original.payment_method_id !== paymentMethodId
+          || !isDeepStrictEqual(candidate.original.terms, expectedTerms)) {
+        throw Object.assign(new Error('Keep the original tip amount, worker and request.'), { code: 'TIP_REQUEST_CONFLICT', statusCode: 409 });
+      }
+      return original;
+    };
+    sameCommand(data);
+    const legacy = data.original.source === 'legacy';
+    if (legacy && mode === 'resume') {
+      throw Object.assign(new Error('An earlier tip can only be checked or canceled.'), { code: 'TIP_LEGACY_CHECK_ONLY', statusCode: 409 });
+    }
+    if (legacy && !data.payment.metadata?.gig_tip_original_v1) {
+      try {
+        const current = await readTipProof(stripe, data.payment, sameCommand(data), live);
+        data = await this._tipRpc('register_legacy_gig_tip', { ...args, p_session_scope: sessionScope,
+          p_livemode: live, p_expected_payment: data.payment, p_proof: current.proof });
+        sameCommand(data);
+      } catch (_) {
+        // Lost adoption acknowledgement may have committed. Read only this
+        // payment again; missing/mismatched evidence never frees its tip slot.
+        const saved = await this._readTipData(args);
+        sameCommand(saved);
+        return { ...projectTipOriginal(saved), canRetry: false };
+      }
+    }
+    if (['succeeded', 'canceled'].includes(data.original.state)) {
+      if (mode === 'check' && data.payment.stripe_payment_intent_id) {
+        const current = await readTipProof(stripe, data.payment, sameCommand(data), live);
+        if (current.intent.status !== data.original.state) throw Object.assign(new Error('The saved tip outcome needs verification.'),
+          { code: 'TIP_PROVIDER_REVIEW', statusCode: 409 });
+      }
+      return projectTipOriginal(data);
+    }
+    try { data = await this._tipRpc('claim_gig_tip_original', args); }
+    catch (error) {
+      if (error.code === 'TIP_BUSY') return { ...projectTipOriginal(data), canRetry: false };
+      throw error;
+    }
+    sameCommand(data);
+    if (['succeeded', 'canceled'].includes(data.original.state)) return projectTipOriginal(data);
+    const leaseId = data.original.lease_id;
+    const leased = { ...args, p_lease_id: leaseId };
+    let checkoutProof = null;
     try {
-      const payeeAccount = await this._getPayeeAccount(payeeId);
-      const customerId = await this.getOrCreateCustomer(payerId);
-
-      // Tips: 100% to worker. No platform fee, and Pantopus absorbs processing.
-      const estimatedStripeFee = Math.floor(amount * 0.029) + 30; // 2.9% + 30¢
-      const platformFee = 0;
-      const amountToPayee = amount;
-
-      const piParams = {
-        amount,
-        currency: 'usd',
-        customer: customerId,
-        // Tips are auto-captured (no manual capture needed)
-        metadata: {
-          payer_id: payerId,
-          payee_id: payeeId,
-          gig_id: gigId || '',
-          payment_type: 'tip',
-          platform_fee: '0',
-          payee_stripe_account: payeeAccount.stripe_account_id,
-        },
-        description: `Pantopus Tip - Gig ${gigId || 'unknown'}`,
-      };
-
-      if (paymentMethodId) {
-        piParams.payment_method = paymentMethodId;
+      if (!legacy && mode === 'cancel' && !data.original.provider_started_at && !data.payment.stripe_payment_intent_id) {
+        data = await this._tipRpc('cancel_unstarted_gig_tip', leased);
+        return projectTipOriginal(data);
       }
-      if (offSession) {
-        piParams.off_session = true;
-        piParams.confirm = true;
-      }
-
-      const paymentIntent = await stripe.paymentIntents.create(piParams);
-      const isTipCaptured = paymentIntent.status === 'succeeded';
-
-      // Insert with AUTHORIZE_PENDING — the natural initial state when a PI is created
-      const { data: payment, error: dbError } = await supabaseAdmin
-        .from('Payment')
-        .insert({
-          payer_id: payerId,
-          payee_id: payeeId,
-          gig_id: gigId,
-          stripe_payment_intent_id: paymentIntent.id,
-          stripe_customer_id: customerId,
-          stripe_payment_method_id: paymentMethodId || null,
-          amount_total: amount,
-          amount_subtotal: amount,
-          amount_platform_fee: platformFee,
-          amount_to_payee: amountToPayee,
-          amount_processing_fee: estimatedStripeFee,
-          payment_status: PAYMENT_STATES.AUTHORIZE_PENDING,
-          payment_type: 'tip',
-          tip_amount: amount,
-          is_escrowed: true,
-        })
-        .select()
-        .single();
-
-      if (dbError) {
-        logger.error('Error saving tip payment', { error: dbError.message });
-        throw new Error(`Failed to save tip payment: ${dbError.message}`);
-      }
-
-      // If the auto-capture PI already succeeded, reconcile immediately so the
-      // worker sees the tip in wallet/history even if webhooks are delayed.
-      if (isTipCaptured) {
+      let intentId = data.payment.stripe_payment_intent_id || null;
+      if (!legacy && !intentId && data.original.provider_started_at) intentId = await discoverOriginalTip(stripe, data);
+      if (!legacy && !intentId && mode === 'resume') {
+        // Reuse the existing durable customer CAS. No PaymentIntent exists
+        // before Payment reservation and provider preparation commit.
+        const customer = data.payment.stripe_customer_id || await this.getOrCreateCustomer(payerId);
+        await verifyTipCustomer(stripe, payerId, customer, live);
+        if (paymentMethodId) {
+          const method = await stripe.paymentMethods.retrieve(paymentMethodId);
+          if (method?.id !== paymentMethodId || providerId(method.customer) !== customer || method.livemode !== live) {
+            throw Object.assign(new Error('The original saved method needs verification.'), { code: 'TIP_PROVIDER_REVIEW', statusCode: 409 });
+          }
+        }
+        data = await this._tipRpc('prepare_gig_tip_provider', { ...leased, p_customer_id: customer });
+        sameCommand(data);
+        const params = tipProviderParams(data);
+        const elapsed = Date.now() - Date.parse(data.original.provider_started_at);
+        if (!Number.isFinite(elapsed) || elapsed < -60000 || elapsed >= 23 * 60 * 60 * 1000) {
+          throw Object.assign(new Error('The original provider outcome needs recovery.'), { code: 'TIP_PROVIDER_OUTCOME_UNKNOWN', statusCode: 409 });
+        }
         try {
-          await this.syncTipPaymentStatus(payment.id, { paymentIntent });
-        } catch (transErr) {
-          logger.error('Tip payment: success reconciliation failed', {
-            paymentId: payment.id, error: transErr.message,
-          });
+          const created = await stripe.paymentIntents.create(params, { idempotencyKey: `gig-tip:${requestId}` });
+          intentId = providerId(created);
+        } catch (error) {
+          // Card/SCA errors may name an existing intent. Its current state is
+          // still independently retrieved and verified before binding it.
+          intentId = providerId(error.payment_intent) || providerId(error.raw?.payment_intent)
+            || await discoverOriginalTip(stripe, data);
+          if (!intentId) throw error;
         }
       }
-
-      // For on-session tips (no paymentMethodId), mint an ephemeral key so the
-      // mobile PaymentSheet can display saved cards and let the user pick one.
-      // Web ignores these fields.
-      let ephemeralKey = null;
-      if (!paymentMethodId) {
+      if (!intentId) return projectTipOriginal(data);
+      const readCurrent = () => readTipProof(stripe, data.payment, { ...sameCommand(data), intent_id: intentId }, live);
+      checkoutProof = await readCurrent();
+      data = await this._tipRpc('record_gig_tip_original', { ...leased, p_proof: checkoutProof.proof });
+      sameCommand(data);
+      if (mode === 'cancel' && !['succeeded', 'canceled'].includes(data.original.state)) {
         try {
-          const key = await this.createEphemeralKey(customerId);
-          ephemeralKey = key.secret;
-        } catch (ekErr) {
-          logger.warn('Tip payment: failed to create ephemeral key', {
-            paymentId: payment.id, error: ekErr.message,
-          });
+          await stripe.paymentIntents.cancel(intentId, { cancellation_reason: 'requested_by_customer' },
+            { idempotencyKey: `gig-tip-cancel:${requestId}:${intentId}` });
+        } catch (_) { /* Read-only recovery decides whether cancellation actually happened. */ }
+        checkoutProof = await readCurrent();
+        data = await this._tipRpc('record_gig_tip_original', { ...leased, p_proof: checkoutProof.proof });
+      }
+      const result = projectTipOriginal(data);
+      // Capture commits its existing Notification and retry state atomically.
+      // The scheduled payment relay delivers it even if this response is lost.
+      if (!legacy && mode !== 'cancel' && !['succeeded', 'canceled'].includes(result.status)
+          && ['requires_payment_method', 'requires_confirmation', 'requires_action'].includes(checkoutProof.intent.status)) {
+        const secret = checkoutProof.intent.client_secret;
+        if (typeof secret === 'string' && secret.startsWith(`${intentId}_secret_`)) {
+          let ephemeralKey = null;
+          try { ephemeralKey = (await this.createEphemeralKey(data.payment.stripe_customer_id)).secret; } catch (_) { /* Retry checkout on the same intent. */ }
+          result.checkout = { paymentIntentId: intentId, clientSecret: secret, customer: data.payment.stripe_customer_id,
+            ephemeralKey, publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null };
         }
       }
-
-      logger.info('Tip payment created', {
-        paymentIntentId: paymentIntent.id,
-        paymentId: payment.id,
-        amount,
-        gigId,
-      });
-
-      return {
-        success: true,
-        clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id,
-        paymentId: payment.id,
-        payment,
-        customer: customerId,
-        ephemeralKey,
-        publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
-      };
-
-    } catch (err) {
-      logger.error('Error creating tip payment', { error: err.message, gigId });
-      throw err;
+      return result;
+    } catch (error) {
+      // A failed provider call or lost database acknowledgement keeps the same
+      // original. A fresh durable terminal receipt can recover a lost reply.
+      const saved = await this._tipRpc('read_gig_tip_original', args);
+      sameCommand(saved);
+      const result = projectTipOriginal(saved);
+      if (['succeeded', 'canceled'].includes(result.status)) return result;
+      if (['TIP_PROVIDER_REVIEW', 'TIP_PROVIDER_OUTCOME_UNKNOWN', 'TIP_CUSTOMER_CHANGED', 'TIP_TERMS_CHANGED', 'TIP_PAYMENT_CHANGED', 'TIP_INVALID_PROOF'].includes(error.code)) {
+        return { ...result, status: 'needs_review', canRetry: false };
+      }
+      return { ...result, canRetry: !legacy && error.code !== 'TIP_LEASE_LOST' };
+    } finally {
+      // Lease release cannot erase provider start, original identity or a
+      // terminal receipt, including when another worker already recovered it.
+      try { await this._tipRpc('release_gig_tip_original', leased); } catch (_) { /* Lease expires; keep original for recovery. */ }
     }
   }
 

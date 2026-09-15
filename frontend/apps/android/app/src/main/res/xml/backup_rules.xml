@@ -2,6 +2,7 @@
 <!-- https://developer.android.com/guide/topics/data/autobackup -->
 <full-backup-content>
     <!-- Schedule recovery uses this device's Keystore; it cannot travel with a backup. -->
+    <exclude domain="sharedpref" path="private_gig_tips_v1.xml" />
     <exclude domain="sharedpref" path="private_home_task_recurrence_v1.xml" />
     <exclude domain="sharedpref" path="private_home_task_gig_v1.xml" />
     <exclude domain="sharedpref" path="private_home_relationship_v1.xml" />

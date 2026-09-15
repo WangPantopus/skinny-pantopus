@@ -807,6 +807,11 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
       return res.status(413).json({ error: sizeValidation.error });
     }
 
+    if (purpose === 'gig_completion') {
+      const saved = await s3.createPrivateGigCompletionFile(req.body.gig_id, userId, file);
+      return res.status(201).json({ message: 'File uploaded successfully', file: { id: saved.id, url: saved.file_url } });
+    }
+
     await checkStorageQuota(userId, file.size);
 
     const ext = path.extname(file.originalname).toLowerCase();
@@ -850,8 +855,8 @@ router.post('/upload', verifyToken, upload.single('file'), async (req, res) => {
       file: { id: savedFile.id, url: fileUrl },
     });
   } catch (err) {
-    logger.error('File upload error', { error: err.message });
-    res.status(500).json({ error: 'Failed to upload file', message: err.message });
+    logger.warn('File upload unavailable', { status: err.statusCode || 500 });
+    res.status(err.statusCode || 500).json({ error: 'Failed to upload file. Please retry.' });
   }
 });
 

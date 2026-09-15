@@ -102,6 +102,7 @@ export interface Gig {
   cancellation_fee?: number | null;
 
   // Completion
+  completion_review?: string | null;
   completion_note?: string | null;
   completion_photos?: string[];
   completion_checklist?: Array<{ item: string; done: boolean }>;

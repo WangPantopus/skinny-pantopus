@@ -1,12 +1,13 @@
 // @ts-nocheck
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
+import { useGigListSession } from '@/hooks/useGigListSession';
 import {
   CalendarDays, DollarSign, Frown, MessageCircle, Clock, CheckCircle,
   XCircle, Ban, Hourglass, Handshake, Bell, PartyPopper, Rocket,
@@ -34,6 +35,9 @@ const WITHDRAW_REASONS = [
 
 export default function MyBidsPage() {
   const router = useRouter();
+  const session = useGigListSession();
+  const withdrawAttempt = useRef(0);
+  const withdrawingNow = useRef(false);
   const [filter, setFilter] = useState<FilterStatus>('all');
   const [search, setSearch] = useState('');
   const [withdrawModal, setWithdrawModal] = useState<{ gigId: string; bidId: string } | null>(null);
@@ -46,84 +50,108 @@ export default function MyBidsPage() {
   }, [router]);
 
   const bidsQuery = useQuery<GigBidWithUser[]>({
-    queryKey: queryKeys.myBids(),
+    queryKey: [...queryKeys.myBids(), session.key],
+    enabled: session.active,
+    gcTime: 0,
     queryFn: async () => {
+      if (!session.isCurrent()) return [];
       const response = await api.gigs.getMyBids({ limit: 200 });
+      if (!session.isCurrent()) return [];
       const resObj = response as Record<string, any>;
       return (resObj?.bids || resObj?.data || []) as GigBidWithUser[];
     },
     staleTime: 30_000,
   });
 
-  const bids = bidsQuery.data ?? [];
-  const loading = bidsQuery.isPending;
-  const fetchError = bidsQuery.error ? 'Failed to load your bids. Please try again.' : null;
+  const bids = session.active ? bidsQuery.data ?? [] : [];
+  const loading = !session.retired && bidsQuery.isPending;
+  const fetchError = session.retired ? 'Your session changed. Reopen My bids to continue.'
+    : bidsQuery.error ? 'Failed to load your bids. Please try again.' : null;
 
   // Shim so mutation handlers keep their imperative refetch behavior
-  const loadBids = () => { void bidsQuery.refetch(); };
+  const loadBids = () => { if (session.isCurrent()) void bidsQuery.refetch(); };
 
-  const handleViewGig = (gigId: string) => router.push(`/app/gigs/${gigId}`);
+  const handleViewGig = (gigId: string) => { if (session.isCurrent()) router.push(`/app/gigs/${gigId}`); };
+
+  const closeWithdrawModal = () => { withdrawAttempt.current++; withdrawingNow.current = false; setWithdrawing(false); setWithdrawModal(null); };
 
   const openWithdrawModal = (gigId: string, bidId: string) => {
+    if (!session.isCurrent()) return;
+    withdrawAttempt.current++; withdrawingNow.current = false; setWithdrawing(false);
     setWithdrawReason('');
     setWithdrawModal({ gigId, bidId });
   };
 
   const handleWithdrawBid = async () => {
-    if (!withdrawModal) return;
-    setWithdrawing(true);
+    if (!withdrawModal || !session.isCurrent() || withdrawingNow.current) return;
+    const attempt = withdrawAttempt.current;
+    const current = () => session.isCurrent() && withdrawAttempt.current === attempt;
+    withdrawingNow.current = true; setWithdrawing(true);
     try {
       await api.gigs.withdrawBid(withdrawModal.gigId, withdrawModal.bidId, withdrawReason || undefined);
+      if (!current()) return;
       setWithdrawModal(null);
       loadBids();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to withdraw bid');
+      if (current()) toast.error(err instanceof Error ? err.message : 'Failed to withdraw bid');
     } finally {
-      setWithdrawing(false);
+      if (current()) { withdrawingNow.current = false; setWithdrawing(false); }
     }
   };
 
   const handleAcceptCounter = async (gigId: string, bidId: string) => {
+    if (!session.isCurrent()) return;
     const yes = await confirmStore.open({ title: 'Accept this counter-offer?', description: 'Your bid amount will be updated to match the counter-offer.', confirmLabel: 'Accept', variant: 'primary' });
-    if (!yes) return;
+    if (!yes || !session.isCurrent()) return;
     try {
       await api.gigs.acceptCounter(gigId, bidId);
       loadBids();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to accept counter-offer');
+      if (session.isCurrent()) toast.error(err instanceof Error ? err.message : 'Failed to accept counter-offer');
     }
   };
 
   const handleDeclineCounter = async (gigId: string, bidId: string) => {
+    if (!session.isCurrent()) return;
     const yes = await confirmStore.open({ title: 'Decline this counter-offer?', description: 'Your original bid will remain active.', confirmLabel: 'Decline', variant: 'destructive' });
-    if (!yes) return;
+    if (!yes || !session.isCurrent()) return;
     try {
       await api.gigs.declineCounter(gigId, bidId);
       loadBids();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to decline counter-offer');
+      if (session.isCurrent()) toast.error(err instanceof Error ? err.message : 'Failed to decline counter-offer');
     }
   };
 
   const handleStartWork = async (gigId: string) => {
+    if (!session.isCurrent()) return;
     const yes = await confirmStore.open({ title: 'Start working on this gig?', description: 'The gig owner will be notified that you have started.', confirmLabel: 'Start', variant: 'primary' });
-    if (!yes) return;
+    if (!yes || !session.isCurrent()) return;
     try {
       await api.gigs.startGig(gigId);
       loadBids();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to start gig');
+      if (session.isCurrent()) toast.error(err instanceof Error ? err.message : 'Failed to start gig');
     }
   };
 
-  const handleMarkCompleted = async (gigId: string) => {
+  const handleMarkCompleted = async (gigId: string, workerId: string) => {
+    if (!session.isCurrent()) return;
     const yes = await confirmStore.open({ title: 'Mark this gig as completed?', description: 'This will notify the gig owner for confirmation.', confirmLabel: 'Complete', variant: 'primary' });
-    if (!yes) return;
+    if (!yes || !session.isCurrent()) return;
     try {
-      await api.gigs.markGigCompleted(gigId);
+      if (!workerId) throw new Error('Reopen My bids to confirm your current task.');
+      const response = await api.gigs.markGigCompleted(gigId);
+      if (!session.isCurrent()) return;
+      const receipt = response?.gig;
+      if (!receipt || receipt.id !== gigId || receipt.status !== 'completed' || receipt.accepted_by !== workerId
+        || !Number.isFinite(Date.parse(receipt.worker_completed_at || ''))
+        || (receipt.completion_note ?? null) !== null || (receipt.completion_photos ?? []).length !== 0) {
+        throw new Error('Completion could not be confirmed. Reopen the task to check its status.');
+      }
       loadBids();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to mark gig completed');
+      if (session.isCurrent()) toast.error(err instanceof Error ? err.message : 'Failed to mark gig completed');
     }
   };
 
@@ -160,7 +188,7 @@ export default function MyBidsPage() {
     <div className="min-h-[calc(100vh-64px)]">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <ListArchetype<GigBidWithUser>
-          title={<span className="inline-flex items-center gap-2">My bids<ProBadge /></span>}
+          title={<span className="inline-flex items-center gap-2">My bids{session.active && <ProBadge />}</span>}
           subtitle={`${stats.pending} pending${stats.countered ? ` · ${stats.countered} countered` : ''} · $${totalEarnings} potential earnings`}
           primaryAction={{ label: 'Browse tasks', onClick: () => router.push('/app/gigs') }}
           headerFilters={
@@ -173,7 +201,7 @@ export default function MyBidsPage() {
           }
           renderHeader={() => (
             <>
-              {fetchError && <ErrorState message={fetchError} onRetry={() => loadBids()} />}
+              {fetchError && <ErrorState message={fetchError} onRetry={() => session.retired ? window.location.reload() : loadBids()} />}
 
               {/* Summary cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -208,7 +236,7 @@ export default function MyBidsPage() {
               onAcceptCounter={() => handleAcceptCounter(bid.gig_id || bid.gig?.id, bid.id)}
               onDeclineCounter={() => handleDeclineCounter(bid.gig_id || bid.gig?.id, bid.id)}
               onStartWork={() => handleStartWork(bid.gig_id || bid.gig?.id)}
-              onMarkCompleted={() => handleMarkCompleted(bid.gig_id || bid.gig?.id)}
+              onMarkCompleted={() => handleMarkCompleted(bid.gig_id || bid.gig?.id, bid.user_id)}
             />
           )}
           emptyState={{
@@ -223,8 +251,8 @@ export default function MyBidsPage() {
       </main>
 
       {/* Withdraw modal */}
-      {withdrawModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setWithdrawModal(null)}>
+      {session.active && withdrawModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={closeWithdrawModal}>
           <div
             className="bg-app-surface rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
@@ -259,7 +287,7 @@ export default function MyBidsPage() {
 
             <div className="px-6 py-4 flex gap-3 justify-end border-t border-app-border-subtle">
               <button
-                onClick={() => setWithdrawModal(null)}
+                onClick={closeWithdrawModal}
                 className="px-4 py-2 text-app-text-strong hover:bg-app-hover rounded-lg font-medium"
               >
                 Cancel

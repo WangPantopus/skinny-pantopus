@@ -1,6 +1,7 @@
 'use client';
 
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { getErrorMessage } from '@pantopus/utils';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import {
   Wrench,
   CheckCircle,
@@ -9,14 +10,14 @@ import {
   Square,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import * as api from '@pantopus/api';
-import FileUpload from '@/components/FileUpload';
+import FileUpload, { CompletionProofImage } from '@/components/FileUpload';
 import StripeConnectOnboarding from '@/components/payments/StripeConnectOnboarding';
-import TipModal from '@/components/payments/TipModal';
+import TipModal, { tipId, tipRecoverySlot, verifyTipPreview } from '@/components/payments/TipModal';
+import AssignedGigAuthorization from '@/components/payments/AssignedGigAuthorization';
 import { toast } from '@/components/ui/toast-store';
-import { confirmStore } from '@/components/ui/confirm-store';
-import CancellationModal from './CancellationModal';
+import GigStopDialog from './GigStopDialog';
+import type { GigStopAction } from '@pantopus/api';
 
 /** Shape of gig data used by CompletionFlow */
 interface CompletionGigData {
@@ -25,6 +26,7 @@ interface CompletionGigData {
   acceptedBy?: string | null;
   payment_status?: string;
   completion_photos?: string[];
+  completion_review?: string | null;
   completion_note?: string;
   completion_checklist?: Array<{ item: string; done: boolean }>;
   worker_completed_at?: string | null;
@@ -40,8 +42,6 @@ interface CompletionGigData {
 
 /** Extended gig API methods not in base type definitions */
 interface GigsCompletionApiExt {
-  reopenBidding: (gigId: string) => Promise<Record<string, any>>;
-  startGig: (gigId: string) => Promise<unknown>;
   markGigCompleted: (gigId: string, data: Record<string, any>) => Promise<unknown>;
   confirmGigCompletion?: (gigId: string, data: Record<string, any>) => Promise<unknown>;
   completeGig?: (gigId: string, data: Record<string, any>) => Promise<unknown>;
@@ -66,15 +66,11 @@ interface CompletionFlowProps {
   onOpenChat: () => void;
 }
 
-interface CancellationPreview {
-  policy_label?: string;
-  fee: number;
-  fee_pct?: number;
-  zone_label: string;
-  zone?: number;
-  in_grace?: boolean;
-  policy_description?: string;
+function completionSessionMarker() {
+  try { return localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY); } catch { return null; }
 }
+
+type CompletionScope = { actor: string | undefined; gigId: string; token: string | null; origin: string; marker: string | null };
 
 export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function CompletionFlow({
   gigId,
@@ -102,11 +98,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   const iAmWorkerCompleted = isWorker && isCompleted;
   const workerBlockedByPaymentAuth = iAmWorkerAssigned && isPaidGig && paymentLifecycleStatus !== 'authorized';
 
-  // Cancellation
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelPreview, setCancelPreview] = useState<CancellationPreview | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
-  const [cancelling, setCancelling] = useState(false);
+  const [stopAction, setStopAction] = useState<GigStopAction | null>(null);
 
   // No-show
   const [noShowCheck, setNoShowCheck] = useState<Record<string, any> | null>(null);
@@ -114,49 +106,96 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   const [noShowDescription, setNoShowDescription] = useState('');
   const [reportingNoShow, setReportingNoShow] = useState(false);
 
-  // Worker completion proof
-  const [showCompletionModal, setShowCompletionModal] = useState(false);
-  const [completionNote, setCompletionNote] = useState('');
-  const [completionFiles, setCompletionFiles] = useState<File[]>([]);
-  const [submittingCompletion, setSubmittingCompletion] = useState(false);
-
   // Poster confirm completion
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmSatisfaction, setConfirmSatisfaction] = useState(0);
   const [confirmNote, setConfirmNote] = useState('');
   const [submittingConfirm, setSubmittingConfirm] = useState(false);
+  const reviewedCompletion = useRef<string | null>(null);
 
   // Tip
   const [showTipModal, setShowTipModal] = useState(false);
+  const [tipRecoveryRequestId, setTipRecoveryRequestId] = useState<string | undefined>();
 
-  // Reopen bidding
-  const handleReopenBidding = async () => {
-    const confirmed = await confirmStore.open({
-      title: 'Reopen bidding?',
-      description: 'This will unassign the current worker and reactivate prior rejected offers.',
-      confirmLabel: 'Reopen',
-      variant: 'destructive',
-    });
-    if (!confirmed) return;
+  // Worker completion proof
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [completionNote, setCompletionNote] = useState('');
+  const [completionFiles, setCompletionFiles] = useState<File[]>([]);
+  const [submittingCompletion, setSubmittingCompletion] = useState(false);
+  const completionScope = useRef<CompletionScope | null>(null);
+  const completionAttempt = useRef<object | null>(null);
+  const completionUploads = useRef(new WeakMap<File, string>());
+  const completionScopeIsCurrent = (scope: CompletionScope | null) => Boolean(scope?.actor && scope.token
+    && completionScope.current === scope && scope.actor === currentUserId && scope.gigId === gigId
+    && scope.token === api.getAuthToken() && scope.origin === api.getApiBaseUrl() && scope.marker === completionSessionMarker());
 
-    try {
-      const gigsExt = api.gigs as unknown as GigsCompletionApiExt;
-      const result = await gigsExt.reopenBidding(gigId);
-      onStatusChange?.();
-      toast.success(String(result?.message || 'Bidding reopened.'));
-    } catch (err: unknown) {
-      console.error('Reopen bidding failed:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to reopen bidding');
+  const [startingWork, setStartingWork] = useState(false);
+  const startAttempt = useRef<object | null>(null);
+  const startContext = useMemo(() => ({ gigId, currentUserId, isWorker, gigStatus, acceptedBy,
+    acceptedAt: gig.accepted_at, price: gig.price, paymentId: gig.payment_id, paymentLifecycleStatus }),
+  [gigId, currentUserId, isWorker, gigStatus, acceptedBy, gig.accepted_at, gig.price, gig.payment_id, paymentLifecycleStatus]);
+  const currentStartContext = useRef<typeof startContext | null>(null);
+  useEffect(() => {
+    currentStartContext.current = startContext;
+    startAttempt.current = null; setStartingWork(false);
+    return () => { currentStartContext.current = null; startAttempt.current = null; };
+  }, [startContext]);
+
+  useEffect(() => {
+    completionScope.current = { actor: currentUserId, gigId, token: api.getAuthToken(), origin: api.getApiBaseUrl(), marker: completionSessionMarker() };
+    completionAttempt.current = null; completionUploads.current = new WeakMap();
+    setShowCompletionModal(false); setCompletionNote(''); setCompletionFiles([]); setSubmittingCompletion(false);
+    setShowConfirmModal(false); setConfirmNote(''); setConfirmSatisfaction(0); setSubmittingConfirm(false); setShowTipModal(false);
+    const retire = () => {
+      completionScope.current = null; completionAttempt.current = null; completionUploads.current = new WeakMap();
+      startAttempt.current = null; setStartingWork(false);
+      setShowCompletionModal(false); setCompletionNote(''); setCompletionFiles([]); setSubmittingCompletion(false);
+      setShowConfirmModal(false); setConfirmNote(''); setConfirmSatisfaction(0); setSubmittingConfirm(false); setShowTipModal(false);
+    };
+    const unsubscribe = api.onTokenChange(retire);
+    const changed = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) retire(); };
+    window.addEventListener('storage', changed);
+    return () => {
+      completionScope.current = null; completionAttempt.current = null; completionUploads.current = new WeakMap();
+      unsubscribe(); window.removeEventListener('storage', changed);
+    };
+  }, [gigId, currentUserId, gigStatus, isWorker, isOwner]);
+
+  // Reopen the existing amount/status screen for this actor's retained original.
+  // A Stripe return URL only identifies a request; its outcome comes from the API.
+  useEffect(() => {
+    if (!currentUserId || !gigId) return;
+    let active = true;
+    const token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = () => { try { return localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY); } catch { return undefined; } };
+    const openingMarker = marker();
+    const current = () => active && api.getAuthToken() === token && api.getApiBaseUrl() === origin && marker() === openingMarker;
+    const unsubscribe = api.onTokenChange(() => { active = false; });
+    const url = new URL(window.location.href);
+    const returned = url.searchParams.get('tip_request');
+    if (tipId(returned)) {
+      for (const name of ['payment_intent_client_secret', 'payment_intent', 'redirect_status']) url.searchParams.delete(name);
+      if (url.href !== window.location.href) router.replace(url.pathname + url.search + url.hash);
+      setTipRecoveryRequestId(returned); setShowTipModal(true);
+    } else if (typeof indexedDB !== 'undefined') {
+      void tipRecoverySlot(origin, currentUserId, gigId).load().then(async original => {
+        if (!current()) return;
+        if (original) { setTipRecoveryRequestId(original.value.requestId); setShowTipModal(true); return; }
+        if (!isOwner || !isCompleted) return;
+        // A fresh browser has no retained UUID for an older payment. Discover
+        // only an existing local payment; the picker still verifies and retains
+        // its exact identity before any explicit check or cancellation.
+        const preview = await api.payments.getTipPreview(gigId);
+        if (!current()) return;
+        verifyTipPreview(preview, gigId, currentUserId, null);
+        const existingId = preview.activeRequestId || preview.legacyPaymentId;
+        if (existingId) { setTipRecoveryRequestId(existingId); setShowTipModal(true); }
+      }).catch(() => { /* Explicit tip entry still shows retained-storage errors before sending. */ });
     }
-  };
+    return () => { active = false; unsubscribe(); };
+  }, [currentUserId, gigId, router, isOwner, isCompleted]);
 
-  // Authorization pending
-  const [continuingAuthorization, setContinuingAuthorization] = useState(false);
-  const [refreshingAuthorization, setRefreshingAuthorization] = useState(false);
-  const [continueAuthorizationError, setContinueAuthorizationError] = useState<string | null>(null);
-  const [, setPaymentClientSecret] = useState<string | null>(null);
-  const [, setPaymentIsSetupIntent] = useState(false);
-  const [, setShowPaymentSetup] = useState(false);
+  const handleReopenBidding = () => setStopAction('reopen_bidding');
 
   // Check no-show eligibility
   useEffect(() => {
@@ -173,31 +212,8 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
     checkNoShowEligibility();
   }, [gigId, gigStatus, currentUserId]);
 
-  const openCancelModal = async () => {
-    if (!canCancel) return;
-    setShowCancelModal(true);
-    setCancelReason('');
-    setCancelPreview(null);
-    try {
-      const preview = await api.gigs.getCancellationPreview(gigId);
-      setCancelPreview(preview as CancellationPreview);
-    } catch {
-      setCancelPreview({ zone: -1, zone_label: 'Unknown', fee: 0, in_grace: true, policy_label: 'Standard' });
-    }
-  };
-
-  const handleCancelGig = async () => {
-    if (!canCancel) return;
-    setCancelling(true);
-    try {
-      await api.gigs.cancelGig(gigId, cancelReason || undefined);
-      setShowCancelModal(false);
-      onStatusChange?.();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to cancel gig');
-    } finally {
-      setCancelling(false);
-    }
+  const openCancelModal = () => {
+    if (canCancel) setStopAction(isOwner && gigStatus === 'open' ? 'close' : 'cancel');
   };
 
   const handleReportNoShow = async () => {
@@ -215,63 +231,112 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
   };
 
   const handleStartWork = async () => {
+    const scope = completionScope.current;
+    if (startAttempt.current || currentStartContext.current !== startContext
+      || !completionScopeIsCurrent(scope) || !iAmWorkerAssigned
+      || acceptedBy !== currentUserId || workerBlockedByPaymentAuth) return;
+    const attempt = {}; startAttempt.current = attempt; setStartingWork(true);
+    const current = () => startAttempt.current === attempt && currentStartContext.current === startContext
+      && completionScopeIsCurrent(scope);
     try {
-      const gigsExt = api.gigs as unknown as GigsCompletionApiExt;
-      await gigsExt.startGig(gigId);
+      const response = await api.gigs.startGig(gigId);
+      if (!current()) return;
+      const receipt = response?.gig;
+      if (!receipt || receipt.id !== gigId || receipt.status !== 'in_progress'
+        || receipt.accepted_by !== currentUserId || !Number.isFinite(Date.parse(receipt.started_at || ''))) {
+        throw new Error('Work start could not be confirmed. Refresh the task to check its current status.');
+      }
       onStatusChange?.();
       toast.success('Work started!');
     } catch (err: unknown) {
-      console.error('Start work failed:', err);
+      if (!current()) return;
       const errData = err && typeof err === 'object' ? (err as Record<string, any>) : null;
       if ((errData?.data as Record<string, any>)?.code === 'payer_authorization_required') {
         toast.warning('Waiting for requester payment authorization. Ask the gig owner to complete payment on the gig page.');
       } else {
         toast.error(err instanceof Error ? err.message : 'Failed to start work');
       }
+    } finally {
+      if (current()) { startAttempt.current = null; setStartingWork(false); }
     }
   };
 
   const handleMarkCompleted = () => {
+    if (showCompletionModal || completionAttempt.current) return;
+    if (!isWorker || gigStatus !== 'in_progress' || !completionScopeIsCurrent(completionScope.current)) {
+      toast.error('Reopen the task with your current account before submitting completion.'); return;
+    }
+    completionAttempt.current = null; completionUploads.current = new WeakMap();
     setShowCompletionModal(true);
     setCompletionNote('');
     setCompletionFiles([]);
   };
 
   const submitCompletion = async () => {
+    const scope = completionScope.current;
+    if (completionAttempt.current || !completionScopeIsCurrent(scope)) return;
+    const attempt = {}; completionAttempt.current = attempt;
+    const current = () => completionAttempt.current === attempt && completionScopeIsCurrent(scope);
+    const files = [...completionFiles];
     setSubmittingCompletion(true);
     try {
-      let photoUrls: string[] = [];
-      if (completionFiles.length > 0) {
-        const uploadRes = await api.upload.uploadGigCompletionMedia(gigId, completionFiles);
-        photoUrls = (uploadRes?.media || []).map((m: Record<string, any>) => m.file_url).filter(Boolean) as string[];
+      const missing = files.filter(file => !completionUploads.current.has(file));
+      if (missing.length > 0) {
+        const uploadRes = await api.upload.uploadGigCompletionMedia(gigId, missing);
+        if (!current()) return;
+        const media = uploadRes?.media;
+        if (!Array.isArray(media) || media.length !== missing.length
+          || media.some(item => typeof item.file_url !== 'string' || !item.file_url.trim())) {
+          throw new Error('Some proof files could not be confirmed. Please retry.');
+        }
+        missing.forEach((file, index) => completionUploads.current.set(file, media[index].file_url));
       }
-      const gigsExt = api.gigs as unknown as GigsCompletionApiExt;
-      await gigsExt.markGigCompleted(gigId, {
+      if (!current()) return;
+      const photoUrls = files.map(file => completionUploads.current.get(file)!);
+      const response = await api.gigs.markGigCompleted(gigId, {
         note: completionNote || undefined,
         photos: photoUrls.length > 0 ? photoUrls : undefined,
       });
+      if (!current()) return;
+      const receipt = response?.gig;
+      if (!receipt || receipt.id !== gigId || receipt.status !== 'completed' || receipt.accepted_by !== currentUserId
+        || !Number.isFinite(Date.parse(receipt.worker_completed_at || ''))
+        || (receipt.completion_note ?? null) !== (completionNote.slice(0, 2000) || null)
+        || JSON.stringify(receipt.completion_photos ?? []) !== JSON.stringify(photoUrls)) {
+        throw new Error('Completion could not be confirmed. Your proof is kept here so you can retry.');
+      }
+      completionUploads.current = new WeakMap();
       setShowCompletionModal(false);
       setCompletionFiles([]);
       onStatusChange?.();
     } catch (err: unknown) {
-      console.error('Mark completed failed:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to mark completed');
+      if (current()) toast.error(err instanceof Error ? err.message : 'Failed to mark completed');
     } finally {
-      setSubmittingCompletion(false);
+      if (current()) { completionAttempt.current = null; setSubmittingCompletion(false); }
     }
   };
 
   const handleConfirmCompletion = () => {
+    if (showConfirmModal || completionAttempt.current) return;
+    if (!isOwner || !isCompleted || !completionScopeIsCurrent(completionScope.current)) {
+      toast.error('Reopen the task with your current account before confirming completion.'); return;
+    }
+    reviewedCompletion.current = gig.completion_review ?? null;
     setShowConfirmModal(true);
     setConfirmSatisfaction(0);
     setConfirmNote('');
   };
 
   const submitConfirmation = async () => {
+    const scope = completionScope.current;
+    if (completionAttempt.current || !isOwner || !isCompleted || !completionScopeIsCurrent(scope)) return;
+    const attempt = {}; completionAttempt.current = attempt;
+    const current = () => completionAttempt.current === attempt && completionScopeIsCurrent(scope);
     setSubmittingConfirm(true);
     try {
       const gigsExt = api.gigs as unknown as GigsCompletionApiExt;
       const payload = {
+        expectedReview: reviewedCompletion.current,
         satisfaction: confirmSatisfaction > 0 ? confirmSatisfaction : undefined,
         note: confirmNote || undefined,
       };
@@ -279,53 +344,22 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
         await gigsExt.confirmGigCompletion(gigId, payload);
       } else if (typeof gigsExt.completeGig === 'function') {
         await gigsExt.completeGig(gigId, payload);
+      } else {
+        throw new Error('Completion confirmation is unavailable. Please reopen the task.');
       }
+      if (!current()) return;
       setShowConfirmModal(false);
       onStatusChange?.();
+      if (!current()) return;
+      setTipRecoveryRequestId(undefined);
       setShowTipModal(true);
     } catch (err: unknown) {
-      console.error('Confirm completion failed:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to confirm');
+      if (current()) toast.error(getErrorMessage(err));
     } finally {
-      setSubmittingConfirm(false);
+      if (current()) { completionAttempt.current = null; setSubmittingConfirm(false); }
     }
   };
 
-  const handleContinueAuthorization = async () => {
-    setContinuingAuthorization(true);
-    setContinueAuthorizationError(null);
-    try {
-      const result = await api.payments.continueAuthorization(gigId);
-      if (result?.alreadyAuthorized) {
-        onStatusChange?.();
-        return;
-      }
-      if (result?.clientSecret) {
-        setPaymentClientSecret(result.clientSecret);
-        setPaymentIsSetupIntent(false);
-        setShowPaymentSetup(true);
-      } else {
-        setContinueAuthorizationError('No authorization flow available right now. Please refresh and try again.');
-      }
-    } catch (err: unknown) {
-      setContinueAuthorizationError(err instanceof Error ? err.message : 'Failed to continue authorization');
-    } finally {
-      setContinuingAuthorization(false);
-    }
-  };
-
-  const handleRefreshAuthorizationStatus = async () => {
-    setRefreshingAuthorization(true);
-    setContinueAuthorizationError(null);
-    try {
-      await api.payments.refreshPaymentStatus(gigId);
-      onStatusChange?.();
-    } catch (err: unknown) {
-      setContinueAuthorizationError(err instanceof Error ? err.message : 'Failed to refresh payment status');
-    } finally {
-      setRefreshingAuthorization(false);
-    }
-  };
 
   useImperativeHandle(ref, () => ({
     openCancelModal,
@@ -377,35 +411,10 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
         </div>
       )}
 
-      {/* Authorization Pending Banner (owner only) */}
-      {isOwner && gig?.payment_status === 'authorize_pending' && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <h4 className="font-semibold text-amber-900 text-sm">Payment Authorization In Progress</h4>
-          <p className="text-sm text-amber-800 mt-1">
-            The worker cannot start until you finish card authorization.
-          </p>
-          {continueAuthorizationError && (
-            <p className="text-sm text-amber-900 mt-2 bg-amber-100 rounded p-2">
-              {continueAuthorizationError}
-            </p>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              onClick={handleContinueAuthorization}
-              disabled={continuingAuthorization || refreshingAuthorization}
-              className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {continuingAuthorization ? 'Opening…' : 'Complete Authorization'}
-            </button>
-            <button
-              onClick={handleRefreshAuthorizationStatus}
-              disabled={refreshingAuthorization || continuingAuthorization}
-              className="px-4 py-2 bg-app-surface text-amber-700 text-sm font-medium rounded-lg border border-amber-300 hover:bg-amber-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {refreshingAuthorization ? 'Refreshing…' : 'Refresh Status'}
-            </button>
-          </div>
-        </div>
+      {isOwner && currentUserId && gigStatus === 'assigned'
+        && ['authorization_failed', 'authorize_pending', 'ready_to_authorize', 'canceled'].includes(gig?.payment_status ?? '') && (
+        <AssignedGigAuthorization key={`${currentUserId}:${gigId}`} actorId={currentUserId}
+          gigId={gigId} payeeId={acceptedBy} onAuthorized={onStatusChange} />
       )}
 
       {/* Owner confirm completion panel */}
@@ -417,9 +426,9 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
           {completionPhotos.length > 0 && (
             <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
               {completionPhotos.slice(0, 4).map((url: string, i: number) => (
-                <Image
+                <CompletionProofImage
                   key={i}
-                  src={url}
+                  reference={url}
                   alt={`Proof ${i + 1}`}
                   width={56}
                   height={56}
@@ -467,7 +476,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
                   if (workerBlockedByPaymentAuth) return;
                   handleStartWork();
                 }}
-                disabled={workerBlockedByPaymentAuth}
+                disabled={workerBlockedByPaymentAuth || startingWork}
                 className={`flex-1 py-2 rounded-lg font-semibold ${
                   workerBlockedByPaymentAuth
                     ? 'bg-app-surface-sunken border border-app-border text-app-text-secondary cursor-not-allowed'
@@ -498,6 +507,8 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
               Waiting for requester payment authorization before you can start.
             </p>
           )}
+          {iAmWorkerAssigned && <button type="button" onClick={() => setStopAction('worker_release')}
+            className="w-full mt-3 text-sm text-amber-700 hover:underline">Can’t make it? Leave assignment</button>}
           {/* Worker cancel option */}
           {(iAmWorkerAssigned || iAmWorkerInProgress) && (
             <button
@@ -581,7 +592,10 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
 
             <div className="px-6 py-4 flex gap-3 justify-end border-t border-app-border-subtle">
               <button
-                onClick={() => setShowCompletionModal(false)}
+                onClick={() => {
+                  completionAttempt.current = null; completionUploads.current = new WeakMap();
+                  setShowCompletionModal(false); setSubmittingCompletion(false); setCompletionFiles([]); setCompletionNote('');
+                }}
                 className="px-4 py-2 text-app-text-strong hover:bg-app-hover rounded-lg font-medium text-sm"
               >
                 Cancel
@@ -629,9 +643,10 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
                       <p className="text-xs text-app-text-secondary mb-1">Photos ({completionPhotos.length}):</p>
                       <div className="grid grid-cols-3 gap-2">
                         {completionPhotos.map((url: string, i: number) => (
-                          <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                            <Image
-                              src={url}
+                            <CompletionProofImage
+                              key={i}
+                              openFull
+                              reference={url}
                               alt={`Proof ${i + 1}`}
                               width={200}
                               height={96}
@@ -640,7 +655,6 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
                               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                               quality={80}
                             />
-                          </a>
                         ))}
                       </div>
                     </div>
@@ -710,7 +724,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
 
             <div className="px-6 py-4 flex gap-3 justify-end border-t border-app-border-subtle">
               <button
-                onClick={() => setShowConfirmModal(false)}
+                onClick={() => { completionAttempt.current = null; setSubmittingConfirm(false); setShowConfirmModal(false); }}
                 className="px-4 py-2 text-app-text-strong hover:bg-app-hover rounded-lg font-medium text-sm"
               >
                 Go Back
@@ -803,21 +817,19 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
         </div>
       )}
 
-      {/* ─── Cancellation Modal ─── */}
-      <CancellationModal
-        show={showCancelModal && canCancel}
-        onClose={() => setShowCancelModal(false)}
-        cancelPreview={cancelPreview}
-        cancelReason={cancelReason}
-        setCancelReason={setCancelReason}
-        cancelling={cancelling}
-        onConfirm={handleCancelGig}
-        isOwner={isOwner}
-      />
+      {stopAction && currentUserId && canCancel && <GigStopDialog
+        key={`${currentUserId}:${gigId}:${stopAction}`} actorId={currentUserId}
+        gigId={gigId} action={stopAction} isOwner={isOwner}
+        onClose={() => setStopAction(null)} onCompleted={onStatusChange}
+      />}
 
       {/* ─── Tip Modal ─── */}
-      {showTipModal && acceptedBy && (
+      {showTipModal && currentUserId && (
         <TipModal
+          key={`${currentUserId}:${gigId}:${tipRecoveryRequestId || 'new'}`}
+          actorId={currentUserId}
+          workerId={acceptedBy}
+          recoveryRequestId={tipRecoveryRequestId}
           gigId={gigId}
           workerName={
             gig?.accepted_bid?.bidder?.name ||
@@ -826,6 +838,8 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
           }
           onSuccess={(tipAmount) => {
             setShowTipModal(false);
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('tip_request')) { url.searchParams.delete('tip_request'); router.replace(url.pathname + url.search + url.hash); }
             onStatusChange?.();
             toast.success(`Tip of $${(tipAmount / 100).toFixed(2)} sent!`);
           }}

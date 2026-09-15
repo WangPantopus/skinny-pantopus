@@ -107,6 +107,49 @@ public final class GigDetailViewModel {
 
     /// Status chip metadata riding the payment envelope.
     public private(set) var paymentStateInfo: GigPaymentStateInfo?
+    private var mayManagePayment = false
+
+    var canOpenAssignedAuthorization: Bool {
+        guard mayManagePayment, bidAcceptance.isCurrentAccount, let gig = rawGig,
+              gig.status == "assigned", let payment, let worker = gig.acceptedBy,
+              payment.id == gig.paymentId, let price = gig.price, price.isFinite,
+              let amount = payment.amountTotal, abs(price * 100 - amount) < 0.001,
+              ["authorization_failed", "authorize_pending", "ready_to_authorize", "canceled"].contains(payment.paymentStatus ?? ""),
+              GigAssignedAuthorizationTerms(payment: payment, gigId: gigId, payeeId: worker) != nil else { return false }
+        return true
+    }
+
+    func makeAssignedAuthorizationViewModel() -> GigAssignedAuthorizationViewModel? {
+        guard canOpenAssignedAuthorization, let actor = currentUserId, let payment,
+              let worker = rawGig?.acceptedBy,
+              let terms = GigAssignedAuthorizationTerms(payment: payment, gigId: gigId, payeeId: worker) else { return nil }
+        return GigAssignedAuthorizationViewModel(gigId: gigId, actor: actor, terms: terms, api: api, checkout: checkout)
+    }
+
+    var canOpenRefunds: Bool {
+        guard viewerIsOwner, bidAcceptance.isCurrentAccount, let payment,
+              payment.gigId == gigId, payment.payerId == currentUserId,
+              payment.currency?.lowercased() == "usd", let id = payment.id, UUID(uuidString: id) != nil,
+              let amount = payment.amountTotal, let cents = Int(exactly: amount), cents >= 50 else { return false }
+        return true
+    }
+
+    func makeRefundViewModel() -> GigRefundViewModel? {
+        guard canOpenRefunds, let payment, let id = payment.id,
+              let amount = payment.amountTotal, let cents = Int(exactly: amount) else { return nil }
+        return GigRefundViewModel(paymentId: id, total: cents, api: api)
+    }
+
+    /// The server checks current action authority and terms before any command.
+    /// A fresh sheet can recover an earlier request without repeating its mutation.
+    func makeStopViewModel(action: GigStopAction) -> GigStopViewModel? {
+        stopRecovery.makeModel(action: action)
+    }
+
+    func refreshAfterRefund() async {
+        guard bidAcceptance.isCurrentAccount else { return }
+        await refreshSilently()
+    }
 
     /// Change orders on an assigned / in-progress gig (newest first).
     public private(set) var changeOrders: [GigChangeOrderDTO] = []
@@ -137,6 +180,59 @@ public final class GigDetailViewModel {
     }
 
     public private(set) var tipStatus: TipStatus = .idle
+    private(set) var tipBusy = false
+    private(set) var tipMessage = "100% goes to your helper. Charged to your card via Stripe."
+    private var tipOriginal: TipOriginal?
+    private var tipPreview: TipPreview?
+    private var tipProgress: TipResponse?
+    private var tipConflict: TipResponse?
+    private var tipServerSession: String?
+    private var tipMayResume = false
+    private let tipStore: any SecureStore
+    private let makeTipRequestId: () -> String
+    private let tipIdentity: () -> GigStopViewModel.Identity?
+    private let tipOpeningIdentity: GigStopViewModel.Identity?
+    private static var activeTips = Set<String>()
+    private var completionUploads: [DeliveryProofPhoto: String] = [:]
+    private var completionAttempt: UUID?
+
+    var tipIsCurrent: Bool {
+        writeIdentityIsCurrent
+    }
+
+    private var writeIdentityIsCurrent: Bool {
+        tipOpeningIdentity != nil && tipOpeningIdentity?.actor == currentUserId && tipIdentity() == tipOpeningIdentity
+    }
+
+    var tipOriginalAmount: Int? {
+        tipIsCurrent ? tipOriginal?.amountCents : nil
+    }
+
+    var hasTipOriginal: Bool {
+        tipIsCurrent && tipOriginal != nil && tipProgress?.terminal != true
+    }
+
+    var mayChooseTip: Bool {
+        tipIsCurrent && !tipBusy && tipOriginal == nil && tipPreview?.eligible == true && tipServerSession != nil
+    }
+
+    var mayContinueTip: Bool {
+        tipIsCurrent && !tipBusy && hasTipOriginal && tipServerSession != nil
+    }
+
+    var mayCancelTip: Bool {
+        hasTipOriginal && tipProgress?.canCancel != false
+    }
+
+    var tipActionTitle: String {
+        if tipConflict != nil { return "View pending tip" }
+        if tipMayResume || tipProgress?.checkout != nil { return "Continue original tip" }
+        return "Check tip status"
+    }
+
+    private var tipScope: String {
+        "gig-tip-original-v1|\(tipOpeningIdentity?.origin ?? "")|\(currentUserId ?? "")|\(gigId)"
+    }
 
     // MARK: - Structured Q&A
 
@@ -193,6 +289,8 @@ public final class GigDetailViewModel {
     private let api: APIClient
     private let uploader: MultipartUploader
     private let checkout: CheckoutCoordinator
+    let stopRecovery: GigStopRecoveryEntry
+    private let bidAcceptance: GigBidAcceptanceCoordinator
     private let currentUserId: String?
     /// Phase 6b — lock-screen Live Activity driver. The default real
     /// controller no-ops in tests / previews; tests inject a recorder.
@@ -203,7 +301,13 @@ public final class GigDetailViewModel {
         api: APIClient = .shared,
         uploader: MultipartUploader = .shared,
         checkout: CheckoutCoordinator = CheckoutCoordinator(),
+        bidAcceptance: GigBidAcceptanceCoordinator? = nil,
         currentUserId: String? = GigDetailViewModel.currentSignedInUserId(),
+        stopStore: any PendingGigStopStoring = PendingGigStopStore(),
+        stopIdentity: (() -> GigStopViewModel.Identity?)? = nil,
+        tipStore: any SecureStore = KeychainStore(service: "app.pantopus.ios.pending-gig-tip"),
+        tipIdentity: (() -> GigStopViewModel.Identity?)? = nil,
+        makeTipRequestId: @escaping () -> String = { UUID().uuidString.lowercased() },
         liveActivity: any GigLiveActivityControlling = GigLiveActivityController.shared,
         roomEvents: @escaping @MainActor (String) -> AsyncStream<GigRoomEvent> = { name in
             SocketClient.shared.events(named: name, as: GigRoomEvent.self)
@@ -216,7 +320,14 @@ public final class GigDetailViewModel {
         self.api = api
         self.uploader = uploader
         self.checkout = checkout
+        self.bidAcceptance = bidAcceptance ?? GigBidAcceptanceCoordinator(api: api, checkout: checkout)
         self.currentUserId = currentUserId
+        self.tipStore = tipStore
+        self.makeTipRequestId = makeTipRequestId
+        let resolveTipIdentity = tipIdentity ?? { GigStopViewModel.currentIdentity(api: api) }
+        self.tipIdentity = resolveTipIdentity
+        tipOpeningIdentity = resolveTipIdentity()
+        stopRecovery = GigStopRecoveryEntry(gig: gigId, actor: currentUserId, api: api, store: stopStore, identity: stopIdentity)
         self.liveActivity = liveActivity
         self.roomEvents = roomEvents
         self.emitRoom = emitRoom
@@ -232,6 +343,7 @@ public final class GigDetailViewModel {
     }
 
     public func load() async {
+        stopRecovery.refresh()
         state = .loading
         await fetch(silently: false)
     }
@@ -239,6 +351,7 @@ public final class GigDetailViewModel {
     /// Realtime / post-mutation refetch — keeps the current frame on
     /// screen (no skeleton) and swallows errors.
     public func refreshSilently() async {
+        stopRecovery.refresh()
         await fetch(silently: true)
     }
 
@@ -250,7 +363,8 @@ public final class GigDetailViewModel {
             viewerIsOwner = currentUserId != nil && detail.gig.userId == currentUserId
             viewerIsWorker = currentUserId != nil && detail.gig.acceptedBy == currentUserId
             canMarkDelivered = Self.viewerCanMarkDelivered(gig: detail.gig, currentUserId: currentUserId)
-            canTip = Self.viewerCanTip(gig: detail.gig, viewerIsOwner: viewerIsOwner)
+            canTip = Self.viewerCanTip(gig: detail.gig, viewerIsOwner: viewerIsOwner) || (tipIsCurrent && (try? readStoredTip()) != nil)
+            if !canTip { canTip = await hasHistoricalTipEntry(gig: detail.gig) }
             canInstantAccept = Self.viewerCanInstantAccept(
                 gig: detail.gig,
                 viewerIsOwner: viewerIsOwner,
@@ -520,14 +634,23 @@ public final class GigDetailViewModel {
     private func loadPayment(gig: GigDTO, status: String) async {
         let assignedPlus = ["assigned", "in_progress", "completed"].contains(status)
             || !(gig.acceptedBy ?? "").isEmpty
-        guard viewerIsOwner, assignedPlus else {
+        mayManagePayment = false
+        // The endpoint verifies current poster/business-manager access. A
+        // worker's redacted response never grants authorization controls.
+        guard currentUserId != nil, !viewerIsWorker, assignedPlus, bidAcceptance.isCurrentAccount else {
             payment = nil
             paymentStateInfo = nil
             return
         }
         let response: GigPaymentResponse? = try? await api.request(GigsEndpoints.payment(gigId: gigId))
+        guard bidAcceptance.isCurrentAccount else { payment = nil
+            paymentStateInfo = nil
+            return
+        }
         payment = response?.payment
         paymentStateInfo = response?.stateInfo
+        mayManagePayment = payment?.gigId == gigId && payment?.payerId == gig.userId
+            && payment?.payeeId != currentUserId && payment != nil
     }
 
     /// Change orders — both roles, while the gig is assigned /
@@ -580,6 +703,15 @@ public final class GigDetailViewModel {
         guard let worker = gig.acceptedBy, !worker.isEmpty else { return false }
         guard (gig.status ?? "").lowercased() == "completed" else { return false }
         return (gig.ownerConfirmedAt ?? "").isEmpty == false
+    }
+
+    /// Current terms gate a new tip, but cannot hide an already-existing payment
+    /// from its original payer on a fresh install. This reads local eligibility only.
+    private func hasHistoricalTipEntry(gig: GigDTO) async -> Bool {
+        guard tipIsCurrent, currentUserId == gig.userId, gig.status?.lowercased() == "completed" else { return false }
+        guard let preview = try? await readTipPreview(), tipIsCurrent,
+              rawGig?.userId == currentUserId, rawGig?.status?.lowercased() == "completed" else { return false }
+        return preview.activeRequestId != nil || preview.legacyPaymentId != nil
     }
 
     /// The instant-accept gate: `engagement_mode == "instant_accept"`,
@@ -748,7 +880,7 @@ public final class GigDetailViewModel {
     /// Payment card gate — owner only (the worker's payout view lives in
     /// the wallet); data presence implies the assigned+ fetch succeeded.
     public var showPaymentCard: Bool {
-        viewerIsOwner && payment != nil
+        (viewerIsOwner || mayManagePayment) && payment != nil && bidAcceptance.isCurrentAccount
     }
 
     /// Changes card gate — either party on an assigned / in-progress
@@ -782,18 +914,15 @@ public final class GigDetailViewModel {
 
     /// "Cancel task" overflow gate — the poster on a live gig.
     ///
-    /// RN branches here (`gig/[id].tsx:412`): an **open** gig is *closed*
-    /// (`DELETE /api/gigs/:id`, the row disappears) while an assigned /
-    /// in-progress one is *cancelled* (`POST /cancel`, fees may apply).
-    /// `canCloseTask` covers the first branch, this one the second.
+    /// The shared task-action sheet verifies current policy and retains any
+    /// pending operation before cancellation can complete.
     public var canCancelTask: Bool {
         guard viewerIsOwner, let gig = rawGig else { return false }
         return ["assigned", "in_progress"].contains((gig.status ?? "").lowercased())
     }
 
-    /// "Close task" overflow gate — the poster on a still-open gig. The
-    /// backend's `DELETE /api/gigs/:id` rejects any other status
-    /// ("Can only delete open gigs", `gigs.js:3755`).
+    /// Closing an open task uses the same recoverable stop command. Server
+    /// admission requires no assignment, payment or unresolved checkout.
     public var canCloseTask: Bool {
         guard viewerIsOwner, let gig = rawGig else { return false }
         return (gig.status ?? "").lowercased() == "open"
@@ -899,38 +1028,240 @@ public final class GigDetailViewModel {
         return pendingReview != nil || reviewSubmitted
     }
 
-    /// Send a tip of `amountCents` to the worker: create the tip payment,
-    /// present PaymentSheet via the shared `CheckoutCoordinator`, then
-    /// best-effort reconcile + refresh the gig. We never mark the tip paid
-    /// locally — the refresh-status + webhook reconcile server-side.
+    /// Reopen the existing picker by reading this actor's protected original first.
+    /// A missing server row retains the same UUID; only explicit continuation sends.
+    func prepareTip() async {
+        guard beginTipWork() else { return }
+        defer { finishTipWork() }
+        tipPreview = nil
+        tipProgress = nil
+        tipConflict = nil
+        tipMayResume = false
+        do {
+            tipOriginal = try readStoredTip()
+            if let original = tipOriginal {
+                do {
+                    let result: TipResponse = try await api.request(PaymentsEndpoints.tipOriginal(requestId: original.requestId))
+                    try acceptTip(result, original: original)
+                    return
+                } catch APIError.notFound {
+                    let next = try await readTipPreview()
+                    tipMayResume = !original.isLegacy && next.eligible && next.terms == original.terms
+                    if let other = next.activeRequestId, other != original.requestId {
+                        tipConflict = try await readOtherTip(other)
+                    }
+                    tipMessage = "The original tip is not confirmed. Keep its amount and request when continuing."
+                    return
+                }
+            }
+            let next = try await readTipPreview()
+            if let active = next.activeRequestId ?? next.legacyPaymentId {
+                let result = try await readOtherTip(active)
+                guard next.legacyPaymentId == nil || result.request.isLegacy else { throw APIError.invalidResponse }
+                try retainTip(result.request, replacing: nil)
+                tipOriginal = result.request
+                try acceptTip(result, original: result.request)
+            } else if !next.eligible {
+                tipMessage = "This task is not currently available for a tip. Reopen its details before continuing."
+            }
+        } catch { failTip("Tip details could not be verified. Reopen the original before continuing.") }
+    }
+
     public func sendTip(amountCents: Int) async {
-        guard canTip else { return }
+        if tipServerSession == nil { await prepareTip() }
+        guard tipIsCurrent, !tipBusy else { return }
+        if tipConflict != nil { await adoptOtherTip()
+            return
+        }
+        guard tipProgress?.terminal != true else { return }
+        if let original = tipOriginal, original.amountCents != amountCents {
+            failTip("A previous tip is still pending. Continue its original amount before choosing another.")
+            return
+        }
+        guard tipOriginal != nil || mayChooseTip, (50...99_999_999).contains(amountCents) else { return }
+        await performTip(mode: tipOriginal != nil && !tipMayResume ? "check" : "resume", amount: amountCents)
+    }
+
+    func cancelOriginalTip() async {
+        guard mayCancelTip, let original = tipOriginal else { return }
+        await performTip(mode: "cancel", amount: original.amountCents)
+    }
+
+    private func performTip(mode: String, amount: Int) async {
+        guard beginTipWork() else { return }
+        defer { finishTipWork() }
         tipStatus = .sending
         do {
-            let response: TipResponse = try await api.request(
-                PaymentsEndpoints.tip(body: TipRequest(gigId: gigId, amount: amountCents))
-            )
-            let outcome = await checkout.present(response.sheetParams)
-            switch outcome {
-            case .paid:
-                if let paymentId = response.paymentId {
-                    _ = try? await api.request(
-                        PaymentsEndpoints.tipRefreshStatus(paymentId: paymentId),
-                        as: TipRefreshStatusResponse.self
-                    )
-                }
-                tipStatus = .succeeded
-                await load()
-            case .canceled:
-                tipStatus = .canceled
-            case let .declined(message), let .failed(message):
-                tipStatus = .failed(message: message)
+            if tipOriginal == nil {
+                guard mode == "resume", let terms = tipPreview?.terms, tipPreview?.eligible == true,
+                      let actor = currentUserId, let worker = terms.payeeId, rawGig?.acceptedBy == worker,
+                      rawGig?.ownerConfirmedAt.flatMap(GigAssignedAuthorizationProgress.date) == terms.ownerConfirmedAt
+                      .flatMap(GigAssignedAuthorizationProgress.date) else { throw APIError.invalidResponse }
+                let id = makeTipRequestId()
+                let original = TipOriginal(
+                    requestId: id,
+                    paymentId: id,
+                    gigId: gigId,
+                    payerId: actor,
+                    payeeId: worker,
+                    amountCents: amount,
+                    currency: "usd",
+                    terms: terms,
+                    paymentMethodId: nil
+                )
+                try retainTip(original, replacing: nil)
+                tipOriginal = original
             }
+            guard let original = tipOriginal else { throw APIError.invalidResponse }
+            let result = try await tipCommand(mode, original: original)
+            guard !result.terminal, mode != "cancel", let selected = result.checkout else {
+                if !result.terminal { failTip(tipMessage) }
+                return
+            }
+            try await confirmOriginalTip(original, selected: selected)
         } catch {
-            tipStatus = .failed(
-                message: (error as? APIError)?.errorDescription ?? "Couldn't send the tip."
-            )
+            if tipIsCurrent, case let APIError.clientError(status, message) = error, status == 409,
+               APIError.code(in: message) == "TIP_ACTIVE" {
+                do {
+                    let next = try await readTipPreview()
+                    if let other = next.activeRequestId, other != tipOriginal?.requestId { tipConflict = try await readOtherTip(other) }
+                } catch { /* Keep the saved original if conflict recovery cannot be verified. */ }
+            }
+            if mode == "resume", tipIsCurrent, tipOriginal?.isLegacy != true { tipMayResume = true }
+            failTip("The tip result is unconfirmed. Reopen and check the same original request.")
         }
+    }
+
+    private func confirmOriginalTip(_ original: TipOriginal, selected: TipCheckout) async throws {
+        // Reuse the existing SDK. Read the current session and exact intent immediately before presenting it.
+        let checked = try await tipCommand("check", original: original)
+        guard !checked.terminal else { return }
+        guard let checkoutDetails = checked.checkout, checkoutDetails.sameIntent(as: selected) else { throw APIError.invalidResponse }
+        try requireCurrentTip()
+        let outcome = await checkout.present(checkoutDetails.sheetParams)
+        try requireCurrentTip()
+        // SDK completion, error and dismissal are observations, never payment receipts.
+        let final = try await tipCommand("check", original: original)
+        if !final.terminal {
+            switch outcome {
+            case .canceled: failTip("This tip has not been confirmed. Continue or cancel the same original tip.")
+            case .paid: failTip("Payment is still being checked. Keep and check this original tip.")
+            case .declined, .failed: failTip("The tip result is unconfirmed. Check the same original before trying again.")
+            }
+        }
+    }
+
+    private func tipCommand(_ mode: String, original: TipOriginal) async throws -> TipResponse {
+        try requireCurrentTip()
+        guard !original.isLegacy || mode != "resume" else { throw APIError.invalidResponse }
+        guard let session = tipServerSession, try readStoredTip() == original else { throw APIError.invalidResponse }
+        let result: TipResponse = try await api.request(PaymentsEndpoints.tip(body: TipRequest(
+            original: original,
+            session: session,
+            mode: mode
+        )))
+        try acceptTip(result, original: original)
+        return result
+    }
+
+    private func readTipPreview() async throws -> TipPreview {
+        try requireCurrentTip()
+        let value: TipPreview = try await api.request(PaymentsEndpoints.tipPreview(gigId: gigId))
+        try requireCurrentTip()
+        guard let actor = currentUserId,
+              value.matches(gig: gigId, actor: actor, session: tipServerSession) else { throw APIError.invalidResponse }
+        tipServerSession = value.sessionScope
+        tipPreview = value
+        return value
+    }
+
+    private func readOtherTip(_ requestId: String) async throws -> TipResponse {
+        try requireCurrentTip()
+        let value: TipResponse = try await api.request(PaymentsEndpoints.tipOriginal(requestId: requestId))
+        try requireCurrentTip()
+        guard let actor = currentUserId,
+              value.matches(gig: gigId, actor: actor, requestId: requestId, session: tipServerSession)
+        else { throw APIError.invalidResponse }
+        return value
+    }
+
+    private func adoptOtherTip() async {
+        guard let conflict = tipConflict, let original = tipOriginal, beginTipWork() else { return }
+        defer { finishTipWork() }
+        do {
+            let next = try await readOtherTip(conflict.request.requestId)
+            guard next.request == conflict.request else { throw APIError.invalidResponse }
+            try retainTip(next.request, replacing: original)
+            tipOriginal = next.request
+            tipConflict = nil
+            try acceptTip(next, original: next.request)
+        } catch { failTip("The pending tip could not be verified. Keep the saved original.") }
+    }
+
+    private func acceptTip(_ result: TipResponse, original: TipOriginal) throws {
+        try requireCurrentTip()
+        guard let actor = currentUserId, result.matches(
+            gig: gigId,
+            actor: actor,
+            requestId: original.requestId,
+            session: tipServerSession,
+            original: original
+        ),
+            try readStoredTip() == original else { throw APIError.invalidResponse }
+        if result.terminal { try tipStore.delete(tipScope) }
+        tipServerSession = result.sessionScope
+        tipProgress = result
+        tipMayResume = result.canRetry && result.paymentIntentId == nil
+        if result.status == "succeeded" {
+            if result.changedAfterCapture {
+                failTip("This tip has a payment record. Check history for its refund or dispute status.")
+            } else { tipStatus = .succeeded }
+        } else if result.status == "canceled" {
+            tipStatus = .canceled
+            tipMessage = "The original tip is canceled with no charge."
+        } else {
+            tipStatus = .idle
+            tipMessage = original.isLegacy ? "Check or cancel this earlier tip before sending another. Its amount and worker stay the same."
+                : result.status == "needs_review" ? "This original tip needs review. Check payment history before continuing."
+                : "This tip is not confirmed as paid. Continue or check the same original before sending another."
+        }
+    }
+
+    private func readStoredTip() throws -> TipOriginal? {
+        guard let data = try tipStore.readData(tipScope) else { return nil }
+        let value = try JSONDecoder().decode(TipOriginal.self, from: data)
+        guard let actor = currentUserId, value.matches(gig: gigId, actor: actor) else { throw APIError.invalidResponse }
+        return value
+    }
+
+    private func retainTip(_ original: TipOriginal, replacing expected: TipOriginal?) throws {
+        try requireCurrentTip()
+        guard let actor = currentUserId, original.matches(gig: gigId, actor: actor),
+              try readStoredTip() == expected else { throw APIError.invalidResponse }
+        // MainActor serializes the compare/write, including multiple open task views.
+        try tipStore.setData(JSONEncoder().encode(original), for: tipScope)
+    }
+
+    private func beginTipWork() -> Bool {
+        guard tipIsCurrent, !tipBusy, Self.activeTips.insert(tipScope).inserted else { return false }
+        tipBusy = true
+        tipMessage = "100% goes to your helper. Charged to your card via Stripe."
+        return true
+    }
+
+    private func finishTipWork() {
+        Self.activeTips.remove(tipScope)
+        tipBusy = false
+    }
+
+    private func requireCurrentTip() throws {
+        guard tipIsCurrent, !Task.isCancelled else { throw APIError.invalidResponse }
+    }
+
+    private func failTip(_ message: String) {
+        guard tipIsCurrent else { return }
+        tipMessage = message
+        tipStatus = .failed(message: message)
     }
 
     /// Clear the tip toast once the view has shown it.
@@ -944,10 +1275,37 @@ public final class GigDetailViewModel {
     /// confirmation; refreshes the task (status → completed) on success.
     @discardableResult
     public func submitDeliveryProof(photos: [DeliveryProofPhoto], note: String?) async -> Bool {
-        guard let gig = rawGig, !photos.isEmpty else { return false }
+        guard writeIdentityIsCurrent, api.apiBaseURL == uploader.apiBaseURL else {
+            retireDeliveryProof()
+            return false
+        }
+        guard let gig = rawGig, gig.acceptedBy == currentUserId, !photos.isEmpty,
+              completionAttempt == nil, ["in_progress", "completed"].contains(gig.status?.lowercased() ?? "")
+        else { return false }
+        if gig.status?.lowercased() == "completed", photos.contains(where: { completionUploads[$0] == nil }) { return false }
+        let attempt = UUID()
+        completionAttempt = attempt
+        let selected = Set(photos)
+        completionUploads = completionUploads.filter { selected.contains($0.key) }
+        func current() -> Bool {
+            completionAttempt == attempt && writeIdentityIsCurrent && !Task.isCancelled
+                && rawGig?.id == gig.id && rawGig?.acceptedBy == currentUserId
+                && api.apiBaseURL == uploader.apiBaseURL
+        }
+        defer {
+            if completionAttempt == attempt {
+                completionAttempt = nil
+                if !writeIdentityIsCurrent { completionUploads.removeAll() }
+            }
+        }
         do {
             var urls: [String] = []
             for photo in photos {
+                guard current() else { return false }
+                if let saved = completionUploads[photo] {
+                    urls.append(saved)
+                    continue
+                }
                 let response = try await uploader.uploadFile(
                     MultipartFile(
                         fieldName: "file",
@@ -955,19 +1313,36 @@ public final class GigDetailViewModel {
                         mimeType: photo.mimeType,
                         data: photo.data
                     ),
-                    formFields: ["file_type": "gig_completion", "visibility": "private"]
+                    formFields: ["file_type": "gig_completion", "visibility": "private", "gig_id": gig.id]
                 )
+                guard current(), !response.file.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+                completionUploads[photo] = response.file.url
                 urls.append(response.file.url)
             }
-            _ = try await api.request(
+            guard current() else { return false }
+            let response = try await api.request(
                 GigsEndpoints.markCompleted(gigId: gig.id, note: note, photos: urls),
-                as: EmptyResponse.self
+                as: GigWorkerCompletionResponse.self
             )
+            let expectedNote = note.flatMap { $0.isEmpty ? nil : String(decoding: $0.utf16.prefix(2000), as: UTF16.self) }
+            guard current(), let receipt = response.gig,
+                  receipt.id == gig.id, receipt.status == "completed", receipt.acceptedBy == currentUserId,
+                  Self.parseTimestamp(receipt.workerCompletedAt) != nil,
+                  receipt.completionNote == expectedNote,
+                  (receipt.completionPhotos ?? []) == urls
+            else { return false }
+            completionUploads.removeAll()
             await load()
-            return true
+            return current()
         } catch {
             return false
         }
+    }
+
+    /// Retire this sheet's callbacks and transient uploaded references on departure.
+    public func retireDeliveryProof() {
+        completionAttempt = nil
+        completionUploads.removeAll()
     }
 
     /// Place a bid with the caller-supplied amount + message + proposed
@@ -1263,42 +1638,32 @@ public extension GigDetailViewModel {
 
     /// Poster accepts a bid: `POST .../bids/:bidId/accept`; paid gigs
     /// return PaymentSheet params → present → `finalize-accept` (or
-    /// `abort-accept` on cancel/decline). Refreshes the gig on success.
+    /// `abort-accept` on explicit cancellation). Unknown outcomes retain recovery.
     func acceptBid(bidId: String) async -> BidAcceptOutcome {
-        guard bidActionInFlight == nil else { return .canceled }
+        guard bidActionInFlight == nil else { return .failed(message: "A payment action is already in progress.") }
         bidActionInFlight = bidId
         defer { bidActionInFlight = nil }
-        do {
-            let response: GigBidAcceptResponse = try await api.request(
-                GigsEndpoints.acceptBid(gigId: gigId, bidId: bidId)
-            )
-            let requiresPayment = response.requiresPaymentSetup == true
-                || response.sheetParams.clientSecret != nil
-            if requiresPayment {
-                let outcome = await checkout.present(response.sheetParams)
-                switch outcome {
-                case .paid:
-                    let _: GigBidAcceptResponse = try await api.request(
-                        GigsEndpoints.finalizeAcceptBid(gigId: gigId, bidId: bidId)
-                    )
-                case .canceled:
-                    _ = try? await api.request(
-                        GigsEndpoints.abortAcceptBid(gigId: gigId, bidId: bidId),
-                        as: GigBidAcceptResponse.self
-                    )
-                    return .canceled
-                case let .declined(message), let .failed(message):
-                    _ = try? await api.request(
-                        GigsEndpoints.abortAcceptBid(gigId: gigId, bidId: bidId),
-                        as: GigBidAcceptResponse.self
-                    )
-                    return .failed(message: message)
-                }
-            }
-            await refreshSilently()
-            return .accepted
-        } catch {
-            return .failed(message: (error as? APIError)?.errorDescription ?? "Couldn't accept this bid.")
+        let result = await bidAcceptance.accept(gigId: gigId, bidId: bidId)
+        if bidAcceptance.isCurrentAccount { await refreshSilently() }
+        guard bidAcceptance.isCurrentAccount else { return .failed(message: "Sign in to check this payment.") }
+        switch result {
+        case .accepted: return .accepted
+        case .canceled: return .canceled
+        case let .failed(message): return .failed(message: message)
+        }
+    }
+
+    func cancelBidAcceptance(bidId: String) async -> BidAcceptOutcome {
+        guard bidActionInFlight == nil else { return .failed(message: "A payment action is already in progress.") }
+        bidActionInFlight = bidId
+        defer { bidActionInFlight = nil }
+        let result = await bidAcceptance.cancel(gigId: gigId, bidId: bidId)
+        if bidAcceptance.isCurrentAccount { await refreshSilently() }
+        guard bidAcceptance.isCurrentAccount else { return .failed(message: "Sign in to check this payment.") }
+        switch result {
+        case .accepted: return .accepted
+        case .canceled: return .canceled
+        case let .failed(message): return .failed(message: message)
         }
     }
 
@@ -1391,24 +1756,6 @@ public extension GigDetailViewModel {
             return nil
         } catch {
             return (error as? APIError)?.errorDescription ?? "Failed to withdraw counter"
-        }
-    }
-
-    /// Poster closes a **still-open** task: `DELETE /api/gigs/:id`
-    /// removes the row outright (the backend 400s any other status).
-    /// Mirrors RN's `handleCloseGig` open branch (`gig/[id].tsx:427`).
-    /// Returns `nil` on success, an error string otherwise.
-    @discardableResult
-    func closeGig() async -> String? {
-        guard canCloseTask else { return "This task can no longer be closed." }
-        do {
-            _ = try await api.request(
-                GigOwnerActionsEndpoints.deleteGig(id: gigId),
-                as: GigDeleteResponse.self
-            )
-            return nil
-        } catch {
-            return (error as? APIError)?.errorDescription ?? "Failed to close gig."
         }
     }
 
@@ -1594,70 +1941,37 @@ public extension GigDetailViewModel {
         }
     }
 
-    /// Poster confirms completion (`/complete`) — releases payment and
-    /// unlocks the tip affordance on refresh.
-    @discardableResult
-    func confirmCompletion() async -> String? {
-        guard canConfirmCompletion else { return nil }
-        do {
-            _ = try await api.request(GigsEndpoints.completeGigAsPoster(gigId: gigId), as: EmptyResponse.self)
-            await refreshSilently()
-            return nil
-        } catch {
-            return (error as? APIError)?.errorDescription ?? "Couldn't confirm completion."
-        }
+    enum ConfirmationResult: Equatable {
+        case confirmed
+        case ignored
+        case failed(String)
     }
 
-    // MARK: - Pre-start release (reopen bidding / worker self-release)
-
-    /// Outcome of a release action, carrying the server's own
-    /// confirmation copy so the toast matches what actually happened.
-    enum ReleaseOutcome: Sendable, Equatable {
-        case succeeded(message: String)
-        case failed(message: String)
-    }
-
-    /// Poster's "Replace worker" — `POST /reopen-bidding`. Unassigns the
-    /// current worker, cancels the pre-capture payment hold, rejects
-    /// their accepted bid, and moves the gig back to `open`
-    /// (`backend/routes/gigs.js:4874`). Refreshes on success so the
-    /// lifecycle footer re-renders in the open/bidding state.
+    /// Confirm the loaded work only while its original account and screen remain current.
     @discardableResult
-    func replaceWorker() async -> ReleaseOutcome {
-        guard canReplaceWorker else {
-            return .failed(message: "This task can't be reopened for bids right now.")
+    func confirmCompletion() async -> ConfirmationResult {
+        guard canConfirmCompletion, writeIdentityIsCurrent, completionAttempt == nil,
+              let review = rawGig?.completionReview, !review.isEmpty else { return .ignored }
+        let attempt = UUID()
+        completionAttempt = attempt
+        func current() -> Bool {
+            completionAttempt == attempt && writeIdentityIsCurrent && !Task.isCancelled
+                && viewerIsOwner && rawGig?.id == gigId && rawGig?.completionReview == review
         }
+        defer { if completionAttempt == attempt { completionAttempt = nil } }
         do {
-            let response: ReopenBiddingResponse = try await api.request(
-                GigReassignmentEndpoints.reopenBidding(gigId: gigId)
+            let response: GigDetailResponse = try await api.request(
+                GigsEndpoints.completeGigAsPoster(gigId: gigId, expectedReview: review)
             )
+            guard current() else { return .ignored }
+            guard response.gig.id == gigId, response.gig.status == "completed",
+                  response.gig.ownerConfirmedAt.flatMap(GigAssignedAuthorizationProgress.date) != nil
+            else { return .failed("Confirmation receipt unavailable. Reopen the task to check its current state.") }
             await refreshSilently()
-            return .succeeded(message: response.message ?? "Worker removed and bidding reopened")
+            return current() ? .confirmed : .ignored
         } catch {
-            return .failed(
-                message: (error as? APIError)?.errorDescription ?? "Failed to replace worker"
-            )
-        }
-    }
-
-    /// Assigned worker's "Can't make it" — `POST /worker-release`.
-    /// Unassigns the viewer, releases the payment hold, reopens the task
-    /// for bids, and notifies the poster (`backend/routes/gigs.js:5954`).
-    @discardableResult
-    func releaseAssignment(note: String? = nil) async -> ReleaseOutcome {
-        guard canReleaseAssignment else {
-            return .failed(message: "You can't release this task right now.")
-        }
-        do {
-            let response: WorkerReleaseResponse = try await api.request(
-                GigReassignmentEndpoints.workerRelease(gigId: gigId, note: note)
-            )
-            await refreshSilently()
-            return .succeeded(message: response.message ?? "You have been released from this task")
-        } catch {
-            return .failed(
-                message: (error as? APIError)?.errorDescription ?? "Failed to release from task"
-            )
+            guard current() else { return .ignored }
+            return .failed((error as? APIError)?.errorDescription ?? "Couldn't confirm completion.")
         }
     }
 
@@ -1724,23 +2038,6 @@ public extension GigDetailViewModel {
             return (true, response.message ?? "Reported. We'll take a look.")
         } catch {
             return (false, (error as? APIError)?.errorDescription ?? "Couldn't report this task.")
-        }
-    }
-
-    /// Fetch the zone / fee preview shown in the cancel sheet.
-    func loadCancellationPreview() async -> GigCancellationPreview? {
-        try? await api.request(GigsEndpoints.cancellationPreview(gigId: gigId))
-    }
-
-    /// Cancel the gig with a structured reason.
-    @discardableResult
-    func cancelTask(reason: CancelGigReason?) async -> String? {
-        do {
-            _ = try await api.request(GigsEndpoints.cancelGig(gigId: gigId, reason: reason), as: EmptyResponse.self)
-            await refreshSilently()
-            return nil
-        } catch {
-            return (error as? APIError)?.errorDescription ?? "Couldn't cancel the task."
         }
     }
 
@@ -1842,7 +2139,8 @@ public extension GigDetailViewModel {
             createdAt: bid.createdAt,
             bidder: bid.bidder,
             counterAmount: clearCounter ? nil : (counterAmount ?? bid.counterAmount),
-            counterStatus: clearCounter ? nil : (counterAmount != nil ? "pending" : bid.counterStatus)
+            counterStatus: clearCounter ? nil : (counterAmount != nil ? "pending" : bid.counterStatus),
+            gigId: bid.gigId
         )
     }
 }

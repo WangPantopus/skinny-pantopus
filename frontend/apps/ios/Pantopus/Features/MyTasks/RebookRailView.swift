@@ -31,19 +31,38 @@ public final class RebookRailViewModel {
         case unavailable
     }
 
-    public private(set) var state: State = .loading
+    private var storedState: State = .loading
+    public private(set) var state: State {
+        get { canDisplay ? storedState : .unavailable }
+        set { storedState = newValue }
+    }
 
     private let api: APIClient
+    private let openingIdentity: GigStopViewModel.Identity?
     private var loadedOnce = false
+    private var screenActive = true
+    private var screenGeneration = 0
+    private var loadGeneration = 0
 
     init(api: APIClient = .shared) {
         self.api = api
+        openingIdentity = GigStopViewModel.currentIdentity(api: api)
     }
 
-    /// `true` only when the server actually returned rebookable tasks.
+    public var isCurrentAccount: Bool {
+        openingIdentity != nil && GigStopViewModel.currentIdentity(api: api) == openingIdentity
+    }
+
+    private var canDisplay: Bool {
+        screenActive && isCurrentAccount
+    }
+
+    private func isCurrent(_ generation: Int) -> Bool {
+        generation == screenGeneration && canDisplay && !Task.isCancelled
+    }
+
     public var isVisible: Bool {
-        if case let .loaded(items) = state { return !items.isEmpty }
-        return false
+        !items.isEmpty
     }
 
     public var items: [RebookableGigDTO] {
@@ -51,18 +70,44 @@ public final class RebookRailViewModel {
         return []
     }
 
+    public func retire() {
+        screenActive = false
+        screenGeneration += 1
+        loadGeneration += 1
+        loadedOnce = false
+        storedState = .unavailable
+    }
+
     public func load() async {
+        guard isCurrentAccount, !Task.isCancelled else { return }
+        screenActive = true
         guard !loadedOnce else { return }
         loadedOnce = true
         await refresh()
     }
 
     public func refresh() async {
+        guard canDisplay, !Task.isCancelled else { return }
+        loadGeneration += 1
+        let generation = loadGeneration
+        let screen = screenGeneration
         do {
             let response: RebookableGigsResponse = try await api.request(GigExtrasEndpoints.rebookable())
+            guard generation == loadGeneration, isCurrent(screen) else { return }
+            loadedOnce = true
             state = .loaded(response.rebookable)
         } catch {
+            guard generation == loadGeneration, isCurrent(screen) else { return }
+            loadedOnce = false
             state = .unavailable
+        }
+    }
+
+    func rebookAction(_ gig: RebookableGigDTO, onRebook: @escaping @MainActor (RebookableGigDTO) -> Void) -> @MainActor () -> Void {
+        let generation = screenGeneration
+        return { [weak self] in
+            guard let self, isCurrent(generation), items.contains(gig) else { return }
+            onRebook(gig)
         }
     }
 
@@ -143,6 +188,10 @@ public struct RebookRailView: View {
             }
         }
         .task { await viewModel.load() }
+        .onDisappear { viewModel.retire() }
+        .onChange(of: viewModel.isCurrentAccount) { _, current in
+            if !current { viewModel.retire() }
+        }
     }
 
     private var header: some View {
@@ -176,9 +225,7 @@ public struct RebookRailView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.Color.appTextMuted)
             }
-            Button {
-                onRebook(gig)
-            } label: {
+            Button(action: viewModel.rebookAction(gig, onRebook: onRebook)) {
                 HStack(spacing: 4) {
                     Icon(.arrowsRepeat, size: 13, strokeWidth: 2.2, color: Theme.Color.appTextInverse)
                     Text("Rebook")
