@@ -1130,6 +1130,21 @@ export async function shareGigStatus(
   return post<{ share_url: string; expires_at: string }>(`/api/gigs/${gigId}/share-status`);
 }
 
+/** Limited public payload for an existing bearer status link. */
+export interface SharedGigStatus {
+  title: string;
+  status: string;
+  helper_first_name: string | null;
+  helper_eta_minutes: number | null;
+  helper_location_updated_at: string | null;
+  updated_at: string;
+  expires_at: string;
+}
+
+export async function getSharedGigStatus(token: string, config?: ApiRequestConfig): Promise<SharedGigStatus> {
+  return get<SharedGigStatus>(`/api/gigs/status/${encodeURIComponent(token)}`, undefined, config);
+}
+
 /**
  * Update helper location for ETA tracking
  */

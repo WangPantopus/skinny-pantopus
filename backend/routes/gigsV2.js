@@ -242,95 +242,80 @@ router.post('/:gigId/instant-accept', verifyToken, async (req, res) => {
 // =====================================================================
 
 router.post('/:gigId/share-status', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { gigId } = req.params;
     const userId = req.user.id;
-
-    // Fetch gig
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, accepted_by')
+      .select('id, user_id, accepted_by, status_share_token, status_share_expires_at')
       .eq('id', gigId)
-      .single();
+      .maybeSingle();
 
-    if (gigErr || !gig) {
-      return res.status(404).json({ error: 'Gig not found' });
-    }
-
-    // Only poster or assigned helper can share status
+    if (gigErr) return res.status(503).json({ error: 'Task sharing is temporarily unavailable' });
+    if (!gig) return res.status(404).json({ error: 'Gig not found' });
     if (gig.user_id !== userId && gig.accepted_by !== userId) {
       return res.status(403).json({ error: 'Not authorised to share this task status' });
     }
 
-    // Generate token + expiry
     const token = crypto.randomBytes(16).toString('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h
-
-    const { error: updateErr } = await supabaseAdmin
-      .from('Gig')
-      .update({
-        status_share_token: token,
-        status_share_expires_at: expiresAt,
-      })
-      .eq('id', gigId);
-
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    let update = supabaseAdmin.from('Gig').update({ status_share_token: token, status_share_expires_at: expiresAt }).eq('id', gigId);
+    // A delayed command cannot replace another work relationship or newer link.
+    for (const field of ['user_id', 'accepted_by', 'status_share_token', 'status_share_expires_at']) {
+      update = gig[field] == null ? update.is(field, null) : update.eq(field, gig[field]);
+    }
+    const { data: saved, error: updateErr } = await update.select('status_share_token, status_share_expires_at').maybeSingle();
     if (updateErr) {
       logger.error('Failed to save share token', { gigId, error: updateErr.message });
       return res.status(500).json({ error: 'Failed to generate share link' });
     }
-
-    const baseUrl = process.env.APP_URL || 'https://pantopus.com';
-    return res.status(200).json({
-      share_url: `${baseUrl}/status/${token}`,
-      expires_at: expiresAt,
-    });
+    if (!saved) return res.status(409).json({ error: 'Task sharing changed. Reopen the task and try again.' });
+    if (saved.status_share_token !== token || Date.parse(saved.status_share_expires_at) !== Date.parse(expiresAt)) {
+      return res.status(503).json({ error: 'Share link could not be confirmed. Please retry.' });
+    }
+    const baseUrl = (process.env.APP_URL || 'https://pantopus.com').replace(/\/$/, '');
+    return res.status(200).json({ share_url: `${baseUrl}/status/${token}`, expires_at: saved.status_share_expires_at });
   } catch (err) {
-    logger.error('Share status error', { error: err.message, stack: err.stack });
+    logger.error('Share status error', { error: err.message });
     return res.status(500).json({ error: 'Failed to share status' });
   }
 });
 
-// =====================================================================
-//  GET /status/:token   (PUBLIC — no auth)
-// =====================================================================
-
+// Public bearer-link reader. Recheck the link after the helper lookup so a
+// revoked/expired link or replaced helper cannot use the opening snapshot.
 router.get('/status/:token', async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { token } = req.params;
+    if (!/^[a-f0-9]{32}$/.test(token)) return res.status(404).json({ error: 'Not found' });
+    const columns = 'id, title, status, helper_eta_minutes, helper_location_updated_at, updated_at, status_share_expires_at, accepted_by';
+    const { data: gig, error: gigErr } = await supabaseAdmin.from('Gig').select(columns).eq('status_share_token', token).maybeSingle();
+    if (gigErr) return res.status(503).json({ error: 'Status is temporarily unavailable' });
+    if (!gig) return res.status(404).json({ error: 'Not found' });
+    const live = value => Number.isFinite(Date.parse(value)) && Date.parse(value) > Date.now();
+    if (!live(gig.status_share_expires_at)) return res.status(404).json({ error: 'Status link expired' });
 
-    const { data: gig, error: gigErr } = await supabaseAdmin
-      .from('Gig')
-      .select('title, status, helper_eta_minutes, updated_at, status_share_expires_at, accepted_by')
-      .eq('status_share_token', token)
-      .single();
-
-    if (gigErr || !gig) {
-      return res.status(404).json({ error: 'Not found' });
-    }
-
-    // Check expiry
-    if (new Date(gig.status_share_expires_at) < new Date()) {
-      return res.status(404).json({ error: 'Status link expired' });
-    }
-
-    // Fetch helper first name only (sanitised)
     let helperFirstName = null;
     if (gig.accepted_by) {
-      const { data: helper } = await supabaseAdmin
-        .from('User')
-        .select('first_name')
-        .eq('id', gig.accepted_by)
-        .single();
+      const { data: helper, error: helperErr } = await supabaseAdmin.from('User').select('first_name').eq('id', gig.accepted_by).single();
+      if (helperErr) return res.status(503).json({ error: 'Status is temporarily unavailable' });
       helperFirstName = helper?.first_name || null;
     }
-
-    // Return sanitised response — NO PII, NO IDs, NO addresses, NO payment info
+    const { data: current, error: currentErr } = await supabaseAdmin.from('Gig').select(columns).eq('id', gig.id).eq('status_share_token', token).maybeSingle();
+    if (currentErr) return res.status(503).json({ error: 'Status is temporarily unavailable' });
+    if (!current || current.accepted_by !== gig.accepted_by || !live(current.status_share_expires_at)) {
+      return res.status(404).json({ error: 'Status link expired or unavailable' });
+    }
+    // Limited shared status: excludes IDs, addresses, exact coordinates and payment details.
     return res.status(200).json({
-      title: gig.title,
-      status: gig.status,
+      title: current.title,
+      status: current.status,
       helper_first_name: helperFirstName,
-      helper_eta_minutes: gig.helper_eta_minutes,
-      updated_at: gig.updated_at,
+      helper_eta_minutes: current.helper_eta_minutes,
+      helper_location_updated_at: current.helper_location_updated_at ?? null,
+      updated_at: current.updated_at,
+      expires_at: current.status_share_expires_at,
     });
   } catch (err) {
     logger.error('Public status lookup error', { error: err.message });

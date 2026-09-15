@@ -489,7 +489,7 @@ Late links cannot be copied after departure, session or work-relationship change
 missing/expired receipts fail, and only matching/current ETA events update the card.
 Existing styles are intact. See [ETA evidence](VERIFICATION_FIRST_2026-09-13.md#existing-eta-tracker-and-share-lifetime).
 Owned port3107/fixture/build are removed and original configs restored exactly.
-This and v2 checkpoint4611b261c are pushed at75ea51867; CI34985637885 is running.
+This and v2 checkpoint4611b261c are pushed at75ea51867; CI34985637885 passes all15 applicable jobs/one Seeder skip.
 
 **General task tracking privacy:**20 failing baseline checks reproduce raw share-token,
 helper-coordinate/ETA, cache and sharing-entry gaps. The existing serializer/list
@@ -501,14 +501,29 @@ reader remains available. The v2 sharing card is offered only to owner/worker.
 pass: six detail viewers, four lists, two active-status reads and two raw RLS denials,
 with unchanged stored Gig and exact fixture cleanup. No schema/native/layout change.
 See [tracking privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-general-task-response-tracking-privacy).
-The API18109 fixture is stopped. This local follow-up needs its own CI after the
-running75ea51867 checkpoint; preserve that run.
+The API18109 fixture is stopped. This2ef9772be follow-up is pushed on integration and
+will share canonical CI with the status-link checkpoint below. Prior75ea51867 CI is green.
 
-**Next:** finish the existing sharing endpoint's authority/expiry/retry behavior and
-its missing web destination. Current/master/history route inventory and local Chrome
-confirm `/status/:token` has no page (404); existing API and canonical Gig share/ETA
-columns already exist. Reuse those contracts. Also review share-token rotation at
-cutover and location/assignment changes; do not claim all tracking surfaces closed. Completion draft/restart
+**Status link endpoint/destination:** ten new baseline failures and seven actual local
+HTTP/SQL interleavings reproduce stale share writes and revoked/expired public reads.
+The existing POST now compares its observed owner/worker/link and requires a matching
+stored receipt. The existing public GET rechecks the link after helper lookup and
+returns a limited expiring payload with no-store headers. Read outages remain retryable.
+276 backend/212 web checks, types/lint/privacy and nine actual HTTP/SQL cases pass.
+Seven Chrome checks open actual generated links without an account, refresh, expire,
+rotate and retry them, and verify narrow/long-title layouts. The only new app file is
+`/status/[token]/page.tsx`, whose absence was confirmed by route/history inventory and
+actual404. It reuses current shared-page spacing, cards, status badges and error states;
+no existing screen is redesigned. See [status-link evidence](VERIFICATION_FIRST_2026-09-13.md#existing-status-links-authority-expiry-and-missing-destination).
+The owned API/Next servers and exact ab13 fixtures are cleaned, original configs are
+restored and compiled entries retained. This and2ef9772be need their combined CI.
+
+**Next:** verify live Gig socket audiences and current-helper location publishing.
+Existing gig:join accepts any authenticated gigId; reproduce private event exposure
+before changing it. Public detail rooms also serve legitimate task/bid updates, so
+preserve those uses while comparing existing authenticated socket delivery. Check
+location input, assignment/consent and delayed write behavior in the existing routes.
+No new schema is needed merely to add the already-existing tracking fields. Completion draft/restart
 continues after that boundary; content-addressed File upload recovery already exists
 and must be reused. There is no active web rebook/boost caller to rebuild.
 Full installed native MyTasks/owner lifetime remains open. Continue completion

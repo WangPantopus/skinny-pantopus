@@ -4214,3 +4214,63 @@ are synthetic. This does not close full installed UI, every tracking/socket surf
 share/location post-read authority, assignment changes, status destination or hosted
 cache/token reconciliation. PR34 remains draft; CI34985637885 covers preceding75ea51867,
 and this follow-up requires its own later CI.
+
+
+## Existing status links: authority, expiry and missing destination
+
+Ten baseline tests fail on the existing share/status routes: delayed owner/worker/
+deleted-task/newer-link changes still issue links; exact expiry and expiry/token/
+worker changes during helper lookup still disclose status; both responses lack
+no-store headers. Seven actual local HTTP/SQL interleavings independently reproduce
+the authority/rotation/deletion and in-flight read gaps, with exact ab13 cleanup.
+
+The existing share POST compares the observed owner, worker, token and expiry in its
+single UPDATE and returns success only for a matching saved token/expiry. Zero rows
+return409; unavailable reads remain retryable. The public GET validates the token,
+checks expiry strictly, and re-reads the same task/token after its helper lookup.
+Changed helper, revocation or expiry return404; data outages return503. Both responses
+are no-store. The limited public payload adds existing expiry/location-update times
+so a reader can retire expired content and avoid presenting an old ETA as current.
+No table, column, migration or replacement sharing service is introduced.
+
+Current/master/history route inventory and an actual Chrome404 confirmed the generated
+`/status/:token` destination was absent. The one new app file supplies that destination,
+using current public-page spacing, app colors/cards, shared status styles and existing
+EmptyState/ErrorState. The existing SDK gains its missing public-reader method and
+Next headers prevent caching, indexing and referrer forwarding from bearer-link pages.
+The reader needs no account, refreshes current status, stops at expiry, clears denied/
+failed content, and ignores late responses after token changes or departure. Its
+explicit expiry timer also retires a held refresh. Existing screens are unchanged.
+
+Final backend R3 passes276 checks/seven suites plus all privacy gates (including15
+audience-profile checks). Final web R4 passes212 checks/three suites; types and scoped
+lint pass with zero new warnings/errors. R1 types exposed a nondiscriminated view-state
+union; R2 lint required a const timer. Both were fixed without suppressions. The final
+CSS-only long-title wrapping refinement is covered by R2 Chrome, final types and R4
+web checks. Earlier failed/stopped commands are preserved.
+
+Actual final HTTP/SQL R2 passes nine cases: seven race denials and current owner/worker
+link creation/public reads, with exact expiry receipts, limited fields, no-store and
+old-link invalidation.81 fixture SQL calls plus two cleanup calls pass. The retained
+UI fixture repeats these checks around the browser journey (131 fixture SQL calls,
+two cleanup calls); two browser runs add six exact fixture updates to simulate status,
+expiry and long-title changes. Synthetic auth/business directory and a SQL transport
+adapter are used; actual HTTP handlers and PostgreSQL execute the operations.
+
+Chrome R2 passes seven checks: generated link without an account, actual SQL refresh,
+expired-link erasure, replacement-link invalidation, temporary503 retry to actual API,
+narrow layout and a long title within390px. Header checks confirm no-store/no-referrer/
+noindex, and the public page performs no profile lookup. One503 is substituted at the
+browser transport; the remaining reads and link generation reach actual local routes.
+R1's six checks also passed; R2 adds the long-title refinement. This is not hosted or
+full native/paid/provider acceptance. App screenshots and served entry chunks are retained.
+
+The exact ab13 rows and owned API18109/Next3107 servers are cleaned. Original tsconfig
+and generated next-env are restored. The first cache removal stopped at a final Next
+shutdown write; after confirming process/port exit, the exact owned cache was removed.
+Source hashes/copies, baselines, accepted results, UI screenshots and cleanup are under
+`existing-tip-provider-proof-r1/status-link-*` and the durable private mirror. Six app/
+test/config files change, of which only the missing page is new, plus three existing
+docs. Prior75ea51867 CI34985637885 passes all15 applicable jobs/one Seeder skip. This and
+2ef9772be require combined CI; PR34 remains draft. Live task-room audiences, location
+publisher authority/consent/input, assignment transitions and hosted cutover remain open.

@@ -158,9 +158,14 @@ and actual local HTTP/SQL: six detail viewers/four lists/two consent-disabled re
 two direct outsider RLS denials and unchanged stored Gig. Four existing source/test
 files repair the responses and sharing entry, with no schema/native/layout change.
 See [tracking privacy evidence](VERIFICATION_FIRST_2026-09-13.md#existing-general-task-response-tracking-privacy).
-The existing share destination still returns404 locally; complete that gap and the
-existing share/location mutation authority/expiry/retry boundaries, then draft/restart. Existing
-content-addressed File upload recovery is preserved. V2/ETA are pushed at75ea51867 with CI34985637885 running; tracking privacy needs later CI.
+The missing status destination now opens actual generated links in Chrome. The
+existing share/status endpoints reject stale writes and revoked/expired reads;
+276 backend/212 web checks and nine local HTTP/SQL cases pass, plus seven browser
+checks. One new page reuses existing UI styles; other changes are in existing files.
+See [status-link evidence](VERIFICATION_FIRST_2026-09-13.md#existing-status-links-authority-expiry-and-missing-destination).
+Next verify live task-room audiences and current-helper location publishing, then
+draft/restart. Public task updates must keep working while private ETA is restricted. Existing
+content-addressed File upload recovery is preserved. V2/ETA at75ea51867 pass CI34985637885 (15 successes/one skip); tracking privacy/status links need combined CI.
 No full inventory row is closed by these bounded checks.
 The preceding main-list change added one Android regression file to preserve the
 existing test-class size rule.

@@ -4,6 +4,7 @@ import * as api from '@pantopus/api';
 import type { GigStopPreview, GigStopProgress, GigStopRequest } from '@pantopus/api';
 import ClassicPage from '../src/app/(app)/app/gigs/[id]/page';
 import V2Page from '../src/app/(app)/app/gigs-v2/[id]/page';
+import SharedStatusPage from '../src/app/status/[token]/page';
 import GigStopRecoveryEntry from '../src/components/gig-detail/GigStopRecoveryEntry';
 import GigStopDialog from '../src/components/gig-detail/GigStopDialog';
 import { retainStopRequest, stopRecoveryKey } from '../src/components/gig-detail/gigStopRecovery';
@@ -17,16 +18,17 @@ let token: string | null = 'opening-session';
 let origin = 'https://app.test';
 const router = { push: jest.fn(), replace: jest.fn() };
 let mockRouteGigId = gigId;
+let mockSharedToken = 'abcdef1234567890abcdef1234567890';
 let mockDetailSocket: ReturnType<typeof detailSocket> | null = null;
-jest.mock('next/navigation', () => ({ useRouter: () => router, useParams: () => ({ id: mockRouteGigId }), useSearchParams: () => new URLSearchParams() }));
+jest.mock('next/navigation', () => ({ useRouter: () => router, useParams: () => ({ id: mockRouteGigId, token: mockSharedToken }), useSearchParams: () => new URLSearchParams() }));
 jest.mock('next/dynamic', () => () => () => null);
 jest.mock('next/image', () => () => null);
-jest.mock('@pantopus/ui-utils', () => ({ formatTimeAgo: () => 'today' }));
+jest.mock('@pantopus/ui-utils', () => ({ formatTimeAgo: () => 'today', GIG_STATUS_STYLES: {}, statusClasses: () => '', statusLabel: (_: unknown, status: string) => status }));
 jest.mock('@pantopus/api', () => ({
   getAuthToken: () => token, getApiBaseUrl: () => origin, AUTH_SESSION_CHANGE_KEY: 'session-change',
   onTokenChange: (fn: () => void) => { listeners.add(fn); return () => listeners.delete(fn); },
   users: { getMyProfile: jest.fn() },
-  gigs: { getGigById: jest.fn(), getGigStopPreview: jest.fn(), getGigStopRequest: jest.fn(),
+  gigs: { getSharedGigStatus: jest.fn(), getGigById: jest.fn(), getGigStopPreview: jest.fn(), getGigStopRequest: jest.fn(),
     submitGigStopRequest: jest.fn(), checkNoShow: jest.fn(), getGigOffersV2: jest.fn() },
   upload: { getGigMedia: jest.fn() }, payments: { getPaymentForGig: jest.fn() },
 }));
@@ -72,6 +74,7 @@ const done: GigStopProgress = { ...pending, status: 'completed', canRetry: false
     currency: 'usd', action: 'worker_release', gigStatus: 'open', financialStatus: 'none' } };
 
 beforeEach(() => {
+  mockSharedToken = 'abcdef1234567890abcdef1234567890'; jest.mocked(api.gigs.getSharedGigStatus).mockReset();
   jest.clearAllMocks(); jest.mocked(api.gigs.getGigById).mockReset(); mockDetailSocket = null; mockRouteGigId = gigId; localStorage.clear(); listeners.clear(); token = 'opening-session'; origin = 'https://app.test';
   jest.mocked(api.users.getMyProfile).mockResolvedValue({ id: worker } as never);
   jest.mocked(api.gigs.getGigById).mockResolvedValue({ id: gigId, user_id: owner, accepted_by: null,
@@ -428,4 +431,65 @@ test.each([owner, worker])('v2 detail preserves status sharing for current parti
   jest.mocked(api.gigs.getGigById).mockResolvedValue({ id: gigId, user_id: owner, accepted_by: worker,
     status: 'in_progress', title: 'Current task', price: 0 } as never);
   render(<V2Page />); await screen.findByText('Current task'); expect(screen.getByTestId('eta-tracker')).toBeInTheDocument();
+});
+
+
+const sharedStatus = () => ({ title: 'Synthetic shared task', status: 'in_progress', helper_first_name: 'Sam', helper_eta_minutes: 8,
+  helper_location_updated_at: new Date().toISOString(), updated_at: new Date().toISOString(), expires_at: new Date(Date.now() + 60000).toISOString() });
+
+test('the existing status-link destination opens without an account and renders only the limited receipt', async () => {
+  token = null; jest.mocked(api.gigs.getSharedGigStatus).mockResolvedValue(sharedStatus()); render(<SharedStatusPage />);
+  await screen.findByRole('heading', { name: 'Synthetic shared task' }); expect(screen.getByText('Helper: Sam')).toBeInTheDocument();
+  expect(screen.getByText('Helper ETA: ~8 min')).toBeInTheDocument(); expect(api.gigs.getSharedGigStatus).toHaveBeenCalledWith(mockSharedToken, expect.objectContaining({ signal: expect.any(Object) }));
+  expect(api.users.getMyProfile).not.toHaveBeenCalled(); expect(router.push).not.toHaveBeenCalled();
+});
+
+test('an invalid status token does not request a resource', () => {
+  mockSharedToken = '../private'; render(<SharedStatusPage />); expect(screen.getByText('Status link unavailable')).toBeInTheDocument();
+  expect(api.gigs.getSharedGigStatus).not.toHaveBeenCalled();
+});
+
+test('an unavailable status link reveals no task content', async () => {
+  jest.mocked(api.gigs.getSharedGigStatus).mockRejectedValue({ statusCode: 404 }); render(<SharedStatusPage />);
+  await screen.findByText('Status link unavailable'); expect(screen.queryByText('Synthetic shared task')).not.toBeInTheDocument();
+});
+
+test('a malformed shared receipt keeps the existing failure and retry controls', async () => {
+  jest.mocked(api.gigs.getSharedGigStatus).mockResolvedValueOnce({} as never).mockResolvedValue(sharedStatus()); render(<SharedStatusPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Try Again' }));
+  await screen.findByRole('heading', { name: 'Synthetic shared task' }); expect(api.gigs.getSharedGigStatus).toHaveBeenCalledTimes(2);
+});
+
+test('a late old status link response cannot overwrite the new token view', async () => {
+  let release!: (value: ReturnType<typeof sharedStatus>) => void;
+  jest.mocked(api.gigs.getSharedGigStatus).mockReturnValueOnce(new Promise(resolve => { release = resolve; })).mockResolvedValue({ ...sharedStatus(), title: 'Current shared task' });
+  const page = render(<SharedStatusPage />); await waitFor(() => expect(api.gigs.getSharedGigStatus).toHaveBeenCalledTimes(1));
+  mockSharedToken = '1234567890abcdef1234567890abcdef'; page.rerender(<SharedStatusPage />); await screen.findByText('Current shared task');
+  await act(async () => release(sharedStatus())); expect(screen.queryByText('Synthetic shared task')).not.toBeInTheDocument();
+});
+
+test('switching status tokens immediately removes the previously loaded task', async () => {
+  jest.mocked(api.gigs.getSharedGigStatus).mockResolvedValueOnce(sharedStatus()).mockReturnValue(new Promise(() => {}));
+  const page = render(<SharedStatusPage />); await screen.findByText('Synthetic shared task');
+  mockSharedToken = '1234567890abcdef1234567890abcdef'; page.rerender(<SharedStatusPage />);
+  expect(screen.queryByText('Synthetic shared task')).not.toBeInTheDocument(); expect(screen.getByRole('status')).toHaveTextContent('Loading task status');
+});
+
+test('shared status expiry clears a loaded task and ignores a held refresh', async () => {
+  jest.useFakeTimers({ now: new Date('2026-09-15T12:00:00Z') });
+  const data = { ...sharedStatus(), expires_at: new Date(Date.now() + 40000).toISOString() }; let release!: (value: typeof data) => void;
+  jest.mocked(api.gigs.getSharedGigStatus).mockResolvedValueOnce(data).mockReturnValue(new Promise(resolve => { release = resolve; }));
+  const page = render(<SharedStatusPage />);
+  try {
+    await act(async () => {}); expect(screen.getByText('Synthetic shared task')).toBeInTheDocument();
+    await act(async () => jest.advanceTimersByTime(30000)); expect(api.gigs.getSharedGigStatus).toHaveBeenCalledTimes(2);
+    await act(async () => jest.advanceTimersByTime(10001)); expect(screen.getByText('Status link unavailable')).toBeInTheDocument();
+    await act(async () => release(data)); expect(screen.queryByText('Synthetic shared task')).not.toBeInTheDocument();
+  } finally { page.unmount(); jest.useRealTimers(); }
+});
+
+test('the public status page does not present old helper location as a current ETA', async () => {
+  jest.mocked(api.gigs.getSharedGigStatus).mockResolvedValue({ ...sharedStatus(), helper_location_updated_at: '2000-01-01T00:00:00Z' }); render(<SharedStatusPage />);
+  await screen.findByText('Synthetic shared task'); expect(screen.queryByText('Helper ETA: ~8 min')).not.toBeInTheDocument();
+  expect(screen.getByText('Waiting for a current location update')).toBeInTheDocument();
 });
