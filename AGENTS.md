@@ -14,17 +14,23 @@ database archives and operator logs out of Git and chat.
 
 The user's September 13 direction supersedes older buildout instructions:
 
-- Preserve working implementations and existing screen designs, layouts,
-  styling and navigation patterns. Do not redesign screens during bug fixes.
+- Preserve working implementations and existing iOS, Android and web screen
+  designs, layouts, styling and navigation patterns. Verification and functional
+  repairs do not authorize redesigning mobile screens or changing their appearance.
 - Before an application change, locate the existing screen, caller, endpoint,
   service and database contract. Record a reproduced failure or a concrete
   unmet requirement, then make the smallest repair in that implementation.
 - An open acceptance row, a stale report or a new filename is not proof that
   a feature is missing. Reuse accepted evidence when its relevant source,
   configuration and behavior remain unchanged.
-- Before adding a table, migration, service or screen, compare existing and
-  archived implementations and other open branches. Explain why extension
-  cannot meet the requirement. Do not rewrite applied migration history.
+- Before adding any application file, table, migration, service or screen,
+  compare existing and archived implementations and other open branches. Add or
+  replace implementation only for a verified gap or concrete defects that cannot
+  reasonably be repaired or extended in place. Record the evidence and why reuse
+  is insufficient; age, style preferences or a general dislike of the code do not
+  justify rebuilding it. Necessary new regression-test files or forward migrations
+  must likewise explain why existing artifacts cannot safely serve the repair.
+  Do not rewrite applied migration history or add parallel tables for existing data.
 - Keep functional/privacy repairs separate from presentation changes. Preserve
   the existing visual treatment with safe data; do not restore private fields
   just to reproduce an old screenshot. Propose any unavoidable design change
@@ -34,6 +40,12 @@ The user's September 13 direction supersedes older buildout instructions:
   duplicate tracking systems. Reuse the existing acceptance and screen catalogs.
 - Run relevant regressions and required CI. Repeat accepted journeys or large
   suites only for changed behavior, a failure or a concrete unresolved risk.
+- Verify the existing end-to-end journey first. For a demonstrated failure,
+  repair it and rerun that journey plus affected regressions until the behavior
+  works within the recorded acceptance scope. Check the existing screen through
+  its real caller, API and persistence where relevant. Mocked checks or green CI
+  alone do not establish end-to-end success; report unavailable provider/device
+  boundaries as unverified and continue independent work without claiming closure.
 
 See [the reconciliation](docs/VERIFICATION_FIRST_2026-09-13.md) for current
 PR dispositions, paused drafts, inventory sources and the next bounded task.

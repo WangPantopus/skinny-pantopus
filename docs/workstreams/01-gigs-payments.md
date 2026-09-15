@@ -3,6 +3,10 @@
 Updated September 15, 2026. Owner: primary coordinator (`/root`).
 State: discovery complete; next baseline verification is queued.
 
+Apply the user's clarified [working agreement](README.md#working-agreement):
+preserve iOS/Android/web designs, verify existing journeys first, repair and retest
+failures, and justify any new file or database structure before adding it.
+
 ## Scope and source
 
 - Inventory: P01–P10. First milestone: P04, existing

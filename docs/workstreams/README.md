@@ -59,6 +59,15 @@ of treating a stale local copy as the live folder.
 
 ## Working agreement
 
+The user's clarified priority is accuracy and efficient reuse. All three streams
+must preserve mobile (iOS/Android) and web screen designs, layouts and appearance.
+Verify existing journeys before application edits; repair demonstrated failures
+and repeat the affected end-to-end checks until they pass within an explicit scope.
+Use the new-file/database comparison rule in [AGENTS.md](../../AGENTS.md): missing
+evidence or disliked code is not permission to rebuild. Document why existing work
+cannot meet the requirement before adding or replacing implementation. Preserve
+accepted evidence and clearly label any unverified runtime/provider boundaries.
+
 1. Select one bounded milestone from an existing inventory row. Locate its screen,
    caller, endpoint, service and database contract. Read relevant accepted evidence
    and compare source/configuration before choosing verification to repeat.

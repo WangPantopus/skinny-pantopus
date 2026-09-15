@@ -16,6 +16,12 @@ Each stream writes its own status; the primary coordinator also owns Stream 1 an
 integrates shared handoff/backlog updates. Existing reports and the 80-row inventory
 remain authoritative; no replacement task tracker or app infrastructure is added.
 
+The user reaffirmed that iOS/Android screen designs must remain unchanged and
+existing end-to-end behavior must be verified before repairs. The shared AGENTS
+and workstream guide now explicitly require repair/retest evidence and a concrete
+reuse comparison before any new application file or database structure. This
+instruction clarification adds no application changes or acceptance evidence.
+
 - Stream 1, gigs/payments: P04 Start Work recovery and assignment lifetime, using
   the existing paid integration checkout and accepted web evidence.
 - Stream 2, Home/household: M02 existing browser guest-pass issue/view/revoke,

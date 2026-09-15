@@ -3,6 +3,12 @@
 Updated September 15, 2026. Owner: accounts/social stream (`/root/accounts_social`).
 State: discovery complete; next baseline verification is queued.
 
+Acknowledged the clarified [working agreement](README.md#working-agreement) and
+[reuse rules](../../AGENTS.md#verify-existing-work-before-changing-it): preserve
+iOS/Android/web appearance, verify existing journeys, repair proven failures in
+place and retest; justify any new/replacement artifact, reuse accepted evidence,
+and label unverified provider/device boundaries.
+
 ## Scope and source
 
 - Inventory: N01–N05 and A01–A05. First milestone: N04, existing personal profile

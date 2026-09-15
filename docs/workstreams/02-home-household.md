@@ -3,6 +3,12 @@
 Updated September 15, 2026. Owner: Home stream (`/root/home_household`).
 State: discovery complete; baseline verification is queued.
 
+Acknowledged the clarified [working agreement](README.md#working-agreement) and
+[verification-first rules](../../AGENTS.md): preserve iOS/Android/web appearance,
+verify existing journeys, repair demonstrated failures in place and retest them.
+Reuse accepted evidence; justify any new file/schema or replacement through the
+required comparison, and label unverified provider/device boundaries explicitly.
+
 ## Scope and source
 
 - Inventory: H/R/I/D/F/M Home and household rows. Accepted work stays accepted;
