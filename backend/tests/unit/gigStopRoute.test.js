@@ -87,3 +87,55 @@ test('exact DELETE command shares pending close recovery without a parallel row 
   expect(response.status).toBe(202); expect(response.body.receipt).toBeNull(); expect(getTable('Gig')).toHaveLength(1);
   expect(stop.execute).toHaveBeenCalledWith(expect.objectContaining({ gigId: gig, action: 'close', requestId: operation }));
 });
+
+
+describe('no-show report admission matches the existing timing preview', () => {
+  const now = Date.parse('2026-09-14T18:00:00Z');
+  const base = { id: gig, user_id: payer, accepted_by: worker, status: 'assigned', price: 100,
+    accepted_at: new Date(now - 60_000).toISOString(), scheduled_start: new Date(now + 60_000).toISOString() };
+  beforeEach(() => { jest.spyOn(Date, 'now').mockReturnValue(now); });
+  afterEach(() => { jest.spyOn(Date, 'now').mockRestore(); });
+  test.each([
+    ['poster before the scheduled start', payer, {}],
+    ['worker before 24 hours', worker, {}],
+    ['work already in progress', payer, { status: 'in_progress', started_at: new Date(now - 60_000).toISOString() }],
+    ['poster exactly at the 30-minute boundary', payer, { scheduled_start: new Date(now - 30 * 60_000).toISOString() }],
+    ['worker exactly at the 24-hour boundary', worker, { accepted_at: new Date(now - 24 * 60 * 60_000).toISOString() }],
+    ['invalid scheduled time', payer, { scheduled_start: 'invalid' }],
+    ['invalid acceptance time', worker, { accepted_at: 'invalid' }],
+    ['no assigned worker', payer, { accepted_by: null, scheduled_start: new Date(now - 60 * 60_000).toISOString() }],
+    ['same person on both sides', payer, { accepted_by: payer, scheduled_start: new Date(now - 60 * 60_000).toISOString() }],
+    ['recorded start with stale assigned status', payer, { started_at: new Date(now - 60_000).toISOString(), scheduled_start: new Date(now - 60 * 60_000).toISOString() }],
+  ])('%s cannot bypass the read-only eligibility check', async (_, actor, changes) => {
+    seedTable('Gig', [{ ...base, ...changes }]);
+    const preview = await request(app).get(`/gigs/${gig}/no-show-check`).set('x-test-user-id', actor);
+    expect(preview.status).toBe(200); expect(preview.body.can_report).toBe(false);
+    const result = await request(app).post(`/gigs/${gig}/report-no-show`).set('x-test-user-id', actor).send({ description: 'Synthetic report' });
+    expect(result.status).toBe(409); expect(result.body.code).toBe('NO_SHOW_NOT_ELIGIBLE');
+    expect(getTable('GigIncident')).toHaveLength(0);
+    expect(getTable('Gig')[0]).toEqual({ ...base, ...changes });
+  });
+
+  test.each([
+    ['poster beyond the scheduled buffer', payer, { scheduled_start: new Date(now - 30 * 60_000 - 1).toISOString() }],
+    ['poster beyond the unscheduled acceptance buffer', payer, { scheduled_start: null, accepted_at: new Date(now - 150 * 60_000 - 1).toISOString() }],
+    ['worker beyond 24 hours', worker, { accepted_at: new Date(now - 24 * 60 * 60_000 - 1).toISOString() }],
+  ])('%s retains the existing eligible path', async (_, actor, changes) => {
+    seedTable('Gig', [{ ...base, ...changes }]);
+    const preview = await request(app).get(`/gigs/${gig}/no-show-check`).set('x-test-user-id', actor);
+    expect(preview.status).toBe(200); expect(preview.body.can_report).toBe(true);
+    const result = await request(app).post(`/gigs/${gig}/report-no-show`).set('x-test-user-id', actor).send({ description: 'Synthetic eligible report' });
+    expect(result.status).toBe(200);
+    expect(getTable('GigIncident')).toHaveLength(1);
+    expect(getTable('GigIncident')[0]).toMatchObject({ gig_id: gig, reported_by: actor, reported_against: actor === payer ? worker : payer });
+    expect(getTable('Gig')[0].status).toBe('cancelled');
+  });
+
+  test('an unrelated actor stays outside the reporting boundary', async () => {
+    const other = 'aac90000-0000-4000-8000-000000000003';
+    seedTable('Gig', [{ ...base, scheduled_start: new Date(now - 60 * 60_000).toISOString() }]);
+    const result = await request(app).post(`/gigs/${gig}/report-no-show`).set('x-test-user-id', other).send({});
+    expect(result.status).toBe(403); expect(getTable('GigIncident')).toHaveLength(0);
+    expect(getTable('Gig')[0].status).toBe('assigned');
+  });
+});

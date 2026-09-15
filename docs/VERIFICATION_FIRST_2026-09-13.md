@@ -2770,3 +2770,32 @@ Chrome process and tip fixture18109 are stopped. Exact SQL cleanup reports zero
 fixture auth/users/gigs/payments/notifications; products/device data are retained.
 PR34 stays draft; current-head CI, real-provider/push acceptance and the remaining
 paid/no-show/fee/dispute/inventory scopes remain open.
+
+
+## Existing no-show report admission
+
+September14: five route reproductions prove that the existing no-show preview
+returned `can_report:false` while a direct POST still cancelled an early or already
+started task. Both poster/worker exact waiting boundaries were bypassed. The
+existing preview calculation is now shared with POST and enforced before creating
+an incident, changing the task or issuing a notification. Existing30-minute
+scheduled-start,150-minute unscheduled-acceptance and24-hour worker waiting windows
+are preserved, including the strict boundary. Invalid timestamps, absent/same
+counterpart and recorded work start fail closed. No fee rate or allocation changes.
+
+Tests cover both rejection and retained eligible paths using the real Express
+router:54 tests across stop/payment/save-report suites pass. All privacy gates pass,
+including15 audience-profile checks. Nine actual HTTP requests against the same
+router and owned SQL reject before writes; exact Gig snapshots remain unchanged,
+with zero incidents, notifications or provider calls. The local adapter reads actual
+SQL; authentication is synthetic. Exact fixture cleanup passes. The initial local
+harness omitted the existing required Gig.description; R1 failed before a request
+and cleaned its actors, and corrected R2 passes. Source/fixture/run hashes and logs
+are retained privately as `no-show-admission-*` under `existing-tip-provider-proof-r1`.
+
+This changes only the existing gigs route and existing route test file. No table,
+migration, screen or layout is added. This is an admission repair, not acceptance
+of no-show execution: the old multi-write incident/cancellation/reliability path
+still needs concurrency, retry and exact financial receipts. The defined fee rates
+alone do not settle who owes/receives worker cancellation/no-show fees; a policy
+clarification is pending. Completion and other independent security checks continue.

@@ -26,7 +26,7 @@ matched master. No hosted deployment, migration adoption or provider activation 
 **Remaining open PR:** [PR34](https://github.com/WangPantopus/skinny-pantopus/pull/34)
 remains draft. Its isolated integration worktree is
 `/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`;
-the canonical PR branch is `codex/staging-paid-gig`, currently at `161aaf529`.
+the canonical PR branch is `codex/staging-paid-gig`, currently at installed-tip checkpoint `4c8f11114`.
 The integration branch includes installed iOS checkpoint `d6a0194ea` after
 cold-entry checkpoint `7791bb16f`, following legacy recovery
 `e700862f1` and coordinated Android `c6b1f830e`, iOS `b98cc283c`,
@@ -37,7 +37,7 @@ Current cold-entry `7791bb16f` [CI34920129205](https://github.com/WangPantopus/s
 passes all applicable jobs, including complete schema replay and native checks. The prior `14b8c3ae5` run was superseded/canceled by the new push.
 The durable-notice checkpoint `161aaf529` is now pushed to both branches and
 passes all15 applicable checks/one Seeder skip in [CI34922146452](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34922146452).
-The later installed UI source still needs its own complete current-head CI.
+Installed-tip checkpoint `4c8f11114` has [CI34924470956](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34924470956) in progress and still needs all current-head checks.
 Do not merge/deploy PR34 yet.
 
 **Current original-tip behavior:** the existing Payment.id and financial fields
@@ -161,10 +161,19 @@ now refreshes from the existing detail loader after a committed receipt;38 focus
 tests and static/build checks pass. Three existing Android files change; no new
 screen/table/migration. See [installed Android/web evidence](VERIFICATION_FIRST_2026-09-13.md#installed-android-and-web-historical-tip-recovery).
 
-**Next:** finish current-head CI and continue existing started-work/no-show/fee/
-completion and paid-gig policy flows. A new five-case route reproduction shows
-that no-show preview denies early/in-progress reports while POST still cancels;
-repair admission using the existing timing rules before accepting that workflow. Finish current-head CI
+**No-show admission:** five reproduced direct-report bypasses now use the same
+existing eligibility rules as the read-only preview. Early/boundary/in-progress,
+invalid timestamp, missing counterpart, self-report and recorded-start cases reject
+before incident/task changes.54 route tests, privacy gates (including15 audience
+checks) and nine actual local HTTP/SQL denials pass with unchanged rows/no notices/
+provider work and exact cleanup. Two existing backend files change, with no schema
+or screen change. See [admission evidence](VERIFICATION_FIRST_2026-09-13.md#existing-no-show-report-admission).
+
+**Next:** finish current-head CI and continue existing completion/reopen and paid
+policy flows. No-show execution still requires atomic concurrent/retry handling and
+verified fee/financial outcomes. The repo's fee rates do not specify who owes and
+receives worker cancellation/no-show fees; one policy clarification is pending.
+Continue independent completion/security verification while that remains pending. Finish current-head CI
 and real-provider acceptance before activation. The new iOS journey is not actual
 Stripe/push acceptance. Recheck existing implementations before each change.
 P01–P03/P07–P09, R05/R06 and the wider80-row inventory remain open within their

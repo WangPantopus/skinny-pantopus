@@ -6787,6 +6787,69 @@ router.delete('/:gigId/questions/:questionId', verifyToken, async (req, res) => 
 // NO-SHOW HANDLING
 // ================================
 
+// The report command must enforce the same waiting rules as its read-only preview.
+function noShowEligibility(gig, userId, now = Date.now()) {
+  const isPoster = String(gig.user_id) === String(userId);
+  const isWorker = gig.accepted_by && String(gig.accepted_by) === String(userId);
+
+  if (!isPoster && !isWorker) {
+    return { can_report: false, reason: 'Not involved' };
+  }
+
+  // Only for assigned or in_progress gigs
+  if (!['assigned', 'in_progress'].includes(gig.status)) {
+    return { can_report: false, reason: `Status is ${gig.status}` };
+  }
+
+  if (!gig.user_id || !gig.accepted_by || String(gig.user_id) === String(gig.accepted_by) || gig.started_at) {
+    return { can_report: false, reason: 'No grounds for no-show report' };
+  }
+
+  // Check if enough time has passed to suspect a no-show
+  const NO_SHOW_BUFFER_MS = 30 * 60 * 1000; // 30 min buffer after expected start
+
+  // Determine expected start time
+  let expectedStart = null;
+  if (gig.scheduled_start) {
+    const scheduled = new Date(gig.scheduled_start).getTime();
+    expectedStart = Number.isFinite(scheduled) ? scheduled : null;
+  } else if (gig.accepted_at) {
+    // If no scheduled start, assume they should start within 2 hours of acceptance
+    const accepted = new Date(gig.accepted_at).getTime();
+    expectedStart = Number.isFinite(accepted) ? accepted + 2 * 60 * 60 * 1000 : null;
+  }
+
+  // For poster: can report worker no-show after expected start + buffer
+  if (isPoster && gig.status === 'assigned' && expectedStart) {
+    const canReportAfter = expectedStart + NO_SHOW_BUFFER_MS;
+    return {
+      can_report: now > canReportAfter,
+      expected_start: expectedStart ? new Date(expectedStart).toISOString() : null,
+      can_report_after: new Date(canReportAfter).toISOString(),
+      minutes_overdue: now > canReportAfter ? Math.floor((now - canReportAfter) / 60000) : 0,
+      reason:
+        now > canReportAfter
+          ? 'Worker has not started after expected time'
+          : 'Too early to report',
+    };
+  }
+
+  // For worker: can report poster no-show if poster becomes unresponsive
+  // (e.g., after gig is assigned for 24+ hours with no communication)
+  if (isWorker && gig.status === 'assigned') {
+    const acceptedAt = gig.accepted_at ? new Date(gig.accepted_at).getTime() : now;
+    if (!Number.isFinite(acceptedAt)) return { can_report: false, reason: 'No valid acceptance time' };
+    const hoursOverdue = (now - acceptedAt) / (60 * 60 * 1000);
+    return {
+      can_report: hoursOverdue > 24,
+      hours_since_accept: Math.floor(hoursOverdue),
+      reason: hoursOverdue > 24 ? 'Poster unresponsive for 24+ hours' : 'Too early to report',
+    };
+  }
+
+  return { can_report: false, reason: 'No grounds for no-show report' };
+}
+
 /**
  * POST /api/gigs/:gigId/report-no-show
  * Report a no-show by the other party.
@@ -6823,6 +6886,11 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
       return res
         .status(400)
         .json({ error: `Cannot report no-show for a gig in "${gig.status}" status` });
+    }
+
+    const eligibility = noShowEligibility(gig, userId);
+    if (!eligibility.can_report) {
+      return res.status(409).json({ code: 'NO_SHOW_NOT_ELIGIBLE', error: eligibility.reason });
     }
 
     const incidentType = isPoster ? 'no_show_worker' : 'no_show_poster';
@@ -6958,59 +7026,7 @@ router.get('/:gigId/no-show-check', verifyToken, async (req, res) => {
 
     if (error || !gig) return res.status(404).json({ error: 'Gig not found' });
 
-    const isPoster = String(gig.user_id) === String(userId);
-    const isWorker = gig.accepted_by && String(gig.accepted_by) === String(userId);
-
-    if (!isPoster && !isWorker) {
-      return res.json({ can_report: false, reason: 'Not involved' });
-    }
-
-    // Only for assigned or in_progress gigs
-    if (!['assigned', 'in_progress'].includes(gig.status)) {
-      return res.json({ can_report: false, reason: `Status is ${gig.status}` });
-    }
-
-    // Check if enough time has passed to suspect a no-show
-    const NO_SHOW_BUFFER_MS = 30 * 60 * 1000; // 30 min buffer after expected start
-    const now = Date.now();
-
-    // Determine expected start time
-    let expectedStart = null;
-    if (gig.scheduled_start) {
-      expectedStart = new Date(gig.scheduled_start).getTime();
-    } else if (gig.accepted_at) {
-      // If no scheduled start, assume they should start within 2 hours of acceptance
-      expectedStart = new Date(gig.accepted_at).getTime() + 2 * 60 * 60 * 1000;
-    }
-
-    // For poster: can report worker no-show after expected start + buffer
-    if (isPoster && gig.status === 'assigned' && expectedStart) {
-      const canReportAfter = expectedStart + NO_SHOW_BUFFER_MS;
-      return res.json({
-        can_report: now > canReportAfter,
-        expected_start: expectedStart ? new Date(expectedStart).toISOString() : null,
-        can_report_after: new Date(canReportAfter).toISOString(),
-        minutes_overdue: now > canReportAfter ? Math.floor((now - canReportAfter) / 60000) : 0,
-        reason:
-          now > canReportAfter
-            ? 'Worker has not started after expected time'
-            : 'Too early to report',
-      });
-    }
-
-    // For worker: can report poster no-show if poster becomes unresponsive
-    // (e.g., after gig is assigned for 24+ hours with no communication)
-    if (isWorker && gig.status === 'assigned') {
-      const acceptedAt = gig.accepted_at ? new Date(gig.accepted_at).getTime() : now;
-      const hoursOverdue = (now - acceptedAt) / (60 * 60 * 1000);
-      return res.json({
-        can_report: hoursOverdue > 24,
-        hours_since_accept: Math.floor(hoursOverdue),
-        reason: hoursOverdue > 24 ? 'Poster unresponsive for 24+ hours' : 'Too early to report',
-      });
-    }
-
-    return res.json({ can_report: false, reason: 'No grounds for no-show report' });
+    return res.json(noShowEligibility(gig, userId));
   } catch (err) {
     logger.error('No-show check error', { error: err.message });
     res.status(500).json({ error: 'Failed to check no-show status' });
