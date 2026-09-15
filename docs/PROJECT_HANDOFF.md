@@ -1,13 +1,54 @@
 # Pantopus project handoff
 
-Updated September14,2026. The user resumed verification and development with full
+Updated September 15, 2026. The user resumed verification and development with full
 permission: inspect existing implementations, repair demonstrated bugs/security
 issues, preserve working behavior and screen designs, then cover the remaining
 features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered backlog;
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
-## Current state and next action
+## Current coordination and next action — September 15
+
+Shared instructions are published independently of application work through the
+documentation-only `codex/workstream-coordination` branch to master. Start at the
+[three-stream guide](workstreams/README.md). The live status folder is
+`/Users/yingpengwang/pantopus-coordination/docs/workstreams/`, in a neutral worktree.
+The earlier gigs-worktree status folder is retired after this transfer. Each agent
+writes only its own status file; the coordinator owns shared instructions, backlog
+updates and integration. This documentation change does not merge paid application
+changes, add migrations or change acceptance counts.
+
+- Stream 1: existing P04 Start Work recovery and assignment lifetime.
+- Stream 2: existing M02 browser guest-pass issue/view/revoke journey.
+- Stream 3: existing N04 personal block/unblock and direct-message admission.
+
+Discovery is complete; baseline verification is queued with no new runtime
+reservations. Preserve iOS/Android/web screen designs, verify existing behavior
+first, repair demonstrated failures and retest. Before adding or replacing files
+or database structures, document why existing/archived/open-branch work cannot
+reasonably be reused or extended. Reuse accepted evidence within its source limits.
+
+Master's application baseline is `e775af9ae`, after merged PR45's residency-letter
+expiry repair; its CI34886464860 passed 15 applicable jobs with one Seeder skip.
+The former expiry task and Git state below are historical. Home and Accounts
+streams start from this master baseline and receive the shared docs from master.
+
+Paid application source `c9cb69825` remains unmerged in draft PR34; its
+[CI34998717315](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34998717315)
+passed 15 applicable jobs with one Seeder skip. Integration `b4b783f8d` additionally
+records the physical iPhone refresh and original coordination setup. Its
+[source-specific handoff](https://github.com/WangPantopus/skinny-pantopus/blob/b4b783f8d42027e22c113a3cfd301f5eb7b4c54b/docs/PROJECT_HANDOFF.md)
+and [verification evidence](https://github.com/WangPantopus/skinny-pantopus/blob/b4b783f8d42027e22c113a3cfd301f5eb7b4c54b/docs/VERIFICATION_FIRST_2026-09-13.md)
+describe that candidate, not accepted master behavior. Newly opened PR47 also
+targets master from the paid integration branch and must remain separate from
+this documentation publication. User PR46 (`place-design`) remains separate.
+
+Next: integrate the shared documentation through its own reviewed, green PR,
+synchronize all three application branches with master, then acquire the needed
+runtime reservations for their bounded baselines. No hosted deployment, migration,
+provider activation or device change is part of this correction.
+
+## Historical state and next action — September 14
 
 **Master:** `f6dbbe2ebdc2d63405aaac4f23cd2759ca0852be`, after reviewed
 [PR43](https://github.com/WangPantopus/skinny-pantopus/pull/43) and
