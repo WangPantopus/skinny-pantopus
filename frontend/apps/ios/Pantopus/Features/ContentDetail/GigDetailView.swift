@@ -625,6 +625,7 @@ public struct GigDetailView: View {
         .padding(Spacing.s5)
         .frame(maxWidth: .infinity)
         .presentationDetents([.height(410)])
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("tip.amount")
         .task {
             await viewModel.prepareTip()

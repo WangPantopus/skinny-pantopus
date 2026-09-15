@@ -32,9 +32,9 @@ web `1b9ff598e` and backend `410ae2767`. It incorporates actual PR43/44/45 maste
 The preceding coordinated head `8203a3ea7db551cce24041815aa7cd4302a9502d` passes
 all15 applicable checks/one Seeder skip in [CI34907347192](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34907347192).
 Current cold-entry `7791bb16f` [CI34920129205](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34920129205)
-has passed backend, web, safeguards and complete schema replay; native jobs are
-still running. The prior `14b8c3ae5` run was superseded/canceled by the new push.
-The following durable-notice checkpoint requires its own current-head CI.
+passes all applicable jobs, including complete schema replay and native checks. The prior `14b8c3ae5` run was superseded/canceled by the new push.
+The durable-notice checkpoint `161aaf529` is now pushed to both branches and
+requires its own current-head CI. Installed tip UI verification is in progress.
 Do not merge/deploy PR34 yet.
 
 **Current original-tip behavior:** the existing Payment.id and financial fields
@@ -136,17 +136,30 @@ survive16 synthetic transport attempts including unknown delivery and lost final
 acknowledgement. Function lint:363 functions/108 bindings, zero errors/eight existing
 warnings. Actual push/provider and full installed tip acceptance remain open.
 
-**Next:** verify existing installed all-platform tip recovery/notification journeys,
-then remaining started-work/no-show/fee/completion and paid-gig policy flows. Finish
-current-head CI and real-provider acceptance before any activation. Legacy commands,
-cold discovery and durable delivery are locally verified; remaining acceptance
-limits are not a claim that the feature is missing. Recheck existing implementations before each change.
+**Installed iOS tip recovery:** one complete simulator journey now passes against
+actual tip HTTP routes, StripeService and owned SQL, with synthetic authentication/
+provider responses. The existing screen recovers the same$10 historical payment,
+retains it through restart, issues two check commands for that UUID, stores one
+capture receipt/notification and clears its recovery entry on the next restart.
+There are zero replacement intent creates. All679 installed app-bundle files match
+the tested build. The actual accessibility tree exposed inherited parent identifiers;
+three `children: .contain` modifiers repair the existing shell/dock/picker grouping
+without changing visuals. An existing payment UI test file carries the journey.
+Source-bound format/strict lint pass. See the [installed iOS evidence](VERIFICATION_FIRST_2026-09-13.md#installed-ios-historical-tip-recovery-and-accessibility).
+
+**Next:** run the existing Android and web tip controls against the owned18109
+HTTP/SQL fixture, preserving the accepted iOS/source evidence, then remaining
+started-work/no-show/fee/completion and paid-gig policy flows. Finish current-head CI
+and real-provider acceptance before activation. The new iOS journey is not actual
+Stripe/push acceptance. Recheck existing implementations before each change.
 P01–P03/P07–P09, R05/R06 and the wider80-row inventory remain open within their
 stated limits. After the paid scope, continue the remaining existing-feature
 inventory; preserve accepted subjourneys and screen designs.
 
-**Runtime/ownership:** owned Chrome tabs/servers, iOS simulator and Android AVD are
-stopped; their data and accepted products are retained. The Android verification
+**Runtime/ownership:** the owned iOS simulator is stopped after the passing journey.
+The isolated tip HTTP/SQL fixture18109 remains active for Android/web; the Android
+loopback APK build is in progress (one heavy native build). Chrome and the Android
+AVD are stopped. Their data and accepted products are retained. The Android verification
 used its private AVD home and created no global registration. Exact random tip
 storage-key cleanup passes. Direct PostgreSQL64522 and the owned Home rehearsal
 REST18089 remain reserved; inspect private leases before use. Owner checkout,

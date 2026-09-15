@@ -2681,3 +2681,48 @@ full installed tip/notification returns remain unverified. No hosted migration,
 deployment, provider activation or physical-phone operation ran. PR34, the paid
 scope, R05/R06 and the wider app remain incomplete. Next: existing installed tip
 recovery journeys, then remaining paid-policy/acceptance rows, reusing accepted work.
+
+
+## Installed iOS historical tip recovery and accessibility
+
+September14 after `161aaf529`: the existing installed detail screen and tip picker
+now pass a complete historical recovery journey through the actual API client,
+Express/Joi tip route, StripeService and owned local PostgreSQL. Authentication
+and provider responses are synthetic; there is no actual Stripe or push send.
+The fixture has an existing$10 payment and no current worker/owner confirmation.
+
+The screen exposes its old tip action, loads the original$10 with amount controls
+disabled, checks the original, restarts and restores that same amount/UUID, then
+checks a freshly supplied synthetic capture. SQL records exactly one success
+receipt and one Notification for the same Payment. Both HTTP commands use check
+and1000 cents; provider create count is zero. After another app restart the recovery
+entry is absent. The existing real Keychain store is used across these restarts.
+The actual installed app matches all679 files in the tested build bundle.
+
+This journey exposed an accessibility identifier defect: the parent shell
+identifier was inherited by its sole dock button, replacing the intended control
+identifier. The complete R4 hierarchy shows the visible Send a tip button identified
+as contentDetailShell. Three `accessibilityElement(children: .contain)` modifiers
+in the existing shared detail shell/dock and tip picker preserve their distinct
+controls. Layout, labels, styling and payment behavior are unchanged. The actual
+R5 picker screenshot retains the established sheet and frozen amount. No new screen,
+file, table or migration is added; one existing payment UI test file is extended.
+
+R5 passes one installed journey with zero failures/skips; build R7 succeeds and
+SwiftFormat/strict SwiftLint pass on all three source/test files. The private
+`installed-tip-ios-source-binding-r5.json` binds hashes and679-file product equality;
+`installed-tip-ios-state-r5.json`, `installed-tip-ios-summary-r5.json`, screenshot
+and result bundle preserve the observed HTTP/SQL/UI evidence. The helper's earlier
+XCTest initializer error (build R1/R2), expired-login/landing-page assumptions
+(UI R1/R2) and inaccessible identifier (UI R3/R4) remain failed attempts. R1–R3
+were stopped after known failures and have incomplete result bundles; R4 has a
+complete failing result and exported hierarchy. No failed run is counted as accepted.
+
+Cold-entry `7791bb16f` passed all15 applicable CI jobs/one Seeder skip in
+[CI34920129205](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34920129205).
+Delivery head `161aaf529` is pushed to the PR branch for its own CI; the new iOS
+accessibility/test checkpoint will also require current-head checks. The owned iOS
+simulator is shut down, preserving its data. The loopback18109 fixture remains
+reserved for Android/web; its current successful iOS state is archived before reuse.
+Actual provider/push delivery, other installed tip cases, wider paid policies and
+all-app acceptance remain open. Next: Android/web existing tip journeys, then P04–P10.
