@@ -2,10 +2,11 @@
 
 Updated September 16, 2026. Owner: coordinator / Stream 1.
 State: ready for review — displayed-terms binding delivered at `a65411758` (backend +
-iOS/Android/web callers + SDK) and verified locally, over real HTTP/SQL and on the
-installed iOS candidate; heavy native build slot **released** at 10:50 PDT; owned simulator
-shut down; fixtures cleaned. Installed Android, real provider authorization and the wider
-P04 scope remain open.
+iOS/Android/web callers + SDK) and verified locally, over real HTTP/SQL, on the installed
+iOS candidate and now on the **installed Android candidate**; heavy native build slot
+**released** at 11:02 PDT; owned simulator and new owned emulator shut down; fixtures
+cleaned. Real provider authorization, the my-bids terms follow-up and the wider P04 scope
+remain open; PR47 CI on `a65411758` was still running at this update.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
@@ -54,21 +55,35 @@ P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
   notice**, screen stayed "Assigned"; reopen → screen shows the new assignment → Start →
   200, one notice, "In progress"; lost reply after commit → error path → retry with the
   same displayed terms → `reused: true`, same timestamp, one notice, "In progress".
+- **Installed Android candidate** (previously open): `app-debug.apk` from `a65411758` with the
+  API/socket URL pointed at the fixture runtime, on a **new owned AVD
+  `Pantopus_Stream1_Start_R2`** (pixel_5, android-34 google_apis arm64; the existing
+  acceptance AVD untouched), real Android sign-in UI backed by the synthetic login fixture,
+  existing GigDetail via `pantopus://gigs/<id>`, same real route/PostgREST/PostgreSQL runtime,
+  driven with adb: stale assignment re-stamped after the screen loaded → **409, row
+  assigned, no notice**, snackbar "The task changed before work could start. Refresh its
+  details." captured; reopen → Start → 200, one notice, "In progress"/"Mark as delivered";
+  invalid `{}` receipt after commit → the existing network-failure branch ("Received an
+  unexpected response.", Moshi cannot decode it as a detail response), screen stayed
+  Assigned, no refresh → retry `reused: true`, one notice; lost reply after commit → stayed
+  Assigned → retry `reused: true`; two taps 0.4 s apart under a 4 s held reply → exactly one
+  request, one transition, one notice.
 - **Limits:** synthetic identity, intercepted providers, free gig, older retained schema,
-  simulator; local web lint could not run in this worktree (symlinked node_modules farm) —
+  simulator/emulator rather than physical devices; local web lint could not run in this worktree (symlinked node_modules farm) —
   CI's web lint job is the gate for that; the web my-bids card still starts without terms
   because its list projection carries no assignment terms (separate bounded follow-up);
-  installed Android not run; P04 stays open.
+  P04 stays open (fee policies, provider authorization, P05–P10).
 - **Shared-file effects:** additive optional parameter on `@pantopus/api` `startGig`
   (Stream 1 scope per the guide); no peer paths touched.
 - **Cleanup:** runtime 18132 stopped, exact owned rows 0 by direct SQL (`f91504x0` prefixes),
-  simulator shut down, own Gradle daemon stopped, heavy slot released.
+  simulator shut down, owned emulator killed (AVD retained), own Gradle daemon stopped,
+  heavy slot released.
 - **Evidence:** `/private/tmp/pantopus-p04-start-20260916-r2` (`EVIDENCE.md` second section),
   mirrored to the owner's private `.pantopus-recovery/audits/20260916-p04-start-r2`.
 
-**Next bounded milestone (Stream 1):** installed Android Start Work journey on the rebuilt
-candidate (new owned emulator, existing acceptance AVD untouched), then the my-bids
-terms follow-up or P05/P06 policy verification per the backlog order.
+**Next bounded milestone (Stream 1):** the my-bids Start Work terms follow-up (list
+projection lacks assignment terms), then P05/P06 policy verification per the backlog order;
+PR47 stays draft until its CI on `a65411758` is green and the recorded gaps are reviewed.
 
 ## Milestone: iOS Start Work candidate verified locally and installed — September 16, 2026
 
