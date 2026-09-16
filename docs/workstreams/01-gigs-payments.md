@@ -4,12 +4,28 @@ Updated September 16, 2026. Owner: coordinator / Stream 1.
 State: ready for review — displayed-terms binding delivered at `a65411758` and the
 my-bids follow-up at `4ad88ec11` (backend projection guard + existing web card), both
 verified; heavy native build slot **released**; owned simulator and emulator shut down;
-fixtures cleaned. PR47 CI is green on `4ad88ec11` (15 applicable checks). Real provider
-authorization, fee policies and the wider P04 scope remain open; PR47 stays draft.
+fixtures cleaned. PR47 CI is green on `4ad88ec11` (15 applicable checks); master
+`c14657e35` is integrated as `6e106d9d0` with combined regressions green locally. Real
+provider authorization, fee policies and the wider P04 scope remain open; PR47 stays draft.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
 P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
+
+## Integration: current master merged into the paid branch — September 16, 2026
+
+- **Branch/commit:** `codex/paid-gig-integration` at **`6e106d9d0`**, a merge of master
+  `c14657e35` (Stream 2 PR53 `4cc9d3787`, Stream 3 PR51, docs PR52/54/55/56) with no
+  conflicts; 40 application/script files from the streams entered the paid branch. The
+  paid `emitPrivateGigUpdate` socket helper and export are preserved; Stream 3's `PT403`
+  admission mapping is present; migrations now number 75 (`20260916010000` added);
+  `sync-sql-contracts.cjs --check` verifies 66 pgTAP wrappers.
+- **Combined regressions on the merged tree:** backend Jest **340 suites / 6256 passed /
+  16 skipped** (Stream 3's chat-access suite now included); web
+  `assigned-gig-authorization`, `gig-acceptance-entrypoints`, `homeSharingLinks`,
+  `blockedUsersPage`, `publicProfileSafety` **153/153**; typecheck gate 0 errors. PR47 CI
+  on this head is the remaining gate (native jobs).
+- **No application edit** in this integration; PR47 stays draft.
 
 ## Follow-up: my-bids Start Work card bound to the terms it rendered — September 16, 2026
 
