@@ -25,12 +25,12 @@ failures, and justify any new file or database structure before adding it.
 - Web uses `frontend/apps/web/src/components/gig-detail/CompletionFlow.tsx` and
   `frontend/packages/api/src/endpoints/gigs.ts`; the latest repair already verifies
   matching receipts and current session/context. Reuse its 180 tests/seven Chrome
-  cases within the [recorded limits](../VERIFICATION_FIRST_2026-09-13.md#existing-web-start-work-control).
+  cases within the [recorded limits at the paid source](https://github.com/WangPantopus/skinny-pantopus/blob/b4b783f8d42027e22c113a3cfd301f5eb7b4c54b/docs/VERIFICATION_FIRST_2026-09-13.md#existing-web-start-work-control).
 - Existing native callers are iOS `Features/ContentDetail/GigDetailViewModel.swift`
   and Android `ui/screens/contentdetail/GigDetailViewModel.kt`, using their existing
   Gigs endpoints/repository. Their Start Work behavior still needs bounded proof.
 - Reuse earlier completion upload, original-payment, owner-capture and notification
-  evidence linked from the [project handoff](../PROJECT_HANDOFF.md).
+  evidence linked from the [paid source handoff](https://github.com/WangPantopus/skinny-pantopus/blob/b4b783f8d42027e22c113a3cfd301f5eb7b4c54b/docs/PROJECT_HANDOFF.md).
 
 ## Owned candidate files and boundaries
 

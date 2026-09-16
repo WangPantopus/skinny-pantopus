@@ -29,14 +29,21 @@ owner. U (UI/accessibility/lifetime) checks accompany each affected journey; G/O
 (integration, operations and launch) stay coordinated centrally with stream input.
 These categories assign responsibility, not permission to reopen accepted work.
 
-## Live location and Git branches
+## Shared publication, live location and Git branches
+
+Shared instructions and coordination snapshots belong on `master`, published
+through documentation-only PRs from `codex/workstream-coordination`. They do not
+depend on approval or integration of the gigs application branch. Each application
+stream receives those instructions by integrating current master into its branch.
 
 The live coordination folder on this Mac is:
-`/private/tmp/pantopus-paid-gig-integration/docs/workstreams/`.
+`/Users/yingpengwang/pantopus-coordination/docs/workstreams/`.
 All three agents read that exact directory, even while editing application code
 in another worktree. A copy in a different branch is a committed snapshot, not a
-live message channel. This path belongs to a Git worktree of the same repository;
-the owner's main checkout remains separate.
+live message channel. This is a neutral documentation worktree of the same
+repository, on `codex/workstream-coordination`; it is not a fourth application
+stream. The owner's main checkout remains separate. The previous live folder in
+the gigs worktree is retired after this transfer; do not update status there.
 
 | Stream | Application worktree | Branch / starting state |
 | --- | --- | --- |
@@ -53,7 +60,11 @@ stream just to obtain its status documents.
 
 Each agent writes only its own status file in the live folder. It commits code
 only from its own application worktree. The coordinator commits/pushes shared
-status snapshots after the author finishes an update; no blanket `git add .`.
+status snapshots from the neutral documentation worktree after the author finishes
+an update and publishes them through a separate PR to master; no blanket `git add .`.
+Before publishing, verify the diff contains only the intended instructions and
+status changes. Do not copy a feature branch's complete handoff or backlog over
+master: link branch-specific evidence and carry over only the relevant updates.
 Remote workers must send their source-bound handoff to the coordinator instead
 of treating a stale local copy as the live folder.
 
@@ -153,6 +164,8 @@ At setup, PR #34 is still draft at `c9cb69825` with
 passing 15 applicable jobs/one Seeder skip. Integration `3e93cd167` only adds the
 verified iPhone-install documentation. Green CI does not finish the paid scope.
 PR #46 (`place-design`) is a separate open user PR. Refresh live state before action.
+PR #47 (`codex/paid-gig-integration`) also contains unfinished gigs application
+changes. Neither paid PR is the vehicle for publishing the shared instructions.
 
 This setup creates no recurring background automation. Status files distinguish
 completed discovery from running verification; agent work is dispatched in bounded
