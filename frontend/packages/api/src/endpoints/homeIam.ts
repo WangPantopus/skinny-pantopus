@@ -78,7 +78,9 @@ export interface GuestPass {
   end_at: string | null;
   revoked_at: string | null;
   created_at: string;
-  status?: 'active' | 'expired' | 'revoked';
+  // mutate_home_external_share's list branch also returns 'reissue_required'
+  // (legacy unvalidated link) and 'scheduled' (start_at is still in the future).
+  status?: 'active' | 'expired' | 'revoked' | 'reissue_required' | 'scheduled';
   last_viewed_at?: string | null;
 }
 
