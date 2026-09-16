@@ -1,11 +1,63 @@
 # Stream 1 — Gigs and payments
 
-Updated September 15, 2026. Owner: coordinator / Stream 1.
-State: handoff — iOS WIP pushed; candidate validation and acceptance remain open.
+Updated September 16, 2026. Owner: coordinator / Stream 1.
+State: resumed — iOS lint repaired and the candidate validated on CI simulators;
+installed-device and provider acceptance remain open.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
 P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
+
+## Resumed from the cutoff — September 16, 2026
+
+The cutoff section below set the resume point: fix the trailing-closure lint, then
+validate the iOS candidate. Both are now done, and no heavy native slot was needed
+because CI had already exercised the candidate on simulators.
+
+- **Lint repaired**: `e531074e4` changes one line of
+  `GigDetailViewModelTests.swift` to the project's trailing-closure form. Verified
+  with the versions CI pins (SwiftLint 0.63.3, SwiftFormat 0.61.1):
+  `swiftlint lint --strict` reports 0 violations in 2245 files, `swiftformat --lint`
+  0 of 2248 files needing formatting, and `verify-icons` and `verify-overline` pass.
+  `ios / Lint (SwiftLint + SwiftFormat)` now passes on the current head.
+  No screen, layout, styling or navigation change.
+- **The iOS candidate is no longer unvalidated.** CI run 35054602607 on the WIP
+  `9af5dcf74` failed *only* the lint job and its aggregate; `ios / Build iOS test
+  bundles` and all three device jobs succeeded. The executed-test log for
+  `ios / Tests on iPhone 16` contains all six new cases —
+  `testStartRejectsMissingOrMismatchedSavedReceipt`, `testStartDebouncesPendingRequest`,
+  `testStartRetiresReplyAfterSessionReplacement`, `testStartRetiresReplyAfterDeparture`,
+  `testStartRetiresReplyAfterSameWorkerReassignment` and
+  `testStartDoesNotApplyRefreshAfterSessionReplacement` — on iPhone 16, 16 Pro and SE.
+  This supersedes the cutoff note that no candidate build or test had run. It is
+  **simulator** evidence from CI, not an installed-device journey.
+- **The `accepted_at` binding in `599de1586` was independently re-verified.** That
+  commit adds a timestamp equality predicate to `bindGigPaymentSnapshot`, which a
+  mocked suite cannot prove safe: a microsecond round trip through PostgREST and
+  supabase-js that truncated would break every real start, because the real
+  acceptance RPCs stamp `accepted_at` with PostgreSQL `now()`. Confirmed against
+  real PostgreSQL that a gig stamped `2026-09-16 13:39:21.846253+00` still starts
+  (200) and still recovers its saved start (200, `reused: true`), free and paid.
+  The helper has exactly two callers, both inside the start handler, so the wider
+  lifecycle is unaffected. Its preserved recovery-read 503 is a real improvement
+  over the inherited patch, which treated a failed recovery read as "no saved start".
+- **End-to-end re-run on the combined tree**: 28/28 checks over real HTTP through
+  the existing route against real PostgreSQL, free and paid. Backend Jest 6202
+  passed / 16 skipped / 0 failed. Fixtures removed exactly: 9 gigs, 13 users,
+  6 payments; 0 remaining; no schema, reset or migration.
+
+**Process finding — two writers shared one worktree.** While this task held
+`/private/tmp/pantopus-paid-gig-integration`, another Stream 1 session committed and
+pushed to the same branch, including a WIP commit that broke CI, and swept this
+task's uncommitted 409/503 repair into `599de1586`. The work itself is sound and is
+kept; the hazard is that neither writer could see the other's in-flight edits, and a
+"WIP" commit reached a shared branch. One writer per worktree, and no WIP commits on
+a branch with an open PR.
+
+**Still open, unchanged by this resumption**: an installed iOS and Android Start Work
+journey, real provider authorization, the stale-client assignment boundary before the
+server's first read, and the unspecified cancellation/no-show fee payer/recipient
+policy. P04 does not close.
 
 ## Immediate cutoff handoff — September 15/16, 2026
 
