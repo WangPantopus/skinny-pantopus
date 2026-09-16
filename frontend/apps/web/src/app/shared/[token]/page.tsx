@@ -8,6 +8,7 @@ import { useParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { SharedResourceView } from '@pantopus/api';
 import { shareFailure } from '@/components/home/share/shareFailure';
+import { sharedDocumentLabel } from '@/components/home/share/sharedDocumentLabel';
 
 // ============================================================
 // Shared Resource Page — /shared/:token
@@ -412,8 +413,8 @@ function DocumentView({ resource }: { resource: Record<string, any> }) {
       {resource.description && (
         <p className="text-sm text-app-text-secondary whitespace-pre-wrap">{resource.description}</p>
       )}
-      {resource.file_type && (
-        <div className="text-xs text-app-text-secondary">Type: {resource.file_type.toUpperCase()}</div>
+      {(resource.mime_type || resource.doc_type) && (
+        <div className="text-xs text-app-text-secondary">Type: {sharedDocumentLabel(resource)}</div>
       )}
       {resource.url && (
         <a
