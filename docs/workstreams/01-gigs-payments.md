@@ -1,23 +1,48 @@
 # Stream 1 — Gigs and payments
 
 Updated September 16, 2026. Owner: coordinator / Stream 1.
-State: ready for review — displayed-terms binding delivered at `a65411758` (backend +
-iOS/Android/web callers + SDK) and verified locally, over real HTTP/SQL, on the installed
-iOS candidate and now on the **installed Android candidate**; heavy native build slot
-**released** at 11:02 PDT; owned simulator and new owned emulator shut down; fixtures
-cleaned. Real provider authorization, the my-bids terms follow-up and the wider P04 scope
-remain open; PR47 CI on `a65411758` was still running at this update.
+State: ready for review — displayed-terms binding delivered at `a65411758` and the
+my-bids follow-up at `4ad88ec11` (backend projection guard + existing web card), both
+verified; heavy native build slot **released**; owned simulator and emulator shut down;
+fixtures cleaned. Real provider authorization, fee policies and the wider P04 scope remain
+open; PR47 CI on the latest head is the current gate.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
 P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
 
+## Follow-up: my-bids Start Work card bound to the terms it rendered — September 16, 2026
+
+- **Branch/commit:** `codex/paid-gig-integration` at **`4ad88ec11`**, pushed after the
+  `a65411758` CI run completed; its own CI was starting at this update (PR47).
+- **Changed paths:** `backend/routes/gigs.js` (existing `GET /my-bids` projection),
+  `backend/tests/unit/paidGigLifecycleRoute.test.js`,
+  `frontend/apps/web/src/app/(app)/app/my-bids/page.tsx`,
+  `frontend/apps/web/tests/gig-acceptance-entrypoints.test.tsx`. No screen, layout or schema
+  change; no new file.
+- **Concrete requirement:** the my-bids card is the second existing Start Work entry and
+  its list projection carried no assignment terms, so after `a65411758` it still started
+  without binding.
+- **Repair:** the projection now includes `accepted_by`, `accepted_at`, `payment_id`, with
+  `accepted_at`/`payment_id` exposed only to the bidder who is the assigned worker (other
+  bidders receive null); the existing card passes the rendered terms when present, keeps the
+  legacy call for an older backend, and on `409 ASSIGNMENT_CHANGED` shows the server
+  guidance and reloads the list.
+- **Evidence:** lifecycle suite 240/240 (new worker-vs-other-bidder projection case); full
+  backend Jest 6213 passed / 16 skipped; `gig-acceptance-entrypoints` 80/80 (two new cases);
+  typecheck gate 0. Rendered-test evidence only for this card; the real HTTP/SQL and installed
+  checks of the binding are the ones recorded for the detail entry.
+- **Cleanup/shared effects:** none (no runtime used); SDK unchanged.
+
 ## Milestone: Start Work bound to the displayed assignment terms — September 16, 2026
 
 - **Branch/commit:** `codex/paid-gig-integration` at **`a65411758`**, pushed to draft
-  [PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47); its CI was starting at this
-  update. Previous head `74c01bf49` had 14 applicable checks green with one Android job
-  still pending when superseded.
+  [PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47);
+  [CI 35130607463](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35130607463)
+  passed all 15 applicable checks (one Seeder path skip), including the three iOS device
+  jobs, Android lint/test/assemble and instrumented tests, and the database replay. The
+  previous head `74c01bf49` also passed all 15 applicable checks in
+  [CI 35126983681](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35126983681).
 - **Changed paths (all existing files except two small DTOs):** `backend/routes/gigs.js`
   (start handler + three helpers), `backend/tests/unit/paidGigLifecycleRoute.test.js`;
   `frontend/packages/api/src/endpoints/gigs.ts` (`startGig(gigId, expected?)`);
@@ -81,9 +106,11 @@ P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
 - **Evidence:** `/private/tmp/pantopus-p04-start-20260916-r2` (`EVIDENCE.md` second section),
   mirrored to the owner's private `.pantopus-recovery/audits/20260916-p04-start-r2`.
 
-**Next bounded milestone (Stream 1):** the my-bids Start Work terms follow-up (list
-projection lacks assignment terms), then P05/P06 policy verification per the backlog order;
-PR47 stays draft until its CI on `a65411758` is green and the recorded gaps are reviewed.
+**Next bounded milestone (Stream 1):** P04 policy verification (existing no-show,
+cancellation-fee and completion/reopen implementations) per the backlog order, starting
+with reproduction against the existing routes; the fee payer/recipient policy still needs
+the product decision recorded in the guide. PR47 stays draft until its CI on the latest
+head is green and the recorded gaps are reviewed.
 
 ## Milestone: iOS Start Work candidate verified locally and installed — September 16, 2026
 
