@@ -147,7 +147,7 @@ subjourney; the authentication change itself closes no additional acceptance row
 - [ ] N01 **Verify:** Close remaining release-build notification states across platforms: exact post/chat/task destinations, foreground/background/cold start, permission denial, login continuation, token changes, account switching and unread state. Preserve completed evidence rather than rerunning it blindly.
 - [ ] N02 **Verify:** Physical Android notification/device acceptance remains unverified; emulator delivery is not hardware acceptance. No physical Android is currently available in the recorded setup.
 - [ ] N03 **Verify:** Release-candidate Pulse and Beacon journeys must preserve address-free discovery, explicit following, eligible posting, conversation/reply return, mute/unfollow and private/public identity boundaries.
-- [ ] N04 **Verify:** Reporting, blocking, moderation and old/shared/deep-link access need a usable end-to-end safety workflow under the final release flags.
+- [ ] N04 **Verify:** Reporting, blocking, moderation and old/shared/deep-link access need a usable end-to-end safety workflow under the final release flags. Draft PR51 at `dfc860bfe` has bounded browser/HTTP/PostgreSQL and regression evidence; native lifetime, real socket/provider delivery and wider entry-point acceptance remain open. See the [source-bound review](VERIFICATION_FIRST_2026-09-13.md#existing-profile-safety-and-blocked-user-journeys); no row closure or merge approval.
 - [ ] N05 **Verify:** Any promised calendar/reminder delivery must arrive once, open the correct authorized destination and honor preferences; saved schedule data is separate evidence.
 
 ## 9. Accounts, providers and storage

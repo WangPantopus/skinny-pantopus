@@ -2009,3 +2009,95 @@ The preceding file-picker repair merged through
 all6 applicable checks/five path-based skips passed in
 [CI34885279768](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34885279768).
 Its source-specific component/browser limits continue to apply.
+
+
+## Existing profile safety and blocked-user journeys
+
+September15 coordinator review of Stream3 `dfc860bfe8025ed65e5b3f31781221ecfec15da9`,
+branch `codex/workstream-accounts-social`, based on master `0616d6e79`.
+[PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51) remains **draft and
+unmerged**; N04/Stream3 remain incomplete. The author owns
+[the live status](workstreams/03-accounts-social.md). This section integrates a
+bounded source/evidence review, not a new backlog or release approval.
+
+The existing profile/chat Block wrote UserBlock, while the existing Settings
+loaders did not expose those records for removal. The first candidate also
+misreported partial/unavailable lists as confirmed emptiness. Existing block
+queries failed open, direct business rooms checked only one other participant,
+and an invalidated in-flight query could publish/cache its earlier allow. New
+baseline regressions reproduced these failures before the repairs. A browser
+pass additionally reproduced a repeated current-profile read loop.
+
+The candidate extends existing native DTO/endpoints/repositories/view-models,
+web profile/Settings controls, blockService, chats/neighborMessages callers,
+direct-chat socket handler and existing chat-access/socket/model tests. Normal
+Jest discovery now includes the existing chat-access suite. Web reporting reuses
+ReportModal, the reportUser client and UserReport endpoint. Personal UserBlock,
+UserProfileBlock, PersonaBlock and Relationship contracts remain distinct; no
+schema/table/service or mobile screen/layout file is added. The paid branch's
+socket delta remains its separate private-gig helper/export, and the Stream3
+socket diff adds only the unavailable callback at direct-chat creation.
+
+The diff **does add** `frontend/packages/api/src/endpoints/blocks.ts` and two web
+regression files. The prior author’s blanket “no application file added” statement
+was inaccurate and is now corrected in the live status. Existing privacy/relationships
+SDK modules expose different contracts, while users.ts has no matching personal
+block methods. The new thin module exposes that existing HTTP contract through the established
+SDK namespace pattern; it is not a second blocking backend. All-ref file history
+shows it first appears in fc99. The author reports comparison with archived
+UserBlock/UserReport contracts and the open paid branch. The new web tests cover
+surfaces absent from prior Beacon/privacy-preview suites.
+
+Coordinator inspected these private artifacts under
+`/private/tmp/pantopus-stream3-20260915-r2`; no raw logs or fixture credentials are
+published:
+
+- `backend-final.log`:42 tests across chat access, socket session and neighbor
+  messages; `web-final.log`:10 rendered profile/blocked-page tests.
+- `android-partial-candidate.xml`:13 tests/zero failures;
+  `ios-partial-candidate.log`:13 model tests/zero failures. Android baseline
+  recorded two distinct failures with retries (six failed executions), not six
+  distinct defects. These tests mock/stub persistence and identity.
+- `verify-http.cjs`, `runtime.cjs`, `http-sql-results.json`:9/9 cases covering
+  owner list/removal isolation, bidirectional direct-create denial, duplicate
+  blocks, reverse block after unilateral unblock, warm-cache unblock/create/send
+  with a stored message, member/nonmember existing-room behavior, unavailable
+  block reads503 without intercepted effects, and saved report retry.
+- Author-reported browser journey uses the existing profile Report/Block and
+  Settings list/Unblock/retry controls. Captured report/unblock persistence files
+  support stored effects; the original browser interaction evidence remains in
+  the author's task transcript. The coordinator did not rerun the browser journey.
+
+The HTTP path uses actual routes, Supabase client, PostgREST and PostgreSQL, with
+**synthetic authentication**, the retained **older schema**, and **intercepted
+socket/provider attempts**. It does not test RLS/hosted authentication, real socket
+transport or provider delivery. A stored message is not a delivery result. The
+prior fc99 in-process/mocked journey and its failed post-unblock send retain their
+original limits; later evidence does not retroactively turn that run into success.
+
+[CI35051834828](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35051834828)
+on dfc860bfe has a confirmed Android ktlint failure in BlockedUsersViewModel.kt
+(indentation at line235); later Android lint/test/assemble gates did not execute.
+Other native jobs were still running at review. No green-current-head claim.
+Installed iOS verification is underway on the newly owned simulator
+`0AE16FA0-E244-414F-86C8-24893BDFD979`; a preview-auth launch returned401 and the
+author then reported installed normal sign-in → Settings list/Unblock with SQL
+removal, plus unavailable/Try again recovery. That narrow result uses a synthetic
+local sign-in response; the interaction evidence remains in the author’s task.
+It does not cover installed block creation, reporting/chat or session races.
+
+Outstanding coordinator findings: verify web profile changes during a pending
+Block confirmation/request (the old generation retires but pendingBlock may remain
+set), complete native account/departure/late rollback coverage, and repair CI.
+These are not replaced by the partial-list tests. Real socket/reconnect,
+block-versus-already-authorized-send concurrency, multi-process cache behavior,
+lost replies, other block/report entry points and moderation remain open. The
+cache revision guard is not a database transaction or distributed invalidation.
+
+Stream3 retains the exclusive heavy native slot, HTTP18130/web18131 and three
+exact f9150300 fixtures on SQL64522/API64521. Its first cleanup column mismatch
+rolled back; a later cleanup artifact reports zero between phases, then the
+native phase recreated three users. **Current fixtures are active.** The schema artifact confirms UserProfileBlock.user_id, matching the corrected
+cleanup script. Final cleanup remains to run after the active phase. No shared reset/schema/cache change or existing/
+physical-device install is granted. Stream1's separate f9150400 fixtures are
+already removed. No application branch is integrated by this documentation.

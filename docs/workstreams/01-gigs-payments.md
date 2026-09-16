@@ -1,7 +1,7 @@
 # Stream 1 — Gigs and payments
 
 Updated September 15, 2026. Owner: coordinator / Stream 1.
-State: CI — two bounded repairs pushed; native end-to-end acceptance remains open.
+State: verification — two bounded repairs and current-head CI pass; native acceptance remains open.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
@@ -98,7 +98,7 @@ failed attempt. Repository responses and identity are mocked in these JVM tests;
 - iOS invalid/late callbacks, both installed native journeys and real provider
   authorization remain open. Native JVM success and green CI are not end-to-end
   acceptance. Cancellation/no-show fee payer/recipient policy is still unspecified.
-- Next: finish current-head CI, then verify iOS and the installed Start Work
+- Next: verify iOS and the installed Start Work
   journeys, including the stale-client assignment boundary, before claiming
   native or P04 completion. No feature merge while scope
   is unfinished.
@@ -111,7 +111,8 @@ failed attempt. Repository responses and identity are mocked in these JVM tests;
   on `599de1586` was superseded and cancelled by the new push; its aggregate
   check reported failure on cancellation, so it is not a green result. Current combined
   [CI35049746982](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35049746982)
-  on `41c75d49a` is queued. Do not treat a prior source’s CI as final-head evidence.
+  on `41c75d49a` passes15 applicable checks/one Seeder skip. Do not treat a prior
+  source’s CI as final-head evidence.
 - PostgreSQL64522/API64521: only exact owned synthetic rows were written. Three
   users, one gig and its notifications are removed; final remaining count zero.
   The private HTTP listener is closed. No container/schema/database reset, cache
@@ -126,19 +127,20 @@ failed attempt. Repository responses and identity are mocked in these JVM tests;
   old revoke callbacks as **unreproduced leads** to verify before merge: existing
   content is not cleared on scope change, and a late revoke calls its captured
   old-Home loader. Stream2 owns that follow-up; no peer source was edited here.
-- Stream3 live handoff is republished at `fc99f8ee7`, correctly marked repair with
-  no real-persistence/installed acceptance and an introduced empty-list defect.
-  It owns `chats.js` block repairs and the bounded `backend/jest.config.js`
-  inclusion of the existing chat-access suite. On its resumed request, overlap
-  review found the paid socket delta is only `emitPrivateGigUpdate` and its export.
-  Stream3 is now sole writer for the block-service error/cache repair and affected
-  direct-chat socket handlers, preserving private-gig delivery, session revocation
-  and `connectedUsers`. Verify all block-service callers before changing errors.
-  Runtime grant: exact synthetic social fixtures on PostgreSQL64522/API64521,
-  private HTTP18130/web18131, no schema changes. REST18089 is not granted (retained
-  Home database resource and currently not listening). Stream3 owns the next
-  heavy native slot after announcing exact build/device targets and checking
-  leases; owner iPhone17 and existing acceptance devices remain protected.
+- Stream3 pushed `dfc860bfe` in draft PR51. Coordinator inspected source and
+  private test/persistence artifacts:42 backend,10 web,13 Android JVM,13 iOS model,
+  and9 HTTP/SQL cases pass within synthetic auth/older-schema/intercepted-delivery
+  limits. Its installed iOS phase is underway; no full native/N04 acceptance.
+  Android CI fails ktlint indentation before later Android gates. The new SDK
+  application file and an unreproduced profile-navigation callback lead were sent
+  back for author reconciliation. See the [shared review](../VERIFICATION_FIRST_2026-09-13.md#existing-profile-safety-and-blocked-user-journeys).
+  Stream3 remains sole writer for blockService, direct-chat socket handlers,
+  chats.js and bounded Jest inclusion; paid private-gig helper/export are separate.
+  Its exclusive native slot and isolated simulator `0AE16FA0-E244-414F-86C8-24893BDFD979`
+  remain reserved. HTTP18130/web18131 and three `f9150300` fixture users are active.
+  Earlier exact cleanup reports zero between phases; final cleanup is still owed.
+  No schema/reset/cache changes, REST18089 or existing/physical-device install are
+  granted. Preserve the owner iPhone17 and other acceptance devices.
 - Stream2's SDK guest-status type widening and Stream3's additive SDK exports
   conflict with no Stream1 change. Neither peer branch is approved for merge.
   Their uncommitted live status updates are preserved and not staged by this task.

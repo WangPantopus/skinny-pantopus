@@ -49,7 +49,7 @@ the gigs worktree is retired after this transfer; do not update status there.
 | --- | --- | --- |
 | 1 | `/private/tmp/pantopus-paid-gig-integration` | `codex/paid-gig-integration`; current source/CI in Stream1 status |
 | 2 | `/private/tmp/pantopus-workstream-home` | `codex/workstream-home`; candidate `70e079543` over master `711340225` |
-| 3 | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; candidate `fc99f8ee7` over master `711340225` |
+| 3 | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; candidate `dfc860bfe` over master `0616d6e79`, draft PR51 |
 
 Streams 2 and 3 compare relevant pending Stream 1 changes before editing shared
 code. They start from master because their first scoped implementations are
@@ -143,9 +143,9 @@ or elapsed time is not proof a resource is free.
 
 | Resource | Current reservation | Rule |
 | --- | --- | --- |
-| Local heavy native build | Stream3 owns the next slot; announce exact runtime before starting | Stream1 released its slot; one heavy native build at a time |
-| iOS/Android test devices | No new reservation | Preserve accepted device state; inspect existing leases |
-| Databases / fixture ports | Stream3: PostgreSQL64522 / API64521, exact social fixtures only; HTTP18130/web18131 | No schema/reset/container mutation; inspect source compatibility and leases, preserve all other fixtures; 18089 is not granted |
+| Local heavy native build | Stream3: Android JVM run finished; slot retained for iOS blocked-list/lifetime verification | Stream1 released its slot; one heavy native build at a time |
+| iOS/Android test devices | Stream3: isolated `Pantopus Stream3 Social R2`, iOS26.5, `0AE16FA0-E244-414F-86C8-24893BDFD979` | Preserve owner iPhone17 and all existing acceptance devices; no physical-device install granted |
+| Databases / fixture ports | Stream3: PostgreSQL64522 / API64521, three active social users under `f9150300`; HTTP18130/web18131 | Earlier exact cleanup reports zero between phases; current fixtures require final cleanup. No schema/reset/container mutation; preserve other fixtures; 18089 is not granted |
 | Existing SQL port 64522 and REST port 18089 | Retained prior rehearsal resources | Never assume available or change their schema from another stream |
 | Physical iPhone | Owner's installed build 3 | No test install or device mutation without a concrete authorized task |
 
