@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import * as api from '@pantopus/api';
 import QRCode from '../../ui/QRCode';
+import { failureMessage } from './shareFailure';
 
 /**
  * ScopedShareModal — reusable modal for sharing a single resource
@@ -64,7 +65,9 @@ export default function ScopedShareModal({
       });
       setToken(res.token);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create share link');
+      // This client rejects with a plain object, so `instanceof Error` would
+      // discard the share API's actual reason for the denial.
+      setError(failureMessage(err, 'Failed to create share link'));
     }
     setCreating(false);
   };

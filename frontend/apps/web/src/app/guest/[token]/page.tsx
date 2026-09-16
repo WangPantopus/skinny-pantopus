@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { LayoutDashboard } from 'lucide-react';
 import { useParams } from 'next/navigation';
@@ -14,6 +14,40 @@ import type { GuestPassView } from '@pantopus/api';
 
 type PageState = 'loading' | 'passcode' | 'expired' | 'revoked' | 'error' | 'success';
 
+// The share API returns a stable recovery code alongside its human copy. Read
+// that code first so a retired link is never described as a transient error and
+// a link that only needs reissuing is never reported as an admin revocation.
+function failureDetails(failure: unknown) {
+  const value = (failure && typeof failure === 'object'
+    ? failure as { code?: unknown; message?: unknown; data?: { code?: unknown; requiresPasscode?: unknown } }
+    : {});
+  const code = typeof value.code === 'string' ? value.code
+    : typeof value.data?.code === 'string' ? value.data.code : '';
+  const message = typeof value.message === 'string' ? value.message : '';
+  return { code, message, requiresPasscode: value.data?.requiresPasscode === true };
+}
+
+// Copy for every terminal/blocked read the share API can return. `retry` marks
+// the links that can still succeed later; the rest must not invite a retry.
+const FAILURE_SCREENS: Record<string, { state: PageState; title: string; body: string; retry?: boolean }> = {
+  SHARE_EXPIRED: { state: 'expired', title: 'Link Expired',
+    body: 'This guest access link has expired. Contact the home admin to request a new one.' },
+  SHARE_VIEW_LIMIT: { state: 'expired', title: 'View Limit Reached',
+    body: 'This guest access link has already been opened the maximum number of times. Contact the home admin to request a new one.' },
+  SHARE_NOT_STARTED: { state: 'expired', title: 'Not Active Yet',
+    body: 'This guest access link is not active yet. It will open once the start time the sender chose has arrived.', retry: true },
+  SHARE_REVOKED: { state: 'revoked', title: 'Access Revoked',
+    body: 'This guest access link is no longer active. It was revoked by the home admin.' },
+  SHARE_REISSUE_REQUIRED: { state: 'revoked', title: 'Link Needs Replacing',
+    body: 'This older guest access link is inactive. Ask the sender for a new link.' },
+  SHARE_NOT_FOUND: { state: 'error', title: 'Link Not Found',
+    body: 'We couldn\'t find this guest access link. Check that you opened the complete link the sender shared.' },
+  SHARE_DENIED: { state: 'revoked', title: 'Access Unavailable',
+    body: 'This guest access link is no longer available. Contact the home admin to request a new one.' },
+  SHARE_RESOURCE_DENIED: { state: 'revoked', title: 'Access Unavailable',
+    body: 'The shared content is no longer available. Contact the home admin to request a new one.' },
+};
+
 export default function GuestViewPage() {
   const params = useParams();
   const token = params.token as string;
@@ -21,57 +55,77 @@ export default function GuestViewPage() {
   const [state, setState] = useState<PageState>('loading');
   const [data, setData] = useState<GuestPassView | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [errorTitle, setErrorTitle] = useState('');
+  const [canRetry, setCanRetry] = useState(true);
   const [passcode, setPasscode] = useState('');
   const [passcodeError, setPasscodeError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // A superseded read must never replace the visitor's current screen.
+  const generation = useRef(0);
+
+  const applyFailure = useCallback((failure: unknown) => {
+    const details = failureDetails(failure);
+    if (details.requiresPasscode || details.code === 'SHARE_PASSCODE_REQUIRED'
+      || (!details.code && details.message.includes('passcode'))) {
+      setState('passcode');
+      return details;
+    }
+    const screen = FAILURE_SCREENS[details.code];
+    if (screen) {
+      setErrorTitle(screen.title);
+      setErrorMsg(screen.body);
+      setCanRetry(screen.retry === true);
+      setState(screen.state);
+      return details;
+    }
+    setErrorTitle('');
+    setErrorMsg(details.message || 'Something went wrong');
+    setCanRetry(true);
+    setState('error');
+    return details;
+  }, []);
 
   const loadPass = useCallback(async (code?: string) => {
+    const request = ++generation.current;
     try {
       const res = await api.homeGuest.viewGuestPass(token, code);
+      if (request !== generation.current) return;
       setData(res);
       setState('success');
     } catch (err: unknown) {
-      const error = err as { body?: { requiresPasscode?: boolean }; response?: unknown; message?: string };
-      const body = error?.body || error;
-      const msg = error?.message || '';
-
-      if ((body as { requiresPasscode?: boolean })?.requiresPasscode || msg.includes('passcode')) {
-        setState('passcode');
-      } else if (msg.includes('expired') || msg.includes('Expired')) {
-        setState('expired');
-      } else if (msg.includes('revoked') || msg.includes('Revoked') || msg.includes('inactive')) {
-        setState('revoked');
-      } else {
-        setState('error');
-        setErrorMsg(msg || 'Something went wrong');
-      }
+      if (request !== generation.current) return;
+      applyFailure(err);
     }
-  }, [token]);
+  }, [token, applyFailure]);
 
   useEffect(() => {
     loadPass();
+    return () => { generation.current++; };
   }, [loadPass]);
 
   const handlePasscodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!passcode.trim()) return;
+    if (!passcode.trim() || submitting) return;
+    const request = ++generation.current;
     setPasscodeError('');
     setSubmitting(true);
     try {
       const res = await api.homeGuest.viewGuestPass(token, passcode.trim());
+      if (request !== generation.current) return;
       setData(res);
       setState('success');
     } catch (err: unknown) {
-      const msg = (err as { message?: string })?.message || '';
-      if (msg.includes('passcode') || msg.includes('incorrect') || msg.includes('invalid')) {
+      if (request !== generation.current) return;
+      const details = failureDetails(err);
+      if (details.requiresPasscode || details.code === 'SHARE_PASSCODE_REQUIRED'
+        || (!details.code && details.message.includes('passcode'))) {
         setPasscodeError('Incorrect passcode. Please try again.');
-      } else if (msg.includes('expired')) {
-        setState('expired');
       } else {
-        setPasscodeError(msg || 'Failed to verify passcode');
+        applyFailure(err);
       }
+    } finally {
+      if (request === generation.current) setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   // ---- Loading state ----
@@ -105,7 +159,7 @@ export default function GuestViewPage() {
               placeholder="Enter passcode"
               autoFocus
               className="w-full rounded-xl border border-app-border px-4 py-3 text-center text-lg font-mono tracking-widest focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none"
-              maxLength={20}
+              maxLength={128}
             />
             {passcodeError && (
               <p className="text-xs text-red-600">{passcodeError}</p>
@@ -129,10 +183,18 @@ export default function GuestViewPage() {
       <PageShell>
         <div className="text-center py-16">
           <div className="text-5xl mb-4">⏰</div>
-          <h1 className="text-xl font-semibold text-app-text mb-1">Link Expired</h1>
+          <h1 className="text-xl font-semibold text-app-text mb-1">{errorTitle || 'Link Expired'}</h1>
           <p className="text-sm text-app-text-secondary mb-6 max-w-xs mx-auto">
-            This guest access link has expired. Contact the home admin to request a new one.
+            {errorMsg || 'This guest access link has expired. Contact the home admin to request a new one.'}
           </p>
+          {canRetry && (
+            <button
+              onClick={() => { setState('loading'); loadPass(); }}
+              className="mb-3 px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition"
+            >
+              Try Again
+            </button>
+          )}
           <a
             href="mailto:?"
             className="inline-flex items-center gap-2 px-4 py-2.5 border border-app-border rounded-xl text-sm font-medium text-app-text-strong hover:bg-app-hover transition"
@@ -153,9 +215,9 @@ export default function GuestViewPage() {
       <PageShell>
         <div className="text-center py-16">
           <div className="text-5xl mb-4">🔒</div>
-          <h1 className="text-xl font-semibold text-app-text mb-1">Access Revoked</h1>
+          <h1 className="text-xl font-semibold text-app-text mb-1">{errorTitle || 'Access Revoked'}</h1>
           <p className="text-sm text-app-text-secondary max-w-xs mx-auto">
-            This guest access link is no longer active. It was revoked by the home admin.
+            {errorMsg || 'This guest access link is no longer active. It was revoked by the home admin.'}
           </p>
         </div>
       </PageShell>
@@ -168,16 +230,18 @@ export default function GuestViewPage() {
       <PageShell>
         <div className="text-center py-16">
           <div className="text-5xl mb-4">😕</div>
-          <h1 className="text-xl font-semibold text-app-text mb-1">Something Went Wrong</h1>
+          <h1 className="text-xl font-semibold text-app-text mb-1">{errorTitle || 'Something Went Wrong'}</h1>
           <p className="text-sm text-app-text-secondary mb-6 max-w-xs mx-auto">
             {errorMsg || 'We couldn\'t load this guest access. The link may be invalid.'}
           </p>
-          <button
-            onClick={() => { setState('loading'); loadPass(); }}
-            className="px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition"
-          >
-            Try Again
-          </button>
+          {canRetry && (
+            <button
+              onClick={() => { setState('loading'); loadPass(); }}
+              className="px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition"
+            >
+              Try Again
+            </button>
+          )}
         </div>
       </PageShell>
     );
