@@ -15,7 +15,8 @@ failures, and justify any new file or database structure before adding it.
   cancellation-fee execution, completion/reopen policy, immutable displayed
   terms) is untouched and stays open.
 - Worktree: `/private/tmp/pantopus-paid-gig-integration`.
-- Branch: `codex/paid-gig-integration`; milestone commit `f437dfd20`, base `b4b783f8d`.
+- Branch: `codex/paid-gig-integration`; milestone commit `f437dfd20`, base `b4b783f8d`,
+  then master integration `959e147e6` (documentation resolution only, no application change).
 - Changed paths: `backend/routes/gigs.js`, `backend/tests/unit/paidGigLifecycleRoute.test.js`.
 - PR #47 carries this branch. PR #34 stays draft at `c9cb69825`; its remaining
   acceptance scope is unchanged by this milestone.
@@ -88,6 +89,10 @@ beside its accepted completion-recovery block, reusing its existing harness.
 - No installed iOS or Android build was run for this milestone. Native behavior
   is established by source reading plus the shared backend contract, not by a
   device journey.
+- The repository's own `tests/integration/gig-lifecycle.test.js` cannot run against
+  the replay database: its helper seeds `account_type: 'personal'`, which that
+  older schema rejects. The suite was not modified to fit a stale fixture; the one
+  auth row it leaked before failing was removed.
 - Green CI and the mocked suite alone do not close P04.
 
 ## Examined and deliberately not changed
@@ -112,14 +117,31 @@ Recorded so they are not re-derived, each without a reproduced failure:
 - Runtime: used the retained replay stack read/write for owned fixtures only.
   All fixture rows removed and verified: 6 gigs, 8 users, 4 payments; 0 remain.
   No schema, migration or reset. No heavy native build taken.
-- Shared-file effects: none. The change is confined to the gigs route and its
-  existing test file, both already Stream 1 scope.
+- Shared-file effects: none from the repair. The change is confined to the gigs
+  route and its existing test file, both already Stream 1 scope.
+- Integration performed: PR #47 was unmergeable against master, so GitHub could
+  build no merge ref and scheduled no CI at all for `f437dfd20`. The cause was this
+  branch carrying its own copies of the shared coordination documents that master
+  had received independently through PR #48. Merge `959e147e6` resolves those four
+  documentation conflicts only — the two shared coordination files take master's
+  published versions, the handoff and backlog keep both sides' distinct content —
+  and PR #47 is mergeable again with CI run 35046049526 scheduled. Feature branches
+  should stop carrying shared coordination documents; master owns them.
 - Blocker unchanged: the cancellation/no-show fee payer and recipient policy is
   still unspecified; it does not block this milestone.
 - Peer findings received: Stream 3 wrote its N04 "ready for review" handoff into
-  the retired `docs/workstreams/03-accounts-social.md` snapshot inside the
-  gigs worktree instead of this live folder. The content is preserved and not
-  committed to the gigs branch. Stream 3 should republish it here; the
-  coordinator will not overwrite another stream's live status file.
-- Next action: confirm current-head CI on PR #47, then take the 409 conflict
-  taxonomy item above as the next bounded milestone.
+  the retired `docs/workstreams/03-accounts-social.md` snapshot inside the gigs
+  worktree instead of this live folder. The content is preserved outside Git and
+  was not committed to the gigs branch; the snapshot was reverted so the master
+  integration could proceed. Stream 3 must republish that handoff here — the
+  coordinator will not write another stream's live status file. Its pushed work
+  on `codex/workstream-accounts-social` (`fc99f8ee7`) is unaffected.
+- Reviewed for conflict, no Stream 1 overlap: Stream 3's branch changes 14
+  frontend files only, no backend, schema or migration. It does touch the shared
+  SDK export barrel `frontend/packages/api/src/index.ts`, which the coordination
+  guide lists as cross-cutting and which needed a recorded assignment first. The
+  edit is two additive export lines and conflicts with nothing in Stream 1; the
+  assignment is recorded here retroactively rather than treated as a violation.
+  Stream 2 has pushed no work; `codex/workstream-home` is still at master.
+- Next action: confirm CI run 35046049526 on PR #47 head `959e147e6`, then take
+  the 409 conflict taxonomy item above as the next bounded milestone.
