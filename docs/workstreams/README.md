@@ -48,8 +48,8 @@ the gigs worktree is retired after this transfer; do not update status there.
 | Stream | Application worktree | Branch / starting state |
 | --- | --- | --- |
 | 1 | `/private/tmp/pantopus-paid-gig-integration` | `codex/paid-gig-integration`; current source/CI in Stream1 status |
-| 2 | `/private/tmp/pantopus-workstream-home` | `codex/workstream-home`; candidate `70e079543` over master `711340225` |
-| 3 | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; pushed `22adc7285`, draft PR51; later milestones await coordinator review |
+| 2 | `/private/tmp/pantopus-workstream-home` | `codex/workstream-home`; PR53 merged into master `4cc9d3787`; branch re-based on master |
+| 3 | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; PR51 merged into master `c14657e35`; integrate master before the next milestone |
 
 Streams 2 and 3 compare relevant pending Stream 1 changes before editing shared
 code. They start from master because their first scoped implementations are
@@ -139,7 +139,7 @@ These cross-cutting files/contracts require coordinator assignment for each edit
 | `backend/socket/chatSocketio.js` direct-chat admission/send checks | Stream 3 | Overlap reviewed: paid branch only adds `emitPrivateGigUpdate` plus its export; preserve that helper, `connectedUsers`, revocation and gig tracking behavior |
 | Start Work displayed-terms binding: `backend/routes/gigs.js` start handler, `frontend/packages/api/src/endpoints/gigs.ts` `startGig`, iOS `GigsEndpoints.startGig`/`GigDetailViewModel.startTask`, Android `GigDetailViewModel.startTask` and its repository call, web `CompletionFlow.handleStartWork` | Stream 1 (coordinator), sole writer | Delivered at `a65411758` (detail entry, all three clients + SDK) and `4ad88ec11` (my-bids card + list projection guard), draft PR47; verified locally, over real HTTP/SQL and on the installed iOS and Android candidates. Additive optional expected-assignment body; clients that send none keep current behavior. Streams 2/3 do not touch these paths |
 | Stream 2 PR for `70e079543..88d076e56` | Coordinator | **Merged** as `4cc9d3787` after coordinator source review and green CI (branch updated with master first). Streams integrate current master before further web share edits. Stream 2's SQL 64552 disposable project is reported stopped; its Emergency-page value finding is routed to Home ownership (Stream 2) as a separate bounded row |
-| Direct-message block admission implementation | Stream 3 | Pushed as `6055bc2b9` in draft PR51 (migration + contract + generated pgTAP test + chats.js PT403 mapping). Author reports one live PostgREST smoke check still owed before merge; coordinator review of the migration and mapping is pending; not merge approved |
+| Direct-message block admission implementation | Stream 3 | **Merged** as `c14657e35` (PR51 at `6e1758234`) after coordinator source review, the author's passing PostgREST smoke check and green CI on the master-updated head. N04/N05 rows remain open per Stream 3's status |
 | Cancellation/no-show fee payer and recipient | Product decision, recorded by Stream 1 | Still unspecified; independent Start Work verification can proceed |
 | User's Place redesign, PR #46 | User's separate scope | Preserved outside these verification milestones |
 
