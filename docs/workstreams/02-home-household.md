@@ -18,9 +18,21 @@ required comparison, and label unverified provider/device boundaries explicitly.
 - Milestone: M02, existing browser guest-pass lifecycle through the Home Share
   tab, issued link, public guest view and revocation, including passcode,
   start/end windows, view limits and stale-result retirement.
-- Worktree `/private/tmp/pantopus-workstream-home`, branch `codex/workstream-home`.
+- **Worktree/branch actually committed from — `/private/tmp/pantopus-workstream-home`,
+  branch `codex/workstream-home`.** This is the assigned Stream 2 worktree and the
+  guide's row is correct. The other path a session may report
+  (`.../estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380`, branch
+  `claude/pantopus-stream-2-home-3ef380`) is only the harness's isolated scratch
+  worktree that a remote session is launched into; it sits at master `711340225`
+  with a clean tree and **zero commits**, and no application code was written
+  there. The single file touched in it was its own untracked `.claude/launch.json`,
+  pointed at the app worktree so a local dev server could serve this branch's
+  code; it was restored both times. All application edits, both commits and the
+  push came from `/private/tmp/pantopus-workstream-home`.
 - Base master `711340225`; commits **`70e079543`** (browser repairs) and
-  **`88d076e56`** (real-SQL run + what it exposed), both pushed. No PR opened yet.
+  **`88d076e56`** (real-SQL run + what it exposed), both pushed. Coordinator
+  opened **draft PR #53** (`codex/workstream-home` → `master`) for CI and review;
+  content ownership stays with this stream and this is not merge approval.
 - No backend, service, schema or migration change. No native/mobile change.
 
 ## What the existing journey already did correctly
@@ -175,7 +187,16 @@ produces, which is what hid the dropped reason.
   invented values the guest page used, none of which `HomeEmergency.type` can
   hold. Not touched here (different screen, outside this slice); routing it to
   the coordinator rather than expanding scope.
-- **Next:** open the PR for `70e079543..88d076e56` on coordinator confirmation,
+- **PR #53 CI is green (run `35128148860`): 6 pass, 5 skip, 0 failures.** Passing:
+  CI OK, Detect changes, Deployment and migration safeguards, **Web (lint,
+  typecheck gate, Jest) 4m41s**, Web E2E (Identity Firewall) 2m8s, and
+  **database / Replay and lint the complete schema 2m2s**. Skipped with no
+  changed paths: backend, Backend Docker image, Seeder, android, ios — consistent
+  with this candidate touching no backend, schema or native code. The database
+  replay job passing is the independent check on the same 53-migration replay
+  this stream ran locally; this candidate adds no migration. No native build
+  requested, so the heavy slot stays free as far as this stream is concerned.
+- **Next:** PR #53 is green and awaiting coordinator review/merge disposition;
   then continue to the next M02 sub-slice (scoped `/shared/:token` grants, the
   shared-document receipt journey, or the alternate `/app/homes/[id]/share`
   entry).

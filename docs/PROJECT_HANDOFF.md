@@ -18,32 +18,35 @@ before editing or using resources. The only live coordination location is
 
 Master is **`82430954038ec6e74b72b54192aaad8117bcc363`** (documentation-only PR50).
 Paid worktree `/private/tmp/pantopus-paid-gig-integration` is clean and pushed at
-**`74c01bf49345b99489af1e8ff7a70c6f2bfd7bb1`** in draft
-[PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47), which now has a scope
-description; CI 35126983681 was still running when this was written. PR34 remains draft at
-`c9cb69825`; user PR46 stays separate. No application merged.
+**`a6541175814f8a4ef5aca38a8f8307141b508904`** in draft
+[PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47), which has a scope
+description; its CI was starting when this was written. PR34 remains draft at
+`c9cb69825`; user PR46 stays separate. No paid application merged.
 
 Stream 1 evidence today: the correction that repairs CI 35103180556's three iOS test
 failures; SwiftLint/SwiftFormat at the pinned versions; 59/59 `GigDetailViewModelTests` on
 the owned iOS 26.5 simulator; and installed candidate journeys through the real sign-in UI,
 the existing GigDetail screen, the real start route, PostgREST and PostgreSQL with synthetic
 identity and intercepted providers: invalid receipt, lost reply, retry recovery, ordinary
-start, double tap, and the stale-assignment-before-read boundary. That last journey shows the
-route starting a newer same-worker assignment the client never displayed while the candidate
-refuses to show success; it is now a reproduced open requirement (immutable displayed
-terms) and the next Stream 1 milestone is the additive displayed-terms binding recorded in
-the guide. Installed Android, real provider authorization and the wider P04/P08/P09 scope
+start, double tap, and the stale-assignment-before-read boundary. That last journey showed the
+route starting a newer same-worker assignment the client never displayed. The follow-up
+milestone `a65411758` binds Start Work to the displayed terms (optional expected fields on
+the existing route, passed by the existing iOS/Android/web callers) and is verified by
+backend/web/Android/iOS suites, a real HTTP/SQL harness and the installed iOS candidate,
+where the stale screen now gets 409 with no write or notice and a reopened screen starts
+normally. See the Stream 1 status for limits (my-bids card, installed Android). Installed Android, real provider authorization and the wider P04/P08/P09 scope
 remain open. Fixtures are cleaned to zero, HTTP18132 is stopped, the owned simulator is shut
 down and the heavy native slot is released.
 
-Coordinator dispositions: Stream 2's `70e079543..88d076e56` is in draft
-[PR53](https://github.com/WangPantopus/skinny-pantopus/pull/53) for CI and review (not merge
-approval); its self-declared disposable SQL project is reported stopped. Stream 3 draft
+Coordinator dispositions: Stream 2's `70e079543..88d076e56`
+([PR53](https://github.com/WangPantopus/skinny-pantopus/pull/53)) was source-reviewed with
+green CI and is being merged after a branch update with master; its disposable SQL project
+is reported stopped. Documentation PR52 merged as `949d4dbb1`. Stream 3 draft
 [PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51) at `22adc7285` has green CI
 and is not approved for merge; its later native-lifetime, N05 reminder and cross-room retry
-milestones still await full coordinator review, and it has begun the granted transactional
-block-admission migration in its own worktree (uncommitted at this update; isolated SQL64532
-only). Retained SQL64522 schema may not be changed. P04/P08/P09, M02, N04/N05, R05 and
+milestones still await full coordinator review, and its granted transactional block-admission
+migration is pushed as `6055bc2b9` (isolated SQL64532 only; one live PostgREST smoke check
+still owed; coordinator review pending). Retained SQL64522 schema may not be changed. P04/P08/P09, M02, N04/N05, R05 and
 launch remain open; inventory counts are unchanged. No hosted deployment, provider
 activation or physical-device change ran.
 
