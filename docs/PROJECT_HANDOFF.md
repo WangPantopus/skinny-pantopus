@@ -18,9 +18,11 @@ before editing or using resources. The only live coordination location is
 
 Master is **`c14657e35`** after Stream 2's PR53 (`4cc9d3787`), Stream 3's PR51 and the
 documentation PRs 52/54/55/56. Paid worktree `/private/tmp/pantopus-paid-gig-integration`
-is clean and pushed at **`6e106d9d0`** (master integrated over `4ad88ec11`) in draft
+is clean and pushed at **`3657af97d`** (master integrated as `6e106d9d0`, then the 21
+paid-only migrations renumbered after master's newest version because the migration
+policy failed on the integrated head) in draft
 [PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47); CI was green on
-`a65411758` and `4ad88ec11`, and the integrated head's run is the current gate. PR34
+`a65411758` and `4ad88ec11`, and the renumbered head's run is the current gate. PR34
 remains draft at `c9cb69825`; user PR46 stays separate. No paid application merged.
 
 Stream 1 evidence today: the correction that repairs CI 35103180556's three iOS test

@@ -5,8 +5,10 @@ State: ready for review — displayed-terms binding delivered at `a65411758` and
 my-bids follow-up at `4ad88ec11` (backend projection guard + existing web card), both
 verified; heavy native build slot **released**; owned simulator and emulator shut down;
 fixtures cleaned. PR47 CI is green on `4ad88ec11` (15 applicable checks); master
-`c14657e35` is integrated as `6e106d9d0` with combined regressions green locally. Real
-provider authorization, fee policies and the wider P04 scope remain open; PR47 stays draft.
+`c14657e35` is integrated as `6e106d9d0` with combined regressions green locally, and the
+paid-only migrations are renumbered after master's newest version at **`3657af97d`** (G03);
+that head's CI is the current gate. Real provider authorization, fee policies and the
+wider P04 scope remain open; PR47 stays draft.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
@@ -25,7 +27,21 @@ P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
   `assigned-gig-authorization`, `gig-acceptance-entrypoints`, `homeSharingLinks`,
   `blockedUsersPage`, `publicProfileSafety` **153/153**; typecheck gate 0 errors. PR47 CI
   on this head is the remaining gate (native jobs).
-- **No application edit** in this integration; PR47 stays draft.
+- **Migration order reconciled (G03, concrete):** CI 35141268492 on `6e106d9d0` failed
+  only "Protect migration history": the policy (`scripts/db/check-migrations.cjs`) requires
+  migrations new relative to the PR base to sort after the base's newest version, and
+  master now carries Stream 3's `20260916010000`, so all 21 paid-only migrations
+  (`20260914020100`..`20260915050000`) violated it. `3657af97d` moves them to
+  `20260916020100`..`20260916022100` with `git mv`, preserving order and bytes; no master
+  migration is touched and none of these versions was ever applied to a hosted
+  environment. The only non-doc reference (`backend/contracts/gig-tip-contract.md`) now
+  cites the new tip names; historical reports keep the old names as history. Verified:
+  policy check passes against the master base, `node --test` for scripts/deploy, scripts/db
+  and scripts/staging 72/72, 66 contract wrappers verify. The fresh-database replay on
+  this head is CI's remaining gate; the failed run is retained as failed. Draft PR34
+  (`codex/staging-paid-gig`) still carries the old version names and will need the same
+  reconciliation or closure as incorporated when its disposition is decided.
+- **No screen or application-behavior edit** in this integration; PR47 stays draft.
 
 ## Follow-up: my-bids Start Work card bound to the terms it rendered — September 16, 2026
 
