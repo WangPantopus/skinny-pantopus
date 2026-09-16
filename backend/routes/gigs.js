@@ -90,7 +90,10 @@ function stopCommand(routeAction = null) {
 function bindGigPaymentSnapshot(query, gig) {
   let scoped = query.eq('user_id', gig.user_id).eq('price', gig.price);
   scoped = gig.payment_id ? scoped.eq('payment_id', gig.payment_id) : scoped.is('payment_id', null);
-  return gig.accepted_by ? scoped.eq('accepted_by', gig.accepted_by) : scoped.is('accepted_by', null);
+  scoped = gig.accepted_by ? scoped.eq('accepted_by', gig.accepted_by) : scoped.is('accepted_by', null);
+  // A free task can return to the same worker with identical payment terms.
+  // Bind this assignment's timestamp as well as its worker and payment.
+  return gig.accepted_at ? scoped.eq('accepted_at', gig.accepted_at) : scoped.is('accepted_at', null);
 }
 
 function matchesWorkerStart(gig, userId) {
@@ -5180,7 +5183,7 @@ router.post('/:gigId/start', verifyToken, async (req, res) => {
 
     const { data: gig, error: gigError } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, status, accepted_by, title, payment_id, payment_status, price, scheduled_start, origin_home_id')
+      .select('id, user_id, status, accepted_by, accepted_at, title, payment_id, payment_status, price, scheduled_start, origin_home_id')
       .eq('id', gigId)
       .maybeSingle();
 
@@ -5195,14 +5198,15 @@ router.post('/:gigId/start', verifyToken, async (req, res) => {
     // Recover exactly the stored transition; never re-verify the provider or
     // repeat the owner notice for a start this worker already committed.
     const recoverSavedStart = async () => {
-      const { data: savedGig } = await bindGigPaymentSnapshot(
+      const { data: savedGig, error } = await bindGigPaymentSnapshot(
         supabaseAdmin.from('Gig').select('*').eq('id', gigId).eq('status', 'in_progress'), gig
       ).maybeSingle();
-      return savedGig && matchesWorkerStart(savedGig, userId) ? savedGig : null;
+      return { saved: savedGig && matchesWorkerStart(savedGig, userId) ? savedGig : null, error };
     };
 
     if (gig.status !== 'assigned') {
-      const saved = await recoverSavedStart();
+      const { saved, error } = await recoverSavedStart();
+      if (error) return res.status(503).json({ error: 'Unable to verify the current task' });
       if (saved) return res.json({ gig: saved, reused: true });
       return res
         .status(400)
@@ -5233,13 +5237,19 @@ router.post('/:gigId/start', verifyToken, async (req, res) => {
     if (updateError || !updatedGig) {
       // A concurrent duplicate commits once. Return that saved row instead of
       // reporting a failure for work the same worker has already started.
-      const saved = await recoverSavedStart();
+      const { saved, error } = await recoverSavedStart();
+      if (error) return res.status(503).json({ error: 'Unable to verify the current task' });
       if (saved) return res.json({ gig: saved, reused: true });
       logger.error('Error starting gig', { error: updateError?.message || 'Payment snapshot changed', gigId, userId });
       if (updateError?.code === '23514') {
         return res.status(409).json({ error: 'Payment authorization changed. Please check its status before starting.', code: 'payer_authorization_required' });
       }
-      return res.status(500).json({ error: 'Failed to start gig' });
+      // Separate an unavailable write, which stays retryable, from an assignment
+      // that changed before the conditional write could match it.
+      if (updateError && updateError.code !== 'PGRST116') {
+        return res.status(503).json({ error: 'Work could not be started. Please retry.' });
+      }
+      return res.status(409).json({ error: 'The task changed before work could start. Refresh its details.' });
     }
 
     // ─── Notify gig poster: worker started ───

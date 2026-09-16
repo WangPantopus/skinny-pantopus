@@ -256,7 +256,7 @@ describe('worker start recovers the saved transition', () => {
     expect(retry.body.reused).toBeUndefined();
   });
 
-  test.each(['user_id', 'payment_id', 'price'])('a concurrent result under another %s cannot be reused', async field => {
+  test.each(['user_id', 'payment_id', 'price', 'accepted_at'])('a concurrent result under another %s cannot be reused', async field => {
     assigned();
     const from = db.from.bind(db);
     jest.spyOn(db, 'from').mockImplementation(table => {
@@ -265,7 +265,7 @@ describe('worker start recovers the saved transition', () => {
         const update = query.update.bind(query);
         query.update = patch => {
           getTable('Gig')[0] = { ...getTable('Gig')[0], ...patch,
-            [field]: field === 'price' ? 99 : 'replacement' };
+            [field]: field === 'price' ? 99 : field === 'accepted_at' ? '2026-09-15T13:00:00Z' : 'replacement' };
           return update(patch);
         };
       }
@@ -287,6 +287,46 @@ describe('worker start recovers the saved transition', () => {
     expect(retry.body.gig.started_at).toBe(originalStart); expect(retry.body.gig.price).toBe(99);
   });
 
+  test.each(['user_id', 'payment_id', 'price', 'accepted_by', 'accepted_at'])('a start that loses to a changed %s reports a conflict, not a server fault', async field => {
+    assigned();
+    const from = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = from(table);
+      if (table === 'Gig') {
+        const update = query.update.bind(query);
+        query.update = patch => {
+          getTable('Gig')[0] = { ...getTable('Gig')[0],
+            [field]: field === 'price' ? 99 : field === 'accepted_at' ? '2026-09-15T13:00:00Z' : 'replacement' };
+          return update(patch);
+        };
+      }
+      return query;
+    });
+    const result = await start();
+    expect(result.status).toBe(409);
+    expect(getTable('Gig')[0].status).toBe('assigned');
+  });
+
+  test('an unavailable write stays retryable rather than reporting a server fault', async () => {
+    assigned();
+    const from = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = from(table);
+      if (table === 'Gig') {
+        const update = query.update.bind(query);
+        query.update = patch => {
+          const built = update(patch);
+          built.single = async () => ({ data: null, error: { code: '08006', message: 'connection failure' } });
+          return built;
+        };
+      }
+      return query;
+    });
+    const result = await start();
+    expect(result.status).toBe(503);
+    expect(getTable('Gig')[0].status).toBe('assigned');
+  });
+
   test('an unavailable read is not reported as a missing gig', async () => {
     assigned();
     const from = db.from.bind(db);
@@ -301,6 +341,38 @@ describe('worker start recovers the saved transition', () => {
     const result = await start();
     expect(result.status).toBe(503);
     expect(result.body.error).not.toMatch(/not found/i);
+  });
+
+  test.each(['saved', 'concurrent'])('an unavailable %s recovery read stays retryable', async state => {
+    assigned();
+    if (state === 'saved') expect((await start()).status).toBe(200);
+    const from = db.from.bind(db); let gigReads = 0;
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = from(table);
+      if (table === 'Gig') {
+        const maybeSingle = query.maybeSingle.bind(query);
+        query.maybeSingle = async () => ++gigReads > 1
+          ? { data: null, error: { code: '08006', message: 'connection failure' } }
+          : maybeSingle();
+        if (state === 'concurrent') {
+          const update = query.update.bind(query);
+          query.update = patch => {
+            getTable('Gig')[0] = { ...getTable('Gig')[0], ...patch };
+            return update(patch);
+          };
+        }
+      }
+      return query;
+    });
+    notifications.createBulkNotifications.mockClear();
+    const result = await start();
+    expect(result.status).toBe(503);
+    expect(result.body.reused).toBeUndefined();
+    expect(getTable('Gig')[0].status).toBe('in_progress');
+    expect(notifications.createBulkNotifications).not.toHaveBeenCalled();
+    jest.restoreAllMocks();
+    const retry = await start();
+    expect(retry.status).toBe(200); expect(retry.body.reused).toBe(true);
   });
 
   test('work already moved past start is not reported as a fresh start', async () => {
