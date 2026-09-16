@@ -1,206 +1,136 @@
 # Stream 1 — Gigs and payments
 
-Updated September 15, 2026. Owner: primary coordinator.
-State: verification — resumed P04 review; backend recovery is implemented, but
-native stale/invalid-result acceptance is still open.
+Updated September 15, 2026. Owner: coordinator / Stream 1.
+State: CI — two bounded repairs pushed; native end-to-end acceptance remains open.
 
-## Active coordinator checkpoint — September 15, resumed
+Preserve existing iOS, Android and web screen designs. Verify existing behavior,
+repair demonstrated failures in place, and retain the evidence limits below.
+P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
 
-- The user confirmed the previous Stream 1 writer has stopped; this task owns
-  the paid integration worktree. Preserve and verify its uncommitted 409/503
-  follow-up in `backend/routes/gigs.js` and its existing lifecycle test file.
-- Remote master is `711340225`; paid HEAD is `959e147e6`. PR34 remains draft;
-  PR47 remains unmerged. CI35046049526 is still running its Android build job;
-  all other completed applicable checks passed. PR49 is a green, documentation-only
-  candidate, pending correction of the evidence claims below before publication.
-- Prior native source reading is **not acceptance**: Android emits a success
-  toast without checking the receipt; iOS decodes `EmptyResponse` and returns
-  success even if its silent refresh fails. Late session/assignment replies and
-  duplicate pending actions require reproduced checks in the existing callers.
-  No screen/design change is authorized or planned.
-- Coordinator reserves only exact synthetic P04 fixtures on the existing local
-  replay PostgreSQL64522/API64521, plus a private ephemeral loopback HTTP listener.
-  No schema/reset/container/cache mutation. Other databases and devices are
-  untouched; no heavy native build is reserved yet. Private checkpoint and owned
-  fixture IDs: `/private/tmp/pantopus-p04-start-20260915-r1`.
-- Reviewed peers: Stream2 has pushed `70e079543` (browser slice, SQL boundary
-  simulated; broader M02 open). Stream3 republished its live handoff, now correctly
-  reporting N04 as repair with no real-persistence or installed-screen acceptance.
-  Neither branch is approved for merge. Stream3 owns `chats.js` block repairs and
-  the bounded `backend/jest.config.js` inclusion of the existing chat-access
-  regression suite; socket edits still require overlap review. Stream2's SDK
-  guest-status type widening and Stream3's additive SDK exports have no Stream1
-  conflict. Each stream remains the sole writer of its own live status file.
+## Source and ownership
 
-The earlier milestone record below is retained as historical evidence to audit;
-its test totals and runtime claims are not silently treated as freshly verified.
+- Application worktree: `/private/tmp/pantopus-paid-gig-integration`, branch
+  `codex/paid-gig-integration`. The user confirmed the previous writer stopped.
+- Backend milestone: **`599de1586`**, on prior integration `959e147e6`.
+  Changed only `backend/routes/gigs.js` and its existing
+  `backend/tests/unit/paidGigLifecycleRoute.test.js`.
+- Android milestone: **`9397e39a7`**, changing only the existing
+  `frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/contentdetail/GigDetailViewModel.kt`
+  and `frontend/apps/android/app/src/test/java/app/pantopus/android/ui/screens/contentdetail/GigDetailSaveViewModelTest.kt`.
+- Current pushed head: **`41c75d49a`**, integrating master `0616d6e79`. This merge
+  changes documentation snapshots only; the shared handoff/backlog take master’s
+  authoritative versions. Earlier paid history remains in Git and the linked
+  source-specific reports. Application bytes match `9397e39a7`.
+- PR34 remains draft at `c9cb69825`. PR47 is now also draft because it contains
+  unfinished paid scope. User PR46 remains separate. No paid feature was merged.
+- Shared documentation PR49 merged as **`0616d6e79`** after four applicable
+  checks passed/seven path skips. Its tree equals tested `3c4f1f721`; no application
+  changed. The neutral coordination branch is synchronized with that master.
 
-### Resumed backend result and next native baseline
+## Reproduced backend failures and repair
 
-The committed `959e147e6` route reproduced seven failures in twelve HTTP cases:
-three concurrent term changes returned 500, same-worker reassignment was started
-by the old request, write unavailability returned 500, saved recovery-read
-unavailability returned 400, and ambiguous commit/recovery returned 500. The
-inherited 409/503 patch fixed five; the remaining assignment/recovery-read defects
-were repaired in the existing route using `accepted_at` and the existing recovery
-query's error. No schema, RPC, service or application/test file was added.
+Actual HTTP → production route → real Supabase client → PostgREST → PostgreSQL
+reproduced seven failures against `959e147e6` before this repair:
 
-Final HTTP/PostgREST/PostgreSQL checks pass 12 cases plus exact cleanup (13/13);
-the existing lifecycle suite passes 229/229 and privacy gates pass. The HTTP
-fixture uses real production route/client/notification persistence with synthetic
-identity and transport faults; free gigs only, older replay schema, no provider,
-push/socket delivery or UI/device acceptance. Three owned users, one gig and its
-notices are deleted; exact remaining count is zero and the ephemeral listener is
-closed. Two preliminary harness attempts had overlapping owned fixtures and are
-retained as invalid attempts, not passing evidence. The final sequential runs
-are bound under the private checkpoint above. Earlier paid/web evidence retains
-its own limits; no inventory row closes.
+- Concurrent owner/worker/price replacement returned 500 instead of conflict.
+- A pending start started a newer assignment to the **same worker**, because
+  `accepted_at` was omitted from the existing conditional update.
+- An unavailable write returned 500 rather than a retryable unavailable response.
+- An unavailable saved-result read returned 400 for already-committed work.
+- A committed write with a lost reply and unavailable recovery returned 500.
 
-CI35046049526 on `959e147e6` finished successfully (15 applicable checks, one
-Seeder skip). The new repair needs its own CI after push. Next: reproduce native
-invalid-receipt, duplicate and late-response behavior in existing native test
-files, then the installed journey. Coordinator reserves the heavy local build
-slot for Stream1 Android tests only; no simulator/device installation yet.
+The inherited uncommitted 409/503 patch fixed five of these. Reused it, then bound
+both the conditional write and recovery read to existing `accepted_at`, and
+preserved the recovery read's error as 503. Reused the route's existing recovery
+helper and the existing lifecycle test harness. No table, migration, RPC, service,
+screen or test file was added. The older conclusion that same-worker free-task
+reassignment needed no repair is superseded by this reproduced race.
 
-Apply the user's clarified [working agreement](README.md#working-agreement):
-preserve iOS/Android/web designs, verify existing journeys first, repair and retest
-failures, and justify any new file or database structure before adding it.
+Final evidence: **12 HTTP cases plus exact cleanup pass (13/13)**, **229 lifecycle
+regressions pass**, and backend privacy gates pass. Lost-reply retries keep the
+saved timestamp; two concurrent HTTP starts produce one stored transition and
+one stored notification; foreign/replaced workers are refused. The notification
+writer is real, while push/badge/socket delivery is stubbed. Identity and transport
+faults are synthetic. These new HTTP checks cover free gigs on the retained older
+schema; paid provider and full UI acceptance are not implied. No schema was changed.
 
-## Scope and source
+The two preliminary private harness attempts overlapped their own fixtures; their
+results remain recorded as invalid attempts. Final runs are sequential, with
+ownership checked before seeding and exact cleanup afterward. The four newly added
+unit checks first fail against the inherited patch (225 pass/4 fail), then all 229
+pass after the repair. Earlier failures are not relabeled passing.
 
-- Inventory: P01–P10. Current milestone: the P04 Start Work slice — a committed
-  transition with a lost reply, retry, concurrent requests, current assignment
-  identity and stale/invalid native results. The rest of P04 (no-show,
-  cancellation-fee execution, completion/reopen policy, immutable displayed
-  terms) is untouched and stays open.
-- Worktree: `/private/tmp/pantopus-paid-gig-integration`.
-- Branch: `codex/paid-gig-integration`; milestone commit `f437dfd20`, base `b4b783f8d`,
-  then master integration `959e147e6` (documentation resolution only, no application change).
-- Changed paths: `backend/routes/gigs.js`, `backend/tests/unit/paidGigLifecycleRoute.test.js`.
-- PR #47 carries this branch. PR #34 stays draft at `c9cb69825`; its remaining
-  acceptance scope is unchanged by this milestone.
+## Native verification correction and current follow-up
 
-## Reproduced failures
+Discarding a response and refetching does **not** establish stale/invalid-result
+safety. The earlier source-reading conclusion is withdrawn. Android emitted
+"Task started" for any successful decoded response. iOS still decodes
+`EmptyResponse` and its caller treats a nil error as success even when silent
+refresh fails; it needs its own baseline and repair.
 
-Reproduced against the existing route before any application edit, then re-run
-after the repair:
+Six distinct Android baseline tests reproduced five defects: invalid receipts,
+duplicate pending requests, and late results after session change, departure or
+reassignment. The ordinary valid case passed. Gradle retried the five failing
+cases, producing 16 recorded executions; these are five distinct failures.
 
-1. A committed start whose reply was lost: the same worker's retry returned
-   `400 Gig must be assigned to start (current: in_progress)`.
-2. A concurrent duplicate start: the losing request returned
-   `500 Failed to start gig` for work that had in fact started.
-3. A transport failure on the gig read returned `404 Gig not found`, telling the
-   worker to stop rather than retry.
+The Android candidate reuses the existing session/read-scope guard and the existing
+view-model. It retains one pending start, checks the current assignment and saved
+receipt, and retires callbacks on departure or assignment replacement. A stale
+failure cannot clear a newer request. The existing screen and controls are
+unchanged. The final functional suite passes **54/54**, and **ktlint and detekt pass**
+after extracting the receipt predicate into a small helper in the same file. The initial complexity failure remains a
+failed attempt. Repository responses and identity are mocked in these JVM tests;
+**no installed native journey is accepted by this result**.
 
-The existing authority and snapshot guards were already correct and were proven
-so, not changed: a foreign actor and a replaced worker are refused with 403, a
-changed payment snapshot is refused, and an unstarted gig still fails closed when
-authorization cannot be verified.
+## Reused evidence, limits and next action
 
-## Repair and why reuse was sufficient
+- Accepted web Start Work component, SDK and regression source is unchanged from
+  `c9cb69825`; reuse its [browser evidence with the original synthetic HTTP/auth
+  limits](https://github.com/WangPantopus/skinny-pantopus/blob/b4b783f8d42027e22c113a3cfd301f5eb7b4c54b/docs/VERIFICATION_FIRST_2026-09-13.md#existing-web-start-work-control).
+- The [prior Start Work record](https://github.com/WangPantopus/skinny-pantopus/blob/82025bc092d09fd288a9a462ca48d5ebbc67fd3f/docs/workstreams/01-gigs-payments.md)
+  retains the original `f437dfd20` paid/free evidence and old schema/provider
+  limits. Its native acceptance and same-worker-race conclusions are superseded
+  above. Prior private artifacts that were not available in this resumed session
+  are not claimed as newly inspected.
+- The backend binds the assignment observed by its own initial read. A request
+  based on a client assignment already stale **before** that read needs further
+  verification; neither this patch nor the original web guard proves that scope.
+- iOS invalid/late callbacks, both installed native journeys and real provider
+  authorization remain open. Native JVM success and green CI are not end-to-end
+  acceptance. Cancellation/no-show fee payer/recipient policy is still unspecified.
+- Next: finish current-head CI, then verify iOS and the installed Start Work
+  journeys, including the stale-client assignment boundary, before claiming
+  native or P04 completion. No feature merge while scope
+  is unfinished.
 
-Repaired the existing handler in place. No new table, migration, RPC, service,
-screen or test file. `matchesWorkerStart` mirrors the file's existing
-`matchesWorkerCompletion`; one `recoverSavedStart` closure re-reads the row under
-the existing `bindGigPaymentSnapshot` before both the non-assigned rejection and
-the conditional-write failure. The existing conditional UPDATE already commits
-exactly once, so only the recovery read was missing — a `start_gig_work` RPC
-mirroring `mark_gig_completed` was considered and rejected as unnecessary, since
-that RPC exists to commit completion proof and notices in one transaction, which
-the start path does not require. The read now uses `maybeSingle` and splits 503
-from 404, matching the sibling handler at `gigs.js:7695-7698`.
+## CI, runtime and coordination
 
-New cases live in the existing `backend/tests/unit/paidGigLifecycleRoute.test.js`
-beside its accepted completion-recovery block, reusing its existing harness.
-
-## Evidence
-
-- Reused: the web Start Work control guard accepted at `c9cb69825` within its
-  [recorded source and runtime limits](https://github.com/WangPantopus/skinny-pantopus/blob/b4b783f8d42027e22c113a3cfd301f5eb7b4c54b/docs/VERIFICATION_FIRST_2026-09-13.md#existing-web-start-work-control).
-  That guard requires `status`, `accepted_by` and a finite `started_at` in the
-  reply; the recovery reply satisfies it, so no web change was needed.
-- New end to end: 23/23 checks over real HTTP through the existing route against
-  real PostgreSQL on the retained replay stack (API 64521 / DB 64522), free and
-  paid gigs — first start commits `in_progress` with `started_at`; a lost reply
-  recovers the saved row with its original `started_at`, no repeated owner notice
-  and no repeated provider authorization; genuinely concurrent starts both return
-  200 against one commit, agree on one `started_at` and leave one notice; a
-  foreign actor and a replaced worker are refused 403; a settled later price
-  change still recovers the saved start and reports the current price; an
-  unstarted gig still fails closed at 503 when authorization cannot be verified.
-- Regression: full backend Jest 6193 passed / 16 skipped / 0 failed; the paid
-  lifecycle suite 220 passed (206 baseline plus 14 new); backend privacy gates pass.
-- Client reading, no code changed: web `CompletionFlow.tsx` validates the receipt;
-  `my-bids/page.tsx`, iOS `GigDetailViewModel.startTask` (`EmptyResponse`) and
-  Android `GigDetailViewModel.startTask` (Moshi) discard the body and refetch, so
-  a stale or invalid payload cannot overwrite their state. The additive `reused`
-  field is ignored by all three, as it already is for `mark-completed`.
-
-## Limitations
-
-- Stripe is a labeled stub in the end-to-end harness; only the provider call is
-  stubbed. Real provider authorization remains unverified here and stays with
-  P08/P09.
-- The replay database predates the current branch's migrations (for example it
-  has no `mark_gig_completed`, and `User.account_type` still uses `individual`).
-  Every column and constraint the start path touches is present and was exercised;
-  no schema was changed, reset or migrated.
-- No installed iOS or Android build was run for this milestone. Native behavior
-  is established by source reading plus the shared backend contract, not by a
-  device journey.
-- The repository's own `tests/integration/gig-lifecycle.test.js` cannot run against
-  the replay database: its helper seeds `account_type: 'personal'`, which that
-  older schema rejects. The suite was not modified to fit a stale fixture; the one
-  auth row it leaked before failing was removed.
-- Green CI and the mocked suite alone do not close P04.
-
-## Examined and deliberately not changed
-
-Recorded so they are not re-derived, each without a reproduced failure:
-
-- `accepted_at` is not bound by `bindGigPaymentSnapshot`. Reopen sets
-  `accepted_by`, `accepted_at` and `payment_id` to NULL, so a paid re-assignment
-  always changes `payment_id`. Only a price-0 gig re-assigned to the same worker
-  leaves every bound predicate identical across assignment epochs, and the start
-  is still truthful for the worker currently assigned. No harm reproduced.
-- A conditional write that matches no row for a reason other than this worker's
-  own start still returns 500; the sibling urgent handler returns 409 "Task
-  changed. Refresh before updating status" (`gigs.js:7761`). Candidate next item.
-- `createBulkNotifications` writes no `idempotency_key`, so an owner notice lost
-  after the commit is never recreated. This predates the repair and is not a
-  regression. It sits in the shared notification service and needs a coordinator
-  assignment before any edit.
-
-## Coordination and handoff
-
-- Runtime: used the retained replay stack read/write for owned fixtures only.
-  All fixture rows removed and verified: 6 gigs, 8 users, 4 payments; 0 remain.
-  No schema, migration or reset. No heavy native build taken.
-- Shared-file effects: none from the repair. The change is confined to the gigs
-  route and its existing test file, both already Stream 1 scope.
-- Integration performed: PR #47 was unmergeable against master, so GitHub could
-  build no merge ref and scheduled no CI at all for `f437dfd20`. The cause was this
-  branch carrying its own copies of the shared coordination documents that master
-  had received independently through PR #48. Merge `959e147e6` resolves those four
-  documentation conflicts only — the two shared coordination files take master's
-  published versions, the handoff and backlog keep both sides' distinct content —
-  and PR #47 is mergeable again with CI run 35046049526 scheduled. Feature branches
-  should stop carrying shared coordination documents; master owns them.
-- Blocker unchanged: the cancellation/no-show fee payer and recipient policy is
-  still unspecified; it does not block this milestone.
-- Peer findings received: Stream 3 wrote its N04 "ready for review" handoff into
-  the retired `docs/workstreams/03-accounts-social.md` snapshot inside the gigs
-  worktree instead of this live folder. The content is preserved outside Git and
-  was not committed to the gigs branch; the snapshot was reverted so the master
-  integration could proceed. Stream 3 must republish that handoff here — the
-  coordinator will not write another stream's live status file. Its pushed work
-  on `codex/workstream-accounts-social` (`fc99f8ee7`) is unaffected.
-- Reviewed for conflict, no Stream 1 overlap: Stream 3's branch changes 14
-  frontend files only, no backend, schema or migration. It does touch the shared
-  SDK export barrel `frontend/packages/api/src/index.ts`, which the coordination
-  guide lists as cross-cutting and which needed a recorded assignment first. The
-  edit is two additive export lines and conflicts with nothing in Stream 1; the
-  assignment is recorded here retroactively rather than treated as a violation.
-  Stream 2 has pushed no work; `codex/workstream-home` is still at master.
-- Next action: confirm CI run 35046049526 on PR #47 head `959e147e6`, then take
-  the 409 conflict taxonomy item above as the next bounded milestone.
+- Prior [CI35046049526](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35046049526)
+  on `959e147e6` passed 15 applicable checks/one Seeder skip.
+  Backend [CI35048472265](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35048472265)
+  on `599de1586` was superseded and cancelled by the new push; its aggregate
+  check reported failure on cancellation, so it is not a green result. Current combined
+  [CI35049746982](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35049746982)
+  on `41c75d49a` is queued. Do not treat a prior source’s CI as final-head evidence.
+- PostgreSQL64522/API64521: only exact owned synthetic rows were written. Three
+  users, one gig and its notifications are removed; final remaining count zero.
+  The private HTTP listener is closed. No container/schema/database reset, cache
+  cleanup, physical device or simulator mutation. Heavy native build slot is
+  **released** after the successful Android test/static run. No new device
+  reservation remains.
+- Private scripts, results, source hashes and failed attempts:
+  `/private/tmp/pantopus-p04-start-20260915-r1`, mirrored to the owner’s private
+  `.pantopus-recovery/audits/20260915-p04-start-r1`. Keep raw logs/credentials outside Git.
+- Stream2 handoff reviewed at `70e079543`: browser slice only, SQL decision boundary
+  simulated, broader M02 open. Source review leaves token/Home transitions and
+  old revoke callbacks as **unreproduced leads** to verify before merge: existing
+  content is not cleared on scope change, and a late revoke calls its captured
+  old-Home loader. Stream2 owns that follow-up; no peer source was edited here.
+- Stream3 live handoff is republished at `fc99f8ee7`, correctly marked repair with
+  no real-persistence/installed acceptance and an introduced empty-list defect.
+  It owns `chats.js` block repairs and the bounded `backend/jest.config.js`
+  inclusion of the existing chat-access suite. Socket changes still need review
+  against the paid private-gig socket implementation before assignment.
+- Stream2's SDK guest-status type widening and Stream3's additive SDK exports
+  conflict with no Stream1 change. Neither peer branch is approved for merge.
+  Their uncommitted live status updates are preserved and not staged by this task.

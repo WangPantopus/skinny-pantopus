@@ -47,9 +47,9 @@ the gigs worktree is retired after this transfer; do not update status there.
 
 | Stream | Application worktree | Branch / starting state |
 | --- | --- | --- |
-| 1 | `/private/tmp/pantopus-paid-gig-integration` | `codex/paid-gig-integration`; setup starts at `3e93cd167` |
-| 2 | `/private/tmp/pantopus-workstream-home` | `codex/workstream-home`; master `e775af9ae` |
-| 3 | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; master `e775af9ae` |
+| 1 | `/private/tmp/pantopus-paid-gig-integration` | `codex/paid-gig-integration`; current source/CI in Stream1 status |
+| 2 | `/private/tmp/pantopus-workstream-home` | `codex/workstream-home`; candidate `70e079543` over master `711340225` |
+| 3 | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; candidate `fc99f8ee7` over master `711340225` |
 
 Streams 2 and 3 compare relevant pending Stream 1 changes before editing shared
 code. They start from master because their first scoped implementations are
@@ -124,7 +124,9 @@ These cross-cutting files/contracts require coordinator assignment for each edit
 
 | Request / decision | Owner | Status / next action |
 | --- | --- | --- |
-| Shared file changes | Coordinator | None granted for new Stream 2/3 repairs; discovery is read-only |
+| `backend/jest.config.js` chat-access regression inclusion | Stream 3 | Granted only for the existing excluded chat-access suite; run regressions, no broad CI rewrite |
+| `backend/routes/chats.js` block-path repairs | Stream 3 | Sole writer; reproduce fail-open/multi-party cases and repair existing contracts |
+| SDK guest-pass status type / block exports | Streams 2 / 3 respectively | Additive candidates reviewed for conflict; no Stream1 overlap; broader SDK/auth changes still require assignment |
 | Stream 3 socket admission, if needed | Coordinator with Stream 1/3 | Compare retained private-gig socket changes before granting a socket edit |
 | Cancellation/no-show fee payer and recipient | Product decision, recorded by Stream 1 | Still unspecified; independent Start Work verification can proceed |
 | User's Place redesign, PR #46 | User's separate scope | Preserved outside these verification milestones |
@@ -140,9 +142,9 @@ or elapsed time is not proof a resource is free.
 
 | Resource | Current reservation | Rule |
 | --- | --- | --- |
-| Local heavy native build | None at setup inspection | Coordinator grants one owner; others continue lighter work |
+| Local heavy native build | None; Stream1 Android checks finished and released | Coordinator grants one owner; others continue lighter work |
 | iOS/Android test devices | No new reservation | Preserve accepted device state; inspect existing leases |
-| Databases / fixture ports | No new reservation | Separate exact owned fixtures or exclusive write lease; record cleanup |
+| Databases / fixture ports | Stream1 P04 exact fixtures cleaned; loopback listener closed | Separate exact owned fixtures or exclusive write lease; record cleanup |
 | Existing SQL port 64522 and REST port 18089 | Retained prior rehearsal resources | Never assume available or change their schema from another stream |
 | Physical iPhone | Owner's installed build 3 | No test install or device mutation without a concrete authorized task |
 

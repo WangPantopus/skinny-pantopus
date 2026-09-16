@@ -30,8 +30,9 @@ to the same worker. The repair binds `accepted_at` and preserves retryable recov
 errors. Twelve final HTTP cases plus exact cleanup pass (13/13), as do 229 lifecycle
 regressions and privacy gates. Authentication/transport faults are synthetic; the
 new HTTP scope uses free gigs on the older retained schema, with no provider or
-installed-native claim. Its [current CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35048472265)
-is still running. Full evidence, source limits and owned resource state are in the
+installed-native claim. Its [CI35048472265](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35048472265)
+was superseded and cancelled by the subsequent native/integration push; it is not
+a completed green run. Full evidence, source limits and owned resource state are in the
 [Stream1 status](workstreams/01-gigs-payments.md). No table, migration or screen was
 added or changed. Earlier paid/web evidence retains its recorded source limits.
 
@@ -48,8 +49,19 @@ correctly records N04 as incomplete, including an introduced empty-list defect a
 no real-persistence or installed-screen acceptance. Each author retains ownership
 of its status file. Neither branch has required PR CI or merge approval yet.
 
-Next: finish current-head Stream1 CI, continue the native Start Work baseline,
-and publish corrected shared status through documentation-only PR49. Review peer
+Stream1 additionally pushed Android `9397e39a7`, after five native callback
+failures reproduced in the existing JVM tests. The existing view-model now
+validates the saved start and retires old callbacks; 54 tests, ktlint and detekt
+pass. No mobile screen/layout file changed. This is mocked JVM evidence, not an
+installed journey. Current integration head `41c75d49a` takes master `0616d6e79`'s
+shared documentation snapshots without application changes; its
+[combined CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35049746982)
+is queued. PR49 is merged; subsequent shared status remains documentation-only.
+Owned SQL fixtures/listener and the heavy native build reservation are released;
+private evidence is mirrored under the owner's recovery audit directory.
+
+Next: finish current-head Stream1 CI, continue iOS and installed Start Work verification,
+and publish the latest shared status through its own documentation-only PR. Review peer
 repairs and their source-bound acceptance before integrating them. P04, P08/P09,
 R05 and overall launch remain open; inventory counts are unchanged. No hosted
 deployment, migration activation, provider activation or physical-device change
