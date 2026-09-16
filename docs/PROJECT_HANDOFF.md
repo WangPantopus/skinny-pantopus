@@ -34,14 +34,15 @@ milestone `a65411758` binds Start Work to the displayed terms (optional expected
 the existing route, passed by the existing iOS/Android/web callers) and is verified by
 backend/web/Android/iOS suites, a real HTTP/SQL harness and the installed iOS candidate,
 where the stale screen now gets 409 with no write or notice and a reopened screen starts
-normally. See the Stream 1 status for limits (my-bids card, installed Android). Installed Android, real provider authorization and the wider P04/P08/P09 scope
+normally. The installed Android candidate then passed the same journeys on a new owned emulator.
+See the Stream 1 status for limits (my-bids card, providers, fee policies). Installed Android, real provider authorization and the wider P04/P08/P09 scope
 remain open. Fixtures are cleaned to zero, HTTP18132 is stopped, the owned simulator is shut
 down and the heavy native slot is released.
 
 Coordinator dispositions: Stream 2's `70e079543..88d076e56`
 ([PR53](https://github.com/WangPantopus/skinny-pantopus/pull/53)) was source-reviewed with
-green CI and is being merged after a branch update with master; its disposable SQL project
-is reported stopped. Documentation PR52 merged as `949d4dbb1`. Stream 3 draft
+green CI and merged as `4cc9d3787`; its disposable SQL project is reported stopped.
+Documentation PR52 merged as `949d4dbb1` and PR54 as `b46934c92`. Stream 3 draft
 [PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51) at `22adc7285` has green CI
 and is not approved for merge; its later native-lifetime, N05 reminder and cross-room retry
 milestones still await full coordinator review, and its granted transactional block-admission
