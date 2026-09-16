@@ -50,13 +50,19 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
     /// A14.4 MonoFooter — signed-in user's name · short ID, same
     /// pattern as the Settings index / Payments mono footers.
     public var monoFooter: String? {
-        guard case let .signedIn(user) = auth.state else { return nil }
+        guard active, sessionScope.isCurrent, case let .signedIn(user) = auth.state else { return nil }
         let name = user.displayName ?? user.email
         return "\(name) · ID \(String(user.id.prefix(8)))"
     }
 
     private let api: APIClient
     private let auth: AuthManager
+    private let sessionScope: HomeClaimSessionScope
+    private var active = true
+    private var request = 0
+    private var snapshot = 0
+    private var mutation = 0
+    private var pending: String?
     private var complete = false
     private var entries: [BlockedEntry] = []
 
@@ -85,12 +91,41 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
         let origin: Origin
     }
 
-    init(api: APIClient = .shared, auth: AuthManager = .shared) {
+    init(api: APIClient = .shared, auth: AuthManager = .shared, sessionIdentity: (() -> String?)? = nil) {
         self.api = api
         self.auth = auth
+        sessionScope = HomeClaimSessionScope(api: api, identity: sessionIdentity)
+    }
+
+    var sessionIsCurrent: Bool {
+        sessionScope.isCurrent
+    }
+
+    func retire() {
+        active = false
+        request += 1
+        mutation += 1
+        pending = nil
+        entries = []
+        complete = false
+        state = .error(message: "Reopen blocked users to load your current list.")
+    }
+
+    private func current() -> Bool {
+        guard active else { return false }
+        guard sessionScope.isCurrent else {
+            retire()
+            return false
+        }
+        return !Task.isCancelled
     }
 
     public func load() async {
+        guard sessionScope.isCurrent else {
+            retire()
+            return
+        }
+        active = true
         state = .loading
         await fetch()
     }
@@ -106,10 +141,16 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
     ///
     /// Only one has to answer: a personal block must still be visible (and
     /// liftable) when the Identity Firewall list is unavailable, and vice
-    /// versa. The screen reports an error only when neither list loads.
+    /// versa. An incomplete empty result uses the existing error state.
     private func fetch() async {
+        guard current() else { return }
+        request += 1
+        let loadRequest = request
         let personal = try? await api.request(BlocksEndpoints.blocked, as: UserBlocksResponse.self)
+        guard current(), loadRequest == request else { return }
         let profile = try? await api.request(PrivacyEndpoints.blocks, as: PrivacyBlocksResponse.self)
+        guard current(), loadRequest == request else { return }
+        snapshot += 1
 
         complete = personal != nil && profile != nil
         guard personal != nil || profile != nil else {
@@ -156,8 +197,14 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
     /// The request is chosen by the row's own contract — a personal block
     /// is lifted by user id, a profile block by block id.
     public func unblock(_ blockId: String) async {
+        guard current(), pending == nil else { return }
         guard let index = entries.firstIndex(where: { $0.id == blockId }) else { return }
         let removed = entries.remove(at: index)
+        pending = blockId
+        mutation += 1
+        let action = mutation
+        request += 1
+        let openingSnapshot = snapshot
         rebuild()
         do {
             switch removed.origin {
@@ -166,18 +213,28 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
             case .profile:
                 _ = try await api.request(PrivacyEndpoints.deleteBlock(blockId: blockId))
             }
+            guard current(), action == mutation else { return }
+            pending = nil
+            request += 1
+            entries.removeAll { $0.id == blockId }
+            rebuild()
         } catch {
-            entries.insert(removed, at: min(index, entries.count))
+            guard current(), action == mutation else { return }
+            pending = nil
+            if openingSnapshot == snapshot {
+                entries.insert(removed, at: min(index, entries.count))
+            }
             rebuild()
         }
     }
 
     private func rebuild() {
-        if entries.isEmpty, !complete {
+        let visible = entries.filter { $0.id != pending }
+        if visible.isEmpty, !complete {
             state = .error(message: "Couldn't load your complete blocked list. Please retry.")
             return
         }
-        guard !entries.isEmpty else {
+        guard !visible.isEmpty else {
             // A14.4 empty hero — neutral grey disc + user-minus glyph
             // (the design's `user-x`; `userMinus` is the in-inventory
             // person-with-negation glyph) + reassurance about silence.
@@ -191,7 +248,7 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
             ))
             return
         }
-        let rows = entries.map { entry -> RowModel in
+        let rows = visible.map { entry -> RowModel in
             let name = entry.name
             let avatarURL = entry.avatarURL
             let blockId = entry.id
@@ -216,7 +273,7 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
             sections: [
                 RowSection(
                     id: "blocked",
-                    header: "Blocked · \(entries.count)",
+                    header: "Blocked · \(visible.count)",
                     footer: (complete ? "" : "We couldn't load the complete list. Pull to refresh. ")
                         + "Blocked people can't message you, see your profile, or bid on "
                         + "your tasks. Unblocking doesn't notify them.",

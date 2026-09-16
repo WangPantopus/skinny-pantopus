@@ -127,6 +127,13 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   }, [captureAction]);
 
   useEffect(() => {
+    // A route change reuses this component, so retire controls as well as callbacks.
+    pendingBlock.current = false;
+    setActionLoading(false);
+    setReportTarget(null);
+    setCurrentUser(null);
+    setConnectionState('none');
+    setFollowState(false);
     const invalidate = () => { actionGeneration.current++; };
     const retire = () => {
       invalidate(); pendingBlock.current = false;
@@ -142,10 +149,12 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   }, [loadCurrentUser]);
 
   const loadProfile = useCallback(async () => {
+    const current = captureAction();
     try {
       const profileData = UUID_REGEX.test(profileIdentifier)
         ? await api.users.getProfileById(profileIdentifier)
         : await api.users.getProfileByUsername(profileIdentifier);
+      if (!current()) return;
       setProfile(profileData as PublicProfileData);
 
       if (profileData.reviews && profileData.reviews.length > 0) {
@@ -156,7 +165,9 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         });
       }
     } catch (err) {
+      if (!current()) return;
       const ownProfile = await loadCurrentUser();
+      if (!current()) return;
       const currentUsername = normalizeProfileIdentifier(ownProfile?.username);
       const isOwnProfileRoute = Boolean(
         ownProfile &&
@@ -171,9 +182,9 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
       console.error('Failed to load profile:', err);
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
-  }, [loadCurrentUser, profileIdentifier]);
+  }, [loadCurrentUser, profileIdentifier, captureAction]);
 
   const loadRelationshipStatus = useCallback(async () => {
     if (!profile?.id) return;
@@ -250,6 +261,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   useEffect(() => {
     // Server-rendered initialProfile is already in state; only refetch
     // if we don't have one, or when username changes in-flight.
+    setProfile(initialProfile);
+    setLoading(!initialProfile);
     if (!initialProfile) {
       loadProfile();
     }

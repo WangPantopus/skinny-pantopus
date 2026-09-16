@@ -12,6 +12,8 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.privacy.PrivacyRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
+import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowPillTone
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
@@ -19,6 +21,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.SectionStyle
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -49,7 +52,8 @@ class BlockedUsersViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(): BlockedUsersViewModel = BlockedUsersViewModel(privacy, blocks, auth)
+    private fun viewModel(session: HomeClaimScopeTestFixture = HomeClaimScopeTestFixture()): BlockedUsersViewModel =
+        BlockedUsersViewModel(privacy, blocks, auth, claimScopeFactory(session))
 
     /** `GET /api/users/blocked` — flattened UserBlock rows (blocks.js:145). */
     private val twoPersonal =
@@ -101,6 +105,116 @@ class BlockedUsersViewModelTest {
                     ),
                 ),
         )
+
+    @Test fun delayedListCannotReplaceNewerRefresh() =
+        runTest {
+            val delayed = CompletableDeferred<NetworkResult<UserBlocksResponse>>()
+            coEvery { blocks.blocked() } coAnswers { delayed.await() } coAndThen { NetworkResult.Success(noPersonal) }
+            coEvery { privacy.blocks() } returns NetworkResult.Success(PrivacyBlocksResponse(blocks = emptyList()))
+            val vm = viewModel()
+            vm.load()
+            vm.refresh()
+            assertTrue(vm.state.value is ListOfRowsUiState.Empty)
+            delayed.complete(NetworkResult.Success(twoPersonal))
+            assertTrue(vm.state.value is ListOfRowsUiState.Empty)
+        }
+
+    @Test fun oldUnblockFailureCannotRestoreAfterNewerSuccessfulRefresh() =
+        runTest {
+            coEvery { blocks.blocked() } returnsMany listOf(NetworkResult.Success(twoPersonal), NetworkResult.Success(noPersonal))
+            coEvery { privacy.blocks() } returns NetworkResult.Success(PrivacyBlocksResponse(blocks = emptyList()))
+            val delayed = CompletableDeferred<NetworkResult<Unit>>()
+            coEvery { blocks.unblock("u_carol") } coAnswers { delayed.await() }
+            val vm = viewModel()
+            vm.load()
+            vm.unblock("ub1")
+            vm.refresh()
+            assertTrue(vm.state.value is ListOfRowsUiState.Empty)
+            delayed.complete(NetworkResult.Failure(NetworkError.Server(500, null)))
+            assertTrue(vm.state.value is ListOfRowsUiState.Empty)
+        }
+
+    @Test fun retiredScreenIgnoresPendingReadAndCannotUnblock() =
+        runTest {
+            val delayed = CompletableDeferred<NetworkResult<UserBlocksResponse>>()
+            coEvery { blocks.blocked() } coAnswers { delayed.await() }
+            val vm = viewModel()
+            vm.load()
+            vm.retire()
+            delayed.complete(NetworkResult.Success(twoPersonal))
+            vm.unblock("ub1")
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            coVerify(exactly = 0) { privacy.blocks() }
+            coVerify(exactly = 0) { blocks.unblock(any()) }
+        }
+
+    @Test fun accountChangeClearsRowsAndRejectsDelayedRollback() =
+        runTest {
+            val session = HomeClaimScopeTestFixture()
+            coEvery { blocks.blocked() } returns NetworkResult.Success(twoPersonal)
+            coEvery { privacy.blocks() } returns NetworkResult.Success(PrivacyBlocksResponse(blocks = emptyList()))
+            val delayed = CompletableDeferred<NetworkResult<Unit>>()
+            coEvery { blocks.unblock("u_carol") } coAnswers { delayed.await() }
+            val vm = viewModel(session)
+            vm.load()
+            vm.unblock("ub1")
+            session.accounts.value = "user-2"
+            delayed.complete(NetworkResult.Failure(NetworkError.Server(500, null)))
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            vm.unblock("ub2")
+            coVerify(exactly = 1) { blocks.unblock(any()) }
+        }
+
+    @Test fun storedSessionChangeBeforeCollectorDeliveryRejectsAction() =
+        runTest {
+            val session = HomeClaimScopeTestFixture()
+            coEvery { blocks.blocked() } returns NetworkResult.Success(twoPersonal)
+            coEvery { privacy.blocks() } returns NetworkResult.Success(PrivacyBlocksResponse(blocks = emptyList()))
+            val vm = viewModel(session)
+            vm.load()
+            session.storedToken = "new-session"
+            vm.unblock("ub1")
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+            coVerify(exactly = 0) { blocks.unblock(any()) }
+        }
+
+    @Test fun duplicateTapAndLateReadCannotUndoSuccessfulUnblock() =
+        runTest {
+            val read = CompletableDeferred<NetworkResult<UserBlocksResponse>>()
+            val write = CompletableDeferred<NetworkResult<Unit>>()
+            coEvery { blocks.blocked() } returns NetworkResult.Success(twoPersonal) coAndThen { read.await() }
+            coEvery { privacy.blocks() } returns NetworkResult.Success(PrivacyBlocksResponse(blocks = emptyList()))
+            coEvery { blocks.unblock("u_carol") } coAnswers { write.await() }
+            val vm = viewModel()
+            vm.load()
+            vm.unblock("ub1")
+            vm.unblock("ub1")
+            vm.refresh()
+            write.complete(NetworkResult.Success(Unit))
+            read.complete(NetworkResult.Success(twoPersonal))
+            val loaded = vm.state.value as ListOfRowsUiState.Loaded
+            assertEquals(listOf("ub2"), loaded.sections[0].rows.map { it.id })
+            coVerify(exactly = 1) { blocks.unblock("u_carol") }
+        }
+
+    @Test fun leavingAndReopeningCannotApplyThePreviousUnblockReply() =
+        runTest {
+            val old = CompletableDeferred<NetworkResult<Unit>>()
+            val newer = CompletableDeferred<NetworkResult<Unit>>()
+            coEvery { blocks.blocked() } returns NetworkResult.Success(twoPersonal)
+            coEvery { privacy.blocks() } returns NetworkResult.Success(PrivacyBlocksResponse(blocks = emptyList()))
+            coEvery { blocks.unblock("u_carol") } coAnswers { old.await() } coAndThen { newer.await() }
+            val vm = viewModel()
+            vm.load()
+            vm.unblock("ub1")
+            vm.retire()
+            vm.load()
+            vm.unblock("ub1")
+            old.complete(NetworkResult.Failure(NetworkError.Server(500, null)))
+            assertEquals(listOf("ub2"), (vm.state.value as ListOfRowsUiState.Loaded).sections[0].rows.map { it.id })
+            newer.complete(NetworkResult.Success(Unit))
+            assertEquals(listOf("ub2"), (vm.state.value as ListOfRowsUiState.Loaded).sections[0].rows.map { it.id })
+        }
 
     @Test fun loadEmptyProducesEmptyState() =
         runTest {
@@ -158,7 +272,7 @@ class BlockedUsersViewModelTest {
 
     @Test fun loadFailureProducesErrorState() =
         runTest {
-            // Both lists must fail before the screen reports an error.
+            // Both unavailable lists must report an error.
             coEvery { blocks.blocked() } returns NetworkResult.Failure(NetworkError.Server(500, null))
             coEvery { privacy.blocks() } returns NetworkResult.Failure(NetworkError.Server(500, null))
             val vm = viewModel()

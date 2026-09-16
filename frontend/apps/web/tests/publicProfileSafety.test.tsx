@@ -8,7 +8,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 jest.mock('@pantopus/api', () => ({
   getAuthToken: jest.fn(() => 'session-a'), onTokenChange: jest.fn(() => jest.fn()), AUTH_SESSION_CHANGE_KEY: 'auth-change',
   blocks: { blockUser: jest.fn() },
-  users: { getMyProfile: jest.fn(), getRelationshipStatus: jest.fn(), reportUser: jest.fn() },
+  users: { getProfileByUsername: jest.fn(), getMyProfile: jest.fn(), getRelationshipStatus: jest.fn(), reportUser: jest.fn() },
   gigs: { getGigs: jest.fn() }, posts: { getUserPosts: jest.fn() },
   reviews: { getUserReviews: jest.fn(), getPendingReviews: jest.fn() },
 }));
@@ -79,4 +79,32 @@ test('a settled empty profile does not repeatedly fetch the signed-in user', asy
   await openProfile();
   await act(async () => {});
   expect(api.users.getMyProfile).toHaveBeenCalledTimes(1);
+});
+
+test('profile navigation retires pending confirmation and allows the new target action', async () => {
+  let resolve!: (value: boolean) => void;
+  (confirmStore.open as jest.Mock).mockReturnValueOnce(new Promise(r => { resolve = r; })).mockResolvedValue(true);
+  (api.blocks.blockUser as jest.Mock).mockResolvedValue({ success: true });
+  const bob = { id: 'bob', username: 'bob', name: 'Bob' };
+  const carol = { id: 'carol', username: 'carol', name: 'Carol' };
+  const view = render(<PublicProfileClient username="bob" initialProfile={bob as never} />);
+  await waitFor(() => expect(api.users.getRelationshipStatus).toHaveBeenCalled());
+  fireEvent.click(screen.getByText('⋯'));
+  fireEvent.click(screen.getByRole('button', { name: 'Block user' }));
+  view.rerender(<PublicProfileClient username="carol" initialProfile={carol as never} />);
+  await act(async () => resolve(true));
+  expect(api.blocks.blockUser).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('⋯'));
+  fireEvent.click(screen.getByRole('button', { name: 'Block user' }));
+  await waitFor(() => expect(api.blocks.blockUser).toHaveBeenCalledWith('carol'));
+});
+
+test('profile navigation closes a report for the previous target', async () => {
+  const view = render(<PublicProfileClient username="bob" initialProfile={{ id: 'bob', username: 'bob', name: 'Bob' } as never} />);
+  await waitFor(() => expect(api.users.getRelationshipStatus).toHaveBeenCalled());
+  fireEvent.click(screen.getByText('⋯'));
+  fireEvent.click(screen.getByRole('button', { name: 'Report profile' }));
+  expect(await screen.findByText('Report User')).toBeInTheDocument();
+  view.rerender(<PublicProfileClient username="carol" initialProfile={{ id: 'carol', username: 'carol', name: 'Carol' } as never} />);
+  await waitFor(() => expect(screen.queryByText('Report User')).not.toBeInTheDocument());
 });

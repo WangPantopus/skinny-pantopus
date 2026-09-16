@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.privacy.PrivacyRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBackground
 import app.pantopus.android.ui.screens.shared.list_of_rows.AvatarBadgeSize
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
@@ -57,6 +58,7 @@ class BlockedUsersViewModel
         private val privacy: PrivacyRepository,
         private val blocks: BlocksRepository,
         private val auth: AuthRepository,
+        sessionFactory: HomeClaimSessionScopeFactory,
     ) : ViewModel() {
         val title: String = "Blocked users"
 
@@ -67,13 +69,43 @@ class BlockedUsersViewModel
          *  pattern as the Settings index / Payments mono footers. */
         val monoFooter: String?
             get() {
+                if (!sessionScope.isCurrent || !active) return null
                 val session = auth.state.value as? AuthRepository.State.SignedIn ?: return null
                 val name = session.user.displayName ?: session.user.email
                 return "$name · ID ${session.user.id.take(8)}"
             }
 
+        private val sessionScope = sessionFactory.create(viewModelScope)
+        private var active = true
+        private var request = 0L
+        private var snapshot = 0L
+        private var mutation = 0L
+        private var pending: String? = null
         private var complete = false
         private var entries: MutableList<BlockedEntry> = mutableListOf()
+
+        init {
+            viewModelScope.launch {
+                sessionScope.invalidated.collect { if (it) retire() }
+            }
+        }
+
+        fun retire() {
+            active = false
+            request++
+            mutation++
+            pending = null
+            entries.clear()
+            complete = false
+            _state.value = ListOfRowsUiState.Error("Reopen blocked users to load your current list.")
+        }
+
+        private suspend fun current(): Boolean {
+            if (!active) return false
+            if (sessionScope.confirmCurrent()) return true
+            retire()
+            return false
+        }
 
         /**
          * One row's worth of "someone you blocked", flattened from the two
@@ -101,14 +133,24 @@ class BlockedUsersViewModel
         )
 
         fun load() {
+            if (!sessionScope.isCurrent) {
+                retire()
+                return
+            }
+            active = true
+            val loadRequest = ++request
             _state.value = ListOfRowsUiState.Loading
             viewModelScope.launch {
+                if (!current() || loadRequest != request) return@launch
                 // Sequential, not concurrent, so the request order stays
                 // deterministic for the VM tests. Only one list has to answer:
                 // a personal block must still be visible (and liftable) when
                 // the Identity Firewall list is unavailable, and vice versa.
                 val personal = blocks.blocked()
+                if (!current() || loadRequest != request) return@launch
                 val profile = privacy.blocks()
+                if (!current() || loadRequest != request) return@launch
+                snapshot++
 
                 complete = personal is NetworkResult.Success && profile is NetworkResult.Success
                 if (personal is NetworkResult.Failure && profile is NetworkResult.Failure) {
@@ -156,33 +198,45 @@ class BlockedUsersViewModel
         /** Optimistic unblock. Restores the row at its original index on
          *  failure so the user doesn't see a flicker on the wrong row. */
         fun unblock(blockId: String) {
+            if (!active || !sessionScope.isCurrent || pending != null) return
             val index = entries.indexOfFirst { it.id == blockId }
             if (index < 0) return
             val removed = entries.removeAt(index)
+            pending = blockId
+            val action = ++mutation
+            request++
+            val openingSnapshot = snapshot
             rebuild()
             viewModelScope.launch {
+                if (!current() || action != mutation) return@launch
                 // The request is chosen by the row's own contract — a personal
                 // block is lifted by user id, a profile block by block id.
                 val result =
                     removed.personalUserId
                         ?.let { blocks.unblock(it) }
                         ?: privacy.deleteBlock(blockId)
+                if (!current() || action != mutation || pending != blockId) return@launch
+                pending = null
                 when (result) {
-                    is NetworkResult.Success -> Unit
+                    is NetworkResult.Success -> {
+                        request++ // Reads started before this success cannot restore the row.
+                        entries.removeAll { it.id == blockId }
+                    }
                     is NetworkResult.Failure -> {
-                        entries.add(index.coerceAtMost(entries.size), removed)
-                        rebuild()
+                        if (openingSnapshot == snapshot) entries.add(index.coerceAtMost(entries.size), removed)
                     }
                 }
+                rebuild()
             }
         }
 
         private fun rebuild() {
-            if (entries.isEmpty() && !complete) {
+            val visible = entries.filterNot { it.id == pending }
+            if (visible.isEmpty() && !complete) {
                 _state.value = ListOfRowsUiState.Error("Couldn't load your complete blocked list. Please retry.")
                 return
             }
-            if (entries.isEmpty()) {
+            if (visible.isEmpty()) {
                 // A14.4 empty hero — neutral grey disc + user-minus glyph
                 // (the design's `user-x`; `UserMinus` is the in-inventory
                 // person-with-negation glyph) + reassurance about silence.
@@ -199,7 +253,7 @@ class BlockedUsersViewModel
                 return
             }
             val rows =
-                entries.map { entry ->
+                visible.map { entry ->
                     val name = entry.name
                     val blockId = entry.id
                     RowModel(
@@ -229,10 +283,10 @@ class BlockedUsersViewModel
                         listOf(
                             RowSection(
                                 id = "blocked",
-                                header = "Blocked · ${entries.size}",
+                                header = "Blocked · ${visible.size}",
                                 footer =
                                     (if (complete) "" else "We couldn't load the complete list. Pull to refresh. ") +
-                                    "Blocked people can't message you, see your profile, or bid on " +
+                                        "Blocked people can't message you, see your profile, or bid on " +
                                         "your tasks. Unblocking doesn't notify them.",
                                 rows = rows,
                                 style = SectionStyle.Card,
