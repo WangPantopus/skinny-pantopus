@@ -26,6 +26,7 @@ import app.pantopus.android.data.api.models.gigs.MarkCompletedResponse
 import app.pantopus.android.data.api.models.gigs.MyGigDto
 import app.pantopus.android.data.api.models.gigs.NoShowCheckResponse
 import app.pantopus.android.data.api.models.gigs.RescheduleGigResponse
+import app.pantopus.android.data.api.models.gigs.StartGigBody
 import app.pantopus.android.data.api.models.gigs.WorkerAckResponse
 import app.pantopus.android.data.api.models.gigs.WorkerCompletionReceipt
 import app.pantopus.android.data.api.models.homes.FileUploadResponse
@@ -820,11 +821,27 @@ class GigDetailSaveViewModelTest {
             val events = mutableListOf<GigLifecycleEvent>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
             invalid.forEach { bad ->
-                coEvery { repo.startGig("g1") } returns NetworkResult.Success(GigDetailResponse(bad))
+                coEvery { repo.startGig("g1", any()) } returns NetworkResult.Success(GigDetailResponse(bad))
                 vm.startTask()
             }
             assertFalse(events.contains(GigLifecycleEvent.Toast("Task started")))
             coVerify(exactly = 1) { repo.detail("g1") }
+        }
+
+    @Test
+    fun start_sends_the_displayed_assignment_terms() =
+        runTest {
+            val gig = startGigFixture().copy(price = 25.0, paymentId = "pay-1")
+            val vm = lifecycleVm(gig, checkoutIdentity = { "viewer-1" to "worker-session" })
+            coEvery { repo.startGig("g1", any()) } returns
+                NetworkResult.Success(GigDetailResponse(gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z")))
+            vm.startTask()
+            coVerify(exactly = 1) {
+                repo.startGig(
+                    "g1",
+                    StartGigBody(expectedAcceptedAt = "2026-09-15T12:00:00Z", expectedPrice = 25.0, expectedPaymentId = "pay-1"),
+                )
+            }
         }
 
     @Test
@@ -833,11 +850,11 @@ class GigDetailSaveViewModelTest {
             val gig = startGigFixture()
             val vm = lifecycleVm(gig, checkoutIdentity = { "viewer-1" to "worker-session" })
             val reply = CompletableDeferred<NetworkResult<GigDetailResponse>>()
-            coEvery { repo.startGig("g1") } coAnswers { reply.await() }
+            coEvery { repo.startGig("g1", any()) } coAnswers { reply.await() }
             vm.startTask()
             vm.startTask()
             reply.complete(NetworkResult.Success(GigDetailResponse(gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z"))))
-            coVerify(exactly = 1) { repo.startGig("g1") }
+            coVerify(exactly = 1) { repo.startGig("g1", any()) }
         }
 
     @Test
@@ -849,7 +866,7 @@ class GigDetailSaveViewModelTest {
             val events = mutableListOf<GigLifecycleEvent>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
             val reply = CompletableDeferred<NetworkResult<GigDetailResponse>>()
-            coEvery { repo.startGig("g1") } coAnswers { reply.await() }
+            coEvery { repo.startGig("g1", any()) } coAnswers { reply.await() }
             vm.startTask()
             identity = "viewer-1" to "replacement-session"
             reply.complete(NetworkResult.Success(GigDetailResponse(gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z"))))
@@ -865,7 +882,7 @@ class GigDetailSaveViewModelTest {
             val events = mutableListOf<GigLifecycleEvent>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
             val reply = CompletableDeferred<NetworkResult<GigDetailResponse>>()
-            coEvery { repo.startGig("g1") } coAnswers { reply.await() }
+            coEvery { repo.startGig("g1", any()) } coAnswers { reply.await() }
             vm.startTask()
             vm.leaveRealtime()
             reply.complete(NetworkResult.Success(GigDetailResponse(gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z"))))
@@ -881,7 +898,7 @@ class GigDetailSaveViewModelTest {
             val events = mutableListOf<GigLifecycleEvent>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
             val reply = CompletableDeferred<NetworkResult<GigDetailResponse>>()
-            coEvery { repo.startGig("g1") } coAnswers { reply.await() }
+            coEvery { repo.startGig("g1", any()) } coAnswers { reply.await() }
             vm.startTask()
             coEvery { repo.detail("g1") } returns NetworkResult.Success(GigDetailResponse(gig.copy(acceptedAt = "2026-09-15T13:00:00Z")))
             vm.load()
@@ -898,7 +915,7 @@ class GigDetailSaveViewModelTest {
             val events = mutableListOf<GigLifecycleEvent>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
             coEvery {
-                repo.startGig("g1")
+                repo.startGig("g1", any())
             } returns NetworkResult.Success(GigDetailResponse(gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z")))
             vm.startTask()
             assertEquals(listOf(GigLifecycleEvent.Toast("Task started")), events)
@@ -912,14 +929,14 @@ class GigDetailSaveViewModelTest {
             val vm = lifecycleVm(gig, checkoutIdentity = { "viewer-1" to "worker-session" })
             val events = mutableListOf<GigLifecycleEvent>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
-            coEvery { repo.startGig("g1") } returns NetworkResult.Failure(NetworkError.Server(503, "Retry"))
+            coEvery { repo.startGig("g1", any()) } returns NetworkResult.Failure(NetworkError.Server(503, "Retry"))
             vm.startTask()
             coEvery {
-                repo.startGig("g1")
+                repo.startGig("g1", any())
             } returns NetworkResult.Success(GigDetailResponse(gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z")))
             vm.startTask()
             assertEquals(1, events.count { it == GigLifecycleEvent.Toast("Task started") })
-            coVerify(exactly = 2) { repo.startGig("g1") }
+            coVerify(exactly = 2) { repo.startGig("g1", any()) }
             coVerify(exactly = 2) { repo.detail("g1") }
         }
 
@@ -932,16 +949,16 @@ class GigDetailSaveViewModelTest {
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
             val oldReply = CompletableDeferred<NetworkResult<GigDetailResponse>>()
             val currentReply = CompletableDeferred<NetworkResult<GigDetailResponse>>()
-            coEvery { repo.startGig("g1") } coAnswers { oldReply.await() }
+            coEvery { repo.startGig("g1", any()) } coAnswers { oldReply.await() }
             vm.startTask()
             val replacement = gig.copy(acceptedAt = "2026-09-15T13:00:00Z")
             coEvery { repo.detail("g1") } returns NetworkResult.Success(GigDetailResponse(replacement))
             vm.load()
-            coEvery { repo.startGig("g1") } coAnswers { currentReply.await() }
+            coEvery { repo.startGig("g1", any()) } coAnswers { currentReply.await() }
             vm.startTask()
             oldReply.complete(NetworkResult.Failure(NetworkError.Server(503, "Old failure")))
             vm.startTask()
-            coVerify(exactly = 2) { repo.startGig("g1") }
+            coVerify(exactly = 2) { repo.startGig("g1", any()) }
             assertTrue(events.isEmpty())
             currentReply.complete(
                 NetworkResult.Success(GigDetailResponse(replacement.copy(status = "in_progress", startedAt = "2026-09-15T13:01:00Z"))),

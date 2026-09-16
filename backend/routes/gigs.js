@@ -96,6 +96,42 @@ function bindGigPaymentSnapshot(query, gig) {
   return gig.accepted_at ? scoped.eq('accepted_at', gig.accepted_at) : scoped.is('accepted_at', null);
 }
 
+const START_TERM_FIELDS = ['expectedAcceptedAt', 'expectedPrice', 'expectedPaymentId'];
+const startTermsSchema = Joi.object({
+  expectedAcceptedAt: Joi.string().isoDate().allow(null),
+  expectedPrice: Joi.number().min(0).allow(null),
+  expectedPaymentId: Joi.string().max(200).allow(null),
+});
+
+// Displayed assignment terms a caller may send with POST /:gigId/start. Returns
+// null when none were sent (existing behavior), false when malformed. When any
+// field is present every field is bound; an absent field means the screen
+// displayed no value for it.
+function parseExpectedStartTerms(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const provided = START_TERM_FIELDS.filter(field => Object.prototype.hasOwnProperty.call(body, field));
+  if (provided.length === 0) return null;
+  const { value, error } = startTermsSchema.validate(
+    Object.fromEntries(provided.map(field => [field, body[field]])), { convert: true });
+  if (error) return false;
+  return Object.fromEntries(START_TERM_FIELDS.map(field => [field, value[field] ?? null]));
+}
+
+function sameTimestamp(left, right) {
+  if (left == null || right == null) return left == null && right == null;
+  const a = Date.parse(left), b = Date.parse(right);
+  return Number.isFinite(a) && Number.isFinite(b) ? a === b : String(left) === String(right);
+}
+
+function matchesExpectedStartTerms(gig, terms) {
+  const price = gig.price == null ? null : Number(gig.price);
+  const expectedPrice = terms.expectedPrice == null ? null : Number(terms.expectedPrice);
+  const paymentId = gig.payment_id == null ? null : String(gig.payment_id);
+  return sameTimestamp(gig.accepted_at, terms.expectedAcceptedAt)
+    && (price == null ? expectedPrice == null : price === expectedPrice)
+    && (paymentId == null ? terms.expectedPaymentId == null : paymentId === String(terms.expectedPaymentId));
+}
+
 function matchesWorkerStart(gig, userId) {
   return gig?.status === 'in_progress' && String(gig.accepted_by) === String(userId)
     && typeof gig.started_at === 'string' && Number.isFinite(Date.parse(gig.started_at));
@@ -5175,6 +5211,10 @@ router.delete('/:gigId/bids/:bidId', verifyToken, async (req, res) => {
 /**
  * POST /api/gigs/:gigId/start
  * Worker starts work: assigned -> in_progress
+ * Optional body: { expectedAcceptedAt, expectedPrice, expectedPaymentId } —
+ * the assignment terms the caller displayed. When present they must match
+ * this route's own read (409 ASSIGNMENT_CHANGED) before recovery, provider
+ * verification or the write; callers that send none keep the prior behavior.
  */
 router.post('/:gigId/start', verifyToken, async (req, res) => {
   try {
@@ -5194,6 +5234,15 @@ router.post('/:gigId/start', verifyToken, async (req, res) => {
     const isWorker = gig.accepted_by && String(gig.accepted_by) === String(userId);
     if (!isWorker)
       return res.status(403).json({ error: 'Only the assigned worker can start this gig' });
+
+    // Bind the terms the caller displayed to this read before recovering,
+    // verifying the provider or writing: a client whose assignment was already
+    // stale before this read must refresh rather than start terms it never saw.
+    const displayedTerms = parseExpectedStartTerms(req.body);
+    if (displayedTerms === false) return res.status(400).json({ error: 'Invalid expected start terms' });
+    if (displayedTerms && !matchesExpectedStartTerms(gig, displayedTerms)) {
+      return res.status(409).json({ code: 'ASSIGNMENT_CHANGED', error: 'The task changed before work could start. Refresh its details.' });
+    }
 
     // Recover exactly the stored transition; never re-verify the provider or
     // repeat the owner notice for a start this worker already committed.

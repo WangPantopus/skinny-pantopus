@@ -227,6 +227,18 @@ describe('existing worker start control', () => {
     await act(async () => release(typed(started)));
     expect(changed).not.toHaveBeenCalled(); expect(toast.success).not.toHaveBeenCalled();
   });
+  test('sends the assignment terms the screen displayed', async () => {
+    showStart(); await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start Work' })));
+    expect(api.gigs.startGig).toHaveBeenCalledWith(gig, { expectedAcceptedAt: '2026-09-01T00:00:00Z', expectedPrice: 0, expectedPaymentId: null });
+    expect(changed).toHaveBeenCalledTimes(1); expect(toast.success).toHaveBeenCalledWith('Work started!');
+  });
+  test('a changed assignment shows the server guidance and reloads instead of reporting success', async () => {
+    jest.mocked(api.gigs.startGig).mockRejectedValueOnce({ statusCode: 409,
+      data: { code: 'ASSIGNMENT_CHANGED', error: 'The task changed before work could start. Refresh its details.' } });
+    showStart(); await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start Work' })));
+    expect(toast.error).toHaveBeenCalledWith('The task changed before work could start. Refresh its details.');
+    expect(toast.success).not.toHaveBeenCalled(); expect(changed).toHaveBeenCalledTimes(1);
+  });
   test('one pending click owns the start request', async () => {
     let release!: (value: Awaited<ReturnType<typeof api.gigs.startGig>>) => void;
     jest.mocked(api.gigs.startGig).mockReturnValue(new Promise(resolve => { release = resolve; }));

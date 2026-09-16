@@ -19,6 +19,7 @@ import app.pantopus.android.data.api.models.gigs.GigPaymentResponse
 import app.pantopus.android.data.api.models.gigs.GigQuestionDto
 import app.pantopus.android.data.api.models.gigs.GigReportReason
 import app.pantopus.android.data.api.models.gigs.PlaceBidBody
+import app.pantopus.android.data.api.models.gigs.StartGigBody
 import app.pantopus.android.data.api.models.gigs.ViewerBidStatus
 import app.pantopus.android.data.api.models.gigs.WorkerCompletionReceipt
 import app.pantopus.android.data.api.models.offers.BidDto
@@ -1928,7 +1929,13 @@ class GigDetailViewModel
                         completionIsCurrent(identity, actor, marker, gig.id, generation) &&
                             startAttempt == attempt && sameStartAssignment(rawGig, gig)
                     if (!current()) return@launch
-                    val result = repo.startGig(gigId)
+                    val displayed =
+                        StartGigBody(
+                            expectedAcceptedAt = gig.acceptedAt,
+                            expectedPrice = gig.price,
+                            expectedPaymentId = gig.paymentId,
+                        )
+                    val result = repo.startGig(gigId, displayed)
                     if (!current()) return@launch
                     when (result) {
                         is NetworkResult.Success -> {

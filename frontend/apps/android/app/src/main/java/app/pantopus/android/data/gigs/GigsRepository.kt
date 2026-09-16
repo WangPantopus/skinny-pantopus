@@ -49,6 +49,7 @@ import app.pantopus.android.data.api.models.gigs.ReportNoShowBody
 import app.pantopus.android.data.api.models.gigs.ReportNoShowResponse
 import app.pantopus.android.data.api.models.gigs.RescheduleGigBody
 import app.pantopus.android.data.api.models.gigs.RescheduleGigResponse
+import app.pantopus.android.data.api.models.gigs.StartGigBody
 import app.pantopus.android.data.api.models.gigs.WorkerAckBody
 import app.pantopus.android.data.api.models.gigs.WorkerAckResponse
 import app.pantopus.android.data.api.net.NetworkResult
@@ -251,8 +252,11 @@ class GigsRepository
         ): NetworkResult<WorkerAckResponse> =
             safeApiCall { api.workerAck(gigId, WorkerAckBody(status = status, etaMinutes = etaMinutes, note = note)) }
 
-        /** `POST /api/gigs/:gigId/start` — worker moves `assigned → in_progress`. */
-        suspend fun startGig(gigId: String): NetworkResult<GigDetailResponse> = safeApiCall { api.startGig(gigId) }
+        /** `POST /api/gigs/:gigId/start` — worker moves `assigned → in_progress` under the displayed terms. */
+        suspend fun startGig(
+            gigId: String,
+            displayed: StartGigBody,
+        ): NetworkResult<GigDetailResponse> = safeApiCall { api.startGig(gigId, displayed) }
 
         /** `GET /api/gigs/:gigId/no-show-check` — gate for the no-show affordance. */
         suspend fun noShowCheck(gigId: String): NetworkResult<NoShowCheckResponse> = safeApiCall { api.noShowCheck(gigId) }

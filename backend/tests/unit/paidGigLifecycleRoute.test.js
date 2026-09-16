@@ -1228,3 +1228,52 @@ describe('existing urgent notification retries', () => {
   });
 
 });
+
+describe('worker start binds the displayed assignment terms', () => {
+  const startWith = (body, actor = 'worker') => request(app).post('/api/gigs/gig/start').set('x-test-user-id', actor).send(body);
+  const displayed = () => ({ expectedAcceptedAt: getTable('Gig')[0].accepted_at, expectedPrice: getTable('Gig')[0].price,
+    expectedPaymentId: getTable('Gig')[0].payment_id });
+  const stamped = () => { assigned(); getTable('Gig')[0].accepted_at = '2026-09-16T12:00:00+00:00'; };
+
+  test('matching displayed terms start the assignment, tolerating timestamp formatting', async () => {
+    stamped();
+    const response = await startWith({ ...displayed(), expectedAcceptedAt: '2026-09-16T12:00:00Z' });
+    expect(response.status).toBe(200); expect(getTable('Gig')[0].status).toBe('in_progress');
+  });
+  test.each([
+    ['accepted_at', { expectedAcceptedAt: '2026-09-16T13:00:00Z' }],
+    ['missing accepted_at', { expectedAcceptedAt: null }],
+    ['price', { expectedPrice: 20 }],
+    ['payment', { expectedPaymentId: 'other' }],
+    ['null payment', { expectedPaymentId: null }],
+  ])('a changed %s is refused before any provider check or write', async (_label, change) => {
+    stamped();
+    const verify = jest.spyOn(service, 'verifyGigAuthorization');
+    const response = await startWith({ ...displayed(), ...change });
+    expect(response.status).toBe(409); expect(response.body.code).toBe('ASSIGNMENT_CHANGED');
+    expect(getTable('Gig')[0].status).toBe('assigned'); expect(getTable('Gig')[0].started_at).toBeNull();
+    expect(verify).not.toHaveBeenCalled(); expect(mockRetrieve).not.toHaveBeenCalled();
+  });
+  test('an absent field means the screen displayed no value', async () => {
+    assigned();
+    expect((await startWith({ expectedPrice: 12.5, expectedPaymentId: 'pay' })).status).toBe(200);
+  });
+  test('a saved start is not recovered for different displayed terms', async () => {
+    stamped();
+    expect((await startWith(displayed())).status).toBe(200);
+    const stale = await startWith({ ...displayed(), expectedAcceptedAt: '2026-09-15T12:00:00Z' });
+    expect(stale.status).toBe(409); expect(stale.body.code).toBe('ASSIGNMENT_CHANGED'); expect(stale.body.reused).toBeUndefined();
+    const same = await startWith(displayed());
+    expect(same.status).toBe(200); expect(same.body.reused).toBe(true);
+  });
+  test('malformed displayed terms are rejected without side effects', async () => {
+    stamped();
+    expect((await startWith({ expectedPrice: 'twelve' })).status).toBe(400);
+    expect((await startWith({ expectedAcceptedAt: 'yesterday' })).status).toBe(400);
+    expect(getTable('Gig')[0].status).toBe('assigned'); expect(mockRetrieve).not.toHaveBeenCalled();
+  });
+  test('callers that send no terms keep the existing behavior', async () => {
+    stamped();
+    expect((await startWith({})).status).toBe(200); expect(getTable('Gig')[0].status).toBe('in_progress');
+  });
+});

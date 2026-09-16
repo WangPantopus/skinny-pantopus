@@ -443,3 +443,17 @@ data class CreateGigResponse(
     val gig: GigDto,
     val message: String? = null,
 )
+
+/**
+ * Body for `POST /api/gigs/:gigId/start`: the assignment terms the screen
+ * displayed. The route answers 409 `ASSIGNMENT_CHANGED` when they no longer
+ * match its own read. Moshi omits null fields; the route reads an absent field
+ * as a displayed null, so a screen without price, assignment time and payment
+ * sends `{}` and keeps the route's prior behavior.
+ */
+@JsonClass(generateAdapter = true)
+data class StartGigBody(
+    val expectedAcceptedAt: String? = null,
+    val expectedPrice: Double? = null,
+    val expectedPaymentId: String? = null,
+)

@@ -510,6 +510,28 @@ final class GigDetailViewModelTests: XCTestCase {
         XCTAssertEqual(vm.rawGig?.acceptedAt, "2026-09-15T12:01:00Z")
     }
 
+    func testStartSendsTheDisplayedAssignmentTerms() async throws {
+        let vm = try await startVM(replies: [.status(200, body: startedEnvelope())], refreshes: [.status(200, body: startedEnvelope())])
+        let result = await vm.startTask()
+        XCTAssertEqual(result, .confirmed)
+        let request = try XCTUnwrap(proofRequests("/api/gigs/g1/start").first)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBodyData())) as? [String: Any])
+        XCTAssertEqual(Set(body.keys), ["expectedAcceptedAt", "expectedPrice", "expectedPaymentId"])
+        XCTAssertEqual(body["expectedAcceptedAt"] as? String, "2026-09-15T12:00:00Z")
+        XCTAssertEqual(body["expectedPrice"] as? Double, 0)
+        XCTAssertTrue(body["expectedPaymentId"] is NSNull, "A displayed null payment is sent explicitly")
+    }
+
+    func testStartConflictSurfacesRefreshGuidanceWithoutRefreshing() async throws {
+        let conflict = #"{"code":"ASSIGNMENT_CHANGED","error":"The task changed before work could start. Refresh its details."}"#
+        let vm = try await startVM(replies: [.status(409, body: conflict)], refreshes: [.status(200, body: startedEnvelope())])
+        let result = await vm.startTask()
+        guard case let .failed(message) = result else { return XCTFail("A conflict is a reported failure") }
+        XCTAssertTrue(message.contains("changed"), message)
+        XCTAssertEqual(detailReadCount, 1)
+        XCTAssertTrue(vm.canStartTask)
+    }
+
     func testStartDoesNotApplyRefreshAfterSessionReplacement() async throws {
         var identity: GigStopViewModel.Identity? = .init(actor: "worker-1", session: "start-session", origin: "synthetic-origin")
         let vm = try await startVM(

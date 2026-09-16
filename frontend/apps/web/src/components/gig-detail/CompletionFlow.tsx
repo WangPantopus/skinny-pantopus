@@ -239,7 +239,13 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
     const current = () => startAttempt.current === attempt && currentStartContext.current === startContext
       && completionScopeIsCurrent(scope);
     try {
-      const response = await api.gigs.startGig(gigId);
+      // Bind the terms this screen displayed; a stale screen gets 409 instead
+      // of starting an assignment it never showed.
+      const response = await api.gigs.startGig(gigId, {
+        expectedAcceptedAt: typeof gig.accepted_at === 'string' ? gig.accepted_at : null,
+        expectedPrice: typeof gig.price === 'number' || typeof gig.price === 'string' ? gig.price : null,
+        expectedPaymentId: typeof gig.payment_id === 'string' ? gig.payment_id : null,
+      });
       if (!current()) return;
       const receipt = response?.gig;
       if (!receipt || receipt.id !== gigId || receipt.status !== 'in_progress'
@@ -251,8 +257,13 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
     } catch (err: unknown) {
       if (!current()) return;
       const errData = err && typeof err === 'object' ? (err as Record<string, any>) : null;
-      if ((errData?.data as Record<string, any>)?.code === 'payer_authorization_required') {
+      const serverData = errData?.data as Record<string, any> | undefined;
+      if (serverData?.code === 'payer_authorization_required') {
         toast.warning('Waiting for requester payment authorization. Ask the gig owner to complete payment on the gig page.');
+      } else if (serverData?.code === 'ASSIGNMENT_CHANGED') {
+        // The task changed under this screen; the existing refresh path reloads it.
+        toast.error(typeof serverData.error === 'string' ? serverData.error : 'The task changed before work could start. Refresh its details.');
+        onStatusChange?.();
       } else {
         toast.error(err instanceof Error ? err.message : 'Failed to start work');
       }

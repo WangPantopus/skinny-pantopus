@@ -388,10 +388,21 @@ export async function getGigChatRoom(
 }
 
 /**
- * Worker starts the gig: assigned -> in_progress
+ * Assignment terms the caller displayed when it asked to start work. The
+ * route answers 409 `ASSIGNMENT_CHANGED` when they no longer match its read.
  */
-export async function startGig(gigId: string): Promise<{ gig: GigSchema }> {
-  return post<{ gig: GigSchema }>(`/api/gigs/${gigId}/start`);
+export interface StartGigExpectedTerms {
+  expectedAcceptedAt: string | null;
+  expectedPrice: number | string | null;
+  expectedPaymentId: string | null;
+}
+
+/**
+ * Worker starts the gig: assigned -> in_progress. Pass the displayed terms so
+ * a stale screen cannot start an assignment it never showed.
+ */
+export async function startGig(gigId: string, expected?: StartGigExpectedTerms): Promise<{ gig: GigSchema }> {
+  return post<{ gig: GigSchema }>(`/api/gigs/${gigId}/start`, expected);
 }
 
 /**

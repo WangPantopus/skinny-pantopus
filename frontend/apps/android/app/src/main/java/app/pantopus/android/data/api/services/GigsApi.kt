@@ -49,6 +49,7 @@ import app.pantopus.android.data.api.models.gigs.ReportNoShowBody
 import app.pantopus.android.data.api.models.gigs.ReportNoShowResponse
 import app.pantopus.android.data.api.models.gigs.RescheduleGigBody
 import app.pantopus.android.data.api.models.gigs.RescheduleGigResponse
+import app.pantopus.android.data.api.models.gigs.StartGigBody
 import app.pantopus.android.data.api.models.gigs.WorkerAckBody
 import app.pantopus.android.data.api.models.gigs.WorkerAckResponse
 import retrofit2.http.Body
@@ -328,11 +329,13 @@ interface GigsApi {
     /**
      * `POST /api/gigs/:gigId/start` — assigned worker transitions
      * `assigned → in_progress` (payment must be authorized for paid
-     * gigs). Route `backend/routes/gigs.js:5501`. Returns `{ gig }`.
+     * gigs). Route `backend/routes/gigs.js:5501`. Returns `{ gig }`. The body
+     * carries the displayed assignment terms (409 `ASSIGNMENT_CHANGED` on drift).
      */
     @POST("api/gigs/{gigId}/start")
     suspend fun startGig(
         @Path("gigId") gigId: String,
+        @Body body: StartGigBody,
     ): GigDetailResponse
 
     /**

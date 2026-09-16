@@ -1975,7 +1975,12 @@ public extension GigDetailViewModel {
         }
         defer { if startAttempt?.id == attempt { startAttempt = nil } }
         do {
-            let response: GigDetailResponse = try await api.request(GigsEndpoints.startGig(gigId: gigId))
+            let displayed = StartGigBody(
+                expectedAcceptedAt: original.acceptedAt,
+                expectedPrice: original.price,
+                expectedPaymentId: original.paymentId
+            )
+            let response: GigDetailResponse = try await api.request(GigsEndpoints.startGig(gigId: gigId, expected: displayed))
             guard current() else { return .ignored }
             guard Self.matchesStartAssignment(response.gig, original), response.gig.status == "in_progress",
                   Self.parseTimestamp(response.gig.startedAt) != nil
