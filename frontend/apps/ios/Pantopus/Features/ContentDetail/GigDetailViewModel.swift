@@ -195,6 +195,7 @@ public final class GigDetailViewModel {
     private static var activeTips = Set<String>()
     private var completionUploads: [DeliveryProofPhoto: String] = [:]
     private var completionAttempt: UUID?
+    private var startAttempt: (id: UUID, gig: GigDTO)?
 
     var tipIsCurrent: Bool {
         writeIdentityIsCurrent
@@ -350,21 +351,33 @@ public final class GigDetailViewModel {
 
     /// Realtime / post-mutation refetch — keeps the current frame on
     /// screen (no skeleton) and swallows errors.
-    public func refreshSilently() async {
+    public func refreshSilently(whileCurrent: () -> Bool = { true }) async {
+        guard whileCurrent() else { return }
         stopRecovery.refresh()
-        await fetch(silently: true)
+        await fetch(silently: true, whileCurrent: whileCurrent)
     }
 
-    private func fetch(silently: Bool) async {
+    private func fetch(silently: Bool, whileCurrent: () -> Bool = { true }) async {
+        guard whileCurrent() else { return }
         do {
             let detail: GigDetailResponse = try await api.request(GigsEndpoints.detail(id: gigId))
+            guard whileCurrent() else { return }
+            if let original = startAttempt?.gig,
+               !Self.matchesStartAssignment(detail.gig, original)
+               || !["assigned", "in_progress"].contains(detail.gig.status ?? "") {
+                startAttempt = nil
+            }
             rawGig = detail.gig
             isSaved = detail.gig.savedByUser ?? false
             viewerIsOwner = currentUserId != nil && detail.gig.userId == currentUserId
             viewerIsWorker = currentUserId != nil && detail.gig.acceptedBy == currentUserId
             canMarkDelivered = Self.viewerCanMarkDelivered(gig: detail.gig, currentUserId: currentUserId)
             canTip = Self.viewerCanTip(gig: detail.gig, viewerIsOwner: viewerIsOwner) || (tipIsCurrent && (try? readStoredTip()) != nil)
-            if !canTip { canTip = await hasHistoricalTipEntry(gig: detail.gig) }
+            if !canTip {
+                let historical = await hasHistoricalTipEntry(gig: detail.gig)
+                guard whileCurrent() else { return }
+                canTip = historical
+            }
             canInstantAccept = Self.viewerCanInstantAccept(
                 gig: detail.gig,
                 viewerIsOwner: viewerIsOwner,
@@ -378,6 +391,7 @@ public final class GigDetailViewModel {
             } else {
                 offerRankings = [:]
             }
+            guard whileCurrent() else { return }
             ownerBids = viewerIsOwner ? bids : []
             // Phase 6b — reconcile the lock-screen Live Activity on every
             // fetch (load, post-mutation refresh, gig:* room events): start
@@ -397,12 +411,14 @@ public final class GigDetailViewModel {
                 suppressBidsModule: Self.ownerPanelHandlesBids(gig: detail.gig, viewerIsOwner: viewerIsOwner),
                 viewerCanUpdateBid: viewerCanEditBid
             ))
-            await loadQuestions()
+            await loadQuestions(whileCurrent: whileCurrent)
+            guard whileCurrent() else { return }
             // Bidder side — does the viewer already have a bid here? A
             // best-effort follow-up like the lifecycle extras below; when
             // one lands it re-projects so the dock flips "Place bid" →
             // "Update bid" and the "Your bid" panel appears.
-            await loadViewerBid()
+            await loadViewerBid(whileCurrent: whileCurrent)
+            guard whileCurrent() else { return }
             if viewerHasActiveBid {
                 state = .loaded(Self.project(
                     gig: detail.gig,
@@ -415,9 +431,9 @@ public final class GigDetailViewModel {
                     viewerCanUpdateBid: viewerCanEditBid
                 ))
             }
-            await loadLifecycleExtras(gig: detail.gig)
+            await loadLifecycleExtras(gig: detail.gig, whileCurrent: whileCurrent)
         } catch {
-            guard !silently else { return }
+            guard whileCurrent(), !silently else { return }
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load gig."
             state = .error(message: message)
         }
@@ -518,7 +534,8 @@ public final class GigDetailViewModel {
     /// A *failed* my-bid call also falls back to `/my-bids` (mirrors RN
     /// `BidPanel.fetchMyBid`, BidPanel.tsx:110); a successful `bid: null`
     /// is authoritative, so the common "hasn't bid" case stays one request.
-    private func loadViewerBid() async {
+    private func loadViewerBid(whileCurrent: () -> Bool = { true }) async {
+        guard whileCurrent() else { return }
         guard currentUserId != nil, !viewerIsOwner else {
             viewerBid = nil
             return
@@ -532,6 +549,7 @@ public final class GigDetailViewModel {
         } catch {
             resolved = false
         }
+        guard whileCurrent() else { return }
         let needsCounterFields = (bid?.status ?? "").lowercased() == "countered"
         if !resolved || needsCounterFields {
             if let mine: MyBidsResponse = try? await api.request(OffersEndpoints.myBids(limit: Self.myBidsLookupLimit)),
@@ -539,6 +557,7 @@ public final class GigDetailViewModel {
                 bid = match
             }
         }
+        guard whileCurrent() else { return }
         viewerBid = bid
     }
 
@@ -585,21 +604,27 @@ public final class GigDetailViewModel {
     /// the change-order list, and the viewer's pending-review row once
     /// the gig completes. All best-effort — failures just hide
     /// affordances.
-    private func loadLifecycleExtras(gig: GigDTO) async {
+    private func loadLifecycleExtras(gig: GigDTO, whileCurrent: () -> Bool = { true }) async {
+        guard whileCurrent() else { return }
         let status = (gig.status ?? "").lowercased()
         // The backend gates `/report-no-show` for both parties: poster →
         // worker no-show, worker → unresponsive poster (gigs.js:7722).
         if viewerIsOwner || viewerIsWorker, ["assigned", "in_progress"].contains(status) {
             let check: NoShowCheckResponse? = try? await api.request(GigsEndpoints.noShowCheck(gigId: gigId))
+            guard whileCurrent() else { return }
             noShowEligible = check?.canReport ?? false
         } else {
             noShowEligible = false
         }
-        await loadPayment(gig: gig, status: status)
-        await loadChangeOrders(status: status)
-        await loadFulfillment(gig: gig, status: status)
+        await loadPayment(gig: gig, status: status, whileCurrent: whileCurrent)
+        guard whileCurrent() else { return }
+        await loadChangeOrders(status: status, whileCurrent: whileCurrent)
+        guard whileCurrent() else { return }
+        await loadFulfillment(gig: gig, status: status, whileCurrent: whileCurrent)
+        guard whileCurrent() else { return }
         if status == "completed", viewerIsOwner || viewerIsWorker, !reviewSubmitted {
             if let response: MyPendingReviewsResponse = try? await api.request(ReviewsEndpoints.myPending()) {
+                guard whileCurrent() else { return }
                 pendingReview = response.pending.first { $0.gigId == gigId }
                 // The gig is completed but no longer pending → the viewer
                 // already reviewed it.
@@ -613,14 +638,17 @@ public final class GigDetailViewModel {
     /// 400s the route on non-urgent gigs and 403s non-participants, so a
     /// failure just hides the stepper. Mirrors RN's
     /// `ActiveTaskPanel` mount fetch (`ActiveTaskPanel.tsx:114`).
-    private func loadFulfillment(gig: GigDTO, status: String) async {
+    private func loadFulfillment(gig: GigDTO, status: String, whileCurrent: () -> Bool = { true }) async {
+        guard whileCurrent() else { return }
         guard Self.gigUsesLiveFulfillment(gig: gig),
               viewerIsOwner || viewerIsWorker,
               ["assigned", "in_progress"].contains(status) else {
             fulfillment = nil
             return
         }
-        fulfillment = try? await api.request(GigOwnerActionsEndpoints.activeStatus(gigId: gigId))
+        let response: GigActiveStatusResponse? = try? await api.request(GigOwnerActionsEndpoints.activeStatus(gigId: gigId))
+        guard whileCurrent() else { return }
+        fulfillment = response
     }
 
     /// The backend's own gate on `/status` + `/active-status`:
@@ -631,7 +659,8 @@ public final class GigDetailViewModel {
 
     /// Owner's Payment card data — fetched once a bid was accepted /
     /// the gig is assigned+ (gigs.js:8440). Silent-hide on 404/failure.
-    private func loadPayment(gig: GigDTO, status: String) async {
+    private func loadPayment(gig: GigDTO, status: String, whileCurrent: () -> Bool = { true }) async {
+        guard whileCurrent() else { return }
         let assignedPlus = ["assigned", "in_progress", "completed"].contains(status)
             || !(gig.acceptedBy ?? "").isEmpty
         mayManagePayment = false
@@ -643,6 +672,7 @@ public final class GigDetailViewModel {
             return
         }
         let response: GigPaymentResponse? = try? await api.request(GigsEndpoints.payment(gigId: gigId))
+        guard whileCurrent() else { return }
         guard bidAcceptance.isCurrentAccount else { payment = nil
             paymentStateInfo = nil
             return
@@ -655,12 +685,14 @@ public final class GigDetailViewModel {
 
     /// Change orders — both roles, while the gig is assigned /
     /// in_progress (the create route's precondition, gigs.js:6691).
-    private func loadChangeOrders(status: String) async {
+    private func loadChangeOrders(status: String, whileCurrent: () -> Bool = { true }) async {
+        guard whileCurrent() else { return }
         guard viewerIsOwner || viewerIsWorker, ["assigned", "in_progress"].contains(status) else {
             changeOrders = []
             return
         }
         let response: GigChangeOrdersResponse? = try? await api.request(GigsEndpoints.changeOrders(gigId: gigId))
+        guard whileCurrent() else { return }
         changeOrders = response?.changeOrders ?? []
     }
 
@@ -1457,13 +1489,16 @@ public final class GigDetailViewModel {
 
     // MARK: - Structured Q&A
 
-    func loadQuestions() async {
+    func loadQuestions(whileCurrent: () -> Bool = { true }) async {
+        guard whileCurrent() else { return }
         questionsLoading = true
-        defer { questionsLoading = false }
+        defer { if whileCurrent() { questionsLoading = false } }
         do {
             let response: GigQuestionsResponse = try await api.request(GigsEndpoints.questions(gigId: gigId))
+            guard whileCurrent() else { return }
             questions = response.questions
         } catch {
+            guard whileCurrent() else { return }
             questions = []
         }
     }
@@ -1928,17 +1963,34 @@ public extension GigDetailViewModel {
         )
     }
 
-    /// Worker starts the task (assigned → in_progress).
+    /// Worker starts only the loaded assignment; old callbacks cannot report success.
     @discardableResult
-    func startTask() async -> String? {
-        guard canStartTask else { return nil }
-        do {
-            _ = try await api.request(GigsEndpoints.startGig(gigId: gigId), as: EmptyResponse.self)
-            await refreshSilently()
-            return nil
-        } catch {
-            return (error as? APIError)?.errorDescription ?? "Couldn't start the task."
+    func startTask() async -> ConfirmationResult {
+        guard canStartTask, writeIdentityIsCurrent, startAttempt == nil, let original = rawGig else { return .ignored }
+        let attempt = UUID()
+        startAttempt = (attempt, original)
+        func current() -> Bool {
+            startAttempt?.id == attempt && writeIdentityIsCurrent && !Task.isCancelled
+                && rawGig.map { Self.matchesStartAssignment($0, original) } == true
         }
+        defer { if startAttempt?.id == attempt { startAttempt = nil } }
+        do {
+            let response: GigDetailResponse = try await api.request(GigsEndpoints.startGig(gigId: gigId))
+            guard current() else { return .ignored }
+            guard Self.matchesStartAssignment(response.gig, original), response.gig.status == "in_progress",
+                  Self.parseTimestamp(response.gig.startedAt) != nil
+            else { return .failed("Start receipt unavailable. Reopen the task to check its current state.") }
+            await refreshSilently(whileCurrent: current)
+            return current() ? .confirmed : .ignored
+        } catch {
+            guard current() else { return .ignored }
+            return .failed((error as? APIError)?.errorDescription ?? "Couldn't start the task.")
+        }
+    }
+
+    private static func matchesStartAssignment(_ value: GigDTO, _ original: GigDTO) -> Bool {
+        value.id == original.id && value.userId == original.userId && value.acceptedBy == original.acceptedBy
+            && value.acceptedAt == original.acceptedAt && value.paymentId == original.paymentId && value.price == original.price
     }
 
     enum ConfirmationResult: Equatable {
@@ -2112,6 +2164,7 @@ public extension GigDetailViewModel {
 
     /// Leave the room and tear down the listeners.
     func stopRealtime() {
+        startAttempt = nil
         guard !realtimeTasks.isEmpty else { return }
         for task in realtimeTasks {
             task.cancel()

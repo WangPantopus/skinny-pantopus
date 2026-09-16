@@ -308,7 +308,13 @@ public struct GigDetailView: View {
                         Task { await runToasting(success: "Told the poster you're on it.") { await viewModel.sendWorkerAck() } }
                     },
                     onStartTask: {
-                        Task { await runToasting(success: "Task started.") { await viewModel.startTask() } }
+                        Task {
+                            switch await viewModel.startTask() {
+                            case .confirmed: toast = ToastMessage(text: "Task started.", kind: .success)
+                            case let .failed(message): toast = ToastMessage(text: message, kind: .error)
+                            case .ignored: break
+                            }
+                        }
                     },
                     onConfirmCompletion: {
                         Task {

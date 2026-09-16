@@ -350,16 +350,181 @@ final class GigDetailViewModelTests: XCTestCase {
                 .status(200, body: Self.questionsJSON),
                 .status(200, body: Self.questionsJSON)
             ],
-            "/api/gigs/g1/start": [.status(200, body: #"{"message":"ok"}"#)]
+            "/api/gigs/g1/start": [.status(200, body: workerGig("in_progress", extra: #","started_at":"2026-09-15T12:05:00Z""#))]
         ])
-        let vm = makeVM()
+        let vm = GigDetailViewModel(gigId: "g1", api: makeAPI(), currentUserId: "viewer-1", tipIdentity: {
+            .init(actor: "viewer-1", session: "start-session", origin: "synthetic-origin")
+        })
         await vm.load()
         let error = await vm.startTask()
-        XCTAssertNil(error)
+        XCTAssertEqual(error, .confirmed)
         XCTAssertTrue(SequencedURLProtocol.capturedRequests.contains { $0.url?.path == "/api/gigs/g1/start" })
         XCTAssertEqual(vm.activePhase, .inProgress)
         XCTAssertFalse(vm.canStartTask)
         XCTAssertTrue(vm.canMarkDelivered, "In-progress worker gets the delivery affordance.")
+    }
+
+    // MARK: - Start Work receipt and callback lifetime
+
+    private func startEnvelope(overrides: [String: Any] = [:]) throws -> String {
+        var gig: [String: Any] = [
+            "id": "g1", "title": "Existing task", "price": 0, "status": "assigned",
+            "user_id": "owner-1", "accepted_by": "worker-1", "payment_id": NSNull(),
+            "accepted_at": "2026-09-15T12:00:00Z"
+        ]
+        gig.merge(overrides) { _, newer in newer }
+        return try XCTUnwrap(String(data: JSONSerialization.data(withJSONObject: ["gig": gig]), encoding: .utf8))
+    }
+
+    private func startedEnvelope(overrides: [String: Any] = [:]) throws -> String {
+        var values: [String: Any] = ["status": "in_progress", "started_at": "2026-09-15T12:05:00Z"]
+        values.merge(overrides) { _, newer in newer }
+        return try startEnvelope(overrides: values)
+    }
+
+    private func startVM(
+        replies: [SequencedURLProtocol.Response],
+        refreshes: [SequencedURLProtocol.Response] = [],
+        identity: @escaping () -> GigStopViewModel.Identity? = {
+            .init(actor: "worker-1", session: "start-session", origin: "synthetic-origin")
+        }
+    ) async throws -> GigDetailViewModel {
+        let routes: [String: [SequencedURLProtocol.Response]] = try [
+            "/api/gigs/g1": [.status(200, body: startEnvelope())] + refreshes,
+            "/api/gigs/g1/start": replies,
+            "/api/gigs/g1/questions": Array(repeating: .status(200, body: Self.questionsJSON), count: 5),
+            "/api/gigs/g1/payment": Array(repeating: .status(200, body: "{\"payment\":null}"), count: 5),
+            "/api/gigs/g1/change-orders": Array(repeating: .status(200, body: "{\"change_orders\":[]}"), count: 5),
+            "/api/gigs/g1/no-show-check": Array(repeating: .status(200, body: "{\"can_report\":false}"), count: 5)
+        ]
+        let vm = GigDetailViewModel(
+            gigId: "g1",
+            api: APIClient(session: SequencedURLProtocol.makeSession(routeResponses: routes), retryPolicy: .none),
+            currentUserId: "worker-1",
+            tipIdentity: identity,
+            roomEvents: { _ in AsyncStream { $0.finish() } },
+            emitRoom: { _, _ in }
+        )
+        await vm.load()
+        XCTAssertTrue(vm.canStartTask)
+        return vm
+    }
+
+    private func waitForStartRequest(count: Int = 1) async {
+        for _ in 0..<100 {
+            if proofRequests("/api/gigs/g1/start").count >= count { return }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("Expected Start Work request")
+    }
+
+    private func releaseStartGate(_ gate: String) async {
+        for _ in 0..<100 {
+            if SequencedURLProtocol.release(gate) { return }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("Expected held response")
+    }
+
+    private var detailReadCount: Int {
+        SequencedURLProtocol.capturedRequests.filter { $0.url?.path == "/api/gigs/g1" }.count
+    }
+
+    func testStartRejectsMissingOrMismatchedSavedReceipt() async throws {
+        let mismatches: [[String: Any]] = [
+            ["id": "other"], ["user_id": "other"], ["accepted_by": "other"],
+            ["accepted_at": "2026-09-15T12:01:00Z"], ["payment_id": "other"],
+            ["price": 1], ["status": "assigned"], ["started_at": NSNull()], ["started_at": "invalid"]
+        ]
+        let bodies = try ["{}"] + mismatches.map { try startedEnvelope(overrides: $0) }
+        for body in bodies {
+            SequencedURLProtocol.reset()
+            let vm = try await startVM(replies: [.status(200, body: body)], refreshes: [.status(503, body: "{}")])
+            let result = await vm.startTask()
+            guard case .failed = result else { XCTFail("Unverified receipts cannot trigger the caller's success toast")
+                continue
+            }
+            XCTAssertEqual(detailReadCount, 1, "Do not refresh from an invalid receipt")
+        }
+    }
+
+    func testStartDebouncesPendingRequest() async throws {
+        let vm = try await startVM(
+            replies: [.status(200, body: startedEnvelope(), gate: "start")],
+            refreshes: [.status(200, body: startedEnvelope())]
+        )
+        let pending = Task { await vm.startTask() }
+        await waitForStartRequest()
+        let duplicate = await vm.startTask()
+        XCTAssertEqual(duplicate, .ignored)
+        XCTAssertEqual(proofRequests("/api/gigs/g1/start").count, 1)
+        await releaseStartGate("start")
+        _ = await pending.value
+    }
+
+    func testStartRetiresReplyAfterSessionReplacement() async throws {
+        var identity: GigStopViewModel.Identity? = .init(actor: "worker-1", session: "start-session", origin: "synthetic-origin")
+        let vm = try await startVM(
+            replies: [.status(200, body: startedEnvelope(), gate: "start")],
+            refreshes: [.status(200, body: startedEnvelope())]
+        ) { identity }
+        let pending = Task { await vm.startTask() }
+        await waitForStartRequest()
+        identity = .init(actor: "worker-1", session: "replacement", origin: "synthetic-origin")
+        await releaseStartGate("start")
+        let result = await pending.value
+        XCTAssertEqual(result, .ignored)
+        XCTAssertEqual(detailReadCount, 1)
+        XCTAssertEqual(vm.rawGig?.status, "assigned")
+    }
+
+    func testStartRetiresReplyAfterDeparture() async throws {
+        let vm = try await startVM(
+            replies: [.status(200, body: startedEnvelope(), gate: "start")],
+            refreshes: [.status(200, body: startedEnvelope())]
+        )
+        let pending = Task { await vm.startTask() }
+        await waitForStartRequest()
+        vm.stopRealtime()
+        await releaseStartGate("start")
+        let result = await pending.value
+        XCTAssertEqual(result, .ignored)
+        XCTAssertEqual(detailReadCount, 1)
+        XCTAssertEqual(vm.rawGig?.status, "assigned")
+    }
+
+    func testStartRetiresReplyAfterSameWorkerReassignment() async throws {
+        let replacement = try startEnvelope(overrides: ["accepted_at": "2026-09-15T12:01:00Z"])
+        let vm = try await startVM(
+            replies: [.status(200, body: startedEnvelope(), gate: "start")],
+            refreshes: [.status(200, body: replacement), .status(200, body: startedEnvelope())]
+        )
+        let pending = Task { await vm.startTask() }
+        await waitForStartRequest()
+        await vm.refreshSilently()
+        await releaseStartGate("start")
+        let result = await pending.value
+        XCTAssertEqual(result, .ignored)
+        XCTAssertEqual(detailReadCount, 2)
+        XCTAssertEqual(vm.rawGig?.acceptedAt, "2026-09-15T12:01:00Z")
+    }
+
+    func testStartDoesNotApplyRefreshAfterSessionReplacement() async throws {
+        var identity: GigStopViewModel.Identity? = .init(actor: "worker-1", session: "start-session", origin: "synthetic-origin")
+        let vm = try await startVM(
+            replies: [.status(200, body: startedEnvelope())],
+            refreshes: [.status(200, body: startedEnvelope(), gate: "refresh")]
+        ) { identity }
+        let pending = Task { await vm.startTask() }
+        for _ in 0..<100 where detailReadCount < 2 {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(detailReadCount, 2)
+        identity = .init(actor: "other", session: "replacement", origin: "synthetic-origin")
+        await releaseStartGate("refresh")
+        let result = await pending.value
+        XCTAssertEqual(result, .ignored)
+        XCTAssertEqual(vm.rawGig?.status, "assigned")
     }
 
     func testOwnerConfirmCompletionUnlocksTip() async {
@@ -981,13 +1146,14 @@ final class GigDetailViewModelTests: XCTestCase {
                 .status(200, body: #"{"change_orders":[]}"#),
                 .status(200, body: #"{"change_orders":[]}"#)
             ],
-            "/api/gigs/g1/start": [.status(200, body: #"{"message":"ok"}"#)]
+            "/api/gigs/g1/start": [.status(200, body: workerGig("in_progress", extra: #","started_at":"2026-09-15T12:05:00Z""#))]
         ])
         let recorder = LiveActivityRecorder()
         let vm = GigDetailViewModel(
             gigId: "g1",
             api: makeAPI(),
             currentUserId: "viewer-1",
+            tipIdentity: { .init(actor: "viewer-1", session: "start-session", origin: "synthetic-origin") },
             liveActivity: recorder,
             roomEvents: { _ in AsyncStream { $0.finish() } },
             emitRoom: { _, _ in }
