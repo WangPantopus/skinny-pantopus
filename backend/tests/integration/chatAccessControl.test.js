@@ -710,3 +710,113 @@ describe('Message retry scope', () => {
     expect(mockIo.emit).not.toHaveBeenCalled();
   });
 });
+
+// The isBlocked pre-check and the ChatMessage insert are separate PostgREST
+// transactions, so a block can commit between them. The database re-decides
+// admission inside the inserting transaction
+// (20260916010000_direct_message_block_admission) and raises PT403. These cases
+// pin the route's half of that contract: UserBlock stays EMPTY throughout, so
+// the pre-check allows and only the persistence-boundary denial can fire.
+describe('Direct send denied at the persistence boundary', () => {
+  const db = require('../__mocks__/supabaseAdmin');
+  const notifications = require('../__mocks__/notificationService');
+  let insertSpy;
+
+  function failInsertWith(error, { onlyFirst = false } = {}) {
+    const original = db.from.bind(db);
+    insertSpy = jest.fn();
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = original(table);
+      if (table === 'ChatMessage') {
+        const insert = query.insert.bind(query);
+        query.insert = payload => {
+          insertSpy(payload);
+          if (onlyFirst && insertSpy.mock.calls.length > 1) return insert(payload);
+          return { select: () => ({ single: async () => ({ data: null, error }) }) };
+        };
+      }
+      return query;
+    });
+  }
+
+  beforeEach(() => {
+    const service = require('../../services/blockService');
+    for (const a of [U1, U2, U_BIZ]) for (const b of [U1, U2, U_BIZ]) service.invalidateBlockCache(a, b);
+    seedTable('UserBlock', []);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  const send = app => request(app).post('/api/chat/messages').set('x-test-user-id', U1)
+    .send({ roomId: ROOM_DIRECT, messageText: 'Raced a committed block', messageType: 'text' });
+
+  test.each([
+    ['DIRECT_MESSAGE_BLOCKED'],
+    ['DIRECT_MESSAGE_ACTOR_INVALID'],
+  ])('%s is refused with no row, no broadcast and no notification', async message => {
+    failInsertWith({ code: 'PT403', message, details: 'Direct message refused', hint: null });
+    const { app, mockIo } = createApp();
+    const before = getTable('ChatMessage').length;
+
+    const response = await send(app);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatch(/unable to message/i);
+    expect(getTable('ChatMessage')).toHaveLength(before);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+    expect(notifications.createNotification).not.toHaveBeenCalled();
+  });
+
+  test('the denial is not re-attempted with a stripped payload', async () => {
+    failInsertWith({ code: 'PT403', message: 'DIRECT_MESSAGE_BLOCKED' });
+    const { app } = createApp();
+
+    expect((await send(app)).status).toBe(403);
+    expect(insertSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('the legacy actor_user_id fallback still recovers and is not captured', async () => {
+    failInsertWith({ message: 'column "actor_user_id" does not exist' }, { onlyFirst: true });
+    const { app, mockIo } = createApp();
+    const before = getTable('ChatMessage').length;
+
+    const response = await send(app);
+
+    expect(response.status).toBe(201);
+    expect(insertSpy).toHaveBeenCalledTimes(2);
+    expect(getTable('ChatMessage')).toHaveLength(before + 1);
+    expect(mockIo.emit).toHaveBeenCalled();
+  });
+
+  test('the denial body is byte-identical to losing the pre-check', async () => {
+    seedTable('UserBlock', [{ id: 'block', blocker_user_id: U2, blocked_user_id: U1 }]);
+    const { app } = createApp();
+    const precheck = await send(app);
+    jest.restoreAllMocks();
+
+    seedTable('UserBlock', []);
+    require('../../services/blockService').invalidateBlockCache(U1, U2);
+    failInsertWith({ code: 'PT403', message: 'DIRECT_MESSAGE_BLOCKED' });
+    const raced = await send(createApp().app);
+
+    expect(precheck.status).toBe(403);
+    expect(raced.status).toBe(precheck.status);
+    expect(raced.body).toEqual(precheck.body);
+  });
+
+  test('a PostgrestError-shaped rejection keeps the token on message', async () => {
+    // supabase-js surfaces the PostgREST body as {message, details, hint, code};
+    // matching on `message` survives even if `details` is ever dropped.
+    const error = Object.assign(new Error('DIRECT_MESSAGE_BLOCKED'), {
+      code: 'PT403', details: 'Direct message refused; this conversation has an active block',
+      hint: null, name: 'PostgrestError',
+    });
+    failInsertWith(error);
+    const { app, mockIo } = createApp();
+
+    const response = await send(app);
+
+    expect(error.message).toBe('DIRECT_MESSAGE_BLOCKED');
+    expect(response.status).toBe(403);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+  });
+});

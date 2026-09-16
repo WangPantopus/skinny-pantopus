@@ -1729,6 +1729,19 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     let supportsMetadataColumn = true;
     let { data: message, error } = await insertMessage(messageData);
 
+    // The database re-decides direct-room admission inside the inserting
+    // transaction (20260916010000_direct_message_block_admission): the isBlocked
+    // pre-check above and this insert are separate PostgREST transactions, so a
+    // block can commit between them. Returning here — ahead of the legacy
+    // fallbacks below — guarantees a denied send is never re-attempted with a
+    // stripped payload, and the response body is byte-identical to the
+    // pre-check denial so the race is indistinguishable from losing it.
+    if (error?.code === 'PT403' && /^DIRECT_MESSAGE_(BLOCKED|ACTOR_INVALID)$/.test(String(error.message || '').trim())) {
+      incCounter('chat.message.send_failed');
+      logger.warn('message_send_blocked_at_persistence', { requestId, roomId, userId, senderUserId, durationMs: Date.now() - sendStartMs });
+      return res.status(403).json({ error: 'Unable to message this user' });
+    }
+
     // Backward-compat fallback:
     // - legacy DB may not have ChatMessage.actor_user_id
     // - legacy DB may not have ChatMessage.metadata
@@ -2083,8 +2096,12 @@ router.post('/rooms/:roomId/participants', verifyToken, participantLimiter, asyn
       return res.status(500).json({ error: 'Failed to add participant' });
     }
     
-    // Create system message
-    await supabaseAdmin
+    // Create system message. The direct-room admission gate
+    // (20260916010000_direct_message_block_admission) can refuse this insert with
+    // PT403 when the room is direct and a block is active. That is the intended
+    // direction, but the result was previously discarded entirely, so record it:
+    // the participant change itself already succeeded and must still be reported.
+    const { error: addNoticeError } = await supabaseAdmin
       .from('ChatMessage')
       .insert({
         room_id: roomId,
@@ -2092,7 +2109,13 @@ router.post('/rooms/:roomId/participants', verifyToken, participantLimiter, asyn
         message: `added ${newParticipant.user.name || newParticipant.user.username}`,
         type: 'system'
       });
-    
+    if (addNoticeError) {
+      logger.warn('system_message_not_recorded', {
+        requestId: req.requestId, roomId, userId, kind: 'participant_added',
+        blockedAtPersistence: addNoticeError.code === 'PT403', error: addNoticeError.message,
+      });
+    }
+
     res.status(201).json({ participant: serializeChatParticipantForViewer(newParticipant) });
     
   } catch (err) {
@@ -2141,8 +2164,10 @@ router.delete('/rooms/:roomId/participants/:participantUserId', verifyToken, par
       return res.status(500).json({ error: 'Failed to remove participant' });
     }
     
-    // Create system message
-    await supabaseAdmin
+    // Create system message. Same admission gate as the add path above; a direct
+    // room under an active block refuses this with PT403. The removal already
+    // succeeded, so the denial is logged rather than surfaced to the caller.
+    const { error: removeNoticeError } = await supabaseAdmin
       .from('ChatMessage')
       .insert({
         room_id: roomId,
@@ -2150,7 +2175,13 @@ router.delete('/rooms/:roomId/participants/:participantUserId', verifyToken, par
         message: isSelf ? 'left the chat' : `removed a participant`,
         type: 'system'
       });
-    
+    if (removeNoticeError) {
+      logger.warn('system_message_not_recorded', {
+        requestId: req.requestId, roomId, userId, kind: isSelf ? 'participant_left' : 'participant_removed',
+        blockedAtPersistence: removeNoticeError.code === 'PT403', error: removeNoticeError.message,
+      });
+    }
+
     res.json({ message: 'Participant removed successfully' });
     
   } catch (err) {
