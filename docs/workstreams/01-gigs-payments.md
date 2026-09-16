@@ -129,8 +129,16 @@ failed attempt. Repository responses and identity are mocked in these JVM tests;
 - Stream3 live handoff is republished at `fc99f8ee7`, correctly marked repair with
   no real-persistence/installed acceptance and an introduced empty-list defect.
   It owns `chats.js` block repairs and the bounded `backend/jest.config.js`
-  inclusion of the existing chat-access suite. Socket changes still need review
-  against the paid private-gig socket implementation before assignment.
+  inclusion of the existing chat-access suite. On its resumed request, overlap
+  review found the paid socket delta is only `emitPrivateGigUpdate` and its export.
+  Stream3 is now sole writer for the block-service error/cache repair and affected
+  direct-chat socket handlers, preserving private-gig delivery, session revocation
+  and `connectedUsers`. Verify all block-service callers before changing errors.
+  Runtime grant: exact synthetic social fixtures on PostgreSQL64522/API64521,
+  private HTTP18130/web18131, no schema changes. REST18089 is not granted (retained
+  Home database resource and currently not listening). Stream3 owns the next
+  heavy native slot after announcing exact build/device targets and checking
+  leases; owner iPhone17 and existing acceptance devices remain protected.
 - Stream2's SDK guest-status type widening and Stream3's additive SDK exports
   conflict with no Stream1 change. Neither peer branch is approved for merge.
   Their uncommitted live status updates are preserved and not staged by this task.

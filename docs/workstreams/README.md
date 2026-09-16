@@ -127,7 +127,8 @@ These cross-cutting files/contracts require coordinator assignment for each edit
 | `backend/jest.config.js` chat-access regression inclusion | Stream 3 | Granted only for the existing excluded chat-access suite; run regressions, no broad CI rewrite |
 | `backend/routes/chats.js` block-path repairs | Stream 3 | Sole writer; reproduce fail-open/multi-party cases and repair existing contracts |
 | SDK guest-pass status type / block exports | Streams 2 / 3 respectively | Additive candidates reviewed for conflict; no Stream1 overlap; broader SDK/auth changes still require assignment |
-| Stream 3 socket admission, if needed | Coordinator with Stream 1/3 | Compare retained private-gig socket changes before granting a socket edit |
+| `backend/services/blockService.js` error/cache repair | Stream 3 | Sole writer granted after baseline reproduction; verify all callers before changing the error contract |
+| `backend/socket/chatSocketio.js` direct-chat admission/send checks | Stream 3 | Overlap reviewed: paid branch only adds `emitPrivateGigUpdate` plus its export; preserve that helper, `connectedUsers`, revocation and gig tracking behavior |
 | Cancellation/no-show fee payer and recipient | Product decision, recorded by Stream 1 | Still unspecified; independent Start Work verification can proceed |
 | User's Place redesign, PR #46 | User's separate scope | Preserved outside these verification milestones |
 
@@ -142,9 +143,9 @@ or elapsed time is not proof a resource is free.
 
 | Resource | Current reservation | Rule |
 | --- | --- | --- |
-| Local heavy native build | None; Stream1 Android checks finished and released | Coordinator grants one owner; others continue lighter work |
+| Local heavy native build | Stream3 owns the next slot; announce exact runtime before starting | Stream1 released its slot; one heavy native build at a time |
 | iOS/Android test devices | No new reservation | Preserve accepted device state; inspect existing leases |
-| Databases / fixture ports | Stream1 P04 exact fixtures cleaned; loopback listener closed | Separate exact owned fixtures or exclusive write lease; record cleanup |
+| Databases / fixture ports | Stream3: PostgreSQL64522 / API64521, exact social fixtures only; HTTP18130/web18131 | No schema/reset/container mutation; inspect source compatibility and leases, preserve all other fixtures; 18089 is not granted |
 | Existing SQL port 64522 and REST port 18089 | Retained prior rehearsal resources | Never assume available or change their schema from another stream |
 | Physical iPhone | Owner's installed build 3 | No test install or device mutation without a concrete authorized task |
 
