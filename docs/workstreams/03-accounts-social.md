@@ -1,7 +1,7 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated September 15, 2026 (resumed verification). Owner: accounts/social stream.
-State: **repair / verification / CI**. Stream 3 and N04 remain **incomplete**.
+Updated September 15, 2026, 21:15 PDT (immediate user-requested cutoff handoff). Owner: accounts/social stream.
+State: **paused for handoff; implementation and verification incomplete**. Stream 3, N04 and N05 remain **incomplete**.
 Current status is maintained only in this neutral coordination file.
 
 ## Source and reconciliation
@@ -9,12 +9,16 @@ Current status is maintained only in this neutral coordination file.
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
 `codex/workstream-accounts-social`. Initial inspection found clean `fc99f8ee7`
 with no later changes, PR or CI. Current master `0616d6e79` was integrated as
-shared documentation only. Current pushed application milestone: **`dfc860bfe`**.
+shared documentation only. Current pushed milestones: **`dfc860bfe`** (initial safety repair), **`41588bbec`** (native lifetime/web navigation), **`8d31d452f`** (N05 reminder failure contract), **`bf16f6f50`** (message retry privacy), **`22adc7285`** (existing retry test fixture models SQL NULL actor defaults).
 Draft [PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51);
-[CI35051834828](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35051834828)
-has an **Android ktlint failure** (BlockedUsersViewModel.kt indentation); web/backend/database/iOS lint gates pass, other native jobs still running. No integration/merge approval and no merge performed.
-New uncommitted Android lifetime regression tests reproduce two stale-response defects. Local Next-generated `tsconfig.json`/`.next-stream3` also remains outside
-that commit; it will be restored/retired after the browser runtime stops.
+[CI35054358217](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35054358217) for current HEAD **`22adc728512b8dd0f261c0aaf02e255123dc7f50`**
+has since **completed successfully** (confirmed 2026-09-16 on resume; it was still
+in progress at the cutoff inspection). Earlier runs were superseded; initial Android
+indentation failure was repaired. Green CI is not acceptance: the reproduced
+concurrent block/send race below is still open, so N04 does not close. No merge or
+integration approval.
+Application worktree is clean: owned generated tsconfig restored to HEAD and Next
+cache moved to private evidence storage after stopping the server.
 
 The prior `fc99f8ee7` router journey used **in-memory Supabase mocks, synthetic
 x-test-user-id authentication and in-process Supertest**. It exercised no
@@ -56,12 +60,12 @@ UserBlock, UserProfileBlock, PersonaBlock and Relationship remain distinct.
 | Class | Current evidence and limitations |
 | --- | --- |
 | Baseline reproduced | New web blocked-page6/6 and report/session3/3 failures; repeated-profile read1 additional failure. Backend original21 pass/new5 fail: unavailable create/send201, second participant bypass201, delayed stale allow, missing count treated empty. Android2 distinct partial-list failures, retried to6 recorded failure executions. |
-| Local regressions | **42 backend**, **10 rendered web**, **13 Android JVM**, **13 iOS model** pass. Web TypeScript passes; scoped ESLint has warnings/no errors. iOS scoped SwiftLint/SwiftFormat pass. Android final static checks still pending. Mocked/stubbed persistence/auth applies to these tests. |
+| Local regressions | **42 backend**, **12 rendered web**, **20 Android JVM**, **17 iOS model** pass. Web TypeScript passes; scoped ESLint has warnings/no errors. iOS scoped SwiftLint/SwiftFormat pass. Android formatter fixed the CI indentation defect; final full static/CI remains pending. Native screen wrapper changes are lifecycle hooks only, without layout changes. Mocked/stubbed persistence/auth applies to these tests. |
 | Browser → HTTP → persistence | Actual existing profile Report submitted harassment to one pending UserReport; profile Block succeeded; Settings → Blocked Users displayed Social Bob; Unblock removed the UserBlock; failed personal list + successful empty relationship list showed unavailable/Retry, then confirmed empty after recovery. Actual SDK, HTTP, PostgREST and PostgreSQL; synthetic authentication, older retained schema, local Debug/development runtime. |
 | Actual HTTP/PostgreSQL | **9/9** focused cases pass: owner list/removal isolation, bidirectional direct-create denial, duplicate blocks, reverse block after unilateral unblock, warm-cache unblock/create/send with a saved message, existing-room member reads/nonmember denial/bidirectional send denial, unavailable block read503 with no intercepted delivery effects, browser report persistence and retry. |
-| Native installed | New owned simulator installed/launched with API18130. Initial preview-auth launch was insufficient (401), so proceeding through real installed sign-in UI backed by a synthetic local sign-in fixture. Actual installed normal sign-in → Hub → Settings → Blocked users displayed persisted Social Bob; Unblock removed the UserBlock (SQL confirmed). Failed personal list + empty profile list displayed existing error/Try again; recovery/Try again displayed confirmed empty. Synthetic sign-in, local PostgREST/SQL; block creation/report/chat and session races remain unverified on installed screens. |
-| Socket/provider | Three socket handler regressions pass for query failure and both block directions. HTTP harness captures socket emits/provider attempts; **no real socket transport or provider delivery claim**. |
-| CI / integration | PR51 draft/current-head CI Android ktlint failed at line235 (indentation36 vs40); later Android gates did not run. Other completed gates green; native jobs still running. Neither green local tests nor this PR closes N04 or authorizes merging. |
+| Native installed | New owned simulator installed/launched with API18130. Initial preview-auth launch was insufficient (401); the accepted run used the real installed sign-in UI backed by a synthetic local sign-in fixture. Actual installed normal sign-in → Hub → Settings → Blocked users displayed persisted Social Bob; Unblock removed the UserBlock (SQL confirmed). Failed personal list + empty profile list displayed existing error/Try again; recovery/Try again displayed confirmed empty. Synthetic sign-in, local PostgREST/SQL; block creation/report/chat and session races remain unverified on installed screens. |
+| Socket/provider | **6/6 actual loopback Socket.IO → HTTP/PostgREST/SQL cases pass**: both-direction denial, warm-cache transition, existing-room membership/nonmember denial, reconnect, reverse block, DB-unavailable acknowledgments/no message/notification effects, one saved/broadcast message after lost-reply retry with outsider excluded. Synthetic exact-fixture socket identity; provider calls intercepted and unrelated global typing cleanup disabled in harness. Initial3-second harness acknowledgment cutoff timed out; rerun with10-second cutoff passed. No provider/device claim. |
+| CI / integration | PR51 draft/current HEAD22adc7285; CI35054358217 in progress at final inspection. Earlier Android indentation repaired. No integration/merge; N04/N05 and Stream3 remain open. |
 
 Private detailed scripts, before/after logs, XML, SQL schema snapshot, runtime and
 captured persisted rows: `/private/tmp/pantopus-stream3-20260915-r2`.
@@ -69,17 +73,28 @@ Key files: `backend-baseline.log`, `backend-final.log`, `web-baseline.log`,
 `profile-baseline.log`, `profile-repeat-baseline.log`, `web-final.log`,
 `android-baseline.xml`, `android-partial-candidate.xml`, `ios-partial-candidate.log`,
 `http-sql-results.json`, `browser-report-persistence.json`,
-`browser-unblock-persistence.json`, `ios-unblock-persistence.json`, `android-lifetime-baseline.log` (two distinct failures retried3 each;19 executions/6 failures). Browser/simulator interactions are also in the
+`browser-unblock-persistence.json`, `ios-unblock-persistence.json`, `socket-sql-results.json`, `android-lifetime-final.xml`, `ios-lifetime-gate-baseline.log`, `ios-lifetime-candidate.log`, `android-lifetime-baseline.log` (two distinct failures retried3 each;19 executions/6 failures). Browser/simulator interactions are also in the
 current **Resume Stream 3 verification** task transcript. No raw logs, fixture
 credentials or device tokens belong in Git/chat. Coordinator integrates detailed
 contributions into the existing report; this is not a new backlog.
 
 ## Remaining N04 work and immediate next action
 
-Next: repair reproduced native delayed-list/late-rollback defects and CI indentation; reproduce coordinator web profile-navigation pending-action lead. Continue installed profile/chat/report and session/departure journeys. Required native models currently have no accepted account
-switch/unmount/late-rollback coverage. Do not infer safety from the partial-list fix.
+Native delayed-list/late-rollback/account/leave/reopen guards now pass focused model tests. Web navigation baseline reproduced a stuck pending Block action;6 profile +6 blocked-page regressions pass after retiring route controls and updating target profile. iOS reused the exact paid branch `41c75d49a` SequencedURLProtocol gate helper with coordinator assignment. Original delay-based test was nondeterministic and is not accepted; gate baseline failed, candidate17 passed. New native lifetime code is **not yet installed-screen verified**.
 
-Still open: all existing block entry points, real socket transport/reconnect,
+Next: remaining existing profile/chat/report entry points and session/departure journeys; full-stream source binding and N05 partial-delivery/preference/destination checks. Native slot released to Stream1. New native model coverage establishes controlled session/departure behavior only; installed account switching remains open.
+
+**New reproduced blocker at8d31:** delaying the outbound ChatMessage insert after
+REST authorization, committing B→A UserBlock first, then releasing the insert
+returned201, persisted one message and delivered one `message:new` to B over the
+actual socket. No Notification/provider attempt. Evidence:
+`concurrent-send-baseline.json`, `verify-concurrent-send.cjs`. The six accepted
+socket cases do not cover this interleaving. Existing membership-only ChatMessage
+RLS/service-role insertion is not transactional block authorization. Coordinator subsequently granted the exact forward schema/test scope and isolated
+migration-test DB listed in the cutoff handoff below. No transactional repair
+application/schema files have been written; no retained/shared schema changed. This prevents N04 closure.
+
+Still open: all existing block entry points, installed native socket/reconnect,
 concurrent block versus already-authorized send (cache invalidation is not a SQL
 transaction), multi-process cache boundaries, lost successful replies/retry,
 actual offline and navigation/account transitions, PersonaBlock cascade lifetime,
@@ -112,15 +127,138 @@ suite inclusion. Broader auth/notification/shared SDK/schema/storage edits need
 new coordinator assignment. Coordinator notified of baseline/final evidence and
 owns shared report publication and eventual review/merge.
 
-Active reservations: HTTP18130, web18131; exact3 synthetic local public User
-fixtures under prefix `f9150300` on SQL64522/API64521. No REST18089 access or
-schema/reset/container mutation. An early cleanup attempt used the wrong
-UserProfileBlock column and rolled back. Corrected exact-ID cleanup then passed
-zero remaining fixture users before restarting for the current native phase.
-**Current fixtures remain active and require final cleanup.**
-
-Heavy native slot retained for installed iOS and lifetime work. New simulator
+Final cleanup at **2026-09-15 21:13:58 PDT**: stopped owned HTTP18130/PID91147
+and web18131/PID93370; process inspection confirmed both absent. Exact three synthetic
+User IDs `f9150300-0000-4000-8000-000000000001` through `...0003` and their owned
+rooms/block/report/relationship/notification/audit rows were retired by the runtime's
+transactional cleanup. Correct UserProfileBlock ownership column is `user_id`.
+Fresh `cleanup.json` reports **0 remaining fixture users**; `final-cleanup-state.json`
+binds cleanup time and source. Earlier wrong-column cleanup had rolled back and is
+not final evidence. No REST18089 access, retained SQL64522 schema/reset/container
+mutation or another stream's fixtures. HTTP18130/web18131 are released.
+Heavy native slot **released to Stream1** after final20 Android/17 iOS runs; no new local native build/install until coordinator releases it. New simulator
 **Pantopus Stream3 Social R2**, ID `0AE16FA0-E244-414F-86C8-24893BDFD979`, iOS26.5.
 App build uses explicit API/socket18130 settings; no existing simulator/physical
-phone was installed or changed. Owner's iPhone17 remains untouched. Android JVM
+phone was installed or changed. Owner's iPhone17 remains untouched. Owned simulator shut down after the run. Android JVM
 run finished; no Android AVD acquired. Generated products and logs are private.
+
+
+## N05 bounded milestone — booking reminder failure contract
+
+Source `8d31d452f`: existing scheduling UI/API/BookingPage.reminder_minutes →
+`jobs/bookingReminders.js` → `services/scheduling/bookingNotifyService.js` →
+existing Notification/emailService. Worker already releases BookingReminderLog
+when delivery throws. Baseline existing schedulingLogic suite23 passed/new3 failed:
+email `{success:false}` and personal Notification null both resolved as success,
+and the worker kept its sent-log row. The granted service-only repair checks these
+results and throws; unchanged worker now retries then deduplicates the accepted
+receipt. All26 tests pass with mocked database/provider responses. No schema,
+provider activation, worker or notificationService edit. This is not real delivery.
+Partial-recipient retry duplication, lost provider acknowledgments, exact timing,
+preferences and authorized destination still need verification. Detailed private
+`n05-booking-baseline.log`, `n05-booking-worker-baseline.log`,
+`n05-booking-candidate.log`. N05 remains open.
+
+
+## N04 follow-up — message retry privacy
+
+Actual8d31 HTTP/PostgreSQL baseline: fixture C (not a member of A/B room)
+submitted A/B's known client_message_id in its authorized C/A room and received200
+with A/B's private message/author/room. Existing chats.js lookup filtered only the
+global unique client ID, contrary to its same-room/sender comment. Inbf16f6f50 the
+existing lookup and23505 recovery bind authorized room, sender and human business
+actor; wrong-scope collisions return409 without content/effects. No new schema.
+68 existing focused backend cases pass (one first-run socket-hang-up in chatRoutes
+passed on the affected repeat). Actual HTTP/PostgreSQL3/3: outsider409, original
+actor authorized retry200, concurrent same-scope200/201 with one saved row. Business
+actor separation is model-tested only. Existing excluded delivery suite's two retry
+cases initially failed because its fake insert omitted PostgreSQL's NULL actor
+default; the existing fixture now models that default and both cases pass. A CLI
+ignore-pattern override initially selected unrelated suites and is not acceptance;
+the corrected private config ran exactly the two delivery cases.
+
+Evidence: cross-room-retry-baseline.json, retry-scope-baseline.log,
+retry-scope-final.log, retry-scope-results.json, retry-delivery-focused.log,
+retry-delivery-final.log. This repair does **not** fix the transactional block race.
+
+## Cutoff handoff — exact next action and reservations
+
+User requested immediate wrap-up; no further implementation or tests were started.
+All application changes are pushed in draft PR51 at22adc7285. Coordinator's prior
+review covers onlydfc860bfe; newer lifetime, reminder and retry milestones still need
+coordinator review. Coordinator also paused on user request; heavy native slot was
+released, but recheck live reservations before any new build/install.
+
+**First next action:** inspect current Git/PR/CI, then reproduce and repair the
+recorded concurrent direct-message admission failure. Start from
+`concurrent-send-baseline.json` and `verify-concurrent-send.cjs` in the private
+mirror. This actual HTTP/PostgreSQL/Socket.IO failure allowed a message to persist
+and reach B after B's block committed. The retry privacy repair does not close it.
+
+Coordinator already granted these exact files (no need to request the same grant again):
+- `supabase/migrations/20260916010000_direct_message_block_admission.sql` (forward migration).
+- `scripts/db/contracts/direct-message-block-admission.sql` (new source SQL contract).
+- `supabase/tests/direct-message-block-admission.test.sql` (generated with existing
+  `scripts/db/sync-sql-contracts.cjs`, leave generator unchanged).
+- Existing `backend/routes/chats.js` denial mapping and existing
+  `backend/tests/integration/chatAccessControl.test.js` focused regressions.
+
+**No files in that new migration/SQL-test scope have been created yet.** Existing
+application baseline, archived034/037/072 and open branch work were compared: no
+transactional UserBlock admission contract exists. Applied history must remain
+unchanged; use existing tables/columns, no replacement service/table/screen.
+Scope is **direct-room sends only**, current human actor versus all active
+counterparties. Do not widen gig/group/read policy or direct-create RPC scope.
+Current send uses human request identity for authorization and stores business
+sender separately in `user_id`, human in nullable `actor_user_id`. Current
+`get_or_create_direct_chat` has no SQL block guard; its race is separate, unverified.
+
+Proposed approach, **not implemented or validated**: deterministic unordered-pair
+locks shared by UserBlock mutations and direct ChatMessage admission, with a fresh
+block check after waiting. Inspect participant roster stability and all active
+counterparties; do not assume cache revision solves SQL concurrency. Preserve the
+existing no-counterparty behavior and room-read policy. Required contract evidence:
+real two-connection wait/commit orders, rollback, reverse blocks, business actor,
+empty/no-member cases, service-role trigger enforcement, grants/search_path, and
+isolation limits. In particular test snapshot behavior beyond READ COMMITTED,
+roster changes, lock order/deadlocks, and actor spoofing. Avoid accidentally invoking
+chats.js legacy insert fallback through error text containing actor_user_id or
+check-constraint patterns. SQL errors must fail closed without message/socket effects.
+
+Owned isolated DB is **left running for the next agent**, canonical schema only;
+no fixture phase or new migration began:
+- Workdir `/private/tmp/pantopus-stream3-block-db-r1`.
+- Project/container prefix `pantopus-stream3-block-r1`;
+  container `supabase_db_pantopus-stream3-block-r1` healthy, SQL64532.
+- API64531/shadow64533 remain reserved; API runtime was not started.
+- Supabase PostgreSQL17.6.1.165/PostgRESTv16.1 cached locally. Existing canonical
+  migrations replayed successfully. Initial config without auth bootstrap failed
+  and CLI removed its own failed container; restored canonical bootstrap passed.
+- `supabase/migrations` and `supabase/tests` symlink to application canonical paths.
+  Config differs only for isolated project/ports. Never reset SQL64522, use
+  Stream1'sf9150410 fixtures, touch REST18089, or activate hosted migrations/providers.
+
+Owned simulator `0AE16FA0-E244-414F-86C8-24893BDFD979` remains shut down. The installed
+run predates the native lifetime repair; installed lifecycle acceptance remains
+open. No Android installed or physical-device acceptance was obtained.
+
+**Durable evidence:**
+`/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260915-stream3-social-r2/`
+contains **76 files** refreshed at cutoff, including final cleanup, retry/privacy
+and isolated DB bootstrap evidence. `MANIFEST.json` SHA256:
+`f5ac697ba9f06552aeda14b1bbfa01f4b795779817bcf4f9bbe1e368956bac13`.
+Individual evidence retains its actual source/config; manifest current HEAD does
+not mean every earlier check was rerun. Directories700/files600; private scripts
+and operator logs stay out of Git/chat. Original private runtime/scripts remain at
+`/private/tmp/pantopus-stream3-20260915-r2`. Large ios-derived and retired Next cache
+were intentionally excluded from the durable mirror. Browser/simulator action
+history remains in task `01a0a824-301b-74e3-a1d9-b205714ed7a1`.
+
+After the transactional milestone, continue the whole-stream coverage table above;
+do not stop at N04. N01/N02 historical Android evidence at699c531a predates changed
+AuthRepository/PendingDeepLinkStore source253d5c6cf; bind newer accepted evidence
+before reusing those session claims. N05 SupportTrain's shared last_reminder_sent
+24-hour/day-of behavior is a source lead, not a reproduced defect; new worker edits
+need assignment. Native chat block/report lifetime and account-deletion UserBlock
+FK are also unverified leads. Route Home/payment findings to owners. This file is
+the sole live Stream3 status; coordinator owns detailed shared-report publication.
