@@ -569,3 +569,65 @@ describe('Pre-bid message limit in gig chat', () => {
     expect(res.status).toBe(201);
   });
 });
+
+
+// N04 authorization failures must stop before persistence or delivery. These
+// are route/service regressions with synthetic auth and the in-memory DB.
+describe('Block authorization availability and ordering', () => {
+  const db = require('../__mocks__/supabaseAdmin');
+  const service = require('../../services/blockService');
+  beforeEach(() => {
+    for (const a of [U1, U2, U3, U_BIZ]) for (const b of [U1, U2, U3, U_BIZ]) service.invalidateBlockCache(a, b);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  test.each(['direct', 'messages'])('%s refuses an unavailable block check without effects', async endpoint => {
+    const original = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => table === 'UserBlock'
+      ? { select: () => ({ or: async () => ({ count: null, error: { message: 'database unavailable' } }) }) }
+      : original(table));
+    db.setRpcMock(async name => ({ data: name === 'get_or_create_direct_chat' ? ROOM_DIRECT : null, error: null }));
+    const { app, mockIo } = createApp();
+    const before = getTable('ChatMessage').length;
+    const response = await request(app).post('/api/chat/' + endpoint).set('x-test-user-id', U1)
+      .send(endpoint === 'direct' ? { otherUserId: U2 } : { roomId: ROOM_DIRECT, messageText: 'Must not escape', messageType: 'text' });
+    expect(response.status).toBe(503);
+    expect(response.body.code).toBe('BLOCK_CHECK_UNAVAILABLE');
+    expect(getTable('ChatMessage')).toHaveLength(before);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+    expect(require('../__mocks__/notificationService').createNotification).not.toHaveBeenCalled();
+  });
+
+  test('every active counterparty is checked in a business direct room', async () => {
+    getTable('ChatParticipant').push({ id: 'cp-team', room_id: ROOM_BIZ, user_id: U1, is_active: true });
+    seedTable('UserBlock', [{ id: 'block', blocker_user_id: U2, blocked_user_id: U1 }]);
+    const { app, mockIo } = createApp();
+    const before = getTable('ChatMessage').length;
+    const response = await request(app).post('/api/chat/messages').set('x-test-user-id', U1)
+      .send({ roomId: ROOM_BIZ, messageText: 'Must not bypass second participant', messageType: 'text' });
+    expect(response.status).toBe(403);
+    expect(getTable('ChatMessage')).toHaveLength(before);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+  });
+
+  test('a delayed pre-block query cannot return or cache a stale allow after invalidation', async () => {
+    let release;
+    const first = new Promise(resolve => { release = resolve; });
+    const query = jest.fn().mockReturnValueOnce(first).mockResolvedValue({ count: 1, error: null });
+    const original = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => table === 'UserBlock'
+      ? { select: () => ({ or: query }) } : original(table));
+    const waiting = service.isBlocked(U1, U2);
+    service.invalidateBlockCache(U2, U1);
+    release({ count: 0, error: null });
+    expect(await waiting).toBe(true);
+    expect(await service.isBlocked(U2, U1)).toBe(true);
+  });
+
+  test('missing count is unavailable, not an empty block table', async () => {
+    const original = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => table === 'UserBlock'
+      ? { select: () => ({ or: async () => ({ count: null, error: null }) }) } : original(table));
+    await expect(service.isBlocked(U1, U2)).rejects.toMatchObject({ code: 'BLOCK_CHECK_UNAVAILABLE' });
+  });
+});

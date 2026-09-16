@@ -69,6 +69,27 @@ final class BlockedUsersViewModelTests: XCTestCase {
         }
     }
 
+    func testPartialEmptyIsUnavailable() async {
+        SequencedURLProtocol.sequence = [.status(500, body: "{}"), .status(200, body: "{\"blocks\":[]}")]
+        let vm = BlockedUsersViewModel(api: makeAPI())
+        await vm.load()
+        guard case .error = vm.state else { return XCTFail("Unavailable is not empty") }
+    }
+
+    func testPartialRowsReportIncompleteAndLastRemovalStaysUnavailable() async {
+        SequencedURLProtocol.sequence = [
+            .status(200, body: Self.twoPersonalJSON), .status(500, body: "{}"),
+            .status(200, body: "{}"), .status(200, body: "{}")
+        ]
+        let vm = BlockedUsersViewModel(api: makeAPI())
+        await vm.load()
+        guard case let .loaded(sections, _) = vm.state else { return XCTFail("Expected rows") }
+        XCTAssertTrue(sections[0].footer?.contains("couldn't load") == true)
+        await vm.unblock("ub1")
+        await vm.unblock("ub2")
+        guard case .error = vm.state else { return XCTFail("Partial empty must remain unavailable") }
+    }
+
     func testLoadPopulatedProducesLoadedRows() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.noPersonalJSON),

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
 import Image from 'next/image';
@@ -37,23 +37,36 @@ function BlockedContent() {
   const [loading, setLoading] = useState(true);
   const [unblocking, setUnblocking] = useState<string | null>(null);
 
-  useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
+  const [loadError, setLoadError] = useState(false);
+  const scope = useRef(0);
+  const request = useRef(0);
+  const pending = useRef<string | null>(null);
+  const captureScope = useCallback(() => {
+    const generation = scope.current;
+    const token = getAuthToken();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    return () => generation === scope.current && token === getAuthToken()
+      && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+  }, []);
 
   const fetchBlocked = useCallback(async () => {
-    // Only one list has to answer: a personal block must stay visible (and
-    // liftable) when the trust-graph list is unavailable, and vice versa.
+    const current = captureScope();
+    const revision = ++request.current;
+    if (!getAuthToken()) { setLoading(false); return; }
+    // Preserve usable rows while distinguishing partial results from emptiness.
     const [personalRes, relRes] = await Promise.allSettled([
       api.blocks.getBlockedUsers(),
       api.relationships.getBlockedUsers(),
     ]);
 
-    if (personalRes.status === 'rejected' && relRes.status === 'rejected') {
-      toast.error('Failed to load blocked users');
-      return;
-    }
+    if (!current() || revision !== request.current) return;
+    const personalLoaded = personalRes.status === 'fulfilled' && Array.isArray(personalRes.value?.blocked);
+    const relationshipsLoaded = relRes.status === 'fulfilled' && Array.isArray(relRes.value?.blocked);
+    setLoadError(!personalLoaded || !relationshipsLoaded);
+    setLoading(false);
 
     const personal: BlockedEntry[] =
-      personalRes.status === 'fulfilled'
+      personalRes.status === 'fulfilled' && personalLoaded
         ? ((personalRes.value as any)?.blocked || []).map((b: any) => ({
             id: b.id,
             name: b.name || b.username || 'Unknown',
@@ -64,11 +77,11 @@ function BlockedContent() {
         : [];
 
     const relationships: BlockedEntry[] =
-      relRes.status === 'fulfilled'
+      relRes.status === 'fulfilled' && relationshipsLoaded
         ? ((relRes.value as any)?.blocked || (relRes.value as any)?.relationships || []).map(
             (rel: any) => {
               // Unchanged field-picking from the trust-graph payload.
-              const otherUser = rel.other_user || rel.addressee || rel.requester;
+              const otherUser = rel.blocked_user || rel.other_user;
               return {
                 id: rel.id,
                 name:
@@ -85,11 +98,29 @@ function BlockedContent() {
 
     // Personal blocks lead — they are the ones that gate direct messages.
     setBlocked([...personal, ...relationships]);
-  }, []);
+  }, [captureScope]);
 
-  useEffect(() => { setLoading(true); fetchBlocked().finally(() => setLoading(false)); }, [fetchBlocked]);
+  useEffect(() => {
+    const retire = () => { scope.current++; request.current++; };
+    const changed = () => {
+      scope.current++; request.current++; pending.current = null;
+      setBlocked([]); setUnblocking(null); setLoadError(false); setLoading(true);
+      if (!getAuthToken()) router.push('/login');
+      void fetchBlocked();
+    };
+    const storage = (event: StorageEvent) => {
+      if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed();
+    };
+    const unsubscribe = api.onTokenChange(changed);
+    window.addEventListener('storage', storage);
+    changed();
+    return () => { retire(); unsubscribe(); window.removeEventListener('storage', storage); };
+  }, [fetchBlocked, router]);
 
   const handleUnblock = useCallback(async (entry: BlockedEntry) => {
+    if (pending.current) return;
+    const current = captureScope();
+    pending.current = entry.id;
     const displayName = entry.name || entry.username || 'this user';
 
     const yes = await confirmStore.open({
@@ -98,8 +129,9 @@ function BlockedContent() {
       confirmLabel: 'Unblock',
       variant: 'destructive',
     });
-    if (!yes) return;
-
+    if (!current()) return;
+    if (!yes) { pending.current = null; return; }
+    request.current++;
     setUnblocking(entry.id);
     try {
       // Each row is lifted through its own contract.
@@ -108,14 +140,15 @@ function BlockedContent() {
       } else {
         await api.relationships.unblock(entry.id);
       }
+      if (!current()) return;
       setBlocked((prev) => prev.filter((b) => b.id !== entry.id));
       toast.success(`${displayName} unblocked`);
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to unblock user');
+      if (current()) toast.error(err?.message || 'Failed to unblock user');
     } finally {
-      setUnblocking(null);
+      if (current()) { pending.current = null; setUnblocking(null); }
     }
-  }, []);
+  }, [captureScope]);
 
   const getInitials = (name: string) =>
     name.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
@@ -131,7 +164,14 @@ function BlockedContent() {
         <h1 className="text-xl font-bold text-app-text">Blocked Users</h1>
       </div>
 
-      {blocked.length === 0 ? (
+      {loadError && (
+        <div role="alert" className="text-sm text-app-text-secondary mb-4">
+          Couldn&apos;t load your complete blocked list. Successfully loaded users are shown below.
+          <button onClick={() => void fetchBlocked()} disabled={!!unblocking}
+            className="ml-2 underline disabled:opacity-50">Retry</button>
+        </div>
+      )}
+      {blocked.length === 0 && !loadError ? (
         <div className="text-center py-16">
           <CheckCircle className="w-14 h-14 mx-auto text-app-text-muted mb-4" />
           <h2 className="text-lg font-bold text-app-text-strong mb-2">No Blocked Users</h2>
@@ -160,7 +200,7 @@ function BlockedContent() {
                   <p className="text-sm font-semibold text-app-text truncate">{name}</p>
                   {username && <p className="text-xs text-app-text-secondary">@{username}</p>}
                 </div>
-                <button onClick={() => handleUnblock(entry)} disabled={isUnblocking}
+                <button onClick={() => handleUnblock(entry)} disabled={!!unblocking}
                   className="px-4 py-2 border border-red-200 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-50 disabled:opacity-50 transition min-w-[80px] flex items-center justify-center">
                   {isUnblocking ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Unblock'}
                 </button>

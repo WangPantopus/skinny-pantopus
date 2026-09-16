@@ -57,6 +57,7 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
 
     private let api: APIClient
     private let auth: AuthManager
+    private var complete = false
     private var entries: [BlockedEntry] = []
 
     /// One row's worth of "someone you blocked", flattened from the two
@@ -110,6 +111,7 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
         let personal = try? await api.request(BlocksEndpoints.blocked, as: UserBlocksResponse.self)
         let profile = try? await api.request(PrivacyEndpoints.blocks, as: PrivacyBlocksResponse.self)
 
+        complete = personal != nil && profile != nil
         guard personal != nil || profile != nil else {
             state = .error(message: "Couldn't load your blocked list.")
             return
@@ -171,6 +173,10 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
     }
 
     private func rebuild() {
+        if entries.isEmpty, !complete {
+            state = .error(message: "Couldn't load your complete blocked list. Please retry.")
+            return
+        }
         guard !entries.isEmpty else {
             // A14.4 empty hero — neutral grey disc + user-minus glyph
             // (the design's `user-x`; `userMinus` is the in-inventory
@@ -211,7 +217,8 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
                 RowSection(
                     id: "blocked",
                     header: "Blocked · \(entries.count)",
-                    footer: "Blocked people can't message you, see your profile, or bid on "
+                    footer: (complete ? "" : "We couldn't load the complete list. Pull to refresh. ")
+                        + "Blocked people can't message you, see your profile, or bid on "
                         + "your tasks. Unblocking doesn't notify them.",
                     rows: rows,
                     style: .card

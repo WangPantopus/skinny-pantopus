@@ -19,7 +19,7 @@ const {
 } = require('../serializers/identitySerializers');
 const { hasPermission } = require('../utils/businessPermissions');
 const s3Service = require('../services/s3Service');
-const { isBlocked } = require('../services/blockService');
+const { isBlocked, blockCheckUnavailable } = require('../services/blockService');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
 const rateLimit = require('express-rate-limit');
@@ -975,6 +975,7 @@ router.post('/direct', verifyToken, directChatLimiter, validate(createDirectChat
     });
     
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Direct chat creation error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
     res.status(500).json({ error: 'Failed to create direct chat' });
   }
@@ -1105,7 +1106,7 @@ router.get('/rooms/:roomId/pre-bid-status', verifyToken, async (req, res) => {
     const { roomId } = req.params;
     const userId = req.user.id;
 
-    const { data: room } = await supabaseAdmin
+    const { data: room, error: roomError } = await supabaseAdmin
       .from('ChatRoom')
       .select('id, type, gig_id')
       .eq('id', roomId)
@@ -1489,25 +1490,29 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     // ─── Pre-bid message limit for gig chats ───
     const PRE_BID_MESSAGE_LIMIT = 3;
 
-    const { data: room } = await supabaseAdmin
+    const { data: room, error: roomError } = await supabaseAdmin
       .from('ChatRoom')
       .select('id, type, gig_id')
       .eq('id', roomId)
       .single();
 
+    if (roomError) throw blockCheckUnavailable();
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+
     // ─── Block check for direct chats ───
     // For gig/group chats, blocking is handled differently (not enforced here).
     if (room && room.type === 'direct') {
-      const { data: otherParticipants } = await supabaseAdmin
+      const { data: otherParticipants, error: participantsError } = await supabaseAdmin
         .from('ChatParticipant')
         .select('user_id')
         .eq('room_id', roomId)
         .neq('user_id', userId)
-        .eq('is_active', true)
-        .limit(1);
-      const otherUserId = otherParticipants?.[0]?.user_id;
-      if (otherUserId && await isBlocked(userId, otherUserId)) {
-        return res.status(403).json({ error: 'Unable to message this user' });
+        .eq('is_active', true);
+      if (participantsError || !Array.isArray(otherParticipants)) throw blockCheckUnavailable();
+      for (const participant of otherParticipants) {
+        if (await isBlocked(userId, participant.user_id)) {
+          return res.status(403).json({ error: 'Unable to message this user' });
+        }
       }
     }
 
@@ -1845,7 +1850,8 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     res.status(201).json({ message: serializeChatMessageForViewer(message) });
     
   } catch (err) {
-    logger.error('Message send error', { requestId, roomId, userId, durationMs: Date.now() - sendStartMs, error: err.message });
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
+    logger.error('Message send error', { requestId: req.requestId, roomId: req.body.roomId, userId: req.user?.id, error: err.message });
     res.status(500).json({ error: 'Failed to send message' });
   }
 });

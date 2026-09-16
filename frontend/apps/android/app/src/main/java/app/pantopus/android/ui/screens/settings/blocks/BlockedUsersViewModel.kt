@@ -72,6 +72,7 @@ class BlockedUsersViewModel
                 return "$name · ID ${session.user.id.take(8)}"
             }
 
+        private var complete = false
         private var entries: MutableList<BlockedEntry> = mutableListOf()
 
         /**
@@ -109,6 +110,7 @@ class BlockedUsersViewModel
                 val personal = blocks.blocked()
                 val profile = privacy.blocks()
 
+                complete = personal is NetworkResult.Success && profile is NetworkResult.Success
                 if (personal is NetworkResult.Failure && profile is NetworkResult.Failure) {
                     _state.value = ListOfRowsUiState.Error("Couldn't load your blocked list.")
                     return@launch
@@ -176,6 +178,10 @@ class BlockedUsersViewModel
         }
 
         private fun rebuild() {
+            if (entries.isEmpty() && !complete) {
+                _state.value = ListOfRowsUiState.Error("Couldn't load your complete blocked list. Please retry.")
+                return
+            }
             if (entries.isEmpty()) {
                 // A14.4 empty hero — neutral grey disc + user-minus glyph
                 // (the design's `user-x`; `UserMinus` is the in-inventory
@@ -225,6 +231,7 @@ class BlockedUsersViewModel
                                 id = "blocked",
                                 header = "Blocked · ${entries.size}",
                                 footer =
+                                    (if (complete) "" else "We couldn't load the complete list. Pull to refresh. ") +
                                     "Blocked people can't message you, see your profile, or bid on " +
                                         "your tasks. Unblocking doesn't notify them.",
                                 rows = rows,

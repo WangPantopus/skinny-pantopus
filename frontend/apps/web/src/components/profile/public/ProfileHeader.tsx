@@ -36,6 +36,7 @@ interface ProfileHeaderProps {
    * nothing on click.
    */
   onBlock: () => void;
+  onReport: () => void;
 }
 
 function stringField(value: unknown): string {
@@ -67,6 +68,7 @@ export default function ProfileHeader({
   onRequestHire,
   onShare,
   onBlock,
+  onReport,
 }: ProfileHeaderProps) {
   const router = useRouter();
   const username = stringField(profile.username);
@@ -172,7 +174,7 @@ export default function ProfileHeader({
                   <details className="relative">
                     <summary className="list-none px-3 py-2 bg-surface text-app-strong border border-app-strong rounded-lg hover:bg-surface-raised cursor-pointer">⋯</summary>
                     <div className="absolute right-0 mt-2 w-40 bg-surface border border-app rounded-lg shadow-sm p-1 z-20">
-                      <button className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded">Report profile</button>
+                      <button onClick={onReport} className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded">Report profile</button>
                       <button
                         onClick={onBlock}
                         disabled={actionLoading}

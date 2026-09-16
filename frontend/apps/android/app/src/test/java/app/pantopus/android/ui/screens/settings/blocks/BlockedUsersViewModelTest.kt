@@ -111,6 +111,28 @@ class BlockedUsersViewModelTest {
             assertTrue("Expected Empty, got $state", state is ListOfRowsUiState.Empty)
         }
 
+    @Test fun partialEmptyIsUnavailable() =
+        runTest {
+            coEvery { blocks.blocked() } returns NetworkResult.Failure(NetworkError.Server(500, null))
+            coEvery { privacy.blocks() } returns NetworkResult.Success(PrivacyBlocksResponse(blocks = emptyList()))
+            val vm = viewModel()
+            vm.load()
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+        }
+
+    @Test fun partialPopulatedReportsIncompleteAndLastRemovalStaysUnavailable() =
+        runTest {
+            coEvery { blocks.blocked() } returns NetworkResult.Success(UserBlocksResponse(blocked = twoPersonal.blocked.take(1)))
+            coEvery { privacy.blocks() } returns NetworkResult.Failure(NetworkError.Server(500, null))
+            coEvery { blocks.unblock("u_carol") } returns NetworkResult.Success(Unit)
+            val vm = viewModel()
+            vm.load()
+            val loaded = vm.state.value as ListOfRowsUiState.Loaded
+            assertTrue(loaded.sections[0].footer.orEmpty().contains("couldn't load"))
+            vm.unblock("ub1")
+            assertTrue(vm.state.value is ListOfRowsUiState.Error)
+        }
+
     @Test fun loadPopulatedProducesLoadedRows() =
         runTest {
             coEvery { privacy.blocks() } returns NetworkResult.Success(twoBlocks)
