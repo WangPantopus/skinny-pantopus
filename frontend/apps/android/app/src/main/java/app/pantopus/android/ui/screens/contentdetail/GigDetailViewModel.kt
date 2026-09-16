@@ -926,6 +926,7 @@ class GigDetailViewModel
             historicalTip: Boolean = false,
         ) {
             val uid = currentUserId()
+            if (!sameStartAssignment(rawGig, gig) || gig.status !in listOf("assigned", "in_progress")) startAttempt = null
             rawGig = gig
             taskStop.probeRecovery(gigId)
             _saved.value = gig.savedByUser == true
@@ -1892,16 +1893,63 @@ class GigDetailViewModel
             }
         }
 
-        /** Worker `POST /start` — `assigned → in_progress`. */
+        private var startSequence = 0L
+        private var startAttempt: Long? = null
+
+        private fun sameStartAssignment(
+            current: GigDto?,
+            original: GigDto,
+        ): Boolean =
+            current?.id == original.id && current.userId == original.userId &&
+                current.acceptedBy == original.acceptedBy && current.acceptedAt == original.acceptedAt &&
+                current.paymentId == original.paymentId && current.price == original.price
+
+        private fun matchesStartReceipt(
+            receipt: GigDto,
+            original: GigDto,
+        ): Boolean =
+            sameStartAssignment(receipt, original) && receipt.status == "in_progress" &&
+                parseEpochMillis(receipt.startedAt) != null
+
+        /** Worker `POST /start` — publish only the current assignment's saved receipt. */
         fun startTask() {
+            val gig = rawGig ?: return
+            val actor = currentUserId() ?: return
+            if (startAttempt != null || gig.status != "assigned" || gig.acceptedBy != actor) return
+            val attempt = ++startSequence
+            val generation = completionGeneration
+            val marker = checkoutIdentities.scopeMarker()
+            startAttempt = attempt
             viewModelScope.launch {
-                when (val result = repo.startGig(gigId)) {
-                    is NetworkResult.Success -> {
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast("Task started"))
-                        silentRefetch()
+                try {
+                    val identity = checkoutIdentities.paymentIdentity() ?: return@launch
+
+                    suspend fun current(): Boolean =
+                        completionIsCurrent(identity, actor, marker, gig.id, generation) &&
+                            startAttempt == attempt && sameStartAssignment(rawGig, gig)
+                    if (!current()) return@launch
+                    val result = repo.startGig(gigId)
+                    if (!current()) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            val receipt = result.data.gig
+                            if (matchesStartReceipt(receipt, gig)) {
+                                _lifecycleEvents.emit(GigLifecycleEvent.Toast("Task started"))
+                                silentRefetch()
+                            } else {
+                                _lifecycleEvents.emit(
+                                    GigLifecycleEvent.Toast(
+                                        "Start receipt unavailable. Reopen the task to check its current state.",
+                                        isError = true,
+                                    ),
+                                )
+                            }
+                        }
+                        is NetworkResult.Failure ->
+                            _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
                     }
-                    is NetworkResult.Failure ->
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                } finally {
+                    if (startAttempt == attempt) startAttempt = null
                 }
             }
         }
@@ -2129,6 +2177,7 @@ class GigDetailViewModel
 
         /** Leave the room + stop collecting when the screen goes away. */
         fun leaveRealtime() {
+            startAttempt = null
             retireDeliveryProof()
             realtimeJob?.cancel()
             realtimeJob = null
