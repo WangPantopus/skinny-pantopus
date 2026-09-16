@@ -63,6 +63,12 @@ One writer per application worktree. Two Stream 1 sessions shared
 (`pantopus-paid-gig-integration-c8`) is retired from writing and the coordinator session
 is the sole Stream 1 writer. No WIP commits on a branch with an open PR.
 
+Feature branches carry `docs/workstreams/*`, `docs/PROJECT_HANDOFF.md` and
+`docs/REMAINING_WORK_2026-09-11.md` only as merged from master, never as their own
+edits: a branch whose copies diverge becomes a conflicting PR, GitHub cannot build its
+merge ref, and pull_request CI silently never schedules (PR47 lost all checks at
+`f437dfd20` until master was merged in). Publish through the coordination branch only.
+
 Each agent writes only its own status file in the live folder. It commits code
 only from its own application worktree. The coordinator commits/pushes shared
 status snapshots from the neutral documentation worktree after the author finishes

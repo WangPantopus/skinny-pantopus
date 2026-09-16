@@ -14,6 +14,37 @@ Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
 P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
 
+## Peer findings received from the earlier Stream 1 session — September 16, 2026
+
+Recorded from the retired Stream 1 session's handoff after independent checks:
+
+- **Native guards can hide a truthful recovery after a post-start price change.** An
+  approved change order updates `Gig.price` while the gig is `in_progress`
+  (`backend/routes/gigs.js` approve handler). If a worker retries Start after a lost reply
+  and the price changed in between, the route's saved-start recovery is correct, but the
+  iOS/Android receipt guards compare the full displayed snapshot and refuse to show
+  success; with `a65411758` the retry now gets `409 ASSIGNMENT_CHANGED` from the route
+  instead, with the same "refresh" guidance, and the reopened screen shows the committed
+  In progress state. Conservative and truthful, not a defect; the native Start Work
+  journey is accepted with this limit stated.
+- **Silent CI loss on conflicting shared docs** is now a rule in the guide (see the
+  feature-branch paragraph): PR47 had no pull_request runs at `f437dfd20` because its
+  own copies of the coordination documents conflicted with master.
+- **The repo's `backend/tests/integration/gig-lifecycle.test.js` cannot run against the
+  retained replay database (64522):** its helper seeds `account_type: 'personal'`, which
+  that older schema's check rejects (`individual|business|curator`), and each failed
+  attempt leaks one `auth.users` row before cleanup tracking starts. Do not change the
+  helper to fit the stale fixture; the peer removed the row it created.
+- **Paid-path HTTP evidence on the final head.** The peer's self-cleaning harness (real
+  HTTP → real route → PostgREST 64521 → PostgreSQL 64522, free and paid, only
+  `verifyGigAuthorization` stubbed, mutation injected at that await) was copied into
+  Stream 1's evidence as `e2e-start-recovery-peer.js` and re-run on `3657af97d`:
+  **28/28 checks pass**, 9 gigs / 13 users / 6 payments created and removed, 0 remaining
+  (`e2e-start-recovery-peer-final-head.log`). This adds paid-gig coverage to the free-gig
+  harnesses above; provider verification itself stays stubbed.
+- The peer's derived data (`.../b16f36ca-.../scratchpad/p04/DerivedData`, several GB) is
+  reclaimable at any time; nothing references it.
+
 ## Integration: current master merged into the paid branch — September 16, 2026
 
 - **Branch/commit:** `codex/paid-gig-integration` at **`6e106d9d0`**, a merge of master
