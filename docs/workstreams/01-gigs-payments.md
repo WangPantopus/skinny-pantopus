@@ -1,7 +1,66 @@
 # Stream 1 — Gigs and payments
 
 Updated September 15, 2026. Owner: primary coordinator.
-State: ready for review — P04 Start Work recovery repaired and verified end to end.
+State: verification — resumed P04 review; backend recovery is implemented, but
+native stale/invalid-result acceptance is still open.
+
+## Active coordinator checkpoint — September 15, resumed
+
+- The user confirmed the previous Stream 1 writer has stopped; this task owns
+  the paid integration worktree. Preserve and verify its uncommitted 409/503
+  follow-up in `backend/routes/gigs.js` and its existing lifecycle test file.
+- Remote master is `711340225`; paid HEAD is `959e147e6`. PR34 remains draft;
+  PR47 remains unmerged. CI35046049526 is still running its Android build job;
+  all other completed applicable checks passed. PR49 is a green, documentation-only
+  candidate, pending correction of the evidence claims below before publication.
+- Prior native source reading is **not acceptance**: Android emits a success
+  toast without checking the receipt; iOS decodes `EmptyResponse` and returns
+  success even if its silent refresh fails. Late session/assignment replies and
+  duplicate pending actions require reproduced checks in the existing callers.
+  No screen/design change is authorized or planned.
+- Coordinator reserves only exact synthetic P04 fixtures on the existing local
+  replay PostgreSQL64522/API64521, plus a private ephemeral loopback HTTP listener.
+  No schema/reset/container/cache mutation. Other databases and devices are
+  untouched; no heavy native build is reserved yet. Private checkpoint and owned
+  fixture IDs: `/private/tmp/pantopus-p04-start-20260915-r1`.
+- Reviewed peers: Stream2 has pushed `70e079543` (browser slice, SQL boundary
+  simulated; broader M02 open). Stream3 republished its live handoff, now correctly
+  reporting N04 as repair with no real-persistence or installed-screen acceptance.
+  Neither branch is approved for merge. Stream3 owns `chats.js` block repairs and
+  the bounded `backend/jest.config.js` inclusion of the existing chat-access
+  regression suite; socket edits still require overlap review. Stream2's SDK
+  guest-status type widening and Stream3's additive SDK exports have no Stream1
+  conflict. Each stream remains the sole writer of its own live status file.
+
+The earlier milestone record below is retained as historical evidence to audit;
+its test totals and runtime claims are not silently treated as freshly verified.
+
+### Resumed backend result and next native baseline
+
+The committed `959e147e6` route reproduced seven failures in twelve HTTP cases:
+three concurrent term changes returned 500, same-worker reassignment was started
+by the old request, write unavailability returned 500, saved recovery-read
+unavailability returned 400, and ambiguous commit/recovery returned 500. The
+inherited 409/503 patch fixed five; the remaining assignment/recovery-read defects
+were repaired in the existing route using `accepted_at` and the existing recovery
+query's error. No schema, RPC, service or application/test file was added.
+
+Final HTTP/PostgREST/PostgreSQL checks pass 12 cases plus exact cleanup (13/13);
+the existing lifecycle suite passes 229/229 and privacy gates pass. The HTTP
+fixture uses real production route/client/notification persistence with synthetic
+identity and transport faults; free gigs only, older replay schema, no provider,
+push/socket delivery or UI/device acceptance. Three owned users, one gig and its
+notices are deleted; exact remaining count is zero and the ephemeral listener is
+closed. Two preliminary harness attempts had overlapping owned fixtures and are
+retained as invalid attempts, not passing evidence. The final sequential runs
+are bound under the private checkpoint above. Earlier paid/web evidence retains
+its own limits; no inventory row closes.
+
+CI35046049526 on `959e147e6` finished successfully (15 applicable checks, one
+Seeder skip). The new repair needs its own CI after push. Next: reproduce native
+invalid-receipt, duplicate and late-response behavior in existing native test
+files, then the installed journey. Coordinator reserves the heavy local build
+slot for Stream1 Android tests only; no simulator/device installation yet.
 
 Apply the user's clarified [working agreement](README.md#working-agreement):
 preserve iOS/Android/web designs, verify existing journeys first, repair and retest

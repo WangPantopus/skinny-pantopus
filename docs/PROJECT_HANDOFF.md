@@ -9,57 +9,52 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 ## Current coordination and next action — September 15
 
-Publication is complete through [PR48](https://github.com/WangPantopus/skinny-pantopus/pull/48),
-merged at `711340225` after [CI35037927456](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35037927456)
-passed all four applicable checks with seven path-based skips. The merged tree
-exactly matches tested `4d4fec720`; only seven instruction/documentation files
-changed. The owner's master checkout and Home/Accounts branches are synchronized
-and pushed at `711340225`. Their application source is unchanged from `e775af9ae`.
+The coordinator resumed Stream 1 in `/private/tmp/pantopus-paid-gig-integration`;
+the user confirmed the previous Stream 1 writer has stopped. Shared status lives
+only in `/Users/yingpengwang/pantopus-coordination/docs/workstreams/`. Read the
+[guide](workstreams/README.md) and each live stream handoff before using resources.
+Feature branches receive shared documentation from master; they do not publish
+independent copies. Application and coordination PRs remain separate.
 
-Shared instructions are published independently of application work through the
-documentation-only `codex/workstream-coordination` branch to master. Start at the
-[three-stream guide](workstreams/README.md). The live status folder is
-`/Users/yingpengwang/pantopus-coordination/docs/workstreams/`, in a neutral worktree.
-The earlier gigs-worktree status folder is retired after this transfer. Each agent
-writes only its own status file; the coordinator owns shared instructions, backlog
-updates and integration. This documentation change does not merge paid application
-changes, add migrations or change acceptance counts.
+Fresh remote master is `711340225`, the documentation-only PR48 merge over
+application baseline `e775af9ae`. Paid PR34 stays draft at `c9cb69825`, and paid
+integration PR47 remains unmerged. User PR46 (`place-design`) stays separate.
+PR47's prior head `959e147e6` passed 15 applicable checks/one Seeder skip in
+[CI35046049526](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35046049526).
+That result does not complete its paid acceptance scope.
 
-- Stream 1: existing P04 Start Work recovery and assignment lifetime.
-- Stream 2: existing M02 browser guest-pass issue/view/revoke journey.
-- Stream 3: existing N04 personal block/unblock and direct-message admission.
+Stream1 committed and pushed `599de1586`, extending the existing Start Work route
+and existing lifecycle tests only. Actual HTTP/PostgREST/PostgreSQL first reproduced
+incorrect 500/400 responses and an old pending request starting a newer assignment
+to the same worker. The repair binds `accepted_at` and preserves retryable recovery
+errors. Twelve final HTTP cases plus exact cleanup pass (13/13), as do 229 lifecycle
+regressions and privacy gates. Authentication/transport faults are synthetic; the
+new HTTP scope uses free gigs on the older retained schema, with no provider or
+installed-native claim. Its [current CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35048472265)
+is still running. Full evidence, source limits and owned resource state are in the
+[Stream1 status](workstreams/01-gigs-payments.md). No table, migration or screen was
+added or changed. Earlier paid/web evidence retains its recorded source limits.
 
-Discovery is complete; baseline verification is queued with no new runtime
-reservations. Preserve iOS/Android/web screen designs, verify existing behavior
-first, repair demonstrated failures and retest. Before adding or replacing files
-or database structures, document why existing/archived/open-branch work cannot
-reasonably be reused or extended. Reuse accepted evidence within its source limits.
+The previous statement that discarding a native response establishes stale/invalid
+response safety is withdrawn. Android reports success without validating the
+receipt; iOS accepts `EmptyResponse` and silently ignores refresh failure. Native
+invalid/late replies, duplicate taps and installed journeys remain to verify and,
+where failures reproduce, repair without changing existing screen designs.
 
-Master's application baseline is `e775af9ae`, after merged PR45's residency-letter
-expiry repair; its CI34886464860 passed 15 applicable jobs with one Seeder skip.
-The former expiry task and Git state below are historical. Home and Accounts
-streams start from this master baseline and receive the shared docs from master.
+Peer handoffs were reviewed, without integration: Stream2 pushed `70e079543` for
+the browser guest-pass slice; its HTTP harness simulates the SQL decision boundary,
+so broader M02 stays open. Stream3 republished its live status for `fc99f8ee7` and
+correctly records N04 as incomplete, including an introduced empty-list defect and
+no real-persistence or installed-screen acceptance. Each author retains ownership
+of its status file. Neither branch has required PR CI or merge approval yet.
 
-Paid application source `c9cb69825` remains unmerged in draft PR34; its
-[CI34998717315](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34998717315)
-passed 15 applicable jobs with one Seeder skip. Integration `b4b783f8d` additionally
-records the physical iPhone refresh and original coordination setup. Its
-[source-specific handoff](https://github.com/WangPantopus/skinny-pantopus/blob/b4b783f8d42027e22c113a3cfd301f5eb7b4c54b/docs/PROJECT_HANDOFF.md)
-and [verification evidence](https://github.com/WangPantopus/skinny-pantopus/blob/b4b783f8d42027e22c113a3cfd301f5eb7b4c54b/docs/VERIFICATION_FIRST_2026-09-13.md)
-describe that candidate, not accepted master behavior. Newly opened PR47 also
-targets master from the paid integration branch and must remain separate from
-this documentation publication. User PR46 (`place-design`) remains separate.
-
-The gigs application branch remains at `b4b783f8d` to preserve PR47's running native
-CI. Stream 1 uses the neutral live guide immediately and must integrate current
-master at its next paid checkpoint before publishing code. Other copies of the
-old gigs-worktree guide/status are snapshots, not the live coordination location.
-
-Next: acquire the needed runtime reservations for the three bounded baselines.
-This post-merge status snapshot is published on the neutral coordination branch
-for the next batched documentation PR; all shared rules are already on master.
-No hosted deployment, migration, provider activation or device change ran as part
-of this correction. Production deployment and migration flags were checked false.
+Next: finish current-head Stream1 CI, continue the native Start Work baseline,
+and publish corrected shared status through documentation-only PR49. Review peer
+repairs and their source-bound acceptance before integrating them. P04, P08/P09,
+R05 and overall launch remain open; inventory counts are unchanged. No hosted
+deployment, migration activation, provider activation or physical-device change
+has run. Preserve existing runtimes and accepted evidence; only one heavy local
+native build at a time.
 
 ## Historical state and next action — September 14
 
