@@ -7,11 +7,20 @@ instruction below requires checking existing implementations and current evidenc
 it is not permission to rebuild a screen or add a competing schema. The original
 improvement requirements remain in scope.
 
+The user approved [three workstreams](workstreams/README.md) on September 15.
+Shared instructions and status snapshots are published to master through a
+separate documentation branch; the live hub is in the neutral coordination
+worktree. This document remains the authoritative backlog. First bounded
+milestones: P04 Start Work (Stream 1), M02 browser guest passes (Stream 2), and
+N04 personal blocking/direct messages (Stream 3). Discovery closes no rows.
+The current handoff supersedes historical PR state below; source-specific paid
+candidate evidence is linked there and does not establish master acceptance.
+
 Native reviewer history is accepted and integrated through PR #35 into #32.
 PR #36 current-claims HTTP/SDK/browser/native acceptance is also complete at
 `1c5f7bb1b`, with final CI 34781479982 passing. The existing presentation is restored and integrated from `a68e8f0e5`;
 CI 34785056441 passes all executed checks. See the current-claims report for
-rendering limits. PRs #32/#34 remain drafts; #34 conflicts with master. Counts remain 8 closed and 72 partial/open. Renewal/schema drafts
+rendering limits. PR #32 is now merged; PR #34 remains draft and unmerged. Counts remain 8 closed and 72 partial/open. Renewal/schema drafts
 remain paused pending an existing-implementation comparison.
 
 Updated September 13, 2026 after current-claims integration and design restoration.
