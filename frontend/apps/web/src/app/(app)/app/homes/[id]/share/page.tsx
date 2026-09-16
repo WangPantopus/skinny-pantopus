@@ -1,12 +1,15 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Wifi, BedDouble, Wrench, CalendarDays, Share2, XCircle, Users } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
+import type { GuestPass } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { passStatus } from '@/components/home/share/ShareCenter';
+import { failureMessage } from '@/components/home/share/shareFailure';
 
 const TEMPLATES: { id: string; label: string; icon: typeof Wifi; duration: string; color: string }[] = [
   { id: 'wifi_only', label: 'Wi-Fi Only',       icon: Wifi,         duration: '2 hours',  color: '#0284c7' },
@@ -28,27 +31,42 @@ function ShareContent() {
   const router = useRouter();
   const { id: homeId } = useParams<{ id: string }>();
 
-  const [passes, setPasses] = useState<any[]>([]);
+  const [passes, setPasses] = useState<GuestPass[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [guestName, setGuestName] = useState('');
   const [creating, setCreating] = useState(false);
+  // A superseded list read must never replace a newer one.
+  const generation = useRef(0);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
   const fetchPasses = useCallback(async () => {
     if (!homeId) return;
+    const request = ++generation.current;
     try {
-      const res = await api.homeIam.getGuestPasses(homeId);
-      setPasses((res as any)?.passes || []);
-    } catch { toast.error('Failed to load guest passes'); }
+      // Revoked passes belong in Past Passes, which already labels them.
+      const res = await api.homeIam.getGuestPasses(homeId, { include_revoked: true });
+      if (request !== generation.current) return;
+      setPasses(res?.passes || []);
+    } catch (err: unknown) {
+      if (request !== generation.current) return;
+      toast.error(failureMessage(err, 'Failed to load guest passes'));
+    }
   }, [homeId]);
 
-  useEffect(() => { setLoading(true); fetchPasses().finally(() => setLoading(false)); }, [fetchPasses]);
+  useEffect(() => {
+    setLoading(true);
+    fetchPasses().finally(() => setLoading(false));
+    return () => { generation.current++; };
+  }, [fetchPasses]);
 
-  const activePasses = passes.filter((p: any) => p.status === 'active' && (!p.end_at || new Date(p.end_at) > new Date()));
-  const expiredPasses = passes.filter((p: any) => p.status !== 'active' || (p.end_at ? new Date(p.end_at) <= new Date() : false));
+  // The list endpoint decides each pass's status. A scheduled link is still live
+  // for whoever holds it, so it stays current and revocable; expired, revoked and
+  // reissue-required links never work again.
+  const activePasses = passes.filter((p) => ['active', 'scheduled'].includes(passStatus(p)));
+  const expiredPasses = passes.filter((p) => !['active', 'scheduled'].includes(passStatus(p)));
 
   const handleCreatePass = useCallback(async () => {
     if (!selectedTemplate || !guestName.trim()) return;
@@ -56,18 +74,22 @@ function ShareContent() {
     try {
       const res = await api.homeIam.createGuestPass(homeId!, {
         label: `${guestName.trim()} (${selectedTemplate})`,
-        kind: selectedTemplate as any,
+        kind: selectedTemplate as GuestPass['kind'],
       });
       setGuestName(''); setSelectedTemplate(null); setShowCreate(false);
       toast.success('Guest pass created');
       await fetchPasses();
 
-      const passUrl = (res as any)?.share_url || (res as any)?.url || (res as any)?.token;
+      // The API returns the raw token; the guest opens it through the public
+      // /guest route, so that is the link to copy (a bare token opens nothing).
+      const passUrl = res?.token
+        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/guest/${encodeURIComponent(res.token)}`
+        : '';
       if (passUrl) {
         try { await navigator.clipboard.writeText(passUrl); toast.success('Share link copied to clipboard'); }
-        catch { /* ignore */ }
+        catch { toast.error('Could not copy the link. Open the Home dashboard Share tab to copy it.'); }
       }
-    } catch (err: any) { toast.error(err?.message || 'Failed to create pass'); }
+    } catch (err: unknown) { toast.error(failureMessage(err, 'Failed to create pass')); }
     finally { setCreating(false); }
   }, [homeId, selectedTemplate, guestName, fetchPasses]);
 
@@ -75,7 +97,7 @@ function ShareContent() {
     const yes = await confirmStore.open({ title: 'Revoke Access', description: 'This guest will immediately lose access.', confirmLabel: 'Revoke', variant: 'destructive' });
     if (!yes) return;
     try { await api.homeIam.revokeGuestPass(homeId!, passId); toast.success('Access revoked'); await fetchPasses(); }
-    catch { toast.error('Failed to revoke pass'); }
+    catch (err: unknown) { toast.error(failureMessage(err, 'Failed to revoke pass')); }
   }, [homeId, fetchPasses]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin h-8 w-8 border-3 border-emerald-600 border-t-transparent rounded-full" /></div>;
@@ -132,14 +154,18 @@ function ShareContent() {
         <div className="mb-6">
           <h2 className="text-sm font-bold text-app-text-strong mb-3">Active Passes ({activePasses.length})</h2>
           <div className="space-y-2">
-            {activePasses.map((pass: any) => (
+            {activePasses.map((pass) => (
               <div key={pass.id} className="flex items-center gap-3 bg-app-surface border border-app-border rounded-xl p-4">
                 <div className="w-1 h-8 rounded-full bg-green-500 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-app-text">{pass.label || 'Guest Pass'}</p>
                   <div className="flex gap-2 mt-0.5">
                     <span className="text-xs text-app-text-secondary capitalize">{pass.kind}</span>
-                    <span className="text-xs text-amber-500 font-medium">{pass.end_at ? formatExpiry(pass.end_at) : 'No expiry'}</span>
+                    <span className="text-xs text-amber-500 font-medium">
+                      {passStatus(pass) === 'scheduled' && pass.start_at
+                        ? `Starts ${new Date(pass.start_at).toLocaleString()}`
+                        : pass.end_at ? formatExpiry(pass.end_at) : 'No expiry'}
+                    </span>
                   </div>
                 </div>
                 <button onClick={() => revokePass(pass.id)} title="Revoke" className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition">
@@ -156,14 +182,16 @@ function ShareContent() {
         <div className="mb-6">
           <h2 className="text-sm font-bold text-app-text-strong mb-3">Past Passes ({expiredPasses.length})</h2>
           <div className="space-y-2">
-            {expiredPasses.slice(0, 10).map((pass: any) => (
+            {expiredPasses.slice(0, 10).map((pass) => (
               <div key={pass.id} className="flex items-center gap-3 bg-app-surface border border-app-border rounded-xl p-4 opacity-60">
                 <div className="w-1 h-8 rounded-full bg-gray-400 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-app-text">{pass.label || 'Guest Pass'}</p>
                   <div className="flex gap-2 mt-0.5">
                     <span className="text-xs text-app-text-secondary capitalize">{pass.kind}</span>
-                    <span className="text-xs text-app-text-muted">{pass.status === 'revoked' ? 'Revoked' : 'Expired'}</span>
+                    <span className="text-xs text-app-text-muted">
+                      {passStatus(pass) === 'revoked' ? 'Revoked' : passStatus(pass) === 'reissue_required' ? 'Needs new link' : 'Expired'}
+                    </span>
                   </div>
                 </div>
               </div>

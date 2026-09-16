@@ -1,69 +1,112 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Phone, Droplets, Users, DoorOpen, HeartPulse, AlertCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Phone, Droplets, DoorOpen, HeartPulse, AlertCircle, Trash2 } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
+import type { HomeEmergency } from '@pantopus/types';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { failureMessage, shareFailure } from '@/components/home/share/shareFailure';
+import {
+  CATEGORY_CREATE_TYPE, SHUTOFF_KINDS, emergencyCategory, emergencyDetail, type EmergencyCategory,
+} from '@/components/home/emergencyTypes';
 
-const CATEGORY_META: Record<string, { icon: typeof Droplets; color: string; label: string }> = {
+const CATEGORY_META: Record<EmergencyCategory, { icon: typeof Droplets; color: string; label: string }> = {
   shutoff:    { icon: Droplets,    color: '#0284c7', label: 'Shutoffs' },
   contact:    { icon: Phone,       color: '#059669', label: 'Emergency Contacts' },
   evacuation: { icon: DoorOpen,    color: '#dc2626', label: 'Evacuation' },
   medical:    { icon: HeartPulse,  color: '#f59e0b', label: 'Medical' },
   other:      { icon: AlertCircle, color: '#6b7280', label: 'Other' },
 };
-const ORDERED_CATS = ['shutoff', 'contact', 'evacuation', 'medical', 'other'];
+const ORDERED_CATS: EmergencyCategory[] = ['shutoff', 'contact', 'evacuation', 'medical', 'other'];
 
 function EmergencyContent() {
   const router = useRouter();
   const { id: homeId } = useParams<{ id: string }>();
 
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<HomeEmergency[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
 
   const [newTitle, setNewTitle] = useState('');
-  const [newCategory, setNewCategory] = useState('contact');
+  const [newCategory, setNewCategory] = useState<EmergencyCategory>('contact');
+  // Shutoffs are stored per utility (shutoff_water, shutoff_gas, ...), so the
+  // form asks which one; every other category maps to one HomeEmergency type.
+  const [newShutoffKind, setNewShutoffKind] = useState(SHUTOFF_KINDS[0].type);
   const [newDetails, setNewDetails] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [creating, setCreating] = useState(false);
+  // A superseded list read must never replace a newer one.
+  const generation = useRef(0);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
   const fetchItems = useCallback(async () => {
     if (!homeId) return;
+    const request = ++generation.current;
     try {
       const res = await api.homeProfile.getHomeEmergencies(homeId);
-      setItems((res as any)?.emergencies || []);
-    } catch { toast.error('Failed to load emergency info'); }
+      if (request !== generation.current) return;
+      setItems((res?.emergencies || []) as HomeEmergency[]);
+    } catch (err: unknown) {
+      if (request !== generation.current) return;
+      toast.error(failureMessage(err, 'Failed to load emergency info'));
+    }
   }, [homeId]);
 
-  useEffect(() => { setLoading(true); fetchItems().finally(() => setLoading(false)); }, [fetchItems]);
+  useEffect(() => {
+    setLoading(true);
+    fetchItems().finally(() => setLoading(false));
+    return () => { generation.current++; };
+  }, [fetchItems]);
 
-  const handleCreate = useCallback(() => {
-    if (!newTitle.trim()) return;
+  // Saves through POST /api/homes/:id/emergencies with a HomeEmergencyType and
+  // the free-form details object the native forms also write; the row shown is
+  // the one the server returned, never a local placeholder.
+  const handleCreate = useCallback(async () => {
+    if (!newTitle.trim() || !homeId || creating) return;
     setCreating(true);
-    setItems((prev) => [{
-      id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, title: newTitle.trim(), category: newCategory,
-      details: newDetails.trim() || undefined, phone: newPhone.trim() || undefined,
-    }, ...prev]);
-    setNewTitle(''); setNewDetails(''); setNewPhone(''); setShowCreate(false);
-    setCreating(false);
-    toast.success('Emergency info added');
-  }, [newTitle, newCategory, newDetails, newPhone]);
+    const details: Record<string, string> = {};
+    if (newPhone.trim()) details.phone = newPhone.trim();
+    if (newDetails.trim()) details.notes = newDetails.trim();
+    try {
+      const res = await api.homeProfile.createHomeEmergency(homeId, {
+        type: newCategory === 'shutoff' ? newShutoffKind : CATEGORY_CREATE_TYPE[newCategory],
+        label: newTitle.trim(),
+        details,
+      });
+      const created = res?.emergency as HomeEmergency | undefined;
+      if (!created?.id) throw new Error('Malformed create response');
+      setItems((prev) => [created, ...prev.filter((i) => i.id !== created.id)]);
+      setNewTitle(''); setNewDetails(''); setNewPhone(''); setShowCreate(false);
+      toast.success('Emergency info added');
+    } catch (err: unknown) {
+      toast.error(failureMessage(err, 'Failed to add emergency info'));
+    } finally { setCreating(false); }
+  }, [homeId, creating, newTitle, newCategory, newShutoffKind, newDetails, newPhone]);
 
   const handleDelete = useCallback(async (itemId: string) => {
     const yes = await confirmStore.open({ title: 'Delete', description: 'Remove this emergency info?', confirmLabel: 'Delete', variant: 'destructive' });
-    if (!yes) return;
+    if (!yes || !homeId) return;
+    try {
+      await api.homeProfile.deleteHomeEmergency(homeId, itemId);
+    } catch (err: unknown) {
+      // Already gone on the server is the outcome the member asked for.
+      if (shareFailure(err).code !== 'EMERGENCY_NOT_FOUND') {
+        toast.error(failureMessage(err, 'Failed to remove emergency info'));
+        return;
+      }
+    }
     setItems((prev) => prev.filter((i) => i.id !== itemId));
     toast.success('Removed');
-  }, []);
+  }, [homeId]);
 
-  const grouped = items.reduce<Record<string, any[]>>((acc, i) => {
-    const cat = i.category || 'other';
+  // HomeEmergency rows carry `type`, never a category; group by the same rollup
+  // the dashboard card and the native palettes apply.
+  const grouped = items.reduce<Partial<Record<EmergencyCategory, HomeEmergency[]>>>((acc, i) => {
+    const cat = emergencyCategory(i.type);
     (acc[cat] = acc[cat] || []).push(i);
     return acc;
   }, {});
@@ -91,7 +134,8 @@ function EmergencyContent() {
         <div className="bg-app-surface border border-app-border rounded-xl p-4 mb-4 space-y-3">
           <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Title" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           <div className="flex flex-wrap gap-1.5">
-            {Object.entries(CATEGORY_META).map(([key, meta]) => {
+            {ORDERED_CATS.map((key) => {
+              const meta = CATEGORY_META[key];
               const CatIcon = meta.icon;
               return (
                 <button key={key} type="button" onClick={() => setNewCategory(key)}
@@ -102,6 +146,18 @@ function EmergencyContent() {
               );
             })}
           </div>
+          {newCategory === 'shutoff' && (
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Shutoff type">
+              {SHUTOFF_KINDS.map((kind) => (
+                <button key={kind.type} type="button" onClick={() => setNewShutoffKind(kind.type)}
+                  aria-pressed={newShutoffKind === kind.type}
+                  className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition ${newShutoffKind === kind.type ? 'border-current' : 'border-app-border text-app-text-secondary'}`}
+                  style={newShutoffKind === kind.type ? { color: CATEGORY_META.shutoff.color, backgroundColor: CATEGORY_META.shutoff.color + '12', borderColor: CATEGORY_META.shutoff.color } : undefined}>
+                  {kind.label}
+                </button>
+              ))}
+            </div>
+          )}
           <input type="tel" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="Phone number (optional)" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           <textarea value={newDetails} onChange={(e) => setNewDetails(e.target.value)} placeholder="Details (optional)" rows={2} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none" />
           <button onClick={handleCreate} disabled={creating || !newTitle.trim()} className="w-full py-2.5 bg-emerald-600 text-white rounded-lg font-semibold text-sm hover:bg-emerald-700 disabled:opacity-50 transition">
@@ -119,7 +175,7 @@ function EmergencyContent() {
       ) : (
         <div className="space-y-6">
           {ORDERED_CATS.filter((cat) => grouped[cat]).map((cat) => {
-            const meta = CATEGORY_META[cat] || CATEGORY_META.other;
+            const meta = CATEGORY_META[cat];
             const CatIcon = meta.icon;
             return (
               <div key={cat}>
@@ -130,22 +186,28 @@ function EmergencyContent() {
                   <h2 className="text-sm font-bold text-app-text-strong">{meta.label}</h2>
                 </div>
                 <div className="space-y-1.5">
-                  {grouped[cat].map((item: any) => (
+                  {(grouped[cat] || []).map((item) => {
+                    // `details` is a jsonb object; render its strings, never the object.
+                    const notes = emergencyDetail(item, 'notes') || emergencyDetail(item, 'detail');
+                    const phone = emergencyDetail(item, 'phone');
+                    return (
                     <div key={item.id} className="flex items-start gap-3 bg-app-surface border border-app-border rounded-xl p-4">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-app-text">{item.title}</p>
-                        {item.details && <p className="text-xs text-app-text-secondary mt-1">{item.details}</p>}
-                        {item.phone && (
-                          <a href={`tel:${item.phone}`} className="inline-flex items-center gap-1.5 mt-2 text-sm text-emerald-600 font-medium hover:underline">
-                            <Phone className="w-3.5 h-3.5" />{item.phone}
+                        <p className="text-sm font-medium text-app-text">{item.label}</p>
+                        {item.location && <p className="text-xs text-app-text-secondary mt-1">{item.location}</p>}
+                        {notes && <p className="text-xs text-app-text-secondary mt-1">{notes}</p>}
+                        {phone && (
+                          <a href={`tel:${phone}`} className="inline-flex items-center gap-1.5 mt-2 text-sm text-emerald-600 font-medium hover:underline">
+                            <Phone className="w-3.5 h-3.5" />{phone}
                           </a>
                         )}
                       </div>
-                      <button onClick={() => handleDelete(item.id)} className="p-1 text-app-text-muted hover:text-red-500 transition flex-shrink-0">
+                      <button onClick={() => handleDelete(item.id)} aria-label={`Delete ${item.label}`} className="p-1 text-app-text-muted hover:text-red-500 transition flex-shrink-0">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             );
