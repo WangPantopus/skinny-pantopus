@@ -47,8 +47,9 @@ status files remain author-owned and unstaged by this cutoff publication.
 
 Stream3 continues its explicitly granted block/send transactional repair in the
 new isolated SQL64532/API64531 runtime; exact forward-migration/contract ownership
-is recorded in the guide. Retained SQL64522 schema may not be changed. Its existing
-social fixtures/listeners still require final peer cleanup. Docker is responsive.
+is recorded in the guide. Retained SQL64522 schema may not be changed. Stream3 reported its HTTP18130/web18131 stopped and exact fixture cleanup zero at
+cutoff; its isolated canonical-empty SQL64532 database remains healthy and reserved.
+No transactional migration/test code has been written. Docker is responsive.
 Read fresh peer status/CI before any integration; do not duplicate its work.
 P04/P08/P09, M02, N04/N05, R05 and overall launch remain open; inventory counts are
 unchanged. No hosted deployment, provider activation or physical-device change ran.

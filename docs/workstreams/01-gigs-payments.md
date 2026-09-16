@@ -43,6 +43,10 @@ has stopped and ownership was explicitly transferred to this task.
   [CI35049746982](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35049746982)
   applies only to `41c75d49a` (15 applicable checks/one Seeder skip).
 
+This shared cutoff is published for review in documentation-only
+[PR52](https://github.com/WangPantopus/skinny-pantopus/pull/52); its checks/merge
+remain pending at handoff. Do not resume work merely to finish that PR now.
+
 **Resume here:** inspect the three-file WIP and private baseline/candidate logs,
 fix the trailing-closure lint issue, then reserve the heavy native slot before
 running the59-test iOS suite and affected static checks. Reuse the baseline command
@@ -86,8 +90,13 @@ Stream3 task **Resume Stream 3 verification**
 release. Its existing grants continue. The guide now records the exact forward
 migration/contract assignment for the reproduced block-versus-send race, restricted
 to its new isolated SQL64532/API64531 database. Do not apply it to retained64522.
-Its HTTP18130/web18131 and `f9150300` fixtures remain peer-owned; final cleanup is
-still owed. Its simulator `0AE16FA0-E244-414F-86C8-24893BDFD979` was reported stopped.
+Stream3 also received immediate cutoff: it reports HTTP18130/web18131 stopped and
+exact `f9150300` cleanup zero at21:13:58 PDT. Its simulator
+`0AE16FA0-E244-414F-86C8-24893BDFD979` remains stopped. Isolated canonical-empty
+SQL64532 is retained healthy; API64531 has not started. No transactional migration
+or SQL-test code has been written. Current PR51 CI35054358217 was still running
+at peer cutoff, not accepted. Its final dirty live03 includes the remaining matrix
+and76-file private evidence mirror; the successor must publish that author snapshot.
 Docker is now responsive; old Docker-blocked notes do not establish a current block.
 
 ## Earlier accepted milestones and preparation snapshot
