@@ -5,6 +5,7 @@ import * as api from '@pantopus/api';
 import QRCode from '../../ui/QRCode';
 import type { GuestPass } from '@pantopus/api';
 import SlidePanel from '../SlidePanel';
+import { failureMessage } from './shareFailure';
 
 // ---- Template defaults ----
 
@@ -147,7 +148,9 @@ export default function CreateGuestPass({
       setStep('result');
 
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create guest pass');
+      // This client rejects with a plain object, so `instanceof Error` would
+      // replace the API's actual reason with generic copy the issuer cannot act on.
+      setError(failureMessage(err, 'Failed to create guest pass'));
     }
     setCreating(false);
   };
@@ -312,6 +315,7 @@ export default function CreateGuestPass({
                   onChange={(e) => setPasscode(e.target.value)}
                   className="w-full rounded-lg border border-app-border px-3 py-2 text-sm font-mono"
                   placeholder="Leave blank for no passcode"
+                  maxLength={128}
                 />
                 <p className="text-[10px] text-app-text-muted mt-0.5">Guest must enter this code to view the pass</p>
               </div>
