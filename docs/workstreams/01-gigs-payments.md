@@ -4,8 +4,8 @@ Updated September 16, 2026. Owner: coordinator / Stream 1.
 State: ready for review — displayed-terms binding delivered at `a65411758` and the
 my-bids follow-up at `4ad88ec11` (backend projection guard + existing web card), both
 verified; heavy native build slot **released**; owned simulator and emulator shut down;
-fixtures cleaned. Real provider authorization, fee policies and the wider P04 scope remain
-open; PR47 CI on the latest head is the current gate.
+fixtures cleaned. PR47 CI is green on `4ad88ec11` (15 applicable checks). Real provider
+authorization, fee policies and the wider P04 scope remain open; PR47 stays draft.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
@@ -14,7 +14,9 @@ P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
 ## Follow-up: my-bids Start Work card bound to the terms it rendered — September 16, 2026
 
 - **Branch/commit:** `codex/paid-gig-integration` at **`4ad88ec11`**, pushed after the
-  `a65411758` CI run completed; its own CI was starting at this update (PR47).
+  `a65411758` CI run completed;
+  [CI 35134153318](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35134153318)
+  passed all 15 applicable checks (one Seeder path skip) on this head.
 - **Changed paths:** `backend/routes/gigs.js` (existing `GET /my-bids` projection),
   `backend/tests/unit/paidGigLifecycleRoute.test.js`,
   `frontend/apps/web/src/app/(app)/app/my-bids/page.tsx`,
