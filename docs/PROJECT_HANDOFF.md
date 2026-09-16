@@ -1,13 +1,53 @@
 # Pantopus project handoff
 
-Updated September 15, 2026. The user resumed verification and development with full
+Updated September 16, 2026. The user resumed verification and development with full
 permission: inspect existing implementations, repair demonstrated bugs/security
 issues, preserve working behavior and screen designs, then cover the remaining
 features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered backlog;
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
-## Current coordination and next action — immediate cutoff
+## Current coordination and next action — September 16, 2026
+
+The September 15/16 cutoff was resumed by the coordinator/Stream 1 session on September 16
+(the user confirmed the iOS Start Work receipt guard and its test correction are fixes to
+keep). Read the live [coordination guide](workstreams/README.md) and
+[Stream 1 status](workstreams/01-gigs-payments.md#milestone-ios-start-work-candidate-verified-locally-and-installed--september-16-2026)
+before editing or using resources. The only live coordination location is
+`/Users/yingpengwang/pantopus-coordination`.
+
+Master is **`82430954038ec6e74b72b54192aaad8117bcc363`** (documentation-only PR50).
+Paid worktree `/private/tmp/pantopus-paid-gig-integration` is clean and pushed at
+**`74c01bf49345b99489af1e8ff7a70c6f2bfd7bb1`** in draft
+[PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47), which now has a scope
+description; CI 35126983681 was still running when this was written. PR34 remains draft at
+`c9cb69825`; user PR46 stays separate. No application merged.
+
+Stream 1 evidence today: the correction that repairs CI 35103180556's three iOS test
+failures; SwiftLint/SwiftFormat at the pinned versions; 59/59 `GigDetailViewModelTests` on
+the owned iOS 26.5 simulator; and installed candidate journeys through the real sign-in UI,
+the existing GigDetail screen, the real start route, PostgREST and PostgreSQL with synthetic
+identity and intercepted providers: invalid receipt, lost reply, retry recovery, ordinary
+start, double tap, and the stale-assignment-before-read boundary. That last journey shows the
+route starting a newer same-worker assignment the client never displayed while the candidate
+refuses to show success; it is now a reproduced open requirement (immutable displayed
+terms) and the next Stream 1 milestone is the additive displayed-terms binding recorded in
+the guide. Installed Android, real provider authorization and the wider P04/P08/P09 scope
+remain open. Fixtures are cleaned to zero, HTTP18132 is stopped, the owned simulator is shut
+down and the heavy native slot is released.
+
+Coordinator dispositions: Stream 2's `70e079543..88d076e56` is in draft
+[PR53](https://github.com/WangPantopus/skinny-pantopus/pull/53) for CI and review (not merge
+approval); its self-declared disposable SQL project is reported stopped. Stream 3 draft
+[PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51) at `22adc7285` has green CI
+and is not approved for merge; its later native-lifetime, N05 reminder and cross-room retry
+milestones still await full coordinator review, and it has begun the granted transactional
+block-admission migration in its own worktree (uncommitted at this update; isolated SQL64532
+only). Retained SQL64522 schema may not be changed. P04/P08/P09, M02, N04/N05, R05 and
+launch remain open; inventory counts are unchanged. No hosted deployment, provider
+activation or physical-device change ran.
+
+## Superseded cutoff record — September 15/16, 2026
 
 The user requested immediate wrap-up. Stream1/coordination work is handed off;
 read the [exact resume point, failed checks and evidence](workstreams/01-gigs-payments.md#immediate-cutoff-handoff--september-1516-2026)

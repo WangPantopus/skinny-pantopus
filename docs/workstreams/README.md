@@ -1,6 +1,6 @@
 # Three-stream coordination
 
-Updated September 15, 2026. The user authorized three concurrent streams. This
+Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
@@ -57,6 +57,11 @@ unchanged in the paid candidate. This permits small independent PRs to master.
 The coordinator then integrates merged master into the paid candidate and checks
 the combined behavior. Do not merge the entire unfinished paid branch into a new
 stream just to obtain its status documents.
+
+One writer per application worktree. Two Stream 1 sessions shared
+`/private/tmp/pantopus-paid-gig-integration` on September 15/16; the older session
+(`pantopus-paid-gig-integration-c8`) is retired from writing and the coordinator session
+is the sole Stream 1 writer. No WIP commits on a branch with an open PR.
 
 Each agent writes only its own status file in the live folder. It commits code
 only from its own application worktree. The coordinator commits/pushes shared
@@ -132,6 +137,9 @@ These cross-cutting files/contracts require coordinator assignment for each edit
 | SDK guest-pass status type / block exports | Streams 2 / 3 respectively | Additive candidates reviewed for conflict; no Stream1 overlap; broader SDK/auth changes still require assignment |
 | `backend/services/blockService.js` error/cache repair | Stream 3 | Sole writer granted after baseline reproduction; verify all callers before changing the error contract |
 | `backend/socket/chatSocketio.js` direct-chat admission/send checks | Stream 3 | Overlap reviewed: paid branch only adds `emitPrivateGigUpdate` plus its export; preserve that helper, `connectedUsers`, revocation and gig tracking behavior |
+| Start Work displayed-terms binding: `backend/routes/gigs.js` start handler, `frontend/packages/api/src/endpoints/gigs.ts` `startGig`, iOS `GigsEndpoints.startGig`/`GigDetailViewModel.startTask`, Android `GigDetailViewModel.startTask` and its repository call, web `CompletionFlow.handleStartWork` | Stream 1 (coordinator), sole writer | Assigned September 16 after installed journey D reproduced the boundary (route starts a newer same-worker assignment the client never displayed). Additive optional expected-assignment body; clients that send none keep current behavior; no new file/table/screen. Streams 2/3 do not touch these paths |
+| Stream 2 PR for `70e079543..88d076e56` | Coordinator | Confirmed; draft [PR53](https://github.com/WangPantopus/skinny-pantopus/pull/53) opened by the coordinator on September 16 for CI and review. Not merge approval; Stream 2 keeps content ownership. Stream 2's SQL 64552 disposable project is reported stopped; its Emergency-page value finding is routed to Home ownership (Stream 2) as a separate bounded row |
+| Direct-message block admission implementation | Stream 3 | Author has begun within the existing grant: uncommitted `supabase/migrations/20260916010000_direct_message_block_admission.sql`, `scripts/db/contracts/direct-message-block-admission.sql`, and `chats.js`/`chatAccessControl.test.js` edits were observed in its worktree on September 16. Apply/test only on isolated SQL64532; report the pushed SHA and evidence in live 03 before review |
 | Cancellation/no-show fee payer and recipient | Product decision, recorded by Stream 1 | Still unspecified; independent Start Work verification can proceed |
 | User's Place redesign, PR #46 | User's separate scope | Preserved outside these verification milestones |
 
@@ -161,9 +169,9 @@ or elapsed time is not proof a resource is free.
 
 | Resource | Current reservation | Rule |
 | --- | --- | --- |
-| Local heavy native build | Released at Stream1 cutoff; no candidate test running | Reacquire before the next heavy native build; check actual state |
-| iOS/Android test devices | Stream3 retains `0AE16FA0-E244-414F-86C8-24893BDFD979` (reported stopped); Stream1 isolated `Pantopus Stream1 Start R2`, iOS26.5, `C2BCF36A-F300-48C1-9BA7-876CA9F61E55` (confirmed Shutdown) | Preserve owner iPhone17 and all existing acceptance devices; no physical-device install granted |
-| Databases / fixture ports | Stream3 reports exact `f9150300` cleanup zero and HTTP18130/web18131 stopped at cutoff. Stream1 `f9150410` rows cleaned to zero and HTTP18132 stopped | Stream3 cleanup is author-reported; retain its evidence. No retained schema/reset/container mutation; preserve other fixtures; 18089 is not granted |
+| Local heavy native build | **Released** by Stream1 at 10:23 PDT September 16 after its local iOS suite and installed journeys; no xcodebuild/Gradle running at release | Reacquire before the next heavy native build; check actual processes, not this note |
+| iOS/Android test devices | Stream3 retains `0AE16FA0-E244-414F-86C8-24893BDFD979` (Shutdown); Stream1 isolated `Pantopus Stream1 Start R2`, iOS26.5, `C2BCF36A-F300-48C1-9BA7-876CA9F61E55` (Shutdown again after the September 16 installed journeys; candidate app left installed) | Preserve owner iPhone17 (currently Booted, untouched) and all existing acceptance devices; no physical-device install granted |
+| Databases / fixture ports | Stream3 reports exact `f9150300` cleanup zero and HTTP18130/web18131 stopped at cutoff. Stream1 `f9150410` (September 15), `f9150420` and `f9150430` (September 16) rows cleaned to zero by direct SQL; HTTP18132 stopped. Stream2 reports its disposable SQL 64552/API 64551 project stopped | Stream3/Stream2 cleanup is author-reported; retain their evidence. No retained schema/reset/container mutation; preserve other fixtures; 18089 is not granted |
 | Stream3 isolated transactional-block database | New private `/private/tmp/pantopus-stream3-block-db-r1`, project/container prefix `pantopus-stream3-block-r1`, SQL64532/API64531 (64533 reserved) | Docker responsive at grant; replay canonical schema into empty owned database. No retained data copy or existing container changes. Canonical-empty SQL64532 retained healthy; API not started. Exact forward migration/contract assignment granted above, but no repair files written before cutoff; never apply to retained64522 |
 | Existing SQL port 64522 and REST port 18089 | Retained prior rehearsal resources | Never assume available or change their schema from another stream |
 | Physical iPhone | Owner's installed build 3 | No test install or device mutation without a concrete authorized task |

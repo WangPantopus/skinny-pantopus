@@ -1,12 +1,85 @@
 # Stream 1 — Gigs and payments
 
 Updated September 16, 2026. Owner: coordinator / Stream 1.
-State: resumed — iOS lint correction under local test verification; the candidate
-is validated on CI simulators; installed-device and provider acceptance remain open.
+State: verification — iOS candidate verified locally and installed (September 16); heavy
+native build slot **released** at 10:23 PDT; owned simulator shut down; fixtures cleaned.
+Next bounded milestone: Start Work displayed-terms binding (see below). Installed Android,
+real provider authorization and the wider P04 scope remain open.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
 P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
+
+## Milestone: iOS Start Work candidate verified locally and installed — September 16, 2026
+
+- **Branch/commit:** `codex/paid-gig-integration` at **`74c01bf49`**, pushed; draft
+  [PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47) now carries a scope
+  description. CI 35126983681 was running at this update (backend/web/database/iOS lint
+  green, native test jobs pending); do not treat it as final until it completes.
+- **Changed path:** only `frontend/apps/ios/PantopusTests/Features/ContentDetail/GigDetailViewModelTests.swift`
+  (3 lines). No application code, screen, layout, styling, navigation, schema or new file.
+- **Reproduced failure:** CI 35103180556 on `e531074e4` failed `testStartTaskTransitionsToInProgress`
+  on all three simulators (line 364, "In-progress worker gets the delivery affordance"):
+  the trailing-closure rewrite no longer bound the closure to `tipIdentity:`, so
+  `startTask()` used the default identity and returned `.ignored`. The correction hoists
+  the closure into a typed local constant passed with the explicit label.
+- **Reused evidence:** backend 13/13 HTTP/SQL cases and 229 regressions (`599de1586`),
+  Android 54/54 JVM (`9397e39a7`), CI 35054602607 simulator runs of the six WIP cases,
+  and the accepted web browser evidence at `c9cb69825`. Unchanged sources are bound by
+  hash in `ios-candidate-source.json`.
+- **New evidence (source-bound):** SwiftLint 0.63.3 strict 0 violations; SwiftFormat 0.61.1
+  0/2248 files. `PantopusTests/GigDetailViewModelTests` on the owned simulator
+  `Pantopus Stream1 Start R2` (iOS 26.5): **59 executed, 0 failures**, including the six
+  Start Work cases and the previously failing case. A first attempt hung before XCTest
+  attached (the host launched with a persisted r1 session) and is retained as a hung
+  attempt, not counted; attempt 2 after a simulator shutdown/boot passed.
+- **Installed candidate journeys** on the same Debug build (`Pantopus.debug.dylib` contains
+  the receipt guard; API/socket 127.0.0.1:18132): real sign-in UI backed by a synthetic
+  login fixture → existing GigDetail via `pantopus://gigs/<id>` → real `backend/routes/gigs.js`
+  → supabase-js → PostgREST 64521 → PostgreSQL 64522; providers intercepted; push/badge/socket
+  stubbed; free gig; retained older schema; fixture prefix `f9150420`.
+  - A. Invalid receipt (200 `{}` after commit): SQL `in_progress` and one `gig_started`
+    notice; the screen stayed "Assigned"/"Start task" and did not refresh from the invalid
+    receipt. Retry → `reused: true`, same `started_at`, still one notice → "In progress"
+    with "Mark as delivered".
+  - B. Lost reply (socket destroyed after commit): committed with one notice; client error
+    path with no automatic POST retry (non-idempotent by design); screen stayed "Assigned".
+    Explicit retry → `reused: true`, same timestamp, one notice → "In progress".
+  - C. Ordinary start: one POST, `in_progress`, one notice, refresh → "In progress".
+  - D. **Stale assignment before the server's first read** (`accepted_at` re-stamped in SQL
+    after the screen loaded): the route **started the newer assignment** (200, new
+    `accepted_at`) and notified the owner; the candidate refused to show success and stayed
+    at "Assigned"; a retry returned `reused: true` for the newer assignment and was refused
+    again. The same boundary is reproduced over pure HTTP (`stale-before-read-http-sql.json`:
+    200 with the new `accepted_at`; a free→paid change before the read is refused 402).
+    This is the previously unproven scope, now concretely reproduced; it stays open.
+  - E. Two taps within a 4 s held reply: exactly one POST reached the route, one transition,
+    one notice; the second tap was ignored.
+  - Toast text was not captured by simulator screenshots; state transitions and SQL records
+    are the accepted evidence.
+- **Limits:** synthetic sign-in/identity, intercepted providers, free gig, older retained
+  schema, stubbed delivery, simulator rather than a physical device. Session replacement and
+  departure mid-request remain unit-test-only. Installed Android was not run. P04 stays open.
+- **Shared-file/integration effects:** none (test file only); no peer source touched.
+- **Cleanup:** runtime 18132 stopped; exact `f9150420`/`f9150430` rows 0 by direct SQL;
+  owned simulator shut down; heavy native slot released; no schema/reset/container change;
+  owner iPhone17 and peer devices untouched.
+- **Evidence:** `/private/tmp/pantopus-p04-start-20260916-r2` (harness, logs, xcresult,
+  screenshots, `EVIDENCE.md`), mirrored to the owner's private
+  `.pantopus-recovery/audits/20260916-p04-start-r2`.
+- **Process:** the earlier Stream 1 session (`pantopus-paid-gig-integration-c8`) is still
+  alive with two stuck background loops in this worktree; it was told that this session is
+  the sole Stream 1 writer. One writer per worktree.
+
+**Next bounded milestone (Stream 1, assigned in the guide): displayed-terms binding for
+Start Work.** Journey D shows the route can start terms the client never displayed. The
+smallest repair in the existing implementation: accept an optional expected-assignment
+snapshot (`accepted_at`, `price`, `payment_id`) in the existing `POST /:gigId/start` body,
+compare it with the route's own read before the provider check and answer the existing 409
+conflict on mismatch; pass the displayed snapshot from the existing iOS/Android/web callers
+and `frontend/packages/api` `startGig`. Existing clients that send no body keep today's
+behavior. No new file, table, screen or migration. Change orders already mutate `Gig.price`
+while assigned, so displayed terms can drift in practice.
 
 ## Resumed from the cutoff — September 16, 2026
 
