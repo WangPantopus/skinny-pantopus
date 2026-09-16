@@ -6,8 +6,8 @@ my-bids follow-up at `4ad88ec11` (backend projection guard + existing web card),
 verified; heavy native build slot **released**; owned simulator and emulator shut down;
 fixtures cleaned. PR47 CI is green on `4ad88ec11` (15 applicable checks); master
 `c14657e35` is integrated as `6e106d9d0` with combined regressions green locally, and the
-paid-only migrations are renumbered after master's newest version at **`3657af97d`** (G03);
-that head's CI is the current gate. Real provider authorization, fee policies and the
+paid-only migrations are renumbered after master's newest version at **`3657af97d`** (G03),
+whose CI passed all 15 applicable checks. Real provider authorization, fee policies and the
 wider P04 scope remain open; PR47 stays draft.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
@@ -37,8 +37,11 @@ P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
   environment. The only non-doc reference (`backend/contracts/gig-tip-contract.md`) now
   cites the new tip names; historical reports keep the old names as history. Verified:
   policy check passes against the master base, `node --test` for scripts/deploy, scripts/db
-  and scripts/staging 72/72, 66 contract wrappers verify. The fresh-database replay on
-  this head is CI's remaining gate; the failed run is retained as failed. Draft PR34
+  and scripts/staging 72/72, 66 contract wrappers verify.
+  [CI 35142787582](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35142787582)
+  on `3657af97d` passed all 15 applicable checks, including the fresh-database replay
+  with the renumbered chain and all native jobs on the integrated tree; the failed run
+  35141268492 on `6e106d9d0` is retained as failed. Draft PR34
   (`codex/staging-paid-gig`) still carries the old version names and will need the same
   reconciliation or closure as incorporated when its disposition is decided.
 - **No screen or application-behavior edit** in this integration; PR47 stays draft.

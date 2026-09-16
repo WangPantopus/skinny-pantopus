@@ -21,8 +21,8 @@ documentation PRs 52/54/55/56. Paid worktree `/private/tmp/pantopus-paid-gig-int
 is clean and pushed at **`3657af97d`** (master integrated as `6e106d9d0`, then the 21
 paid-only migrations renumbered after master's newest version because the migration
 policy failed on the integrated head) in draft
-[PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47); CI was green on
-`a65411758` and `4ad88ec11`, and the renumbered head's run is the current gate. PR34
+[PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47); CI is green on
+`a65411758`, `4ad88ec11` and `3657af97d` (15 applicable checks each). PR34
 remains draft at `c9cb69825`; user PR46 stays separate. No paid application merged.
 
 Stream 1 evidence today: the correction that repairs CI 35103180556's three iOS test
