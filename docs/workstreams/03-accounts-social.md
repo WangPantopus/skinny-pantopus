@@ -7,7 +7,9 @@ Current status is maintained only in this neutral coordination file.
 ## Source and reconciliation
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
-`codex/workstream-accounts-social`. Initial inspection found clean `fc99f8ee7`
+`codex/workstream-accounts-social`. **Base: current master `b46934c92`** (PR #53
+Home guest-pass `4cc9d3787` and docs PR #54) integrated at merge `6cfe9f6fb`,
+pushed; backend suite re-run green after the merge (326 suites /5473 tests). Initial inspection found clean `fc99f8ee7`
 with no later changes, PR or CI. Current master `0616d6e79` was integrated as
 shared documentation only. Current pushed milestones: **`dfc860bfe`** (initial safety repair), **`41588bbec`** (native lifetime/web navigation), **`8d31d452f`** (N05 reminder failure contract), **`bf16f6f50`** (message retry privacy), **`22adc7285`** (existing retry test fixture models SQL NULL actor defaults), **`6055bc2b9`** (transactional direct-message block admission).
 Draft [PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51);
@@ -118,13 +120,29 @@ harness confirms denial PT403, INSERT/UPDATE/DELETE coverage, re-admission after
 unblock, and the block-waits fix; backend **326 suites /5473 tests /0 failures**,
 chatAccessControl **37/37** (was31/31). Fixtures cleaned (0 remaining).
 
-**Not yet re-run:** the original `verify-concurrent-send.cjs` reproduction. Its
-fixture API on18130 is down and the r2 database it targets has been cleaned, so
-the end-to-end HTTP/socket repro could not be replayed against the fix. The
-PT403 → supabase-js `error.code` mapping therefore rests on documented PostgREST
-behaviour, not a live check; if wrong the denial surfaces as500 — still fail
-closed, no row, no emit, but a worse status. **One live smoke check is needed
-before merge.** N04 does not close on this milestone alone.
+**Owed live PostgREST smoke check: DONE, passing.** Real PostgREST v16.1
+(cached image) on owned API64531 against owned SQL64532; retained64522 untouched.
+Results:
+
+| Check | Result |
+| --- | --- |
+| Control, no block, insert via supabase-js | `error: null`, 1 row inserted — legitimate traffic unaffected |
+| Blocked insert, raw HTTP | **403**, body `{code:"PT403", message:"DIRECT_MESSAGE_BLOCKED", details:…}` |
+| Blocked insert, supabase-js | `error.code === "PT403"`, `error.message === "DIRECT_MESSAGE_BLOCKED"` |
+| The exact `chats.js` branch predicate | **fires (true)** |
+| Rows persisted on refusal | **0** |
+| Fixture cleanup | 0 remaining |
+
+So the mapping does not rest on documented behaviour any more; it is observed
+through the real client. The PostgREST container was removed and 64531 released.
+Harness note: supabase-js builds `${url}/rest/v1/...` while bare PostgREST serves
+at root, so the transit URL was rewritten in the harness; the client's own error
+parsing — the thing under test — was untouched.
+
+**Still not re-run:** the original `verify-concurrent-send.cjs` end-to-end
+reproduction (fixture API18130 down, r2 database cleaned). The admission gate and
+its client mapping are now directly evidenced, but the full socket-level replay
+against the fix is not. N04 does not close on this milestone alone.
 
 Still open: all existing block entry points, installed native socket/reconnect,
 concurrent block versus already-authorized send (cache invalidation is not a SQL

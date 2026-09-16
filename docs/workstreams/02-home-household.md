@@ -1,9 +1,10 @@
 # Stream 2 — Home and household
 
 Updated September 15, 2026. Owner: Home stream.
-State: ready for review — M02 browser guest-pass slice repaired, retested, and
-now re-run against actual SQL. The September 15 "transcribed contract" limit is
-closed; three further defects surfaced only once real SQL was in the loop.
+State: merged — the M02 browser guest-pass slice is in master. Repaired, retested
+and re-run against actual SQL; the September 15 "transcribed contract" limit is
+closed, and three further defects surfaced only once real SQL was in the loop.
+Branch re-based on current master; awaiting the next bounded sub-slice.
 
 Acknowledged the clarified [working agreement](README.md#working-agreement) and
 [verification-first rules](../../AGENTS.md): preserve iOS/Android/web appearance,
@@ -29,10 +30,20 @@ required comparison, and label unverified provider/device boundaries explicitly.
   pointed at the app worktree so a local dev server could serve this branch's
   code; it was restored both times. All application edits, both commits and the
   push came from `/private/tmp/pantopus-workstream-home`.
-- Base master `711340225`; commits **`70e079543`** (browser repairs) and
-  **`88d076e56`** (real-SQL run + what it exposed), both pushed. Coordinator
-  opened **draft PR #53** (`codex/workstream-home` → `master`) for CI and review;
-  content ownership stays with this stream and this is not merge approval.
+- **Merged.** Commits `70e079543` (browser repairs) and `88d076e56` (real-SQL run
+  + what it exposed) reached master through PR #53 as **`4cc9d3787`**; docs PR #54
+  merged as **`b46934c92`**. Independently verified from this worktree: both
+  commits are ancestors of `origin/master`.
+- **New base: `b46934c92`.** `codex/workstream-home` fast-forwarded to current
+  master from `/private/tmp/pantopus-workstream-home` and pushed
+  (`514b95960..b46934c92`); the branch is now identical to master with a clean
+  tree. The integrated delta is **documentation only** — `git diff HEAD...master
+  -- ':!docs'` is empty — so it changes no application contract and the real-SQL
+  evidence recorded below stands unchanged.
+- Post-integration re-check at the new head: web **107 suites / 1469 tests** pass,
+  typecheck gate at its 0-error baseline, and `test-home-guest-pass-http.cjs`
+  passes its 8 transcribed checks. No container run was repeated: no migration,
+  schema or share-path source changed in the integration.
 - No backend, service, schema or migration change. No native/mobile change.
 
 ## What the existing journey already did correctly
@@ -196,7 +207,14 @@ produces, which is what hid the dropped reason.
   replay job passing is the independent check on the same 53-migration replay
   this stream ran locally; this candidate adds no migration. No native build
   requested, so the heavy slot stays free as far as this stream is concerned.
-- **Next:** PR #53 is green and awaiting coordinator review/merge disposition;
-  then continue to the next M02 sub-slice (scoped `/shared/:token` grants, the
-  shared-document receipt journey, or the alternate `/app/homes/[id]/share`
-  entry).
+- **Open bounded row carried forward (assigned to this stream):** the members'
+  Emergency screen `frontend/apps/web/src/app/(app)/app/homes/[id]/emergency/page.tsx`
+  orders categories by `['shutoff','contact','evacuation','medical','other']` —
+  the same invented values the guest page carried, none of which
+  `HomeEmergency.type` can hold under `HomeEmergency_type_chk`. Reproduction and
+  repair not started; it needs its own baseline before any edit.
+- **Next:** awaiting selection of the next bounded sub-slice — the Emergency-page
+  row above, scoped `/shared/:token` grants, the shared-document receipt/download
+  journey (needs a storage provider boundary, to be labelled), or the alternate
+  `/app/homes/[id]/share` entry. No runtime is held by this stream and no native
+  build is requested; the heavy slot stays free.
