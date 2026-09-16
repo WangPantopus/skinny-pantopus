@@ -352,9 +352,10 @@ final class GigDetailViewModelTests: XCTestCase {
             ],
             "/api/gigs/g1/start": [.status(200, body: workerGig("in_progress", extra: #","started_at":"2026-09-15T12:05:00Z""#))]
         ])
-        let vm = GigDetailViewModel(gigId: "g1", api: makeAPI(), currentUserId: "viewer-1") {
+        let tipIdentity: () -> GigStopViewModel.Identity? = {
             .init(actor: "viewer-1", session: "start-session", origin: "synthetic-origin")
         }
+        let vm = GigDetailViewModel(gigId: "g1", api: makeAPI(), currentUserId: "viewer-1", tipIdentity: tipIdentity)
         await vm.load()
         let error = await vm.startTask()
         XCTAssertEqual(error, .confirmed)
