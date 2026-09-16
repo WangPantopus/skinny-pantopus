@@ -29,6 +29,13 @@ public enum BlocksEndpoints {
     public static func unblock(userId: String) -> Endpoint {
         Endpoint(method: .delete, path: "/api/users/\(userId)/block")
     }
+
+    /// `GET /api/users/blocked` — the viewer's own personal blocks, the
+    /// rows `POST /api/users/:userId/block` writes. Route
+    /// `backend/routes/blocks.js:138`. Mounted before `userRoutes`
+    /// (`backend/app.js:346`) so `/blocked` is not captured by the
+    /// `/:username` profile route.
+    public static let blocked = Endpoint(method: .get, path: "/api/users/blocked")
 }
 
 /// `POST /api/users/:userId/block` body. `reason` is optional.

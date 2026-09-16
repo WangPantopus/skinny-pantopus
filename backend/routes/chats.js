@@ -19,7 +19,7 @@ const {
 } = require('../serializers/identitySerializers');
 const { hasPermission } = require('../utils/businessPermissions');
 const s3Service = require('../services/s3Service');
-const { isBlocked } = require('../services/blockService');
+const { isBlocked, blockCheckUnavailable } = require('../services/blockService');
 const { incCounter, recordHistogram, getSnapshot } = require('../services/chatMetrics');
 const pushService = require('../services/pushService');
 const rateLimit = require('express-rate-limit');
@@ -975,6 +975,7 @@ router.post('/direct', verifyToken, directChatLimiter, validate(createDirectChat
     });
     
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Direct chat creation error', { requestId: req.requestId, userId: req.user?.id, error: err.message });
     res.status(500).json({ error: 'Failed to create direct chat' });
   }
@@ -1105,7 +1106,7 @@ router.get('/rooms/:roomId/pre-bid-status', verifyToken, async (req, res) => {
     const { roomId } = req.params;
     const userId = req.user.id;
 
-    const { data: room } = await supabaseAdmin
+    const { data: room, error: roomError } = await supabaseAdmin
       .from('ChatRoom')
       .select('id, type, gig_id')
       .eq('id', roomId)
@@ -1489,25 +1490,29 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     // ─── Pre-bid message limit for gig chats ───
     const PRE_BID_MESSAGE_LIMIT = 3;
 
-    const { data: room } = await supabaseAdmin
+    const { data: room, error: roomError } = await supabaseAdmin
       .from('ChatRoom')
       .select('id, type, gig_id')
       .eq('id', roomId)
       .single();
 
+    if (roomError) throw blockCheckUnavailable();
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+
     // ─── Block check for direct chats ───
     // For gig/group chats, blocking is handled differently (not enforced here).
     if (room && room.type === 'direct') {
-      const { data: otherParticipants } = await supabaseAdmin
+      const { data: otherParticipants, error: participantsError } = await supabaseAdmin
         .from('ChatParticipant')
         .select('user_id')
         .eq('room_id', roomId)
         .neq('user_id', userId)
-        .eq('is_active', true)
-        .limit(1);
-      const otherUserId = otherParticipants?.[0]?.user_id;
-      if (otherUserId && await isBlocked(userId, otherUserId)) {
-        return res.status(403).json({ error: 'Unable to message this user' });
+        .eq('is_active', true);
+      if (participantsError || !Array.isArray(otherParticipants)) throw blockCheckUnavailable();
+      for (const participant of otherParticipants) {
+        if (await isBlocked(userId, participant.user_id)) {
+          return res.status(403).json({ error: 'Unable to message this user' });
+        }
       }
     }
 
@@ -1675,28 +1680,25 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       }
     }
 
-    // ─── Idempotency check ───
-    // If the client provides a clientMessageId (UUID), check for an existing
-    // message with that ID in the same room by the same sender. If found,
-    // return it as an idempotent success instead of inserting a duplicate.
-    if (clientMessageId) {
-      const { data: existingMsg } = await supabaseAdmin
-        .from('ChatMessage')
-        .select(`
-          *,
-          sender:user_id(
-            id,
-            username,
-            name,
-            profile_picture_url
-          )
-        `)
+    // A retry is bound to the authorized room, displayed sender and human actor.
+    // client_message_id is globally unique, so a conflicting key from another
+    // scope must never return that scope's private message.
+    const findRetryMessage = async () => {
+      let query = supabaseAdmin.from('ChatMessage')
+        .select(`*, sender:user_id(id, username, name, profile_picture_url)`)
         .eq('client_message_id', clientMessageId)
-        .maybeSingle();
-
-      if (existingMsg) {
-        return res.json({ message: serializeChatMessageForViewer(existingMsg) });
-      }
+        .eq('room_id', roomId)
+        .eq('user_id', senderUserId);
+      query = String(senderUserId) === String(userId)
+        ? query.is('actor_user_id', null)
+        : query.eq('actor_user_id', userId);
+      const { data, error: retryError } = await query.maybeSingle();
+      if (retryError) throw retryError;
+      return data;
+    };
+    if (clientMessageId) {
+      const existingMsg = await findRetryMessage();
+      if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg) });
     }
 
     // Insert message
@@ -1727,6 +1729,19 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     let supportsMetadataColumn = true;
     let { data: message, error } = await insertMessage(messageData);
 
+    // The database re-decides direct-room admission inside the inserting
+    // transaction (20260916010000_direct_message_block_admission): the isBlocked
+    // pre-check above and this insert are separate PostgREST transactions, so a
+    // block can commit between them. Returning here — ahead of the legacy
+    // fallbacks below — guarantees a denied send is never re-attempted with a
+    // stripped payload, and the response body is byte-identical to the
+    // pre-check denial so the race is indistinguishable from losing it.
+    if (error?.code === 'PT403' && /^DIRECT_MESSAGE_(BLOCKED|ACTOR_INVALID)$/.test(String(error.message || '').trim())) {
+      incCounter('chat.message.send_failed');
+      logger.warn('message_send_blocked_at_persistence', { requestId, roomId, userId, senderUserId, durationMs: Date.now() - sendStartMs });
+      return res.status(403).json({ error: 'Unable to message this user' });
+    }
+
     // Backward-compat fallback:
     // - legacy DB may not have ChatMessage.actor_user_id
     // - legacy DB may not have ChatMessage.metadata
@@ -1755,6 +1770,13 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
         delete downgradedPayload.metadata;
       }
       ({ data: message, error } = await insertMessage(downgradedPayload));
+    }
+
+    if (error?.code === '23505' && clientMessageId) {
+      // A concurrent same-scope insert may have won after the initial lookup.
+      const existingMsg = await findRetryMessage();
+      if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg) });
+      return res.status(409).json({ error: 'Message retry key is already in use' });
     }
 
     if (error) {
@@ -1845,7 +1867,8 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
     res.status(201).json({ message: serializeChatMessageForViewer(message) });
     
   } catch (err) {
-    logger.error('Message send error', { requestId, roomId, userId, durationMs: Date.now() - sendStartMs, error: err.message });
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
+    logger.error('Message send error', { requestId: req.requestId, roomId: req.body.roomId, userId: req.user?.id, error: err.message });
     res.status(500).json({ error: 'Failed to send message' });
   }
 });
@@ -2073,8 +2096,12 @@ router.post('/rooms/:roomId/participants', verifyToken, participantLimiter, asyn
       return res.status(500).json({ error: 'Failed to add participant' });
     }
     
-    // Create system message
-    await supabaseAdmin
+    // Create system message. The direct-room admission gate
+    // (20260916010000_direct_message_block_admission) can refuse this insert with
+    // PT403 when the room is direct and a block is active. That is the intended
+    // direction, but the result was previously discarded entirely, so record it:
+    // the participant change itself already succeeded and must still be reported.
+    const { error: addNoticeError } = await supabaseAdmin
       .from('ChatMessage')
       .insert({
         room_id: roomId,
@@ -2082,7 +2109,13 @@ router.post('/rooms/:roomId/participants', verifyToken, participantLimiter, asyn
         message: `added ${newParticipant.user.name || newParticipant.user.username}`,
         type: 'system'
       });
-    
+    if (addNoticeError) {
+      logger.warn('system_message_not_recorded', {
+        requestId: req.requestId, roomId, userId, kind: 'participant_added',
+        blockedAtPersistence: addNoticeError.code === 'PT403', error: addNoticeError.message,
+      });
+    }
+
     res.status(201).json({ participant: serializeChatParticipantForViewer(newParticipant) });
     
   } catch (err) {
@@ -2131,8 +2164,10 @@ router.delete('/rooms/:roomId/participants/:participantUserId', verifyToken, par
       return res.status(500).json({ error: 'Failed to remove participant' });
     }
     
-    // Create system message
-    await supabaseAdmin
+    // Create system message. Same admission gate as the add path above; a direct
+    // room under an active block refuses this with PT403. The removal already
+    // succeeded, so the denial is logged rather than surfaced to the caller.
+    const { error: removeNoticeError } = await supabaseAdmin
       .from('ChatMessage')
       .insert({
         room_id: roomId,
@@ -2140,7 +2175,13 @@ router.delete('/rooms/:roomId/participants/:participantUserId', verifyToken, par
         message: isSelf ? 'left the chat' : `removed a participant`,
         type: 'system'
       });
-    
+    if (removeNoticeError) {
+      logger.warn('system_message_not_recorded', {
+        requestId: req.requestId, roomId, userId, kind: isSelf ? 'participant_left' : 'participant_removed',
+        blockedAtPersistence: removeNoticeError.code === 'PT403', error: removeNoticeError.message,
+      });
+    }
+
     res.json({ message: 'Participant removed successfully' });
     
   } catch (err) {

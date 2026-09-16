@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.settings.blocks
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -22,6 +23,8 @@ fun BlockedUsersScreen(
     viewModel: BlockedUsersViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    DisposableEffect(viewModel) { onDispose { viewModel.retire() } }
 
     LaunchedEffect(Unit) { viewModel.load() }
 

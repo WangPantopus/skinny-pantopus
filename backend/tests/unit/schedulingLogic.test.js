@@ -25,7 +25,7 @@ jest.mock('../../stripe/stripeService', () => ({
   getEffectiveFeeRate: jest.fn(),
 }));
 
-const { resetTables, seedTable } = require('../__mocks__/supabaseAdmin');
+const { resetTables, seedTable, getTable } = require('../__mocks__/supabaseAdmin');
 
 describe('module wiring (require without error)', () => {
   it('loads all scheduling services + routers', () => {
@@ -299,5 +299,58 @@ describe('ensurePage (booking-page get-or-create) — never returns null', () =>
       return builder;
     });
     await expect(ensurePage(ctx(), 'u1')).rejects.toMatchObject({ code: '42P01' });
+  });
+});
+
+
+describe('N05 booking reminder delivery failures', () => {
+  const notifications = require('../../services/notificationService');
+  const email = require('../../services/emailService');
+  const { sendBookingReminder } = require('../../services/scheduling/bookingNotifyService');
+  const booking = {
+    id: 'reminder-fixture', owner_type: 'user', owner_id: 'host',
+    start_at: '2026-09-16T12:00:00Z', end_at: '2026-09-16T12:30:00Z',
+  };
+  beforeEach(() => resetTables());
+  afterEach(() => jest.restoreAllMocks());
+
+  it('does not report success when the email service reports unavailable', async () => {
+    jest.spyOn(email, 'sendEmail').mockResolvedValue({ success: false, error: 'EMAIL_UNAVAILABLE' });
+    await expect(sendBookingReminder({
+      booking: { ...booking, invitee_email: 'reminder@example.invalid' }, kind: 'reminder_60m', offsetMinutes: 60,
+    })).rejects.toThrow();
+  });
+
+  it('does not report success when the personal notification insert fails', async () => {
+    jest.spyOn(notifications, 'createNotification').mockResolvedValue(null);
+    await expect(sendBookingReminder({
+      booking: { ...booking, invitee_user_id: 'invitee' }, kind: 'reminder_60m', offsetMinutes: 60,
+    })).rejects.toThrow();
+  });
+});
+
+
+describe('N05 booking worker retries delivery failures', () => {
+  const { runBookingReminders } = require('../../jobs/bookingReminders');
+  const email = require('../../services/emailService');
+  beforeEach(() => {
+    resetTables();
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-16T11:00:00Z'));
+    seedTable('Booking', [{
+      id: 'reminder-fixture', owner_type: 'user', owner_id: 'host', status: 'confirmed',
+      invitee_email: 'reminder@example.invalid', start_at: '2026-09-16T12:00:00Z', end_at: '2026-09-16T12:30:00Z',
+    }]);
+  });
+  afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
+  it('releases a failed email claim, retries, then deduplicates a successful receipt', async () => {
+    const send = jest.spyOn(email, 'sendEmail')
+      .mockResolvedValueOnce({ success: false, error: 'EMAIL_UNAVAILABLE' })
+      .mockResolvedValue({ success: true, messageId: 'synthetic-receipt' });
+    await runBookingReminders();
+    expect(getTable('BookingReminderLog')).toHaveLength(0);
+    await runBookingReminders();
+    expect(getTable('BookingReminderLog')).toHaveLength(1);
+    await runBookingReminders();
+    expect(send).toHaveBeenCalledTimes(2);
   });
 });

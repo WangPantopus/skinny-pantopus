@@ -1,13 +1,16 @@
 // @ts-nocheck
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { buildUserProfileShareUrl } from '@pantopus/utils';
 import type { UserProfile, User, GigListItem, Review } from '@pantopus/types';
 import { getAuthToken } from '@pantopus/api';
 import BusinessPublicProfile from '@/components/business/BusinessPublicProfile';
+import { toast } from '@/components/ui/toast-store';
+import ReportModal from '@/components/ui/ReportModal';
+import { confirmStore } from '@/components/ui/confirm-store';
 import { ProfileHeader, TabButton } from '@/components/profile/public';
 import { ReliabilityPanel, AboutCard, SkillsCard } from '@/components/profile/public/cards';
 import {
@@ -93,11 +96,27 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const [connectionState, setConnectionState] = useState<RelationshipState>('none');
   const [actionLoading, setActionLoading] = useState(false);
 
+  const [reportTarget, setReportTarget] = useState<{ id: string; current: () => boolean } | null>(null);
+  const actionGeneration = useRef(0);
+  const pendingBlock = useRef(false);
+  const target = useRef(profileIdentifier);
+  target.current = profileIdentifier;
+  const captureAction = useCallback(() => {
+    const generation = actionGeneration.current;
+    const identifier = profileIdentifier;
+    const token = getAuthToken();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    return () => generation === actionGeneration.current && identifier === target.current
+      && token === getAuthToken() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+  }, [profileIdentifier]);
+
   const loadCurrentUser = useCallback(async () => {
+    const current = captureAction();
     try {
       const token = getAuthToken();
       if (token) {
         const userData = await api.users.getMyProfile();
+        if (!current()) return null;
         setCurrentUser(userData);
         return userData;
       }
@@ -105,13 +124,37 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       console.error('Failed to load current user:', err);
     }
     return null;
-  }, []);
+  }, [captureAction]);
+
+  useEffect(() => {
+    // A route change reuses this component, so retire controls as well as callbacks.
+    pendingBlock.current = false;
+    setActionLoading(false);
+    setReportTarget(null);
+    setCurrentUser(null);
+    setConnectionState('none');
+    setFollowState(false);
+    const invalidate = () => { actionGeneration.current++; };
+    const retire = () => {
+      invalidate(); pendingBlock.current = false;
+      setReportTarget(null); setActionLoading(false); setCurrentUser(null);
+      void loadCurrentUser();
+    };
+    const storage = (event: StorageEvent) => {
+      if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) retire();
+    };
+    const unsubscribe = api.onTokenChange(retire);
+    window.addEventListener('storage', storage);
+    return () => { invalidate(); unsubscribe(); window.removeEventListener('storage', storage); };
+  }, [loadCurrentUser]);
 
   const loadProfile = useCallback(async () => {
+    const current = captureAction();
     try {
       const profileData = UUID_REGEX.test(profileIdentifier)
         ? await api.users.getProfileById(profileIdentifier)
         : await api.users.getProfileByUsername(profileIdentifier);
+      if (!current()) return;
       setProfile(profileData as PublicProfileData);
 
       if (profileData.reviews && profileData.reviews.length > 0) {
@@ -122,7 +165,9 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         });
       }
     } catch (err) {
-      const ownProfile = currentUser || await loadCurrentUser();
+      if (!current()) return;
+      const ownProfile = await loadCurrentUser();
+      if (!current()) return;
       const currentUsername = normalizeProfileIdentifier(ownProfile?.username);
       const isOwnProfileRoute = Boolean(
         ownProfile &&
@@ -137,9 +182,9 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
       console.error('Failed to load profile:', err);
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
-  }, [currentUser, loadCurrentUser, profileIdentifier]);
+  }, [loadCurrentUser, profileIdentifier, captureAction]);
 
   const loadRelationshipStatus = useCallback(async () => {
     if (!profile?.id) return;
@@ -216,6 +261,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   useEffect(() => {
     // Server-rendered initialProfile is already in state; only refetch
     // if we don't have one, or when username changes in-flight.
+    setProfile(initialProfile);
+    setLoading(!initialProfile);
     if (!initialProfile) {
       loadProfile();
     }
@@ -274,6 +321,66 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       }
     } catch (err: unknown) {
       console.error('Failed to create chat:', err);
+    }
+  };
+
+  /**
+   * N04 — the personal block contract (`UserBlock`). This is the same
+   * endpoint the iOS and Android Block actions call, and the only one
+   * `backend/services/blockService.js` reads to refuse direct messages.
+   * It is deliberately NOT the trust-graph block
+   * (`POST /api/relationships/block-user`), which does not gate messaging.
+   * The block is liftable from Settings -> Blocked Users.
+   */
+  const handleBlock = async () => {
+    if (!currentUser) { router.push('/login'); return; }
+    if (pendingBlock.current) return;
+    pendingBlock.current = true;
+    const current = captureAction();
+    const targetId = profile!.id;
+    const yes = await confirmStore.open({
+      title: 'Block user',
+      description:
+        `Block ${fullName}? They won't be able to message you, and you won't ` +
+        `see messages from them. They are not notified, and you can unblock ` +
+        `them from Settings.`,
+      confirmLabel: 'Block',
+      variant: 'destructive',
+    });
+    if (!current()) return;
+    if (!yes) { pendingBlock.current = false; return; }
+
+    setActionLoading(true);
+    try {
+      await api.blocks.blockUser(targetId);
+      if (!current()) return;
+      // Mirrors the native clients: the connection edge drops to `blocked`
+      // on the same success, which hides the Connect / Follow row.
+      setConnectionState('blocked');
+      setFollowState(false);
+      toast.success(`${fullName} blocked`);
+    } catch (err: unknown) {
+      if (!current()) return;
+      console.error('Block error:', err);
+      toast.error('Couldn\'t block this user');
+    } finally {
+      if (current()) { pendingBlock.current = false; setActionLoading(false); }
+    }
+  };
+
+  const handleReport = () => {
+    if (!currentUser) { router.push('/login'); return; }
+    setReportTarget({ id: profile!.id, current: captureAction() });
+  };
+
+  const submitReport = async (reason: string, details?: string) => {
+    if (!reportTarget?.current()) throw new Error('Session changed');
+    try {
+      await api.users.reportUser(reportTarget.id, reason, details);
+      if (reportTarget.current()) toast.success('Report submitted');
+    } catch (error) {
+      if (reportTarget.current()) toast.error('Couldn\'t submit your report. Please retry.');
+      throw error;
     }
   };
 
@@ -419,6 +526,13 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
   return (
     <div className="bg-app min-h-screen pb-24 md:pb-8">
+      <ReportModal
+        key={`${profileIdentifier}:${actionGeneration.current}`}
+        open={!!reportTarget && reportTarget.current()}
+        onClose={() => setReportTarget(null)}
+        onSubmit={submitReport}
+        entityType="user"
+      />
       <ProfileHeader
         profile={profile}
         fullName={fullName}
@@ -439,6 +553,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         onMessage={handleMessage}
         onRequestHire={handleRequestHire}
         onShare={handleShare}
+        onBlock={handleBlock}
+        onReport={handleReport}
       />
 
       <div className="bg-surface border-b border-app mt-6">

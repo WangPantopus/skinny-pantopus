@@ -71,6 +71,37 @@ data class PrivacyBlockDto(
     val blocked: BlockedUserSummaryDto? = null,
 )
 
+/**
+ * Envelope from `GET /api/users/blocked` (route `backend/routes/blocks.js:138`).
+ * These are the `UserBlock` rows that `POST /api/users/:userId/block` writes —
+ * the table `backend/services/blockService.js` reads to deny direct messages.
+ * Distinct from [PrivacyBlocksResponse], which carries the Identity Firewall's
+ * separately scoped `UserProfileBlock` rows.
+ */
+@JsonClass(generateAdapter = true)
+data class UserBlocksResponse(
+    val blocked: List<UserBlockEntryDto>,
+)
+
+/**
+ * One `UserBlock` row. The route flattens the joined user onto the row rather
+ * than nesting it, so there is no `blocked` object here.
+ */
+@JsonClass(generateAdapter = true)
+data class UserBlockEntryDto(
+    val id: String,
+    /**
+     * The blocked person. `blocks.js:150` maps the NOT NULL `blocked_user_id`
+     * column onto this key; it addresses `DELETE /api/users/:userId/block`.
+     */
+    @Json(name = "user_id") val userId: String,
+    val username: String? = null,
+    val name: String? = null,
+    @Json(name = "profile_picture_url") val profilePictureUrl: String? = null,
+    val reason: String? = null,
+    @Json(name = "created_at") val createdAt: String? = null,
+)
+
 /** Nested user summary returned by `privacy.js:154` join. */
 @JsonClass(generateAdapter = true)
 data class BlockedUserSummaryDto(

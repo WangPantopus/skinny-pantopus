@@ -32,6 +32,10 @@ public struct BlockedUsersView: View {
         }
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("blockedUsers")
+        .onDisappear { viewModel.retire() }
+        .onChange(of: viewModel.sessionIsCurrent) { _, current in
+            if !current { viewModel.retire() }
+        }
     }
 }
 

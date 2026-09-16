@@ -155,3 +155,45 @@ describe('session_revoked → socket kick', () => {
     expect(kickRevokedSessions(io, { userId: 'nobody', sessionIds: [SID], reason: 'user' })).toBe(0);
   });
 });
+
+// The production socket creates direct rooms; message sending uses REST.
+// Capture the real handler with synthetic socket authentication and mocked DB.
+describe('direct creation block authorization', () => {
+  const db = require('../__mocks__/supabaseAdmin');
+  const blockService = require('../../services/blockService');
+  const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2';
+  afterEach(() => jest.restoreAllMocks());
+  async function connect() {
+    const handlers = {};
+    const socket = { id: 'block-socket', userId: UID, userEmail: 'fixture@example.invalid',
+      join: jest.fn(), emit: jest.fn(), broadcast: { emit: jest.fn() }, on: (name, fn) => { handlers[name] = fn; } };
+    db.setRpcMock(async () => ({ data: [], error: null }));
+    await io._handlers.connection(socket);
+    socket.emit.mockClear();
+    return { socket, handlers };
+  }
+  test('database failure acknowledges unavailability without joining or announcing a room', async () => {
+    blockService.invalidateBlockCache(UID, OTHER);
+    const { socket, handlers } = await connect();
+    const original = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => table === 'UserBlock'
+      ? { select: () => ({ or: async () => ({ error: { message: 'offline' }, count: null }) }) }
+      : original(table));
+    const rpc = jest.spyOn(db, 'rpc');
+    const callback = jest.fn();
+    await handlers['chat:create_direct']({ otherUserId: OTHER }, callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ code: 'BLOCK_CHECK_UNAVAILABLE' }));
+    expect(rpc).not.toHaveBeenCalled();
+    expect(socket.join).not.toHaveBeenCalled();
+    expect(socket.emit).not.toHaveBeenCalled();
+  });
+  test.each([false, true])('a block in either direction denies socket creation (reverse=%s)', async reverse => {
+    blockService.invalidateBlockCache(UID, OTHER);
+    seedTable('UserBlock', [{ id: 'block', blocker_user_id: reverse ? OTHER : UID, blocked_user_id: reverse ? UID : OTHER }]);
+    const { socket, handlers } = await connect();
+    const callback = jest.fn();
+    await handlers['chat:create_direct']({ otherUserId: OTHER }, callback);
+    expect(callback).toHaveBeenCalledWith({ error: 'Unable to message this user' });
+    expect(socket.join).not.toHaveBeenCalled();
+  });
+});

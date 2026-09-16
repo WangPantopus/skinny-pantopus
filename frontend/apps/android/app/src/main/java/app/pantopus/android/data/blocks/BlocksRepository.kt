@@ -1,5 +1,6 @@
 package app.pantopus.android.data.blocks
 
+import app.pantopus.android.data.api.models.settings.UserBlocksResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.BlocksApi
@@ -24,4 +25,10 @@ class BlocksRepository
          * Route `backend/routes/blocks.js:101`.
          */
         suspend fun unblock(userId: String): NetworkResult<Unit> = safeApiCall { api.unblock(userId) }
+
+        /**
+         * `GET /api/users/blocked` — the viewer's own personal blocks.
+         * Route `backend/routes/blocks.js:138`.
+         */
+        suspend fun blocked(): NetworkResult<UserBlocksResponse> = safeApiCall { api.blocked() }
     }
