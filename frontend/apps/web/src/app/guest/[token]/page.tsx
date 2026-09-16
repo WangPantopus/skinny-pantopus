@@ -27,6 +27,16 @@ function failureDetails(failure: unknown) {
   return { code, message, requiresPasscode: value.data?.requiresPasscode === true };
 }
 
+// HomeEmergencyType's actual values (@pantopus/types, matching the
+// HomeEmergency_type_chk constraint). The earlier 'shutoff'/'contact' keys are
+// not values this column can hold, so every entry fell through to the generic
+// icon and a water shutoff looked identical to a contact list.
+const EMERGENCY_ICON: Record<string, string> = {
+  shutoff_water: '🔧', shutoff_gas: '🔧', shutoff_electric: '🔧', breaker_map: '🔧',
+  emergency_contacts: '📞',
+  extinguisher: '🧯', first_aid: '🩹', evac_plan: '🚪',
+};
+
 // Copy for every terminal/blocked read the share API can return. `retry` marks
 // the links that can still succeed later; the rest must not invite a retry.
 const FAILURE_SCREENS: Record<string, { state: PageState; title: string; body: string; retry?: boolean }> = {
@@ -329,7 +339,7 @@ export default function GuestViewPage() {
               {sections.emergency.map((item: { type?: string; label?: string; title?: string; location?: string; phone?: string; notes?: string }, i: number) => (
                 <div key={i} className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-600 text-sm shrink-0">
-                    {item.type === 'shutoff' ? '🔧' : item.type === 'contact' ? '📞' : '⚠️'}
+                    {EMERGENCY_ICON[item.type || ''] || '⚠️'}
                   </div>
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-app-text">{item.label || item.title || 'Emergency'}</div>

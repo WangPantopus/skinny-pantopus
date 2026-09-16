@@ -3,13 +3,22 @@
 // hold the same server open for the browser journey.
 // Synthetic: authentication, and (without a container) the share RPC contract.
 const assert = require('node:assert/strict');
-const fixture = require('./home-guest-pass-http-fixture.cjs')();
+
+// `--container <name>` runs the share RPCs as actual SQL in this stream's own
+// disposable replay project. Without it the fixture uses its transcription of
+// the frozen contract, which is route/service/UI evidence only.
+const containerIndex = process.argv.indexOf('--container');
+const container = containerIndex > 0 ? process.argv[containerIndex + 1] : null;
+const fixture = require('./home-guest-pass-http-fixture.cjs')({ container });
 
 const serveIndex = process.argv.indexOf('--serve');
 const port = serveIndex > 0 ? Number(process.argv[serveIndex + 1]) : 0;
 
+let server = null;
+
 async function main() {
-  const server = await new Promise(resolve => {
+  if (container) fixture.seed();
+  server = await new Promise(resolve => {
     const created = fixture.app.listen(port, '127.0.0.1', () => resolve(created));
   });
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -35,7 +44,7 @@ async function main() {
       included_sections: ['parking'], start_at: new Date(Date.now() + 86400_000).toISOString(), duration_hours: 24 });
     const legacy = await call('POST', passes(), { label: 'Legacy pass', kind: 'guest',
       included_sections: ['parking'], duration_hours: 24 });
-    fixture.state.passes.find(row => row.id === legacy.body.pass.id).sharing_version = null;
+    fixture.demoteToLegacy(legacy.body.pass.id);
     console.log(JSON.stringify({ ready: true, port: server.address().port, tokens: {
       seeded: seeded.body.token, locked: locked.body.token, limited: limited.body.token,
       later: later.body.token, legacy: legacy.body.token,
@@ -100,7 +109,7 @@ async function main() {
 
   const legacy = await call('POST', passes(), { label: 'Legacy', kind: 'guest',
     included_sections: ['parking'], duration_hours: 24 });
-  fixture.state.passes.find(row => row.id === legacy.body.pass.id).sharing_version = null;
+  fixture.demoteToLegacy(legacy.body.pass.id);
   const stale = await call('GET', `/api/homes/guest/${legacy.body.token}`);
   assert.equal(stale.status, 410);
   assert.equal(stale.body.code, 'SHARE_REISSUE_REQUIRED');
@@ -121,17 +130,30 @@ async function main() {
   const denied = await call('POST', `/api/homes/${fixture.id(999)}/guest-passes`, { label: 'Other home' });
   assert.equal(denied.status, 404);
   assert.equal(denied.body.code, 'HOME_NOT_FOUND');
-  fixture.state.permissions = ['home.view'];
+  fixture.denyPermissions(['members.manage']);
   const unauthorized = await call('POST', passes(), { label: 'No authority', kind: 'guest', included_sections: ['parking'] });
   assert.equal(unauthorized.status, 403);
   assert.equal(unauthorized.body.code, 'SHARE_DENIED');
-  fixture.state.permissions = ['home.view', 'members.manage'];
+  fixture.restorePermissions();
+  fixture.denyPermissions(['access.view_wifi']);
   const wifiDenied = await call('POST', passes(), { label: 'No wifi authority', kind: 'wifi_only', included_sections: ['wifi'] });
   assert.equal(wifiDenied.status, 403);
   assert.equal(wifiDenied.body.code, 'SHARE_RESOURCE_DENIED');
-  console.log('PASS: unauthorized issuance is refused with its exact recovery code');
+  // A withdrawn wifi grant must also stop an already-issued wifi link.
+  const wifiHeld = await call('GET', `/api/homes/guest/${locked.body.token}?passcode=sesame`);
+  assert.equal(wifiHeld.status, 403);
+  assert.equal(wifiHeld.body.code, 'SHARE_RESOURCE_DENIED');
+  fixture.restorePermissions();
+  assert.equal((await call('GET', `/api/homes/guest/${locked.body.token}?passcode=sesame`)).status, 200);
+  console.log('PASS: a withdrawn grant refuses issuance and retires the links it already backed');
 
-  server.close();
+  if (container) {
+    const remaining = fixture.cleanup();
+    assert.deepEqual(remaining, { passes: 0, views: 0, audits: 0, homes: 0, users: 0 });
+    console.log('PASS: the owned fixture rows are removed and counted back to zero');
+  }
 }
 
-main().catch(error => { console.error(error); process.exitCode = 1; });
+// A failed assertion must not leave the listening server holding the event loop.
+main().catch(error => { console.error(error); process.exitCode = 1; })
+  .finally(() => { if (server && serveIndex < 0) server.close(); });

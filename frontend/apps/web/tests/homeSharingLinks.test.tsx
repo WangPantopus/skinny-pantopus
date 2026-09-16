@@ -191,6 +191,26 @@ test('an actual revocation keeps its existing revoked screen', async () => {
   expect(screen.getByText(/revoked by the home admin/)).toBeInTheDocument();
 });
 
+test('emergency entries use the icon for their actual HomeEmergency type', async () => {
+  // HomeEmergency.type can only hold the HomeEmergencyType values; the page had
+  // matched 'shutoff'/'contact', which this column never contains, so every
+  // entry fell back to the generic icon.
+  jest.mocked(api.homeGuest.viewGuestPass).mockResolvedValue({
+    pass: { label: 'Vendor', kind: 'vendor', custom_title: null, expires_at: '2099-01-01T00:00:00Z',
+      home_name: 'My Place', welcome_message: null },
+    sections: { emergency: [
+      { type: 'shutoff_water', label: 'Water shutoff', location: 'Garage wall' },
+      { type: 'emergency_contacts', label: 'Emergency contacts', location: 'Kitchen binder' },
+    ] },
+  } as Awaited<ReturnType<typeof api.homeGuest.viewGuestPass>>);
+  await act(async () => { render(<GuestViewPage />); });
+  const shutoff = screen.getByText('Water shutoff').closest('div.flex');
+  const contacts = screen.getByText('Emergency contacts').closest('div.flex');
+  expect(shutoff?.textContent).toContain('🔧');
+  expect(contacts?.textContent).toContain('📞');
+  expect(screen.queryByText('⚠️')).not.toBeInTheDocument();
+});
+
 test('a passcode challenge still opens the passcode form', async () => {
   await guestView({ message: 'Enter the correct passcode to view this share link.',
     code: 'SHARE_PASSCODE_REQUIRED', statusCode: 403, requiresPasscode: true,

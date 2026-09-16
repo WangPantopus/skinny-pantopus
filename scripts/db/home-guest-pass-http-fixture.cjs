@@ -15,6 +15,8 @@ const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const id = n => `f0e51100-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 module.exports = function ({ container = null } = {}) {
+  // Only this stream's own disposable replay container may be written to.
+  if (container !== null) assert.match(container, /^supabase_db_pantopus-stream2-guest-[a-z0-9-]+$/);
   const express = require(path.join(root, 'backend/node_modules/express'));
   const actor = id(1);
   const homeId = id(100);
@@ -33,7 +35,12 @@ module.exports = function ({ container = null } = {}) {
       default_guest_pass_hours: 24,
     },
     wifi: [{ id: id(201), label: 'Home WiFi', value: 'MyWifiPassword123', visibility: 'members' }],
-    emergency: [{ id: id(301), type: 'shutoff', label: 'Water shutoff', location: 'Garage wall' }],
+    // HomeEmergency_type_chk allows only shutoff_water/shutoff_gas/shutoff_electric/
+    // breaker_map/extinguisher/first_aid/evac_plan/emergency_contacts/other.
+    emergency: [
+      { id: id(301), type: 'shutoff_water', label: 'Water shutoff', location: 'Garage wall' },
+      { id: id(302), type: 'emergency_contacts', label: 'Emergency contacts', location: 'Kitchen binder' },
+    ],
     passes: [],
     views: [],
     audits: [],
@@ -170,6 +177,10 @@ module.exports = function ({ container = null } = {}) {
     if (!state.permissions.includes('members.manage') || !state.permissions.includes('home.view')) return fail('SHARE_DENIED', 403);
     const sections = {};
     for (const section of pass.included_sections) {
+      // inspect_home_external_share rechecks the issuer's CURRENT permission for
+      // each bound section, so a withdrawn grant retires links it already backed.
+      const need = section === 'wifi' ? 'access.view_wifi' : 'home.view';
+      if (!state.permissions.includes(need)) return fail('SHARE_RESOURCE_DENIED', 403);
       if (section === 'wifi') {
         const networks = (pass.resource_bindings.wifi || [])
           .map(wifiId => state.wifi.find(row => row.id === wifiId))
@@ -192,11 +203,135 @@ module.exports = function ({ container = null } = {}) {
       expires_at: pass.end_at, home_name: state.home.name, welcome_message: state.home.guest_welcome_message }, sections } };
   }
 
+  // --- Actual SQL execution in a disposable container ---------------------
+  // Same shape as the accepted scripts/db HTTP fixtures: service_role RPCs run
+  // through `docker exec psql` against an owned, disposable project.
+  const { execFileSync } = require('node:child_process');
+  const q = value => `'${String(value).replaceAll("'", "''")}'`;
+  function sql(query) {
+    return execFileSync('docker', ['exec', '-i', container, 'psql', '-X', '-qAt', '-U', 'postgres',
+      '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
+      { input: query, encoding: 'utf8', timeout: 30000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+  }
+  function callSql(name, args) {
+    const params = Object.entries(args).map(([key, value]) => {
+      assert.match(key, /^p_[a-z_]+$/);
+      return `${key} => ${value == null ? 'NULL' : q(typeof value === 'object' ? JSON.stringify(value) : value)}`;
+    });
+    return JSON.parse(sql(`SET ROLE service_role; SELECT public.${name}(${params.join(',')})::text; RESET ROLE;`));
+  }
+
+  // Seed exactly this fixture's own rows, refusing a database that is not empty
+  // of them first — the accepted scripts/db pattern (parents before children,
+  // one transaction, relative timestamps, explicit enum casts, no role-default
+  // writes: the canonical HomeRolePermission rows arrive with the migrations).
+  // home_effective_access grants a verified owner every permission that is not
+  // explicitly denied for role_base 'owner', which is what members.manage,
+  // home.view and access.view_wifi depend on here.
+  function seed() {
+    assert(container, 'seed() requires a container-backed run');
+    assert.equal(sql(`SELECT (SELECT count(*) FROM auth.users WHERE id=${q(actor)})
+      +(SELECT count(*) FROM public."Home" WHERE id=${q(homeId)});`), '0');
+    const home = state.home;
+    sql(`BEGIN;
+      INSERT INTO auth.users(id,email,email_confirmed_at)
+        VALUES(${q(actor)},'guest-pass-http-1@example.invalid',now());
+      INSERT INTO public."User"(id,email,username,name,role)
+        SELECT id,email,'guest_pass_http_'||right(id::text,2),'Guest pass fixture','user'
+        FROM auth.users WHERE id=${q(actor)};
+      INSERT INTO public."Home"(id,owner_id,created_by_user_id,address,city,state,zipcode,name,
+        trash_day,house_rules,local_tips,entry_instructions,parking_instructions,
+        guest_welcome_message,default_guest_pass_hours)
+        VALUES(${q(homeId)},${q(actor)},${q(actor)},'Private guest pass fixture','Test','WA','98607',
+          ${q(home.name)},${q(home.trash_day)},${q(home.house_rules)},
+          ${home.local_tips === null ? 'NULL' : q(home.local_tips)},
+          ${q(home.entry_instructions)},${q(home.parking_instructions)},
+          ${q(home.guest_welcome_message)},${home.default_guest_pass_hours});
+      INSERT INTO public."HomeOwner"(home_id,subject_id,owner_status,is_primary_owner,verification_tier)
+        VALUES(${q(homeId)},${q(actor)},'verified',true,'strong');
+      INSERT INTO public."HomeOccupancy"(home_id,user_id,role,role_base,age_band,verification_status,
+        is_active,start_at,access_end_at)
+        VALUES(${q(homeId)},${q(actor)},'owner','owner'::public.home_role_base,'adult','verified',
+          true,now()-interval '1 day',now()+interval '30 days');
+      -- trg_sync_homeaccesssecret_value refuses an INSERT carrying a secret and
+      -- only moves the value into HomeAccessSecretValue on UPDATE. Seed through
+      -- that same contract instead of writing the value table directly.
+      INSERT INTO public."HomeAccessSecret"(id,home_id,access_type,label,secret_value,visibility,created_by)
+        VALUES ${state.wifi.map(row => `(${q(row.id)},${q(homeId)},'wifi',${q(row.label)},'',
+          ${q(row.visibility)}::public.home_record_visibility,${q(actor)})`).join(',')};
+      ${state.wifi.map(row => `UPDATE public."HomeAccessSecret" SET secret_value=${q(row.value)} WHERE id=${q(row.id)};`).join('\n      ')}
+      INSERT INTO public."HomeEmergency"(id,home_id,type,label,location,created_by,created_at,updated_at)
+        VALUES ${state.emergency.map(row => `(${q(row.id)},${q(homeId)},${q(row.type)},${q(row.label)},
+          ${q(row.location)},${q(actor)},now(),now())`).join(',')};
+      COMMIT;`);
+  }
+
+  // Remove only this fixture's own rows and report the counts back, so a run can
+  // assert its owned database returns to zero.
+  function cleanup() {
+    assert(container, 'cleanup() requires a container-backed run');
+    sql(`BEGIN;
+      DELETE FROM public."HomeShareReadReceipt" WHERE home_id=${q(homeId)};
+      DELETE FROM public."HomeGuestPassView" WHERE guest_pass_id IN
+        (SELECT id FROM public."HomeGuestPass" WHERE home_id=${q(homeId)});
+      DELETE FROM public."HomeGuestPass" WHERE home_id=${q(homeId)};
+      DELETE FROM public."HomeScopedGrant" WHERE home_id=${q(homeId)};
+      DELETE FROM public."HomeAuditLog" WHERE home_id=${q(homeId)};
+      DELETE FROM public."HomeEmergency" WHERE home_id=${q(homeId)};
+      DELETE FROM public."HomeAccessSecretValue" WHERE access_secret_id IN
+        (SELECT id FROM public."HomeAccessSecret" WHERE home_id=${q(homeId)});
+      DELETE FROM public."HomeAccessSecret" WHERE home_id=${q(homeId)};
+      DELETE FROM public."HomeOccupancy" WHERE home_id=${q(homeId)};
+      DELETE FROM public."HomeOwner" WHERE home_id=${q(homeId)};
+      DELETE FROM public."Home" WHERE id=${q(homeId)};
+      DELETE FROM public."User" WHERE id=${q(actor)};
+      DELETE FROM auth.users WHERE id=${q(actor)};
+      COMMIT;`);
+    return JSON.parse(sql(`SELECT jsonb_build_object(
+      'passes',(SELECT count(*) FROM public."HomeGuestPass" WHERE home_id=${q(homeId)}),
+      'views',(SELECT count(*) FROM public."HomeGuestPassView" v JOIN public."HomeGuestPass" g
+        ON g.id=v.guest_pass_id WHERE g.home_id=${q(homeId)}),
+      'audits',(SELECT count(*) FROM public."HomeAuditLog" WHERE home_id=${q(homeId)}),
+      'homes',(SELECT count(*) FROM public."Home" WHERE id=${q(homeId)}),
+      'users',(SELECT count(*) FROM auth.users WHERE id=${q(actor)}))::text;`));
+  }
+
+  // Retire a pass to the pre-validation sharing contract, the way a link issued
+  // before migration 20260910040000 exists today. Works in both modes so one
+  // journey script covers the transcribed and the SQL-backed run.
+  function demoteToLegacy(passId) {
+    if (container) { sql(`UPDATE public."HomeGuestPass" SET sharing_version=NULL WHERE id=${q(passId)};`); return; }
+    const pass = state.passes.find(row => row.id === passId);
+    assert(pass, 'Unknown guest pass');
+    pass.sharing_version = null;
+  }
+
+  // Withdraw the actor's authority the way the product does — an explicit
+  // HomePermissionOverride deny, which home_effective_access subtracts from
+  // every source. Mode-aware so one journey script covers both runs.
+  function denyPermissions(permissions) {
+    if (!container) {
+      state.permissions = state.permissions.filter(value => !permissions.includes(value));
+      return;
+    }
+    sql(`INSERT INTO public."HomePermissionOverride"(id,home_id,user_id,permission,allowed,created_by,created_at,updated_at)
+      VALUES ${permissions.map((permission, index) => `(${q(id(700 + index))},${q(homeId)},${q(actor)},
+        ${q(permission)}::public.home_permission,false,${q(actor)},now(),now())`).join(',')}
+      ON CONFLICT (home_id,user_id,permission) DO UPDATE SET allowed=false,updated_at=now();`);
+  }
+  function restorePermissions() {
+    if (!container) {
+      state.permissions = ['home.view', 'home.edit', 'members.manage', 'access.view_wifi'];
+      return;
+    }
+    sql(`DELETE FROM public."HomePermissionOverride" WHERE home_id=${q(homeId)} AND user_id=${q(actor)};`);
+  }
+
   const rpcCalls = [];
   const db = { rpc: async (name, args) => {
     assert(['mutate_home_external_share', 'read_home_external_share'].includes(name));
     rpcCalls.push(name);
-    assert(container === null, 'Container-backed SQL execution is not wired in this fixture run');
+    if (container) return { data: callSql(name, args), error: null };
     return { data: name === 'mutate_home_external_share' ? mutate(args) : read(args), error: null };
   } };
 
@@ -232,7 +367,7 @@ module.exports = function ({ container = null } = {}) {
   app.use(express.json());
   app.use('/api/homes', guest);
   app.use('/api/homes', iam);
-  return { app, state, db, rpcCalls, actor, homeId, id, hash, clock,
+  return { app, state, db, rpcCalls, actor, homeId, id, hash, clock, sql, seed, cleanup, demoteToLegacy, denyPermissions, restorePermissions,
     setNow(value) { state.now = value; },
     reset() { state.passes = []; state.views = []; state.audits = []; state.now = null; state.sequence = 400;
       state.permissions = ['home.view', 'home.edit', 'members.manage', 'access.view_wifi']; },
