@@ -9,7 +9,7 @@ Current status is maintained only in this neutral coordination file.
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
 `codex/workstream-accounts-social`. Initial inspection found clean `fc99f8ee7`
 with no later changes, PR or CI. Current master `0616d6e79` was integrated as
-shared documentation only. Current pushed milestones: **`dfc860bfe`** (initial safety repair), **`41588bbec`** (native lifetime/web navigation), **`8d31d452f`** (N05 reminder failure contract), **`bf16f6f50`** (message retry privacy), **`22adc7285`** (existing retry test fixture models SQL NULL actor defaults).
+shared documentation only. Current pushed milestones: **`dfc860bfe`** (initial safety repair), **`41588bbec`** (native lifetime/web navigation), **`8d31d452f`** (N05 reminder failure contract), **`bf16f6f50`** (message retry privacy), **`22adc7285`** (existing retry test fixture models SQL NULL actor defaults), **`6055bc2b9`** (transactional direct-message block admission).
 Draft [PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51);
 [CI35054358217](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35054358217) for current HEAD **`22adc728512b8dd0f261c0aaf02e255123dc7f50`**
 has since **completed successfully** (confirmed 2026-09-16 on resume; it was still
@@ -84,15 +84,47 @@ Native delayed-list/late-rollback/account/leave/reopen guards now pass focused m
 
 Next: remaining existing profile/chat/report entry points and session/departure journeys; full-stream source binding and N05 partial-delivery/preference/destination checks. Native slot released to Stream1. New native model coverage establishes controlled session/departure behavior only; installed account switching remains open.
 
-**New reproduced blocker at8d31:** delaying the outbound ChatMessage insert after
+**RESOLVED at `6055bc2b9`** (was the open blocker at 8d31). Reproduced failure:
+delaying the outbound ChatMessage insert after
 REST authorization, committing B→A UserBlock first, then releasing the insert
 returned201, persisted one message and delivered one `message:new` to B over the
 actual socket. No Notification/provider attempt. Evidence:
 `concurrent-send-baseline.json`, `verify-concurrent-send.cjs`. The six accepted
 socket cases do not cover this interleaving. Existing membership-only ChatMessage
 RLS/service-role insertion is not transactional block authorization. Coordinator subsequently granted the exact forward schema/test scope and isolated
-migration-test DB listed in the cutoff handoff below. No transactional repair
-application/schema files have been written; no retained/shared schema changed. This prevents N04 closure.
+migration-test DB listed in the cutoff handoff below. Repair applied within that exact grant, on isolated
+SQL64532 only; no retained/shared schema changed.
+
+`6055bc2b9` adds a BEFORE INSERT trigger on ChatMessage that, for direct rooms
+only, takes deterministic unordered-pair advisory locks per active counterparty
+and re-reads UserBlock. plpgsql VOLATILE gives that re-read a fresh READ
+COMMITTED snapshot after the lock wait, so a block committed while the sender
+waited is seen and the send is refused PT403. A matching BEFORE INSERT OR UPDATE
+OR DELETE trigger on UserBlock takes the same keys. chats.js maps PT403 ahead of
+the legacy insert fallbacks; the two participant system-message inserts now
+record a denial instead of discarding it.
+
+Two corrections were made to the first implementation after adversarial review,
+both verified on SQL64532: (a) the UserBlock trigger's `lock_timeout='5s'` was
+removed — a block waiting behind a held send was **aborting at 5002ms**, so
+blocks.js returned500 and the block did not exist; it now waits and succeeds
+(measured 7063ms). A timed-out send is retryable; a timed-out block is a safety
+failure. (b) UPDATE now locks the OLD pair as well, so repointing a block cannot
+leave the vacated pair unguarded.
+
+Evidence: migration applies cleanly; generated pgTAP contract passes with
+`scripts/db/sync-sql-contracts.cjs` unchanged (56 wrappers verified); two-connection
+harness confirms denial PT403, INSERT/UPDATE/DELETE coverage, re-admission after
+unblock, and the block-waits fix; backend **326 suites /5473 tests /0 failures**,
+chatAccessControl **37/37** (was31/31). Fixtures cleaned (0 remaining).
+
+**Not yet re-run:** the original `verify-concurrent-send.cjs` reproduction. Its
+fixture API on18130 is down and the r2 database it targets has been cleaned, so
+the end-to-end HTTP/socket repro could not be replayed against the fix. The
+PT403 → supabase-js `error.code` mapping therefore rests on documented PostgREST
+behaviour, not a live check; if wrong the denial surfaces as500 — still fail
+closed, no row, no emit, but a worse status. **One live smoke check is needed
+before merge.** N04 does not close on this milestone alone.
 
 Still open: all existing block entry points, installed native socket/reconnect,
 concurrent block versus already-authorized send (cache invalidation is not a SQL
@@ -189,11 +221,11 @@ review covers onlydfc860bfe; newer lifetime, reminder and retry milestones still
 coordinator review. Coordinator also paused on user request; heavy native slot was
 released, but recheck live reservations before any new build/install.
 
-**First next action:** inspect current Git/PR/CI, then reproduce and repair the
-recorded concurrent direct-message admission failure. Start from
-`concurrent-send-baseline.json` and `verify-concurrent-send.cjs` in the private
-mirror. This actual HTTP/PostgreSQL/Socket.IO failure allowed a message to persist
-and reach B after B's block committed. The retry privacy repair does not close it.
+**Done on resume (2026-09-16):** the concurrent admission failure is repaired at
+`6055bc2b9` and pushed. **Next action:** stand the fixture API back up on an owned
+port against an owned database, replay `verify-concurrent-send.cjs` against the
+fix, and confirm the PT403 → HTTP403 mapping through real PostgREST. Then continue
+the whole-stream coverage table; do not stop at N04.
 
 Coordinator already granted these exact files (no need to request the same grant again):
 - `supabase/migrations/20260916010000_direct_message_block_admission.sql` (forward migration).
