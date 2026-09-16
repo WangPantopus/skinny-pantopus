@@ -123,15 +123,34 @@ export default function MyBidsPage() {
     }
   };
 
-  const handleStartWork = async (gigId: string) => {
+  const handleStartWork = async (bid: { gig_id?: string; gig?: { id?: string; accepted_at?: string | null; price?: number | string | null; payment_id?: string | null } | null }) => {
     if (!session.isCurrent()) return;
+    const gigId = bid.gig_id || bid.gig?.id || '';
     const yes = await confirmStore.open({ title: 'Start working on this gig?', description: 'The gig owner will be notified that you have started.', confirmLabel: 'Start', variant: 'primary' });
     if (!yes || !session.isCurrent()) return;
     try {
-      await api.gigs.startGig(gigId);
+      // Bind the terms this list rendered when the projection carries them, so a
+      // stale card cannot start an assignment it never showed.
+      const gig = bid.gig;
+      if (gig && gig.accepted_at !== undefined) {
+        await api.gigs.startGig(gigId, {
+          expectedAcceptedAt: typeof gig.accepted_at === 'string' ? gig.accepted_at : null,
+          expectedPrice: typeof gig.price === 'number' || typeof gig.price === 'string' ? gig.price : null,
+          expectedPaymentId: typeof gig.payment_id === 'string' ? gig.payment_id : null,
+        });
+      } else {
+        await api.gigs.startGig(gigId);
+      }
       loadBids();
     } catch (err: unknown) {
-      if (session.isCurrent()) toast.error(err instanceof Error ? err.message : 'Failed to start gig');
+      if (!session.isCurrent()) return;
+      const serverData = err && typeof err === 'object' ? (err as { data?: Record<string, unknown> }).data : undefined;
+      if (serverData?.code === 'ASSIGNMENT_CHANGED') {
+        toast.error(typeof serverData.error === 'string' ? serverData.error : 'The task changed before work could start. Refresh its details.');
+        loadBids();
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Failed to start gig');
+      }
     }
   };
 
@@ -235,7 +254,7 @@ export default function MyBidsPage() {
               onWithdraw={() => openWithdrawModal(bid.gig_id || bid.gig?.id, bid.id)}
               onAcceptCounter={() => handleAcceptCounter(bid.gig_id || bid.gig?.id, bid.id)}
               onDeclineCounter={() => handleDeclineCounter(bid.gig_id || bid.gig?.id, bid.id)}
-              onStartWork={() => handleStartWork(bid.gig_id || bid.gig?.id)}
+              onStartWork={() => handleStartWork(bid)}
               onMarkCompleted={() => handleMarkCompleted(bid.gig_id || bid.gig?.id, bid.user_id)}
             />
           )}

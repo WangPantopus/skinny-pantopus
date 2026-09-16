@@ -1277,3 +1277,17 @@ describe('worker start binds the displayed assignment terms', () => {
     expect((await startWith({})).status).toBe(200); expect(getTable('Gig')[0].status).toBe('in_progress');
   });
 });
+
+describe('my-bids exposes the assignment terms only to the assigned worker', () => {
+  test('the worker receives accepted_at and payment_id; another bidder receives null', async () => {
+    assigned(); getTable('Gig')[0].accepted_at = '2026-09-16T12:00:00+00:00';
+    seedTable('GigBid', [...getTable('GigBid'), { id: 'bid-other', gig_id: 'gig', user_id: 'other', bid_amount: 10, status: 'rejected' }]);
+    const mine = await request(app).get('/api/gigs/my-bids').set('x-test-user-id', 'worker');
+    expect(mine.status).toBe(200);
+    expect(mine.body.bids.find(b => b.id === 'bid').gig).toMatchObject({ id: 'gig', price: 12.5, accepted_by: 'worker', accepted_at: '2026-09-16T12:00:00+00:00', payment_id: 'pay' });
+    const theirs = await request(app).get('/api/gigs/my-bids').set('x-test-user-id', 'other');
+    expect(theirs.status).toBe(200);
+    const gig = theirs.body.bids.find(b => b.id === 'bid-other').gig;
+    expect(gig.accepted_at).toBeNull(); expect(gig.payment_id).toBeNull(); expect(gig.price).toBe(12.5);
+  });
+});

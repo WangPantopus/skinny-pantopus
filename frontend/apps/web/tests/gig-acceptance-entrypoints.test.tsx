@@ -346,6 +346,23 @@ test.each([
   expect(command.mock.calls).toEqual([command === mockStart ? ['gig-a'] : ['gig-a', 'bid-worker']]);
 });
 
+test('My bids Start Work sends the assignment terms the list rendered', async () => {
+  const bid = { ...workerBid, gig: { ...workerBid.gig, status: 'assigned', accepted_by: 'worker-a', accepted_at: '2026-09-16T12:00:00+00:00', payment_id: null } };
+  mockMyBids.mockResolvedValueOnce({ bids: [bid] }).mockResolvedValueOnce({ bids: [{ ...bid, gig: { ...bid.gig, title: 'Current saved bid task' } }] });
+  mockStart.mockResolvedValue({}); jest.mocked(confirmStore.open).mockResolvedValue(true); renderMyGigs(MyBidsPage);
+  fireEvent.click(await screen.findByRole('button', { name: 'Start Work' })); await screen.findByText('Current saved bid task');
+  expect(mockStart.mock.calls).toEqual([['gig-a', { expectedAcceptedAt: '2026-09-16T12:00:00+00:00', expectedPrice: 25, expectedPaymentId: null }]]);
+});
+
+test('My bids Start Work shows the server guidance and reloads when the assignment changed', async () => {
+  const bid = { ...workerBid, gig: { ...workerBid.gig, status: 'assigned', accepted_by: 'worker-a', accepted_at: '2026-09-16T12:00:00+00:00', payment_id: null } };
+  mockMyBids.mockResolvedValueOnce({ bids: [bid] }).mockResolvedValueOnce({ bids: [{ ...bid, gig: { ...bid.gig, title: 'Reloaded bid task' } }] });
+  mockStart.mockRejectedValue({ statusCode: 409, data: { code: 'ASSIGNMENT_CHANGED', error: 'The task changed before work could start. Refresh its details.' } });
+  jest.mocked(confirmStore.open).mockResolvedValue(true); renderMyGigs(MyBidsPage);
+  fireEvent.click(await screen.findByRole('button', { name: 'Start Work' })); await screen.findByText('Reloaded bid task');
+  expect(toast.error).toHaveBeenCalledWith('The task changed before work could start. Refresh its details.');
+});
+
 test('My bids preserves signed-out navigation without private reads', async () => {
   mockToken = null; renderMyGigs(MyBidsPage); await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/login'));
   expect(mockMyBids).not.toHaveBeenCalled();

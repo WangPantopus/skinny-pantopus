@@ -1676,7 +1676,7 @@ router.get('/my-bids', verifyToken, async (req, res) => {
     if (gigIds.length > 0) {
       const { data: gigs, error: gigsErr } = await supabaseAdmin
         .from('Gig')
-        .select('id, title, description, price, category, status, user_id')
+        .select('id, title, description, price, category, status, user_id, accepted_by, accepted_at, payment_id')
         .in('id', gigIds);
 
       if (gigsErr) {
@@ -1695,12 +1695,22 @@ router.get('/my-bids', verifyToken, async (req, res) => {
     }
 
     // 3) Attach gig object to each bid for frontend compatibility
-    //    Normalize 'assigned' → 'accepted' for backwards compat
-    const merged = safeBids.map((b) => ({
-      ...b,
-      status: b.status === 'assigned' ? 'accepted' : b.status,
-      gig: gigsById[b.gig_id] || null,
-    }));
+    //    Normalize 'assigned' → 'accepted' for backwards compat.
+    //    The assignment terms a Start Work call binds (accepted_at, payment_id)
+    //    belong to the assigned worker only; other bidders receive them as null.
+    const merged = safeBids.map((b) => {
+      const gig = gigsById[b.gig_id] || null;
+      const viewerIsWorker = Boolean(gig?.accepted_by) && String(gig.accepted_by) === String(userId);
+      return {
+        ...b,
+        status: b.status === 'assigned' ? 'accepted' : b.status,
+        gig: gig ? {
+          ...gig,
+          accepted_at: viewerIsWorker ? gig.accepted_at ?? null : null,
+          payment_id: viewerIsWorker ? gig.payment_id ?? null : null,
+        } : null,
+      };
+    });
 
     return res.json({
       bids: merged,
