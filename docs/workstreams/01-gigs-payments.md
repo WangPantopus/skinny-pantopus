@@ -1,11 +1,99 @@
 # Stream 1 — Gigs and payments
 
 Updated September 15, 2026. Owner: coordinator / Stream 1.
-State: verification — two bounded repairs and current-head CI pass; native acceptance remains open.
+State: handoff — iOS WIP pushed; candidate validation and acceptance remain open.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
 P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
+
+## Immediate cutoff handoff — September 15/16, 2026
+
+The user requested immediate wrap-up. Implementation and testing have stopped.
+The next agent resumes **Stream1 and coordination**; the previous Stream1 writer
+has stopped and ownership was explicitly transferred to this task.
+
+- Paid worktree: `/private/tmp/pantopus-paid-gig-integration`, branch
+  `codex/paid-gig-integration`, clean and pushed at **`9af5dcf7417760c9483c4f7b1e1008722350daf8`**.
+  [PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47) remains draft.
+  This is an **unverified iOS WIP**, not an accepted repair or merge candidate.
+- Master is **`82430954038ec6e74b72b54192aaad8117bcc363`**, documentation-only
+  [PR50](https://github.com/WangPantopus/skinny-pantopus/pull/50), with four applicable
+  checks/seven path skips. Paid merge `4aaa08546` preserved both append-only report
+  sections; application bytes before the WIP match `41c75d49a`.
+- The iOS baseline ran59 tests:53 existing tests passed; all6 new distinct cases
+  failed, with28 assertions. Cases cover invalid/missing/mismatched receipts,
+  duplicate pending requests, late session/departure/reassignment replies and a
+  session change during refresh. Baseline exit65 is expected failure evidence.
+- Actual installed **baseline**: normal sign-in UI with synthetic local auth →
+  existing GigDetail via deep link → Start task → In progress/Task started/Mark as
+  delivered. Real route/PostgREST/PostgreSQL saved `started_at` and exactly one
+  Notification; provider calls intercepted. Free gig, older retained schema.
+  This proves the ordinary baseline journey only.
+- WIP changes only three existing files: `GigDetailViewModel.swift`,
+  `GigDetailView.swift` and `GigDetailViewModelTests.swift` under the existing iOS
+  ContentDetail feature/test folders. It validates the saved receipt, binds the
+  pending attempt to identity/assignment, retires callbacks on departure and uses
+  existing `ConfirmationResult` to suppress stale success. Refresh guards are
+  threaded through existing readers. The screen callback changed; its appearance,
+  layout and navigation did not. No new application file/schema was added.
+- Swift parse passed and SwiftFormat ran. Scoped strict SwiftLint currently fails
+  **one `trailing_closure` at test line355**. **No candidate Xcode build/test or
+  installed candidate journey has run.** Current-head CI was not accepted; green
+  [CI35049746982](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35049746982)
+  applies only to `41c75d49a` (15 applicable checks/one Seeder skip).
+
+**Resume here:** inspect the three-file WIP and private baseline/candidate logs,
+fix the trailing-closure lint issue, then reserve the heavy native slot before
+running the59-test iOS suite and affected static checks. Reuse the baseline command
+from `ios-baseline.log` and source metadata. Review any compile/behavior failures;
+then rerun installed invalid/late/retry and valid journeys through existing UI,
+real caller/API and persistence. Do not label the WIP accepted from parsing or CI.
+Android54 JVM tests and backend229 regressions/13 HTTP cases remain source-bound
+accepted evidence; installed Android, stale-client assignment before the server's
+first read, paid providers and broader P04/P08/P09/R05 remain open.
+
+Private evidence: `/private/tmp/pantopus-p04-start-20260915-r1`, mirrored to
+`/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260915-p04-start-r1`.
+Start with `EVIDENCE.md`, `ios-baseline-source.json`, `ios-baseline.log`,
+`ios-baseline.xcresult`, `ios-installed-baseline.json`, `ios-candidate-lint.log`
+and `ios-runtime.cjs`. Derived build output remains only in the temporary source
+folder. Raw credentials, logs and device tokens stay outside Git/chat.
+The first truncated Safari deep link was a harness entry error; reopening the full
+URL worked. A reused-view deep-link lead and MyTasks500 on the older schema are
+unverified/outside this acceptance, not reasons to expand the current patch.
+
+**Cleanup confirmed:** own HTTP18132 stopped; exact `f9150410` fixtures removed
+(`ios-runtime-cleanup.json` reports zero); new owned simulator
+`C2BCF36A-F300-48C1-9BA7-876CA9F61E55` is Shutdown. Earlier `f9150400` cleanup was
+also zero. The heavy native slot is released. No other simulator, physical device,
+container or schema was changed by Stream1. Preserve the owner's checkout and
+other streams' fixtures.
+
+**Coordinator pickup:** the live guide remains
+`/Users/yingpengwang/pantopus-coordination/docs/workstreams/README.md`; application
+copies are snapshots. Stream2's dirty02 and Stream3's dirty03 are author-owned and
+were deliberately not staged with this cutoff. Review their live files and fresh
+remote state before integration. Stream2 is at `70e079543`, no PR; its broader M02
+and two unverified callback/scope leads remain open. Stream3 draft PR51 is freshly
+observed at **`22adc728512b8dd0f261c0aaf02e255123dc7f50`**. Its later native lifetime,
+N05 reminder and cross-room retry milestones are reported, not fully coordinator
+reviewed. Earlier reviewed `dfc860bfe` evidence is in the existing verification
+report. No peer or paid application merge is approved.
+
+Stream3 task **Resume Stream 3 verification**
+(`01a0a824-301b-74e3-a1d9-b205714ed7a1`) was notified of the cutoff and native-slot
+release. Its existing grants continue. The guide now records the exact forward
+migration/contract assignment for the reproduced block-versus-send race, restricted
+to its new isolated SQL64532/API64531 database. Do not apply it to retained64522.
+Its HTTP18130/web18131 and `f9150300` fixtures remain peer-owned; final cleanup is
+still owed. Its simulator `0AE16FA0-E244-414F-86C8-24893BDFD979` was reported stopped.
+Docker is now responsive; old Docker-blocked notes do not establish a current block.
+
+## Earlier accepted milestones and preparation snapshot
+
+The cutoff section above supersedes current-source, preparation and resource claims
+in this retained milestone history.
 
 ## Source and ownership
 
@@ -23,9 +111,17 @@ P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
   source-specific reports. Application bytes match `9397e39a7`.
 - PR34 remains draft at `c9cb69825`. PR47 is now also draft because it contains
   unfinished paid scope. User PR46 remains separate. No paid feature was merged.
+- Shared documentation PR50 merged as **`824309540`** after four applicable
+  checks/seven path skips. It publishes the reviewed Stream3 milestone without
+  merging application code. Its tree matches tested `123d11437`.
 - Shared documentation PR49 merged as **`0616d6e79`** after four applicable
   checks passed/seven path skips. Its tree equals tested `3c4f1f721`; no application
   changed. The neutral coordination branch is synchronized with that master.
+
+iOS follow-up is in preparation: six regression cases added to the existing
+GigDetailViewModelTests cover receipt, duplicate, reassignment, departure and
+session/refresh lifetime. They have not run yet; application code is unchanged.
+Waiting for Stream3 to release the heavy native slot. No native acceptance claim.
 
 ## Reproduced backend failures and repair
 

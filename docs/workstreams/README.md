@@ -49,7 +49,7 @@ the gigs worktree is retired after this transfer; do not update status there.
 | --- | --- | --- |
 | 1 | `/private/tmp/pantopus-paid-gig-integration` | `codex/paid-gig-integration`; current source/CI in Stream1 status |
 | 2 | `/private/tmp/pantopus-workstream-home` | `codex/workstream-home`; candidate `70e079543` over master `711340225` |
-| 3 | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; candidate `dfc860bfe` over master `0616d6e79`, draft PR51 |
+| 3 | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; pushed `22adc7285`, draft PR51; later milestones await coordinator review |
 
 Streams 2 and 3 compare relevant pending Stream 1 changes before editing shared
 code. They start from master because their first scoped implementations are
@@ -124,13 +124,31 @@ These cross-cutting files/contracts require coordinator assignment for each edit
 
 | Request / decision | Owner | Status / next action |
 | --- | --- | --- |
+| Transactional direct-message block admission | Stream 3 | Granted `supabase/migrations/20260916010000_direct_message_block_admission.sql`, source `scripts/db/contracts/direct-message-block-admission.sql`, generated `supabase/tests/direct-message-block-admission.test.sql` through existing sync pipeline, and existing chats.js denial mapping. Apply/test only isolated64532; details below |
+| `frontend/apps/ios/PantopusTests/Support/SequencedURLProtocol.swift` | Stream 3 | May import the exact already-tested paid-branch gate/release delta from41c75d49a for deterministic lifetime tests; no competing helper design |
+| N05 booking reminder failure contract | Stream 3 | Sole writer for `backend/services/scheduling/bookingNotifyService.js` after2 reproduced failures/23 passes. `backend/jobs/bookingReminders.js` may change only after a separate worker regression proves need; preserve retry/partial-recipient limits. No notificationService/emailService/schema/provider changes; Home UI/fixtures remain coordinated with Stream2 |
 | `backend/jest.config.js` chat-access regression inclusion | Stream 3 | Granted only for the existing excluded chat-access suite; run regressions, no broad CI rewrite |
-| `backend/routes/chats.js` block-path repairs | Stream 3 | Sole writer; reproduce fail-open/multi-party cases and repair existing contracts |
+| `backend/routes/chats.js` block/retry repairs | Stream 3 | Sole writer; includes reproduced cross-room clientMessageId leak: scope initial/recovery lookup to authorized room, sender and human business actor; reported repair awaits coordinator review |
 | SDK guest-pass status type / block exports | Streams 2 / 3 respectively | Additive candidates reviewed for conflict; no Stream1 overlap; broader SDK/auth changes still require assignment |
 | `backend/services/blockService.js` error/cache repair | Stream 3 | Sole writer granted after baseline reproduction; verify all callers before changing the error contract |
 | `backend/socket/chatSocketio.js` direct-chat admission/send checks | Stream 3 | Overlap reviewed: paid branch only adds `emitPrivateGigUpdate` plus its export; preserve that helper, `connectedUsers`, revocation and gig tracking behavior |
 | Cancellation/no-show fee payer and recipient | Product decision, recorded by Stream 1 | Still unspecified; independent Start Work verification can proceed |
 | User's Place redesign, PR #46 | User's separate scope | Preserved outside these verification milestones |
+
+Transactional admission grant evidence: actual socket/HTTP/SQL baseline allowed a
+message to persist and broadcast after the counterparty's block had committed.
+Existing UserBlock/ChatMessage tables, archives034/037/072, membership-only RLS and
+unread trigger do not enforce this boundary; service-role writes bypass RLS. No
+existing direct-message SQL contract can safely substitute. Use existing tables
+and an additive forward migration; no applied history rewrite or parallel table.
+The scoped proposal uses unordered-pair transaction advisory locks for UserBlock
+INSERT/UPDATE/DELETE and BEFORE ChatMessage INSERT in direct rooms, checking
+COALESCE(actor_user_id,user_id) against active participants. Verify deterministic
+old/new-pair ordering and actual two-connection commit/wait/rollback, reverse,
+business/nonmember/service-role, grants/search_path and isolation boundaries.
+Deny before side effects. No gig/group/read-policy or direct-create RPC changes
+without separate reproduction/assignment. Preserve the paid private-gig socket
+helper/export. This is permission to implement and verify, not merge approval.
 
 ## Runtime reservations
 
@@ -143,9 +161,10 @@ or elapsed time is not proof a resource is free.
 
 | Resource | Current reservation | Rule |
 | --- | --- | --- |
-| Local heavy native build | Stream3: Android JVM run finished; slot retained for iOS blocked-list/lifetime verification | Stream1 released its slot; one heavy native build at a time |
-| iOS/Android test devices | Stream3: isolated `Pantopus Stream3 Social R2`, iOS26.5, `0AE16FA0-E244-414F-86C8-24893BDFD979` | Preserve owner iPhone17 and all existing acceptance devices; no physical-device install granted |
-| Databases / fixture ports | Stream3: PostgreSQL64522 / API64521, three active social users under `f9150300`; HTTP18130/web18131 | Earlier exact cleanup reports zero between phases; current fixtures require final cleanup. No schema/reset/container mutation; preserve other fixtures; 18089 is not granted |
+| Local heavy native build | Released at Stream1 cutoff; no candidate test running | Reacquire before the next heavy native build; check actual state |
+| iOS/Android test devices | Stream3 retains `0AE16FA0-E244-414F-86C8-24893BDFD979` (reported stopped); Stream1 isolated `Pantopus Stream1 Start R2`, iOS26.5, `C2BCF36A-F300-48C1-9BA7-876CA9F61E55` (confirmed Shutdown) | Preserve owner iPhone17 and all existing acceptance devices; no physical-device install granted |
+| Databases / fixture ports | Stream3: PostgreSQL64522 / API64521, three active social users under `f9150300`; HTTP18130/web18131. Stream1 `f9150410` rows cleaned to zero and HTTP18132 stopped | Stream3 final cleanup remains owed. No retained schema/reset/container mutation; preserve other fixtures; 18089 is not granted |
+| Stream3 isolated transactional-block database | New private `/private/tmp/pantopus-stream3-block-db-r1`, project/container prefix `pantopus-stream3-block-r1`, SQL64532/API64531 (64533 reserved) | Docker responsive at grant; replay canonical schema into empty owned database. No retained data copy or existing container changes. Exact forward migration/contract assignment granted above after canonical replay and comparison; never apply to retained64522 |
 | Existing SQL port 64522 and REST port 18089 | Retained prior rehearsal resources | Never assume available or change their schema from another stream |
 | Physical iPhone | Owner's installed build 3 | No test install or device mutation without a concrete authorized task |
 

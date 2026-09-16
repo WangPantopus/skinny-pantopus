@@ -7,75 +7,51 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
-## Current coordination and next action — September 15
+## Current coordination and next action — immediate cutoff
 
-The coordinator resumed Stream 1 in `/private/tmp/pantopus-paid-gig-integration`;
-the user confirmed the previous Stream 1 writer has stopped. Shared status lives
-only in `/Users/yingpengwang/pantopus-coordination/docs/workstreams/`. Read the
-[guide](workstreams/README.md) and each live stream handoff before using resources.
-Feature branches receive shared documentation from master; they do not publish
-independent copies. Application and coordination PRs remain separate.
+The user requested immediate wrap-up. Stream1/coordination work is handed off;
+read the [exact resume point, failed checks and evidence](workstreams/01-gigs-payments.md#immediate-cutoff-handoff--september-1516-2026)
+and the live [coordination guide](workstreams/README.md) before editing or using resources.
+The only live coordination location is `/Users/yingpengwang/pantopus-coordination`.
 
-Fresh remote master is `0616d6e79`, the documentation-only PR49 merge over
-application baseline `e775af9ae`. Paid PR34 stays draft at `c9cb69825`, and paid
-integration PR47 remains unmerged. User PR46 (`place-design`) stays separate.
-PR47's prior head `959e147e6` passed 15 applicable checks/one Seeder skip in
-[CI35046049526](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35046049526).
-That result does not complete its paid acceptance scope.
+Fresh master is **`82430954038ec6e74b72b54192aaad8117bcc363`**, documentation-only
+PR50, four applicable checks/seven path skips. Paid worktree
+`/private/tmp/pantopus-paid-gig-integration` is clean and pushed at
+**`9af5dcf7417760c9483c4f7b1e1008722350daf8`**, an **unverified iOS WIP** in draft
+[PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47).
+PR34 remains draft at `c9cb69825`; user PR46 stays separate. No application merged.
 
-Stream1 committed and pushed `599de1586`, extending the existing Start Work route
-and existing lifecycle tests only. Actual HTTP/PostgREST/PostgreSQL first reproduced
-incorrect 500/400 responses and an old pending request starting a newer assignment
-to the same worker. The repair binds `accepted_at` and preserves retryable recovery
-errors. Twelve final HTTP cases plus exact cleanup pass (13/13), as do 229 lifecycle
-regressions and privacy gates. Authentication/transport faults are synthetic; the
-new HTTP scope uses free gigs on the older retained schema, with no provider or
-installed-native claim. Its [CI35048472265](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35048472265)
-was superseded and cancelled by the subsequent native/integration push; it is not
-a completed green run. Full evidence, source limits and owned resource state are in the
-[Stream1 status](workstreams/01-gigs-payments.md). No table, migration or screen was
-added or changed. Earlier paid/web evidence retains its recorded source limits.
+Next: inspect the three existing iOS ContentDetail files, fix the one strict
+SwiftLint trailing-closure violation, reserve the heavy native slot, then run the
+candidate iOS tests/build and installed Start Work failure/retry journeys.
+Baseline59 tests had53 passes/6 new failing cases (28 assertions); the installed
+baseline ordinary Start Work journey persisted successfully through actual API/SQL
+with synthetic auth, a free gig, old schema and intercepted providers. Candidate
+parsing passed, but **candidate compilation/tests and installed acceptance have
+not run**. Preserve the failed evidence and do not equate this WIP with completion.
+Earlier backend229 regressions/13 HTTP cases and Android54 JVM tests retain their
+source limits. CI35049746982 is green only for prior `41c75d49a`, not the WIP.
 
-The previous statement that discarding a native response establishes stale/invalid
-response safety is withdrawn. Android's reproduced callback defects are repaired
-below; iOS still accepts `EmptyResponse` and silently ignores refresh failure.
-iOS invalid/late replies, duplicate taps and installed journeys remain to verify
-and, where failures reproduce, repair without changing existing screen designs.
+Stream1's exact fixtures are removed, HTTP18132 stopped and isolated simulator
+C2BCF36A-F300-48C1-9BA7-876CA9F61E55 shut down. Heavy native slot released.
+Private evidence is mirrored in the owner's recovery audit directory; see Stream1
+for exact paths. Existing owner and peer work/resources are preserved.
 
-Peer handoffs were reviewed, without application integration. Stream2 pushed
-`70e079543` for the browser guest-pass slice; its HTTP harness simulates the SQL
-decision boundary, so broader M02 stays open. Stream3 pushed `dfc860bfe` in draft
-[PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51), repairing unavailable
-block checks and the existing profile/blocked-list controls. Its local browser
-and nine HTTP/PostgreSQL cases use synthetic authentication, the retained older
-schema and intercepted delivery. Inspected regression artifacts show42 backend,
-10 web,13 Android JVM and13 iOS model passes. Current CI has an Android formatting
-failure; installed native/lifetime acceptance remains underway. See the
-[reviewed milestone and outstanding findings](VERIFICATION_FIRST_2026-09-13.md#existing-profile-safety-and-blocked-user-journeys).
-N04 stays open. Each author retains its live status ownership; neither peer is
-approved for merge.
+Coordinator also resumes review of Stream2 `70e079543` (no PR; browser slice/SQL
+boundary simulated) and draft [Stream3 PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51)
+currently `22adc728512b8dd0f261c0aaf02e255123dc7f50`. Later native-lifetime, reminder
+and cross-room retry repairs are reported and await full coordinator review;
+[reviewed dfc860bfe evidence](VERIFICATION_FIRST_2026-09-13.md#existing-profile-safety-and-blocked-user-journeys)
+retains its narrow limits. Neither stream is approved for merge. Their dirty live
+status files remain author-owned and unstaged by this cutoff publication.
 
-Stream1 additionally pushed Android `9397e39a7`, after five native callback
-failures reproduced in the existing JVM tests. The existing view-model now
-validates the saved start and retires old callbacks; 54 tests, ktlint and detekt
-pass. No mobile screen/layout file changed. This is mocked JVM evidence, not an
-installed journey. Current integration head `41c75d49a` takes master `0616d6e79`'s
-shared documentation snapshots without application changes; its
-[combined CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35049746982)
-passes15 applicable checks/one Seeder skip. PR49 is merged; subsequent shared
-status is in documentation-only [PR50](https://github.com/WangPantopus/skinny-pantopus/pull/50).
-Owned SQL fixtures/listener and the heavy native build reservation are released;
-private evidence is mirrored under the owner's recovery audit directory.
-
-Next: continue iOS and installed Start Work verification, and publish the latest
-shared status through its own documentation-only PR. Stream3 retains the exclusive
-native slot and its isolated iOS simulator; Stream1 can continue source/test preparation.
-Review peer
-repairs and their source-bound acceptance before integrating them. P04, P08/P09,
-R05 and overall launch remain open; inventory counts are unchanged. No hosted
-deployment, migration activation, provider activation or physical-device change
-has run. Preserve existing runtimes and accepted evidence; only one heavy local
-native build at a time.
+Stream3 continues its explicitly granted block/send transactional repair in the
+new isolated SQL64532/API64531 runtime; exact forward-migration/contract ownership
+is recorded in the guide. Retained SQL64522 schema may not be changed. Its existing
+social fixtures/listeners still require final peer cleanup. Docker is responsive.
+Read fresh peer status/CI before any integration; do not duplicate its work.
+P04/P08/P09, M02, N04/N05, R05 and overall launch remain open; inventory counts are
+unchanged. No hosted deployment, provider activation or physical-device change ran.
 
 ## Historical state and next action — September 14
 
