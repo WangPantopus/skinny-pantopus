@@ -124,6 +124,22 @@ describe('Message persistence', () => {
 // ============================================================
 
 describe('clientMessageId idempotency', () => {
+  beforeEach(() => {
+    // Match PostgreSQL's nullable actor column. This in-memory mock otherwise
+    // omits unspecified columns, which cannot match PostgREST's IS NULL filter.
+    const db = require('../__mocks__/supabaseAdmin');
+    const original = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = original(table);
+      if (table === 'ChatMessage') {
+        const insert = query.insert.bind(query);
+        query.insert = payload => insert({ actor_user_id: null, ...payload });
+      }
+      return query;
+    });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
   test('message sent with clientMessageId is idempotent on retry', async () => {
     const { app } = createApp();
 
