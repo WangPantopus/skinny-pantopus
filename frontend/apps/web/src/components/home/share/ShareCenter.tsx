@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '@pantopus/api';
 import type { GuestPass } from '@pantopus/api';
 import CreateGuestPass from './CreateGuestPass';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { failureMessage } from './shareFailure';
 
 const QUICK_TEMPLATES: {
   kind: GuestPass['kind'];
@@ -65,14 +66,27 @@ function timeRemaining(endAt: string | null): string {
   return `${mins}m left`;
 }
 
+// The list endpoint already decides each pass's current status. Read it here so
+// a scheduled or reissue-required link is never advertised as Active; a guest
+// opening either one is refused by the share API.
+const NEUTRAL_BADGE = 'bg-app-surface-sunken text-app-text-secondary border-app-border';
+
+function passStatus(pass: GuestPass): 'revoked' | 'expired' | 'reissue_required' | 'scheduled' | 'active' {
+  if (pass.revoked_at || pass.status === 'revoked') return 'revoked';
+  if (pass.status === 'expired' || pass.status === 'reissue_required' || pass.status === 'scheduled') return pass.status;
+  // Older list envelopes omit `status`; keep the existing end-date fallback.
+  if (pass.end_at && new Date(pass.end_at) <= new Date()) return 'expired';
+  return 'active';
+}
+
 function statusBadge(pass: GuestPass) {
-  if (pass.revoked_at || pass.status === 'revoked') {
-    return { text: 'Revoked', cls: 'bg-red-50 text-red-700 border-red-200' };
+  switch (passStatus(pass)) {
+    case 'revoked': return { text: 'Revoked', cls: 'bg-red-50 text-red-700 border-red-200' };
+    case 'expired': return { text: 'Expired', cls: NEUTRAL_BADGE };
+    case 'reissue_required': return { text: 'Needs new link', cls: NEUTRAL_BADGE };
+    case 'scheduled': return { text: 'Scheduled', cls: NEUTRAL_BADGE };
+    default: return { text: 'Active', cls: 'bg-green-50 text-green-700 border-green-200' };
   }
-  if (pass.status === 'expired' || (pass.end_at && new Date(pass.end_at) <= new Date())) {
-    return { text: 'Expired', cls: 'bg-app-surface-sunken text-app-text-secondary border-app-border' };
-  }
-  return { text: 'Active', cls: 'bg-green-50 text-green-700 border-green-200' };
 }
 
 const KIND_ICON: Record<string, string> = {
@@ -103,18 +117,31 @@ export default function ShareCenter({
   const [preselectedKind, setPreselectedKind] = useState<GuestPass['kind'] | null>(null);
   const [showPastPasses, setShowPastPasses] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [listError, setListError] = useState('');
+  // A superseded list read must not replace the current one.
+  const generation = useRef(0);
 
   const loadPasses = useCallback(async () => {
+    const request = ++generation.current;
     try {
       const res = await api.homeIam.getGuestPasses(homeId, { include_revoked: true });
+      if (request !== generation.current) return;
       setPasses(res.passes || []);
-    } catch {
+      setListError('');
+    } catch (err: unknown) {
+      if (request !== generation.current) return;
+      // An unavailable list is not an empty list; saying "no passes" here would
+      // hide links that are still live for whoever holds them.
       setPasses([]);
+      setListError(failureMessage(err, 'Guest passes could not be loaded. Retry to check the current links.'));
     }
-    setLoading(false);
+    if (request === generation.current) setLoading(false);
   }, [homeId]);
 
-  useEffect(() => { loadPasses(); }, [loadPasses]);
+  useEffect(() => {
+    loadPasses();
+    return () => { generation.current++; };
+  }, [loadPasses]);
 
   const handleQuickCreate = (kind: GuestPass['kind']) => {
     setPreselectedKind(kind);
@@ -129,19 +156,17 @@ export default function ShareCenter({
       await api.homeIam.revokeGuestPass(homeId, passId);
       await loadPasses();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to revoke');
+      // This client rejects with a plain object, so `instanceof Error` would
+      // discard the API's actual reason and its recovery code.
+      toast.error(failureMessage(err, 'Failed to revoke'));
     }
     setRevokingId(null);
   };
 
-  const activePasses = passes.filter(
-    (p) => !p.revoked_at && p.status !== 'revoked' && p.status !== 'expired' &&
-           (!p.end_at || new Date(p.end_at) > new Date())
-  );
-  const pastPasses = passes.filter(
-    (p) => p.revoked_at || p.status === 'revoked' || p.status === 'expired' ||
-           (p.end_at && new Date(p.end_at) <= new Date())
-  );
+  // A scheduled link still becomes usable, so it stays in the current list with
+  // its own badge. Revoked, expired and reissue-required links never work again.
+  const activePasses = passes.filter((p) => ['active', 'scheduled'].includes(passStatus(p)));
+  const pastPasses = passes.filter((p) => !['active', 'scheduled'].includes(passStatus(p)));
 
   return (
     <div className="space-y-6">
@@ -194,6 +219,17 @@ export default function ShareCenter({
         </h3>
         {loading ? (
           <div className="text-center py-6 text-app-text-muted text-sm">Loading passes...</div>
+        ) : listError ? (
+          <div className="bg-app-surface rounded-xl border border-app-border p-6 text-center">
+            <div className="text-2xl mb-1">⚠️</div>
+            <p className="text-xs text-app-text-muted">{listError}</p>
+            <button
+              onClick={() => { setLoading(true); loadPasses(); }}
+              className="mt-3 px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition"
+            >
+              Retry
+            </button>
+          </div>
         ) : activePasses.length === 0 ? (
           <div className="bg-app-surface rounded-xl border border-app-border p-6 text-center">
             <div className="text-2xl mb-1">🔗</div>
@@ -250,8 +286,11 @@ function GuestPassRow({
   revoking?: boolean;
   homeId: string;
 }) {
+  const status = passStatus(pass);
   const badge = statusBadge(pass);
-  const isActive = badge.text === 'Active';
+  const isActive = status === 'active';
+  // A scheduled link is still live for whoever holds it, so it must stay revocable.
+  const revocable = isActive || status === 'scheduled';
 
   return (
     <div className="bg-app-surface rounded-xl border border-app-border shadow-sm px-4 py-3 flex items-center gap-3">
@@ -270,6 +309,11 @@ function GuestPassRow({
           <span className="text-[10px] text-app-text-muted capitalize">{pass.kind.replace('_', ' ')}</span>
           {isActive && (
             <span className="text-[10px] text-app-text-muted">{timeRemaining(pass.end_at)}</span>
+          )}
+          {status === 'scheduled' && pass.start_at && (
+            <span className="text-[10px] text-app-text-muted">
+              Starts {new Date(pass.start_at).toLocaleString()}
+            </span>
           )}
           <span className="text-[10px] text-app-text-muted">
             {pass.view_count} view{pass.view_count !== 1 ? 's' : ''}
@@ -292,7 +336,7 @@ function GuestPassRow({
         )}
       </div>
 
-      {isActive && onRevoke && (
+      {revocable && onRevoke && (
         <button
           onClick={onRevoke}
           disabled={revoking}
