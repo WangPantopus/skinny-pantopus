@@ -7,9 +7,10 @@ Current status is maintained only in this neutral coordination file.
 ## Source and reconciliation
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
-`codex/workstream-accounts-social`. **Base: current master `b46934c92`** (PR #53
-Home guest-pass `4cc9d3787` and docs PR #54) integrated at merge `6cfe9f6fb`,
-pushed; backend suite re-run green after the merge (326 suites /5473 tests). Initial inspection found clean `fc99f8ee7`
+`codex/workstream-accounts-social`. **PR #51 merged to master as `c14657e35`**;
+branch fast-forwarded to that base, tree clean, nothing unpushed. Backend suite
+green on the merged base (326 suites /5473 tests /0 failures). The transactional
+block admission work (`6055bc2b9`) is now in master. Initial inspection found clean `fc99f8ee7`
 with no later changes, PR or CI. Current master `0616d6e79` was integrated as
 shared documentation only. Current pushed milestones: **`dfc860bfe`** (initial safety repair), **`41588bbec`** (native lifetime/web navigation), **`8d31d452f`** (N05 reminder failure contract), **`bf16f6f50`** (message retry privacy), **`22adc7285`** (existing retry test fixture models SQL NULL actor defaults), **`6055bc2b9`** (transactional direct-message block admission).
 Draft [PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51);
@@ -139,10 +140,62 @@ Harness note: supabase-js builds `${url}/rest/v1/...` while bare PostgREST serve
 at root, so the transit URL was rewritten in the harness; the client's own error
 parsing — the thing under test — was untouched.
 
-**Still not re-run:** the original `verify-concurrent-send.cjs` end-to-end
-reproduction (fixture API18130 down, r2 database cleaned). The admission gate and
-its client mapping are now directly evidenced, but the full socket-level replay
-against the fix is not. N04 does not close on this milestone alone.
+**End-to-end socket replay: DONE, the fix holds.** The existing 103-line fixture
+runtime and `verify-concurrent-send.cjs` were copied and repointed at the owned
+stack (SQL64532, own PostgREST on64531, app18140); the r2 originals are
+byte-unchanged. One deliberate substitution: the original read its JWT secret from
+Stream1's private file, replaced with an own secret so nothing depends on another
+stream's assets.
+
+Same script, same interleaving, same three fixture actors:
+
+| | BEFORE `8d31d452f` | NOW `6e1758234` |
+| --- | --- | --- |
+| HTTP status | 201 | **403** |
+| ChatMessage rows persisted | 1 | **0** |
+| `message:new` delivered to B | 1 | **0** |
+| Notification rows / provider attempts | 0 / 0 | 0 / 0 |
+| held before insert / block committed first | true / true | true / true |
+
+The denial is proven to come from the persistence gate, not the route pre-check
+(the route returns a byte-identical body from both): direct psql INSERT raises
+`DIRECT_MESSAGE_BLOCKED` at `direct_message_block_admission()` line42, and raw
+PostgREST returns `403 {code:"PT403"}`. Four extra interleavings also ran:
+control (201/1/1, happy path intact), reverse-direction block during the hold
+(403/0/0), unblock-then-send (201/1/1, the DELETE branch does not wedge), and a
+block-read fault case.
+
+Independently audited by two agents against the live catalog: both agreed. The
+installed `pg_get_functiondef` was diffed against the committed migration and
+matches.
+
+**Caveats recorded rather than smoothed over.** Authentication is synthetic
+(`x-fixture-actor` header, `db.auth.getUser` stubbed) — the authorization decision
+is real, the identity is not. The retired stack reached PostgREST through Kong,
+which strips `/rest/v1`; this replay talks to bare PostgREST, so the harness
+rewrites that prefix — a deviation the baseline run did not have. The race is
+forced, not natural: the insert is parked inside the client fetch shim, before the
+request leaves the process. Providers are intercepted, so `providerAttempts:0`
+proves the route did not call them, not that a real pipeline would stay silent.
+Single-counterparty rooms only, so the multi-key lock ordering, the
+`DIRECT_MESSAGE_ACTOR_INVALID` spoofing guard and the `is_active IS NOT FALSE`
+divergence are still unexercised end-to-end. READ COMMITTED only. The audit also
+correctly flagged that "ran twice, byte-identical" is unverifiable from the
+artifacts, that `heldBeforeInsert`/`blockCommittedBeforeMessageInsert` are
+asserted-then-hardcoded literals rather than measurements, and that the
+`persisted` counts are filtered rather than table counts.
+
+Cleanup: fixture rows created14, removed14; exhaustive count over every base table
+in `public`, `auth` and `storage` shows only canonical seed data remains. PostgREST
+container removed,64531 released; 64532 left running. One leftover of this
+stream's own making was found by the audit and reaped: a backgrounded smoke-check
+process had errored without closing its `pg` client and held a session for ~63
+minutes; its fixtures were already removed and0 rows of either prefix remain.
+
+N04 still does not close: the ChatParticipant activation race, ungated message
+edits (`PUT /api/chat/messages/:messageId`, outside the sends-only grant),
+installed native block/report/chat lifetime and the account-deletion `UserBlock`
+FK lead all remain open.
 
 Still open: all existing block entry points, installed native socket/reconnect,
 concurrent block versus already-authorized send (cache invalidation is not a SQL
@@ -152,6 +205,44 @@ report moderation and old/shared/deep-link authorization. Separate scopes retain
 existing policy; do not invent profile/bid/message policies from existing UI copy.
 The prior account-deletion/UserBlock FK lead remains to reproduce. Home/gig findings
 are routed through the coordinator, including the gig chat-room block path.
+
+## Reproduced: account deletion is blocked by UserBlock (A02 / N04 lead)
+
+**Reproduced at the database level on isolated SQL64532**, not inferred. Both
+`UserBlock` foreign keys to `"User"` are NO ACTION and the deletion handler in
+`backend/routes/users.js` never touches the table (`grep -n UserBlock` there
+returns nothing), so:
+
+| Case | Result |
+| --- | --- |
+| Delete a user who has blocked someone | `ERROR: violates foreign key constraint "UserBlock_blocker_user_id_fkey"` |
+| Delete a user **someone else** blocked | `ERROR: violates foreign key constraint "UserBlock_blocked_user_id_fkey"` |
+| Delete after the block row is removed | succeeds |
+
+The second case is the serious one: a third party who blocks you can prevent your
+own account deletion. All fixtures were created inside a transaction and rolled
+back; 0 rows persisted.
+
+**`UserBlock` is the lone outlier among the sibling contracts** — this is a
+consistency repair, not a new policy:
+
+| Table | FKs to `"User"` |
+| --- | --- |
+| `UserProfileBlock` | both ON DELETE CASCADE |
+| `UserReport` | both ON DELETE CASCADE |
+| `Relationship` | requester/addressee CASCADE (`blocked_by` NO ACTION — same class, likely masked because the blocker is also requester or addressee) |
+| `UserBlock` | **both NO ACTION** |
+
+**Grant requested before any edit.** Two candidate repairs, both outside the
+current grant:
+1. Forward migration aligning the two `UserBlock` FKs with the CASCADE precedent
+   its siblings already use. Smallest and consistent; no applied history rewritten.
+2. Clearing the rows in the `users.js` deletion handler, matching how that handler
+   already treats other tables.
+Recommend (1), with (2) only if the handler must stay the single point of truth.
+`backend/routes/users.js` and FK-altering migrations are not in this stream's
+current assignment, so nothing has been edited. `Relationship_blocked_by_fkey`
+should be assessed at the same time by whoever owns it.
 
 ## Whole-stream coverage reconciliation (existing inventory rows)
 
