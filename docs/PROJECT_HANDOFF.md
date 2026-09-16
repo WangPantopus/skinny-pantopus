@@ -9,6 +9,13 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 ## Current coordination and next action — September 15
 
+Publication is complete through [PR48](https://github.com/WangPantopus/skinny-pantopus/pull/48),
+merged at `711340225` after [CI35037927456](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35037927456)
+passed all four applicable checks with seven path-based skips. The merged tree
+exactly matches tested `4d4fec720`; only seven instruction/documentation files
+changed. The owner's master checkout and Home/Accounts branches are synchronized
+and pushed at `711340225`. Their application source is unchanged from `e775af9ae`.
+
 Shared instructions are published independently of application work through the
 documentation-only `codex/workstream-coordination` branch to master. Start at the
 [three-stream guide](workstreams/README.md). The live status folder is
@@ -43,10 +50,16 @@ describe that candidate, not accepted master behavior. Newly opened PR47 also
 targets master from the paid integration branch and must remain separate from
 this documentation publication. User PR46 (`place-design`) remains separate.
 
-Next: integrate the shared documentation through its own reviewed, green PR,
-synchronize all three application branches with master, then acquire the needed
-runtime reservations for their bounded baselines. No hosted deployment, migration,
-provider activation or device change is part of this correction.
+The gigs application branch remains at `b4b783f8d` to preserve PR47's running native
+CI. Stream 1 uses the neutral live guide immediately and must integrate current
+master at its next paid checkpoint before publishing code. Other copies of the
+old gigs-worktree guide/status are snapshots, not the live coordination location.
+
+Next: acquire the needed runtime reservations for the three bounded baselines.
+This post-merge status snapshot is published on the neutral coordination branch
+for the next batched documentation PR; all shared rules are already on master.
+No hosted deployment, migration, provider activation or device change ran as part
+of this correction. Production deployment and migration flags were checked false.
 
 ## Historical state and next action — September 14
 
