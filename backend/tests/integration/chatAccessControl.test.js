@@ -631,3 +631,82 @@ describe('Block authorization availability and ordering', () => {
     await expect(service.isBlocked(U1, U2)).rejects.toMatchObject({ code: 'BLOCK_CHECK_UNAVAILABLE' });
   });
 });
+
+// The canonical database has a global unique client_message_id index. The
+// in-memory database does not model it, so these cases inject only that conflict.
+describe('Message retry scope', () => {
+  const db = require('../__mocks__/supabaseAdmin');
+  const key = 'f9150300-0000-4000-8000-000000000501';
+  beforeEach(() => {
+    const service = require('../../services/blockService');
+    for (const a of [U1, U2, U_BIZ, U_MEMBER]) for (const b of [U1, U2, U_BIZ, U_MEMBER]) service.invalidateBlockCache(a, b);
+    const original = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = original(table);
+      if (table === 'ChatMessage') {
+        const insert = query.insert.bind(query);
+        query.insert = payload => getTable('ChatMessage').some(row => row.client_message_id === payload.client_message_id)
+          ? { select: () => ({ single: async () => ({ data: null, error: { code: '23505', message: 'idx_chat_message_client_id' } }) }) }
+          : insert(payload);
+      }
+      return query;
+    });
+  });
+  afterEach(() => jest.restoreAllMocks());
+  function saved(overrides = {}) {
+    seedTable('ChatMessage', [{ id: MSG_1, room_id: ROOM_DIRECT, user_id: U1, actor_user_id: null,
+      client_message_id: key, message: 'Private saved text', type: 'text', deleted: false, ...overrides }]);
+  }
+  test.each([
+    ['other room', { room_id: ROOM_BIZ }],
+    ['other author', { user_id: U2 }],
+  ])('does not return a retry from %s', async (_name, overrides) => {
+    saved(overrides);
+    const { app, mockIo } = createApp();
+    const response = await request(app).post('/api/chat/messages').set('x-test-user-id', U1)
+      .send({ roomId: ROOM_DIRECT, messageText: 'New content', messageType: 'text', clientMessageId: key });
+    expect(response.status).toBe(409);
+    expect(response.body.message).toBeUndefined();
+    expect(getTable('ChatMessage')).toHaveLength(1);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+  });
+  test('same authorized room and human actor recover their saved message without effects', async () => {
+    saved();
+    const { app, mockIo } = createApp();
+    const response = await request(app).post('/api/chat/messages').set('x-test-user-id', U1)
+      .send({ roomId: ROOM_DIRECT, messageText: 'Lost reply retry', messageType: 'text', clientMessageId: key });
+    expect(response.status).toBe(200);
+    expect(response.body.message.id).toBe(MSG_1);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+  });
+  test('a concurrent same-scope insert recovers the winner without another broadcast', async () => {
+    seedTable('ChatMessage', []);
+    const previous = db.from.getMockImplementation();
+    db.from.mockImplementation(table => {
+      const query = previous(table);
+      if (table === 'ChatMessage') query.insert = payload => {
+        saved({ ...payload, actor_user_id: null });
+        return { select: () => ({ single: async () => ({ data: null, error: { code: '23505', message: 'idx_chat_message_client_id' } }) }) };
+      };
+      return query;
+    });
+    const { app, mockIo } = createApp();
+    const response = await request(app).post('/api/chat/messages').set('x-test-user-id', U1)
+      .send({ roomId: ROOM_DIRECT, messageText: 'Concurrent winner', messageType: 'text', clientMessageId: key });
+    expect(response.status).toBe(200);
+    expect(response.body.message.id).toBe(MSG_1);
+    expect(getTable('ChatMessage')).toHaveLength(1);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+  });
+  test('another authorized business actor cannot claim a colleague retry', async () => {
+    saved({ room_id: ROOM_BIZ, user_id: U_BIZ, actor_user_id: U_MEMBER });
+    getTable('ChatParticipant').push({ id: 'actor', room_id: ROOM_BIZ, user_id: U1, is_active: true });
+    hasPermission.mockResolvedValue(true);
+    const { app, mockIo } = createApp();
+    const response = await request(app).post('/api/chat/messages').set('x-test-user-id', U1)
+      .send({ roomId: ROOM_BIZ, asBusinessUserId: U_BIZ, messageText: 'Different actor', messageType: 'text', clientMessageId: key });
+    expect(response.status).toBe(409);
+    expect(response.body.message).toBeUndefined();
+    expect(mockIo.emit).not.toHaveBeenCalled();
+  });
+});

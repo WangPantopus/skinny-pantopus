@@ -1680,28 +1680,25 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
       }
     }
 
-    // ─── Idempotency check ───
-    // If the client provides a clientMessageId (UUID), check for an existing
-    // message with that ID in the same room by the same sender. If found,
-    // return it as an idempotent success instead of inserting a duplicate.
-    if (clientMessageId) {
-      const { data: existingMsg } = await supabaseAdmin
-        .from('ChatMessage')
-        .select(`
-          *,
-          sender:user_id(
-            id,
-            username,
-            name,
-            profile_picture_url
-          )
-        `)
+    // A retry is bound to the authorized room, displayed sender and human actor.
+    // client_message_id is globally unique, so a conflicting key from another
+    // scope must never return that scope's private message.
+    const findRetryMessage = async () => {
+      let query = supabaseAdmin.from('ChatMessage')
+        .select(`*, sender:user_id(id, username, name, profile_picture_url)`)
         .eq('client_message_id', clientMessageId)
-        .maybeSingle();
-
-      if (existingMsg) {
-        return res.json({ message: serializeChatMessageForViewer(existingMsg) });
-      }
+        .eq('room_id', roomId)
+        .eq('user_id', senderUserId);
+      query = String(senderUserId) === String(userId)
+        ? query.is('actor_user_id', null)
+        : query.eq('actor_user_id', userId);
+      const { data, error: retryError } = await query.maybeSingle();
+      if (retryError) throw retryError;
+      return data;
+    };
+    if (clientMessageId) {
+      const existingMsg = await findRetryMessage();
+      if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg) });
     }
 
     // Insert message
@@ -1760,6 +1757,13 @@ router.post('/messages', verifyToken, messageSendLimiter, validate(sendMessageSc
         delete downgradedPayload.metadata;
       }
       ({ data: message, error } = await insertMessage(downgradedPayload));
+    }
+
+    if (error?.code === '23505' && clientMessageId) {
+      // A concurrent same-scope insert may have won after the initial lookup.
+      const existingMsg = await findRetryMessage();
+      if (existingMsg) return res.json({ message: serializeChatMessageForViewer(existingMsg) });
+      return res.status(409).json({ error: 'Message retry key is already in use' });
     }
 
     if (error) {
