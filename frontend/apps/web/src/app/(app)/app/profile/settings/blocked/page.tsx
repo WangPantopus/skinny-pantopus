@@ -9,26 +9,88 @@ import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 
+/**
+ * N04 — this page lists two separate existing block contracts:
+ *  - `UserBlock` via `GET /api/users/blocked` (`backend/routes/blocks.js:138`),
+ *    written by the profile Block action and read by
+ *    `backend/services/blockService.js` to deny direct messages. Lifted by
+ *    `DELETE /api/users/:userId/block`.
+ *  - `Relationship.status = 'blocked'` via `GET /api/relationships/blocked`,
+ *    the trust-graph block this page has always shown. Lifted by
+ *    `DELETE /api/relationships/:id`.
+ * They stay separate tables with separate scopes; this page is the only
+ * surface that lifts either, so each row carries its own origin.
+ */
+type BlockedEntry = {
+  /** Row key, and the id the relationship unblock takes. */
+  id: string;
+  name: string;
+  username?: string;
+  avatarUrl?: string;
+  /** Set for a `UserBlock` row — the id `DELETE /api/users/:id/block` takes. */
+  personalUserId?: string;
+};
+
 function BlockedContent() {
   const router = useRouter();
-  const [blocked, setBlocked] = useState<any[]>([]);
+  const [blocked, setBlocked] = useState<BlockedEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [unblocking, setUnblocking] = useState<string | null>(null);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
   const fetchBlocked = useCallback(async () => {
-    try {
-      const result = await api.relationships.getBlockedUsers();
-      setBlocked((result as any)?.blocked || (result as any)?.relationships || []);
-    } catch { toast.error('Failed to load blocked users'); }
+    // Only one list has to answer: a personal block must stay visible (and
+    // liftable) when the trust-graph list is unavailable, and vice versa.
+    const [personalRes, relRes] = await Promise.allSettled([
+      api.blocks.getBlockedUsers(),
+      api.relationships.getBlockedUsers(),
+    ]);
+
+    if (personalRes.status === 'rejected' && relRes.status === 'rejected') {
+      toast.error('Failed to load blocked users');
+      return;
+    }
+
+    const personal: BlockedEntry[] =
+      personalRes.status === 'fulfilled'
+        ? ((personalRes.value as any)?.blocked || []).map((b: any) => ({
+            id: b.id,
+            name: b.name || b.username || 'Unknown',
+            username: b.username || undefined,
+            avatarUrl: b.profile_picture_url || undefined,
+            personalUserId: b.user_id,
+          }))
+        : [];
+
+    const relationships: BlockedEntry[] =
+      relRes.status === 'fulfilled'
+        ? ((relRes.value as any)?.blocked || (relRes.value as any)?.relationships || []).map(
+            (rel: any) => {
+              // Unchanged field-picking from the trust-graph payload.
+              const otherUser = rel.other_user || rel.addressee || rel.requester;
+              return {
+                id: rel.id,
+                name:
+                  otherUser?.name ||
+                  `${otherUser?.first_name || ''} ${otherUser?.last_name || ''}`.trim() ||
+                  otherUser?.username ||
+                  'Unknown',
+                username: otherUser?.username,
+                avatarUrl: otherUser?.profile_picture_url || otherUser?.avatar_url,
+              };
+            },
+          )
+        : [];
+
+    // Personal blocks lead — they are the ones that gate direct messages.
+    setBlocked([...personal, ...relationships]);
   }, []);
 
   useEffect(() => { setLoading(true); fetchBlocked().finally(() => setLoading(false)); }, [fetchBlocked]);
 
-  const handleUnblock = useCallback(async (relationship: any) => {
-    const otherUser = relationship.other_user || relationship.addressee || relationship.requester;
-    const displayName = otherUser?.name || otherUser?.username || 'this user';
+  const handleUnblock = useCallback(async (entry: BlockedEntry) => {
+    const displayName = entry.name || entry.username || 'this user';
 
     const yes = await confirmStore.open({
       title: 'Unblock User',
@@ -38,10 +100,15 @@ function BlockedContent() {
     });
     if (!yes) return;
 
-    setUnblocking(relationship.id);
+    setUnblocking(entry.id);
     try {
-      await api.relationships.unblock(relationship.id);
-      setBlocked((prev) => prev.filter((b) => b.id !== relationship.id));
+      // Each row is lifted through its own contract.
+      if (entry.personalUserId) {
+        await api.blocks.unblockUser(entry.personalUserId);
+      } else {
+        await api.relationships.unblock(entry.id);
+      }
+      setBlocked((prev) => prev.filter((b) => b.id !== entry.id));
       toast.success(`${displayName} unblocked`);
     } catch (err: any) {
       toast.error(err?.message || 'Failed to unblock user');
@@ -74,15 +141,14 @@ function BlockedContent() {
         </div>
       ) : (
         <div className="divide-y divide-app-border-subtle">
-          {blocked.map((relationship: any) => {
-            const otherUser = relationship.other_user || relationship.addressee || relationship.requester;
-            const avatarUrl = otherUser?.profile_picture_url || otherUser?.avatar_url;
-            const name = otherUser?.name || `${otherUser?.first_name || ''} ${otherUser?.last_name || ''}`.trim() || otherUser?.username || 'Unknown';
-            const username = otherUser?.username;
-            const isUnblocking = unblocking === relationship.id;
+          {blocked.map((entry: BlockedEntry) => {
+            const avatarUrl = entry.avatarUrl;
+            const name = entry.name;
+            const username = entry.username;
+            const isUnblocking = unblocking === entry.id;
 
             return (
-              <div key={relationship.id} className="flex items-center gap-3 py-3.5">
+              <div key={entry.id} className="flex items-center gap-3 py-3.5">
                 {avatarUrl ? (
                   <Image src={avatarUrl} alt={name} width={44} height={44} sizes="44px" quality={75} className="w-11 h-11 rounded-full object-cover flex-shrink-0" />
                 ) : (
@@ -94,7 +160,7 @@ function BlockedContent() {
                   <p className="text-sm font-semibold text-app-text truncate">{name}</p>
                   {username && <p className="text-xs text-app-text-secondary">@{username}</p>}
                 </div>
-                <button onClick={() => handleUnblock(relationship)} disabled={isUnblocking}
+                <button onClick={() => handleUnblock(entry)} disabled={isUnblocking}
                   className="px-4 py-2 border border-red-200 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-50 disabled:opacity-50 transition min-w-[80px] flex items-center justify-center">
                   {isUnblocking ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Unblock'}
                 </button>

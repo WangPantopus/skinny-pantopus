@@ -1,6 +1,8 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.settings.UserBlocksResponse
 import retrofit2.http.DELETE
+import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
 
@@ -27,4 +29,13 @@ interface BlocksApi {
     suspend fun unblock(
         @Path("userId") userId: String,
     ): Unit
+
+    /**
+     * `GET /api/users/blocked` — the viewer's own personal blocks.
+     * Route `backend/routes/blocks.js:138`. Mounted before `userRoutes`
+     * (`backend/app.js:346`) so `/blocked` is not captured by the
+     * `/:username` profile route.
+     */
+    @GET("api/users/blocked")
+    suspend fun blocked(): UserBlocksResponse
 }

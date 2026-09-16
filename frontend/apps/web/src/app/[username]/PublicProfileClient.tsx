@@ -8,6 +8,8 @@ import { buildUserProfileShareUrl } from '@pantopus/utils';
 import type { UserProfile, User, GigListItem, Review } from '@pantopus/types';
 import { getAuthToken } from '@pantopus/api';
 import BusinessPublicProfile from '@/components/business/BusinessPublicProfile';
+import { toast } from '@/components/ui/toast-store';
+import { confirmStore } from '@/components/ui/confirm-store';
 import { ProfileHeader, TabButton } from '@/components/profile/public';
 import { ReliabilityPanel, AboutCard, SkillsCard } from '@/components/profile/public/cards';
 import {
@@ -277,6 +279,43 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     }
   };
 
+  /**
+   * N04 — the personal block contract (`UserBlock`). This is the same
+   * endpoint the iOS and Android Block actions call, and the only one
+   * `backend/services/blockService.js` reads to refuse direct messages.
+   * It is deliberately NOT the trust-graph block
+   * (`POST /api/relationships/block-user`), which does not gate messaging.
+   * The block is liftable from Settings -> Blocked Users.
+   */
+  const handleBlock = async () => {
+    if (!currentUser) { router.push('/login'); return; }
+    const yes = await confirmStore.open({
+      title: 'Block user',
+      description:
+        `Block ${fullName}? They won't be able to message you, and you won't ` +
+        `see messages from them. They are not notified, and you can unblock ` +
+        `them from Settings.`,
+      confirmLabel: 'Block',
+      variant: 'destructive',
+    });
+    if (!yes) return;
+
+    setActionLoading(true);
+    try {
+      await api.blocks.blockUser(profile!.id);
+      // Mirrors the native clients: the connection edge drops to `blocked`
+      // on the same success, which hides the Connect / Follow row.
+      setConnectionState('blocked');
+      setFollowState(false);
+      toast.success(`${fullName} blocked`);
+    } catch (err: unknown) {
+      console.error('Block error:', err);
+      toast.error('Couldn\'t block this user');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleRequestHire = () => {
     if (!currentUser) {
       router.push('/login');
@@ -439,6 +478,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         onMessage={handleMessage}
         onRequestHire={handleRequestHire}
         onShare={handleShare}
+        onBlock={handleBlock}
       />
 
       <div className="bg-surface border-b border-app mt-6">

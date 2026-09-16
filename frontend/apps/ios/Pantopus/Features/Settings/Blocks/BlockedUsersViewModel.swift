@@ -3,11 +3,23 @@
 //  Pantopus
 //
 //  P8 / T6.2c — Settings → Blocked users sub-route.
-//  Backs the screen with `ListOfRowsDataSource`. Reads
-//  `GET /api/privacy/blocks` (privacy.js:154) and unblocks via
-//  `DELETE /api/privacy/blocks/:blockId` (privacy.js:251). Unblock is
-//  optimistic: the row disappears immediately and re-appears if the
-//  DELETE fails.
+//  Backs the screen with `ListOfRowsDataSource`.
+//
+//  N04: this is the only surface that lifts a block, so it reads BOTH
+//  existing personal block contracts, which remain separate tables with
+//  separate scopes:
+//    • `GET /api/users/blocked` (blocks.js:138) — the `UserBlock` rows
+//      that Block-on-a-profile and Block-in-a-chat write, and the ones
+//      `blockService.isBlocked` reads to deny direct messages. Lifted by
+//      `DELETE /api/users/:userId/block` (blocks.js:101).
+//    • `GET /api/privacy/blocks` (privacy.js:154) — the Identity
+//      Firewall's scoped `UserProfileBlock` rows. Lifted by
+//      `DELETE /api/privacy/blocks/:blockId` (privacy.js:251).
+//  Before this the screen read only the second, so a block made from a
+//  profile was invisible here and could never be undone in the app.
+//
+//  Unblock is optimistic: the row disappears immediately and re-appears
+//  if its DELETE fails.
 //
 
 import Foundation
@@ -45,7 +57,32 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
 
     private let api: APIClient
     private let auth: AuthManager
-    private var blocks: [PrivacyBlock] = []
+    private var entries: [BlockedEntry] = []
+
+    /// One row's worth of "someone you blocked", flattened from the two
+    /// separate existing block contracts the app can produce. They stay
+    /// separate tables with separate scopes; this screen is the one place
+    /// the owner sees and lifts both, so it has to know which DELETE
+    /// addresses which row.
+    private struct BlockedEntry {
+        enum Origin {
+            /// `UserBlock` — written by Block on a profile or in a chat.
+            /// Lifted by `DELETE /api/users/:userId/block`.
+            case personal(userId: String)
+            /// `UserProfileBlock` — the Identity Firewall's scoped block.
+            /// Lifted by `DELETE /api/privacy/blocks/:blockId`.
+            case profile
+        }
+
+        let id: String
+        let name: String
+        let avatarURL: URL?
+        let createdAt: String?
+        /// Only `UserProfileBlock` carries a scope; personal blocks are
+        /// account-wide, which renders the same as the existing `full` case.
+        let scope: String?
+        let origin: Origin
+    }
 
     init(api: APIClient = .shared, auth: AuthManager = .shared) {
         self.api = api
@@ -63,32 +100,78 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
 
     public func loadMoreIfNeeded() async {}
 
+    /// Reads both existing block lists. Sequential, not concurrent, so the
+    /// request order stays deterministic for the sequenced test transport.
+    ///
+    /// Only one has to answer: a personal block must still be visible (and
+    /// liftable) when the Identity Firewall list is unavailable, and vice
+    /// versa. The screen reports an error only when neither list loads.
     private func fetch() async {
-        do {
-            let response: PrivacyBlocksResponse = try await api.request(PrivacyEndpoints.blocks)
-            blocks = response.blocks
-            rebuild()
-        } catch {
+        let personal = try? await api.request(BlocksEndpoints.blocked, as: UserBlocksResponse.self)
+        let profile = try? await api.request(PrivacyEndpoints.blocks, as: PrivacyBlocksResponse.self)
+
+        guard personal != nil || profile != nil else {
             state = .error(message: "Couldn't load your blocked list.")
+            return
         }
+
+        let personalEntries = (personal?.blocked ?? []).map { block in
+            BlockedEntry(
+                id: block.id,
+                name: block.name
+                    ?? block.username.map { "@\($0)" }
+                    ?? "Blocked user",
+                avatarURL: block.profilePictureUrl.flatMap(URL.init(string:)),
+                createdAt: block.createdAt,
+                scope: nil,
+                origin: .personal(userId: block.userId)
+            )
+        }
+        let profileEntries = (profile?.blocks ?? []).map { block in
+            BlockedEntry(
+                id: block.id,
+                name: block.blocked?.name
+                    ?? block.blocked?.username.map { "@\($0)" }
+                    ?? "Blocked user",
+                avatarURL: block.blocked?.profilePictureUrl.flatMap(URL.init(string:)),
+                createdAt: block.createdAt,
+                scope: block.blockScope,
+                origin: .profile
+            )
+        }
+
+        // Each route already orders its own rows newest-first, and the
+        // screen has always rendered them in the order the server sent.
+        // Keep that: concatenate rather than re-sort, so the existing
+        // privacy-only rendering is unchanged. Personal blocks lead
+        // because they are the ones that gate direct messages.
+        entries = personalEntries + profileEntries
+        rebuild()
     }
 
     /// Optimistic unblock. Removes the row immediately; restores it on
     /// network failure (kept original index so the order doesn't shuffle).
+    /// The request is chosen by the row's own contract — a personal block
+    /// is lifted by user id, a profile block by block id.
     public func unblock(_ blockId: String) async {
-        guard let index = blocks.firstIndex(where: { $0.id == blockId }) else { return }
-        let removed = blocks.remove(at: index)
+        guard let index = entries.firstIndex(where: { $0.id == blockId }) else { return }
+        let removed = entries.remove(at: index)
         rebuild()
         do {
-            _ = try await api.request(PrivacyEndpoints.deleteBlock(blockId: blockId))
+            switch removed.origin {
+            case let .personal(userId):
+                _ = try await api.request(BlocksEndpoints.unblock(userId: userId))
+            case .profile:
+                _ = try await api.request(PrivacyEndpoints.deleteBlock(blockId: blockId))
+            }
         } catch {
-            blocks.insert(removed, at: min(index, blocks.count))
+            entries.insert(removed, at: min(index, entries.count))
             rebuild()
         }
     }
 
     private func rebuild() {
-        guard !blocks.isEmpty else {
+        guard !entries.isEmpty else {
             // A14.4 empty hero — neutral grey disc + user-minus glyph
             // (the design's `user-x`; `userMinus` is the in-inventory
             // person-with-negation glyph) + reassurance about silence.
@@ -102,16 +185,14 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
             ))
             return
         }
-        let rows = blocks.map { block -> RowModel in
-            let name = block.blocked?.name
-                ?? block.blocked?.username.map { "@\($0)" }
-                ?? "Blocked user"
-            let avatarURL = block.blocked?.profilePictureUrl.flatMap(URL.init(string:))
-            let blockId = block.id
+        let rows = entries.map { entry -> RowModel in
+            let name = entry.name
+            let avatarURL = entry.avatarURL
+            let blockId = entry.id
             return RowModel(
                 id: blockId,
                 title: name,
-                subtitle: Self.blockedSubtitle(createdAt: block.createdAt, scope: block.blockScope),
+                subtitle: Self.blockedSubtitle(createdAt: entry.createdAt, scope: entry.scope),
                 template: .avatarKebab,
                 leading: .avatarWithBadge(
                     name: name,
@@ -129,7 +210,7 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
             sections: [
                 RowSection(
                     id: "blocked",
-                    header: "Blocked · \(blocks.count)",
+                    header: "Blocked · \(entries.count)",
                     footer: "Blocked people can't message you, see your profile, or bid on "
                         + "your tasks. Unblocking doesn't notify them.",
                     rows: rows,
