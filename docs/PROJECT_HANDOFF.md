@@ -16,7 +16,7 @@ only in `/Users/yingpengwang/pantopus-coordination/docs/workstreams/`. Read the
 Feature branches receive shared documentation from master; they do not publish
 independent copies. Application and coordination PRs remain separate.
 
-Fresh remote master is `711340225`, the documentation-only PR48 merge over
+Fresh remote master is `0616d6e79`, the documentation-only PR49 merge over
 application baseline `e775af9ae`. Paid PR34 stays draft at `c9cb69825`, and paid
 integration PR47 remains unmerged. User PR46 (`place-design`) stays separate.
 PR47's prior head `959e147e6` passed 15 applicable checks/one Seeder skip in
@@ -30,26 +30,47 @@ to the same worker. The repair binds `accepted_at` and preserves retryable recov
 errors. Twelve final HTTP cases plus exact cleanup pass (13/13), as do 229 lifecycle
 regressions and privacy gates. Authentication/transport faults are synthetic; the
 new HTTP scope uses free gigs on the older retained schema, with no provider or
-installed-native claim. Its [current CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35048472265)
-is still running. Full evidence, source limits and owned resource state are in the
+installed-native claim. Its [CI35048472265](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35048472265)
+was superseded and cancelled by the subsequent native/integration push; it is not
+a completed green run. Full evidence, source limits and owned resource state are in the
 [Stream1 status](workstreams/01-gigs-payments.md). No table, migration or screen was
 added or changed. Earlier paid/web evidence retains its recorded source limits.
 
 The previous statement that discarding a native response establishes stale/invalid
-response safety is withdrawn. Android reports success without validating the
-receipt; iOS accepts `EmptyResponse` and silently ignores refresh failure. Native
-invalid/late replies, duplicate taps and installed journeys remain to verify and,
-where failures reproduce, repair without changing existing screen designs.
+response safety is withdrawn. Android's reproduced callback defects are repaired
+below; iOS still accepts `EmptyResponse` and silently ignores refresh failure.
+iOS invalid/late replies, duplicate taps and installed journeys remain to verify
+and, where failures reproduce, repair without changing existing screen designs.
 
-Peer handoffs were reviewed, without integration: Stream2 pushed `70e079543` for
-the browser guest-pass slice; its HTTP harness simulates the SQL decision boundary,
-so broader M02 stays open. Stream3 republished its live status for `fc99f8ee7` and
-correctly records N04 as incomplete, including an introduced empty-list defect and
-no real-persistence or installed-screen acceptance. Each author retains ownership
-of its status file. Neither branch has required PR CI or merge approval yet.
+Peer handoffs were reviewed, without application integration. Stream2 pushed
+`70e079543` for the browser guest-pass slice; its HTTP harness simulates the SQL
+decision boundary, so broader M02 stays open. Stream3 pushed `dfc860bfe` in draft
+[PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51), repairing unavailable
+block checks and the existing profile/blocked-list controls. Its local browser
+and nine HTTP/PostgreSQL cases use synthetic authentication, the retained older
+schema and intercepted delivery. Inspected regression artifacts show42 backend,
+10 web,13 Android JVM and13 iOS model passes. Current CI has an Android formatting
+failure; installed native/lifetime acceptance remains underway. See the
+[reviewed milestone and outstanding findings](VERIFICATION_FIRST_2026-09-13.md#existing-profile-safety-and-blocked-user-journeys).
+N04 stays open. Each author retains its live status ownership; neither peer is
+approved for merge.
 
-Next: finish current-head Stream1 CI, continue the native Start Work baseline,
-and publish corrected shared status through documentation-only PR49. Review peer
+Stream1 additionally pushed Android `9397e39a7`, after five native callback
+failures reproduced in the existing JVM tests. The existing view-model now
+validates the saved start and retires old callbacks; 54 tests, ktlint and detekt
+pass. No mobile screen/layout file changed. This is mocked JVM evidence, not an
+installed journey. Current integration head `41c75d49a` takes master `0616d6e79`'s
+shared documentation snapshots without application changes; its
+[combined CI](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35049746982)
+passes15 applicable checks/one Seeder skip. PR49 is merged; subsequent shared
+status is in documentation-only [PR50](https://github.com/WangPantopus/skinny-pantopus/pull/50).
+Owned SQL fixtures/listener and the heavy native build reservation are released;
+private evidence is mirrored under the owner's recovery audit directory.
+
+Next: continue iOS and installed Start Work verification, and publish the latest
+shared status through its own documentation-only PR. Stream3 retains the exclusive
+native slot and its isolated iOS simulator; Stream1 can continue source/test preparation.
+Review peer
 repairs and their source-bound acceptance before integrating them. P04, P08/P09,
 R05 and overall launch remain open; inventory counts are unchanged. No hosted
 deployment, migration activation, provider activation or physical-device change
