@@ -290,23 +290,25 @@ async function sendBookingReminder({ booking, eventType, page, kind, offsetMinut
 
   // Host reminder respects the host's 'reminder' notify-me toggle.
   if (booking.host_user_id && (await notifyPrefs.hostWantsKey(booking.host_user_id, 'reminder'))) {
-    await notifyAppUser(booking.host_user_id, {
+    const notification = await notifyAppUser(booking.host_user_id, {
       type: 'booking_reminder',
       title: `Reminder: ${eventName} ${label}`,
       body: whenInvitee,
       link,
       metadata: { booking_id: booking.id, kind },
     });
+    if (!notification) throw new Error('BOOKING_REMINDER_NOTIFICATION_UNAVAILABLE');
   }
 
   if (booking.invitee_user_id) {
-    await notifyAppUser(booking.invitee_user_id, {
+    const notification = await notifyAppUser(booking.invitee_user_id, {
       type: 'booking_reminder',
       title: `Reminder: ${eventName} ${label}`,
       body: whenInvitee,
       link,
       metadata: { booking_id: booking.id, kind },
     });
+    if (!notification) throw new Error('BOOKING_REMINDER_NOTIFICATION_UNAVAILABLE');
   } else if (booking.invitee_email) {
     if (await isEmailSuppressed(booking.invitee_email, booking.owner_type, booking.owner_id)) return;
     const organizer = await getUserContact(booking.host_user_id || booking.owner_user_id);
@@ -319,7 +321,10 @@ async function sendBookingReminder({ booking, eventType, page, kind, offsetMinut
       manageUrl: null,
       footerNote: 'You are receiving this because you have an upcoming booking.',
     });
-    await emailService.sendEmail({ to: booking.invitee_email, subject: `Reminder: ${eventName} ${label}`, html, attachments });
+    const delivery = await emailService.sendEmail({ to: booking.invitee_email, subject: `Reminder: ${eventName} ${label}`, html, attachments });
+    // sendEmail reports provider rejection/unavailability as a value. The worker
+    // must see failure so its existing catch releases the claim for a later retry.
+    if (delivery?.success !== true) throw new Error('BOOKING_REMINDER_EMAIL_UNAVAILABLE');
   }
 }
 

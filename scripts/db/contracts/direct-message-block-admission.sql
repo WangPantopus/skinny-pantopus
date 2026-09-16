@@ -1,0 +1,285 @@
+-- Direct-room sends are re-decided inside the inserting transaction; the gate
+-- binds service_role, is invisible to clients, and never widens past direct.
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
+SET LOCAL search_path = public, extensions, pg_catalog;
+
+INSERT INTO auth.users (id,email) VALUES
+ ('dbb00000-0000-4000-8000-000000000001','block-admission-a@example.invalid'),
+ ('dbb00000-0000-4000-8000-000000000002','block-admission-b@example.invalid'),
+ ('dbb00000-0000-4000-8000-000000000003','block-admission-c@example.invalid'),
+ ('dbb00000-0000-4000-8000-000000000004','block-admission-biz@example.invalid');
+INSERT INTO public."User" (id,email,username,name)
+ SELECT id,email,'block_admission_'||right(id::text,2),'Block admission contract'
+ FROM auth.users WHERE id IN ('dbb00000-0000-4000-8000-000000000001','dbb00000-0000-4000-8000-000000000002',
+   'dbb00000-0000-4000-8000-000000000003','dbb00000-0000-4000-8000-000000000004');
+INSERT INTO public."Gig" (id,title,description,price,user_id) VALUES
+ ('dbb00000-0000-4000-8000-000000000020','Block admission scope','Scope fixture',1,'dbb00000-0000-4000-8000-000000000001');
+INSERT INTO public."ChatRoom" (id,type,gig_id) VALUES
+ ('dbb00000-0000-4000-8000-000000000011','direct',NULL),
+ ('dbb00000-0000-4000-8000-000000000012','direct',NULL),
+ ('dbb00000-0000-4000-8000-000000000014','direct',NULL),
+ ('dbb00000-0000-4000-8000-000000000015','direct',NULL),
+ ('dbb00000-0000-4000-8000-000000000013','gig','dbb00000-0000-4000-8000-000000000020');
+INSERT INTO public."ChatParticipant" (room_id,user_id,is_active) VALUES
+ ('dbb00000-0000-4000-8000-000000000011','dbb00000-0000-4000-8000-000000000001',true),
+ ('dbb00000-0000-4000-8000-000000000011','dbb00000-0000-4000-8000-000000000002',true),
+ ('dbb00000-0000-4000-8000-000000000012','dbb00000-0000-4000-8000-000000000001',true),
+ ('dbb00000-0000-4000-8000-000000000014','dbb00000-0000-4000-8000-000000000001',true),
+ ('dbb00000-0000-4000-8000-000000000014','dbb00000-0000-4000-8000-000000000002',NULL),
+ ('dbb00000-0000-4000-8000-000000000015','dbb00000-0000-4000-8000-000000000001',true),
+ ('dbb00000-0000-4000-8000-000000000015','dbb00000-0000-4000-8000-000000000002',true),
+ ('dbb00000-0000-4000-8000-000000000015','dbb00000-0000-4000-8000-000000000004',true),
+ ('dbb00000-0000-4000-8000-000000000013','dbb00000-0000-4000-8000-000000000001',true),
+ ('dbb00000-0000-4000-8000-000000000013','dbb00000-0000-4000-8000-000000000002',true);
+
+-- Shape, grants and the environment the gate depends on.
+DO $structure$
+DECLARE v_type smallint; v_src text;
+BEGIN
+  SELECT tgtype INTO v_type FROM pg_trigger
+   WHERE tgname='trigger_direct_message_block_admission' AND tgrelid='public."ChatMessage"'::regclass AND NOT tgisinternal;
+  IF v_type IS NULL OR (v_type & 7) <> 7 THEN
+   RAISE EXCEPTION 'Send admission is not a BEFORE INSERT row trigger'; END IF;
+  SELECT tgtype INTO v_type FROM pg_trigger
+   WHERE tgname='trigger_user_block_pair_lock' AND tgrelid='public."UserBlock"'::regclass AND NOT tgisinternal;
+  IF v_type IS NULL OR (v_type & 31) <> 31 THEN
+   RAISE EXCEPTION 'Block rendezvous does not cover insert, update and delete'; END IF;
+
+  IF has_function_privilege('authenticated','public.direct_message_block_admission()','execute')
+  OR has_function_privilege('anon','public.direct_message_block_admission()','execute')
+  OR has_function_privilege('authenticated','public.user_block_pair_lock()','execute')
+  OR has_function_privilege('anon','public.user_block_pair_lock()','execute') THEN
+   RAISE EXCEPTION 'Clients can call the admission internals directly'; END IF;
+  IF NOT (SELECT prosecdef FROM pg_proc WHERE oid='public.direct_message_block_admission()'::regprocedure) THEN
+   RAISE EXCEPTION 'Admission is not SECURITY DEFINER and is blind to UserBlock under row level security'; END IF;
+  IF NOT (SELECT prosecdef FROM pg_proc WHERE oid='public.user_block_pair_lock()'::regprocedure) THEN
+   RAISE EXCEPTION 'Block rendezvous is not SECURITY DEFINER'; END IF;
+  IF (SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE oid='public.direct_message_block_admission()'::regprocedure)
+     <> current_user THEN
+   RAISE EXCEPTION 'Admission owner is not the migration role; a recreate could blind the gate'; END IF;
+
+  -- The post-lock re-read only takes a fresh snapshot under READ COMMITTED.
+  -- Config drift must break this suite rather than quietly weakening delivery.
+  IF current_setting('transaction_isolation') <> 'read committed' THEN
+   RAISE EXCEPTION 'Admission re-read assumes read committed, found %', current_setting('transaction_isolation'); END IF;
+
+  IF public.direct_message_block_lock_key('dbb00000-0000-4000-8000-000000000001','dbb00000-0000-4000-8000-000000000002')
+   <> public.direct_message_block_lock_key('dbb00000-0000-4000-8000-000000000002','dbb00000-0000-4000-8000-000000000001') THEN
+   RAISE EXCEPTION 'Rendezvous key depends on pair order'; END IF;
+
+  -- Ordered acquisition is the deadlock-freedom argument for multi-party rooms.
+  -- Concurrency itself is proven outside pgTAP; pin the ordering here so it
+  -- cannot be dropped as though it were decorative.
+  SELECT prosrc INTO v_src FROM pg_proc WHERE oid='public.direct_message_block_admission()'::regprocedure;
+  IF v_src !~ 'ORDER BY k' THEN RAISE EXCEPTION 'Lock acquisition is no longer ordered'; END IF;
+  IF v_src ~ 'is_active\s*=\s*true' OR v_src !~ 'is_active IS NOT FALSE' THEN
+   RAISE EXCEPTION 'Admission dropped NULL is_active counterparties'; END IF;
+END $structure$;
+
+-- Every UserBlock write must take the same key the admission function computes.
+-- One session cannot prove a rendezvous by waiting, so prove key identity from
+-- pg_locks instead: classid/objid are the high and low halves of the bigint key.
+DO $rendezvous$
+DECLARE k bigint; v_op text;
+BEGIN
+  k := public.direct_message_block_lock_key('dbb00000-0000-4000-8000-000000000001','dbb00000-0000-4000-8000-000000000002');
+  FOREACH v_op IN ARRAY ARRAY['INSERT','UPDATE','DELETE'] LOOP
+    IF v_op='INSERT' THEN
+      INSERT INTO public."UserBlock"(id,blocker_user_id,blocked_user_id)
+       VALUES ('dbb00000-0000-4000-8000-0000000000a1','dbb00000-0000-4000-8000-000000000002','dbb00000-0000-4000-8000-000000000001');
+    ELSIF v_op='UPDATE' THEN
+      UPDATE public."UserBlock" SET reason='contract' WHERE id='dbb00000-0000-4000-8000-0000000000a1';
+    ELSE
+      DELETE FROM public."UserBlock" WHERE id='dbb00000-0000-4000-8000-0000000000a1';
+    END IF;
+    IF NOT EXISTS (SELECT FROM pg_locks WHERE locktype='advisory' AND pid=pg_backend_pid()
+                   AND classid=((k>>32)&4294967295)::oid AND objid=(k&4294967295)::oid AND objsubid=1) THEN
+      RAISE EXCEPTION 'Block % did not take the send rendezvous key', v_op; END IF;
+  END LOOP;
+END $rendezvous$;
+
+-- The backend reaches PostgreSQL as service_role, which has rolbypassrls, so
+-- row level security enforces nothing on this path. Only a trigger binds it.
+SET LOCAL ROLE service_role;
+DO $behaviour$
+DECLARE v_before bigint; v_unread integer; v_after bigint; v_unread_after integer; k1 bigint; k2 bigint;
+BEGIN
+  -- Baseline: an unblocked direct send is admitted.
+  INSERT INTO public."ChatMessage"(room_id,user_id,message)
+   VALUES ('dbb00000-0000-4000-8000-000000000011','dbb00000-0000-4000-8000-000000000001','admitted');
+
+  -- Multi-counterparty room {A,B,Biz}: the send must take one key per active
+  -- counterparty of the human actor. Asserted around an admitted send, because
+  -- a denial aborts the enclosing subtransaction and releases the keys with it.
+  k1 := public.direct_message_block_lock_key('dbb00000-0000-4000-8000-000000000001','dbb00000-0000-4000-8000-000000000002');
+  k2 := public.direct_message_block_lock_key('dbb00000-0000-4000-8000-000000000001','dbb00000-0000-4000-8000-000000000004');
+  -- The A/B key is already held by the rendezvous proof above, so the
+  -- precondition is asserted on the untouched A/Biz pair.
+  IF EXISTS (SELECT FROM pg_locks WHERE locktype='advisory' AND pid=pg_backend_pid()
+             AND classid=((k2>>32)&4294967295)::oid AND objid=(k2&4294967295)::oid) THEN
+   RAISE EXCEPTION 'The business counterparty key was already held before the send under test'; END IF;
+  INSERT INTO public."ChatMessage"(room_id,user_id,actor_user_id,message)
+   VALUES ('dbb00000-0000-4000-8000-000000000015','dbb00000-0000-4000-8000-000000000004',
+           'dbb00000-0000-4000-8000-000000000001','multi counterparty');
+  IF NOT EXISTS (SELECT FROM pg_locks WHERE locktype='advisory' AND pid=pg_backend_pid()
+                 AND classid=((k1>>32)&4294967295)::oid AND objid=(k1&4294967295)::oid AND objsubid=1)
+  OR NOT EXISTS (SELECT FROM pg_locks WHERE locktype='advisory' AND pid=pg_backend_pid()
+                 AND classid=((k2>>32)&4294967295)::oid AND objid=(k2&4294967295)::oid AND objsubid=1) THEN
+   RAISE EXCEPTION 'A counterparty was left outside the lock set'; END IF;
+
+  INSERT INTO public."UserBlock"(blocker_user_id,blocked_user_id)
+   VALUES ('dbb00000-0000-4000-8000-000000000002','dbb00000-0000-4000-8000-000000000001');
+
+  SELECT count(*) INTO v_before FROM public."ChatMessage";
+  SELECT unread_count INTO v_unread FROM public."ChatParticipant"
+   WHERE room_id='dbb00000-0000-4000-8000-000000000011' AND user_id='dbb00000-0000-4000-8000-000000000002';
+
+  BEGIN
+    INSERT INTO public."ChatMessage"(room_id,user_id,message)
+     VALUES ('dbb00000-0000-4000-8000-000000000011','dbb00000-0000-4000-8000-000000000001','blocked');
+    RAISE EXCEPTION 'Blocked direct send was admitted';
+  EXCEPTION WHEN SQLSTATE 'PT403' THEN
+    IF SQLERRM <> 'DIRECT_MESSAGE_BLOCKED' THEN RAISE; END IF;
+    -- A denial must never look like a legacy column or constraint failure, or
+    -- backend/routes/chats.js would strip the payload and re-attempt the insert.
+    IF SQLERRM ~* 'actor_user_id|metadata|ChatMessage_type_check|violates check constraint' THEN
+     RAISE EXCEPTION 'Denial text can trigger the legacy insert fallback: %', SQLERRM; END IF;
+  END;
+
+  -- BEFORE, not AFTER: no row and no unread badge survives a denial.
+  SELECT count(*) INTO v_after FROM public."ChatMessage";
+  SELECT unread_count INTO v_unread_after FROM public."ChatParticipant"
+   WHERE room_id='dbb00000-0000-4000-8000-000000000011' AND user_id='dbb00000-0000-4000-8000-000000000002';
+  IF v_after <> v_before OR v_unread_after IS DISTINCT FROM v_unread THEN
+   RAISE EXCEPTION 'Denied send left a row or an unread badge'; END IF;
+
+  -- type is not a one-field bypass for a direct PostgREST caller.
+  BEGIN
+    INSERT INTO public."ChatMessage"(room_id,user_id,message,type)
+     VALUES ('dbb00000-0000-4000-8000-000000000011','dbb00000-0000-4000-8000-000000000001','blocked','system');
+    RAISE EXCEPTION 'System type bypassed admission';
+  EXCEPTION WHEN SQLSTATE 'PT403' THEN IF SQLERRM <> 'DIRECT_MESSAGE_BLOCKED' THEN RAISE; END IF;
+  END;
+
+  -- Scope is not widened: the same blocked pair still sends in a gig room.
+  INSERT INTO public."ChatMessage"(room_id,user_id,message)
+   VALUES ('dbb00000-0000-4000-8000-000000000013','dbb00000-0000-4000-8000-000000000001','gig stays ungated');
+
+  -- Business identity sending with the human actor recorded: the gate must
+  -- decide on the human, not on the displayed sender.
+  BEGIN
+    INSERT INTO public."ChatMessage"(room_id,user_id,actor_user_id,message)
+     VALUES ('dbb00000-0000-4000-8000-000000000015','dbb00000-0000-4000-8000-000000000004',
+             'dbb00000-0000-4000-8000-000000000001','blocked human behind a business');
+    RAISE EXCEPTION 'Blocked human sent through a business identity';
+  EXCEPTION WHEN SQLSTATE 'PT403' THEN IF SQLERRM <> 'DIRECT_MESSAGE_BLOCKED' THEN RAISE; END IF;
+  END;
+
+  -- Reverse direction: the join matches isBlocked()'s bidirectional semantics.
+  DELETE FROM public."UserBlock"
+   WHERE blocker_user_id='dbb00000-0000-4000-8000-000000000002' AND blocked_user_id='dbb00000-0000-4000-8000-000000000001';
+  INSERT INTO public."ChatMessage"(room_id,user_id,message)
+   VALUES ('dbb00000-0000-4000-8000-000000000011','dbb00000-0000-4000-8000-000000000001','unblocked again');
+  INSERT INTO public."UserBlock"(blocker_user_id,blocked_user_id)
+   VALUES ('dbb00000-0000-4000-8000-000000000001','dbb00000-0000-4000-8000-000000000002');
+  BEGIN
+    INSERT INTO public."ChatMessage"(room_id,user_id,message)
+     VALUES ('dbb00000-0000-4000-8000-000000000011','dbb00000-0000-4000-8000-000000000002','reverse');
+    RAISE EXCEPTION 'Reverse block did not deny';
+  EXCEPTION WHEN SQLSTATE 'PT403' THEN IF SQLERRM <> 'DIRECT_MESSAGE_BLOCKED' THEN RAISE; END IF;
+  END;
+
+  -- Business identity blocked while the human actor is clear still sends. This
+  -- documents that policy was deliberately NOT widened past the route's check.
+  DELETE FROM public."UserBlock";
+  INSERT INTO public."UserBlock"(blocker_user_id,blocked_user_id)
+   VALUES ('dbb00000-0000-4000-8000-000000000002','dbb00000-0000-4000-8000-000000000004');
+  INSERT INTO public."ChatMessage"(room_id,user_id,actor_user_id,message)
+   VALUES ('dbb00000-0000-4000-8000-000000000015','dbb00000-0000-4000-8000-000000000004',
+           'dbb00000-0000-4000-8000-000000000001','business blocked, human clear');
+
+  -- With no actor recorded the business identity itself is the actor, which is
+  -- the documented boundary rather than a widening.
+  BEGIN
+    INSERT INTO public."ChatMessage"(room_id,user_id,message)
+     VALUES ('dbb00000-0000-4000-8000-000000000015','dbb00000-0000-4000-8000-000000000004','business as itself');
+    RAISE EXCEPTION 'Blocked business identity sent as itself';
+  EXCEPTION WHEN SQLSTATE 'PT403' THEN IF SQLERRM <> 'DIRECT_MESSAGE_BLOCKED' THEN RAISE; END IF;
+  END;
+  DELETE FROM public."UserBlock";
+
+  -- Actor spoofing: a named human who is not an active member of the room.
+  BEGIN
+    INSERT INTO public."ChatMessage"(room_id,user_id,actor_user_id,message)
+     VALUES ('dbb00000-0000-4000-8000-000000000011','dbb00000-0000-4000-8000-000000000004',
+             'dbb00000-0000-4000-8000-000000000003','spoofed outsider');
+    RAISE EXCEPTION 'A non-participant was accepted as the human actor';
+  EXCEPTION WHEN SQLSTATE 'PT403' THEN IF SQLERRM <> 'DIRECT_MESSAGE_ACTOR_INVALID' THEN RAISE; END IF;
+  END;
+
+  -- Actor equal to sender is never produced by the route, which sets the actor
+  -- only when the sender identity differs from the authenticated user.
+  BEGIN
+    INSERT INTO public."ChatMessage"(room_id,user_id,actor_user_id,message)
+     VALUES ('dbb00000-0000-4000-8000-000000000011','dbb00000-0000-4000-8000-000000000001',
+             'dbb00000-0000-4000-8000-000000000001','actor equals sender');
+    RAISE EXCEPTION 'Redundant actor was accepted';
+  EXCEPTION WHEN SQLSTATE 'PT403' THEN IF SQLERRM <> 'DIRECT_MESSAGE_ACTOR_INVALID' THEN RAISE; END IF;
+  END;
+
+  -- ChatParticipant.is_active is NULLABLE with default true. A bare truth test
+  -- would drop this counterparty from both the lock set and the block check.
+  INSERT INTO public."UserBlock"(blocker_user_id,blocked_user_id)
+   VALUES ('dbb00000-0000-4000-8000-000000000002','dbb00000-0000-4000-8000-000000000001');
+  BEGIN
+    INSERT INTO public."ChatMessage"(room_id,user_id,message)
+     VALUES ('dbb00000-0000-4000-8000-000000000014','dbb00000-0000-4000-8000-000000000001','null is_active');
+    RAISE EXCEPTION 'A null is_active counterparty was invisible to the gate';
+  EXCEPTION WHEN SQLSTATE 'PT403' THEN IF SQLERRM <> 'DIRECT_MESSAGE_BLOCKED' THEN RAISE; END IF;
+  END;
+  DELETE FROM public."UserBlock";
+
+  -- A direct room with no active counterparty keeps its existing behaviour.
+  INSERT INTO public."ChatMessage"(room_id,user_id,message)
+   VALUES ('dbb00000-0000-4000-8000-000000000012','dbb00000-0000-4000-8000-000000000001','no counterparty');
+END $behaviour$;
+RESET ROLE;
+
+-- Trigger execution does not consult EXECUTE privilege. Revoking it in-session
+-- (undone by the rollback) proves the gate binds a role that cannot call it.
+REVOKE ALL ON FUNCTION public.direct_message_block_admission(), public.user_block_pair_lock(),
+  public.direct_message_block_lock_key(uuid,uuid) FROM service_role;
+SET LOCAL ROLE service_role;
+DO $unprivileged$
+BEGIN
+  IF has_function_privilege('service_role','public.direct_message_block_admission()','execute') THEN
+   RAISE EXCEPTION 'Contract failed to drop execute privilege'; END IF;
+  INSERT INTO public."UserBlock"(blocker_user_id,blocked_user_id)
+   VALUES ('dbb00000-0000-4000-8000-000000000002','dbb00000-0000-4000-8000-000000000001');
+  BEGIN
+    INSERT INTO public."ChatMessage"(room_id,user_id,message)
+     VALUES ('dbb00000-0000-4000-8000-000000000011','dbb00000-0000-4000-8000-000000000001','no execute privilege');
+    RAISE EXCEPTION 'Revoking execute disabled the gate';
+  EXCEPTION WHEN SQLSTATE 'PT403' THEN IF SQLERRM <> 'DIRECT_MESSAGE_BLOCKED' THEN RAISE; END IF;
+  END;
+  DELETE FROM public."UserBlock";
+END $unprivileged$;
+RESET ROLE;
+
+-- The canonical ChatParticipant select policy is self-referential, so any
+-- ChatMessage insert as a client role fails at rewrite with 42P17 before any
+-- trigger runs. That is pre-existing and independent of this gate, in every
+-- room type. Pin only that a client role can never succeed here, so a later
+-- policy repair cannot quietly open a direct client write path.
+SET LOCAL ROLE authenticated;
+DO $client$
+BEGIN
+  INSERT INTO public."ChatMessage"(room_id,user_id,message)
+   VALUES ('dbb00000-0000-4000-8000-000000000011','dbb00000-0000-4000-8000-000000000001','client write');
+  RAISE EXCEPTION 'A client role inserted a ChatMessage directly';
+EXCEPTION WHEN SQLSTATE 'PT403' OR SQLSTATE '42P17' OR SQLSTATE '42501' THEN NULL;
+END $client$;
+RESET ROLE;
+ROLLBACK;

@@ -200,6 +200,7 @@ router.post('/', verifyToken, sendBurstLimiter, validate(sendSchema), async (req
 
     return res.status(201).json(serializeSent(row));
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('neighborMessages.send_error', { error: err.message, userId });
     return res.status(500).json({ error: 'Failed to send message.' });
   }
@@ -225,6 +226,7 @@ router.get('/received', verifyToken, async (req, res) => {
     );
     return res.json({ messages: items });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('neighborMessages.received_list_error', { error: err.message, userId });
     return res.status(500).json({ error: 'Failed to load messages.' });
   }
@@ -258,6 +260,7 @@ router.get('/:id', verifyToken, async (req, res) => {
     const canReply = !row.reply_template_id && !(await isBlocked(userId, row.sender_user_id));
     return res.json(serializeReceived(row, { canReply }));
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('neighborMessages.detail_error', { error: err.message, userId });
     return res.status(500).json({ error: 'Failed to load message.' });
   }
@@ -316,6 +319,7 @@ router.post('/:id/reply', verifyToken, validate(replySchema), async (req, res) =
 
     return res.json(serializeReceived(updated, { canReply: false }));
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('neighborMessages.reply_error', { error: err.message, userId });
     return res.status(500).json({ error: 'Failed to send reply.' });
   }
@@ -335,6 +339,7 @@ router.post('/:id/not-helpful', verifyToken, async (req, res) => {
     if (error) throw new Error(error.message);
     return res.json({ success: true });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('neighborMessages.not_helpful_error', { error: err.message, userId });
     return res.status(500).json({ error: 'Failed to record feedback.' });
   }
@@ -361,6 +366,7 @@ router.post('/:id/report', verifyToken, validate(reportSchema), async (req, res)
     if (error) throw new Error(error.message);
     return res.json({ success: true });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('neighborMessages.report_error', { error: err.message, userId });
     return res.status(500).json({ error: 'Failed to report message.' });
   }
@@ -389,6 +395,7 @@ router.post('/:id/block', verifyToken, async (req, res) => {
     invalidateBlockCache(userId, senderId);
     return res.json({ success: true });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('neighborMessages.block_error', { error: err.message, userId });
     return res.status(500).json({ error: 'Failed to block neighbor.' });
   }

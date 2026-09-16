@@ -15,14 +15,24 @@ final class SequencedURLProtocol: URLProtocol {
         let body: Data
         let headers: [String: String]
         let delay: TimeInterval
+        let gate: String?
+
+        init(status: Int, body: Data, headers: [String: String], delay: TimeInterval, gate: String? = nil) {
+            self.status = status
+            self.body = body
+            self.headers = headers
+            self.delay = delay
+            self.gate = gate
+        }
 
         static func status(
             _ code: Int,
             body: String,
             headers: [String: String] = [:],
-            delay: TimeInterval = 0
+            delay: TimeInterval = 0,
+            gate: String? = nil
         ) -> Response {
-            Response(status: code, body: Data(body.utf8), headers: headers, delay: delay)
+            Response(status: code, body: Data(body.utf8), headers: headers, delay: delay, gate: gate)
         }
     }
 
@@ -32,6 +42,8 @@ final class SequencedURLProtocol: URLProtocol {
     private nonisolated(unsafe) static var sessionRouteResponses: [String: [String: [Response]]] = [:]
 
     private static let lock = NSLock()
+    private nonisolated(unsafe) static var heldResponses: [String: [(SequencedURLProtocol, Response)]] = [:]
+    private var stopped = false
     private static let sessionHeader = "X-Pantopus-Test-Session"
 
     static func reset() {
@@ -41,6 +53,7 @@ final class SequencedURLProtocol: URLProtocol {
         routeResponses = [:]
         capturedRequests = []
         sessionRouteResponses = [:]
+        heldResponses = [:]
     }
 
     static func makeSession() -> URLSession {
@@ -71,10 +84,45 @@ final class SequencedURLProtocol: URLProtocol {
         request
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        Self.lock.lock()
+        stopped = true
+        for gate in Array(Self.heldResponses.keys) {
+            Self.heldResponses[gate]?.removeAll { $0.0 === self }
+        }
+        Self.lock.unlock()
+    }
+
+    /// Release an explicitly held response without blocking other requests.
+    @discardableResult
+    static func release(_ gate: String) -> Bool {
+        lock.lock()
+        let responses = heldResponses.removeValue(forKey: gate) ?? []
+        lock.unlock()
+        for (request, response) in responses {
+            request.deliver(response)
+        }
+        return !responses.isEmpty
+    }
 
     override func startLoading() {
         let response = Self.nextResponse(for: request)
+        if let gate = response.gate {
+            Self.lock.lock()
+            if !stopped { Self.heldResponses[gate, default: []].append((self, response)) }
+            Self.lock.unlock()
+            return
+        }
+        deliver(response)
+    }
+
+    private func deliver(_ response: Response) {
+        if response.gate != nil {
+            Self.lock.lock()
+            let canceled = stopped
+            Self.lock.unlock()
+            if canceled { return }
+        }
         if response.delay > 0 {
             Thread.sleep(forTimeInterval: response.delay)
         }
