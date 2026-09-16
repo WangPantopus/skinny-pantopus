@@ -1,8 +1,8 @@
 # Stream 1 — Gigs and payments
 
 Updated September 16, 2026. Owner: coordinator / Stream 1.
-State: resumed — iOS lint repaired and the candidate validated on CI simulators;
-installed-device and provider acceptance remain open.
+State: resumed — iOS lint correction under local test verification; the candidate
+is validated on CI simulators; installed-device and provider acceptance remain open.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
@@ -14,12 +14,18 @@ The cutoff section below set the resume point: fix the trailing-closure lint, th
 validate the iOS candidate. Both are now done, and no heavy native slot was needed
 because CI had already exercised the candidate on simulators.
 
-- **Lint repaired**: `e531074e4` changes one line of
-  `GigDetailViewModelTests.swift` to the project's trailing-closure form. Verified
-  with the versions CI pins (SwiftLint 0.63.3, SwiftFormat 0.61.1):
-  `swiftlint lint --strict` reports 0 violations in 2245 files, `swiftformat --lint`
-  0 of 2248 files needing formatting, and `verify-icons` and `verify-overline` pass.
-  `ios / Lint (SwiftLint + SwiftFormat)` now passes on the current head.
+- **Lint repaired, after one wrong attempt.** `e531074e4` rewrote the offending
+  call to trailing-closure form. That satisfied SwiftLint but was wrong: `tipIdentity`
+  is followed by `makeTipRequestId`, `liveActivity`, `roomEvents` and `emitRoom`, so
+  a trailing closure no longer binds to `tipIdentity`. It compiled, `ios / Lint`
+  went green, and `testStartTaskTransitionsToInProgress` then returned `.ignored`
+  instead of `.confirmed` on all three simulators in CI 35103180556 — one green job
+  traded for three failing ones. Lint passing is not evidence the change is correct.
+  The correction keeps the explicit `tipIdentity:` label and hoists the closure into
+  a typed local constant, so there is no closure literal for the rule to flag and
+  the semantics match the form that passed on `9af5dcf74`. Verified with the versions
+  CI pins (SwiftLint 0.63.3, SwiftFormat 0.61.1): 0 violations in 2245 files, 0 of
+  2248 files needing formatting, `verify-icons` and `verify-overline` pass.
   No screen, layout, styling or navigation change.
 - **The iOS candidate is no longer unvalidated.** CI run 35054602607 on the WIP
   `9af5dcf74` failed *only* the lint job and its aggregate; `ios / Build iOS test
