@@ -6,7 +6,7 @@ module.exports = {
   // the project's mocked supabaseAdmin (live Supabase isn't available in
   // CI). Allow it under default `npm test` alongside auth-exploits. P2.3
   // adds notifications.context — same shape, mocked supabaseAdmin only.
-  testPathIgnorePatterns: ['/node_modules/', '/tests/integration/(?!auth-exploits|audienceProfile\\.e2e|notifications\\.context|posts\\.identityContext|identityCenter\\.unified|identityCenter\\.viewAs|personaPayments\\.stripeArgs)'],
+  testPathIgnorePatterns: ['/node_modules/', '/tests/integration/(?!chatAccessControl|auth-exploits|audienceProfile\\.e2e|notifications\\.context|posts\\.identityContext|identityCenter\\.unified|identityCenter\\.viewAs|personaPayments\\.stripeArgs)'],
   // Map requires to mocks so tests don't need live Supabase/Stripe
   moduleNameMapper: {
     '^../config/supabaseAdmin$': '<rootDir>/tests/__mocks__/supabaseAdmin.js',

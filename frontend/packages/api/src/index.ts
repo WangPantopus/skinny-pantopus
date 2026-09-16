@@ -72,6 +72,8 @@ export * as businesses from './endpoints/businesses';       // Business profiles
 export * as businessIam from './endpoints/businessIam';     // Business IAM
 export * as wallet from './endpoints/wallet';               // Wallet/balance
 export * as relationships from './endpoints/relationships'; // Trust graph (connections)
+export * as blocks from './endpoints/blocks';               // N04 — personal blocks (UserBlock), the DM admission contract
+export type { BlockedUser } from './endpoints/blocks';
 export * as professional from './endpoints/professional';   // Professional mode
 export * as hub from './endpoints/hub';                     // Hub (Mission Control)
 export * as location from './endpoints/location';           // Viewing Location

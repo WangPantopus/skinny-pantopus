@@ -569,3 +569,254 @@ describe('Pre-bid message limit in gig chat', () => {
     expect(res.status).toBe(201);
   });
 });
+
+
+// N04 authorization failures must stop before persistence or delivery. These
+// are route/service regressions with synthetic auth and the in-memory DB.
+describe('Block authorization availability and ordering', () => {
+  const db = require('../__mocks__/supabaseAdmin');
+  const service = require('../../services/blockService');
+  beforeEach(() => {
+    for (const a of [U1, U2, U3, U_BIZ]) for (const b of [U1, U2, U3, U_BIZ]) service.invalidateBlockCache(a, b);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  test.each(['direct', 'messages'])('%s refuses an unavailable block check without effects', async endpoint => {
+    const original = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => table === 'UserBlock'
+      ? { select: () => ({ or: async () => ({ count: null, error: { message: 'database unavailable' } }) }) }
+      : original(table));
+    db.setRpcMock(async name => ({ data: name === 'get_or_create_direct_chat' ? ROOM_DIRECT : null, error: null }));
+    const { app, mockIo } = createApp();
+    const before = getTable('ChatMessage').length;
+    const response = await request(app).post('/api/chat/' + endpoint).set('x-test-user-id', U1)
+      .send(endpoint === 'direct' ? { otherUserId: U2 } : { roomId: ROOM_DIRECT, messageText: 'Must not escape', messageType: 'text' });
+    expect(response.status).toBe(503);
+    expect(response.body.code).toBe('BLOCK_CHECK_UNAVAILABLE');
+    expect(getTable('ChatMessage')).toHaveLength(before);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+    expect(require('../__mocks__/notificationService').createNotification).not.toHaveBeenCalled();
+  });
+
+  test('every active counterparty is checked in a business direct room', async () => {
+    getTable('ChatParticipant').push({ id: 'cp-team', room_id: ROOM_BIZ, user_id: U1, is_active: true });
+    seedTable('UserBlock', [{ id: 'block', blocker_user_id: U2, blocked_user_id: U1 }]);
+    const { app, mockIo } = createApp();
+    const before = getTable('ChatMessage').length;
+    const response = await request(app).post('/api/chat/messages').set('x-test-user-id', U1)
+      .send({ roomId: ROOM_BIZ, messageText: 'Must not bypass second participant', messageType: 'text' });
+    expect(response.status).toBe(403);
+    expect(getTable('ChatMessage')).toHaveLength(before);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+  });
+
+  test('a delayed pre-block query cannot return or cache a stale allow after invalidation', async () => {
+    let release;
+    const first = new Promise(resolve => { release = resolve; });
+    const query = jest.fn().mockReturnValueOnce(first).mockResolvedValue({ count: 1, error: null });
+    const original = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => table === 'UserBlock'
+      ? { select: () => ({ or: query }) } : original(table));
+    const waiting = service.isBlocked(U1, U2);
+    service.invalidateBlockCache(U2, U1);
+    release({ count: 0, error: null });
+    expect(await waiting).toBe(true);
+    expect(await service.isBlocked(U2, U1)).toBe(true);
+  });
+
+  test('missing count is unavailable, not an empty block table', async () => {
+    const original = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => table === 'UserBlock'
+      ? { select: () => ({ or: async () => ({ count: null, error: null }) }) } : original(table));
+    await expect(service.isBlocked(U1, U2)).rejects.toMatchObject({ code: 'BLOCK_CHECK_UNAVAILABLE' });
+  });
+});
+
+// The canonical database has a global unique client_message_id index. The
+// in-memory database does not model it, so these cases inject only that conflict.
+describe('Message retry scope', () => {
+  const db = require('../__mocks__/supabaseAdmin');
+  const key = 'f9150300-0000-4000-8000-000000000501';
+  beforeEach(() => {
+    const service = require('../../services/blockService');
+    for (const a of [U1, U2, U_BIZ, U_MEMBER]) for (const b of [U1, U2, U_BIZ, U_MEMBER]) service.invalidateBlockCache(a, b);
+    const original = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = original(table);
+      if (table === 'ChatMessage') {
+        const insert = query.insert.bind(query);
+        query.insert = payload => getTable('ChatMessage').some(row => row.client_message_id === payload.client_message_id)
+          ? { select: () => ({ single: async () => ({ data: null, error: { code: '23505', message: 'idx_chat_message_client_id' } }) }) }
+          : insert(payload);
+      }
+      return query;
+    });
+  });
+  afterEach(() => jest.restoreAllMocks());
+  function saved(overrides = {}) {
+    seedTable('ChatMessage', [{ id: MSG_1, room_id: ROOM_DIRECT, user_id: U1, actor_user_id: null,
+      client_message_id: key, message: 'Private saved text', type: 'text', deleted: false, ...overrides }]);
+  }
+  test.each([
+    ['other room', { room_id: ROOM_BIZ }],
+    ['other author', { user_id: U2 }],
+  ])('does not return a retry from %s', async (_name, overrides) => {
+    saved(overrides);
+    const { app, mockIo } = createApp();
+    const response = await request(app).post('/api/chat/messages').set('x-test-user-id', U1)
+      .send({ roomId: ROOM_DIRECT, messageText: 'New content', messageType: 'text', clientMessageId: key });
+    expect(response.status).toBe(409);
+    expect(response.body.message).toBeUndefined();
+    expect(getTable('ChatMessage')).toHaveLength(1);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+  });
+  test('same authorized room and human actor recover their saved message without effects', async () => {
+    saved();
+    const { app, mockIo } = createApp();
+    const response = await request(app).post('/api/chat/messages').set('x-test-user-id', U1)
+      .send({ roomId: ROOM_DIRECT, messageText: 'Lost reply retry', messageType: 'text', clientMessageId: key });
+    expect(response.status).toBe(200);
+    expect(response.body.message.id).toBe(MSG_1);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+  });
+  test('a concurrent same-scope insert recovers the winner without another broadcast', async () => {
+    seedTable('ChatMessage', []);
+    const previous = db.from.getMockImplementation();
+    db.from.mockImplementation(table => {
+      const query = previous(table);
+      if (table === 'ChatMessage') query.insert = payload => {
+        saved({ ...payload, actor_user_id: null });
+        return { select: () => ({ single: async () => ({ data: null, error: { code: '23505', message: 'idx_chat_message_client_id' } }) }) };
+      };
+      return query;
+    });
+    const { app, mockIo } = createApp();
+    const response = await request(app).post('/api/chat/messages').set('x-test-user-id', U1)
+      .send({ roomId: ROOM_DIRECT, messageText: 'Concurrent winner', messageType: 'text', clientMessageId: key });
+    expect(response.status).toBe(200);
+    expect(response.body.message.id).toBe(MSG_1);
+    expect(getTable('ChatMessage')).toHaveLength(1);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+  });
+  test('another authorized business actor cannot claim a colleague retry', async () => {
+    saved({ room_id: ROOM_BIZ, user_id: U_BIZ, actor_user_id: U_MEMBER });
+    getTable('ChatParticipant').push({ id: 'actor', room_id: ROOM_BIZ, user_id: U1, is_active: true });
+    hasPermission.mockResolvedValue(true);
+    const { app, mockIo } = createApp();
+    const response = await request(app).post('/api/chat/messages').set('x-test-user-id', U1)
+      .send({ roomId: ROOM_BIZ, asBusinessUserId: U_BIZ, messageText: 'Different actor', messageType: 'text', clientMessageId: key });
+    expect(response.status).toBe(409);
+    expect(response.body.message).toBeUndefined();
+    expect(mockIo.emit).not.toHaveBeenCalled();
+  });
+});
+
+// The isBlocked pre-check and the ChatMessage insert are separate PostgREST
+// transactions, so a block can commit between them. The database re-decides
+// admission inside the inserting transaction
+// (20260916010000_direct_message_block_admission) and raises PT403. These cases
+// pin the route's half of that contract: UserBlock stays EMPTY throughout, so
+// the pre-check allows and only the persistence-boundary denial can fire.
+describe('Direct send denied at the persistence boundary', () => {
+  const db = require('../__mocks__/supabaseAdmin');
+  const notifications = require('../__mocks__/notificationService');
+  let insertSpy;
+
+  function failInsertWith(error, { onlyFirst = false } = {}) {
+    const original = db.from.bind(db);
+    insertSpy = jest.fn();
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = original(table);
+      if (table === 'ChatMessage') {
+        const insert = query.insert.bind(query);
+        query.insert = payload => {
+          insertSpy(payload);
+          if (onlyFirst && insertSpy.mock.calls.length > 1) return insert(payload);
+          return { select: () => ({ single: async () => ({ data: null, error }) }) };
+        };
+      }
+      return query;
+    });
+  }
+
+  beforeEach(() => {
+    const service = require('../../services/blockService');
+    for (const a of [U1, U2, U_BIZ]) for (const b of [U1, U2, U_BIZ]) service.invalidateBlockCache(a, b);
+    seedTable('UserBlock', []);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  const send = app => request(app).post('/api/chat/messages').set('x-test-user-id', U1)
+    .send({ roomId: ROOM_DIRECT, messageText: 'Raced a committed block', messageType: 'text' });
+
+  test.each([
+    ['DIRECT_MESSAGE_BLOCKED'],
+    ['DIRECT_MESSAGE_ACTOR_INVALID'],
+  ])('%s is refused with no row, no broadcast and no notification', async message => {
+    failInsertWith({ code: 'PT403', message, details: 'Direct message refused', hint: null });
+    const { app, mockIo } = createApp();
+    const before = getTable('ChatMessage').length;
+
+    const response = await send(app);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatch(/unable to message/i);
+    expect(getTable('ChatMessage')).toHaveLength(before);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+    expect(notifications.createNotification).not.toHaveBeenCalled();
+  });
+
+  test('the denial is not re-attempted with a stripped payload', async () => {
+    failInsertWith({ code: 'PT403', message: 'DIRECT_MESSAGE_BLOCKED' });
+    const { app } = createApp();
+
+    expect((await send(app)).status).toBe(403);
+    expect(insertSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('the legacy actor_user_id fallback still recovers and is not captured', async () => {
+    failInsertWith({ message: 'column "actor_user_id" does not exist' }, { onlyFirst: true });
+    const { app, mockIo } = createApp();
+    const before = getTable('ChatMessage').length;
+
+    const response = await send(app);
+
+    expect(response.status).toBe(201);
+    expect(insertSpy).toHaveBeenCalledTimes(2);
+    expect(getTable('ChatMessage')).toHaveLength(before + 1);
+    expect(mockIo.emit).toHaveBeenCalled();
+  });
+
+  test('the denial body is byte-identical to losing the pre-check', async () => {
+    seedTable('UserBlock', [{ id: 'block', blocker_user_id: U2, blocked_user_id: U1 }]);
+    const { app } = createApp();
+    const precheck = await send(app);
+    jest.restoreAllMocks();
+
+    seedTable('UserBlock', []);
+    require('../../services/blockService').invalidateBlockCache(U1, U2);
+    failInsertWith({ code: 'PT403', message: 'DIRECT_MESSAGE_BLOCKED' });
+    const raced = await send(createApp().app);
+
+    expect(precheck.status).toBe(403);
+    expect(raced.status).toBe(precheck.status);
+    expect(raced.body).toEqual(precheck.body);
+  });
+
+  test('a PostgrestError-shaped rejection keeps the token on message', async () => {
+    // supabase-js surfaces the PostgREST body as {message, details, hint, code};
+    // matching on `message` survives even if `details` is ever dropped.
+    const error = Object.assign(new Error('DIRECT_MESSAGE_BLOCKED'), {
+      code: 'PT403', details: 'Direct message refused; this conversation has an active block',
+      hint: null, name: 'PostgrestError',
+    });
+    failInsertWith(error);
+    const { app, mockIo } = createApp();
+
+    const response = await send(app);
+
+    expect(error.message).toBe('DIRECT_MESSAGE_BLOCKED');
+    expect(response.status).toBe(403);
+    expect(mockIo.emit).not.toHaveBeenCalled();
+  });
+});

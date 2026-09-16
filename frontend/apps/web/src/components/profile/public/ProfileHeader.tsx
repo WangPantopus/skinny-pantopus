@@ -30,6 +30,13 @@ interface ProfileHeaderProps {
   onMessage: () => void;
   onRequestHire: () => void;
   onShare: () => void;
+  /**
+   * N04 — `POST /api/users/:userId/block` (`backend/routes/blocks.js:13`).
+   * Before this the menu item rendered with full hover affordance and did
+   * nothing on click.
+   */
+  onBlock: () => void;
+  onReport: () => void;
 }
 
 function stringField(value: unknown): string {
@@ -60,6 +67,8 @@ export default function ProfileHeader({
   onMessage,
   onRequestHire,
   onShare,
+  onBlock,
+  onReport,
 }: ProfileHeaderProps) {
   const router = useRouter();
   const username = stringField(profile.username);
@@ -165,8 +174,14 @@ export default function ProfileHeader({
                   <details className="relative">
                     <summary className="list-none px-3 py-2 bg-surface text-app-strong border border-app-strong rounded-lg hover:bg-surface-raised cursor-pointer">⋯</summary>
                     <div className="absolute right-0 mt-2 w-40 bg-surface border border-app rounded-lg shadow-sm p-1 z-20">
-                      <button className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded">Report profile</button>
-                      <button className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded">Block user</button>
+                      <button onClick={onReport} className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded">Report profile</button>
+                      <button
+                        onClick={onBlock}
+                        disabled={actionLoading}
+                        className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded disabled:opacity-60"
+                      >
+                        Block user
+                      </button>
                     </div>
                   </details>
                 </>

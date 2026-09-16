@@ -74,6 +74,39 @@ public struct PrivacyBlock: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// Envelope from `GET /api/users/blocked` (route
+/// `backend/routes/blocks.js:138`). These are the `UserBlock` rows that
+/// `POST /api/users/:userId/block` writes — the table
+/// `backend/services/blockService.js` reads to deny direct messages.
+/// Distinct from `PrivacyBlocksResponse`, which carries the Identity
+/// Firewall's separately scoped `UserProfileBlock` rows.
+public struct UserBlocksResponse: Decodable, Sendable {
+    public let blocked: [UserBlockEntry]
+}
+
+/// One `UserBlock` row. The route flattens the joined user onto the row
+/// rather than nesting it, so there is no `blocked` object here.
+public struct UserBlockEntry: Decodable, Sendable, Hashable, Identifiable {
+    public let id: String
+    /// The blocked person. `blocks.js:150` maps the NOT NULL
+    /// `blocked_user_id` column onto this key; it addresses
+    /// `DELETE /api/users/:userId/block`.
+    public let userId: String
+    public let username: String?
+    public let name: String?
+    public let profilePictureUrl: String?
+    public let reason: String?
+    public let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case username, name, reason
+        case profilePictureUrl = "profile_picture_url"
+        case createdAt = "created_at"
+    }
+}
+
 /// Nested user summary returned by `privacy.js:154` join.
 public struct BlockedUserSummary: Decodable, Sendable, Hashable, Identifiable {
     public let id: String

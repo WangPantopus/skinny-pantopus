@@ -13,6 +13,13 @@ const logger = require('../utils/logger');
 
 const CACHE_TTL_MS = 60_000; // 60 seconds
 const cache = new Map(); // key: "uuid1:uuid2" (sorted) → { blocked: bool, expiresAt: number }
+let revision = 0;
+
+function blockCheckUnavailable() {
+  return Object.assign(new Error('Messaging authorization is temporarily unavailable. Please retry.'), {
+    code: 'BLOCK_CHECK_UNAVAILABLE', status: 503,
+  });
+}
 
 function cacheKey(id1, id2) {
   return id1 < id2 ? `${id1}:${id2}` : `${id2}:${id1}`;
@@ -30,27 +37,33 @@ async function isBlocked(userId1, userId2) {
     return cached.blocked;
   }
 
-  try {
-    const { count, error } = await supabaseAdmin
-      .from('UserBlock')
-      .select('id', { count: 'exact', head: true })
-      .or(
-        `and(blocker_user_id.eq.${userId1},blocked_user_id.eq.${userId2}),` +
-        `and(blocker_user_id.eq.${userId2},blocked_user_id.eq.${userId1})`
-      );
+  // A block/unblock can complete while the query is in flight. Never publish
+  // its old result after invalidation; re-read the current persisted decision.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const started = revision;
+    try {
+      const { count, error } = await supabaseAdmin
+        .from('UserBlock')
+        .select('id', { count: 'exact', head: true })
+        .or(
+          `and(blocker_user_id.eq.${userId1},blocked_user_id.eq.${userId2}),` +
+          `and(blocker_user_id.eq.${userId2},blocked_user_id.eq.${userId1})`
+        );
 
-    if (error) {
-      logger.error('[blockService] isBlocked query failed', { error: error.message, userId1, userId2 });
-      return false; // fail-open: don't block actions on DB errors
+      if (error || !Number.isInteger(count) || count < 0) {
+        throw error || new Error('Missing block count');
+      }
+
+      if (started !== revision) continue;
+      const blocked = count > 0;
+      cache.set(key, { blocked, expiresAt: Date.now() + CACHE_TTL_MS });
+      return blocked;
+    } catch (err) {
+      logger.error('[blockService] isBlocked error', { error: err.message });
+      throw blockCheckUnavailable();
     }
-
-    const blocked = (count || 0) > 0;
-    cache.set(key, { blocked, expiresAt: Date.now() + CACHE_TTL_MS });
-    return blocked;
-  } catch (err) {
-    logger.error('[blockService] isBlocked error', { error: err.message });
-    return false;
   }
+  throw blockCheckUnavailable();
 }
 
 /**
@@ -58,7 +71,8 @@ async function isBlocked(userId1, userId2) {
  */
 function invalidateBlockCache(userId1, userId2) {
   const key = cacheKey(String(userId1), String(userId2));
+  revision++;
   cache.delete(key);
 }
 
-module.exports = { isBlocked, invalidateBlockCache };
+module.exports = { isBlocked, invalidateBlockCache, blockCheckUnavailable };

@@ -699,6 +699,7 @@ module.exports = (io) => {
         callback({ success: true, roomId });
         
       } catch (err) {
+        if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return callback({ error: err.message, code: err.code });
         logger.error('Create direct chat error', { sessionId, userId, otherUserId, error: err.message });
         callback({ error: 'Failed to create chat' });
       }
