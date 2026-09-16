@@ -1,7 +1,7 @@
 # Stream 1 — Gigs and payments
 
-Updated September 15, 2026. Owner: primary coordinator (`/root`).
-State: discovery complete; next baseline verification is queued.
+Updated September 15, 2026. Owner: primary coordinator.
+State: ready for review — P04 Start Work recovery repaired and verified end to end.
 
 Apply the user's clarified [working agreement](README.md#working-agreement):
 preserve iOS/Android/web designs, verify existing journeys first, repair and retest
@@ -9,58 +9,117 @@ failures, and justify any new file or database structure before adding it.
 
 ## Scope and source
 
-- Inventory: P01–P10. First milestone: P04, existing
-  Start Work recovery and assignment lifetime. Cross-cutting release G/O/L rows
-  remain coordinator work; feature-specific UI checks stay with their feature owner.
+- Inventory: P01–P10. Current milestone: the P04 Start Work slice — a committed
+  transition with a lost reply, retry, concurrent requests, current assignment
+  identity and stale/invalid native results. The rest of P04 (no-show,
+  cancellation-fee execution, completion/reopen policy, immutable displayed
+  terms) is untouched and stays open.
 - Worktree: `/private/tmp/pantopus-paid-gig-integration`.
-- Branch: `codex/paid-gig-integration`; setup base `3e93cd167`.
-- Canonical PR #34 branch: `codex/staging-paid-gig`, code `c9cb69825`;
-  CI run 34998717315 passes 15 applicable jobs/one skip. PR #34 remains draft.
+- Branch: `codex/paid-gig-integration`; milestone commit `f437dfd20`, base `b4b783f8d`.
+- Changed paths: `backend/routes/gigs.js`, `backend/tests/unit/paidGigLifecycleRoute.test.js`.
+- PR #47 carries this branch. PR #34 stays draft at `c9cb69825`; its remaining
+  acceptance scope is unchanged by this milestone.
 
-## Existing implementation and reusable evidence
+## Reproduced failures
 
-- Existing POST `/api/gigs/:gigId/start` in `backend/routes/gigs.js` verifies the
-  assigned worker and paid authorization before updating existing Gig fields.
-  `bindGigPaymentSnapshot` already binds owner, price, payment and worker.
-- Web uses `frontend/apps/web/src/components/gig-detail/CompletionFlow.tsx` and
-  `frontend/packages/api/src/endpoints/gigs.ts`; the latest repair already verifies
-  matching receipts and current session/context. Reuse its 180 tests/seven Chrome
-  cases within the [recorded limits at the paid source](https://github.com/WangPantopus/skinny-pantopus/blob/b4b783f8d42027e22c113a3cfd301f5eb7b4c54b/docs/VERIFICATION_FIRST_2026-09-13.md#existing-web-start-work-control).
-- Existing native callers are iOS `Features/ContentDetail/GigDetailViewModel.swift`
-  and Android `ui/screens/contentdetail/GigDetailViewModel.kt`, using their existing
-  Gigs endpoints/repository. Their Start Work behavior still needs bounded proof.
-- Reuse earlier completion upload, original-payment, owner-capture and notification
-  evidence linked from the [paid source handoff](https://github.com/WangPantopus/skinny-pantopus/blob/b4b783f8d42027e22c113a3cfd301f5eb7b4c54b/docs/PROJECT_HANDOFF.md).
+Reproduced against the existing route before any application edit, then re-run
+after the repair:
 
-## Owned candidate files and boundaries
+1. A committed start whose reply was lost: the same worker's retry returned
+   `400 Gig must be assigned to start (current: in_progress)`.
+2. A concurrent duplicate start: the losing request returned
+   `500 Failed to start gig` for work that had in fact started.
+3. A transport failure on the gig read returned `404 Gig not found`, telling the
+   worker to stop rather than retry.
 
-Candidate scope: existing start handler and paid lifecycle route tests; existing
-web Start Work/SDK only if a new failure requires it; existing native Gig detail
-handlers/endpoints and relevant tests. No current application edit has been made
-for this new milestone. Shared notification/socket/auth/storage changes require a
-recorded assignment in the coordination guide.
+The existing authority and snapshot guards were already correct and were proven
+so, not changed: a foreign actor and a replaced worker are refused with 403, a
+changed payment snapshot is refused, and an unstarted gig still fails closed when
+authorization cannot be verified.
 
-## Findings, unknowns and next verification
+## Repair and why reuse was sufficient
 
-Source observations, not newly reproduced failures: the start handler accepts only
-`assigned`, the write does not bind `accepted_at`, and the iOS caller discards the
-response body. Determine actual saved-result/retry and stale-assignment behavior
-before repairing any of these. Existing provider authorization must be preserved.
+Repaired the existing handler in place. No new table, migration, RPC, service,
+screen or test file. `matchesWorkerStart` mirrors the file's existing
+`matchesWorkerCompletion`; one `recoverSavedStart` closure re-reads the row under
+the existing `bindGigPaymentSnapshot` before both the non-assigned rejection and
+the conditional-write failure. The existing conditional UPDATE already commits
+exactly once, so only the recovery read was missing — a `start_gig_work` RPC
+mirroring `mark_gig_completed` was considered and rejected as unnecessary, since
+that RPC exists to commit completion proof and notices in one transaction, which
+the start path does not require. The read now uses `maybeSingle` and splits 503
+from 404, matching the sibling handler at `gigs.js:7695-7698`.
 
-Next: reproduce a committed start with lost reply, same-worker reassignment during
-admission, concurrent requests and native stale/invalid responses using existing
-fixtures/contracts. Choose the smallest proven repair; no replacement task flow.
+New cases live in the existing `backend/tests/unit/paidGigLifecycleRoute.test.js`
+beside its accepted completion-recovery block, reusing its existing harness.
 
-Completion criterion: truthful start/recovery for the current assigned worker,
-preserved payment authorization and one saved transition with appropriate existing
-side effects; affected native/browser behavior verified within explicit provider
-limits. Full payment/provider acceptance remains separate.
+## Evidence
+
+- Reused: the web Start Work control guard accepted at `c9cb69825` within its
+  [recorded source and runtime limits](https://github.com/WangPantopus/skinny-pantopus/blob/b4b783f8d42027e22c113a3cfd301f5eb7b4c54b/docs/VERIFICATION_FIRST_2026-09-13.md#existing-web-start-work-control).
+  That guard requires `status`, `accepted_by` and a finite `started_at` in the
+  reply; the recovery reply satisfies it, so no web change was needed.
+- New end to end: 23/23 checks over real HTTP through the existing route against
+  real PostgreSQL on the retained replay stack (API 64521 / DB 64522), free and
+  paid gigs — first start commits `in_progress` with `started_at`; a lost reply
+  recovers the saved row with its original `started_at`, no repeated owner notice
+  and no repeated provider authorization; genuinely concurrent starts both return
+  200 against one commit, agree on one `started_at` and leave one notice; a
+  foreign actor and a replaced worker are refused 403; a settled later price
+  change still recovers the saved start and reports the current price; an
+  unstarted gig still fails closed at 503 when authorization cannot be verified.
+- Regression: full backend Jest 6193 passed / 16 skipped / 0 failed; the paid
+  lifecycle suite 220 passed (206 baseline plus 14 new); backend privacy gates pass.
+- Client reading, no code changed: web `CompletionFlow.tsx` validates the receipt;
+  `my-bids/page.tsx`, iOS `GigDetailViewModel.startTask` (`EmptyResponse`) and
+  Android `GigDetailViewModel.startTask` (Moshi) discard the body and refetch, so
+  a stale or invalid payload cannot overwrite their state. The additive `reused`
+  field is ignored by all three, as it already is for `mark-completed`.
+
+## Limitations
+
+- Stripe is a labeled stub in the end-to-end harness; only the provider call is
+  stubbed. Real provider authorization remains unverified here and stays with
+  P08/P09.
+- The replay database predates the current branch's migrations (for example it
+  has no `mark_gig_completed`, and `User.account_type` still uses `individual`).
+  Every column and constraint the start path touches is present and was exercised;
+  no schema was changed, reset or migrated.
+- No installed iOS or Android build was run for this milestone. Native behavior
+  is established by source reading plus the shared backend contract, not by a
+  device journey.
+- Green CI and the mocked suite alone do not close P04.
+
+## Examined and deliberately not changed
+
+Recorded so they are not re-derived, each without a reproduced failure:
+
+- `accepted_at` is not bound by `bindGigPaymentSnapshot`. Reopen sets
+  `accepted_by`, `accepted_at` and `payment_id` to NULL, so a paid re-assignment
+  always changes `payment_id`. Only a price-0 gig re-assigned to the same worker
+  leaves every bound predicate identical across assignment epochs, and the start
+  is still truthful for the worker currently assigned. No harm reproduced.
+- A conditional write that matches no row for a reason other than this worker's
+  own start still returns 500; the sibling urgent handler returns 409 "Task
+  changed. Refresh before updating status" (`gigs.js:7761`). Candidate next item.
+- `createBulkNotifications` writes no `idempotency_key`, so an owner notice lost
+  after the commit is never recreated. This predates the repair and is not a
+  regression. It sits in the shared notification service and needs a coordinator
+  assignment before any edit.
 
 ## Coordination and handoff
 
-- Resources reserved: none for the new milestone; consult existing leases before use.
-- Blocker: fee payer/recipient policy remains unspecified for later cancellation/
-  no-show execution; it does not block this first milestone.
-- Source/evidence change in this setup: coordination documentation only.
-- Next action: acquire the needed fixture reservation and run the bounded baseline.
-- Peer findings/requests: none yet. Do not reopen accepted Home/social work.
+- Runtime: used the retained replay stack read/write for owned fixtures only.
+  All fixture rows removed and verified: 6 gigs, 8 users, 4 payments; 0 remain.
+  No schema, migration or reset. No heavy native build taken.
+- Shared-file effects: none. The change is confined to the gigs route and its
+  existing test file, both already Stream 1 scope.
+- Blocker unchanged: the cancellation/no-show fee payer and recipient policy is
+  still unspecified; it does not block this milestone.
+- Peer findings received: Stream 3 wrote its N04 "ready for review" handoff into
+  the retired `docs/workstreams/03-accounts-social.md` snapshot inside the
+  gigs worktree instead of this live folder. The content is preserved and not
+  committed to the gigs branch. Stream 3 should republish it here; the
+  coordinator will not overwrite another stream's live status file.
+- Next action: confirm current-head CI on PR #47, then take the 409 conflict
+  taxonomy item above as the next bounded milestone.
