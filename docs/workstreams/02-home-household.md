@@ -32,18 +32,31 @@ required comparison, and label unverified provider/device boundaries explicitly.
   push came from `/private/tmp/pantopus-workstream-home`.
 - **Merged.** Commits `70e079543` (browser repairs) and `88d076e56` (real-SQL run
   + what it exposed) reached master through PR #53 as **`4cc9d3787`**; docs PR #54
-  merged as **`b46934c92`**. Independently verified from this worktree: both
-  commits are ancestors of `origin/master`.
-- **New base: `b46934c92`.** `codex/workstream-home` fast-forwarded to current
-  master from `/private/tmp/pantopus-workstream-home` and pushed
-  (`514b95960..b46934c92`); the branch is now identical to master with a clean
-  tree. The integrated delta is **documentation only** — `git diff HEAD...master
-  -- ':!docs'` is empty — so it changes no application contract and the real-SQL
-  evidence recorded below stands unchanged.
-- Post-integration re-check at the new head: web **107 suites / 1469 tests** pass,
-  typecheck gate at its 0-error baseline, and `test-home-guest-pass-http.cjs`
-  passes its 8 transcribed checks. No container run was repeated: no migration,
-  schema or share-path source changed in the integration.
+  merged as `b46934c92`. Independently verified from this worktree: both commits
+  are ancestors of `origin/master`.
+- **New base: `c14657e35`** (Stream 3's PR #51). `codex/workstream-home`
+  fast-forwarded from `/private/tmp/pantopus-workstream-home` and pushed
+  (`b46934c92..c14657e35`); branch identical to master, clean tree. The earlier
+  `b46934c92` integration was documentation only; this one is not.
+- **Integration check, and why it earned a full re-run.** Stream 3's delta touches
+  none of this stream's files (`git diff --name-only HEAD...master` matches
+  nothing under `guest/[token]`, `components/home/share`, `home-guest-pass*` or
+  `endpoints/homeIam`), but it adds a **54th migration**
+  (`20260916010000_direct_message_block_admission.sql`). That is a changed schema
+  in the same database this stream replays, so the disposable project was rebuilt
+  and the real-SQL journey repeated rather than assumed:
+  - Replay applied all **54** migrations; ledger = 54; the 4 block-admission
+    functions are present.
+  - `test-home-guest-pass-http.cjs --container` — **9 checks pass**, owned rows
+    back to zero. The new advisory-lock trigger on direct chat does not disturb
+    `lock_home_external_share` or any guest-pass path.
+  - Web **109 suites / 1481 tests** pass (Stream 3 adds 2 suites / 12 tests; all
+    of this stream's remain green); typecheck gate at its 0-error baseline.
+  - Runtime released again with `supabase stop --workdir ... --no-backup`; ports
+    64551-64557 free; retained `pantopus-home-gig-replay` and
+    `pantopus-stream3-block-r1` verified still up and healthy.
+- This stream's merged slice also reached the paid branch through the coordinator's
+  master integration (`6e106d9d0`); no action needed here.
 - No backend, service, schema or migration change. No native/mobile change.
 
 ## What the existing journey already did correctly
