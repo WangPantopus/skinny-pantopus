@@ -188,6 +188,129 @@ describe('worker start and owner capture boundaries', () => {
   });
 });
 
+describe('worker start recovers the saved transition', () => {
+  const notifications = require('../__mocks__/notificationService');
+  const start = (actor = 'worker') => post('gig/start', actor);
+
+  test('a lost success reply recovers the saved start without another authorization or notice', async () => {
+    assigned();
+    expect((await start()).status).toBe(200);
+    const saved = structuredClone(getTable('Gig')[0]);
+    const verify = jest.spyOn(service, 'verifyGigAuthorization');
+    notifications.createBulkNotifications.mockClear();
+    const retry = await start();
+    expect(retry.status).toBe(200); expect(retry.body.reused).toBe(true);
+    expect(retry.body.gig).toEqual(saved); expect(getTable('Gig')[0]).toEqual(saved);
+    expect(verify).not.toHaveBeenCalled();
+    expect(notifications.createBulkNotifications).not.toHaveBeenCalled();
+  });
+
+  test('a concurrent identical start returns the committed row without a second notice', async () => {
+    assigned();
+    const from = db.from.bind(db); let saved;
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = from(table);
+      if (table === 'Gig') {
+        const update = query.update.bind(query);
+        query.update = patch => {
+          saved = { ...getTable('Gig')[0], ...patch, started_at: '2026-09-14T12:01:00Z' };
+          getTable('Gig')[0] = saved;
+          return update(patch);
+        };
+      }
+      return query;
+    });
+    notifications.createBulkNotifications.mockClear();
+    const retry = await start();
+    expect(retry.status).toBe(200); expect(retry.body.reused).toBe(true);
+    expect(retry.body.gig).toEqual(saved); expect(getTable('Gig')[0]).toEqual(saved);
+    expect(notifications.createBulkNotifications).not.toHaveBeenCalled();
+  });
+
+  test('the recovered start keeps its original time rather than restamping it', async () => {
+    assigned();
+    expect((await start()).status).toBe(200);
+    const originalStart = getTable('Gig')[0].started_at;
+    expect(typeof originalStart).toBe('string');
+    const retry = await start();
+    expect(retry.status).toBe(200); expect(retry.body.gig.started_at).toBe(originalStart);
+  });
+
+  test.each(['foreign', 'payer'])('another actor cannot recover a worker start: %s', async actor => {
+    assigned(); expect((await start()).status).toBe(200);
+    const saved = structuredClone(getTable('Gig')[0]);
+    expect((await start(actor)).status).toBe(403); expect(getTable('Gig')[0]).toEqual(saved);
+  });
+
+  test('a former worker cannot recover a start after replacement', async () => {
+    assigned(); expect((await start()).status).toBe(200);
+    getTable('Gig')[0].accepted_by = 'replacement';
+    expect((await start()).status).toBe(403);
+  });
+
+  test.each([null, 'invalid'])('a missing start receipt is not reported as success: %s', async timestamp => {
+    assigned(); expect((await start()).status).toBe(200);
+    getTable('Gig')[0].started_at = timestamp;
+    const retry = await start();
+    expect(retry.status).toBeGreaterThanOrEqual(400);
+    expect(retry.body.reused).toBeUndefined();
+  });
+
+  test.each(['user_id', 'payment_id', 'price'])('a concurrent result under another %s cannot be reused', async field => {
+    assigned();
+    const from = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = from(table);
+      if (table === 'Gig') {
+        const update = query.update.bind(query);
+        query.update = patch => {
+          getTable('Gig')[0] = { ...getTable('Gig')[0], ...patch,
+            [field]: field === 'price' ? 99 : 'replacement' };
+          return update(patch);
+        };
+      }
+      return query;
+    });
+    const retry = await start();
+    expect(retry.status).toBeGreaterThanOrEqual(400);
+    expect(retry.body.reused).toBeUndefined();
+  });
+
+  test('a settled later price change still recovers the saved start', async () => {
+    assigned(); expect((await start()).status).toBe(200);
+    const originalStart = getTable('Gig')[0].started_at;
+    // An approved change order moves the price while work is in progress. The
+    // saved transition stays truthful and the reply carries the current row.
+    getTable('Gig')[0].price = 99;
+    const retry = await start();
+    expect(retry.status).toBe(200); expect(retry.body.reused).toBe(true);
+    expect(retry.body.gig.started_at).toBe(originalStart); expect(retry.body.gig.price).toBe(99);
+  });
+
+  test('an unavailable read is not reported as a missing gig', async () => {
+    assigned();
+    const from = db.from.bind(db);
+    jest.spyOn(db, 'from').mockImplementation(table => {
+      const query = from(table);
+      if (table === 'Gig') {
+        query.single = async () => ({ data: null, error: { code: '08006', message: 'connection failure' } });
+        query.maybeSingle = async () => ({ data: null, error: { code: '08006', message: 'connection failure' } });
+      }
+      return query;
+    });
+    const result = await start();
+    expect(result.status).toBe(503);
+    expect(result.body.error).not.toMatch(/not found/i);
+  });
+
+  test('work already moved past start is not reported as a fresh start', async () => {
+    assigned('completed');
+    const retry = await start();
+    expect(retry.status).toBeGreaterThanOrEqual(400);
+    expect(getTable('Gig')[0].status).toBe('completed');
+  });
+});
+
 
 describe('stale bid mutations cannot overtake checkout reservation', () => {
   test.each([
