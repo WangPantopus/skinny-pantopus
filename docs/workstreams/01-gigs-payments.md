@@ -1,14 +1,74 @@
 # Stream 1 — Gigs and payments
 
 Updated September 16, 2026. Owner: coordinator / Stream 1.
-State: verification — iOS candidate verified locally and installed (September 16); heavy
-native build slot **released** at 10:23 PDT; owned simulator shut down; fixtures cleaned.
-Next bounded milestone: Start Work displayed-terms binding (see below). Installed Android,
-real provider authorization and the wider P04 scope remain open.
+State: ready for review — displayed-terms binding delivered at `a65411758` (backend +
+iOS/Android/web callers + SDK) and verified locally, over real HTTP/SQL and on the
+installed iOS candidate; heavy native build slot **released** at 10:50 PDT; owned simulator
+shut down; fixtures cleaned. Installed Android, real provider authorization and the wider
+P04 scope remain open.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
 P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
+
+## Milestone: Start Work bound to the displayed assignment terms — September 16, 2026
+
+- **Branch/commit:** `codex/paid-gig-integration` at **`a65411758`**, pushed to draft
+  [PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47); its CI was starting at this
+  update. Previous head `74c01bf49` had 14 applicable checks green with one Android job
+  still pending when superseded.
+- **Changed paths (all existing files except two small DTOs):** `backend/routes/gigs.js`
+  (start handler + three helpers), `backend/tests/unit/paidGigLifecycleRoute.test.js`;
+  `frontend/packages/api/src/endpoints/gigs.ts` (`startGig(gigId, expected?)`);
+  `frontend/apps/web/src/components/gig-detail/CompletionFlow.tsx`,
+  `frontend/apps/web/tests/assigned-gig-authorization.test.tsx`; iOS
+  `GigsEndpoints.swift` (new `StartGigBody`), `GigDetailViewModel.swift`,
+  `GigDetailViewModelTests.swift`; Android `GigDtos.kt` (new `StartGigBody`), `GigsApi.kt`,
+  `GigsRepository.kt`, `GigDetailViewModel.kt`, `GigDetailSaveViewModelTest.kt`. No screen,
+  layout, styling, navigation, table, migration, RPC, service or new screen file.
+- **Reproduced requirement:** installed journey D above and `stale-before-read-http-sql.json`:
+  the route started a newer same-worker assignment the client never displayed (200 with a
+  new `accepted_at`, owner notified). Change orders already mutate `Gig.price` while
+  assigned, so displayed terms can drift in practice. Existing pattern reused: the route
+  family already binds flat `expected*` body fields (confirmation/authorization).
+- **Repair:** the existing handler accepts optional `expectedAcceptedAt`, `expectedPrice`,
+  `expectedPaymentId`; when any is present all three are compared with the route's own
+  read (timestamps by instant, so PostgREST `+00:00` matches a client `Z`) before recovery,
+  provider verification or the write, answering the existing conflict copy with
+  `409 ASSIGNMENT_CHANGED`; malformed terms are 400; callers that send none keep the
+  prior behavior. iOS sends every key (null included); Android's Moshi omits nulls and the
+  route reads an absent key as a displayed null; web passes the rendered `accepted_at`,
+  `price`, `payment_id` and shows the server guidance plus the existing reload on 409.
+- **Evidence (source-bound):** backend lifecycle suite 239/239 (10 new cases); full backend
+  Jest 6212 passed / 16 skipped; real HTTP → route → PostgREST → PostgreSQL harness 8/8
+  (`displayed-terms-http-sql.json`: stale re-stamp refused with no write or notice, saved
+  start not recovered under old terms, lost-reply recovery under the same terms, legacy
+  caller unchanged, timestamp formatting, malformed 400, exact cleanup); web
+  `assigned-gig-authorization` + `gig-acceptance-entrypoints` 126/126 and the typecheck
+  gate at 0 errors; Android ktlint/detekt and `GigDetailSaveViewModelTest` 55/55; iOS
+  SwiftLint strict/SwiftFormat (pinned) and `GigDetailViewModelTests` 61/61 on the owned
+  iOS 26.5 simulator. Two first attempts were test-compile errors (stray MockK import;
+  SwiftFormat-hoisted `await`) and are retained as attempts, not counted.
+- **Installed rebuilt iOS candidate** (same runtime, real route with the change):
+  stale assignment re-stamped after the screen loaded → **409, row stayed assigned, no
+  notice**, screen stayed "Assigned"; reopen → screen shows the new assignment → Start →
+  200, one notice, "In progress"; lost reply after commit → error path → retry with the
+  same displayed terms → `reused: true`, same timestamp, one notice, "In progress".
+- **Limits:** synthetic identity, intercepted providers, free gig, older retained schema,
+  simulator; local web lint could not run in this worktree (symlinked node_modules farm) —
+  CI's web lint job is the gate for that; the web my-bids card still starts without terms
+  because its list projection carries no assignment terms (separate bounded follow-up);
+  installed Android not run; P04 stays open.
+- **Shared-file effects:** additive optional parameter on `@pantopus/api` `startGig`
+  (Stream 1 scope per the guide); no peer paths touched.
+- **Cleanup:** runtime 18132 stopped, exact owned rows 0 by direct SQL (`f91504x0` prefixes),
+  simulator shut down, own Gradle daemon stopped, heavy slot released.
+- **Evidence:** `/private/tmp/pantopus-p04-start-20260916-r2` (`EVIDENCE.md` second section),
+  mirrored to the owner's private `.pantopus-recovery/audits/20260916-p04-start-r2`.
+
+**Next bounded milestone (Stream 1):** installed Android Start Work journey on the rebuilt
+candidate (new owned emulator, existing acceptance AVD untouched), then the my-bids
+terms follow-up or P05/P06 policy verification per the backlog order.
 
 ## Milestone: iOS Start Work candidate verified locally and installed — September 16, 2026
 
