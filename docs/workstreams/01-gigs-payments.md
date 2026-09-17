@@ -7,12 +7,94 @@ verified; heavy native build slot **released**; owned simulator and emulator shu
 fixtures cleaned. PR47 CI is green on `4ad88ec11` (15 applicable checks); master
 `c14657e35` is integrated as `6e106d9d0` with combined regressions green locally, and the
 paid-only migrations are renumbered after master's newest version at **`3657af97d`** (G03),
-whose CI passed all 15 applicable checks. Real provider authorization, fee policies and the
-wider P04 scope remain open; PR47 stays draft.
+whose CI passed all 15 applicable checks. **Evening (afternoon PDT) milestone:** the
+existing completion, owner-confirmation and reopen/release policies passed 32/32 checks over
+real HTTP → route → PostgREST → PostgreSQL on a private full-schema project (no application
+change needed; see the [completion/reopen milestone](#milestone-completion-confirmation-and-reopen-policies-verified-over-real-httpsql--september-16-2026)).
+Real provider authorization, the fee policies (product decision) and the wider P04 scope
+remain open; PR47 stays draft.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
 P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
+
+## Milestone: completion, confirmation and reopen policies verified over real HTTP/SQL — September 16, 2026
+
+- **Branch/commit:** `codex/paid-gig-integration` unchanged at **`3657af97d`** (draft PR47, CI
+  35142787582 green). This milestone changed no application code, screen, schema or test;
+  it verified the existing implementation. Coordination docs only (this file, the guide's
+  request/runtime rows, the backlog P04 row, the handoff).
+- **Existing implementation located and verified:** `backend/routes/gigs.js` `POST
+  /:gigId/mark-completed` (worker proof, `mark_gig_completed` RPC bound to the assignment
+  snapshot), `confirmCompletionHelper` behind `POST /:gigId/confirm-completion` and its
+  `/complete` alias (`expectedReview` digest from the loaded detail, `confirm_gig_completion` /
+  `prepare_gig_completion_original`), and the stop command family (`GET /:gigId/stop-preview`,
+  `POST /:gigId/stop-requests`, legacy `POST /:gigId/reopen-bidding` and `/worker-release`)
+  through `services/gigStopService.js` and the `gig_stop_*` SQL. Clients: web
+  `CompletionFlow` (receipt guards, `completion_review` from detail, `GigStopDialog` →
+  `useGigStopRequest`), iOS `GigDetailViewModel.submitDeliveryProof` / owner confirm /
+  `GigStopViewModel`, Android `GigDetailViewModel.markCompleted` / `completeGigAsPoster` /
+  `GigStopCoordinator`, SDK `markGigCompleted`, `confirmGigCompletion`, `completeGig`,
+  `reopenBidding` → `submitGigStopRequest`.
+- **Why a new runtime, not the retained one:** the retained replay database (SQL 64522) is at
+  `20260910220000` and has none of the paid SQL functions these routes call. A private
+  disposable project `pantopus-stream1-complete-r1` (SQL 64562 / API 64561, 75 migrations
+  from this branch, only db/kong/postgrest/gotrue/storage) was created; the retained
+  64521-64533 resources were not connected to or changed.
+- **Reproduced failure:** none in the application. Every policy in the backlog row behaved as
+  specified on the real chain. The only defects found were in the new private harness
+  (a constant reassignment and a teardown that hit the product's immutable pending-approval
+  guard; both corrected and the full run repeated).
+- **New evidence (private, `/private/tmp/pantopus-p04-complete-20260916-r1`, mirrored to the
+  owner's `.pantopus-recovery/audits/20260916-p04-complete-r1`):** `verify-complete-reopen-r1.cjs`
+  → `complete-reopen-http-sql.json`, **32/32 passed, 0 fixture rows remaining (`f9150450`),
+  2 provider attempts (both the intercepted capture)**. Worker completion: before start 400;
+  non-worker 403; commit with one owner notice; identical retry `reused:true` without a
+  second notice; different proof 409 `COMPLETION_CHANGED`; lost reply after commit then retry
+  reused. Owner confirmation: stale or missing `expectedReview` 409; the digest is visible to
+  owner and worker only; non-owner 403; the displayed review commits confirmation, rating,
+  the worker counter and one worker notice with no provider call on a free task; retry and
+  the `/complete` alias return the same receipt without a second counter, notice or rating
+  change; a task edited after the owner loaded the review is refused until the refreshed
+  review is used (immutable displayed terms). Paid task: worker completion binds the payment;
+  owner confirmation stops at the intercepted provider with 503, the original approval stays
+  pending for the same owner/review across a retry, and a direct edit of the reviewed task is
+  refused by the guard. Reopen/release: worker preview 403; owner preview eligible with the
+  accepted bid, zero fee, no financial action and the session scope; missing terms / changed
+  actor / changed scope 409; stale terms 409 `STOP_TERMS_CHANGED` with no request row; the
+  displayed terms complete the reopen (task open, worker and acceptance cleared, bid rejected,
+  request completed, one worker notice); retry returns the same receipt; lost reply after
+  commit recovers through the status read and the retry; after work started the preview is
+  ineligible (`STARTED_POLICY_REVIEW`) and the command is refused with that code; worker
+  release reopens with one owner notice; two concurrent identical commands produce one
+  request row and one transition; the legacy `/reopen-bidding` route refuses an empty body
+  (`STOP_TERMS_REQUIRED`) and completes the full command.
+- **Reused evidence:** backend `paidGigLifecycleRoute` (240) and `gigStopRoute` unit suites
+  and the tracked real-SQL stop harness `scripts/db/test-gig-stop.cjs` + pgTAP
+  `scripts/db/contracts/gig-stop.sql` (CI green on this head); web suites re-run locally today
+  (`assigned-gig-authorization`, `gig-acceptance-entrypoints`, `gig-stop-recovery-entry`,
+  `gig-stop-recovery`, `tip-modal`: 5 suites, 289 tests passed); native unit coverage cited
+  by file in the evidence (not re-run today; CI green on `3657af97d`).
+- **Findings without code change:** (1) the retained iOS `GigReassignmentEndpoints.reopenBidding`
+  and Android `GigReassignmentRepository.reopenBidding` DTO callers post an empty body to
+  routes that now require the full stop command and would get 409, but no shipped screen
+  calls them (every screen uses the stop preview → command flow); recorded as dead client
+  code, not a failure, and left untouched under the design-preservation rule. (2) A pending
+  paid completion approval is immutable by design; the product's only release path is a
+  provider-canceled intent (`stripeService.capturePayment` → `record_gig_completion_canceled`),
+  which belongs to the provider bundle (P02/L01).
+- **Limits:** synthetic identity and session scope; providers intercepted (paid confirmation
+  verified only up to the capture boundary); free tasks for the completed paths; no photos
+  (storage provider stubbed; photo verification stays unit-tested); no installed native or
+  browser journey in this milestone; no notification delivery worker run; disposable local
+  project, not a hosted environment. No-show and cancellation-fee policy rows still need the
+  fee payer/recipient product decision.
+- **Shared-file effects:** guide request table (Stream 2 migration version grant) and runtime
+  table (this reservation); backlog P04 row; handoff current-state paragraph.
+- **Cleanup:** fixture rows 0 by the harness's own count and by direct SQL; owned runtime
+  `pantopus-stream1-complete-r1` kept up after this milestone for a possible installed
+  journey — its release (`supabase stop --workdir ... --no-backup`, ports 64561-64567 free,
+  retained containers still healthy) is recorded below when done.
 
 ## Peer findings received from the earlier Stream 1 session — September 16, 2026
 
