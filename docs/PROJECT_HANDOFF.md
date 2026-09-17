@@ -37,8 +37,12 @@ the existing route, passed by the existing iOS/Android/web callers) and is verif
 backend/web/Android/iOS suites, a real HTTP/SQL harness and the installed iOS candidate,
 where the stale screen now gets 409 with no write or notice and a reopened screen starts
 normally. The installed Android candidate then passed the same journeys on a new owned emulator.
-See the Stream 1 status for limits (my-bids card, providers, fee policies). Installed Android, real provider authorization and the wider P04/P08/P09 scope
-remain open. Fixtures are cleaned to zero, HTTP18132 is stopped, the owned simulator is shut
+Later on September 16 the existing completion, owner-confirmation and reopen/release
+policies (immutable displayed terms included) passed 32/32 real HTTP → route → PostgREST →
+PostgreSQL checks on a private full-schema project with no application change; the paid
+confirmation is verified to the provider boundary. See the Stream 1 status for limits
+(my-bids card, providers, fee policies). Real provider authorization, the fee payer/recipient
+decision and the wider P04/P08/P09 scope remain open. Fixtures are cleaned to zero, HTTP18132 is stopped, the owned simulator is shut
 down and the heavy native slot is released.
 
 Coordinator dispositions: Stream 2's `70e079543..88d076e56`
