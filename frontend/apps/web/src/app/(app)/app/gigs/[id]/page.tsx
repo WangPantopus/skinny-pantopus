@@ -1,6 +1,9 @@
 // @ts-nocheck
 'use client';
 
+import { useBusinessGigAccess } from '@/hooks/useBusinessGigAccess';
+import { usePaymentRedirectCleanup } from '@/hooks/usePaymentRedirectCleanup';
+
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -21,6 +24,7 @@ import ChangeOrdersSection from '@/components/gig-detail/ChangeOrdersSection';
 import BidPanel from '@/components/gig-detail/BidPanel';
 import OffersPanel from '@/components/gig-detail/OffersPanel';
 import CompletionFlow, { type CompletionFlowHandle } from '@/components/gig-detail/CompletionFlow';
+import GigStopRecoveryEntry from '@/components/gig-detail/GigStopRecoveryEntry';
 import GigHeader from '@/components/gig-detail/GigHeader';
 import PaymentSection from '@/components/gig-detail/PaymentSection';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
@@ -132,6 +136,7 @@ interface GigMediaItem {
 }
 
 export default function GigDetailsPage() {
+  usePaymentRedirectCleanup();
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -140,7 +145,6 @@ export default function GigDetailsPage() {
 
   const [gig, setGig] = useState<GigFullRecord | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [canManageGigAsBusinessMember, setCanManageGigAsBusinessMember] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Media gallery state
@@ -208,34 +212,10 @@ export default function GigDetailsPage() {
   // ---------- Derived ----------
   const currentUserId = user?.id;
 
-  useEffect(() => {
-    const resolveBusinessManageAccess = async () => {
-      if (!gig || !currentUserId) {
-        setCanManageGigAsBusinessMember(false);
-        return;
-      }
-      const ownerId = gig.user_id || gig.poster_user_id || gig.poster_id;
-      const ownerAccountType = gig.creator?.account_type;
-      if (!ownerId || String(ownerId) === String(currentUserId) || ownerAccountType !== 'business') {
-        setCanManageGigAsBusinessMember(false);
-        return;
-      }
-      try {
-        const access = await api.businessIam.getMyBusinessAccess(String(ownerId));
-        const canManage = Boolean(
-          access?.hasAccess &&
-          (access?.isOwner ||
-            (Array.isArray(access?.permissions) &&
-              (access.permissions.includes('gigs.manage') || access.permissions.includes('gigs.post')))
-          )
-        );
-        setCanManageGigAsBusinessMember(canManage);
-      } catch {
-        setCanManageGigAsBusinessMember(false);
-      }
-    };
-    void resolveBusinessManageAccess();
-  }, [gig, currentUserId]);
+  const canManageGigAsBusinessMember = useBusinessGigAccess(
+    currentUserId, gig?.user_id || gig?.poster_user_id || gig?.poster_id,
+    gig?.creator?.account_type === 'business', gig,
+  );
 
   const gigStatus = String(gig?.status ?? '');
   const isAssigned = gigStatus === 'assigned';
@@ -450,6 +430,7 @@ export default function GigDetailsPage() {
         <div className="text-center">
           <h2 className="text-2xl font-bold text-app-text mb-2">Gig not found</h2>
           <p className="text-app-text-secondary mb-4">This gig may have been removed or doesn&apos;t exist.</p>
+          <GigStopRecoveryEntry key={gigId} gigId={gigId} />
           <button onClick={() => router.push('/app')} className="bg-primary-600 text-white px-6 py-2 rounded-lg hover:bg-primary-700">
             Back to Home
           </button>
@@ -461,6 +442,7 @@ export default function GigDetailsPage() {
   return (
     <div className="bg-app-surface-raised">
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <GigStopRecoveryEntry key={gigId} gigId={gigId} />
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left */}
           <div className="lg:col-span-2 space-y-6">
@@ -810,6 +792,8 @@ export default function GigDetailsPage() {
             {/* Payment breakdown (owner and worker) */}
             <ErrorBoundary>
               <PaymentSection
+                actorId={currentUserId}
+                onChanged={handleRefresh}
                 gigId={gigId}
                 gigPrice={budget}
                 isOwner={isMyGig}
@@ -821,6 +805,7 @@ export default function GigDetailsPage() {
             {/* Offers panel (owner only) */}
             <ErrorBoundary>
               <OffersPanel
+                actorId={currentUserId}
                 gigId={gigId}
                 gigStatus={gigStatus}
                 gigPrice={budget}

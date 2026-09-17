@@ -43,3 +43,36 @@ module.exports = async function homeDocumentRecovery() {
   if (stats.selected) logger.info('Home document recovery complete', stats);
   return stats;
 };
+
+
+// Reuse the scheduled private-file recovery worker for completion tombstones.
+// Selection/claim retain Gig -> File lock order; only exact reserved keys leave SQL.
+module.exports.completionFiles = async function completionFiles() {
+  const bucket = (process.env.GIG_COMPLETION_BUCKET || '').trim();
+  const stats = { selected: 0, removed: 0, pending: 0, skipped: 0 };
+  if (!bucket) return stats;
+  const service = require('../services/s3Service');
+  const candidates = await db.rpc('gig_completion_file_cleanup_candidates', { p_bucket: bucket, p_limit: 100 });
+  if (candidates.error || !Array.isArray(candidates.data)) throw new Error('Completion file recovery selection unavailable');
+  stats.selected = candidates.data.length;
+  for (const id of candidates.data) {
+    const claimed = await db.rpc('claim_gig_completion_file_cleanup', { p_file_id: id, p_bucket: bucket });
+    if (claimed.error) { stats.pending++; continue; }
+    const file = claimed.data;
+    if (!file) { stats.skipped++; continue; }
+    let succeeded = false;
+    try {
+      if (file.id !== id || file.is_deleted !== true || !file.metadata?.storage_cleanup_claim
+        || file.metadata.storage_bucket !== bucket) throw new Error('Invalid cleanup reference');
+      await service.removePrivateGigCompletionFile(file);
+      succeeded = true;
+    } catch { /* Retain exact tombstones without logging private provider paths. */ }
+    const finished = await db.rpc('finish_gig_completion_file_cleanup', {
+      p_file_id: id, p_claim: file.metadata?.storage_cleanup_claim || null, p_succeeded: succeeded,
+    });
+    if (succeeded && !finished.error && finished.data === true) stats.removed++;
+    else stats.pending++;
+  }
+  if (stats.selected) logger.info('Completion file recovery complete', stats);
+  return stats;
+};

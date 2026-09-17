@@ -83,9 +83,12 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     val bids by viewModel.bids.collectAsStateWithLifecycle()
     val offerRankings by viewModel.offerRankings.collectAsStateWithLifecycle()
     val bidActionInFlight by viewModel.bidActionInFlight.collectAsStateWithLifecycle()
+    val bidCheckout by viewModel.bidCheckout.state.collectAsStateWithLifecycle()
     val activeTask by viewModel.activeTask.collectAsStateWithLifecycle()
     val reviewState by viewModel.reviewState.collectAsStateWithLifecycle()
     val payment by viewModel.payment.collectAsStateWithLifecycle()
+    val refundState by viewModel.refunds.state.collectAsStateWithLifecycle()
+    val authorizationState by viewModel.assignedAuthorization.state.collectAsStateWithLifecycle()
     val changeOrders by viewModel.changeOrders.collectAsStateWithLifecycle()
     val changeOrderActionInFlight by viewModel.changeOrderActionInFlight.collectAsStateWithLifecycle()
     val fulfillment by viewModel.fulfillment.collectAsStateWithLifecycle()
@@ -99,8 +102,6 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     var noShowSheetVisible by remember { mutableStateOf(false) }
     var runningLateSheetVisible by remember { mutableStateOf(false) }
     var proposeChangeSheetVisible by remember { mutableStateOf(false) }
-    // Assigned worker's pre-start "Can't make it" confirm (`POST /worker-release`).
-    var cantMakeItConfirmVisible by remember { mutableStateOf(false) }
 
     val gig = viewModel.gigSnapshot()
     // Single source of truth with the projection: whenever this panel
@@ -111,7 +112,7 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     if (ownerSeesBidsPanel) {
         GigOwnerBidsPanel(
             bids = bids,
-            actionInFlightBidId = bidActionInFlight,
+            actionInFlightBidId = bidActionInFlight ?: bidCheckout.bidId?.takeIf { bidCheckout.blocksNewBidActions },
             onAccept = { viewModel.acceptBidAsOwner(it.id) },
             onCounter = { counterTarget = it },
             onReject = { rejectTarget = it },
@@ -182,40 +183,10 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
             onStartTask = { viewModel.startTask() },
             onConfirmCompletion = { viewModel.confirmCompletion() },
             onReportNoShow = { noShowSheetVisible = true },
-            onCantMakeIt = { cantMakeItConfirmVisible = true },
+            onCantMakeIt = { viewModel.openTaskStop("worker_release") },
             canRemindWorker = viewModel.canRemindWorker(),
             reminderCooldownLabel = reminderCooldownLabel,
             onRemindWorker = { viewModel.remindWorker() },
-        )
-    }
-
-    // Worker's "Can't make it" confirm — releases them, drops the payment
-    // hold, and reopens the task for bids. Copy mirrors the poster's
-    // "Replace worker" dialog on the other side of the same transition.
-    if (cantMakeItConfirmVisible) {
-        AlertDialog(
-            onDismissRequest = { cantMakeItConfirmVisible = false },
-            title = { Text("Can't Make It") },
-            text = {
-                Text(
-                    "This will unassign you from the task and reopen it for new bids. " +
-                        "Any payment hold will be released.",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        cantMakeItConfirmVisible = false
-                        viewModel.releaseAssignment()
-                    },
-                    modifier = Modifier.testTag("gigDetail.cantMakeItConfirm"),
-                ) {
-                    Text("I Can't Make It", color = PantopusColors.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { cantMakeItConfirmVisible = false }) { Text("Stay on the task") }
-            },
         )
     }
 
@@ -233,7 +204,19 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     }
 
     // 5b work item 1 — compact payment card (owner, assigned+).
-    payment?.let { GigPaymentCard(payment = it) }
+    if (!refundState.invalidated && !authorizationState.invalidated) {
+        payment?.let { GigPaymentCard(payment = it) }
+        if (viewModel.canOpenAssignedAuthorization()) {
+            TextButton(onClick = viewModel::openAssignedAuthorization, modifier = Modifier.testTag("gigDetail.authorization")) {
+                Text("Payment authorization")
+            }
+        }
+        if (viewModel.canOpenRefunds()) {
+            TextButton(onClick = viewModel::openRefunds, modifier = Modifier.testTag("gigDetail.refunds")) {
+                Text("Refunds and hold releases")
+            }
+        }
+    }
 
     GigReviewSection(
         state = reviewState,
@@ -463,6 +446,15 @@ private fun GigOwnerBidRow(
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.appTextMuted,
                 )
+            bid.status == "pending_payment" ->
+                BidActionButton(
+                    label = "Resume payment",
+                    prominent = true,
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth().testTag("gigDetail.bid_${bid.id}.resume"),
+                    onClick = onAccept,
+                )
+            bid.status == "accepted" -> Text("Bid accepted", color = PantopusColors.appTextSecondary)
             countered ->
                 // RN keeps the poster in control while the bidder mulls it
                 // over: the counter can be pulled back and the bid reverts
@@ -1469,8 +1461,6 @@ private fun normalizedAmountChange(
 @Composable
 private fun GigPaymentCard(payment: GigPaymentResponse) {
     val row = payment.payment ?: return
-    val totalCents = (row.amountTotal ?: 0) + (row.tipAmount ?: 0)
-    val feesCents = (row.amountPlatformFee ?: 0) + (row.amountProcessingFee ?: 0)
     Column(
         modifier =
             Modifier
@@ -1501,14 +1491,13 @@ private fun GigPaymentCard(payment: GigPaymentResponse) {
                     .padding(Spacing.s3),
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
-            PaymentLine(label = "Subtotal", amount = formatCents(row.amountSubtotal ?: 0))
-            PaymentLine(label = "Fees", amount = formatCents(feesCents))
+            PaymentLine(label = "Platform fee (included)", amount = formatCents(row.amountPlatformFee ?: 0))
             if ((row.tipAmount ?: 0) > 0) {
                 PaymentLine(label = "Tip", amount = formatCents(row.tipAmount ?: 0))
             }
             PaymentLine(
-                label = "Total",
-                amount = formatCents(totalCents),
+                label = app.pantopus.android.ui.screens.gigs.refunds.gigPaymentAmountLabel(row),
+                amount = formatCents(row.amountTotal ?: 0),
                 emphasized = true,
                 modifier = Modifier.testTag("gigDetail.payment.total"),
             )

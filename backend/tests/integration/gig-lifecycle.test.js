@@ -83,7 +83,7 @@ describe('Gig Lifecycle', () => {
     expect(res.status).toBe(200);
   });
 
-  test('DELETE /api/gigs/:id — poster can cancel the gig', async () => {
+  test('DELETE /api/gigs/:id — poster closes an unpaid gig through its exact stop receipt', async () => {
     // Create a fresh gig to delete (don't mess up the main flow)
     const createRes = await apiRequest('POST', '/api/gigs', poster.token, {
       title: 'Deletable Gig',
@@ -95,8 +95,15 @@ describe('Gig Lifecycle', () => {
     expect(createRes.status).toBe(201);
     const deleteGigId = createRes.body.gig.id;
 
-    const res = await apiRequest('DELETE', `/api/gigs/${deleteGigId}`, poster.token);
-    expect([200, 204]).toContain(res.status);
+    const preview = await apiRequest('GET', `/api/gigs/${deleteGigId}/stop-preview?action=close`, poster.token);
+    expect(preview.status).toBe(200); expect(preview.body.eligible).toBe(true);
+    const requestId = require('node:crypto').randomUUID();
+    const res = await apiRequest('DELETE', `/api/gigs/${deleteGigId}`, poster.token, {
+      requestId, action: 'close', expectedActorId: preview.body.actorId,
+      expectedSessionScope: preview.body.sessionScope, expectedTerms: preview.body.terms,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.receipt).toMatchObject({ requestId, gigId: deleteGigId, action: 'close', gigStatus: 'cancelled', financialStatus: 'none' });
   });
 
   test('Unauthorized user cannot modify the gig', async () => {

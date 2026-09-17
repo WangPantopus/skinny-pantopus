@@ -1,0 +1,87 @@
+BEGIN;
+INSERT INTO auth.users(id,email) VALUES
+ ('aaff0000-0000-4000-8000-000000000001','expiry-payer@example.invalid'),
+ ('aaff0000-0000-4000-8000-000000000002','expiry-worker@example.invalid');
+INSERT INTO public."User"(id,email,username,name) SELECT id,email,'expiry_'||right(id::text,1),'Expiry contract' FROM auth.users WHERE id::text LIKE 'aaff0000-%';
+INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,scheduled_start)
+ VALUES('aaff0000-0000-4000-8000-000000000101','aaff0000-0000-4000-8000-000000000001','aaff0000-0000-4000-8000-000000000001',
+ 'Expiry contract','Synthetic',10,'assigned','aaff0000-0000-4000-8000-000000000002',now()+interval '1 hour');
+INSERT INTO public."Payment"(id,gig_id,payer_id,payee_id,amount_total,amount_subtotal,amount_platform_fee,amount_to_payee,stripe_customer_id,stripe_payment_intent_id,payment_status,authorization_expires_at)
+ VALUES('aaff0000-0000-4000-8000-000000000301','aaff0000-0000-4000-8000-000000000101','aaff0000-0000-4000-8000-000000000001',
+ 'aaff0000-0000-4000-8000-000000000002',1000,1000,150,850,'cus_expiry','pi_expiry','authorized',now()+interval '7 days');
+UPDATE public."Gig" SET payment_id='aaff0000-0000-4000-8000-000000000301',payment_status='authorized' WHERE id='aaff0000-0000-4000-8000-000000000101';
+SET LOCAL ROLE service_role;
+DO $$ DECLARE d jsonb;result jsonb;proof jsonb;invalid jsonb;expected jsonb;operation uuid;lease uuid;event jsonb;note uuid;seconds bigint;financial jsonb;BEGIN
+ seconds:=floor(extract(epoch FROM clock_timestamp()+interval '1 hour'))::bigint;
+ d:=public.read_gig_authorization_expiry('aaff0000-0000-4000-8000-000000000301');
+ IF d ? 'error' THEN RAISE EXCEPTION 'Current assigned payment unreadable %',d; END IF;
+ expected:=d->'expected';financial:=expected;
+ proof:=jsonb_build_object('id','pi_expiry','customer','cus_expiry','capture_method','manual','currency','usd','amount',1000,
+ 'payer_id','aaff0000-0000-4000-8000-000000000001','payee_id','aaff0000-0000-4000-8000-000000000002',
+ 'gig_id','aaff0000-0000-4000-8000-000000000101','status','requires_capture','amount_capturable',1000,
+ 'amount_captured',0,'amount_received',0,'charge_refunded',false,'charge_amount_refunded',0,'charge_id','ch_expiry','capture_before',seconds);
+ IF NOT (public.claim_gig_expiry_scan(100) @> '["aaff0000-0000-4000-8000-000000000301"]'::jsonb) THEN RAISE EXCEPTION 'Guessed future deadline hid actually due candidate'; END IF;
+ IF public.claim_gig_expiry_scan(100) @> '["aaff0000-0000-4000-8000-000000000301"]'::jsonb THEN RAISE EXCEPTION 'Candidate scan did not rotate'; END IF;
+ FOREACH invalid IN ARRAY ARRAY[proof-'capture_before',proof||'{"capture_before":"1234"}',proof||'{"capture_before":253402300800}',
+ proof||'{"amount_received":1}',proof||'{"amount_captured":1}',proof||'{"charge_refunded":true,"charge_amount_refunded":1000}',proof||'{"amount":999}',proof||'{"customer":"cus_other"}',proof||'{"charge_id":null}'] LOOP
+  result:=public.begin_gig_authorization_expiry('aaff0000-0000-4000-8000-000000000301',expected,invalid);
+  IF result->>'error' IS DISTINCT FROM 'INVALID_PROOF' THEN RAISE EXCEPTION 'Invalid proof admitted %',invalid; END IF;
+ END LOOP;
+ result:=public.begin_gig_authorization_expiry('aaff0000-0000-4000-8000-000000000301',expected,proof||jsonb_build_object('capture_before',seconds+172800));
+ IF result->>'notDue' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Future provider deadline admitted %',result; END IF;
+ IF EXISTS(SELECT FROM public."GigAuthorizationExpiry" WHERE payment_id='aaff0000-0000-4000-8000-000000000301') THEN RAISE EXCEPTION 'Rejected proof created operation'; END IF;
+ result:=public.begin_gig_authorization_expiry('aaff0000-0000-4000-8000-000000000301',expected,proof);
+ operation:=(result->'operation'->>'id')::uuid;
+ IF operation IS NULL THEN RAISE EXCEPTION 'Due proof did not reserve %',result; END IF;
+ IF EXISTS(SELECT FROM public."GigAuthorizationExpiryDelivery" WHERE expiry_id=operation) THEN RAISE EXCEPTION 'Reservation falsely notified cancellation'; END IF;
+ BEGIN UPDATE public."Gig" SET status='in_progress',started_at=clock_timestamp() WHERE id='aaff0000-0000-4000-8000-000000000101'; RAISE EXCEPTION 'Worker started through barrier'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."Gig" SET price=11 WHERE id='aaff0000-0000-4000-8000-000000000101'; RAISE EXCEPTION 'Price changed through barrier'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."Gig" SET payment_id=NULL WHERE id='aaff0000-0000-4000-8000-000000000101'; RAISE EXCEPTION 'Payment replaced through barrier'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."Payment" SET payment_status='capture_pending',capture_attempts=1 WHERE id='aaff0000-0000-4000-8000-000000000301'; RAISE EXCEPTION 'Capture admitted through barrier'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN PERFORM public.begin_legacy_gig_authorization('aaff0000-0000-4000-8000-000000000101','aaff0000-0000-4000-8000-000000000001'); RAISE EXCEPTION 'Legacy operation admitted through barrier'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN PERFORM public.reserve_payment_refund('aaff0000-0000-4000-8000-000000000301','aaff0000-0000-4000-8000-000000000801','aaff0000-0000-4000-8000-000000000001','payer',NULL,'requested_by_customer',NULL,
+  (SELECT public.refund_payment_snapshot(p) FROM public."Payment" p WHERE id='aaff0000-0000-4000-8000-000000000301'),'release');
+  RAISE EXCEPTION 'Release admitted through barrier'; EXCEPTION WHEN check_violation THEN NULL; END;
+ IF EXISTS(SELECT FROM public."PaymentRefundRequest" WHERE payment_id='aaff0000-0000-4000-8000-000000000301') THEN RAISE EXCEPTION 'Blocked refund left partial request'; END IF;
+ result:=public.claim_gig_authorization_expiry('aaff0000-0000-4000-8000-000000000301',operation,proof);
+ lease:=(result->'operation'->>'lease_id')::uuid;
+ IF lease IS NULL THEN RAISE EXCEPTION 'Exact cancellation not leased %',result; END IF;
+ result:=public.claim_gig_authorization_expiry('aaff0000-0000-4000-8000-000000000301',operation,proof);
+ IF result->>'error' IS DISTINCT FROM 'BUSY' THEN RAISE EXCEPTION 'Duplicate active provider lease'; END IF;
+ result:=public.record_gig_authorization_expiry('aaff0000-0000-4000-8000-000000000301',operation,proof);
+ IF result->>'error' IS DISTINCT FROM 'INVALID_PROOF' THEN RAISE EXCEPTION 'Authorized proof claimed cancellation'; END IF;
+ IF NOT public.release_gig_expiry_lease(operation,lease,'UNKNOWN') THEN RAISE EXCEPTION 'Owned unknown lease not retained'; END IF;
+ IF (SELECT state FROM public."GigAuthorizationExpiry" WHERE id=operation)<>'pending' THEN RAISE EXCEPTION 'Unknown release completed'; END IF;
+ result:=public.begin_gig_authorization_expiry('aaff0000-0000-4000-8000-000000000301',expected,proof||jsonb_build_object('capture_before',seconds+172800));
+ IF result->>'error' IS DISTINCT FROM 'OPERATION_CHANGED' THEN RAISE EXCEPTION 'Changed deadline hid pending operation'; END IF;
+ proof:=proof||'{"status":"canceled","amount_capturable":0}'::jsonb;
+ IF NOT public.gig_expiry_proof_valid((SELECT p FROM public."Payment" p WHERE id='aaff0000-0000-4000-8000-000000000301'),proof||'{"charge_refunded":true,"charge_amount_refunded":1000}'::jsonb) THEN RAISE EXCEPTION 'Exact legacy zero-capture release refused'; END IF;
+ IF public.gig_expiry_proof_valid((SELECT p FROM public."Payment" p WHERE id='aaff0000-0000-4000-8000-000000000301'),proof||'{"charge_refunded":true,"charge_amount_refunded":999}'::jsonb) THEN RAISE EXCEPTION 'Partial refund misrepresented as zero-charge release'; END IF;
+ result:=public.record_gig_authorization_expiry('aaff0000-0000-4000-8000-000000000301',operation,proof);
+ IF result->>'complete' IS DISTINCT FROM 'true' OR result->'gig'->>'status' IS DISTINCT FROM 'cancelled' OR result->'payment'->>'payment_status' IS DISTINCT FROM 'canceled' THEN RAISE EXCEPTION 'Exact terminal proof not committed %',result; END IF;
+ IF (SELECT public.gig_expiry_payment_snapshot(p) FROM public."Payment" p WHERE id='aaff0000-0000-4000-8000-000000000301') IS DISTINCT FROM financial THEN RAISE EXCEPTION 'Expiry rewrote original financial identity'; END IF;
+ IF (SELECT count(*) FROM public."GigAuthorizationExpiryDelivery" WHERE expiry_id=operation)<>2 THEN RAISE EXCEPTION 'Missing atomic notices'; END IF;
+ PERFORM public.record_gig_authorization_expiry('aaff0000-0000-4000-8000-000000000301',operation,proof);
+ IF (SELECT count(*) FROM public."GigAuthorizationExpiryDelivery" WHERE expiry_id=operation)<>2 THEN RAISE EXCEPTION 'Replay duplicated notices'; END IF;
+ event:=public.claim_gig_expiry_delivery();
+ result:=public.read_gig_expiry_delivery((event->>'id')::uuid,(event->>'lease_id')::uuid);
+ IF result->>'eligible' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Exact receipt notice not eligible %',result; END IF;
+ note:=(result->'notification'->>'id')::uuid;
+ UPDATE public."Notification" SET is_read=true WHERE id=note;
+ result:=public.read_gig_expiry_delivery((event->>'id')::uuid,(event->>'lease_id')::uuid);
+ IF result->>'eligible' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'Reading notification invalidated receipt'; END IF;
+ DELETE FROM public."Notification" WHERE id=note;
+ result:=public.read_gig_expiry_delivery((event->>'id')::uuid,(event->>'lease_id')::uuid);
+ IF result->>'eligible' IS DISTINCT FROM 'false' THEN RAISE EXCEPTION 'Deleted notice remained eligible'; END IF;
+ IF NOT public.finish_gig_expiry_delivery((event->>'id')::uuid,(event->>'lease_id')::uuid,'suppressed') THEN RAISE EXCEPTION 'Current delivery lease failed'; END IF;
+ PERFORM public.materialize_gig_expiry_notices(operation);
+ IF EXISTS(SELECT FROM public."Notification" WHERE id=note) OR (SELECT count(*) FROM public."GigAuthorizationExpiryDelivery" WHERE expiry_id=operation)<>2 THEN RAISE EXCEPTION 'Deleted notice recreated'; END IF;
+END $$;
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ BEGIN PERFORM public.begin_gig_authorization_expiry(NULL,'{}','{}'); RAISE EXCEPTION 'Client admitted expiry'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN INSERT INTO public."GigAuthorizationExpiryScan"(payment_id) VALUES('aaff0000-0000-4000-8000-000000000301'); RAISE EXCEPTION 'Client controlled scan'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN PERFORM public.claim_gig_expiry_delivery(); RAISE EXCEPTION 'Client leased notification'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
+ROLLBACK;

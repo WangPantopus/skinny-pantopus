@@ -83,9 +83,9 @@ describe('retryCaptureFailures job', () => {
     expect(stripeService.capturePayment).toHaveBeenCalledTimes(1);
     expect(stripeService.capturePayment).toHaveBeenCalledWith('pay-cap-001');
 
-    // Gig payment_status should be updated to captured_hold
+    // The service owns the atomic receipt; the job must not write a second status.
     const gig = getTable('Gig').find((g) => g.id === 'gig-cap-001');
-    expect(gig.payment_status).toBe(PAYMENT_STATES.CAPTURED_HOLD);
+    expect(gig.payment_status).toBe(PAYMENT_STATES.AUTHORIZED);
   });
 
   test('skips gig without owner_confirmed_at', async () => {
@@ -104,19 +104,10 @@ describe('retryCaptureFailures job', () => {
     expect(stripeService.capturePayment).not.toHaveBeenCalled();
   });
 
-  test('stops retrying after MAX_CAPTURE_ATTEMPTS (3)', async () => {
-    seedCaptureScenario({ captureAttempts: 3 });
-
+  test('exhausted retries still delegate provider reconciliation to the capped service', async () => {
+    seedCaptureScenario({ captureAttempts: 5 });
     await retryCaptureFailures();
-
-    expect(stripeService.capturePayment).not.toHaveBeenCalled();
-    // Should send notification to payer
-    expect(createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'user-payer',
-        type: 'payment_capture_failed',
-      })
-    );
+    expect(stripeService.capturePayment).toHaveBeenCalledWith('pay-cap-001');
   });
 
   test('capture failure does not crash the job (continues to next gig)', async () => {
@@ -146,9 +137,9 @@ describe('retryCaptureFailures job', () => {
     await retryCaptureFailures();
 
     expect(stripeService.capturePayment).toHaveBeenCalledTimes(2);
-    // Second gig should have been captured
+    // The job does not overwrite the service-owned main-payment receipt.
     const gig2 = getTable('Gig').find((g) => g.id === 'gig-cap-002');
-    expect(gig2.payment_status).toBe(PAYMENT_STATES.CAPTURED_HOLD);
+    expect(gig2.payment_status).toBe(PAYMENT_STATES.AUTHORIZED);
   });
 
   test('does nothing when no orphaned captures exist', async () => {
@@ -156,5 +147,24 @@ describe('retryCaptureFailures job', () => {
     await retryCaptureFailures();
 
     expect(stripeService.capturePayment).not.toHaveBeenCalled();
+  });
+});
+
+describe('capture-first original recovery discovery', () => {
+  test.each(['authorized', 'capture_pending', 'captured_hold', 'canceled'])('pending original in %s is recovered before a visible confirmation', async paymentStatus => {
+    seedCaptureScenario({ ownerConfirmedAt: null, paymentStatus });
+    getTable('Payment')[0].gig_completion_original = { state: 'pending' };
+    await retryCaptureFailures();
+    expect(stripeService.capturePayment).toHaveBeenCalledTimes(1);
+    expect(stripeService.capturePayment).toHaveBeenCalledWith('pay-cap-001');
+  });
+  test.each(['confirmed', 'canceled'])('terminal %s original never creates a new approval', async state => {
+    seedCaptureScenario({ ownerConfirmedAt: null });
+    getTable('Payment')[0].gig_completion_original = { state };
+    await retryCaptureFailures(); expect(stripeService.capturePayment).not.toHaveBeenCalled();
+  });
+  test('an overlapping legacy row is processed once', async () => {
+    seedCaptureScenario(); getTable('Payment')[0].gig_completion_original = { state: 'pending' };
+    await retryCaptureFailures(); expect(stripeService.capturePayment).toHaveBeenCalledTimes(1);
   });
 });

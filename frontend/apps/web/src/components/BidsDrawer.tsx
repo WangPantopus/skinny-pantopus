@@ -1,11 +1,11 @@
 // @ts-nocheck
 'use client';
 
+import { gigBidCheckoutUrl } from '@/components/gig-detail/GigBidCheckout';
+
 import { useEffect, useState } from 'react';
 import * as api from '@pantopus/api';
-import { confirmStore } from '@/components/ui/confirm-store';
 
-const formatUsd = (amount: number): string => `$${amount.toFixed(2)}`;
 
 export default function BidsDrawer({
   open,
@@ -44,65 +44,9 @@ export default function BidsDrawer({
 
   if (!open || !gig) return null;
 
-  const accept = async (bidId: string) => {
-    const selectedBid = bids.find((b) => String(b?.id) === String(bidId));
-    const rawAmount = Number((selectedBid as Record<string, any> | undefined)?.amount ?? gig.price ?? NaN);
-    const amount = Number.isFinite(rawAmount) ? rawAmount : null;
-    const confirmed = await confirmStore.open({
-      title: amount != null && amount > 0 ? 'Authorize payment method?' : 'Accept this bid?',
-      description:
-        amount != null && amount > 0
-          ? `Pantopus will place a temporary authorization hold of ${formatUsd(amount)}. You are charged only after you confirm the task is completed. If canceled per policy, the hold is released (or only applicable fees apply).`
-          : 'This will assign the gig to this bidder.',
-      confirmLabel: amount != null && amount > 0 ? 'Continue to Payment' : 'Accept',
-      cancelLabel: amount != null && amount > 0 ? 'Not now' : 'Cancel',
-      variant: 'primary',
-    });
-    if (!confirmed) return;
-
-    setBusyId(bidId);
-    setError('');
-    try {
-      const resp = await api.gigs.acceptBid(gig.id, bidId) as Record<string, any>;
-      await load();
-      onChanged();
-
-      const payment = (resp?.payment as Record<string, any>) || null;
-      const clientSecret = (resp?.clientSecret as string) || (payment?.clientSecret as string) || null;
-      const setupIntentId = (resp?.setupIntentId as string) || (payment?.setupIntentId as string) || null;
-      const roomId = (resp?.roomId as string) || null;
-      const isSetupIntent = Boolean(resp?.isSetupIntent ?? setupIntentId);
-      const requiresPaymentSetup = Boolean(resp?.requiresPaymentSetup || clientSecret);
-
-      if (requiresPaymentSetup && clientSecret) {
-        window.sessionStorage.setItem(
-          `gig_payment_setup_${gig.id}`,
-          JSON.stringify({
-            clientSecret,
-            isSetupIntent,
-            roomId,
-            createdAt: Date.now(),
-          })
-        );
-        onClose();
-        window.location.href = `/app/gigs/${gig.id}?action=payment_setup`;
-        return;
-      }
-
-      if (roomId) {
-        onClose();
-        window.location.href = `/app/chat/${roomId}`;
-      }
-    } catch (e: unknown) {
-      const apiErr = e as any;
-      if (apiErr?.data?.code === 'payer_payment_required') {
-        setError('Add a payment method to accept this bid');
-      } else {
-        setError(e instanceof Error ? e.message : 'Failed to accept offer');
-      }
-    } finally {
-      setBusyId(null);
-    }
+  const accept = (bidId: string) => {
+    onClose();
+    window.location.assign(gigBidCheckoutUrl(gig.id, bidId));
   };
 
   const reject = async (bidId: string) => {
@@ -178,6 +122,11 @@ export default function BidsDrawer({
                   </div>
                 </div>
 
+                {b.status === 'pending_payment' && (
+                  <button className="mt-4 rounded-xl px-3 py-2 bg-emerald-600 text-white" onClick={() => accept(b.id)}>
+                    Resume payment
+                  </button>
+                )}
                 {b.status === 'pending' ? (
                   <div className="mt-4 flex justify-end gap-2">
                     <button

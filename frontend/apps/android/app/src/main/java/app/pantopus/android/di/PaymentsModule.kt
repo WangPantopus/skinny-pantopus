@@ -16,6 +16,12 @@ import javax.inject.Singleton
 object PaymentsModule {
     @Provides
     @Singleton
+    fun providePendingGigTipStore(
+        store: app.pantopus.android.data.payments.PersistentPendingGigTipStore,
+    ): app.pantopus.android.data.payments.PendingGigTipStore = store
+
+    @Provides
+    @Singleton
     fun providePendingCardSetupStore(
         preferences: SharedPreferences,
         tokens: TokenStorage,

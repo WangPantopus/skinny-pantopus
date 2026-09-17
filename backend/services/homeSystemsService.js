@@ -297,78 +297,8 @@ async function recordSystem({ homeId, systemKey, installedYear, source = 'reside
   }
 }
 
-/**
- * Provenance capture — a paid, confirmed job at this address.
- *
- * Called after payment captures and the owner confirms, so the row only
- * ever records work that really happened and was really paid for.
- *
- * Deliberately writes the SERVICE HISTORY and not the system's install
- * year. A completed "roofing" gig does not tell us whether the roof was
- * replaced or a flashing was patched, and silently resetting a 25-year
- * clock on that guess would be exactly the overclaiming this ledger
- * exists to avoid. The install year stays the resident's to confirm.
- *
- * This is the half that compounds: a prompt converts at 20–30%, automatic
- * capture converts at 100%, and Angi knows a price was quoted in a ZIP
- * while this knows a dispute-free job happened at a verified address on a
- * specific date. Never throws — provenance must not be able to fail a
- * payment path.
- *
- * @returns {Promise<{ok: boolean, reason?: string}>}
- */
-async function recordCompletedJob({ homeId, gigId, title, category, price, performedBy, performedAt }) {
-  if (!homeId || !gigId) return { ok: false, reason: 'missing_home_or_gig' };
-
-  try {
-    // One row per gig. Backed by a partial unique index on gig_id
-    // (migration 163), so this read is a fast path rather than the
-    // guarantee — two concurrent owner-confirms are stopped by the index,
-    // not by the check. The error is surfaced rather than dropped: a failed
-    // read used to fall through to an unconditional insert.
-    const { data: existing, error: readErr } = await supabaseAdmin
-      .from('HomeMaintenanceLog')
-      .select('id')
-      .eq('gig_id', gigId)
-      .maybeSingle();
-    if (readErr) throw new Error(readErr.message);
-    if (existing) return { ok: true, reason: 'already_recorded' };
-
-    const nowIso = new Date().toISOString();
-    const { error: writeErr } = await supabaseAdmin
-      .from('HomeMaintenanceLog')
-      .insert({
-        home_id: homeId,
-        task: String(title || category || 'Completed job').slice(0, 200),
-        performed_at: performedAt || nowIso,
-        performed_by: performedBy || null,
-        cost: Number.isFinite(Number(price)) ? Number(price) : null,
-        // The gig id is the evidence pointer — it is what makes this row
-        // verifiable rather than a self-reported claim. It lives in its own
-        // column so the guarantee does not rest on user-visible free text.
-        gig_id: gigId,
-        status: 'completed',
-        recurrence: 'one_time',
-        created_at: nowIso,
-        updated_at: nowIso,
-      });
-    if (writeErr) {
-      // The partial unique index on gig_id is the real guarantee — a
-      // concurrent confirm losing to it is success, not failure.
-      if (writeErr.code === '23505') return { ok: true, reason: 'already_recorded' };
-      throw new Error(writeErr.message);
-    }
-
-    return { ok: true };
-  } catch (err) {
-    logger.warn('homeSystems: provenance capture failed', { homeId, gigId, error: err.message });
-    return { ok: false, reason: 'write_failed' };
-  }
-}
-
 module.exports = {
   getSystemsLedger,
-  recordCompletedJob,
   recordSystem,
   SYSTEM_DEFS,
   SYSTEM_KEYS,
