@@ -11,12 +11,68 @@ whose CI passed all 15 applicable checks. **Evening (afternoon PDT) milestone:**
 existing completion, owner-confirmation and reopen/release policies passed 32/32 checks over
 real HTTP → route → PostgREST → PostgreSQL on a private full-schema project (no application
 change needed; see the [completion/reopen milestone](#milestone-completion-confirmation-and-reopen-policies-verified-over-real-httpsql--september-16-2026)).
-Real provider authorization, the fee policies (product decision) and the wider P04 scope
-remain open; PR47 stays draft.
+The existing tip implementation (P01–P03) then passed the tracked service harness (22/22)
+and a new route-level harness (15/15) on the same project (see the
+[tip milestone](#milestone-existing-tip-implementation-verified-over-real-httpsql--september-16-2026));
+the project was released at 17:20 PDT with zero owned rows. Real provider authorization, the
+fee policies (product decision) and the wider P04 scope remain open; PR47 stays draft.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
 P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
+
+## Milestone: existing tip implementation verified over real HTTP/SQL — September 16, 2026
+
+- **Branch/commit:** `codex/paid-gig-integration` unchanged at **`3657af97d`**. No application
+  code, schema or test changed; verification only. The backlog rows P01–P03 were written when
+  the tip work was a draft; the source now carries the implementation, so the rows are
+  re-stated below from today's evidence rather than re-implemented (no duplicated work).
+- **Existing implementation located:** routes `backend/routes/pays.js` (`GET /api/payments/tip-preview`,
+  `GET /api/payments/tip-requests/:requestId`, `POST /api/payments/tip` with the original UUID,
+  displayed terms, session scope and `resume|check|cancel` modes, legacy `POST /tip/:paymentId/refresh-status`),
+  service `backend/stripe/stripeService.js` (`previewTip`, `readTipRequest`, `createTipPayment`)
+  with `backend/stripe/gigTipProof.js`, SQL `20260916021100..021300` (16 `*gig_tip*` functions),
+  contract `backend/contracts/gig-tip-contract.md`; clients iOS `PaymentsEndpoints` +
+  `GigDetailViewModel` tip commands, Android `PaymentsApi` + `GigTipViewModel`, SDK `payments.ts`
+  + web tip modal.
+- **Reproduced failure:** none in the application. The only defects were in the new private
+  harness (a request-string interception that missed `stripeService`'s relative
+  `./getStripeClient` require, so two early runs built the real provider client with a synthetic
+  test key and had one `customers.create` rejected by the provider as an invalid key; corrected
+  to resolve by filename, and the recorded run uses no network provider).
+- **Reused evidence, executed today on the fresh full-schema replay:** a `pantopus_stream1_contract`
+  template copy of the disposable project's database ran the tracked
+  `scripts/db/test-gig-tip-original-service.cjs` **22/22 scenarios** (real service + real SQL,
+  synthetic provider/notice transport, exact cleanup verified) and `scripts/db/test-gig-stop.cjs`
+  (full scenario list) unchanged. Web `tip-modal` was part of today's 289-test web run.
+- **New evidence (private, `verify-tip-routes-r1.cjs` → `tip-routes-http-sql.json`, prefix
+  `f9150460`, mirrored with the completion evidence):** real `pays.js` → real `stripeService` →
+  supabase-js → PostgREST → PostgreSQL, synthetic identity, synthetic provider carrying the tracked
+  harness's assertions (frozen parameters equal the saved `provider_params`, idempotency key per
+  request, provider reachable only after `provider_started_at`): **15/15 passed, 0 fixture rows
+  remaining, 6 provider creates, 0 cancels, 1 customer, 0 stub failures.** Worker preview 403;
+  worker without a Connect account `CONNECT_REQUIRED`; owner preview terms, 3 slots, 50/99999999
+  cents, session scope; missing terms / wrong actor / wrong scope / 10 cents refused with no row;
+  resume → succeeded receipt, Payment `tip` 500/500/fee 0, one intent, customer bound once, one
+  committed `tip_received` notice; identical retry same receipt with no provider call; different
+  amount `TIP_REQUEST_CONFLICT`; owner read with scope, worker read 403; lost provider create →
+  202 pending retryable with the Payment reserved and its parameters frozen before the provider
+  was reached; check discovers the exact intent and records the receipt without creating again;
+  cancel before first submission → canceled with zero charge and no provider call, later resume
+  stays canceled, slot not consumed; after three successful tips `TIP_LIMIT` with 0 slots and a
+  fourth command refused without a reservation; two concurrent identical commands → one intent,
+  one row, second pending not retryable; lost HTTP reply after the committed capture recovers
+  through the status read and the retry; legacy refresh-status leaves a succeeded original intact.
+- **Limits:** synthetic identity/session scope and synthetic provider (exact provider proof
+  against Stripe test mode remains P02/L01); free tasks; no installed native or browser tip
+  journey (client tip commands remain unit-level: iOS `GigTipTests`/`GigTipRecoveryTests`,
+  Android `GigTipViewModelTest`/`GigTipRecoveryTest`, not re-run today); cold historical
+  discovery beyond the 24-hour provider window only synthetic; the notification relay verified
+  only by the tracked harness's scheduled relay, not a running worker.
+- **Shared-file effects:** backlog P01–P03 rows re-stated; guide runtime row marked released;
+  handoff paragraph.
+- **Cleanup:** fixture rows 0 (harness count and direct SQL); runtime released as recorded in
+  the completion milestone's cleanup bullet.
 
 ## Milestone: completion, confirmation and reopen policies verified over real HTTP/SQL — September 16, 2026
 
@@ -92,9 +148,11 @@ P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
 - **Shared-file effects:** guide request table (Stream 2 migration version grant) and runtime
   table (this reservation); backlog P04 row; handoff current-state paragraph.
 - **Cleanup:** fixture rows 0 by the harness's own count and by direct SQL; owned runtime
-  `pantopus-stream1-complete-r1` kept up after this milestone for a possible installed
-  journey — its release (`supabase stop --workdir ... --no-backup`, ports 64561-64567 free,
-  retained containers still healthy) is recorded below when done.
+  `pantopus-stream1-complete-r1` kept up for the tip milestone below, then **released at 17:20 PDT**
+  (`supabase stop --no-backup` in the workdir): owned rows `f9150450`/`f9150460` = 0 by direct
+  SQL before the stop, no `stream1-complete` container remains, ports 64561-64567 free, the
+  retained `pantopus-home-gig-replay` (64521-64527) and `pantopus-stream3-block-r1` (64532)
+  containers still up (Kong 64521 answered 200 afterwards). The workdir stays for cheap recreation.
 
 ## Peer findings received from the earlier Stream 1 session — September 16, 2026
 
