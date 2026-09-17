@@ -15,29 +15,20 @@ export const EMERGENCY_CATEGORY_OF: Record<HomeEmergencyType, EmergencyCategory>
   evac_plan: 'evacuation',
   first_aid: 'medical', extinguisher: 'medical',
   other: 'other',
-};
-
-// The native Add Emergency forms send these form categories as `type`. The
-// column refuses them today (reproduced 2026-09-16); once the constraint admits
-// them they roll up the way the native palette rolls them up.
-const NATIVE_FORM_CATEGORY_OF: Record<string, EmergencyCategory> = {
+  // The six categories the native Add Emergency forms send (admitted by
+  // migration 20260916011000), rolled up the way the native palette rolls them.
   allergy: 'medical', medical_condition: 'medical', medication: 'medical', pet_medical: 'medical',
   contact: 'contact', power_of_attorney: 'contact',
 };
 
 export function emergencyCategory(type: unknown): EmergencyCategory {
   if (typeof type !== 'string') return 'other';
-  return EMERGENCY_CATEGORY_OF[type as HomeEmergencyType] || NATIVE_FORM_CATEGORY_OF[type] || 'other';
+  return EMERGENCY_CATEGORY_OF[type as HomeEmergencyType] || 'other';
 }
 
-// What the page's create form saves for each design category. Shutoffs need
-// the exact utility, which is why the form asks for it.
-export const SHUTOFF_KINDS: { type: HomeEmergencyType; label: string }[] = [
-  { type: 'shutoff_water', label: 'Water' },
-  { type: 'shutoff_gas', label: 'Gas' },
-  { type: 'shutoff_electric', label: 'Electric' },
-  { type: 'breaker_map', label: 'Breaker map' },
-];
+// What the page's create form saves for each design category. Shutoffs are
+// stored per utility and have no create mapping until a utility choice is
+// approved for the form.
 export const CATEGORY_CREATE_TYPE: Record<Exclude<EmergencyCategory, 'shutoff'>, HomeEmergencyType> = {
   contact: 'emergency_contacts',
   evacuation: 'evac_plan',

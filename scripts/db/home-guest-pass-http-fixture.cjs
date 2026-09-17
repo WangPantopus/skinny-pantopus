@@ -58,8 +58,9 @@ module.exports = function ({ container = null, api = null } = {}) {
       default_guest_pass_hours: 24,
     },
     wifi: [{ id: id(201), label: 'Home WiFi', value: 'MyWifiPassword123', visibility: 'members' }],
-    // HomeEmergency_type_chk allows only shutoff_water/shutoff_gas/shutoff_electric/
-    // breaker_map/extinguisher/first_aid/evac_plan/emergency_contacts/other.
+    // HomeEmergency_type_chk allows shutoff_water/shutoff_gas/shutoff_electric/
+    // breaker_map/extinguisher/first_aid/evac_plan/emergency_contacts/other and,
+    // since 20260916011000, the six native form categories.
     emergency: [
       { id: id(301), type: 'shutoff_water', label: 'Water shutoff', location: 'Garage wall' },
       { id: id(302), type: 'emergency_contacts', label: 'Emergency contacts', location: 'Kitchen binder' },

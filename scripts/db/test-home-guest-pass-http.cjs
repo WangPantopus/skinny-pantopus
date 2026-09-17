@@ -301,17 +301,23 @@ async function main() {
   assert.equal((await call('GET', emergencies(), undefined, { 'x-fixture-actor': fixture.id(998) })).status, 403);
   console.log('PASS: emergency rows expose the real HomeEmergency fields and refuse a non-member');
 
-  // Both native Add Emergency forms send their form category as `type`; the
-  // column's check constraint refuses six of the seven. The route must report
-  // that as an invalid type, not an internal failure.
+  // Both native Add Emergency forms send their form category as `type`;
+  // migration 20260916011000 admits those six (the constraint refused them and
+  // the route answered 500 before). A value outside the constraint is still the
+  // caller's error, reported with a stable code rather than an internal failure.
   for (const type of NATIVE_FORM_TYPES) {
-    const refused = await call('POST', emergencies(), { type, label: `Native ${type}` });
-    assert.equal(refused.status, 400, `${type}: ${JSON.stringify(refused.body)}`);
-    assert.equal(refused.body.code, 'INVALID_EMERGENCY_TYPE');
+    const saved = await call('POST', emergencies(), { type, label: `Native ${type}` });
+    assert.equal(saved.status, 201, `${type}: ${JSON.stringify(saved.body)}`);
+    assert.equal(saved.body.emergency.type, type);
   }
+  const refused = await call('POST', emergencies(), { type: 'shutoff', label: 'Web category id' });
+  assert.equal(refused.status, 400, JSON.stringify(refused.body));
+  assert.equal(refused.body.code, 'INVALID_EMERGENCY_TYPE');
   assert.equal((await call('POST', emergencies(), { type: 'shutoff_gas' })).status, 400);
   assert.equal((await call('POST', emergencies(), { type: 'shutoff_gas', label: 'Gas valve' }, { 'x-fixture-actor': fixture.id(998) })).status, 403);
-  console.log('PASS: unsupported emergency types are a 400 with a stable code; a non-member cannot create one');
+  const baseCount = 2 + NATIVE_FORM_TYPES.length;
+  assert.equal((await call('GET', emergencies())).body.emergencies.length, baseCount);
+  console.log('PASS: the six native form categories save; an unsupported type is a 400 with a stable code; a non-member cannot create one');
 
   const createdEmergency = await call('POST', emergencies(), { type: 'shutoff_gas', label: 'Gas valve', location: 'Behind the dryer', details: { notes: 'Turn clockwise', phone: '+1 555 0100' } });
   assert.equal(createdEmergency.status, 201, JSON.stringify(createdEmergency.body));
@@ -319,14 +325,14 @@ async function main() {
   assert.equal(createdEmergency.body.emergency.type, 'shutoff_gas');
   assert.equal(createdEmergency.body.emergency.info_type, 'shutoff_gas');
   assert.deepEqual(createdEmergency.body.emergency.details, { notes: 'Turn clockwise', phone: '+1 555 0100' });
-  assert.equal((await call('GET', emergencies())).body.emergencies.length, 3);
+  assert.equal((await call('GET', emergencies())).body.emergencies.length, baseCount + 1);
   const removed = await call('DELETE', `${emergencies()}/${emergencyId}`);
   assert.equal(removed.status, 200, JSON.stringify(removed.body));
   assert.equal((await call('GET', emergencies())).body.emergencies.some(row => row.id === emergencyId), false);
   assert.equal((await call('DELETE', `${emergencies()}/${emergencyId}`)).status, 404);
   assert.equal((await call('DELETE', `${emergencies()}/${fixture.state.emergency[0].id}`, undefined, { 'x-fixture-actor': fixture.id(998) })).status, 403);
   assert.equal((await call('DELETE', `/api/homes/${fixture.id(999)}/emergencies/${fixture.state.emergency[0].id}`)).status, 403);
-  assert.equal((await call('GET', emergencies())).body.emergencies.length, 2);
+  assert.equal((await call('GET', emergencies())).body.emergencies.length, baseCount);
   console.log('PASS: a canonical emergency entry is created with its details and removed exactly once');
 
   // ---- Shared documents: a real upload through the production route and

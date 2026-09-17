@@ -31,6 +31,9 @@ const rows = [
     location: 'Front yard', location_in_home: 'Front yard', details: { detail: 'Take the side gate' }, created_by: 'u', created_at: '', updated_at: '' },
   { id: 'kit', home_id: 'home', type: 'first_aid', info_type: 'first_aid', label: 'First aid kit',
     location: 'Hall closet', location_in_home: 'Hall closet', details: {}, created_by: 'u', created_at: '', updated_at: '' },
+  // A native Add Emergency form category (admitted by migration 20260916011000).
+  { id: 'allergy', home_id: 'home', type: 'allergy', info_type: 'allergy', label: 'Peanut allergy',
+    location: null, location_in_home: null, details: { detail: 'EpiPen in the fridge door' }, created_by: 'u', created_at: '', updated_at: '' },
 ];
 
 beforeEach(() => {
@@ -49,26 +52,33 @@ test('real HomeEmergency rows render under their type\'s category with label, lo
   expect(screen.getByRole('link', { name: /\+1 800 222 1222/ })).toHaveAttribute('href', 'tel:+1 800 222 1222');
   expect(screen.getByText('Open 24h')).toBeInTheDocument();
   expect(screen.getByText('Take the side gate')).toBeInTheDocument();
+  // The native form category lands in the Medical section with its detail text.
+  expect(screen.getByText('Peanut allergy')).toBeInTheDocument();
+  expect(screen.getByText('EpiPen in the fridge door')).toBeInTheDocument();
   expect(screen.queryByText('[object Object]')).not.toBeInTheDocument();
 });
 
-test('adding a shutoff saves the exact utility type and details through the API and shows the saved row', async () => {
+test('adding a medical entry saves first_aid with its details through the API and shows the saved row', async () => {
   jest.mocked(api.homeProfile.createHomeEmergency).mockResolvedValue({ emergency: {
-    id: 'gas', home_id: 'home', type: 'shutoff_gas', label: 'Gas valve', location: null,
-    details: { phone: '+1 555 0100', notes: 'Behind the dryer' }, created_by: 'u', created_at: '', updated_at: '',
+    id: 'meds', home_id: 'home', type: 'first_aid', label: 'Insulin', location: null,
+    details: { phone: '+1 555 0100', notes: 'Fridge door' }, created_by: 'u', created_at: '', updated_at: '',
   } });
   render(<EmergencyPage />);
   fireEvent.click(await screen.findByRole('button', { name: /^Add$/ }));
-  fireEvent.change(screen.getByPlaceholderText('Title'), { target: { value: 'Gas valve' } });
+  fireEvent.change(screen.getByPlaceholderText('Title'), { target: { value: 'Insulin' } });
+  // Shutoffs are stored per utility; without an approved utility choice the
+  // form cannot save one, so the submit stays disabled instead of guessing.
   fireEvent.click(screen.getByRole('button', { name: 'Shutoffs' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Gas' }));
+  expect(screen.getByRole('button', { name: 'Add Emergency Info' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Medical' }));
+  expect(screen.getByRole('button', { name: 'Add Emergency Info' })).toBeEnabled();
   fireEvent.change(screen.getByPlaceholderText('Phone number (optional)'), { target: { value: '+1 555 0100' } });
-  fireEvent.change(screen.getByPlaceholderText('Details (optional)'), { target: { value: 'Behind the dryer' } });
+  fireEvent.change(screen.getByPlaceholderText('Details (optional)'), { target: { value: 'Fridge door' } });
   fireEvent.click(screen.getByRole('button', { name: 'Add Emergency Info' }));
   await waitFor(() => expect(api.homeProfile.createHomeEmergency).toHaveBeenCalledWith('home',
-    { type: 'shutoff_gas', label: 'Gas valve', details: { phone: '+1 555 0100', notes: 'Behind the dryer' } }));
-  expect(await screen.findByText('Gas valve')).toBeInTheDocument();
-  expect(screen.getByText('Behind the dryer')).toBeInTheDocument();
+    { type: 'first_aid', label: 'Insulin', details: { phone: '+1 555 0100', notes: 'Fridge door' } }));
+  expect(await screen.findByText('Insulin')).toBeInTheDocument();
+  expect(screen.getByText('Fridge door')).toBeInTheDocument();
   expect(toast.success).toHaveBeenCalledWith('Emergency info added');
 });
 

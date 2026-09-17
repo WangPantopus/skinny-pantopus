@@ -115,6 +115,15 @@ describe('DELETE /api/homes/:id/emergencies/:emergencyId', () => {
     expect((await request(makeApp()).delete(`/api/homes/${HOME_ID}/emergencies/${ROW_ID}`).set('x-test-user-id', OUTSIDER)).status).toBe(403);
     expect(getTable('HomeEmergency')).toHaveLength(1);
   });
+
+  test('a manager of another home reaches the query and still cannot remove this home\'s row', async () => {
+    const otherHome = 'eeeeeeee-eeee-1eee-8eee-eeeeeeeeeeee';
+    checkHomePermission.mockImplementation(async () => ({ hasAccess: true, permissions: [], readFailed: false }));
+    const res = await request(makeApp()).delete(`/api/homes/${otherHome}/emergencies/${ROW_ID}`).set('x-test-user-id', OWNER);
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('EMERGENCY_NOT_FOUND');
+    expect(getTable('HomeEmergency')).toHaveLength(1);
+  });
 });
 
 describe('GET /api/homes/shared-documents/:receipt/:documentId', () => {

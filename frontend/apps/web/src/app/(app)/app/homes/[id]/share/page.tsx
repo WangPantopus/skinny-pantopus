@@ -87,7 +87,7 @@ function ShareContent() {
         : '';
       if (passUrl) {
         try { await navigator.clipboard.writeText(passUrl); toast.success('Share link copied to clipboard'); }
-        catch { toast.error('Could not copy the link. Open the Home dashboard Share tab to copy it.'); }
+        catch { /* ignore */ }
       }
     } catch (err: unknown) { toast.error(failureMessage(err, 'Failed to create pass')); }
     finally { setCreating(false); }

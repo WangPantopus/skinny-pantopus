@@ -10,7 +10,7 @@ import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { failureMessage, shareFailure } from '@/components/home/share/shareFailure';
 import {
-  CATEGORY_CREATE_TYPE, SHUTOFF_KINDS, emergencyCategory, emergencyDetail, type EmergencyCategory,
+  CATEGORY_CREATE_TYPE, emergencyCategory, emergencyDetail, type EmergencyCategory,
 } from '@/components/home/emergencyTypes';
 
 const CATEGORY_META: Record<EmergencyCategory, { icon: typeof Droplets; color: string; label: string }> = {
@@ -32,9 +32,9 @@ function EmergencyContent() {
 
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState<EmergencyCategory>('contact');
-  // Shutoffs are stored per utility (shutoff_water, shutoff_gas, ...), so the
-  // form asks which one; every other category maps to one HomeEmergency type.
-  const [newShutoffKind, setNewShutoffKind] = useState(SHUTOFF_KINDS[0].type);
+  // Shutoffs are stored per utility (shutoff_water, shutoff_gas, ...). Until a
+  // utility choice is approved for this form, a Shutoffs entry cannot be saved
+  // here (the submit stays disabled); every other category maps to one type.
   const [newDetails, setNewDetails] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [creating, setCreating] = useState(false);
@@ -66,14 +66,14 @@ function EmergencyContent() {
   // the free-form details object the native forms also write; the row shown is
   // the one the server returned, never a local placeholder.
   const handleCreate = useCallback(async () => {
-    if (!newTitle.trim() || !homeId || creating) return;
+    if (!newTitle.trim() || !homeId || creating || newCategory === 'shutoff') return;
     setCreating(true);
     const details: Record<string, string> = {};
     if (newPhone.trim()) details.phone = newPhone.trim();
     if (newDetails.trim()) details.notes = newDetails.trim();
     try {
       const res = await api.homeProfile.createHomeEmergency(homeId, {
-        type: newCategory === 'shutoff' ? newShutoffKind : CATEGORY_CREATE_TYPE[newCategory],
+        type: CATEGORY_CREATE_TYPE[newCategory],
         label: newTitle.trim(),
         details,
       });
@@ -85,7 +85,7 @@ function EmergencyContent() {
     } catch (err: unknown) {
       toast.error(failureMessage(err, 'Failed to add emergency info'));
     } finally { setCreating(false); }
-  }, [homeId, creating, newTitle, newCategory, newShutoffKind, newDetails, newPhone]);
+  }, [homeId, creating, newTitle, newCategory, newDetails, newPhone]);
 
   const handleDelete = useCallback(async (itemId: string) => {
     const yes = await confirmStore.open({ title: 'Delete', description: 'Remove this emergency info?', confirmLabel: 'Delete', variant: 'destructive' });
@@ -146,21 +146,9 @@ function EmergencyContent() {
               );
             })}
           </div>
-          {newCategory === 'shutoff' && (
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Shutoff type">
-              {SHUTOFF_KINDS.map((kind) => (
-                <button key={kind.type} type="button" onClick={() => setNewShutoffKind(kind.type)}
-                  aria-pressed={newShutoffKind === kind.type}
-                  className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition ${newShutoffKind === kind.type ? 'border-current' : 'border-app-border text-app-text-secondary'}`}
-                  style={newShutoffKind === kind.type ? { color: CATEGORY_META.shutoff.color, backgroundColor: CATEGORY_META.shutoff.color + '12', borderColor: CATEGORY_META.shutoff.color } : undefined}>
-                  {kind.label}
-                </button>
-              ))}
-            </div>
-          )}
           <input type="tel" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="Phone number (optional)" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           <textarea value={newDetails} onChange={(e) => setNewDetails(e.target.value)} placeholder="Details (optional)" rows={2} className="w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none" />
-          <button onClick={handleCreate} disabled={creating || !newTitle.trim()} className="w-full py-2.5 bg-emerald-600 text-white rounded-lg font-semibold text-sm hover:bg-emerald-700 disabled:opacity-50 transition">
+          <button onClick={handleCreate} disabled={creating || !newTitle.trim() || newCategory === 'shutoff'} className="w-full py-2.5 bg-emerald-600 text-white rounded-lg font-semibold text-sm hover:bg-emerald-700 disabled:opacity-50 transition">
             {creating ? 'Adding...' : 'Add Emergency Info'}
           </button>
         </div>
