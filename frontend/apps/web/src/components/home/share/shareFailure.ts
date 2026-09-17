@@ -9,6 +9,8 @@ export interface ShareFailure {
   statusCode: number | null;
   /** True when the response body itself carried an API error envelope. */
   fromApi: boolean;
+  /** The share API's passcode challenge flag (403 SHARE_PASSCODE_REQUIRED). */
+  requiresPasscode: boolean;
 }
 
 export function shareFailure(failure: unknown): ShareFailure {
@@ -16,13 +18,14 @@ export function shareFailure(failure: unknown): ShareFailure {
     ? failure as { message?: unknown; code?: unknown; statusCode?: unknown; data?: unknown }
     : {});
   const body = (value.data && typeof value.data === 'object'
-    ? value.data as { code?: unknown; error?: unknown } : {});
+    ? value.data as { code?: unknown; error?: unknown; requiresPasscode?: unknown } : {});
   const bodyCode = typeof body.code === 'string' ? body.code : '';
   return {
     message: typeof value.message === 'string' ? value.message : '',
     code: bodyCode || (typeof value.code === 'string' ? value.code : ''),
     statusCode: typeof value.statusCode === 'number' ? value.statusCode : null,
     fromApi: Boolean(bodyCode) || typeof body.error === 'string',
+    requiresPasscode: body.requiresPasscode === true,
   };
 }
 
