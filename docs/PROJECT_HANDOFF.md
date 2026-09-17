@@ -40,7 +40,9 @@ normally. The installed Android candidate then passed the same journeys on a new
 Later on September 16 the existing completion, owner-confirmation and reopen/release
 policies (immutable displayed terms included) passed 32/32 real HTTP → route → PostgREST →
 PostgreSQL checks on a private full-schema project with no application change; the paid
-confirmation is verified to the provider boundary. See the Stream 1 status for limits
+confirmation is verified to the provider boundary. The existing tip implementation (P01–P03)
+then passed the tracked service harness (22/22) and a route-level harness (15/15) on the same
+project, which was released with zero owned rows. See the Stream 1 status for limits
 (my-bids card, providers, fee policies). Real provider authorization, the fee payer/recipient
 decision and the wider P04/P08/P09 scope remain open. Fixtures are cleaned to zero, HTTP18132 is stopped, the owned simulator is shut
 down and the heavy native slot is released.
