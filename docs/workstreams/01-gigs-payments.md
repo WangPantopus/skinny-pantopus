@@ -101,6 +101,14 @@ unchanged. Private attempt, source and cleanup evidence mirrored with the browse
 milestone. Recheck actual Simulator availability at resume; do not repeat browser
 acceptance for unchanged application bytes.
 
+Android fallback also attempted: existing owned `Pantopus_Stream1_Start_R2` AVD
+booted and contains `app.pantopus.android.debug`. The computer-use surface cannot
+attach its non-bundled qemu app (not in app inventory; exact executable rejected),
+so no UI/native-tip acceptance ran. No APK rebuild/install, unit tests, screenshots
+claimed or unsupported input automation used. Owned emulator stopped; briefly
+recreated isolated full-schema project stopped again without seeding. Native slot
+released. Native verification needs a functioning supported device-control surface.
+
 Coordinator review in progress: Stream2 PR60 `0f663dc32` includes the already
 approved Emergency migration `20260916011000` and a newly reproduced stale-create
 UI repair; Stream3 PR64 `e83eaac91` wires existing chat Report/Block controls.

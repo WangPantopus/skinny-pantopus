@@ -21,7 +21,9 @@ conditionally pending actual reproduction/comparison; no implementation grant ye
 
 Browser hostnames deliberately differ because cookies are shared across ports.
 No shared cookie clearing, retained database mutation, cache cleaning or physical
-device use. Native slot **released** after Stream1's interrupted installed-tip attempt; exact
+device use. Native slot **released** after Stream1's iOS and Android attempts. Android AVD
+boots but current computer-use cannot attach its qemu window; no native tip
+acceptance claimed. Owned emulator stopped; no rebuild/install. exact
 owned simulator shut down. Local Simulator became unavailable after an external
 shutdown/XPC/display failure; no build or system-service reset. Recheck actual
 availability before reserving. Stream1 HTTP18132/web18133 and isolated64561/64562
