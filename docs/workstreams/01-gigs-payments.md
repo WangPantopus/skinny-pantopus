@@ -1,5 +1,81 @@
 # Stream 1 — Gigs and payments
 
+## Current resumed state — September 20, 2026
+
+State: **verification**, coordinator and sole Stream 1 writer resumed in task
+`01a0c0d1-0703-70c3-b842-6d01bc8ca48b`. Restored the missing registered application
+worktree at `/private/tmp/pantopus-paid-gig-integration`, branch
+`codex/paid-gig-integration`, from exact remote `3657af97d`; merged current master
+`38f00dcc8` (six coordination documents only, application bytes unchanged).
+Owner checkout/untracked design work and Stream 3's dirty status are preserved.
+PR47 and PR34 remain draft, PR46 separate. Fresh remote CI35142787582 is green on
+`3657af97d` (15 applicable checks); the new documentation integration is not yet CI verified.
+
+Adopted later Start Work displayed terms, my-bids, installed iOS/Android,
+completion/reopen and tip HTTP/SQL milestones below. Durable September16 mirrors
+are present; source unchanged, so do not repeat accepted large suites or write
+unit tests. Next bounded P03/P08/P09 milestone: existing browser tip modal from
+GigDetail, through SDK, payment routes/service and full-schema PostgREST/SQL,
+including persisted original, lost reply, reopen/reload and session boundaries.
+Actual Stripe remains a separate unverified provider boundary; use the existing
+synthetic provider harness for local UI/persistence verification.
+
+Runtime reservation: Stream 1 owns HTTP18132/web18133 and isolated SQL64562/API64561
+(64563–64567) for this milestone; old temporary runtime is gone and Docker was
+initially stopped. Inspect actual ownership before recreation; preserve retained
+64521–64533 and all other fixtures. Heavy native slot remains unclaimed. Stream 3
+has been notified of coordinator resumption and its own 18130/18131/64531/64532
+reservation; its shared-file/schema requests come here.
+
+Coordinator runtime grant September20: Stream2 task `01a0c0d4-2278-71d3-bc23-a9d789d2afeb`
+owns SQL64552/API64551 (64550–64559), API18142/web18141. Docker auto-restarted
+its existing `pantopus-stream2-guest-r1` containers; inspect and adopt those before
+creating r2 on the same ports. No retained64521–64533 mutation. Native slot still
+unclaimed. Browser cookie isolation: Stream1 localhost, Stream3 127.0.0.1;
+Stream2 must use its own loopback host and bind accordingly.
+
+The historical snapshot below retains its original source and acceptance limits.
+
+## Milestone: browser tip recovery through real UI/HTTP/SQL — September 20, 2026
+
+- Branch `codex/paid-gig-integration`, pushed **`aa168017e`** (current master
+  `38f00dcc8` merged; application bytes equal accepted `3657af97d`). PR47/PR34 stay
+  draft; PR46 separate. CI35540452604 explicitly dispatched because no automatic
+  run appeared on the merge head; backend/web/database gates pass, native jobs
+  still running. No feature merged.
+- Existing GigDetail → `CompletionFlow` → `TipModal` → SDK → real `gigs.js`/`pays.js`
+  → `stripeService` → PostgREST → PostgreSQL on all75 migrations. Existing sign-in
+  form used a synthetic identity handler. Reused September16 route/provider harness
+  and its frozen-parameter/idempotency assertions. No app file, screen, layout,
+  schema or unit test added/changed; no application failure reproduced.
+- Browser verified ordinary confirmation/tip, minimum/maximum amount refusal,
+  duplicate click, lost committed response/reload recovery, unknown provider result,
+  retained reload, cross-tab sign-out retirement, other-account isolation (zero tip
+  reads/submits), original-account return, unknown cancellation staying pending,
+  discovered-original success, missing Connect refusal, unavailable-before-submit
+  zero-charge cancellation, corrupted receipt refusal/retry, concurrent second-tab
+  retry, departure before delayed result, pending processing and explicit provider
+  cancellation. Exact originals and amounts remained bound throughout.
+- SQL/private traces confirm **8 owner-confirmed gigs, 7 original Payments,
+  5 successful tips/5 stored tip notices, 2 canceled originals, 6 synthetic provider
+  creates and 1 synthetic cancel, zero provider assertion failures** across two
+  independently cleaned phases. UI transient reload toast was not captured; exact
+  recovery GET/modal retirement plus unchanged payment/provider counts were.
+- Limits: local development browser; synthetic auth/provider and ancillary shell
+  feeds; no Stripe checkout/3DS, real provider, delivery worker, hosted deployment,
+  cold browser profile/disabled storage or installed native tip claim. P03/P08/P09
+  remain partial. Start Work source-bound evidence reused, no duplicate unit suites.
+- Private evidence: `/private/tmp/pantopus-stream1-tip-ui-r1`, mirrored to
+  `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream1-tip-ui-r1`.
+  Read `EVIDENCE.md`, `source.json`, `phase1-final.json`, `phase2-final.json`, request/RPC
+  traces and both cleanup records. Credentials/raw logs stay outside Git/chat.
+- Cleanup: phase1 exact rows0; phase2 exact rows0 (`cleanup.json`).
+  Browser web18133 and isolated SQL64562/API64561 temporarily retained for the next
+  native-tip milestone; API18132 stopped between fixture phases. No peer resources
+  changed. Next: inspect the previously installed owned iOS candidate and source
+  binding before reusing it for existing tip UI journeys; reserve native slot first.
+
+
 Updated September 16, 2026. Owner: coordinator / Stream 1.
 State: ready for review — displayed-terms binding delivered at `a65411758` and the
 my-bids follow-up at `4ad88ec11` (backend projection guard + existing web card), both

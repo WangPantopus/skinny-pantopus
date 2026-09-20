@@ -4,6 +4,24 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## Active sessions and runtime ownership — September 20, 2026
+
+This table supersedes historical session/runtime rows below. No work is dispatched
+to the retired September16 coordinator or older Stream1 session.
+
+| Stream | Active task | Current work / sole writer | Local browser and API | Database |
+| --- | --- | --- | --- | --- |
+| 1 / coordinator | `01a0c0d1-0703-70c3-b842-6d01bc8ca48b` | Existing tip UI through payment routes/SQL; no application edits yet; restored paid branch + documentation master merge `aa168017e` | `localhost:18133` → HTTP18132 | Isolated `pantopus-stream1-tip-ui-r1`, API64561/SQL64562 |
+| 2 | `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` | Adopt `e84b085b7`/PR60; existing Home sharing/Emergency/document journeys | `[::1]:18141` → HTTP18142 | Adopt existing `pantopus-stream2-guest-r1`, API64551/SQL64552; ports64550–64559 granted |
+| 3 | `01a0a824-301b-74e3-a1d9-b205714ed7a1` | Existing `components/chat/ConversationView.tsx` Report/Block repair; shared account-deletion/schema changes need a separate reproduced request | `stream3.localhost:18131` → HTTP18130 | Existing `pantopus-stream3-block-r1`, API64531/SQL64532 |
+
+Browser hostnames deliberately differ because cookies are shared across ports.
+No shared cookie clearing, retained database mutation, cache cleaning or physical
+device use. Native heavy-build slot is currently unclaimed; ask coordinator before
+acquiring. Stream3 and Stream2 own their dirty live status files; coordinator stages
+only handed-off snapshots. Stream1 source changes remain confined to its assigned
+paid worktree, Stream2 to its Home worktree, Stream3 to its accounts/social worktree.
+
 ## Where to start
 
 | Document | Purpose | Writer |
