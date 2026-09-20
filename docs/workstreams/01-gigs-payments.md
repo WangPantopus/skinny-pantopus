@@ -171,34 +171,43 @@ conditionally, pending actual UI/API reproduction and comparison before edits.
   past.9ecf66fc7 changes only the fixture to future-relative dates; no app behavior
   or coverage expansion. Source-bound earlier native evidence retained.
 
-## Milestone: actual paid authorization, Start Work and capture — September20
+## Milestone: actual paid authorization, Start Work and capture — September 20
 
-- **Source:** unchanged application9ae1edb3bf2647cd8a9d276d0f210d5b201f5eac,
-  currentCI35542623560 running. No app defect/source change, new file or unit test.
-  Existing GigDetail→GigBidCheckout/GigPaymentSetup→gigs accept/finalize/start/
-  completion/confirm→gigPaymentAcceptance/stripeService→PostgREST/full75migrations.
-  Prior synthetic concurrency/error cases reused; new boundary actual Stripe TEST.
-- **Actual Chrome workflow:** owner accepts12.50USD bid on20USD-budget gig,
-  authorizes public4242 card. Stripe requires_capture1250/received0; SQL oneauthorized
-  Payment, acceptedbid, assignedgigprice12.50; UI Bid accepted. Owner logout→worker
-  login, StartWork→in_progress; worker completion note→completed with paymentstill
-  authorized and no ownerconfirmation. Ownerlogin→ReviewWork exact persistednote→
-  Confirm&Approve captures1250; SQLcaptured_hold/owner_confirmed, UI PaymentHeld.
-  Optional tip skipped. Card only charged at ownerconfirmation in this journey.
-- **Cancellation:** separate10USD-budget/7.50bid→actualcheckout→Cancel. Existing
-  abort route canceled same Stripeintent; bidpending/gigopen restored, attempt and
-  paymentcanceled/received0. Reload displayed explicit newContinue but created no
-  payment. Final2providercreates1cancel,1captured1250/1canceled750, no duplicate.
-- **Limits:** actual Stripe TEST and local payment persistence; synthetic appidentity,
-  shell reads and notificationtransports. Worker ConnectAccount getter correctly
-  fails for synthetic account and UI saysSetUp; no Connect/payout readiness or
-  hosted/live/native acceptance. Acceptance/chat/delivery rows persisted but
-  external delivery not claimed. Fees/productdecision and widerP04/P08/P09 open.
-- **Evidence/cleanup:** same durable September20mirror, `paid-*.json`,
-  `runtime-paid-stripe.cjs`, EVIDENCE.md/manifest.11 exactownedtable counts0, test1250
-  refundsuccess/readbackfullyrefunded,750intentcanceled,ownedcustomerdeleted.
-  Providerhistoryretained. Ownpaymenttabclosed,HTTP18132/web18133 andSupabasestopped;
-  nativefree,peerresourcespreserved. Documentation-only publication, no featuremerge.
+- **Source:** unchanged application `9ae1edb3bf2647cd8a9d276d0f210d5b201f5eac`;
+  current [CI35542623560](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35542623560)
+  is running. No application defect, source change, new file or new unit test.
+  Located the existing GigDetail, GigBidCheckout and GigPaymentSetup callers,
+  accept/finalize/start/completion routes, gigPaymentAcceptance/stripeService and
+  existing persistence contracts. Reused earlier synthetic concurrency/error
+  evidence; this milestone adds the actual Stripe TEST provider boundary.
+- **Actual Chrome workflow:** the owner accepts a $12.50 bid on a $20-budget gig
+  and authorizes Stripe's public 4242 test card. Stripe reports `requires_capture`,
+  1,250 cents capturable and zero received. SQL has one authorized Payment, an
+  accepted bid and an assigned gig priced at $12.50; UI says Bid accepted.
+  After signing in as the worker, Start Work saves `in_progress`; submitting the
+  completion note saves `completed` while the payment remains authorized and the
+  owner confirmation is absent. The owner signs in, reviews the persisted note and
+  selects Confirm & Approve. Stripe then captures 1,250 cents, SQL records
+  `captured_hold` and owner confirmation, and UI shows Payment Held. Optional tip
+  skipped. The card was charged only after owner confirmation in this journey.
+- **Cancellation:** a separate $10-budget gig has a $7.50 bid. Cancel in the
+  existing checkout invokes the abort route and cancels the same Stripe intent.
+  The bid returns to pending and the gig stays open; its attempt and payment are
+  canceled with zero received. Reload offers an explicit new Continue action but
+  creates no payment. Final count: two provider creates, one cancel, one captured
+  original and one canceled original; no duplicate payment.
+- **Limits:** actual Stripe TEST and local payment persistence; synthetic app
+  identity, ancillary shell reads and notification transports. The worker's
+  Connect-account lookup fails for the synthetic account and UI shows Set Up.
+  This does not establish Connect, payout, hosted, live-mode or native readiness.
+  Acceptance/chat/delivery rows persisted; external delivery is not claimed.
+  Fee decisions and the wider P04/P08/P09 scope remain open.
+- **Evidence and cleanup:** same durable September 20 mirror, `paid-*.json`,
+  `runtime-paid-stripe.cjs`, EVIDENCE.md and manifest. All 11 checked owned entity
+  counts are zero. The test $12.50 refund succeeded and a fresh provider read
+  confirmed the full refund; the $7.50 intent is canceled and the owned customer
+  deleted. Provider history remains. Own payment tab, API18132/web18133 and
+  Supabase project stopped; native slot free and peer resources preserved.
 
 Updated September 16, 2026. Owner: coordinator / Stream 1.
 State: ready for review — displayed-terms binding delivered at `a65411758` and the

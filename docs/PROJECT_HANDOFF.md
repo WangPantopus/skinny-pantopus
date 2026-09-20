@@ -38,17 +38,27 @@ retained. Synthetic identity/notification transport limits remain. Native tip
 attempts lack functioning supported device control, not accepted; native slot free.
 Live/hosted/Connect payout boundaries and P03/P08/P09/app remain incomplete.
 
-Stream2 PR60 **66f834cc7** author handoff reviewed/published, currentCI35541676278
-success; source repairs existing guest creation stale replies and DocsCard canonical
-share contract, no design change. Native/wider scope remains open; still draft.
-Stream3 PR64 is actively fixing reproduced cross-account cookie-session retirement,
-held401 retry under a new account, and admitted account deletion blocked by UserBlock
-FKs. Single-writer scopes and reserved forward migration20260916012000 in README;
-finalsafetyf387cd480 source reviewed, intact-cookie/account retry acceptance
-verified, exactheadCIpending; frozen03 handedoff forpublication. No peer feature merged this session.
-Next: finish current-head CI/review and remaining provider/native acceptance, with
-fee payer/recipient/timing decision still pending. Documentation PR63 publishes
-milestones separately from feature code. Preserve PR34 draft and unrelatedPR46.
+Stream2 PR60 **66f834cc7** has a reviewed/published author handoff and green
+CI35541676278. Its existing guest-creation and document-share caller repairs are
+verified within the recorded browser/API scope. Author is integrating the new
+shared session changes and checking one affected journey before final disposition;
+native and wider scope remain open.
+
+Stream3 safety PR64 **f387cd480** passed exact-head CI and was merged as
+**2d6ff2069** on September 20 at 23:00 UTC. Source review and real local GoTrue
+browser/API evidence cover inert Report/Block controls, account-state retirement,
+wrong-account retry after a delayed401, and an old refresh response overwriting a
+new login's cookies. Existing client code now cancels the old refresh and preserves
+new-account state. Storage-event delivery, frozen tabs, other browsers and native
+limits remain explicit; no broad safety row closed. The separately verified A02
+Settings step-up and two UserBlock FK repairs remain with their author for a new
+PR against current master. Single-writer scopes and migration20260916012000 are in
+README. Frozen03 was published; later dirty updates are author-owned.
+
+Next: finish paid current-head CI, review combined Home and A02 candidates, and
+continue remaining provider/native acceptance. Fee payer/recipient/timing decision
+is pending. Documentation PR63 publishes milestones separately from feature code.
+Preserve PR34 draft and unrelated PR46; paid PR47 remains draft.
 
 ## Current coordination and next action — September 16, 2026
 

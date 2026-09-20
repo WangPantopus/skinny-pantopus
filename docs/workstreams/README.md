@@ -13,7 +13,7 @@ to the retired September16 coordinator or older Stream1 session.
 | --- | --- | --- | --- | --- |
 | 1 / coordinator | `01a0c0d1-0703-70c3-b842-6d01bc8ca48b` | Actual Stripe test checkout; sole writer `backend/stripe/gigTipProof.js` for reproduced absent-transfer receipt failure; base `aa168017e` | `localhost:18133` → HTTP18132 | Isolated `pantopus-stream1-tip-ui-r1`, API64561/SQL64562 |
 | 2 | `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` | Adopt `e84b085b7`/PR60; existing Home sharing/Emergency/document journeys | `[::1]:18141` → HTTP18142 | Adopt existing `pantopus-stream2-guest-r1`, API64551/SQL64552; ports64550–64559 granted |
-| 3 | `01a0a824-301b-74e3-a1d9-b205714ed7a1` | Existing `components/chat/ConversationView.tsx` Report/Block repair; shared account-deletion/schema changes need a separate reproduced request | `stream3-auth.localhost:18131` → HTTP18130 | Existing `pantopus-stream3-block-r1`, API64531/SQL64532 |
+| 3 | `01a0a824-301b-74e3-a1d9-b205714ed7a1` | PR64 safety merged as2d6ff2069; author owns separate granted Settings/SDK deletion and UserBlock forward migration | `stream3-auth.localhost:18131` → HTTP18130 | Existing `pantopus-stream3-block-r1`, API64531/SQL64532 |
 
 Stream3 runtime extension64534–64537 is granted for local GoTrue/Kong/mail only.
 Stream3 single-writer grants: existing Settings deletion UI and SDK users endpoint;
@@ -38,8 +38,9 @@ acceptance claimed. Owned emulator stopped; no rebuild/install. exact
 owned simulator shut down. Local Simulator became unavailable after an external
 shutdown/XPC/display failure; no build or system-service reset. Recheck actual
 availability before reserving. Stream1 HTTP18132/web18133 and isolated64561/64562
-project stopped after bothactualStripeTEST phases; exactownedrows0,4testcaptures
-fullyrefunded,2intentscanceled,2ownedcustomersdeleted(providerhistoryretained).
+project stopped after both actual Stripe TEST phases. Exact owned rows0; four test
+captures fully refunded, two intents canceled, two owned customers deleted. Provider
+history remains.
 Stream3 and Stream2 own their dirty live status files; coordinator stages
 only handed-off snapshots. Stream1 source changes remain confined to its assigned
 paid worktree, Stream2 to its Home worktree, Stream3 to its accounts/social worktree.
