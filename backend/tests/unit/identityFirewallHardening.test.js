@@ -283,7 +283,7 @@ describe('Identity Firewall backend hardening', () => {
     });
     expect(listPending.body.followers[0].follower).toEqual({
       handle: getTable('PersonaMembership')[0].fan_handle,
-      displayName: getTable('PersonaMembership')[0].fan_display_name,
+      displayName: getTable('PersonaMembership')[0].fan_display_name || getTable('PersonaMembership')[0].fan_handle,
       avatarUrl: null,
     });
     expect(JSON.stringify(listPending.body)).not.toContain('follower_user_id');
