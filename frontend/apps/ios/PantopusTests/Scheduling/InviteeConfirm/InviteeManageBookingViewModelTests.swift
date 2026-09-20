@@ -35,7 +35,10 @@ final class InviteeManageBookingViewModelTests: XCTestCase {
         return """
         {"booking":{"id":"b1","status":"\(
             status
-        )","start_at":"\(formatter.string(from: start))","end_at":"\(formatter.string(from: start.addingTimeInterval(30 * 60)))","invitee_name":"Maya Chen","invitee_timezone":"America/Los_Angeles","location_mode":"video"},
+        )","start_at":"\(formatter.string(from: start))","end_at":"\(formatter
+            .string(from: start
+                .addingTimeInterval(30 *
+                    60)))","invitee_name":"Maya Chen","invitee_timezone":"America/Los_Angeles","location_mode":"video"},
         "actions":{"can_cancel":\(canAct),"can_reschedule":\(canAct)},
         "eventType":{"id":"et1","name":"Intro call","slug":"intro","default_duration":30,"location_mode":"video","cancellation_window_min":1440},
         "page":{"slug":"ada","title":"Maria Kessler","owner_type":"user","timezone":"America/Los_Angeles"}}
