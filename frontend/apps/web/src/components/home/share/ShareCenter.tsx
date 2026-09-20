@@ -176,6 +176,7 @@ export default function ShareCenter({
         onClose={() => { setShowCreate(false); setPreselectedKind(null); }}
         homeId={homeId}
         preselectedKind={preselectedKind}
+        onIssued={() => { void loadPasses(); }}
         onCreated={() => { setShowCreate(false); setPreselectedKind(null); loadPasses(); }}
       />
 
