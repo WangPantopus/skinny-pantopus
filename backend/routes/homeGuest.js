@@ -38,9 +38,11 @@ router.get('/shared-documents/:receipt/:documentId', viewLimiter, optionalVerifi
   try {
     const document = await share.download({ receipt: req.params.receipt, documentId: req.params.documentId,
       recipientId: req.user?.id || null });
-    res.type(document.mimeType || 'application/octet-stream');
     // Attachment prevents an uploaded document from executing in the app origin.
     res.attachment(String(document.title || 'Shared document').replace(/[\r\n]/g, ' ').slice(0,180));
+    // attachment() derives a type from the filename's extension, so the stored
+    // MIME type must be applied after it or every download is octet-stream.
+    res.type(document.mimeType || 'application/octet-stream');
     return res.send(document.bytes);
   } catch (error) { return sendFailure(res, error); }
 });

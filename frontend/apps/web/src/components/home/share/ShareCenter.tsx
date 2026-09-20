@@ -71,7 +71,7 @@ function timeRemaining(endAt: string | null): string {
 // opening either one is refused by the share API.
 const NEUTRAL_BADGE = 'bg-app-surface-sunken text-app-text-secondary border-app-border';
 
-function passStatus(pass: GuestPass): 'revoked' | 'expired' | 'reissue_required' | 'scheduled' | 'active' {
+export function passStatus(pass: GuestPass): 'revoked' | 'expired' | 'reissue_required' | 'scheduled' | 'active' {
   if (pass.revoked_at || pass.status === 'revoked') return 'revoked';
   if (pass.status === 'expired' || pass.status === 'reissue_required' || pass.status === 'scheduled') return pass.status;
   // Older list envelopes omit `status`; keep the existing end-date fallback.
@@ -176,6 +176,7 @@ export default function ShareCenter({
         onClose={() => { setShowCreate(false); setPreselectedKind(null); }}
         homeId={homeId}
         preselectedKind={preselectedKind}
+        onIssued={() => { void loadPasses(); }}
         onCreated={() => { setShowCreate(false); setPreselectedKind(null); loadPasses(); }}
       />
 
