@@ -107,6 +107,14 @@ export function onTokenChange(handler: TokenChangeHandler): () => void {
   return () => { _tokenChangeHandlers.delete(handler); };
 }
 
+/** Successful web login replaces httpOnly cookies without returning body tokens. */
+export function acceptCookieAuthSession(): void {
+  if (!_isWeb || getCookie('pantopus_session') !== '1') return;
+  _tokenCache = null;
+  _refreshTokenCache = null;
+  _emitTokenChange('__session__');
+}
+
 // In-memory token cache (always synchronous for interceptor access)
 let _tokenCache: string | null = null;
 let _refreshTokenCache: string | null = null;
