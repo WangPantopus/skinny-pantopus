@@ -184,8 +184,8 @@ export function sendSignals(signals: Array<{
  * Permanently delete the authenticated user's account and all associated data.
  * This cannot be undone.
  */
-export async function deleteAccount(): Promise<{ message: string }> {
-  return del('/api/users/account');
+export async function deleteAccount(stepUpToken?: string): Promise<{ message: string }> {
+  return del('/api/users/account', undefined, stepUpToken ? { headers: { 'X-Step-Up': stepUpToken } } : undefined);
 }
 
 /**
