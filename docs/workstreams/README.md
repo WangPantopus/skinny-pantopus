@@ -12,7 +12,7 @@ to the retired September16 coordinator or older Stream1 session.
 | Stream | Active task | Current work / sole writer | Local browser and API | Database |
 | --- | --- | --- | --- | --- |
 | 1 / coordinator | `01a0c0d1-0703-70c3-b842-6d01bc8ca48b` | Actual Stripe test checkout; sole writer `backend/stripe/gigTipProof.js` for reproduced absent-transfer receipt failure; base `aa168017e` | `localhost:18133` → HTTP18132 | Isolated `pantopus-stream1-tip-ui-r1`, API64561/SQL64562 |
-| 2 | `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` | Adopt `e84b085b7`/PR60; existing Home sharing/Emergency/document journeys | `[::1]:18141` → HTTP18142 | Adopt existing `pantopus-stream2-guest-r1`, API64551/SQL64552; ports64550–64559 granted |
+| 2 | `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` | PR60 merged as ebeea43d5; combined browser check and CI accepted; runtime released | `[::1]:18141` → HTTP18142 | Adopt existing `pantopus-stream2-guest-r1`, API64551/SQL64552; ports64550–64559 granted |
 | 3 | `01a0a824-301b-74e3-a1d9-b205714ed7a1` | PR64 safety merged as2d6ff2069; author owns separate granted Settings/SDK deletion and UserBlock forward migration | `stream3-auth.localhost:18131` → HTTP18130 | Existing `pantopus-stream3-block-r1`, API64531/SQL64532 |
 
 Stream3 runtime extension64534–64537 is granted for local GoTrue/Kong/mail only.

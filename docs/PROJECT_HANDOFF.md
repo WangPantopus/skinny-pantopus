@@ -38,11 +38,12 @@ retained. Synthetic identity/notification transport limits remain. Native tip
 attempts lack functioning supported device control, not accepted; native slot free.
 Live/hosted/Connect payout boundaries and P03/P08/P09/app remain incomplete.
 
-Stream2 PR60 **66f834cc7** has a reviewed/published author handoff and green
-CI35541676278. Its existing guest-creation and document-share caller repairs are
-verified within the recorded browser/API scope. Author is integrating the new
-shared session changes and checking one affected journey before final disposition;
-native and wider scope remain open.
+Stream2 PR60 **3dc226983** passed combined CI35543397030 and was merged as
+**ebeea43d5** at 23:07 UTC. Home source remained unchanged while adopting the
+shared session repair; one focused browser journey verified delayed creation,
+recovery, viewing, revocation and list-error retry through actual API/SQL. The
+broader native, hosted, clipboard and M02/D08 limits remain open. Its final02
+handoff is published separately from application code.
 
 Stream3 safety PR64 **f387cd480** passed exact-head CI and was merged as
 **2d6ff2069** on September 20 at 23:00 UTC. Source review and real local GoTrue
@@ -51,8 +52,8 @@ wrong-account retry after a delayed401, and an old refresh response overwriting 
 new login's cookies. Existing client code now cancels the old refresh and preserves
 new-account state. Storage-event delivery, frozen tabs, other browsers and native
 limits remain explicit; no broad safety row closed. The separately verified A02
-Settings step-up and two UserBlock FK repairs remain with their author for a new
-PR against current master. Single-writer scopes and migration20260916012000 are in
+Settings step-up and two UserBlock FK repairs are now in draft PR65 at `bce48b25b`, with Home master integrated and combined CI
+running. Source reviewed; the new `20260916012000` migration follows Home11000. Single-writer scopes and migration20260916012000 are in
 README. Frozen03 was published; later dirty updates are author-owned.
 
 Next: finish paid current-head CI, review combined Home and A02 candidates, and
