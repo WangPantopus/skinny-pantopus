@@ -36,7 +36,10 @@ Stream3 grants and shared single-writer scopes are in live README. Stream2 final
 snapshot published; Stream3 frozen03 safety handoff captured for publication; subsequent updates
 remain author-owned.
 
-Next: current-head CI, Stream3 shared-session/account-deletion review; resume native
+Next: finish current-head native CI before batching the next paid-branch integration.
+Master's reviewed Stream3 safety merge2d6ff2069 is not yet in paid9ae1edb3b;
+Home/A02 integration review is active. Recheck the affected payment session journey
+on the combined source. Then resume native
 tip acceptance when supported device control works; continue remaining paid-gig
 provider/P08/P09 scope. Fee payer/recipient/timing product decision remains pending.
 No broad inventory row closed; reuse accepted unchanged journeys.

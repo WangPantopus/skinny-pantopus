@@ -27,7 +27,11 @@ origin-bound mutex repair, with intact-header UI acceptance required.
 Existing `UserBlock` incoming/outgoing
 NO ACTION FKs caused admitted real-auth/step-up DELETE500: forward migration
 20260916012000 is granted for only those two CASCADE constraints, after canonical
-comparison. No applied migration rewrite or auth/socket redesign. Stream3 reports
+comparison. No applied migration rewrite or auth/socket redesign. Stream3 also owns a separate,
+reproduced N03 follow404 repair in existing `backend/routes/personaBlocks.js`:
+move auth/feature guards onto its actual three block routes so the supported
+flag-off legacy follow route can run. Verify follow persistence and block denial;
+no feature-flag activation, backend policy widening or new application file. Stream3 reports
 exact paths and real UI/API/SQL proof before integration.
 
 Browser hostnames deliberately differ because cookies are shared across ports.
