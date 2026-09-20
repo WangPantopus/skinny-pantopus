@@ -16,12 +16,14 @@ keep). Read the live [coordination guide](workstreams/README.md) and
 before editing or using resources. The only live coordination location is
 `/Users/yingpengwang/pantopus-coordination`.
 
-Master is **`82430954038ec6e74b72b54192aaad8117bcc363`** (documentation-only PR50).
-Paid worktree `/private/tmp/pantopus-paid-gig-integration` is clean and pushed at
-**`a6541175814f8a4ef5aca38a8f8307141b508904`** in draft
-[PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47), which has a scope
-description; its CI was starting when this was written. PR34 remains draft at
-`c9cb69825`; user PR46 stays separate. No paid application merged.
+Master is **`c14657e35`** after Stream 2's PR53 (`4cc9d3787`), Stream 3's PR51 and the
+documentation PRs 52/54/55/56. Paid worktree `/private/tmp/pantopus-paid-gig-integration`
+is clean and pushed at **`3657af97d`** (master integrated as `6e106d9d0`, then the 21
+paid-only migrations renumbered after master's newest version because the migration
+policy failed on the integrated head) in draft
+[PR47](https://github.com/WangPantopus/skinny-pantopus/pull/47); CI is green on
+`a65411758`, `4ad88ec11` and `3657af97d` (15 applicable checks each). PR34
+remains draft at `c9cb69825`; user PR46 stays separate. No paid application merged.
 
 Stream 1 evidence today: the correction that repairs CI 35103180556's three iOS test
 failures; SwiftLint/SwiftFormat at the pinned versions; 59/59 `GigDetailViewModelTests` on
@@ -35,19 +37,25 @@ the existing route, passed by the existing iOS/Android/web callers) and is verif
 backend/web/Android/iOS suites, a real HTTP/SQL harness and the installed iOS candidate,
 where the stale screen now gets 409 with no write or notice and a reopened screen starts
 normally. The installed Android candidate then passed the same journeys on a new owned emulator.
-See the Stream 1 status for limits (my-bids card, providers, fee policies). Installed Android, real provider authorization and the wider P04/P08/P09 scope
-remain open. Fixtures are cleaned to zero, HTTP18132 is stopped, the owned simulator is shut
+Later on September 16 the existing completion, owner-confirmation and reopen/release
+policies (immutable displayed terms included) passed 32/32 real HTTP → route → PostgREST →
+PostgreSQL checks on a private full-schema project with no application change; the paid
+confirmation is verified to the provider boundary. The existing tip implementation (P01–P03)
+then passed the tracked service harness (22/22) and a route-level harness (15/15) on the same
+project, which was released with zero owned rows. See the Stream 1 status for limits
+(my-bids card, providers, fee policies). Real provider authorization, the fee payer/recipient
+decision and the wider P04/P08/P09 scope remain open. Fixtures are cleaned to zero, HTTP18132 is stopped, the owned simulator is shut
 down and the heavy native slot is released.
 
 Coordinator dispositions: Stream 2's `70e079543..88d076e56`
 ([PR53](https://github.com/WangPantopus/skinny-pantopus/pull/53)) was source-reviewed with
 green CI and merged as `4cc9d3787`; its disposable SQL project is reported stopped.
-Documentation PR52 merged as `949d4dbb1` and PR54 as `b46934c92`. Stream 3 draft
-[PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51) at `22adc7285` has green CI
-and is not approved for merge; its later native-lifetime, N05 reminder and cross-room retry
-milestones still await full coordinator review, and its granted transactional block-admission
-migration is pushed as `6055bc2b9` (isolated SQL64532 only; one live PostgREST smoke check
-still owed; coordinator review pending). Retained SQL64522 schema may not be changed. P04/P08/P09, M02, N04/N05, R05 and
+Documentation PR52 merged as `949d4dbb1` and PR54 as `b46934c92`. Stream 3's
+[PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51) (safety repair, native
+lifetime, N05 reminder failure contract, retry privacy, transactional block admission)
+was source-reviewed, its PostgREST smoke check reported passing, and it merged as
+`c14657e35` after green CI on the master-updated head; N04/N05 rows stay open per its
+status. Retained SQL64522 schema may not be changed. P04/P08/P09, M02, N04/N05, R05 and
 launch remain open; inventory counts are unchanged. No hosted deployment, provider
 activation or physical-device change ran.
 

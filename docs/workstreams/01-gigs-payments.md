@@ -4,17 +4,225 @@ Updated September 16, 2026. Owner: coordinator / Stream 1.
 State: ready for review — displayed-terms binding delivered at `a65411758` and the
 my-bids follow-up at `4ad88ec11` (backend projection guard + existing web card), both
 verified; heavy native build slot **released**; owned simulator and emulator shut down;
-fixtures cleaned. Real provider authorization, fee policies and the wider P04 scope remain
-open; PR47 CI on the latest head is the current gate.
+fixtures cleaned. PR47 CI is green on `4ad88ec11` (15 applicable checks); master
+`c14657e35` is integrated as `6e106d9d0` with combined regressions green locally, and the
+paid-only migrations are renumbered after master's newest version at **`3657af97d`** (G03),
+whose CI passed all 15 applicable checks. **Evening (afternoon PDT) milestone:** the
+existing completion, owner-confirmation and reopen/release policies passed 32/32 checks over
+real HTTP → route → PostgREST → PostgreSQL on a private full-schema project (no application
+change needed; see the [completion/reopen milestone](#milestone-completion-confirmation-and-reopen-policies-verified-over-real-httpsql--september-16-2026)).
+The existing tip implementation (P01–P03) then passed the tracked service harness (22/22)
+and a new route-level harness (15/15) on the same project (see the
+[tip milestone](#milestone-existing-tip-implementation-verified-over-real-httpsql--september-16-2026));
+the project was released at 17:20 PDT with zero owned rows. Real provider authorization, the
+fee policies (product decision) and the wider P04 scope remain open; PR47 stays draft.
 
 Preserve existing iOS, Android and web screen designs. Verify existing behavior,
 repair demonstrated failures in place, and retain the evidence limits below.
 P04 and the wider P01–P10/launch backlog remain open; no inventory row closes.
 
+## Milestone: existing tip implementation verified over real HTTP/SQL — September 16, 2026
+
+- **Branch/commit:** `codex/paid-gig-integration` unchanged at **`3657af97d`**. No application
+  code, schema or test changed; verification only. The backlog rows P01–P03 were written when
+  the tip work was a draft; the source now carries the implementation, so the rows are
+  re-stated below from today's evidence rather than re-implemented (no duplicated work).
+- **Existing implementation located:** routes `backend/routes/pays.js` (`GET /api/payments/tip-preview`,
+  `GET /api/payments/tip-requests/:requestId`, `POST /api/payments/tip` with the original UUID,
+  displayed terms, session scope and `resume|check|cancel` modes, legacy `POST /tip/:paymentId/refresh-status`),
+  service `backend/stripe/stripeService.js` (`previewTip`, `readTipRequest`, `createTipPayment`)
+  with `backend/stripe/gigTipProof.js`, SQL `20260916021100..021300` (16 `*gig_tip*` functions),
+  contract `backend/contracts/gig-tip-contract.md`; clients iOS `PaymentsEndpoints` +
+  `GigDetailViewModel` tip commands, Android `PaymentsApi` + `GigTipViewModel`, SDK `payments.ts`
+  + web tip modal.
+- **Reproduced failure:** none in the application. The only defects were in the new private
+  harness (a request-string interception that missed `stripeService`'s relative
+  `./getStripeClient` require, so two early runs built the real provider client with a synthetic
+  test key and had one `customers.create` rejected by the provider as an invalid key; corrected
+  to resolve by filename, and the recorded run uses no network provider).
+- **Reused evidence, executed today on the fresh full-schema replay:** a `pantopus_stream1_contract`
+  template copy of the disposable project's database ran the tracked
+  `scripts/db/test-gig-tip-original-service.cjs` **22/22 scenarios** (real service + real SQL,
+  synthetic provider/notice transport, exact cleanup verified) and `scripts/db/test-gig-stop.cjs`
+  (full scenario list) unchanged. Web `tip-modal` was part of today's 289-test web run.
+- **New evidence (private, `verify-tip-routes-r1.cjs` → `tip-routes-http-sql.json`, prefix
+  `f9150460`, mirrored with the completion evidence):** real `pays.js` → real `stripeService` →
+  supabase-js → PostgREST → PostgreSQL, synthetic identity, synthetic provider carrying the tracked
+  harness's assertions (frozen parameters equal the saved `provider_params`, idempotency key per
+  request, provider reachable only after `provider_started_at`): **15/15 passed, 0 fixture rows
+  remaining, 6 provider creates, 0 cancels, 1 customer, 0 stub failures.** Worker preview 403;
+  worker without a Connect account `CONNECT_REQUIRED`; owner preview terms, 3 slots, 50/99999999
+  cents, session scope; missing terms / wrong actor / wrong scope / 10 cents refused with no row;
+  resume → succeeded receipt, Payment `tip` 500/500/fee 0, one intent, customer bound once, one
+  committed `tip_received` notice; identical retry same receipt with no provider call; different
+  amount `TIP_REQUEST_CONFLICT`; owner read with scope, worker read 403; lost provider create →
+  202 pending retryable with the Payment reserved and its parameters frozen before the provider
+  was reached; check discovers the exact intent and records the receipt without creating again;
+  cancel before first submission → canceled with zero charge and no provider call, later resume
+  stays canceled, slot not consumed; after three successful tips `TIP_LIMIT` with 0 slots and a
+  fourth command refused without a reservation; two concurrent identical commands → one intent,
+  one row, second pending not retryable; lost HTTP reply after the committed capture recovers
+  through the status read and the retry; legacy refresh-status leaves a succeeded original intact.
+- **Limits:** synthetic identity/session scope and synthetic provider (exact provider proof
+  against Stripe test mode remains P02/L01); free tasks; no installed native or browser tip
+  journey (client tip commands remain unit-level: iOS `GigTipTests`/`GigTipRecoveryTests`,
+  Android `GigTipViewModelTest`/`GigTipRecoveryTest`, not re-run today); cold historical
+  discovery beyond the 24-hour provider window only synthetic; the notification relay verified
+  only by the tracked harness's scheduled relay, not a running worker.
+- **Shared-file effects:** backlog P01–P03 rows re-stated; guide runtime row marked released;
+  handoff paragraph.
+- **Cleanup:** fixture rows 0 (harness count and direct SQL); runtime released as recorded in
+  the completion milestone's cleanup bullet.
+
+## Milestone: completion, confirmation and reopen policies verified over real HTTP/SQL — September 16, 2026
+
+- **Branch/commit:** `codex/paid-gig-integration` unchanged at **`3657af97d`** (draft PR47, CI
+  35142787582 green). This milestone changed no application code, screen, schema or test;
+  it verified the existing implementation. Coordination docs only (this file, the guide's
+  request/runtime rows, the backlog P04 row, the handoff).
+- **Existing implementation located and verified:** `backend/routes/gigs.js` `POST
+  /:gigId/mark-completed` (worker proof, `mark_gig_completed` RPC bound to the assignment
+  snapshot), `confirmCompletionHelper` behind `POST /:gigId/confirm-completion` and its
+  `/complete` alias (`expectedReview` digest from the loaded detail, `confirm_gig_completion` /
+  `prepare_gig_completion_original`), and the stop command family (`GET /:gigId/stop-preview`,
+  `POST /:gigId/stop-requests`, legacy `POST /:gigId/reopen-bidding` and `/worker-release`)
+  through `services/gigStopService.js` and the `gig_stop_*` SQL. Clients: web
+  `CompletionFlow` (receipt guards, `completion_review` from detail, `GigStopDialog` →
+  `useGigStopRequest`), iOS `GigDetailViewModel.submitDeliveryProof` / owner confirm /
+  `GigStopViewModel`, Android `GigDetailViewModel.markCompleted` / `completeGigAsPoster` /
+  `GigStopCoordinator`, SDK `markGigCompleted`, `confirmGigCompletion`, `completeGig`,
+  `reopenBidding` → `submitGigStopRequest`.
+- **Why a new runtime, not the retained one:** the retained replay database (SQL 64522) is at
+  `20260910220000` and has none of the paid SQL functions these routes call. A private
+  disposable project `pantopus-stream1-complete-r1` (SQL 64562 / API 64561, 75 migrations
+  from this branch, only db/kong/postgrest/gotrue/storage) was created; the retained
+  64521-64533 resources were not connected to or changed.
+- **Reproduced failure:** none in the application. Every policy in the backlog row behaved as
+  specified on the real chain. The only defects found were in the new private harness
+  (a constant reassignment and a teardown that hit the product's immutable pending-approval
+  guard; both corrected and the full run repeated).
+- **New evidence (private, `/private/tmp/pantopus-p04-complete-20260916-r1`, mirrored to the
+  owner's `.pantopus-recovery/audits/20260916-p04-complete-r1`):** `verify-complete-reopen-r1.cjs`
+  → `complete-reopen-http-sql.json`, **32/32 passed, 0 fixture rows remaining (`f9150450`),
+  2 provider attempts (both the intercepted capture)**. Worker completion: before start 400;
+  non-worker 403; commit with one owner notice; identical retry `reused:true` without a
+  second notice; different proof 409 `COMPLETION_CHANGED`; lost reply after commit then retry
+  reused. Owner confirmation: stale or missing `expectedReview` 409; the digest is visible to
+  owner and worker only; non-owner 403; the displayed review commits confirmation, rating,
+  the worker counter and one worker notice with no provider call on a free task; retry and
+  the `/complete` alias return the same receipt without a second counter, notice or rating
+  change; a task edited after the owner loaded the review is refused until the refreshed
+  review is used (immutable displayed terms). Paid task: worker completion binds the payment;
+  owner confirmation stops at the intercepted provider with 503, the original approval stays
+  pending for the same owner/review across a retry, and a direct edit of the reviewed task is
+  refused by the guard. Reopen/release: worker preview 403; owner preview eligible with the
+  accepted bid, zero fee, no financial action and the session scope; missing terms / changed
+  actor / changed scope 409; stale terms 409 `STOP_TERMS_CHANGED` with no request row; the
+  displayed terms complete the reopen (task open, worker and acceptance cleared, bid rejected,
+  request completed, one worker notice); retry returns the same receipt; lost reply after
+  commit recovers through the status read and the retry; after work started the preview is
+  ineligible (`STARTED_POLICY_REVIEW`) and the command is refused with that code; worker
+  release reopens with one owner notice; two concurrent identical commands produce one
+  request row and one transition; the legacy `/reopen-bidding` route refuses an empty body
+  (`STOP_TERMS_REQUIRED`) and completes the full command.
+- **Reused evidence:** backend `paidGigLifecycleRoute` (240) and `gigStopRoute` unit suites
+  and the tracked real-SQL stop harness `scripts/db/test-gig-stop.cjs` + pgTAP
+  `scripts/db/contracts/gig-stop.sql` (CI green on this head); web suites re-run locally today
+  (`assigned-gig-authorization`, `gig-acceptance-entrypoints`, `gig-stop-recovery-entry`,
+  `gig-stop-recovery`, `tip-modal`: 5 suites, 289 tests passed); native unit coverage cited
+  by file in the evidence (not re-run today; CI green on `3657af97d`).
+- **Findings without code change:** (1) the retained iOS `GigReassignmentEndpoints.reopenBidding`
+  and Android `GigReassignmentRepository.reopenBidding` DTO callers post an empty body to
+  routes that now require the full stop command and would get 409, but no shipped screen
+  calls them (every screen uses the stop preview → command flow); recorded as dead client
+  code, not a failure, and left untouched under the design-preservation rule. (2) A pending
+  paid completion approval is immutable by design; the product's only release path is a
+  provider-canceled intent (`stripeService.capturePayment` → `record_gig_completion_canceled`),
+  which belongs to the provider bundle (P02/L01).
+- **Limits:** synthetic identity and session scope; providers intercepted (paid confirmation
+  verified only up to the capture boundary); free tasks for the completed paths; no photos
+  (storage provider stubbed; photo verification stays unit-tested); no installed native or
+  browser journey in this milestone; no notification delivery worker run; disposable local
+  project, not a hosted environment. No-show and cancellation-fee policy rows still need the
+  fee payer/recipient product decision.
+- **Shared-file effects:** guide request table (Stream 2 migration version grant) and runtime
+  table (this reservation); backlog P04 row; handoff current-state paragraph.
+- **Cleanup:** fixture rows 0 by the harness's own count and by direct SQL; owned runtime
+  `pantopus-stream1-complete-r1` kept up for the tip milestone below, then **released at 17:20 PDT**
+  (`supabase stop --no-backup` in the workdir): owned rows `f9150450`/`f9150460` = 0 by direct
+  SQL before the stop, no `stream1-complete` container remains, ports 64561-64567 free, the
+  retained `pantopus-home-gig-replay` (64521-64527) and `pantopus-stream3-block-r1` (64532)
+  containers still up (Kong 64521 answered 200 afterwards). The workdir stays for cheap recreation.
+
+## Peer findings received from the earlier Stream 1 session — September 16, 2026
+
+Recorded from the retired Stream 1 session's handoff after independent checks:
+
+- **Native guards can hide a truthful recovery after a post-start price change.** An
+  approved change order updates `Gig.price` while the gig is `in_progress`
+  (`backend/routes/gigs.js` approve handler). If a worker retries Start after a lost reply
+  and the price changed in between, the route's saved-start recovery is correct, but the
+  iOS/Android receipt guards compare the full displayed snapshot and refuse to show
+  success; with `a65411758` the retry now gets `409 ASSIGNMENT_CHANGED` from the route
+  instead, with the same "refresh" guidance, and the reopened screen shows the committed
+  In progress state. Conservative and truthful, not a defect; the native Start Work
+  journey is accepted with this limit stated.
+- **Silent CI loss on conflicting shared docs** is now a rule in the guide (see the
+  feature-branch paragraph): PR47 had no pull_request runs at `f437dfd20` because its
+  own copies of the coordination documents conflicted with master.
+- **The repo's `backend/tests/integration/gig-lifecycle.test.js` cannot run against the
+  retained replay database (64522):** its helper seeds `account_type: 'personal'`, which
+  that older schema's check rejects (`individual|business|curator`), and each failed
+  attempt leaks one `auth.users` row before cleanup tracking starts. Do not change the
+  helper to fit the stale fixture; the peer removed the row it created.
+- **Paid-path HTTP evidence on the final head.** The peer's self-cleaning harness (real
+  HTTP → real route → PostgREST 64521 → PostgreSQL 64522, free and paid, only
+  `verifyGigAuthorization` stubbed, mutation injected at that await) was copied into
+  Stream 1's evidence as `e2e-start-recovery-peer.js` and re-run on `3657af97d`:
+  **28/28 checks pass**, 9 gigs / 13 users / 6 payments created and removed, 0 remaining
+  (`e2e-start-recovery-peer-final-head.log`). This adds paid-gig coverage to the free-gig
+  harnesses above; provider verification itself stays stubbed.
+- The peer's derived data (`.../b16f36ca-.../scratchpad/p04/DerivedData`, several GB) is
+  reclaimable at any time; nothing references it.
+
+## Integration: current master merged into the paid branch — September 16, 2026
+
+- **Branch/commit:** `codex/paid-gig-integration` at **`6e106d9d0`**, a merge of master
+  `c14657e35` (Stream 2 PR53 `4cc9d3787`, Stream 3 PR51, docs PR52/54/55/56) with no
+  conflicts; 40 application/script files from the streams entered the paid branch. The
+  paid `emitPrivateGigUpdate` socket helper and export are preserved; Stream 3's `PT403`
+  admission mapping is present; migrations now number 75 (`20260916010000` added);
+  `sync-sql-contracts.cjs --check` verifies 66 pgTAP wrappers.
+- **Combined regressions on the merged tree:** backend Jest **340 suites / 6256 passed /
+  16 skipped** (Stream 3's chat-access suite now included); web
+  `assigned-gig-authorization`, `gig-acceptance-entrypoints`, `homeSharingLinks`,
+  `blockedUsersPage`, `publicProfileSafety` **153/153**; typecheck gate 0 errors. PR47 CI
+  on this head is the remaining gate (native jobs).
+- **Migration order reconciled (G03, concrete):** CI 35141268492 on `6e106d9d0` failed
+  only "Protect migration history": the policy (`scripts/db/check-migrations.cjs`) requires
+  migrations new relative to the PR base to sort after the base's newest version, and
+  master now carries Stream 3's `20260916010000`, so all 21 paid-only migrations
+  (`20260914020100`..`20260915050000`) violated it. `3657af97d` moves them to
+  `20260916020100`..`20260916022100` with `git mv`, preserving order and bytes; no master
+  migration is touched and none of these versions was ever applied to a hosted
+  environment. The only non-doc reference (`backend/contracts/gig-tip-contract.md`) now
+  cites the new tip names; historical reports keep the old names as history. Verified:
+  policy check passes against the master base, `node --test` for scripts/deploy, scripts/db
+  and scripts/staging 72/72, 66 contract wrappers verify.
+  [CI 35142787582](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35142787582)
+  on `3657af97d` passed all 15 applicable checks, including the fresh-database replay
+  with the renumbered chain and all native jobs on the integrated tree; the failed run
+  35141268492 on `6e106d9d0` is retained as failed. Draft PR34
+  (`codex/staging-paid-gig`) still carries the old version names and will need the same
+  reconciliation or closure as incorporated when its disposition is decided.
+- **No screen or application-behavior edit** in this integration; PR47 stays draft.
+
 ## Follow-up: my-bids Start Work card bound to the terms it rendered — September 16, 2026
 
 - **Branch/commit:** `codex/paid-gig-integration` at **`4ad88ec11`**, pushed after the
-  `a65411758` CI run completed; its own CI was starting at this update (PR47).
+  `a65411758` CI run completed;
+  [CI 35134153318](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35134153318)
+  passed all 15 applicable checks (one Seeder path skip) on this head.
 - **Changed paths:** `backend/routes/gigs.js` (existing `GET /my-bids` projection),
   `backend/tests/unit/paidGigLifecycleRoute.test.js`,
   `frontend/apps/web/src/app/(app)/app/my-bids/page.tsx`,

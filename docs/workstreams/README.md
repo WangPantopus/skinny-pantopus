@@ -48,8 +48,8 @@ the gigs worktree is retired after this transfer; do not update status there.
 | Stream | Application worktree | Branch / starting state |
 | --- | --- | --- |
 | 1 | `/private/tmp/pantopus-paid-gig-integration` | `codex/paid-gig-integration`; current source/CI in Stream1 status |
-| 2 | `/private/tmp/pantopus-workstream-home` | `codex/workstream-home`; candidate `70e079543` over master `711340225` |
-| 3 | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; pushed `22adc7285`, draft PR51; later milestones await coordinator review |
+| 2 | `/private/tmp/pantopus-workstream-home` | `codex/workstream-home`; PR53 merged into master `4cc9d3787`; branch re-based on master |
+| 3 | `/private/tmp/pantopus-workstream-accounts-social` | `codex/workstream-accounts-social`; PR51 merged into master `c14657e35`; integrate master before the next milestone |
 
 Streams 2 and 3 compare relevant pending Stream 1 changes before editing shared
 code. They start from master because their first scoped implementations are
@@ -62,6 +62,12 @@ One writer per application worktree. Two Stream 1 sessions shared
 `/private/tmp/pantopus-paid-gig-integration` on September 15/16; the older session
 (`pantopus-paid-gig-integration-c8`) is retired from writing and the coordinator session
 is the sole Stream 1 writer. No WIP commits on a branch with an open PR.
+
+Feature branches carry `docs/workstreams/*`, `docs/PROJECT_HANDOFF.md` and
+`docs/REMAINING_WORK_2026-09-11.md` only as merged from master, never as their own
+edits: a branch whose copies diverge becomes a conflicting PR, GitHub cannot build its
+merge ref, and pull_request CI silently never schedules (PR47 lost all checks at
+`f437dfd20` until master was merged in). Publish through the coordination branch only.
 
 Each agent writes only its own status file in the live folder. It commits code
 only from its own application worktree. The coordinator commits/pushes shared
@@ -139,8 +145,9 @@ These cross-cutting files/contracts require coordinator assignment for each edit
 | `backend/socket/chatSocketio.js` direct-chat admission/send checks | Stream 3 | Overlap reviewed: paid branch only adds `emitPrivateGigUpdate` plus its export; preserve that helper, `connectedUsers`, revocation and gig tracking behavior |
 | Start Work displayed-terms binding: `backend/routes/gigs.js` start handler, `frontend/packages/api/src/endpoints/gigs.ts` `startGig`, iOS `GigsEndpoints.startGig`/`GigDetailViewModel.startTask`, Android `GigDetailViewModel.startTask` and its repository call, web `CompletionFlow.handleStartWork` | Stream 1 (coordinator), sole writer | Delivered at `a65411758` (detail entry, all three clients + SDK) and `4ad88ec11` (my-bids card + list projection guard), draft PR47; verified locally, over real HTTP/SQL and on the installed iOS and Android candidates. Additive optional expected-assignment body; clients that send none keep current behavior. Streams 2/3 do not touch these paths |
 | Stream 2 PR for `70e079543..88d076e56` | Coordinator | **Merged** as `4cc9d3787` after coordinator source review and green CI (branch updated with master first). Streams integrate current master before further web share edits. Stream 2's SQL 64552 disposable project is reported stopped; its Emergency-page value finding is routed to Home ownership (Stream 2) as a separate bounded row |
-| Direct-message block admission implementation | Stream 3 | Pushed as `6055bc2b9` in draft PR51 (migration + contract + generated pgTAP test + chats.js PT403 mapping). Author reports one live PostgREST smoke check still owed before merge; coordinator review of the migration and mapping is pending; not merge approved |
+| Direct-message block admission implementation | Stream 3 | **Merged** as `c14657e35` (PR51 at `6e1758234`) after coordinator source review, the author's passing PostgREST smoke check and green CI on the master-updated head. N04/N05 rows remain open per Stream 3's status |
 | Cancellation/no-show fee payer and recipient | Product decision, recorded by Stream 1 | Still unspecified; independent Start Work verification can proceed |
+| Home Emergency form-type migration (Stream 2 request, 2026-09-16 evening) | Coordinator → Stream 2 | **Granted version `20260916011000_home_emergency_form_types.sql`** (not `030000`): it sorts after master's newest `20260916010000` and *before* the paid branch's unmerged `20260916020100..022100` block, so a Stream 2 merge does not force another paid renumbering under the migration policy. Scope as proposed: drop and re-add `HomeEmergency_type_chk` with the nine current values plus the six form categories, `SET lock_timeout`, "backwards compatible: yes", `HomeEmergencyType` in `@pantopus/types` widened to match; contract source under `scripts/db/contracts` synced through the existing pipeline; apply/test only in Stream 2's own disposable project. No server-side type mapping. |
 | User's Place redesign, PR #46 | User's separate scope | Preserved outside these verification milestones |
 
 Transactional admission grant evidence: actual socket/HTTP/SQL baseline allowed a
@@ -173,6 +180,7 @@ or elapsed time is not proof a resource is free.
 | iOS/Android test devices | Stream3 retains `0AE16FA0-E244-414F-86C8-24893BDFD979` (Shutdown); Stream1 isolated `Pantopus Stream1 Start R2`, iOS26.5, `C2BCF36A-F300-48C1-9BA7-876CA9F61E55` (Shutdown; candidate app left installed) and new owned Android AVD `Pantopus_Stream1_Start_R2` (android-34, stopped; candidate APK left installed). The existing `Pantopus_Home_Recurrence_Acceptance` AVD was not used | Preserve owner iPhone17 (currently Booted, untouched) and all existing acceptance devices; no physical-device install granted |
 | Databases / fixture ports | Stream3 reports exact `f9150300` cleanup zero and HTTP18130/web18131 stopped at cutoff. Stream1 `f9150410` (September 15), `f9150420` and `f9150430` (September 16) rows cleaned to zero by direct SQL; HTTP18132 stopped. Stream2 reports its disposable SQL 64552/API 64551 project stopped | Stream3/Stream2 cleanup is author-reported; retain their evidence. No retained schema/reset/container mutation; preserve other fixtures; 18089 is not granted |
 | Stream3 isolated transactional-block database | New private `/private/tmp/pantopus-stream3-block-db-r1`, project/container prefix `pantopus-stream3-block-r1`, SQL64532/API64531 (64533 reserved) | Docker responsive at grant; replay canonical schema into empty owned database. No retained data copy or existing container changes. Canonical-empty SQL64532 retained healthy; API not started. Exact forward migration/contract assignment granted above, but no repair files written before cutoff; never apply to retained64522 |
+| Stream 1 full-schema completion/reopen project | Private `/private/tmp/pantopus-stream1-complete-r1`, project/container prefix `pantopus-stream1-complete-r1`, SQL 64562 / API 64561 (64563-64567 reserved), taken 2026-09-16 ~17:00 PDT, **RELEASED 17:20 PDT** | Created with `supabase start --workdir` from the paid branch's 75 migrations (the retained 64522 database predates the paid functions). Only db, kong, postgrest, gotrue, storage started. Fixture prefixes `f9150450`/`f9150460`; exact cleanup verified 0 before `supabase stop --no-backup`; no container remains, ports free, retained 64521-64527/64532 containers still up. Workdir kept for cheap recreation. |
 | Existing SQL port 64522 and REST port 18089 | Retained prior rehearsal resources | Never assume available or change their schema from another stream |
 | Physical iPhone | Owner's installed build 3 | No test install or device mutation without a concrete authorized task |
 

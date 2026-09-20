@@ -1,10 +1,44 @@
 # Stream 2 — Home and household
 
-Updated September 15, 2026. Owner: Home stream.
-State: merged — the M02 browser guest-pass slice is in master. Repaired, retested
-and re-run against actual SQL; the September 15 "transcribed contract" limit is
-closed, and three further defects surfaced only once real SQL was in the loop.
-Branch re-based on current master; awaiting the next bounded sub-slice.
+Updated September 16, 2026 (evening session). Owner: Home stream.
+State: **ready for review** — the four bounded follow-ups this stream carried
+forward (scoped `/shared/:token` links, the alternate `/app/homes/[id]/share`
+entry, the members' Emergency page, the shared-document download journey) were
+verified end to end, repaired in place and re-verified on `codex/workstream-home`
+(fast-forwarded to master `d471611b3` first; guest-pass source identical to the
+merged slice). Pushed as **`28bad0d3d`** + **`6882ba29a`**, draft
+[PR #60](https://github.com/WangPantopus/skinny-pantopus/pull/60). Runtime reservation released. Full detail in the
+[September 16 evening milestone](#milestone--september-16-2026-evening-scoped-links-settings-entry-emergency-info-shared-document-downloads).
+
+**Runtime reservation (self-declared, taken 2026-09-16 ~16:05 PDT, RELEASED
+~17:20 PDT):** the same disposable project as before —
+`/private/tmp/pantopus-stream2-guest-r1`, container prefix
+`pantopus-stream2-guest-r1`, SQL 64552 / API (Kong) 64551, with only db, kong,
+postgrest, gotrue and storage-api started (`-x` for the rest). All 54 migrations
+replayed (ledger 54). Nothing on 64521-64533, 18089 or 18130-18132 was connected
+to or changed. Released with `supabase stop --workdir ... --no-backup`; no
+`stream2` container remains, ports 64550-64559 are free, and the retained
+`pantopus-home-gig-replay` (64521/64522) and `pantopus-stream3-block-r1` (64532)
+containers were verified still up and healthy afterwards.
+
+**Coordinator request (schema, needs assignment before any migration is written):**
+both native Add Emergency forms POST `type` = `allergy` / `medical_condition` /
+`medication` / `contact` / `pet_medical` / `power_of_attorney` / `other`
+(Android `EmergencyFormCategory.backendType`, iOS `EmergencyFormCategory.rawValue`),
+and `HomeEmergency_type_chk` refuses six of the seven — reproduced 2026-09-16 in
+the replayed database (`INSERT ... type='contact'` → check-constraint violation;
+only `other` saves) and through the real route over real PostgREST (HTTP 500
+"Failed to create emergency info"). No lossless repair exists without widening
+the constraint; a server-side mapping would silently turn an "Allergy" entry
+into `first_aid` and change what the native detail screens show. Proposed
+additive forward migration (not written): drop and re-add
+`HomeEmergency_type_chk` with the nine current values plus the six form
+categories, `SET lock_timeout`, "backwards compatible: yes", versioned after
+master's newest and clear of the paid branch's `20260916021700..022100` block
+(e.g. `20260916030000_home_emergency_form_types.sql`), with `HomeEmergencyType`
+in `@pantopus/types` widened to match. Until it is granted the route now
+answers a truthful 400 `INVALID_EMERGENCY_TYPE` instead of a 500; the native
+forms still cannot save those six categories.
 
 Acknowledged the clarified [working agreement](README.md#working-agreement) and
 [verification-first rules](../../AGENTS.md): preserve iOS/Android/web appearance,
@@ -32,18 +66,31 @@ required comparison, and label unverified provider/device boundaries explicitly.
   push came from `/private/tmp/pantopus-workstream-home`.
 - **Merged.** Commits `70e079543` (browser repairs) and `88d076e56` (real-SQL run
   + what it exposed) reached master through PR #53 as **`4cc9d3787`**; docs PR #54
-  merged as **`b46934c92`**. Independently verified from this worktree: both
-  commits are ancestors of `origin/master`.
-- **New base: `b46934c92`.** `codex/workstream-home` fast-forwarded to current
-  master from `/private/tmp/pantopus-workstream-home` and pushed
-  (`514b95960..b46934c92`); the branch is now identical to master with a clean
-  tree. The integrated delta is **documentation only** — `git diff HEAD...master
-  -- ':!docs'` is empty — so it changes no application contract and the real-SQL
-  evidence recorded below stands unchanged.
-- Post-integration re-check at the new head: web **107 suites / 1469 tests** pass,
-  typecheck gate at its 0-error baseline, and `test-home-guest-pass-http.cjs`
-  passes its 8 transcribed checks. No container run was repeated: no migration,
-  schema or share-path source changed in the integration.
+  merged as `b46934c92`. Independently verified from this worktree: both commits
+  are ancestors of `origin/master`.
+- **New base: `c14657e35`** (Stream 3's PR #51). `codex/workstream-home`
+  fast-forwarded from `/private/tmp/pantopus-workstream-home` and pushed
+  (`b46934c92..c14657e35`); branch identical to master, clean tree. The earlier
+  `b46934c92` integration was documentation only; this one is not.
+- **Integration check, and why it earned a full re-run.** Stream 3's delta touches
+  none of this stream's files (`git diff --name-only HEAD...master` matches
+  nothing under `guest/[token]`, `components/home/share`, `home-guest-pass*` or
+  `endpoints/homeIam`), but it adds a **54th migration**
+  (`20260916010000_direct_message_block_admission.sql`). That is a changed schema
+  in the same database this stream replays, so the disposable project was rebuilt
+  and the real-SQL journey repeated rather than assumed:
+  - Replay applied all **54** migrations; ledger = 54; the 4 block-admission
+    functions are present.
+  - `test-home-guest-pass-http.cjs --container` — **9 checks pass**, owned rows
+    back to zero. The new advisory-lock trigger on direct chat does not disturb
+    `lock_home_external_share` or any guest-pass path.
+  - Web **109 suites / 1481 tests** pass (Stream 3 adds 2 suites / 12 tests; all
+    of this stream's remain green); typecheck gate at its 0-error baseline.
+  - Runtime released again with `supabase stop --workdir ... --no-backup`; ports
+    64551-64557 free; retained `pantopus-home-gig-replay` and
+    `pantopus-stream3-block-r1` verified still up and healthy.
+- This stream's merged slice also reached the paid branch through the coordinator's
+  master integration (`6e106d9d0`); no action needed here.
 - No backend, service, schema or migration change. No native/mobile change.
 
 ## What the existing journey already did correctly
@@ -218,3 +265,181 @@ produces, which is what hid the dropped reason.
   journey (needs a storage provider boundary, to be labelled), or the alternate
   `/app/homes/[id]/share` entry. No runtime is held by this stream and no native
   build is requested; the heavy slot stays free.
+
+
+## Milestone — September 16, 2026 (evening): scoped links, Settings entry, Emergency info, shared-document downloads
+
+**Branch / commits:** `codex/workstream-home`, base master `d471611b3`
+(fast-forward only; the 11 commits behind were documentation). `28bad0d3d`
+(harness + backend + web repairs + tests) and `6882ba29a` (document type label +
+backend CI test). Draft PR: **[#60](https://github.com/WangPantopus/skinny-pantopus/pull/60)** — [CI run 35163173561](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35163173561) on `6882ba29a` is **green**: CI OK, Detect changes, Deployment and migration safeguards, Backend (privacy gates + Jest), Backend Docker image, Web (lint, typecheck gate, Jest), Web E2E (Identity Firewall), database / Replay and lint the complete schema all pass; Seeder, android and ios skip with no changed paths. Worktree clean.
+
+**Changed paths (17 files, +1173/−153):** `backend/routes/home.js` (+38: 23514 →
+400 `INVALID_EMERGENCY_TYPE`; new `DELETE /:id/emergencies/:emergencyId`),
+`backend/routes/homeGuest.js` (attachment/type order), new
+`backend/tests/homeEmergencyRoutes.test.js`,
+`frontend/apps/web/src/app/(app)/app/homes/[id]/{emergency,share}/page.tsx`,
+`frontend/apps/web/src/app/{guest,shared}/[token]/page.tsx`,
+`frontend/apps/web/src/components/home/cards/EmergencyCard.tsx`, new
+`.../components/home/emergencyTypes.ts`, `.../home/share/{ShareCenter.tsx
+(export passStatus), shareFailure.ts (+requiresPasscode)}`, new
+`.../home/share/sharedDocumentLabel.ts`, `frontend/apps/web/tests/homeSharingLinks.test.tsx`
+(+7 tests), new `frontend/apps/web/tests/homeEmergencyPage.test.tsx` (5 tests),
+`frontend/packages/api/src/endpoints/homeProfile.ts` (+`createHomeEmergency`,
+`deleteHomeEmergency`), `scripts/db/{home-guest-pass-http-fixture,test-home-guest-pass-http}.cjs`.
+No migration, no schema change, no native change, no layout/styling change.
+
+### What the existing journeys already did correctly (verified first, reused)
+
+The scoped-grant **backend** is correct end to end: issuing a `HomeTask` grant,
+opening it, view counting, the 128-character passcode challenge/refusal/unlock,
+view limits, future windows, legacy (`sharing_version` NULL) links, revocation
+with idempotent replay, `can_edit:true` and foreign resource types refused, and
+a withdrawn `tasks.view` grant retiring already-issued links — all as real SQL.
+The document contract is also correct: `home_external_share_resource` binds the
+exact `File` (fingerprint/sha/path checks), the read receipt is consumed once
+per download and refuses a stale receipt after revocation, and a withdrawn
+`docs.view` grant retires a guest pass that bound a document. The merged guest
+slice (issue → copy → open → passcode → revoke) reproduces unchanged on today's
+head (9/9 against the fresh 54-migration container before any edit). Emergency
+GET/POST routes and their permission gate work for canonical types.
+
+### Reproduced failures and the repairs (all reproduced before editing, re-verified after)
+
+| Reproduced failure | Where | Repair |
+| --- | --- | --- |
+| Spent view limit → "Something Went Wrong" + Try Again (API 410 `SHARE_VIEW_LIMIT`); unopened window → same generic error (403 `SHARE_NOT_STARTED`); legacy link → "Access Revoked … revoked by the owner" (410 `SHARE_REISSUE_REQUIRED`); unknown token → generic + retry; passcode `maxLength=20` vs API 128 | `/shared/[token]` page (message-substring classification) | Reads the share API code through the existing `shareFailure` reader (now also carrying `requiresPasscode`); terminal screens for limit/reissue/not-found, retry kept only for not-started; `maxLength=128`; `generation` guard for superseded reads. Existing screens/copy retained; titles/bodies vary by code |
+| "Share link copied to clipboard" put the **bare 64-hex token** on the clipboard (`res.share_url \|\| res.url \|\| res.token`); scheduled and legacy passes listed under Past Passes as "Expired", no Revoke on a scheduled link; failures showed the raw client message | `/app/homes/[id]/share` (Settings → Guest Passes) | Copies `${origin}/guest/<token>`; uses the exported `passStatus` (scheduled = current + revocable + "Starts …", legacy = "Needs new link", revoked = "Revoked"); `include_revoked:true` so the existing Revoked label is reachable; `failureMessage` for load/create/revoke; `generation` guard |
+| Page grouped by `i.category` (no row has it), titled rows by `item.title` (rows have `label`), rendered `item.details` — a jsonb **object** — as a React child: **React throws "Objects are not valid as a React child (found: object with keys {})" and nothing renders** for any real row; Add created a `local-…` row and toasted success without any request; Delete removed only local state; create chips `shutoff/contact/evacuation/medical` are values the column refuses | `/app/homes/[id]/emergency` | Reads `type/label/location/details.{phone,notes,detail}`, groups by the real rollup (`emergencyTypes.ts`, same rollup as the native palettes), saves through `POST` with a `HomeEmergencyType` and the details object, deletes through the new `DELETE`, shows the server's row, reports the API reason on failure, `generation` guard |
+| Filtered on `emergency_type ∈ {water_main, gas_shutoff, electrical_panel, sprinkler, contact, evacuation, plan}` — never a real value, so every row landed in "Other"; "+ Add Info" toggled an unused state | dashboard `EmergencyCard` (+ preview) | Buckets by real `type`; reads phone/notes from `details`; "+ Add Info" opens the existing Emergency page |
+| Native Add Emergency forms POST `allergy/medical_condition/medication/contact/pet_medical/power_of_attorney` → check-constraint violation → **HTTP 500 "Failed to create emergency info"** (reproduced over the real route + real PostgREST) | `POST /:id/emergencies` | 23514 → 400 `{code:'INVALID_EMERGENCY_TYPE'}`. The schema widening itself needs the coordinator grant recorded at the top of this file; until then those six native categories still cannot be saved |
+| No delete route existed (T6.0c "no PATCH/DELETE" row) | `home.js` | `DELETE /:id/emergencies/:emergencyId`: `can_manage_home` gate like POST, exactly-one-row of that home, 404 `EMERGENCY_NOT_FOUND` on replay |
+| Every shared-document download served as `application/octet-stream` with an extension-less filename: `res.attachment(title)` ran after `res.type(mime)` and re-derived the type from the title | `homeGuest.js` | `attachment()` first, then the stored MIME type |
+| Both public pages badged every shared document "PDF" (`doc.file_type \|\| 'PDF'`; the view carries `mime_type`/`doc_type`) | guest + scoped pages | `sharedDocumentLabel()` from the stored type |
+
+### New-file justifications
+
+`emergencyTypes.ts`: three web readers (page, card, preview) need the same
+type→category rollup and detail reader; `@pantopus/types` declares the values
+but no web mapping existed. `sharedDocumentLabel.ts`: two public pages, no
+shared MIME→label helper (PrivateClaimEvidencePreview's map is private and
+image/pdf-only). `homeEmergencyPage.test.tsx`: no suite rendered either
+screen and it needs its own `next/navigation`/`homeProfile` mock shape.
+`homeEmergencyRoutes.test.js`: no suite loads these handlers; `guestPass.test.js`
+exercises the share service against the mocked database, not the routers.
+Everything else extends existing files (the fixture/harness, the sharing test,
+the SDK file, the share reader, ShareCenter's export).
+
+### Evidence
+
+- **Real HTTP/SQL/Storage harness** — `SUPABASE_SERVICE_ROLE_KEY=… SUPABASE_ANON_KEY=…
+  node scripts/db/test-home-guest-pass-http.cjs --container
+  supabase_db_pantopus-stream2-guest-r1 --api http://127.0.0.1:64551`: **19 PASS**
+  (8 accepted guest checks + 4 scoped + 3 emergency + 3 document + exact cleanup
+  `{passes,views,audits,grants,receipts,tasks,emergencies,documents,files,homes,users,objects}` all 0).
+  The same script still passes 8 checks route-only and 9 SQL-only, unchanged.
+  In `--api` mode the production admin client (`backend/config/supabaseClient`)
+  serves every non-share table/RPC/Storage call, so `home.js`, `homeDocumentFiles.js`
+  and `homeDocumentStorage.js` run their real reads/writes; identity and rate
+  limits are the only stubs.
+- **Baselines** (before the repair, same harness/fixture): native form type →
+  `500 {"error":"Failed to create emergency info"}`; download `content-type:
+  application/octet-stream`; scratch Jest renders of the merged-master pages
+  (not committed): Emergency page → React object-child error, no headings;
+  Settings entry → listed the scheduled and legacy passes as "Expired" and
+  copied `"baba…ba"` (the bare token).
+- **Regressions**: web Jest **110 suites / 1493 tests** (was 109/1481); web
+  typecheck gate **0 errors** at its 0-error baseline (run twice, after each
+  commit); eslint **0 errors** on the changed paths (warnings are the existing
+  `any`/`@ts-nocheck`/`generation.current` categories); backend Jest **118 tests**
+  across `guestPass`, `homeEmergencyRoutes` (new, 7), `homeDocumentFiles`,
+  `homeDocumentAccess`, `homeAddressRedaction`.
+- **Browser journeys** on the local Next dev server (`.claude/launch.json` `web`,
+  3000 → fixture 8000 through the existing `/api` rewrite), fixture in
+  `--serve 8000` mode against the SQL/Storage-backed project: `/shared/<task>`
+  renders the exact task; `<later>` → "Not Active Yet" + Try Again; `<legacy>`
+  → "Link Needs Replacing"; `<limited>` opens once, second open → "View Limit
+  Reached" with no Try Again; `<locked>` → passcode form with `maxlength=128`,
+  wrong code → "Incorrect passcode. Please try again.", `sesame` → task; the
+  task grant revoked through the API → "Access Revoked"; `/shared/<doc>` →
+  Download link whose in-page fetch returns 200 `text/plain; charset=utf-8`,
+  `attachment; filename="Fixture document"`, exact bytes; `/guest/<docPass>` →
+  Shared Documents row, same download; Emergency page renders the two seeded
+  rows under Shutoffs/Emergency Contacts (the pre-fix page crashes here), Add →
+  Shutoffs → Gas → phone/details → row appears and SQL holds
+  `type=shutoff_gas, details={notes,phone}`; Delete → confirm → row gone in UI
+  and SQL (count back to 2); Settings entry lists 5 active incl. "Scheduled
+  pass — Starts 9/17/2026 …" with Revoke and "Legacy pass — Needs new link"
+  under Past; Revoke → confirm → pass moves to Past as "Revoked", SQL
+  `revoked_at` set, audit `guest_pass_created,guest_pass_revoked`, public link →
+  410 `SHARE_REVOKED`; New Pass → Guest → "Ana" → Create & Share → clipboard
+  received `http://localhost:3000/guest/<token>` and that link opened the real
+  guest page with Wi-Fi/parking/entry/house-rules and the real emergency icons
+  (🔧 water shutoff, 📞 contacts). Screenshots were taken but not committed.
+
+### Limits (labelled)
+
+- Authentication is synthetic throughout (`x-fixture-actor` / the seeded owner;
+  browser session via the `pantopus_access` + `pantopus_session` cookies).
+  Storage is the disposable project's own Supabase Storage, not hosted.
+- The dashboard `EmergencyCard` is verified by Jest only; the dashboard page needs
+  many unrelated reads the fixture answers 404 (serve-mode catch-all), so it was
+  not driven in the browser.
+- **Native**: not built or run (no heavy-slot request). The native Add Emergency
+  forms remain blocked by the constraint for six categories until the schema
+  grant; no native code change is needed once it lands (the forms already send
+  those ids). Installed native Emergency verification stays open.
+- The scoped page keeps its existing `// @ts-nocheck`.
+- `frontend/apps/web/src/components/home/QuickAccess.tsx` renders `{e.details}`
+  (same object-child crash) but is **not rendered anywhere** (no importer); left
+  untouched as dead code, flagged here.
+- No native/mobile screen was changed; no web layout/styling changed.
+
+### Visible change needing approval
+
+The Emergency create form now shows a second small chip row (Water / Gas /
+Electric / Breaker map, same chip style) only while "Shutoffs" is selected,
+because shutoffs are stored per utility and the form previously saved nothing
+at all. Without it the only alternatives were guessing a utility or keeping the
+fake save. Everything else on the page is unchanged. If not approved, the row
+can be dropped and "Shutoffs" would need a product decision on which type to
+store.
+
+### Shared-file / integration effects
+
+- `frontend/packages/api/src/endpoints/homeProfile.ts`: two additive functions
+  (`createHomeEmergency`, `deleteHomeEmergency`), Home-owned endpoint file, no
+  existing signature changed. Flagged because the SDK package is shared.
+- `backend/routes/home.js`: additive DELETE route + a 400 mapping inside the
+  existing POST error branch; `backend/routes/homeGuest.js`: two-line ordering
+  change. No Stream 1/3 overlap (`git diff --name-only` vs their paths: none).
+- `ShareCenter.passStatus` is now exported (no behaviour change);
+  `shareFailure.ShareFailure` gains `requiresPasscode` (additive).
+- The scratch baseline tests and browser screenshots are not committed; the
+  worktree's untracked state is only the gitignored `node_modules` symlink.
+
+### Coordinator requests
+
+1. Review/CI/merge of the draft PR (green locally as above; the harness `--api`
+   mode needs the disposable project, the rest runs in CI).
+2. The schema grant recorded at the top of this file (widen
+   `HomeEmergency_type_chk` + `HomeEmergencyType`); this stream will write the
+   forward migration, the SQL contract/generated test and the type widening,
+   then re-run the harness with the six native ids.
+3. Decision on the shutoff sub-kind row above.
+
+### Runtime and fixture cleanup
+
+Fixture server (8000) and Next dev server (3000) stopped; `--cleanup` counts all
+zero (rows and Storage objects); the private bucket was removed; disposable
+project stopped with `--no-backup` (no `stream2` container remains; 64550-64559
+free); retained 64521/64522/64532 containers verified up and healthy; browser tab
+closed. Nothing else on this Mac was created, written or mutated.
+
+### Next
+
+- Upon the schema grant: migration + contract + types, harness re-run, then
+  installed native Emergency add/list verification (needs the heavy native slot).
+- Remaining M02 breadth outside the browser: native guest-pass acceptance, the
+  dashboard Share tab against a fuller scaffold, the wider D08 external-share
+  expiry/account-change acceptance.
