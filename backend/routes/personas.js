@@ -1669,7 +1669,19 @@ router.delete('/:id/follow', verifyToken, personaFollowLimiter, async (req, res)
     const persona = await getPersonaById(req.params.id);
     if (!persona) return res.status(404).json({ error: 'Beacon not found' });
 
-    const existingMembership = await getPersonaMembershipForUser(persona.id, req.user.id);
+    const { data: existingMembership, error: membershipError } = await supabaseAdmin
+      .from('PersonaMembership')
+      .select('*, tier:PersonaTier!tier_id(id, rank, name, status)')
+      .eq('persona_id', persona.id)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (membershipError) {
+      logger.error('personas.unfollow.read_error', {
+        error: membershipError.message, personaId: persona.id, userId: req.user.id,
+      });
+      return res.status(500).json({ error: 'Failed to unfollow Beacon' });
+    }
+    if (!existingMembership) return res.json({ message: 'Beacon unfollowed' });
     if (isPaidPersonaMembership(existingMembership)) {
       return paidMembershipConflict(res);
     }
@@ -1678,7 +1690,7 @@ router.delete('/:id/follow', verifyToken, personaFollowLimiter, async (req, res)
     const { error: deleteError } = await supabaseAdmin
       .from('PersonaMembership')
       .delete()
-      .eq('id', existingMembership?.id || '__missing__');
+      .eq('id', existingMembership.id);
 
     if (deleteError) {
       logger.error('personas.unfollow.delete_error', {
