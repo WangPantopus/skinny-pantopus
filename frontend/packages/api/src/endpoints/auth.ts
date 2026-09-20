@@ -4,7 +4,7 @@
 // Updated to support firstName, middleName, lastName
 // ============================================================
 
-import { get, post, applyAuthSession, clearAuthSession } from '../client';
+import { get, post, applyAuthSession, clearAuthSession, acceptCookieAuthSession } from '../client';
 import type { 
   User, 
   LoginForm, 
@@ -74,7 +74,10 @@ export interface ReauthenticateResponse extends ApiResponse {
 
 async function persistAuthResponse(response: AuthResponse): Promise<void> {
   const accessToken = (response as any).accessToken || response.token;
-  if (!accessToken) return;
+  if (!accessToken) {
+    if (response.user && !response.requiresEmailVerification) acceptCookieAuthSession();
+    return;
+  }
 
   const refreshToken = (response as any).refreshToken ?? (response as any).refresh_token ?? null;
   const expiresAt = (response as any).expiresAt ?? (response as any).expires_at ?? null;
