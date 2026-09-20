@@ -57,7 +57,7 @@ function ScopedOffersPanel({
     if (!isOwner) return;
     void loadOffers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gigId, isOwner, refreshKey]);
+  }, [gigId, gigStatus, isOwner, refreshKey]);
 
   const loadOffers = async () => {
     if (!mounted.current) return;
