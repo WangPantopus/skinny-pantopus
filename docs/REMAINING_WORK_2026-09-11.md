@@ -148,7 +148,7 @@ subjourney; the authentication change itself closes no additional acceptance row
 - [ ] P06 **Fix/Verify:** Finish disputes and dispute-loss accounting, historical Connect transfers/reversals, payout onboarding/withdrawal and operational debt recovery, including contradictory legacy proof.
 - [ ] P07 **Fix/Verify:** Provide support/reconciliation paths for retained unknown financial operations and durable attention; review legacy tip/booking notices separately from the completed paid-gig wallet outbox.
 - [ ] P08 **Verify:** Run fresh installed/native and browser sandbox journeys: chosen bid → authorization → assignment → worker start/completion → owner capture → wallet release/refund → exact notification return, including all loss/retry/denial paths.
-- [ ] P09 **Verify:** Exercise assigned authorization, refunds and cancel/reopen/release/close through installed clients and actual provider state. Their source/build checkpoints do not replace this acceptance.
+- [ ] P09 **Verify (partial):** September20 Chrome/actual Stripe TEST/API/full77SQL now verifies assigned reopen and grace cancellation with hold release, lost stop-response reload, captured partial500c refund with lost-response recovery and remaining750c full refund. Exact provider/request/SQL proof and cleanup are in Stream1 status. Still verify installed clients, remaining denial/provider-failure cases, historical transfer/reversal and broader close/release scope; source/build checkpoints do not replace acceptance.
 - [ ] P10 **Verify:** Payment worker retries, retained operations, financial records and notification delivery need final workload/capacity/retention checks and safe fixture cleanup.
 
 ## 8. Pulse, Beacon, notifications and social safety

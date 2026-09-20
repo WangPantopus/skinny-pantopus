@@ -7,16 +7,23 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
-## Latest integration — September20,23:28UTC
+## Latest integration — September20,23:54UTC
 
-Paid branchf0a98a974 integrates reviewed master61080b399; clean/pushed. Prior9ae full
-CI35542623560 green, combinedCI35544523207 running. Focused Chrome payment session
-check passed across account switch/return: one retained original, one synthetic create,
-zero other-account payment calls, exact SQL capture/notice. Full77migration source
-matched, isolated cleanup0/runtime stopped. Details/limits in [Stream1 status](workstreams/01-gigs-payments.md).
-PR65 account deletion merged61080b399 after current combinedCIgreen; PR66 follow/retry
-merged2d12b85a7 after source/UI/SQL review and currentCIgreen. Stream3 subsequent privacy
-work remains separate; native/live/provider boundaries and broad backlog remain open.
+Paid branch **8825c1928** is clean/pushed. It includes reviewed master61080b399 and
+the one-line Offers status refresh repair proven with actual Stripe authorization
+and reopening. The combined account-switch check, actual assigned hold releases,
+and partial500c/remaining750c refunds all passed through existing browser/UI/API/SQL.
+Prior9ae full CI35542623560 passed; current8825 CI35545431059 is running. Current
+source, evidence and precise limits are in [Stream1 status](workstreams/01-gigs-payments.md).
+All Stream1 owned rows and runtimes are cleaned/stopped; five Stripe TEST captures
+fully refunded, five unpaid intents cancelled, four owned customers deleted. Provider
+history remains. Native/live/hosted/payout and broader backlog scopes remain open.
+
+Coordinator merged PR65/66/67/69 after each current-head checks and bounded UI/API
+proof; master5eab68ab7 contains those reviewed scopes. PR70 comment privacy/draft
+retention is separately reviewed with native CI pending. Stream3 continues actual
+SMTP reminder verification under its existing service/runtime grant. Documentation
+PR68 publishes only handoff/backlog/ownership evidence, independently from paid drafts.
 
 ## Resumed coordination — September 20, 2026
 

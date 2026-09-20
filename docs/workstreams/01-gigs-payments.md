@@ -1,44 +1,96 @@
 # Stream 1 — Gigs and payments
 
-## Latest combined milestone — September20,23:28UTC
+## Current checkpoint — September 20, 2026, 23:54 UTC
 
-Application worktree `/private/tmp/pantopus-paid-gig-integration`, branch
-`codex/paid-gig-integration`, clean/pushed **f0a98a974652d89252ffc4ff1dd3651b70d44f53**.
-Merged master61080b399 (reviewed Home60, safety64, account-deletion65). Prior paid
+Worktree `/private/tmp/pantopus-paid-gig-integration`; branch
+`codex/paid-gig-integration`; clean and pushed at **8825c192866498a6ab065a5d53f007b0abd637a7**.
+PR47 and PR34 remain draft. PR46 and the owner's unrelated checkout are untouched.
+The branch includes reviewed master61080b399 (Home PR60, session safety PR64 and
+account deletion PR65). Subsequent social merges remain on master until the next
+justified batch integration; their unrelated journeys need no duplicate payment run.
+
+[Current CI35545431059](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35545431059)
+is running on8825c1928. Previous combined CI35544523207 was superseded; its backend,
+web and database checks passed, but it is not a completed green run. Earlier paid
 9ae1edb3b [CI35542623560](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35542623560)
-fully passed including Android quality/instrumentation and all3 iOS simulators.
-Combined [CI35544523207](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35544523207)
-is running; backend/database/web Identity Firewall pass, native/build gates pending.
-PR47/PR34 remain draft; PR46 untouched. No new application repair in this integration.
+fully passed, including Android and all three iOS simulators. No new unit tests
+were written. Only necessary existing expired/stale fixtures were maintained.
 
-Focused real Chrome UI→existing cookie/session SDK→gigs/pays/service→PostgREST/full77
-migration SQL check passed: owner confirms completion, submits500c with deliberately
-unknown synthetic-provider create, second tab discovers same original. Second-tab
-Settings Logout retires first-tab tip; other login/same gig has no tip and0payment
-requests. Return originalowner restores retained request; Retry same tip after proof
-reveal produces success toast/modal retirement. SQL same original captured_hold500,
-1tipnotice,1providercreate,0assertions. This checks the changed shared session contract;
-earlier actual StripeTEST decline/3DS/capture/cancel evidence is reused, not repeated.
-Synthetic identity/provider/shell/delivery, no new native/hosted/disabled-storage claim.
+Two focused application repairs this session:
+- `be13cd7ba`, existing `backend/stripe/gigTipProof.js`: an actual Stripe platform
+  Charge omitted optional transfer; strict-null proof incorrectly left a captured
+  tip pending. Accept absent/null only. The same original capture then recovered.
+- `8825c1928`, existing `OffersPanel.tsx`: actual authorized assignment left the
+  offer labeled PENDING despite SQL accepted. Manual Refresh proved the existing
+  reader was correct. Adding gigStatus to the existing effect refreshes that list
+  after assignment changes. A fresh Stripe checkout automatically showed ACCEPTED;
+  reopening automatically showed REJECTED. Scoped ESLint passed. No layout change.
 
-Evidence `/private/tmp/pantopus-stream1-session-integration-r1`; durable private mirror
-`/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream1-session-integration-r1`,
-7 files hash verified. Source.json binds all77migration hashes to committed source.
-Initial localhost inherited retired fixture cookies and cannot refresh in this narrow
-harness; excluded setup attempt, fresh `stream1-combined.localhost` used. Old private
-Chrome window polls retired fixture but cannot authorize; window closure unconfirmed.
-Both owned integration tabs closed, exactf9200210rows0, own18132/18133/64561/64562
-stopped and free; own Next cache preserved privately/generatedtsconfig restored exactly.
-No peer resources touched; native slot free.
+## Newly verified combined and provider journeys
 
-Coordinator: PR65 merged61080b399 after finalf30c7fe7a CI35544236662 green. PR66
-follow/unfollow2-file repair merged2d12b85a7 after exacthead3a2b18be5 all checks green;
-its source/realUI/SQL evidence reviewed. Subsequent fan-identity/privacy milestones
-remain separate Stream3 work; no broad row closed. Next finish combined CI, continue
-existing P08/P09 provider cancellation/refund acceptance, and installed tips when
-supported native control works. Fee payer/recipient/timing decision remains pending.
+All use existing Chrome UI, SDK, routes/services and isolated PostgREST/PostgreSQL.
+The combined and subsequent provider projects replayed all77 migrations. Identity,
+ancillary shell feeds and notification transports are synthetic; Stripe TEST is
+real only where specified. No live funds, Connect transfers/payouts, hosted or
+installed-native acceptance is implied.
 
-The snapshot below records the earlier state and is superseded by this milestone.
+- **Combined session recovery on f0a98a974:** owner confirms completion and submits
+  a500c tip with a deliberately unknown synthetic-provider outcome. Another tab's
+  Settings Logout retires the old tip. A different account sees no tip and sends
+  zero payment requests. Returning owner recovers the exact original, one create,
+  captured_hold500 and one tip notice. No additional source repair.
+- **Actual Stripe assigned stops:**1250c authorization→Reopen Bidding releases the
+  hold and commits the task open. Dropped final response leaves UI unknown; reload
+  and saved action status confirm the same request's release. Separate750c grace
+  cancellation with Changed my plans confirms task cancelled and zero capture.
+  The500c offer-status candidate also reopens successfully. Three originals,
+  three completed stop UUIDs, three provider cancels, zero captured funds.
+- **Actual Stripe partial/full refunds on8825c1928:** chosen1250c bid→authorization,
+  worker Start Work/completion with note, owner review/approval→exact capture.
+  Refund0.49 and12.51 are rejected before any provider call.500c partial refund
+  with a dropped committed response stays unknown; reload recovers that original.
+  A blank-amount request freezes the remaining750c and completes it. Fresh Stripe
+  receipt reads match both request IDs/amounts; the1250c charge is fully refunded.
+  UI shows both receipts, no remaining worker earnings and no further refund action.
+  No refund repair was needed. Worker Connect lookup's synthetic-account failures
+  are fixture boundaries, not payout acceptance.
+
+Earlier actual tip decline/retry, failed/successful3DS, lost-response recovery,
+zero-charge cancellation and ordinary paid capture evidence remains accepted within
+its recorded source/runtime limits. It was not repeated solely for coverage.
+Across this session's four actual provider phases: ten originals, five captures
+fully refunded (6000c total), five unpaid intents cancelled, four owned customers
+deleted. Stripe's immutable test history remains; it is not claimed erased.
+
+Private durable evidence under the owner's `.pantopus-recovery/audits/`:
+- `20260920-stream1-tip-ui-r1`:71 files previously hash verified; earlier provider phases.
+- `20260920-stream1-session-integration-r1`:7 files hash verified; combined account switch.
+- `20260920-stream1-stop-stripe-r1`:18 files hash verified; stop receipts and Offers repair.
+- `20260920-stream1-refund-stripe-r1`:13 files hash verified; partial/full refund proof.
+Each has EVIDENCE.md, source/state/provider details and cleanup. Credentials, caches
+and operator logs stay private and outside Git/chat. CUA observations are in active
+task `01a0c0d1-0703-70c3-b842-6d01bc8ca48b`.
+
+Cleanup: exact owned rows zero in every phase; stop project13 entity counts and
+refund project18 counts all zero. Own browser tabs, API18132/web18133 and isolated
+API64561/SQL64562 projects stopped. Generated tsconfig restored; own Next caches
+preserved privately. An earlier native Chrome window's closure is unconfirmed; its
+retired fixture cannot authorize and the backend is stopped. Peer/retained resources
+were not changed. Native build slot is free; previous Simulator/Android control
+failures still prevent installed tip acceptance.
+
+Coordinator merged reviewed PR65/66/67/69 as61080b399/2d12b85a7/d69482d3f/5eab68ab7
+only after their current checks and bounded UI/API evidence passed. PR70 comment
+privacy/draft/native mapping is separately reviewed with native CI pending. Stream3's
+next real-SMTP reminder repair owns only the granted existing service. Live README
+contains exact shared-file/runtime grants; later dirty Stream3 status is author-owned.
+
+Next: finish current paid CI, publish this documentation-only checkpoint, then
+continue existing provider/native/backlog acceptance. Historical transfer/reversal,
+disputes, disabled storage and native journeys remain open. Fee payer/recipient/timing
+still needs the pending product decision. No broad inventory row is closed.
+
+The historical snapshot below records earlier states and their original limits.
 
 ## Current resumed state — September 20, 2026
 
