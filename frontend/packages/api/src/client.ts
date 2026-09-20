@@ -88,6 +88,7 @@ let _authChangeSequence = 0;
 function _emitTokenChange(token: string | null): void {
   if (_isWeb) {
     ++_authChangeSequence;
+    cancelPendingWebRefresh();
     try {
       // Other tabs cannot observe httpOnly cookie replacement. Broadcast only
       // a nonsecret change marker, never the token or account identity.
@@ -475,6 +476,20 @@ apiClient.interceptors.request.use(
 // Prevents concurrent 401 responses from triggering parallel refresh attempts.
 // The first 401 starts the refresh; subsequent 401s wait for the same promise.
 let _refreshPromise: Promise<AuthRefreshResult> | null = null;
+let _webRefreshController: AbortController | null = null;
+
+function cancelPendingWebRefresh(): void {
+  if (!_isWeb) return;
+  _webRefreshController?.abort();
+  _webRefreshController = null;
+  _refreshPromise = null;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', event => {
+    if (event.key === AUTH_SESSION_CHANGE_KEY || event.key === null) cancelPendingWebRefresh();
+  });
+}
 
 async function doTokenRefresh(): Promise<AuthRefreshResult> {
   // On web, the refresh token is in an httpOnly cookie sent automatically
@@ -489,13 +504,19 @@ async function doTokenRefresh(): Promise<AuthRefreshResult> {
   const baseURL = _isWeb ? '' : (apiClient.defaults.baseURL || API_BASE_URL);
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (_isWeb) headers['x-token-transport'] = 'cookie';
+  const controller = _isWeb ? new AbortController() : null;
+  if (controller) _webRefreshController = controller;
+  const sessionMarker = _isWeb ? currentRequestSession() : null;
 
   try {
     const { data } = await axios.post(
       `${baseURL}/api/users/refresh`,
       _isWeb ? {} : { refreshToken },
-      { headers, timeout: 10000 }
+      { headers, timeout: 10000, ...(controller ? { signal: controller.signal } : {}) }
     );
+    if (_isWeb && sessionMarker !== currentRequestSession()) {
+      return { status: 'transient', code: 'AUTH_SESSION_CHANGED', message: 'Account changed during refresh' };
+    }
     const newAccess = (data as any)?.accessToken ?? (data as any)?.access_token;
     const newRefresh = (data as any)?.refreshToken ?? (data as any)?.refresh_token;
     const expiresAt = (data as any)?.expiresAt ?? (data as any)?.expires_at;
@@ -537,6 +558,8 @@ async function doTokenRefresh(): Promise<AuthRefreshResult> {
       status: 'transient',
       message: error instanceof Error ? error.message : 'Failed to refresh session',
     };
+  } finally {
+    if (_webRefreshController === controller) _webRefreshController = null;
   }
 }
 
@@ -544,8 +567,13 @@ export async function refreshAuthSession(options?: { trigger?: string }): Promis
   const trigger = options?.trigger ?? 'manual';
 
   if (!_refreshPromise) {
-    _refreshPromise = doTokenRefresh().then(
+    const sessionMarker = _isWeb ? currentRequestSession() : null;
+    const pending: Promise<AuthRefreshResult> = doTokenRefresh().then(
       (result) => {
+        if (_refreshPromise === pending) _refreshPromise = null;
+        if (_isWeb && sessionMarker !== currentRequestSession()) {
+          return { status: 'transient' as const, code: 'AUTH_SESSION_CHANGED', message: 'Account changed during refresh' };
+        }
         if (result.status === 'success') {
           emitAuthEvent({
             type: 'session_refresh_ok',
@@ -562,14 +590,14 @@ export async function refreshAuthSession(options?: { trigger?: string }): Promis
             statusCode: result.statusCode,
           });
         }
-        _refreshPromise = null;
         return result;
       },
       (error) => {
-        _refreshPromise = null;
+        if (_refreshPromise === pending) _refreshPromise = null;
         throw error;
       }
     );
+    _refreshPromise = pending;
   }
   return _refreshPromise;
 }
@@ -634,11 +662,11 @@ apiClient.interceptors.response.use(
             }
           } catch {
             // Refresh threw unexpectedly — fall through to clear and redirect
-            _refreshPromise = null;
+            if (!requestSessionChanged(originalRequest)) _refreshPromise = null;
           }
         }
+        if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
         if (refreshResult?.status === 'invalid') {
-          if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
           didInvalidateSession = true;
           emitAuthEvent({
             type: 'session_invalidated',
