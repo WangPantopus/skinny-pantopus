@@ -2818,7 +2818,7 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
           metadata: {
             post_id: postId,
             comment_id: newComment.id,
-            ...(audienceAuthors ? {} : { user_id: userId }),
+            ...(audienceAuthors ? { persona_id: post.identity_context_id } : { user_id: userId }),
           },
         });
       }).catch(err => {
@@ -2839,7 +2839,7 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
             icon: '💬',
             ...(audienceAuthors ? { context: 'audience' } : {}),
             link: `/posts/${postId}`,
-            metadata: { post_id: postId, comment_id: newComment.id, parent_comment_id: parentCommentId, ...(audienceAuthors ? {} : { user_id: userId }) },
+            metadata: { post_id: postId, comment_id: newComment.id, parent_comment_id: parentCommentId, ...(audienceAuthors ? { persona_id: post.identity_context_id } : { user_id: userId }) },
           });
         }).catch(err => {
           logger.warn('Reply notification failed (non-blocking)', { error: err.message, postId });
