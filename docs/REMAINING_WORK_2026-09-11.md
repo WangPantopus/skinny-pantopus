@@ -16,6 +16,15 @@ N04 personal blocking/direct messages (Stream 3). Discovery closes no rows.
 The current handoff supersedes historical PR state below; source-specific paid
 candidate evidence is linked there and does not establish master acceptance.
 
+September20 Stream1 extends existing P02/P03/P08/P09 evidence with real Stripe TEST
+browser tips: captured-original recovery, decline/retry,3DS failure/retry, lost
+committed reply/reload, zero-charge cancellation. Reproduced absent-transfer receipt
+bug repaired in existing validator atbe13cd7ba. Actual paid-bid12.50authorization→
+workerStartWork/completion→ownerCapture plus7.50checkoutcancel now verified in
+Chrome/StripeTEST/API/SQL; source/current CI/cleanup/limits in
+[live Stream1 status](workstreams/01-gigs-payments.md). Synthetic app identity;
+Connect transfers/payouts, live/hosted and native tips remain open. No row closed.
+
 Native reviewer history is accepted and integrated through PR #35 into #32.
 PR #36 current-claims HTTP/SDK/browser/native acceptance is also complete at
 `1c5f7bb1b`, with final CI 34781479982 passing. The existing presentation is restored and integrated from `a68e8f0e5`;
@@ -133,7 +142,7 @@ subjourney; the authentication change itself closes no additional acceptance row
 
 - [x] P01 **Implemented and locally verified:** Durable tips reserve the exact original request/payment/payer/worker/cents/currency/terms before provider creation (`reserve_gig_tip_original` → `prepare_gig_tip_provider` → frozen `provider_params`). Verified September 16 on a fresh full-schema replay: tracked `scripts/db/test-gig-tip-original-service.cjs` 22/22 and a route-level HTTP/SQL harness 15/15 (lost provider create leaves a reserved, retryable original; identical retries reuse one intent). Real provider acceptance remains P02/L01. See [Stream1 evidence and limits](workstreams/01-gigs-payments.md).
 - [ ] P02 **Verify:** Tip migrations (`20260916021100..021300`), service and routes exist and pass local synthetic-provider verification for unknown creation, check/resume/cancel, historical legacy tips and the three-successful-tip limit without duplicate charges (September 16, same evidence as P01). Still open: exact provider proof against Stripe test mode and cold historical discovery beyond the 24-hour window, which belong with L01.
-- [ ] P03 **Verify:** Retained tip commands and receipt handling exist in web, iOS and Android (contract `backend/contracts/gig-tip-contract.md`) with unit-level coverage (web tip modal in the September 16 289-test run; iOS `GigTipTests`/`GigTipRecoveryTests`; Android `GigTipViewModelTest`/`GigTipRecoveryTest`). Still open: installed native and browser tip journeys with account/session changes and app restart recovery (P08/P09 scope).
+- [ ] P03 **Verify:** Retained tip commands and receipt handling exist in web, iOS and Android (contract `backend/contracts/gig-tip-contract.md`) with unit-level coverage (web tip modal in the September 16 289-test run; iOS `GigTipTests`/`GigTipRecoveryTests`; Android `GigTipViewModelTest`/`GigTipRecoveryTest`). September20 browser UI → real HTTP/SQL now passes retained reload/session changes, lost/invalid receipts, concurrent tabs, departure and cancellation with synthetic providers (see Stream1 status). Still open: installed native tip journeys, Stripe checkout/3DS, cold browser profile/storage failures and real provider acceptance (P08/P09 scope). The installed iOS attempt was interrupted by local Simulator failure; it is not accepted.
 - [ ] P04 **Fix/Verify:** Finish started-work, no-show, cancellation-fee and completion/reopen policies, immutable displayed terms and exact fee execution. Existing zero-fee unstarted-stop recovery is a bounded completed source milestone. Start Work is verified end to end (backend `599de1586`, displayed-terms binding `a65411758`/`4ad88ec11`, installed iOS and Android journeys). Completion, owner confirmation and reopen/release policies with immutable displayed terms passed 32/32 real HTTP/SQL checks on the full schema on September 16 (free paths complete; paid confirmation verified to the provider boundary). Still open: no-show and cancellation-fee policies and exact fee execution, which need the fee payer/recipient product decision, and real provider capture (P02/L01). See [Stream1 evidence and limits](workstreams/01-gigs-payments.md).
 - [ ] P05 **Fix/Verify:** Settle cancellation-fee residuals under an explicit policy; do not silently treat held money as released earnings or waive fees.
 - [ ] P06 **Fix/Verify:** Finish disputes and dispute-loss accounting, historical Connect transfers/reversals, payout onboarding/withdrawal and operational debt recovery, including contradictory legacy proof.

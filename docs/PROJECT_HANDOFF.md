@@ -7,6 +7,60 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## Resumed coordination — September 20, 2026
+
+Active coordinator/Stream1 task `01a0c0d1-0703-70c3-b842-6d01bc8ca48b` restored the
+missing registered paid worktree at `3657af97d`, adopted the later September16
+milestones, and merged current master `38f00dcc8` as **`aa168017e`** (documentation
+only; application bytes unchanged). PR47/PR34 remain draft, PR46 separate. See
+[active sessions](workstreams/README.md#active-sessions-and-runtime-ownership--september-20-2026)
+for all three resumed streams and nonoverlapping runtime/browser ownership.
+
+New bounded [browser tip acceptance and real-provider repair](workstreams/01-gigs-payments.md)
+uses existing UI/SDK/routes/service and full-schema PostgREST/SQL. Synthetic-provider
+phases verified8 gigs/7 originals/5 successes/2 cancellations with session/concurrency/
+transport failures. Actual Stripe TEST checkout then reproduced captured-but-unrecognized
+tip: optional charge.transfer was omitted, strict-null check refused it. In-place
+receipt fixbe13cd7ba recovered that same capture; real decline/retry, failed/successful
+3DS with dropped committed reply/reload, and zero-charge cancellation pass. Current
+paid head **9ae1edb3b** includes a separate expired existing iOS fixture correction;
+no new unit tests/screens/layout/schema. Current CI35542623560 running; affected
+64 backend regressions pass. Superseded CI exposed September17 fixture expiry,
+not app scheduling regression; never report current green from prior evidence.
+
+Additional actual paid-bid UI journey authorizes selected12.50 against20budget,
+worker starts/completes while hold remains, ownerapproval captures exact1250.
+Separate7.50checkoutcancel restorespendingbid/opengig with0charge, no appchange.
+All Stream1 local rows0, own API/web/Supabase stopped. Across both providerphases,
+four Stripe TEST captures fully refunded, two unpaid intents canceled, two customers
+deleted; provider history
+retained. Synthetic identity/notification transport limits remain. Native tip
+attempts lack functioning supported device control, not accepted; native slot free.
+Live/hosted/Connect payout boundaries and P03/P08/P09/app remain incomplete.
+
+Stream2 PR60 **3dc226983** passed combined CI35543397030 and was merged as
+**ebeea43d5** at 23:07 UTC. Home source remained unchanged while adopting the
+shared session repair; one focused browser journey verified delayed creation,
+recovery, viewing, revocation and list-error retry through actual API/SQL. The
+broader native, hosted, clipboard and M02/D08 limits remain open. Its final02
+handoff is published separately from application code.
+
+Stream3 safety PR64 **f387cd480** passed exact-head CI and was merged as
+**2d6ff2069** on September 20 at 23:00 UTC. Source review and real local GoTrue
+browser/API evidence cover inert Report/Block controls, account-state retirement,
+wrong-account retry after a delayed401, and an old refresh response overwriting a
+new login's cookies. Existing client code now cancels the old refresh and preserves
+new-account state. Storage-event delivery, frozen tabs, other browsers and native
+limits remain explicit; no broad safety row closed. The separately verified A02
+Settings step-up and two UserBlock FK repairs are now in draft PR65 at `bce48b25b`, with Home master integrated and combined CI
+running. Source reviewed; the new `20260916012000` migration follows Home11000. Single-writer scopes and migration20260916012000 are in
+README. Frozen03 was published; later dirty updates are author-owned.
+
+Next: finish paid current-head CI, review combined Home and A02 candidates, and
+continue remaining provider/native acceptance. Fee payer/recipient/timing decision
+is pending. Documentation PR63 publishes milestones separately from feature code.
+Preserve PR34 draft and unrelated PR46; paid PR47 remains draft.
+
 ## Current coordination and next action — September 16, 2026
 
 The September 15/16 cutoff was resumed by the coordinator/Stream 1 session on September 16

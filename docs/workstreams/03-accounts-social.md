@@ -1,8 +1,100 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated September 15, 2026, 21:15 PDT (immediate user-requested cutoff handoff). Owner: accounts/social stream.
-State: **paused for handoff; implementation and verification incomplete**. Stream 3, N04 and N05 remain **incomplete**.
-Current status is maintained only in this neutral coordination file.
+Updated September20, 2026, 22:57 UTC. **Stream incomplete; verification continues.**
+Sole live status: this neutral coordination file. No new unit tests requested/written.
+
+## Current safety handoff — frozen for coordinator review/publication
+
+Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
+`codex/workstream-accounts-social`. [Draft PR64](https://github.com/WangPantopus/skinny-pantopus/pull/64)
+final safety head **f387cd480**, committed and pushed. Includes separately reviewable
+`e83eaac91` chat actions, `b414ad6f6` cookie-login state retirement,
+`72823e366` stale-request retry guard, `f387cd480` pending refresh cancellation.
+Coordinator reviewed final source without a further finding; **exact-head CI still
+pending**. Prior728 CI35542480186 passed all6 applicable checks, not finalhead proof.
+No merge/integration claim. Safety/N04 and whole Stream3 remain open.
+
+| Reproduced problem | Existing implementation repaired | Actual candidate evidence |
+| --- | --- | --- |
+| Existing chat-details Report/Block had no handler. | ConversationView uses existing ReportModal, confirmStore, SDK/routes and UserReport/UserBlock. No layout/new screen/service/schema. | Real browser→SDK→HTTP→PostgREST/SQL: report, write failure/retry, block cancellation/failure, lost successful reply/retry one row, Settings find/unblock, pending departure. Earlier phase uses synthetic sign-in; persistence real. |
+| Cookie login skipped session-change notification; old tab retained Bob identity/draft and disabled safety. | Existing SDK auth/client + mounted QueryProvider publish existing nonsecret marker, retire cached queries and remount account state. | Real local GoTrue two-tab Bob→Alice login replaces identity and unsaved Private setting with Alice Public default. Same-account protected401→real cookie refresh200 preserves unsaved draft/open drawer. |
+| Bob's delayed401 retried under newly signed-in Dana and saved Dana→Evan block without Dana confirmation. | Existing web client binds request to originating session marker; rejects stale response/refresh/retry/cleanup. | Baseline22:37 wrong persisted actor; candidate22:40 no block/no refresh/retry. Same-account Dana401→refresh200→retry200 saves one rightful block. |
+| Old successful refresh overwrote new login cookies: fresh Settings returned Bob email under Dana shell. | Existing client AbortController cancels pending web refresh on local/cross-tab account transition; mutex completion belongs to its own promise; stale apply/event/cleanup checks. | Real GoTrue refresh with all4Set-Cookie intact: baseline945ms rollback; candidate920ms preserves Dana fresh protected read. New Dana401→refresh200 also succeeds before canceled old reply release. Old400 + newDana refresh leaves Dana signed in. Two earlier >10s client-timeout attempts excluded. |
+
+No backend/socket/native source change in PR64. Web TypeScript passes on final
+source (`refresh-cookie-candidate-types.log`); focused lint0errors (one existing
+Settings ts-nocheck warning in separately held A02 page). CI remains distinct.
+Expired/failed responses and delay schedules were injected privately. Local auth,
+HTTP handlers and PostgreSQL were real. No hosted OAuth/provider or installed
+native acceptance. Cross-tab cancellation depends on browser storage events;
+unavailable storage, frozen-tab event delivery and other browsers are unverified.
+No unauthorized message or Notification rows in these safety fixtures (both0).
+
+Detailed private evidence, source hashes and actual timing:
+`/private/tmp/pantopus-stream3-20260920-r1/real-auth-ui-results.json`,
+`real-auth-http.jsonl`, `real-auth-persistence.json`, `full-backend.log`,
+`cookie-race-baseline-release.json`, `cookie-race-candidate-release.json`,
+`cookie-race-new-refresh-release.json`, `stale-refresh-failure-candidate-release.json`.
+Durable private mirror:
+`/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/`
+(60 files at preceding refresh; MANIFEST SHA binds each file). Credentials/operator
+logs remain private, not Git/chat. CUA interaction history is in this Stream3 task.
+
+## Separate A02 candidate — verified, uncommitted
+
+Preserve existing changed web Settings page and SDK users.deleteAccount optional
+X-Step-Up, plus new coordinator-granted forward
+`supabase/migrations/20260916012000_user_block_account_deletion.sql` (only2 UserBlock
+FK CASCADE rules). Do not include in safety merge. No users.js change. Existing
+StepUpPasswordModal/native purpose/header contract reused; no redesign/new screen.
+Canonical sibling UserProfileBlock/UserReport CASCADE compared; applied migration
+history unchanged. Migration applied only to owned SQL64532, not hosted.
+
+Actual real-auth UI baseline: Delete→DELETE confirmation sent no stepup, rejected.
+Admitted direct HTTP login200→password stepup200→DELETE500 reproduced UserBlock FK.
+Candidate UI: cancel restores Delete; incorrect password shows retry; valid Alice
+stepup/DELETE200 removes public/authAlice plus2 outgoingblocks; Charlie stepup/
+DELETE200 removes public/authCharlie plus incomingBobblock. Both tabs retire to
+sign-in. Evidence `deletion-stepup-baseline.json`, `delete-api-baseline.json`,
+`real-auth-ui-results.json`/source hashes and HTTP/SQL. Publish separate commit/PR
+against fresh master after safety disposition, then required CI/coordinator review.
+Broader nontransactional deletion cleanup/provider failure and installed cases remain open.
+
+## Runtime, fixtures and continuation
+
+HTTP18130/web18131; real full backend/app.js, local GoTrue/Kong API64531, SQL64532,
+mail UI64534; additional64535–37 reserved. Project `pantopus-stream3-block-r1`,
+private workdir `/private/tmp/pantopus-stream3-auth-r3`. Browser
+`stream3-auth.localhost:18131`, separate from other streams' cookies. No hosted
+provider activation. Email log mode is not delivery. Own Next `.next-stream3/` and
+generated tsconfig remain uncommitted; preserve application edits when retiring them.
+
+Original synthetic phase stopped/cleaned0 (`cleanup.json`), bareREST removed.
+Current private auth-fixtures.json has5 exact owned Auth/public IDs: Alice/Charlie
+deleted by real UI; **Bob, Dana, Evan active**, one legitimate Dana→Evan block,
+0ChatMessage/0Notification. Do not rerun seeds blindly; exact remaining cleanup
+is required after continued verification. No unrelated database/container changed.
+Native slot free, but current iOSSimulator failure/AndroidCUA window attachment
+prevent installed acceptance; physical Android unavailable in recorded setup.
+
+Adopted merged PR51/6055bc2b9 transaction gate and later real PostgREST/socket replay
+within synthetic auth/READ COMMITTED/single-counterparty limits. PR51 mergec14657e35,
+CI35137410491 green; restored missing own worktree and advanced documentation-only
+master38f00dcc8 before current repairs. September15 mirror76files hashes verified;
+September16 raw temporary artifacts were lost, so later reports remain source-bound
+accepted evidence, not newly recovered raw proof. No duplicate large-suite replays.
+
+Continue whole-stream N01–N05/A01–A05 mapping below. N03 current step: existing
+My Beacon setup on Dana, preview reached, **not yet published**; local development
+identity/persona/broadcast defaults enabled, release cohort/provider unverified.
+N01/N02 provider/device, N03 public/private/follow/mute/post/old-link, N04 remaining
+access/moderation, N05 delivered reminders, A01 recovery/OAuth/onboarding, A03 storage,
+A04 providers and A05 reachable-action acceptance remain open. Route Home/payment
+findings to their owners. New shared/schema/runtime work goes to active coordinator
+`01a0c0d1-0703-70c3-b842-6d01bc8ca48b`; old coordinator remains retired.
+
+**The historical sections below retain their original evidence. This current
+snapshot supersedes their stale draft/paused/no-migration/next-race instructions.**
 
 ## Source and reconciliation
 
@@ -13,7 +105,7 @@ green on the merged base (326 suites /5473 tests /0 failures). The transactional
 block admission work (`6055bc2b9`) is now in master. Initial inspection found clean `fc99f8ee7`
 with no later changes, PR or CI. Current master `0616d6e79` was integrated as
 shared documentation only. Current pushed milestones: **`dfc860bfe`** (initial safety repair), **`41588bbec`** (native lifetime/web navigation), **`8d31d452f`** (N05 reminder failure contract), **`bf16f6f50`** (message retry privacy), **`22adc7285`** (existing retry test fixture models SQL NULL actor defaults), **`6055bc2b9`** (transactional direct-message block admission).
-Draft [PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51);
+Merged [PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51);
 [CI35054358217](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35054358217) for current HEAD **`22adc728512b8dd0f261c0aaf02e255123dc7f50`**
 has since **completed successfully** (confirmed 2026-09-16 on resume; it was still
 in progress at the cutoff inspection). Earlier runs were superseded; initial Android
