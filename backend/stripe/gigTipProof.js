@@ -68,7 +68,9 @@ function assertTipCharge(payment, request, intent, charge, expectedLive) {
   if (!id(chargeId, 'ch') || charge?.id !== chargeId || charge.livemode !== expectedLive
       || providerId(charge.payment_intent) !== intent.id || providerId(charge.customer) !== payment.stripe_customer_id
       || charge.amount !== amount || charge.currency !== 'usd' || charge.on_behalf_of !== null
-      || charge.transfer !== null || charge.destination !== null || !zeroOrAbsent(charge.application_fee_amount)
+      // Stripe omits transfer on platform charges; a transfer ID/object still fails proof.
+      || (charge.transfer !== null && charge.transfer !== undefined)
+      || charge.destination !== null || !zeroOrAbsent(charge.application_fee_amount)
       || charge.application_fee !== null || typeof charge.paid !== 'boolean' || typeof charge.captured !== 'boolean'
       || !Number.isSafeInteger(charge.amount_captured) || charge.amount_captured < 0 || charge.amount_captured > amount
       || !Number.isSafeInteger(charge.amount_refunded) || charge.amount_refunded < 0 || charge.amount_refunded > amount
