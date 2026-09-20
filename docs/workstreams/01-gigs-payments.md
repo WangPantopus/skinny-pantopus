@@ -14,9 +14,10 @@ draft, PR46 separate; no feature merged. Owner checkout/untracked work preserved
 
 New browser acceptance reuses existing screens and actual SDK/routes/service/SQL.
 First two phases use synthetic provider (8 gigs/7 originals/5 successes/2 canceled).
-Final phase uses actual Stripe TEST PaymentElement/provider:4 originals/3 captured
-and1 canceled; ordinary recovery, actual decline/retry,3DS failure/retry, lost
-committed reply/reload and zero-charge cancellation pass. No screen/design/schema
+Actual Stripe TEST tip phase:4 originals/3 captured and1 canceled; ordinary
+recovery, actual decline/retry,3DS failure/retry, lost committed reply/reload and
+zero-charge cancellation pass. Additional paid-bid authorization→workerStartWork/
+completion→ownerCapture and separate checkoutcancel pass with2 originals. No screen/design/schema
 change or new unit test. Synthetic app identity, native/hosted/live provider,
 Connect transfers/payouts and notification delivery remain explicit boundaries.
 
@@ -28,11 +29,12 @@ separate fixture correction. Existing64 affected backend regressions pass. Do no
 call current CI green until its current-head run finishes.
 
 Owned browser/API18133/18132 and SQL64562/API64561 project are stopped; exact fixture
-rows0. Three Stripe TEST charges fully refunded, one unpaid intent canceled,
-owned customer deleted; provider history retained. Heavy native slot released;
+rows0. Across actual provider phases4 Stripe TEST charges fully refunded,2 unpaid intents
+canceled,2 owned customers deleted; provider history retained. Heavy native slot released;
 owned iOS Simulator/emulator shut down. Peer resources untouched. Active Stream2/
 Stream3 grants and shared single-writer scopes are in live README. Stream2 final02
-snapshot published; Stream3 ongoing dirty03 remains author-owned.
+snapshot published; Stream3 frozen03 safety handoff captured for publication; subsequent updates
+remain author-owned.
 
 Next: current-head CI, Stream3 shared-session/account-deletion review; resume native
 tip acceptance when supported device control works; continue remaining paid-gig
@@ -169,16 +171,34 @@ conditionally, pending actual UI/API reproduction and comparison before edits.
   past.9ecf66fc7 changes only the fixture to future-relative dates; no app behavior
   or coverage expansion. Source-bound earlier native evidence retained.
 
-## Next bounded milestone started: actual paid authorization — September20
+## Milestone: actual paid authorization, Start Work and capture — September20
 
-Reacquired same owned SQL64562/API64561 and HTTP18132/web18133; no native slot.
-Source9ae1edb3b (pinned formatting follow-up to existing fixture), payment app source
-unchanged sincebe13cd7ba. Existing GigBidCheckout/GigPaymentSetup → gigs accept/finalize
-→ gigPaymentAcceptance/stripeService → GigPaymentAcceptance/GigBid/Gig/Payment located;
-prior source-bound synthetic authorization/Start Work evidence reused. Next actual
-Chrome→Stripe TEST manual authorization→assigned worker Start Work; separate checkout
-cancellation. Owned prefixf9200200, synthetic local identity, no Connect payout.
-No new app file/unit test; private harness extends same isolated provider runtime.
+- **Source:** unchanged application9ae1edb3bf2647cd8a9d276d0f210d5b201f5eac,
+  currentCI35542623560 running. No app defect/source change, new file or unit test.
+  Existing GigDetail→GigBidCheckout/GigPaymentSetup→gigs accept/finalize/start/
+  completion/confirm→gigPaymentAcceptance/stripeService→PostgREST/full75migrations.
+  Prior synthetic concurrency/error cases reused; new boundary actual Stripe TEST.
+- **Actual Chrome workflow:** owner accepts12.50USD bid on20USD-budget gig,
+  authorizes public4242 card. Stripe requires_capture1250/received0; SQL oneauthorized
+  Payment, acceptedbid, assignedgigprice12.50; UI Bid accepted. Owner logout→worker
+  login, StartWork→in_progress; worker completion note→completed with paymentstill
+  authorized and no ownerconfirmation. Ownerlogin→ReviewWork exact persistednote→
+  Confirm&Approve captures1250; SQLcaptured_hold/owner_confirmed, UI PaymentHeld.
+  Optional tip skipped. Card only charged at ownerconfirmation in this journey.
+- **Cancellation:** separate10USD-budget/7.50bid→actualcheckout→Cancel. Existing
+  abort route canceled same Stripeintent; bidpending/gigopen restored, attempt and
+  paymentcanceled/received0. Reload displayed explicit newContinue but created no
+  payment. Final2providercreates1cancel,1captured1250/1canceled750, no duplicate.
+- **Limits:** actual Stripe TEST and local payment persistence; synthetic appidentity,
+  shell reads and notificationtransports. Worker ConnectAccount getter correctly
+  fails for synthetic account and UI saysSetUp; no Connect/payout readiness or
+  hosted/live/native acceptance. Acceptance/chat/delivery rows persisted but
+  external delivery not claimed. Fees/productdecision and widerP04/P08/P09 open.
+- **Evidence/cleanup:** same durable September20mirror, `paid-*.json`,
+  `runtime-paid-stripe.cjs`, EVIDENCE.md/manifest.11 exactownedtable counts0, test1250
+  refundsuccess/readbackfullyrefunded,750intentcanceled,ownedcustomerdeleted.
+  Providerhistoryretained. Ownpaymenttabclosed,HTTP18132/web18133 andSupabasestopped;
+  nativefree,peerresourcespreserved. Documentation-only publication, no featuremerge.
 
 Updated September 16, 2026. Owner: coordinator / Stream 1.
 State: ready for review — displayed-terms binding delivered at `a65411758` and the

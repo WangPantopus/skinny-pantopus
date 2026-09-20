@@ -23,13 +23,17 @@ transport failures. Actual Stripe TEST checkout then reproduced captured-but-unr
 tip: optional charge.transfer was omitted, strict-null check refused it. In-place
 receipt fixbe13cd7ba recovered that same capture; real decline/retry, failed/successful
 3DS with dropped committed reply/reload, and zero-charge cancellation pass. Current
-paid head **9ecf66fc7** includes a separate expired existing iOS fixture correction;
-no new unit tests/screens/layout/schema. Current CI35542203259 running; affected
+paid head **9ae1edb3b** includes a separate expired existing iOS fixture correction;
+no new unit tests/screens/layout/schema. Current CI35542623560 running; affected
 64 backend regressions pass. Superseded CI exposed September17 fixture expiry,
 not app scheduling regression; never report current green from prior evidence.
 
-All Stream1 local rows0, own API/web/Supabase stopped. Three Stripe TEST captures
-fully refunded, one unpaid intent canceled, customer deleted; provider history
+Additional actual paid-bid UI journey authorizes selected12.50 against20budget,
+worker starts/completes while hold remains, ownerapproval captures exact1250.
+Separate7.50checkoutcancel restorespendingbid/opengig with0charge, no appchange.
+All Stream1 local rows0, own API/web/Supabase stopped. Across both providerphases,
+four Stripe TEST captures fully refunded, two unpaid intents canceled, two customers
+deleted; provider history
 retained. Synthetic identity/notification transport limits remain. Native tip
 attempts lack functioning supported device control, not accepted; native slot free.
 Live/hosted/Connect payout boundaries and P03/P08/P09/app remain incomplete.
@@ -40,7 +44,8 @@ share contract, no design change. Native/wider scope remains open; still draft.
 Stream3 PR64 is actively fixing reproduced cross-account cookie-session retirement,
 held401 retry under a new account, and admitted account deletion blocked by UserBlock
 FKs. Single-writer scopes and reserved forward migration20260916012000 in README;
-its dirty03 remains author-owned until handoff. No peer feature merged this session.
+finalsafetyf387cd480 source reviewed, intact-cookie/account retry acceptance
+verified, exactheadCIpending; frozen03 handedoff forpublication. No peer feature merged this session.
 Next: finish current-head CI/review and remaining provider/native acceptance, with
 fee payer/recipient/timing decision still pending. Documentation PR63 publishes
 milestones separately from feature code. Preserve PR34 draft and unrelatedPR46.

@@ -19,7 +19,9 @@ candidate evidence is linked there and does not establish master acceptance.
 September20 Stream1 extends existing P02/P03/P08/P09 evidence with real Stripe TEST
 browser tips: captured-original recovery, decline/retry,3DS failure/retry, lost
 committed reply/reload, zero-charge cancellation. Reproduced absent-transfer receipt
-bug repaired in existing validator atbe13cd7ba; source/current CI/cleanup/limits in
+bug repaired in existing validator atbe13cd7ba. Actual paid-bid12.50authorization→
+workerStartWork/completion→ownerCapture plus7.50checkoutcancel now verified in
+Chrome/StripeTEST/API/SQL; source/current CI/cleanup/limits in
 [live Stream1 status](workstreams/01-gigs-payments.md). Synthetic app identity;
 Connect transfers/payouts, live/hosted and native tips remain open. No row closed.
 
