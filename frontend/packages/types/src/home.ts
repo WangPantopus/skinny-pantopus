@@ -175,10 +175,14 @@ export interface HomeDocument {
 
 // ─── HomeEmergency ──────────────────────────────────────────
 
+// HomeEmergency_type_chk (migration 20260916011000): the nine list-of-rows
+// values plus the six categories the native Add Emergency forms send.
 export type HomeEmergencyType =
   | 'shutoff_water' | 'shutoff_gas' | 'shutoff_electric'
   | 'breaker_map' | 'extinguisher' | 'first_aid'
-  | 'evac_plan' | 'emergency_contacts' | 'other';
+  | 'evac_plan' | 'emergency_contacts' | 'other'
+  | 'allergy' | 'medical_condition' | 'medication'
+  | 'contact' | 'pet_medical' | 'power_of_attorney';
 
 export interface HomeEmergency {
   id: string;

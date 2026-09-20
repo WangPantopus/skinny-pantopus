@@ -6,6 +6,7 @@ import { LayoutDashboard } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { GuestPassView } from '@pantopus/api';
+import { sharedDocumentLabel } from '@/components/home/share/sharedDocumentLabel';
 
 // ============================================================
 // Guest View Page — /guest/:token
@@ -359,7 +360,7 @@ export default function GuestViewPage() {
         {sections.docs && sections.docs.length > 0 && (
           <GuestCard icon="📄" title="Shared Documents">
             <div className="space-y-2">
-              {sections.docs.map((doc: { url?: string; file_type?: string; title?: string; filename?: string; description?: string }, i: number) => (
+              {sections.docs.map((doc: { url?: string; mime_type?: string; doc_type?: string; title?: string; filename?: string; description?: string }, i: number) => (
                 <a
                   key={i}
                   href={doc.url || '#'}
@@ -368,7 +369,7 @@ export default function GuestViewPage() {
                   className="flex items-center gap-3 p-2 rounded-lg hover:bg-app-hover transition"
                 >
                   <div className="w-8 h-8 rounded-lg bg-app-surface-sunken flex items-center justify-center text-app-text-secondary text-xs font-bold shrink-0">
-                    {(doc.file_type || 'PDF').toUpperCase().slice(0, 3)}
+                    {sharedDocumentLabel(doc)}
                   </div>
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-app-text truncate">{doc.title || doc.filename || 'Document'}</div>

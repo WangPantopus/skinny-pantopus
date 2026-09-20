@@ -5,6 +5,7 @@
 // ============================================================
 
 import { get, post, put, patch, del } from '../client';
+import type { HomeEmergencyType } from '@pantopus/types';
 import { assertHomeTaskSession, taskSessionHeaders, rethrowTaskSessionError, type HomeTaskSessionScope } from '../taskSessionScope';
 
 // ---- HomeTask ----
@@ -269,6 +270,20 @@ export async function removeBusinessLink(homeId: string, linkId: string) {
 
 export async function getHomeEmergencies(homeId: string) {
   return get<{ emergencies: any[] }>(`/api/homes/${homeId}/emergencies`);
+}
+
+// `type` must be a HomeEmergencyType value (HomeEmergency_type_chk); the route
+// answers 400 INVALID_EMERGENCY_TYPE otherwise. `details` is the free-form
+// jsonb object the native forms already write (phone, notes, detail keys).
+export async function createHomeEmergency(
+  homeId: string,
+  data: { type: HomeEmergencyType; label: string; location?: string | null; details?: Record<string, string> },
+) {
+  return post<{ emergency: any }>(`/api/homes/${homeId}/emergencies`, data);
+}
+
+export async function deleteHomeEmergency(homeId: string, emergencyId: string) {
+  return del<{ message: string }>(`/api/homes/${homeId}/emergencies/${emergencyId}`);
 }
 
 // ---- HomeAccessSecret ----
