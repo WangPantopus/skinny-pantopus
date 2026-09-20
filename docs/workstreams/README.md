@@ -19,7 +19,10 @@ Stream3 runtime extension64534–64537 is granted for local GoTrue/Kong/mail onl
 Stream3 single-writer grants: existing Settings deletion UI and SDK users endpoint;
 `frontend/packages/api/src/client.ts`, `endpoints/auth.ts` and mounted web
 `lib/query-provider.tsx` for reproduced cookie-login cross-tab account retirement
-(preserve same-account refresh/drafts). Existing `UserBlock` incoming/outgoing
+(preserve same-account refresh/drafts). Extension granted after admitted held401
+replayed Bob's block as new Dana after refresh: bind shared interceptor requests
+to session generation, recheck across awaits, prevent stale retry/session cleanup.
+Existing `UserBlock` incoming/outgoing
 NO ACTION FKs caused admitted real-auth/step-up DELETE500: forward migration
 20260916012000 is granted for only those two CASCADE constraints, after canonical
 comparison. No applied migration rewrite or auth/socket redesign. Stream3 reports
@@ -33,8 +36,9 @@ acceptance claimed. Owned emulator stopped; no rebuild/install. exact
 owned simulator shut down. Local Simulator became unavailable after an external
 shutdown/XPC/display failure; no build or system-service reset. Recheck actual
 availability before reserving. Stream1 HTTP18132/web18133 and isolated64561/64562
-project reacquired for actual Stripe TEST provider checkout; synthetic fixture
-identity only, tracked provider objects require exact cancel/refund cleanup. Stream3 and Stream2 own their dirty live status files; coordinator stages
+project reacquired for paid-bid authorization browser test; previous tip phase exact
+local rows0,3 test captures fully
+refunded,1 intent canceled and owned customer deleted (provider history retained). Stream3 and Stream2 own their dirty live status files; coordinator stages
 only handed-off snapshots. Stream1 source changes remain confined to its assigned
 paid worktree, Stream2 to its Home worktree, Stream3 to its accounts/social worktree.
 

@@ -2,38 +2,42 @@
 
 ## Current resumed state — September 20, 2026
 
-State: **browser milestone verified; installed tip acceptance remains open**, coordinator and sole Stream 1 writer resumed in task
-`01a0c0d1-0703-70c3-b842-6d01bc8ca48b`. Restored the missing registered application
-worktree at `/private/tmp/pantopus-paid-gig-integration`, branch
-`codex/paid-gig-integration`, from exact remote `3657af97d`; merged current master
-`38f00dcc8` (six coordination documents only, application bytes unchanged).
-Owner checkout/untracked design work and Stream 3's dirty status are preserved.
-PR47 and PR34 remain draft, PR46 separate. Fresh remote CI35142787582 is green on
-`3657af97d` (15 applicable checks); the new documentation integration is not yet CI verified.
+State: **real Stripe TEST browser tip milestone verified and repaired; current-head
+CI running; native tip acceptance remains open.** Sole Stream1/coordinator task
+`01a0c0d1-0703-70c3-b842-6d01bc8ca48b` works only in
+`/private/tmp/pantopus-paid-gig-integration`, branch `codex/paid-gig-integration`,
+clean/pushed **9ae1edb3bf2647cd8a9d276d0f210d5b201f5eac**. Adopted later September16
+Start Work/my-bids/native/completion/tip work at3657af97d and durable evidence;
+merged documentation-only master38f00dcc8 asaa168017e. Receipt repairbe13cd7ba and
+existing scheduling fixture maintenance9ecf66fc7 follow below. PR47/PR34 remain
+draft, PR46 separate; no feature merged. Owner checkout/untracked work preserved.
 
-Adopted later Start Work displayed terms, my-bids, installed iOS/Android,
-completion/reopen and tip HTTP/SQL milestones below. Durable September16 mirrors
-are present; source unchanged, so do not repeat accepted large suites or write
-unit tests. Completed bounded P03/P08/P09 milestone: existing browser tip modal from
-GigDetail, through SDK, payment routes/service and full-schema PostgREST/SQL,
-including persisted original, lost reply, reopen/reload and session boundaries.
-Actual Stripe TEST card capture now reproduced and repaired below; synthetic
-provider evidence retains its original limits. Live-mode, payouts and hosted delivery
-remain unverified.
+New browser acceptance reuses existing screens and actual SDK/routes/service/SQL.
+First two phases use synthetic provider (8 gigs/7 originals/5 successes/2 canceled).
+Final phase uses actual Stripe TEST PaymentElement/provider:4 originals/3 captured
+and1 canceled; ordinary recovery, actual decline/retry,3DS failure/retry, lost
+committed reply/reload and zero-charge cancellation pass. No screen/design/schema
+change or new unit test. Synthetic app identity, native/hosted/live provider,
+Connect transfers/payouts and notification delivery remain explicit boundaries.
 
-Runtime reservation: Stream 1 owns HTTP18132/web18133 and isolated SQL64562/API64561
-(64563–64567) for this milestone; old temporary runtime is gone and Docker was
-initially stopped. Inspect actual ownership before recreation; preserve retained
-64521–64533 and all other fixtures. Heavy native slot remains unclaimed. Stream 3
-has been notified of coordinator resumption and its own 18130/18131/64531/64532
-reservation; its shared-file/schema requests come here.
+[CI35542623560](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35542623560)
+is running on9ae1edb3b. Existing fixture pinned-format follow-up is included;
+SwiftFormat0.61.1/SwiftLint0.63.3 scoped checks pass. Superseded manual35540452604 exposed expired September17
+iOS scheduling fixtures (application correctly says past); it was canceled after
+separate fixture correction. Existing64 affected backend regressions pass. Do not
+call current CI green until its current-head run finishes.
 
-Coordinator runtime grant September20: Stream2 task `01a0c0d4-2278-71d3-bc23-a9d789d2afeb`
-owns SQL64552/API64551 (64550–64559), API18142/web18141. Docker auto-restarted
-its existing `pantopus-stream2-guest-r1` containers; inspect and adopt those before
-creating r2 on the same ports. No retained64521–64533 mutation. Native slot still
-unclaimed. Browser cookie isolation: Stream1 localhost, Stream3 127.0.0.1;
-Stream2 must use its own loopback host and bind accordingly.
+Owned browser/API18133/18132 and SQL64562/API64561 project are stopped; exact fixture
+rows0. Three Stripe TEST charges fully refunded, one unpaid intent canceled,
+owned customer deleted; provider history retained. Heavy native slot released;
+owned iOS Simulator/emulator shut down. Peer resources untouched. Active Stream2/
+Stream3 grants and shared single-writer scopes are in live README. Stream2 final02
+snapshot published; Stream3 ongoing dirty03 remains author-owned.
+
+Next: current-head CI, Stream3 shared-session/account-deletion review; resume native
+tip acceptance when supported device control works; continue remaining paid-gig
+provider/P08/P09 scope. Fee payer/recipient/timing product decision remains pending.
+No broad inventory row closed; reuse accepted unchanged journeys.
 
 The historical snapshot below retains its original source and acceptance limits.
 
@@ -118,37 +122,63 @@ apply, neither feature merged. Stream3 runtime extension64534–64537 granted;
 `users.js` account-delete/SDK scope and forward version20260916012000 are reserved
 conditionally, pending actual UI/API reproduction and comparison before edits.
 
-## Current next milestone: actual Stripe test provider — September 20, 2026
+## Milestone: actual Stripe TEST checkout and receipt repair — September20
 
-Read-only preflight of existing local Stripe configuration succeeded and returned
-`livemode:false`; no credential copied into Git/chat. Reacquired owned isolated
-SQL64562/API64561, HTTP18132/web18133 for P02 browser tip → actual Stripe test
-intent/charge proof. Reuse existing UI/routes/service/SQL, synthetic local identity,
-actual test Stripe provider; no Connect account creation or transfer/payout scope.
-Native slot remains released. This is discovery/preparation, not acceptance.
+- **Source:** be13cd7ba modifies only existing `backend/stripe/gigTipProof.js`.
+  Current head9ecf66fc7 separately maintains the existing iOS scheduling fixture;
+  both pushed to draftPR47. No new application file, unit test, schema or design.
+- **Reproduced failure:** Chrome PaymentElement4242 captured500c at Stripe, while
+  app UI said needs_review and SQL original stayed pending. Actual charge omits
+  optional `transfer`; strict null comparison incorrectly refused it. Existing
+  validator/history/paid branches and installed Stripe type compared; official
+  [Charge contract](https://docs.stripe.com/api/charges/object) applies transfer
+  to destination charges. Small in-place repair accepts absent/null only and
+  continues refusing any transfer value.
+- **Real end-to-end:** existing completion→TipModal→Stripe PaymentElement→actual
+  provider→existing POST tip/check→PostgREST/full75-migration SQL. Same original500c
+  recovered through Check tip status, one create/no second charge; reload retired
+  modal. Fresh1000c actual generic card decline showed safe retry, valid4242 then
+  succeeded SAME intent.2000c actual3DS Fail showed authentication error; retry
+  Complete with final app response deliberately lost after commit showed unknown,
+  reload recovered terminal SAME original.50c checkout Cancel returned unpaid
+  original; explicit Cancel tip canceled provider with no charge and retired UI.
+  Fourth fixture was assigned connected worker before confirmation; historical
+  title still says no connect. Cold Chrome storage recovered preexisting original.
+- **Proof:**4 provider creates/4 originals,3 captured500/1000/2000c,1 canceled50c,
+  exactly3 stored tip notices,1 customer,0 assertions/errors. Stripe charge list
+  confirms declined then successful1000c attempt and authenticated3DS2000c.
+  Existing64 affected backend regressions pass. No new test written.
+- **Limits:** actual Stripe TEST only, synthetic local app identity and ancillary
+  shell/notification transports. No real Connect account/transfer/payout/live funds,
+  delivery worker/hosted deployment/native tip/disabled-storage acceptance. IAB
+  PaymentElement did not render; real browser provider proof uses Chrome extension.
+  Native browser attempt interrupted. Success toasts transient; terminal UI and
+  provider/SQL receipt proof recorded. Do not close P01–P10 broadly.
+- **Evidence:** durable private September20 mirror above, `EVIDENCE.md`,
+  `stripe-source.json`, `stripe-after-charge-state.json`,
+  `stripe-charge-proof-fields.json`, `stripe-recovered-state.json`,
+  `stripe-decline-retry-*`, `stripe-3ds-lost-*`, `stripe-final-*`,
+  `stripe-provider-attempts.json`, `stripe-runtime-evidence.json`, regression log,
+  cleanup records and manifest. Credentials/operator logs excluded from Git/chat.
+- **Cleanup:** exact local rows0;3 Stripe TEST refunds succeeded and read-back proved
+  fully refunded; fourth intent canceled/zero received; owned customer deleted.
+  Provider test PI/charge/refund history remains. Owned payment tabs closed, API/web
+  and own Supabase stopped; native slot free; peer runtime/caches/fixtures untouched.
+- **CI:** current35542203259 running. Prior35540452604 failed two existing iOS
+  scheduling future-action tests on all3 devices because hardcoded September17 is
+  past.9ecf66fc7 changes only the fixture to future-relative dates; no app behavior
+  or coverage expansion. Source-bound earlier native evidence retained.
 
-Actual Stripe baseline reproduced at22:31 UTC: public4242 test card submitted in
-Chrome PaymentElement, provider succeeded/captured500c, but UI returned needs_review
-and local original stayed pending. Read-only charge proof shows `transfer` omitted;
-existing validator required strict null. Installed Stripe type declares transfer
-optional and official Charge docs say applicable to destination charges only.
-Small in-place `gigTipProof.js` repair admits only undefined/null (still rejects
-any transfer value). At22:33 existing Check tip status recovered the SAME captured
-intent to captured_hold/succeeded + one tip_received notice, provider creates1.
-Additional real provider scenarios and relevant regressions ongoing. No screen,
-service, schema or unit test added. Receipt repair committed/pushed **be13cd7ba**; current paid head **9ecf66fc7**
-adds a separate existing scheduling-fixture date correction (no new unit tests).
-Same-original500c recovery and declined1000c card→valid-card retry both succeeded
-through real Chrome/Stripe/API/SQL; exactly2 provider creates,2 captured originals
-and2 stored tip notices. Existing affected backend regressions64/64 pass.
-[Current CI35542203259](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35542203259)
-is running; superseded manual run35540452604 canceled after failure diagnosis.
+## Next bounded milestone started: actual paid authorization — September20
 
-Fresh CI35540452604 iOS failures are unrelated expired September17 scheduling
-fixtures: actual lifecycle correctly reads past on September20. No application
-change justified; existing fixture now uses future-relative dates in9ecf66fc7. Do not report
-current paid CI green. Three native jobs fail same action assumptions; remaining
-Android job still running.
+Reacquired same owned SQL64562/API64561 and HTTP18132/web18133; no native slot.
+Source9ae1edb3b (pinned formatting follow-up to existing fixture), payment app source
+unchanged sincebe13cd7ba. Existing GigBidCheckout/GigPaymentSetup → gigs accept/finalize
+→ gigPaymentAcceptance/stripeService → GigPaymentAcceptance/GigBid/Gig/Payment located;
+prior source-bound synthetic authorization/Start Work evidence reused. Next actual
+Chrome→Stripe TEST manual authorization→assigned worker Start Work; separate checkout
+cancellation. Owned prefixf9200200, synthetic local identity, no Connect payout.
+No new app file/unit test; private harness extends same isolated provider runtime.
 
 Updated September 16, 2026. Owner: coordinator / Stream 1.
 State: ready for review — displayed-terms binding delivered at `a65411758` and the

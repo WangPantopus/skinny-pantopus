@@ -16,6 +16,13 @@ N04 personal blocking/direct messages (Stream 3). Discovery closes no rows.
 The current handoff supersedes historical PR state below; source-specific paid
 candidate evidence is linked there and does not establish master acceptance.
 
+September20 Stream1 extends existing P02/P03/P08/P09 evidence with real Stripe TEST
+browser tips: captured-original recovery, decline/retry,3DS failure/retry, lost
+committed reply/reload, zero-charge cancellation. Reproduced absent-transfer receipt
+bug repaired in existing validator atbe13cd7ba; source/current CI/cleanup/limits in
+[live Stream1 status](workstreams/01-gigs-payments.md). Synthetic app identity;
+Connect transfers/payouts, live/hosted and native tips remain open. No row closed.
+
 Native reviewer history is accepted and integrated through PR #35 into #32.
 PR #36 current-claims HTTP/SDK/browser/native acceptance is also complete at
 `1c5f7bb1b`, with final CI 34781479982 passing. The existing presentation is restored and integrated from `a68e8f0e5`;

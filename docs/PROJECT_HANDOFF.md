@@ -16,21 +16,34 @@ only; application bytes unchanged). PR47/PR34 remain draft, PR46 separate. See
 [active sessions](workstreams/README.md#active-sessions-and-runtime-ownership--september-20-2026)
 for all three resumed streams and nonoverlapping runtime/browser ownership.
 
-New bounded [browser tip acceptance](workstreams/01-gigs-payments.md#milestone-browser-tip-recovery-through-real-uihttpsql--september-20-2026)
-passed the existing UI → SDK → real routes/service → PostgREST/PostgreSQL: normal,
-lost/malformed result, retained reload/session return, concurrent tabs, departure,
-eligibility and cancellation paths. Five successful tips and two canceled originals,
-no duplicate creation in exercised cases; no application changes or new unit tests.
-Synthetic auth/provider boundaries remain explicit. Installed iOS tip attempt was
-interrupted by local Simulator failure and is **not accepted**; exact fixtures0,
-own runtime stopped and native slot released. P03/P08/P09 and app remain incomplete.
-CI35540452604 on paid head is running; prior source CI remains accepted only within
-its original scope. Documentation PR63 publishes this milestone separately.
+New bounded [browser tip acceptance and real-provider repair](workstreams/01-gigs-payments.md)
+uses existing UI/SDK/routes/service and full-schema PostgREST/SQL. Synthetic-provider
+phases verified8 gigs/7 originals/5 successes/2 cancellations with session/concurrency/
+transport failures. Actual Stripe TEST checkout then reproduced captured-but-unrecognized
+tip: optional charge.transfer was omitted, strict-null check refused it. In-place
+receipt fixbe13cd7ba recovered that same capture; real decline/retry, failed/successful
+3DS with dropped committed reply/reload, and zero-charge cancellation pass. Current
+paid head **9ecf66fc7** includes a separate expired existing iOS fixture correction;
+no new unit tests/screens/layout/schema. Current CI35542203259 running; affected
+64 backend regressions pass. Superseded CI exposed September17 fixture expiry,
+not app scheduling regression; never report current green from prior evidence.
 
-Stream2 PR60 at `0f663dc32` and Stream3 draft PR64 at `e83eaac91` are being reviewed;
-no peer feature merged in this resumed session. Preserve author-owned dirty02/03
-until handed off. Next: finish source-bound CI/review and resume installed tips
-when Simulator is usable; real Stripe/provider and unresolved fee policy remain open.
+All Stream1 local rows0, own API/web/Supabase stopped. Three Stripe TEST captures
+fully refunded, one unpaid intent canceled, customer deleted; provider history
+retained. Synthetic identity/notification transport limits remain. Native tip
+attempts lack functioning supported device control, not accepted; native slot free.
+Live/hosted/Connect payout boundaries and P03/P08/P09/app remain incomplete.
+
+Stream2 PR60 **66f834cc7** author handoff reviewed/published, currentCI35541676278
+success; source repairs existing guest creation stale replies and DocsCard canonical
+share contract, no design change. Native/wider scope remains open; still draft.
+Stream3 PR64 is actively fixing reproduced cross-account cookie-session retirement,
+held401 retry under a new account, and admitted account deletion blocked by UserBlock
+FKs. Single-writer scopes and reserved forward migration20260916012000 in README;
+its dirty03 remains author-owned until handoff. No peer feature merged this session.
+Next: finish current-head CI/review and remaining provider/native acceptance, with
+fee payer/recipient/timing decision still pending. Documentation PR63 publishes
+milestones separately from feature code. Preserve PR34 draft and unrelatedPR46.
 
 ## Current coordination and next action — September 16, 2026
 
