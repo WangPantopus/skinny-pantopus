@@ -3,12 +3,13 @@
 
 import { clearPendingPlaces } from '@/components/place/pendingPlace';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken, clearAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import AccountDeleteModal from '@/components/profile/AccountDeleteModal';
+import StepUpPasswordModal from '@/components/settings/StepUpPasswordModal';
 import type { User } from '@pantopus/types';
 
 export default function SettingsPage() {
@@ -24,6 +25,12 @@ export default function SettingsPage() {
   const [showPhone, setShowPhone] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const deleteOperation = useRef<symbol | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    operation: symbol; hasPassword: boolean; current: () => boolean;
+  } | null>(null);
+
+  useEffect(() => () => { deleteOperation.current = null; }, []);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -79,15 +86,47 @@ export default function SettingsPage() {
   };
 
   const handleDeleteAccount = async () => {
+    if (deleteOperation.current) return;
+    const operation = Symbol('delete-account');
+    deleteOperation.current = operation;
+    const token = getAuthToken();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => deleteOperation.current === operation
+      && token === getAuthToken() && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
     setDeleting(true);
     try {
-      await api.users.deleteAccount();
+      const methods = await api.auth.getAuthMethods();
+      if (!current()) return;
+      setShowDeleteModal(false);
+      setDeleteConfirmation({ operation, hasPassword: methods.hasPassword, current });
+    } catch (err: unknown) {
+      if (!current()) return;
+      toast.error((err as { message?: string })?.message || 'Could not verify your sign-in methods. Please try again.');
+      deleteOperation.current = null;
+      setDeleting(false);
+    }
+  };
+
+  const finishDeleteAccount = async (stepUpToken: string | null) => {
+    const confirmation = deleteConfirmation;
+    if (!confirmation?.current()) return;
+    setDeleteConfirmation(null);
+    if (!stepUpToken) {
+      deleteOperation.current = null;
+      setDeleting(false);
+      return;
+    }
+    try {
+      await api.users.deleteAccount(stepUpToken);
+      if (!confirmation.current()) return;
       clearPendingPlaces();
       clearAuthToken();
-      toast.success('Account scheduled for deletion');
+      toast.success('Account deleted successfully');
       router.push('/login');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Account deletion failed');
+      if (!confirmation.current()) return;
+      toast.error((err as { message?: string })?.message || 'Account deletion failed');
+      deleteOperation.current = null;
       setDeleting(false);
       setShowDeleteModal(false);
     }
@@ -355,6 +394,13 @@ export default function SettingsPage() {
         </div>
       </main>
 
+      {deleteConfirmation && <StepUpPasswordModal
+        request={{ purpose: 'delete_account', title: 'Confirm account deletion',
+          description: 'Confirm your password to permanently delete your account.',
+          confirmLabel: 'Delete My Account', destructive: true }}
+        hasPassword={deleteConfirmation.hasPassword}
+        onResolve={finishDeleteAccount}
+      />}
       <AccountDeleteModal
         open={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
