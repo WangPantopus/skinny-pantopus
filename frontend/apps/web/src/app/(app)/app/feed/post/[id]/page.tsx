@@ -427,7 +427,13 @@ export default function PostDetailPage() {
             )}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
-                {creatorHandle ? (
+                {publicAuthor?.type === 'persona' ? (
+                  publicAuthor.href ? (
+                    <a href={publicAuthor.href} className="text-sm font-semibold text-app hover:underline">
+                      {creatorName}
+                    </a>
+                  ) : <span className="text-sm font-semibold text-app">{creatorName}</span>
+                ) : creatorHandle ? (
                   <UserIdentityLink
                     userId={post.creator?.id || post.user_id}
                     username={creatorHandle}
