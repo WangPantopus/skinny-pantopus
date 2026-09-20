@@ -7,6 +7,17 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## Latest integration — September20,23:28UTC
+
+Paid branchf0a98a974 integrates reviewed master61080b399; clean/pushed. Prior9ae full
+CI35542623560 green, combinedCI35544523207 running. Focused Chrome payment session
+check passed across account switch/return: one retained original, one synthetic create,
+zero other-account payment calls, exact SQL capture/notice. Full77migration source
+matched, isolated cleanup0/runtime stopped. Details/limits in [Stream1 status](workstreams/01-gigs-payments.md).
+PR65 account deletion merged61080b399 after current combinedCIgreen; PR66 follow/retry
+merged2d12b85a7 after source/UI/SQL review and currentCIgreen. Stream3 subsequent privacy
+work remains separate; native/live/provider boundaries and broad backlog remain open.
+
 ## Resumed coordination — September 20, 2026
 
 Active coordinator/Stream1 task `01a0c0d1-0703-70c3-b842-6d01bc8ca48b` restored the
@@ -52,13 +63,14 @@ wrong-account retry after a delayed401, and an old refresh response overwriting 
 new login's cookies. Existing client code now cancels the old refresh and preserves
 new-account state. Storage-event delivery, frozen tabs, other browsers and native
 limits remain explicit; no broad safety row closed. The separately verified A02
-Settings step-up and two UserBlock FK repairs are now in draft PR65 at `bce48b25b`, with Home master integrated and combined CI
-running. Source reviewed; the new `20260916012000` migration follows Home11000. Single-writer scopes and migration20260916012000 are in
+Settings step-up and two UserBlock FK repairs passed e96be1ea4 CI35543817853.
+PR65 is ready; f30c7fe7a integrates required docs-only master8ed60f6ed for GitHub
+up-to-date protection, with CI35544236662 running. Source reviewed; the new `20260916012000` migration follows Home11000. Single-writer scopes and migration20260916012000 are in
 README. Frozen03 was published; later dirty updates are author-owned.
 
-Next: finish paid current-head CI, review combined Home and A02 candidates, and
-continue remaining provider/native acceptance. Fee payer/recipient/timing decision
-is pending. Documentation PR63 publishes milestones separately from feature code.
+Next: finish paid current-head CI and A02 merge, then verify payment session recovery
+on the combined paid branch. Home is already merged. Continue remaining provider/native acceptance. Fee payer/recipient/timing decision
+is pending. Documentation PR63 merged as8ed60f6ed; subsequent milestones publish separately from feature code.
 Preserve PR34 draft and unrelated PR46; paid PR47 remains draft.
 
 ## Current coordination and next action — September 16, 2026

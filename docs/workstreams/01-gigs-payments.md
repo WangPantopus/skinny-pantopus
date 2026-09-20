@@ -1,5 +1,45 @@
 # Stream 1 — Gigs and payments
 
+## Latest combined milestone — September20,23:28UTC
+
+Application worktree `/private/tmp/pantopus-paid-gig-integration`, branch
+`codex/paid-gig-integration`, clean/pushed **f0a98a974652d89252ffc4ff1dd3651b70d44f53**.
+Merged master61080b399 (reviewed Home60, safety64, account-deletion65). Prior paid
+9ae1edb3b [CI35542623560](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35542623560)
+fully passed including Android quality/instrumentation and all3 iOS simulators.
+Combined [CI35544523207](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35544523207)
+is running; backend/database/web Identity Firewall pass, native/build gates pending.
+PR47/PR34 remain draft; PR46 untouched. No new application repair in this integration.
+
+Focused real Chrome UI→existing cookie/session SDK→gigs/pays/service→PostgREST/full77
+migration SQL check passed: owner confirms completion, submits500c with deliberately
+unknown synthetic-provider create, second tab discovers same original. Second-tab
+Settings Logout retires first-tab tip; other login/same gig has no tip and0payment
+requests. Return originalowner restores retained request; Retry same tip after proof
+reveal produces success toast/modal retirement. SQL same original captured_hold500,
+1tipnotice,1providercreate,0assertions. This checks the changed shared session contract;
+earlier actual StripeTEST decline/3DS/capture/cancel evidence is reused, not repeated.
+Synthetic identity/provider/shell/delivery, no new native/hosted/disabled-storage claim.
+
+Evidence `/private/tmp/pantopus-stream1-session-integration-r1`; durable private mirror
+`/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream1-session-integration-r1`,
+7 files hash verified. Source.json binds all77migration hashes to committed source.
+Initial localhost inherited retired fixture cookies and cannot refresh in this narrow
+harness; excluded setup attempt, fresh `stream1-combined.localhost` used. Old private
+Chrome window polls retired fixture but cannot authorize; window closure unconfirmed.
+Both owned integration tabs closed, exactf9200210rows0, own18132/18133/64561/64562
+stopped and free; own Next cache preserved privately/generatedtsconfig restored exactly.
+No peer resources touched; native slot free.
+
+Coordinator: PR65 merged61080b399 after finalf30c7fe7a CI35544236662 green. PR66
+follow/unfollow2-file repair merged2d12b85a7 after exacthead3a2b18be5 all checks green;
+its source/realUI/SQL evidence reviewed. Subsequent fan-identity/privacy milestones
+remain separate Stream3 work; no broad row closed. Next finish combined CI, continue
+existing P08/P09 provider cancellation/refund acceptance, and installed tips when
+supported native control works. Fee payer/recipient/timing decision remains pending.
+
+The snapshot below records the earlier state and is superseded by this milestone.
+
 ## Current resumed state — September 20, 2026
 
 State: **real Stripe TEST browser tip milestone verified and repaired; current-head
