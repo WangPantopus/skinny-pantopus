@@ -20,6 +20,8 @@ const {
   SAFE_CREATOR_SELECT,
   serializeUserAsLocalIdentity,
   serializeUserIdentityForViewer,
+  serializeFanForCreator,
+  serializeAudienceProfileForViewer,
 } = require('../serializers/identitySerializers');
 const { matchBusinessesForPost } = require('../jobs/organicMatch');
 const { checkHomePermission, getActiveOccupancy, mapLegacyRole } = require('../utils/homePermissions');
@@ -459,13 +461,57 @@ async function attachFilesToComments(comments) {
   }));
 }
 
-function serializeCommentForViewer(comment) {
+async function loadPersonaCommentAuthors(post, userIds) {
+  if (post?.identity_context_type !== 'persona') return null;
+  const authors = new Map();
+  const ids = [...new Set(userIds.filter(Boolean))];
+  const fanIds = ids.filter((id) => id !== post.user_id);
+  if (fanIds.length) {
+    const { data: identities, error } = await supabaseAdmin.from('AudienceIdentity')
+      .select('user_id, handle, display_name, avatar_url')
+      .in('user_id', fanIds).eq('status', 'active');
+    if (error) throw error;
+    const byUser = new Map((identities || []).map((identity) => [identity.user_id, identity]));
+    for (const userId of fanIds) {
+      const identity = byUser.get(userId);
+      const fan = serializeFanForCreator({
+        fan_handle: identity?.handle,
+        fan_display_name: identity?.display_name,
+        fan_avatar_url: identity?.avatar_url,
+      });
+      // Existing native DTOs require string IDs. An empty identity is deliberately
+      // non-navigable; it must never identify the private account behind a fan.
+      authors.set(userId, { id: '', handle: fan.fanHandle || null,
+        displayName: fan.fanDisplayName || 'Fan', avatarUrl: fan.fanAvatarUrl || null, href: null });
+    }
+  }
+  if (ids.includes(post.user_id)) {
+    const { data: persona, error } = await supabaseAdmin.from('PublicPersona')
+      .select('id, handle, display_name, avatar_url').eq('id', post.identity_context_id).maybeSingle();
+    if (error) throw error;
+    const identity = serializeAudienceProfileForViewer(persona);
+    authors.set(post.user_id, { id: '', type: 'persona', handle: identity?.handle || null,
+      displayName: identity?.displayName || 'Beacon', avatarUrl: identity?.avatarUrl || null,
+      href: identity?.href || null });
+  }
+  return authors;
+}
+
+function serializeCommentForViewer(comment, audienceAuthor, viewerUserId) {
   if (!comment) return null;
-  const { author: rawAuthor, ...safe } = comment;
+  const { author: rawAuthor, user_id: actorUserId, ...safe } = comment;
   return {
     ...safe,
-    author: serializeUserAsLocalIdentity(rawAuthor),
+    user_id: audienceAuthor ? (actorUserId === viewerUserId ? actorUserId : '') : actorUserId,
+    author: audienceAuthor || serializeUserAsLocalIdentity(rawAuthor),
   };
+}
+
+async function serializeCommentsForViewer(comments, post, viewerUserId, preparedAuthors) {
+  const authors = preparedAuthors ?? await loadPersonaCommentAuthors(post, comments.map((comment) => comment.user_id));
+  return comments.map((comment) => serializeCommentForViewer(comment,
+    authors ? authors.get(comment.user_id) || { id: '', displayName: 'Fan', href: null } : null,
+    viewerUserId));
 }
 
 function serializeLikeForViewer(like) {
@@ -2387,7 +2433,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       .select(`*, author:user_id (id, username, name, first_name, last_name, profile_picture_url)`)
       .eq('post_id', id).eq('is_deleted', false).order('created_at', { ascending: true });
 
-    const commentRows = (await attachFilesToComments(comments || [])).map(serializeCommentForViewer);
+    const commentRows = await serializeCommentsForViewer(await attachFilesToComments(comments || []), post, userId);
 
     let userLike = null;
     let userSave = null;
@@ -2744,6 +2790,11 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
 
     const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
 
+    const audienceAuthors = await loadPersonaCommentAuthors(post, [userId]);
+    const commenterName = () => audienceAuthors
+      ? Promise.resolve(audienceAuthors.get(userId)?.displayName || 'Fan')
+      : getUserDisplayName(userId);
+
     // comment_count auto-incremented by DB trigger
     const { data: newComment, error } = await supabaseAdmin
       .from('PostComment')
@@ -2755,18 +2806,19 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
 
     // Notify post owner of new comment (not on own post)
     if (post.user_id !== userId) {
-      getUserDisplayName(userId).then(name => {
+      commenterName().then(name => {
         notificationService.createNotification({
           userId: post.user_id,
           type: 'post_commented',
           title: `${name} commented on your post`,
           body: normalizedComment.length > 100 ? normalizedComment.substring(0, 100) + '…' : normalizedComment,
           icon: '💬',
+          ...(audienceAuthors ? { context: 'audience' } : {}),
           link: `/posts/${postId}`,
           metadata: {
             post_id: postId,
             comment_id: newComment.id,
-            user_id: userId,
+            ...(audienceAuthors ? {} : { user_id: userId }),
           },
         });
       }).catch(err => {
@@ -2778,15 +2830,16 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
     if (parentCommentId) {
       const { data: parentComment } = await supabaseAdmin.from('PostComment').select('user_id').eq('id', parentCommentId).single();
       if (parentComment && parentComment.user_id !== userId && parentComment.user_id !== post.user_id) {
-        getUserDisplayName(userId).then(name => {
+        commenterName().then(name => {
           notificationService.createNotification({
             userId: parentComment.user_id,
             type: 'comment_replied',
             title: `${name} replied to your comment`,
             body: normalizedComment.length > 100 ? normalizedComment.substring(0, 100) + '…' : normalizedComment,
             icon: '💬',
+            ...(audienceAuthors ? { context: 'audience' } : {}),
             link: `/posts/${postId}`,
-            metadata: { post_id: postId, comment_id: newComment.id, parent_comment_id: parentCommentId, user_id: userId },
+            metadata: { post_id: postId, comment_id: newComment.id, parent_comment_id: parentCommentId, ...(audienceAuthors ? {} : { user_id: userId }) },
           });
         }).catch(err => {
           logger.warn('Reply notification failed (non-blocking)', { error: err.message, postId });
@@ -2796,7 +2849,7 @@ router.post('/:id/comments', verifyToken, validate(createCommentSchema), async (
 
     res.status(201).json({
       message: 'Comment added successfully',
-      comment: serializeCommentForViewer({ ...newComment, attachments: [] }),
+      comment: (await serializeCommentsForViewer([{ ...newComment, attachments: [] }], post, userId, audienceAuthors))[0],
     });
   } catch (err) {
     logger.error('Comment creation error', { error: err.message, postId: req.params.id });
@@ -2831,8 +2884,9 @@ router.get('/:id/comments', verifyToken, async (req, res) => {
     }
 
     const enrichedComments = await attachFilesToComments(comments || []);
-    const commentsWithLikes = enrichedComments.map(c => ({
-      ...serializeCommentForViewer(c),
+    const projectedComments = await serializeCommentsForViewer(enrichedComments, post, userId);
+    const commentsWithLikes = projectedComments.map(c => ({
+      ...c,
       userHasLiked: userLikedSet.has(c.id),
     }));
     res.json({ comments: commentsWithLikes, pagination: { limit: parseInt(limit), offset: parseInt(offset) } });
@@ -2956,12 +3010,16 @@ router.patch('/:postId/comments/:commentId', verifyToken, validate(updateComment
     }
     if (!existing) return res.status(404).json({ error: 'Comment not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only edit your own comments' });
+    const { data: parentPost, error: postError } = await supabaseAdmin.from('Post')
+      .select('user_id, identity_context_type, identity_context_id').eq('id', postId).single();
+    if (postError || !parentPost) return res.status(500).json({ error: 'Failed to load comment context' });
+    const audienceAuthors = await loadPersonaCommentAuthors(parentPost, [userId]);
     const { data: updated, error } = await supabaseAdmin.from('PostComment')
       .update({ comment, is_edited: true, edited_at: new Date().toISOString() })
       .eq('id', commentId)
       .select(`*, author:user_id (id, username, name, first_name, last_name, profile_picture_url)`).single();
     if (error) { logger.error('Error updating comment', { error: error.message, commentId }); return res.status(500).json({ error: 'Failed to update comment' }); }
-    res.json({ message: 'Comment updated successfully', comment: serializeCommentForViewer(updated) });
+    res.json({ message: 'Comment updated successfully', comment: (await serializeCommentsForViewer([updated], parentPost, userId, audienceAuthors))[0] });
   } catch (err) {
     logger.error('Comment update error', { error: err.message });
     res.status(500).json({ error: 'Failed to update comment' });
