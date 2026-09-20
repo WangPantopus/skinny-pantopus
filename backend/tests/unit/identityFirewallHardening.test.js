@@ -278,9 +278,13 @@ describe('Identity Firewall backend hardening', () => {
       id: 'follow-pending',
       status: 'pending',
       follower: {
-        type: 'local',
-        handle: 'viewer',
+        handle: getTable('PersonaMembership')[0].fan_handle,
       },
+    });
+    expect(listPending.body.followers[0].follower).toEqual({
+      handle: getTable('PersonaMembership')[0].fan_handle,
+      displayName: getTable('PersonaMembership')[0].fan_display_name,
+      avatarUrl: null,
     });
     expect(JSON.stringify(listPending.body)).not.toContain('follower_user_id');
 
