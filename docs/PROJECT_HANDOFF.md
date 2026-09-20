@@ -7,6 +7,31 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## Resumed coordination — September 20, 2026
+
+Active coordinator/Stream1 task `01a0c0d1-0703-70c3-b842-6d01bc8ca48b` restored the
+missing registered paid worktree at `3657af97d`, adopted the later September16
+milestones, and merged current master `38f00dcc8` as **`aa168017e`** (documentation
+only; application bytes unchanged). PR47/PR34 remain draft, PR46 separate. See
+[active sessions](workstreams/README.md#active-sessions-and-runtime-ownership--september-20-2026)
+for all three resumed streams and nonoverlapping runtime/browser ownership.
+
+New bounded [browser tip acceptance](workstreams/01-gigs-payments.md#milestone-browser-tip-recovery-through-real-uihttpsql--september-20-2026)
+passed the existing UI → SDK → real routes/service → PostgREST/PostgreSQL: normal,
+lost/malformed result, retained reload/session return, concurrent tabs, departure,
+eligibility and cancellation paths. Five successful tips and two canceled originals,
+no duplicate creation in exercised cases; no application changes or new unit tests.
+Synthetic auth/provider boundaries remain explicit. Installed iOS tip attempt was
+interrupted by local Simulator failure and is **not accepted**; exact fixtures0,
+own runtime stopped and native slot released. P03/P08/P09 and app remain incomplete.
+CI35540452604 on paid head is running; prior source CI remains accepted only within
+its original scope. Documentation PR63 publishes this milestone separately.
+
+Stream2 PR60 at `0f663dc32` and Stream3 draft PR64 at `e83eaac91` are being reviewed;
+no peer feature merged in this resumed session. Preserve author-owned dirty02/03
+until handed off. Next: finish source-bound CI/review and resume installed tips
+when Simulator is usable; real Stripe/provider and unresolved fee policy remain open.
+
 ## Current coordination and next action — September 16, 2026
 
 The September 15/16 cutoff was resumed by the coordinator/Stream 1 session on September 16

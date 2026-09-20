@@ -2,7 +2,7 @@
 
 ## Current resumed state — September 20, 2026
 
-State: **verification**, coordinator and sole Stream 1 writer resumed in task
+State: **browser milestone verified; installed tip acceptance remains open**, coordinator and sole Stream 1 writer resumed in task
 `01a0c0d1-0703-70c3-b842-6d01bc8ca48b`. Restored the missing registered application
 worktree at `/private/tmp/pantopus-paid-gig-integration`, branch
 `codex/paid-gig-integration`, from exact remote `3657af97d`; merged current master
@@ -14,7 +14,7 @@ PR47 and PR34 remain draft, PR46 separate. Fresh remote CI35142787582 is green o
 Adopted later Start Work displayed terms, my-bids, installed iOS/Android,
 completion/reopen and tip HTTP/SQL milestones below. Durable September16 mirrors
 are present; source unchanged, so do not repeat accepted large suites or write
-unit tests. Next bounded P03/P08/P09 milestone: existing browser tip modal from
+unit tests. Completed bounded P03/P08/P09 milestone: existing browser tip modal from
 GigDetail, through SDK, payment routes/service and full-schema PostgREST/SQL,
 including persisted original, lost reply, reopen/reload and session boundaries.
 Actual Stripe remains a separate unverified provider boundary; use the existing
@@ -70,11 +70,44 @@ The historical snapshot below retains its original source and acceptance limits.
   Read `EVIDENCE.md`, `source.json`, `phase1-final.json`, `phase2-final.json`, request/RPC
   traces and both cleanup records. Credentials/raw logs stay outside Git/chat.
 - Cleanup: phase1 exact rows0; phase2 exact rows0 (`cleanup.json`).
-  Browser web18133 and isolated SQL64562/API64561 temporarily retained for the next
-  native-tip milestone; API18132 stopped between fixture phases. No peer resources
-  changed. Next: inspect the previously installed owned iOS candidate and source
-  binding before reusing it for existing tip UI journeys; reserve native slot first.
+  Browser/API18133/18132 stopped; owned SQL64562/API64561 project stopped after
+  the native attempt below; all listeners free and peer containers preserved.
+  Next: resume installed tip journeys when the local Simulator is usable, then
+  remaining Stripe checkout/provider and P08/P09 scope; no broad row closed.
 
+
+## Installed iOS tip attempt and verification limit — September 20, 2026
+
+The owned simulator still contained the previously installed `a65411758` candidate.
+Recorded binary hashes/configuration in `ios-installed-provenance.json`; existing
+ContentDetail/payment endpoints and relevant session/storage paths have no diff
+from that source to current paid head. Separate social/settings changes entered
+master later, so this would be candidate-specific acceptance, not a current full
+native rebuild. Existing real login UI succeeded with synthetic local identity.
+No tip command ran. The first Safari entry truncated the UUID (actual HTTP path
+`/api/gigs/f9200180-0000`,404): a harness input error, not an application defect.
+
+Before retrying the full link, the simulator shut down externally. An exact-device
+restart first returned SimLaunchHostService XPC Connection invalid; bootstatus
+later reported booted, but the GUI stayed black. Reopening the GUI reported
+Simulator app unavailable. No license accepted, system service/cache reset, owner
+device or peer device modification. **Installed native tip acceptance remains
+unverified.** Stop this attempt rather than claim the browser result proves native.
+
+Exact native prefix `f9200180` cleanup0; no Payment rows/provider calls. Owned
+simulator explicitly shut down, native slot released, HTTP18132/web18133 stopped,
+owned Supabase project stopped; ports64561–64567 free and retained/peer containers
+unchanged. Private attempt, source and cleanup evidence mirrored with the browser
+milestone. Recheck actual Simulator availability at resume; do not repeat browser
+acceptance for unchanged application bytes.
+
+Coordinator review in progress: Stream2 PR60 `0f663dc32` includes the already
+approved Emergency migration `20260916011000` and a newly reproduced stale-create
+UI repair; Stream3 PR64 `e83eaac91` wires existing chat Report/Block controls.
+Inspected both new diffs, no Stream1 file overlap; author handoff/CI gates still
+apply, neither feature merged. Stream3 runtime extension64534–64537 granted;
+`users.js` account-delete/SDK scope and forward version20260916012000 are reserved
+conditionally, pending actual UI/API reproduction and comparison before edits.
 
 Updated September 16, 2026. Owner: coordinator / Stream 1.
 State: ready for review — displayed-terms binding delivered at `a65411758` and the
