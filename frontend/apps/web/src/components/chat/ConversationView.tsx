@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
@@ -15,6 +15,9 @@ import GigPickerModal from './GigPickerModal';
 import ListingPickerModal from './ListingPickerModal';
 import ImageLightbox from './ImageLightbox';
 import ListingShareAddressButton from './ListingShareAddressButton';
+import ReportModal from '../ui/ReportModal';
+import { confirmStore } from '../ui/confirm-store';
+import { toast } from '../ui/toast-store';
 
 // ============================================================
 // UNIFIED CONVERSATION VIEW (Person-Based)
@@ -49,15 +52,102 @@ export default function ConversationView({
   // ── Shared chat hook ──────────────────────────────────
   const chat = useChatMessages({ otherUserId, topicId: selectedTopicId, currentUserId });
 
-  // ── Load current user ─────────────────────────────────
+  // Safety actions belong to the account and conversation that opened them.
+  const safetyScope = useRef(0);
+  const activePeer = useRef(otherUserId);
+  activePeer.current = otherUserId;
+  const pendingBlock = useRef<symbol | null>(null);
+  const ownedConfirmation = useRef<ReturnType<typeof confirmStore.getSnapshot>>(null);
+  const [blocking, setBlocking] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{
+    userId: string; generation: number; current: () => boolean;
+  } | null>(null);
+  const captureSafetyScope = useCallback(() => {
+    const generation = safetyScope.current;
+    const peer = otherUserId;
+    const token = api.getAuthToken();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    return () => generation === safetyScope.current && peer === activePeer.current
+      && token === api.getAuthToken()
+      && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+  }, [otherUserId]);
+
   useEffect(() => {
-    (async () => {
-      try {
-        const userData = await api.users.getMyProfile() as { id?: string };
-        setCurrentUserId(userData?.id || null);
-      } catch {}
-    })();
-  }, []);
+    const retire = () => {
+      safetyScope.current++;
+      pendingBlock.current = null;
+      if (ownedConfirmation.current && confirmStore.getSnapshot() === ownedConfirmation.current) {
+        confirmStore.close(false);
+      }
+      ownedConfirmation.current = null;
+    };
+    const changed = () => {
+      retire();
+      setBlocking(false);
+      setReportTarget(null);
+      setShowDrawer(false);
+      setCurrentUserId(null);
+      const current = captureSafetyScope();
+      if (api.getAuthToken()) {
+        void api.users.getMyProfile().then(user => {
+          if (current()) setCurrentUserId(user?.id || null);
+        }).catch(() => {});
+      }
+    };
+    const storage = (event: StorageEvent) => {
+      if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed();
+    };
+    const unsubscribe = api.onTokenChange(changed);
+    window.addEventListener('storage', storage);
+    changed();
+    return () => { retire(); unsubscribe(); window.removeEventListener('storage', storage); };
+  }, [captureSafetyScope]);
+
+  const handleBlock = async () => {
+    if (!currentUserId || currentUserId === otherUserId || pendingBlock.current) return;
+    const operation = Symbol('block');
+    pendingBlock.current = operation;
+    const current = captureSafetyScope();
+    const confirmation = confirmStore.open({
+      title: 'Block User',
+      description: `Block ${chatTitle}? You will not be able to send each other direct messages. You can unblock them in Settings.`,
+      confirmLabel: 'Block',
+      variant: 'destructive',
+    });
+    ownedConfirmation.current = confirmStore.getSnapshot();
+    const yes = await confirmation;
+    if (!current() || pendingBlock.current !== operation) return;
+    ownedConfirmation.current = null;
+    if (!yes) { pendingBlock.current = null; return; }
+    setBlocking(true);
+    try {
+      await api.blocks.blockUser(otherUserId);
+      if (!current() || pendingBlock.current !== operation) return;
+      toast.success('User blocked');
+      setShowDrawer(false);
+      router.push(returnTo);
+    } catch (error) {
+      if (current()) toast.error(error instanceof Error ? error.message : 'Failed to block user');
+    } finally {
+      if (current() && pendingBlock.current === operation) {
+        pendingBlock.current = null;
+        setBlocking(false);
+      }
+    }
+  };
+
+  const handleReport = async (reason: string, details?: string) => {
+    const target = reportTarget;
+    if (!target?.current()) throw new Error('Session or conversation changed');
+    try {
+      await api.users.reportUser(target.userId, reason, details);
+      if (!target.current()) throw new Error('Session or conversation changed');
+      toast.success('Report submitted');
+    } catch (error) {
+      if (target.current()) toast.error(error instanceof Error ? error.message : 'Failed to report user');
+      throw error;
+    }
+  };
 
   const otherUser = chat.directChatPeer;
 
@@ -431,16 +521,32 @@ export default function ConversationView({
               {/* Safety section */}
               <div>
                 <h3 className="text-xs font-semibold text-app-text-secondary uppercase tracking-wider mb-3">Safety</h3>
-                <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover-bg-app transition-colors text-left text-sm text-app-text-strong">
+                <button
+                  onClick={() => setReportTarget({ userId: otherUserId, generation: safetyScope.current, current: captureSafetyScope() })}
+                  disabled={!currentUserId || currentUserId === otherUserId || blocking}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover-bg-app transition-colors text-left text-sm text-app-text-strong">
                   <span>🚩</span> Report
                 </button>
-                <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-50 transition-colors text-left text-sm text-red-600">
-                  <span>🚫</span> Block {chatTitle}
+                <button
+                  onClick={handleBlock}
+                  disabled={!currentUserId || currentUserId === otherUserId || blocking}
+                  aria-busy={blocking}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-50 transition-colors text-left text-sm text-red-600">
+                  <span>🚫</span> {blocking ? 'Blocking…' : `Block ${chatTitle}`}
                 </button>
               </div>
             </div>
           </div>
         </div>
+      )}
+      {reportTarget && (
+        <ReportModal
+          key={`${reportTarget.generation}:${reportTarget.userId}`}
+          open
+          entityType="user"
+          onClose={() => { if (reportTarget.current()) setReportTarget(null); }}
+          onSubmit={handleReport}
+        />
       )}
     </div>
   );
