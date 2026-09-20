@@ -1,12 +1,14 @@
 // @ts-nocheck
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { LayoutDashboard } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { SharedResourceView } from '@pantopus/api';
+import { shareFailure } from '@/components/home/share/shareFailure';
+import { sharedDocumentLabel } from '@/components/home/share/sharedDocumentLabel';
 
 // ============================================================
 // Shared Resource Page — /shared/:token
@@ -16,64 +18,110 @@ import type { SharedResourceView } from '@pantopus/api';
 
 type PageState = 'loading' | 'passcode' | 'expired' | 'revoked' | 'error' | 'success';
 
+// The share API returns a stable recovery code with its human copy. Read the
+// code first, the same decisions the guest page makes, so a retired link is
+// never a retryable "Something Went Wrong" and a link that only needs reissuing
+// is never reported as an owner revocation. `retry` marks the screens that can
+// still succeed later.
+const FAILURE_SCREENS: Record<string, { state: PageState; title: string; body: string; retry?: boolean }> = {
+  SHARE_EXPIRED: { state: 'expired', title: 'Link Expired',
+    body: 'This shared link has expired. Contact the person who shared it to request a new one.' },
+  SHARE_VIEW_LIMIT: { state: 'expired', title: 'View Limit Reached',
+    body: 'This shared link has already been opened the maximum number of times. Contact the person who shared it to request a new one.' },
+  SHARE_NOT_STARTED: { state: 'error', title: 'Not Active Yet',
+    body: 'This shared link is not active yet. It will open once the start time the sender chose has arrived.', retry: true },
+  SHARE_REVOKED: { state: 'revoked', title: 'Access Revoked',
+    body: 'This shared link is no longer active. It was revoked by the owner.' },
+  SHARE_REISSUE_REQUIRED: { state: 'revoked', title: 'Link Needs Replacing',
+    body: 'This older shared link is inactive. Ask the sender for a new link.' },
+  SHARE_NOT_FOUND: { state: 'error', title: 'Link Not Found',
+    body: 'We couldn\'t find this shared link. Check that you opened the complete link the sender shared.' },
+  SHARE_DENIED: { state: 'revoked', title: 'Access Unavailable',
+    body: 'This shared link is no longer available to you. Contact the person who shared it to request a new one.' },
+  SHARE_RESOURCE_DENIED: { state: 'revoked', title: 'Content Unavailable',
+    body: 'The shared content is no longer available. Contact the person who shared it to request a new one.' },
+};
+
+function isPasscodeChallenge(details: ReturnType<typeof shareFailure>) {
+  return details.requiresPasscode || details.code === 'SHARE_PASSCODE_REQUIRED'
+    || (!details.code && details.message.includes('passcode'));
+}
+
 export default function SharedResourcePage() {
   const params = useParams();
   const token = params.token as string;
 
   const [state, setState] = useState<PageState>('loading');
   const [data, setData] = useState<SharedResourceView | null>(null);
+  const [errorTitle, setErrorTitle] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [canRetry, setCanRetry] = useState(true);
   const [passcode, setPasscode] = useState('');
   const [passcodeError, setPasscodeError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // A superseded read must never replace the visitor's current screen.
+  const generation = useRef(0);
+
+  const applyFailure = useCallback((failure: unknown) => {
+    const details = shareFailure(failure);
+    if (isPasscodeChallenge(details)) {
+      setState('passcode');
+      return details;
+    }
+    const screen = FAILURE_SCREENS[details.code];
+    if (screen) {
+      setErrorTitle(screen.title);
+      setErrorMsg(screen.body);
+      setCanRetry(screen.retry === true);
+      setState(screen.state);
+      return details;
+    }
+    setErrorTitle('');
+    setErrorMsg(details.fromApi && details.message ? details.message : 'Something went wrong');
+    setCanRetry(true);
+    setState('error');
+    return details;
+  }, []);
 
   const loadResource = useCallback(async (code?: string) => {
+    const request = ++generation.current;
     try {
       const res = await api.homeGuest.viewSharedResource(token, code);
+      if (request !== generation.current) return;
       setData(res);
       setState('success');
     } catch (err: unknown) {
-      const error = err as { body?: { requiresPasscode?: boolean }; response?: unknown; message?: string };
-      const body = error?.body || error;
-      const msg = error?.message || '';
-
-      if ((body as { requiresPasscode?: boolean })?.requiresPasscode || msg.includes('passcode')) {
-        setState('passcode');
-      } else if (msg.includes('expired') || msg.includes('Expired')) {
-        setState('expired');
-      } else if (msg.includes('revoked') || msg.includes('Revoked') || msg.includes('inactive')) {
-        setState('revoked');
-      } else {
-        setState('error');
-        setErrorMsg(msg || 'Something went wrong');
-      }
+      if (request !== generation.current) return;
+      applyFailure(err);
     }
-  }, [token]);
+  }, [token, applyFailure]);
 
   useEffect(() => {
     loadResource();
+    return () => { generation.current++; };
   }, [loadResource]);
 
   const handlePasscodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!passcode.trim()) return;
+    if (!passcode.trim() || submitting) return;
+    const request = ++generation.current;
     setPasscodeError('');
     setSubmitting(true);
     try {
       const res = await api.homeGuest.viewSharedResource(token, passcode.trim());
+      if (request !== generation.current) return;
       setData(res);
       setState('success');
     } catch (err: unknown) {
-      const msg = (err as { message?: string })?.message || '';
-      if (msg.includes('passcode') || msg.includes('incorrect') || msg.includes('invalid')) {
+      if (request !== generation.current) return;
+      if (isPasscodeChallenge(shareFailure(err))) {
         setPasscodeError('Incorrect passcode. Please try again.');
-      } else if (msg.includes('expired')) {
-        setState('expired');
       } else {
-        setPasscodeError(msg || 'Failed to verify passcode');
+        applyFailure(err);
       }
+    } finally {
+      if (request === generation.current) setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   // ---- Loading ----
@@ -107,7 +155,7 @@ export default function SharedResourcePage() {
               placeholder="Enter passcode"
               autoFocus
               className="w-full rounded-xl border border-app-border px-4 py-3 text-center text-lg font-mono tracking-widest focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none"
-              maxLength={20}
+              maxLength={128}
             />
             {passcodeError && (
               <p className="text-xs text-red-600">{passcodeError}</p>
@@ -131,9 +179,9 @@ export default function SharedResourcePage() {
       <PageShell>
         <div className="text-center py-16">
           <div className="text-5xl mb-4">⏰</div>
-          <h1 className="text-xl font-semibold text-app-text mb-1">Link Expired</h1>
+          <h1 className="text-xl font-semibold text-app-text mb-1">{errorTitle || 'Link Expired'}</h1>
           <p className="text-sm text-app-text-secondary mb-6 max-w-xs mx-auto">
-            This shared link has expired. Contact the person who shared it to request a new one.
+            {errorMsg || 'This shared link has expired. Contact the person who shared it to request a new one.'}
           </p>
           <a
             href="mailto:?"
@@ -155,9 +203,9 @@ export default function SharedResourcePage() {
       <PageShell>
         <div className="text-center py-16">
           <div className="text-5xl mb-4">🔒</div>
-          <h1 className="text-xl font-semibold text-app-text mb-1">Access Revoked</h1>
+          <h1 className="text-xl font-semibold text-app-text mb-1">{errorTitle || 'Access Revoked'}</h1>
           <p className="text-sm text-app-text-secondary max-w-xs mx-auto">
-            This shared link is no longer active. It was revoked by the owner.
+            {errorMsg || 'This shared link is no longer active. It was revoked by the owner.'}
           </p>
         </div>
       </PageShell>
@@ -170,16 +218,18 @@ export default function SharedResourcePage() {
       <PageShell>
         <div className="text-center py-16">
           <div className="text-5xl mb-4">😕</div>
-          <h1 className="text-xl font-semibold text-app-text mb-1">Something Went Wrong</h1>
+          <h1 className="text-xl font-semibold text-app-text mb-1">{errorTitle || 'Something Went Wrong'}</h1>
           <p className="text-sm text-app-text-secondary mb-6 max-w-xs mx-auto">
             {errorMsg || 'We couldn\'t load this shared content. The link may be invalid.'}
           </p>
-          <button
-            onClick={() => { setState('loading'); loadResource(); }}
-            className="px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition"
-          >
-            Try Again
-          </button>
+          {canRetry && (
+            <button
+              onClick={() => { setState('loading'); loadResource(); }}
+              className="px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition"
+            >
+              Try Again
+            </button>
+          )}
         </div>
       </PageShell>
     );
@@ -363,8 +413,8 @@ function DocumentView({ resource }: { resource: Record<string, any> }) {
       {resource.description && (
         <p className="text-sm text-app-text-secondary whitespace-pre-wrap">{resource.description}</p>
       )}
-      {resource.file_type && (
-        <div className="text-xs text-app-text-secondary">Type: {resource.file_type.toUpperCase()}</div>
+      {(resource.mime_type || resource.doc_type) && (
+        <div className="text-xs text-app-text-secondary">Type: {sharedDocumentLabel(resource)}</div>
       )}
       {resource.url && (
         <a

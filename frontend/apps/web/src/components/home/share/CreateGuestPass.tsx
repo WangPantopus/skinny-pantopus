@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as api from '@pantopus/api';
 import QRCode from '../../ui/QRCode';
 import type { GuestPass } from '@pantopus/api';
@@ -61,12 +61,14 @@ export default function CreateGuestPass({
   homeId,
   preselectedKind,
   onCreated,
+  onIssued,
 }: {
   open: boolean;
   onClose: () => void;
   homeId: string;
   preselectedKind?: GuestPass['kind'] | null;
   onCreated: () => void;
+  onIssued?: () => void;
 }) {
   const [step, setStep] = useState<Step>('template');
 
@@ -84,9 +86,20 @@ export default function CreateGuestPass({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [resultPasscode, setResultPasscode] = useState('');
+  const generation = useRef(0);
+  const pending = useRef<number | null>(null);
+  const owner = useRef<string | null>(homeId);
+  useEffect(() => {
+    owner.current = homeId;
+    return () => { owner.current = null; };
+  }, [homeId]);
 
   // Reset on open
   useEffect(() => {
+    generation.current++;
+    pending.current = null;
+    setCreating(false);
     if (open) {
       if (preselectedKind) {
         const tpl = TEMPLATE_DEFAULTS[preselectedKind];
@@ -108,10 +121,12 @@ export default function CreateGuestPass({
       }
       setResultPass(null);
       setResultToken('');
+      setResultPasscode('');
       setError('');
       setCopied(false);
     }
-  }, [open, preselectedKind]);
+    return () => { generation.current++; pending.current = null; };
+  }, [open, preselectedKind, homeId]);
 
   // Pick template
   const handlePickTemplate = (k: GuestPass['kind']) => {
@@ -131,6 +146,11 @@ export default function CreateGuestPass({
 
   // Create pass
   const handleCreate = async () => {
+    if (!open || pending.current !== null) return;
+    const request = generation.current;
+    const issuedHome = homeId;
+    const issuedPasscode = passcode.trim();
+    pending.current = request;
     setCreating(true);
     setError('');
     try {
@@ -140,19 +160,29 @@ export default function CreateGuestPass({
         included_sections: sections,
         custom_title: customTitle.trim() || undefined,
         duration_hours: Number(durationHours) || TEMPLATE_DEFAULTS[kind].hours,
-        passcode: passcode.trim() || undefined,
+        passcode: issuedPasscode || undefined,
         max_views: maxViews ? Number(maxViews) : undefined,
       });
+      // A saved pass remains revocable even if its form was dismissed. Refresh
+      // that Home's list without closing or replacing a newer draft.
+      if (owner.current === issuedHome) onIssued?.();
+      if (request !== generation.current) return;
       setResultPass(res.pass);
       setResultToken(res.token);
+      setResultPasscode(issuedPasscode);
       setStep('result');
 
     } catch (err: unknown) {
+      if (request !== generation.current) return;
       // This client rejects with a plain object, so `instanceof Error` would
       // replace the API's actual reason with generic copy the issuer cannot act on.
       setError(failureMessage(err, 'Failed to create guest pass'));
+    } finally {
+      if (request === generation.current) {
+        pending.current = null;
+        setCreating(false);
+      }
     }
-    setCreating(false);
   };
 
   const getShareUrl = (token: string) => {
@@ -186,6 +216,9 @@ export default function CreateGuestPass({
   };
 
   const tpl = TEMPLATE_DEFAULTS[kind];
+  const resultHours = resultPass?.end_at
+    ? (new Date(resultPass.end_at).getTime() - new Date(resultPass.start_at).getTime()) / 3600000
+    : null;
 
   return (
     <SlidePanel
@@ -427,7 +460,7 @@ export default function CreateGuestPass({
               </div>
               <h3 className="text-base font-semibold text-app-text">Guest Pass Created!</h3>
               <p className="text-xs text-app-text-secondary mt-0.5">
-                Share this link with your guest. It expires in {durationHours} hours.
+                Share this link with your guest. It expires in {resultHours} hours.
               </p>
             </div>
 
@@ -479,26 +512,26 @@ export default function CreateGuestPass({
             <div className="bg-app-surface-raised rounded-lg px-4 py-3 space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-app-text-secondary">Type</span>
-                <span className="text-app-text-strong font-medium capitalize">{kind.replace('_', ' ')}</span>
+                <span className="text-app-text-strong font-medium capitalize">{resultPass.kind.replace('_', ' ')}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-app-text-secondary">Duration</span>
-                <span className="text-app-text-strong font-medium">{durationHours}h</span>
+                <span className="text-app-text-strong font-medium">{resultHours}h</span>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-app-text-secondary">Sections</span>
-                <span className="text-app-text-strong font-medium">{sections.length}</span>
+                <span className="text-app-text-strong font-medium">{resultPass.included_sections?.length ?? 0}</span>
               </div>
-              {passcode && (
+              {resultPasscode && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-app-text-secondary">Passcode</span>
-                  <span className="text-app-text-strong font-medium font-mono">{passcode}</span>
+                  <span className="text-app-text-strong font-medium font-mono">{resultPasscode}</span>
                 </div>
               )}
-              {maxViews && (
+              {resultPass.max_views != null && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-app-text-secondary">Max Views</span>
-                  <span className="text-app-text-strong font-medium">{maxViews}</span>
+                  <span className="text-app-text-strong font-medium">{resultPass.max_views}</span>
                 </div>
               )}
             </div>

@@ -1,15 +1,19 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import Image from 'next/image';
-import { Droplets, Flame, Zap, ShowerHead, OctagonX, Siren, MapPin, Phone, ChevronLeft } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Droplets, Flame, Zap, OctagonX, Siren, MapPin, Phone, ChevronLeft } from 'lucide-react';
 import DashboardCard from '../DashboardCard';
+import { emergencyCategory, emergencyDetail } from '../emergencyTypes';
 
+// Keyed by the HomeEmergency.type values the column actually holds; the earlier
+// water_main/gas_shutoff/electrical_panel keys never matched a row.
 const SHUTOFF_TYPES: Record<string, { icon: ReactNode; label: string }> = {
-  water_main: { icon: <Droplets className="w-5 h-5" />, label: 'Water Main' },
-  gas_shutoff: { icon: <Flame className="w-5 h-5" />, label: 'Gas Shutoff' },
-  electrical_panel: { icon: <Zap className="w-5 h-5" />, label: 'Electrical Panel' },
-  sprinkler: { icon: <ShowerHead className="w-5 h-5" />, label: 'Sprinkler System' },
+  shutoff_water: { icon: <Droplets className="w-5 h-5" />, label: 'Water Main' },
+  shutoff_gas: { icon: <Flame className="w-5 h-5" />, label: 'Gas Shutoff' },
+  shutoff_electric: { icon: <Zap className="w-5 h-5" />, label: 'Electrical Panel' },
+  breaker_map: { icon: <Zap className="w-5 h-5" />, label: 'Breaker Map' },
   other: { icon: <OctagonX className="w-5 h-5" />, label: 'Other' },
 };
 
@@ -33,7 +37,7 @@ export function EmergencyCardPreview({
       {emergencies.length > 0 ? (
         <div className="space-y-1.5">
           {emergencies.slice(0, 3).map((e) => {
-            const cfg = SHUTOFF_TYPES[e.emergency_type] || SHUTOFF_TYPES.other;
+            const cfg = SHUTOFF_TYPES[e.type] || SHUTOFF_TYPES.other;
             return (
               <div key={e.id} className="flex items-center gap-2 text-sm">
                 <span className="flex-shrink-0">{cfg.icon}</span>
@@ -57,7 +61,7 @@ export function EmergencyCardPreview({
 export default function EmergencyCard({
   emergencies,
   home: _home,
-  homeId: _homeId,
+  homeId,
   onBack,
 }: {
   emergencies: Record<string, any>[];
@@ -65,17 +69,13 @@ export default function EmergencyCard({
   homeId: string;
   onBack: () => void;
 }) {
-  const [showAddForm, setShowAddForm] = useState(false);
+  const router = useRouter();
 
-  // Categorize emergencies
-  const shutoffs = emergencies.filter(
-    (e) => e.emergency_type === 'water_main' || e.emergency_type === 'gas_shutoff' ||
-           e.emergency_type === 'electrical_panel' || e.emergency_type === 'sprinkler'
-  );
-  const contacts = emergencies.filter((e) => e.emergency_type === 'contact');
-  const plans = emergencies.filter(
-    (e) => e.emergency_type === 'evacuation' || e.emergency_type === 'plan'
-  );
+  // Categorize by the row's actual HomeEmergency.type (the card has no medical
+  // section, so first-aid/extinguisher rows list under Other).
+  const shutoffs = emergencies.filter((e) => emergencyCategory(e.type) === 'shutoff');
+  const contacts = emergencies.filter((e) => emergencyCategory(e.type) === 'contact');
+  const plans = emergencies.filter((e) => emergencyCategory(e.type) === 'evacuation');
   const other = emergencies.filter(
     (e) => !shutoffs.includes(e) && !contacts.includes(e) && !plans.includes(e)
   );
@@ -88,7 +88,7 @@ export default function EmergencyCard({
           <h2 className="text-lg font-semibold text-app-text flex items-center gap-2"><Siren className="w-5 h-5" /> Emergency Info</h2>
         </div>
         <button
-          onClick={() => setShowAddForm(!showAddForm)}
+          onClick={() => router.push(`/app/homes/${homeId}/emergency`)}
           className="px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition"
         >
           + Add Info
@@ -105,7 +105,9 @@ export default function EmergencyCard({
             </div>
           ) : (
             shutoffs.map((s) => {
-              const cfg = SHUTOFF_TYPES[s.emergency_type] || SHUTOFF_TYPES.other;
+              const cfg = SHUTOFF_TYPES[s.type] || SHUTOFF_TYPES.other;
+              const notes = emergencyDetail(s, 'notes') || emergencyDetail(s, 'detail');
+              const photoUrl = emergencyDetail(s, 'photo_url');
               return (
                 <div key={s.id} className="px-4 py-3 flex items-start gap-3">
                   <span className="flex-shrink-0">{cfg.icon}</span>
@@ -114,12 +116,12 @@ export default function EmergencyCard({
                     {s.location && (
                       <div className="text-xs text-app-text-secondary mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3" /> {s.location}</div>
                     )}
-                    {s.notes && (
-                      <div className="text-xs text-app-text-muted mt-0.5">{s.notes}</div>
+                    {notes && (
+                      <div className="text-xs text-app-text-muted mt-0.5">{notes}</div>
                     )}
-                    {s.photo_url && (
+                    {photoUrl && (
                       <Image
-                        src={s.photo_url}
+                        src={photoUrl}
                         alt={s.label || cfg.label}
                         className="mt-2 rounded-lg w-full max-w-[200px] h-auto border border-app-border"
                         width={200}
@@ -145,18 +147,22 @@ export default function EmergencyCard({
               <p className="text-xs text-app-text-muted">No emergency contacts added</p>
             </div>
           ) : (
-            contacts.map((c) => (
+            contacts.map((c) => {
+              const phone = emergencyDetail(c, 'phone');
+              const notes = emergencyDetail(c, 'notes') || emergencyDetail(c, 'detail');
+              return (
               <div key={c.id} className="px-4 py-3 flex items-center gap-3">
                 <Phone className="w-5 h-5 flex-shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-app-text">{c.label || 'Contact'}</div>
-                  {c.phone && (
-                    <a href={`tel:${c.phone}`} className="text-xs text-blue-600 hover:underline">{c.phone}</a>
+                  {phone && (
+                    <a href={`tel:${phone}`} className="text-xs text-blue-600 hover:underline">{phone}</a>
                   )}
-                  {c.notes && <div className="text-xs text-app-text-muted mt-0.5">{c.notes}</div>}
+                  {notes && <div className="text-xs text-app-text-muted mt-0.5">{notes}</div>}
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -171,14 +177,18 @@ export default function EmergencyCard({
             </div>
           ) : (
             <div className="px-4 py-3 space-y-2">
-              {plans.map((p) => (
+              {plans.map((p) => {
+                const description = emergencyDetail(p, 'detail') || emergencyDetail(p, 'description');
+                const notes = emergencyDetail(p, 'notes');
+                const photoUrl = emergencyDetail(p, 'photo_url');
+                return (
                 <div key={p.id}>
                   <div className="text-sm font-medium text-app-text">{p.label || 'Evacuation Plan'}</div>
-                  {p.description && <div className="text-xs text-app-text-secondary mt-1 whitespace-pre-wrap">{p.description}</div>}
-                  {p.notes && <div className="text-xs text-app-text-muted mt-1">{p.notes}</div>}
-                  {p.photo_url && (
+                  {description && <div className="text-xs text-app-text-secondary mt-1 whitespace-pre-wrap">{description}</div>}
+                  {notes && <div className="text-xs text-app-text-muted mt-1">{notes}</div>}
+                  {photoUrl && (
                     <Image
-                      src={p.photo_url}
+                      src={photoUrl}
                       alt="Evacuation Plan"
                       className="mt-2 rounded-lg w-full max-w-[300px] h-auto border border-app-border"
                       width={300}
@@ -188,7 +198,8 @@ export default function EmergencyCard({
                     />
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -199,12 +210,15 @@ export default function EmergencyCard({
         <div>
           <h3 className="text-sm font-semibold text-app-text-secondary uppercase tracking-wider mb-2">Other</h3>
           <div className="bg-app-surface rounded-xl border border-app-border shadow-sm divide-y divide-app-border-subtle">
-            {other.map((item) => (
+            {other.map((item) => {
+              const notes = emergencyDetail(item, 'notes') || emergencyDetail(item, 'detail');
+              return (
               <div key={item.id} className="px-4 py-3">
                 <div className="text-sm font-medium text-app-text">{item.label || 'Emergency Item'}</div>
-                {item.notes && <div className="text-xs text-app-text-muted mt-0.5">{item.notes}</div>}
+                {notes && <div className="text-xs text-app-text-muted mt-0.5">{notes}</div>}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

@@ -5,6 +5,10 @@
 // scripts/db HTTP fixtures) or, when no container is supplied, a transcription
 // of the frozen 20260910040000 migration's documented decision contract.
 // A transcribed run is NOT SQL evidence; it exercises route/service/UI only.
+// With `api` ({ url, serviceKey } of the SAME disposable project) the production
+// supabase-js admin client also serves every non-share table, RPC and Storage
+// call, so the real home.js emergency routes, the real document upload route
+// and shared-document downloads run through actual PostgREST and Storage.
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const Module = require('node:module');
@@ -14,9 +18,28 @@ const root = path.resolve(__dirname, '../..');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const id = n => `f0e51100-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
-module.exports = function ({ container = null } = {}) {
+// Private bucket for the document journey; created and removed by this fixture.
+const BUCKET = 'stream2-guest-pass-fixture';
+
+module.exports = function ({ container = null, api = null } = {}) {
   // Only this stream's own disposable replay container may be written to.
   if (container !== null) assert.match(container, /^supabase_db_pantopus-stream2-guest-[a-z0-9-]+$/);
+  assert(api === null || container !== null, 'api requires the container-backed run');
+  let real = null;
+  if (api) {
+    const url = new URL(api.url);
+    assert.equal(url.hostname, '127.0.0.1'); assert.equal(url.protocol, 'http:'); assert.equal(url.port, '64551');
+    assert(typeof api.serviceKey === 'string' && api.serviceKey.length > 20, 'api.serviceKey is required');
+    const { createServerSupabaseClient } = require(path.join(root, 'backend/config/supabaseClient'));
+    real = createServerSupabaseClient(api.url, api.serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
+    process.env.HOME_DOCUMENTS_BUCKET = BUCKET;
+    // backend/config/supabase.js builds the anon client at import time; point it
+    // at the same owned project so no module can reach a hosted database.
+    assert(typeof api.anonKey === 'string' && api.anonKey.length > 20, 'api.anonKey is required');
+    process.env.SUPABASE_URL = api.url;
+    process.env.SUPABASE_ANON_KEY = api.anonKey;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = api.serviceKey;
+  }
   const express = require(path.join(root, 'backend/node_modules/express'));
   const actor = id(1);
   const homeId = id(100);
@@ -35,12 +58,16 @@ module.exports = function ({ container = null } = {}) {
       default_guest_pass_hours: 24,
     },
     wifi: [{ id: id(201), label: 'Home WiFi', value: 'MyWifiPassword123', visibility: 'members' }],
-    // HomeEmergency_type_chk allows only shutoff_water/shutoff_gas/shutoff_electric/
-    // breaker_map/extinguisher/first_aid/evac_plan/emergency_contacts/other.
+    // HomeEmergency_type_chk allows shutoff_water/shutoff_gas/shutoff_electric/
+    // breaker_map/extinguisher/first_aid/evac_plan/emergency_contacts/other and,
+    // since 20260916011000, the six native form categories.
     emergency: [
       { id: id(301), type: 'shutoff_water', label: 'Water shutoff', location: 'Garage wall' },
       { id: id(302), type: 'emergency_contacts', label: 'Emergency contacts', location: 'Kitchen binder' },
     ],
+    // One task with default members visibility, the simplest resource a scoped
+    // link can bind (HomeTask needs tasks.view, which the owner holds).
+    task: { id: id(501), title: 'Fixture task', description: 'Shared through a scoped link', task_type: 'chore' },
     passes: [],
     views: [],
     audits: [],
@@ -263,7 +290,29 @@ module.exports = function ({ container = null } = {}) {
       INSERT INTO public."HomeEmergency"(id,home_id,type,label,location,created_by,created_at,updated_at)
         VALUES ${state.emergency.map(row => `(${q(row.id)},${q(homeId)},${q(row.type)},${q(row.label)},
           ${q(row.location)},${q(actor)},now(),now())`).join(',')};
+      INSERT INTO public."HomeTask"(id,home_id,created_by,task_type,title,description,due_at)
+        VALUES(${q(state.task.id)},${q(homeId)},${q(actor)},${q(state.task.task_type)},${q(state.task.title)},
+          ${q(state.task.description)},now()+interval '3 days');
       COMMIT;`);
+  }
+
+  // The document journey needs the configured private bucket to exist in the
+  // owned project's Storage. Created here, emptied and removed by cleanupStorage.
+  async function prepareStorage() {
+    assert(real, 'prepareStorage() requires the api client');
+    const existing = await real.storage.getBucket(BUCKET);
+    if (existing.data) return;
+    const created = await real.storage.createBucket(BUCKET, { public: false });
+    assert.equal(created.error, null, created.error?.message);
+  }
+  async function cleanupStorage() {
+    assert(real, 'cleanupStorage() requires the api client');
+    const existing = await real.storage.getBucket(BUCKET);
+    if (existing.data) {
+      await real.storage.emptyBucket(BUCKET);
+      await real.storage.deleteBucket(BUCKET);
+    }
+    return Number(sql(`SELECT count(*) FROM storage.objects WHERE bucket_id=${q(BUCKET)};`));
   }
 
   // Remove only this fixture's own rows and report the counts back, so a run can
@@ -277,7 +326,13 @@ module.exports = function ({ container = null } = {}) {
       DELETE FROM public."HomeGuestPass" WHERE home_id=${q(homeId)};
       DELETE FROM public."HomeScopedGrant" WHERE home_id=${q(homeId)};
       DELETE FROM public."HomeAuditLog" WHERE home_id=${q(homeId)};
+      DELETE FROM public."HomePermissionOverride" WHERE home_id=${q(homeId)};
       DELETE FROM public."HomeEmergency" WHERE home_id=${q(homeId)};
+      DELETE FROM public."HomeTask" WHERE home_id=${q(homeId)};
+      DELETE FROM public."HomeDocument" WHERE home_id=${q(homeId)};
+      DELETE FROM public."FileAccessLog" WHERE file_id IN (SELECT id FROM public."File" WHERE home_id=${q(homeId)});
+      DELETE FROM public."FileThumbnail" WHERE file_id IN (SELECT id FROM public."File" WHERE home_id=${q(homeId)});
+      DELETE FROM public."File" WHERE home_id=${q(homeId)};
       DELETE FROM public."HomeAccessSecretValue" WHERE access_secret_id IN
         (SELECT id FROM public."HomeAccessSecret" WHERE home_id=${q(homeId)});
       DELETE FROM public."HomeAccessSecret" WHERE home_id=${q(homeId)};
@@ -292,6 +347,12 @@ module.exports = function ({ container = null } = {}) {
       'views',(SELECT count(*) FROM public."HomeGuestPassView" v JOIN public."HomeGuestPass" g
         ON g.id=v.guest_pass_id WHERE g.home_id=${q(homeId)}),
       'audits',(SELECT count(*) FROM public."HomeAuditLog" WHERE home_id=${q(homeId)}),
+      'grants',(SELECT count(*) FROM public."HomeScopedGrant" WHERE home_id=${q(homeId)}),
+      'receipts',(SELECT count(*) FROM public."HomeShareReadReceipt" WHERE home_id=${q(homeId)}),
+      'tasks',(SELECT count(*) FROM public."HomeTask" WHERE home_id=${q(homeId)}),
+      'emergencies',(SELECT count(*) FROM public."HomeEmergency" WHERE home_id=${q(homeId)}),
+      'documents',(SELECT count(*) FROM public."HomeDocument" WHERE home_id=${q(homeId)}),
+      'files',(SELECT count(*) FROM public."File" WHERE home_id=${q(homeId)}),
       'homes',(SELECT count(*) FROM public."Home" WHERE id=${q(homeId)}),
       'users',(SELECT count(*) FROM auth.users WHERE id=${q(actor)}))::text;`));
   }
@@ -299,8 +360,13 @@ module.exports = function ({ container = null } = {}) {
   // Retire a pass to the pre-validation sharing contract, the way a link issued
   // before migration 20260910040000 exists today. Works in both modes so one
   // journey script covers the transcribed and the SQL-backed run.
-  function demoteToLegacy(passId) {
-    if (container) { sql(`UPDATE public."HomeGuestPass" SET sharing_version=NULL WHERE id=${q(passId)};`); return; }
+  function demoteToLegacy(passId, kind = 'guest') {
+    assert(['guest', 'scoped'].includes(kind));
+    if (container) {
+      sql(`UPDATE public."${kind === 'guest' ? 'HomeGuestPass' : 'HomeScopedGrant'}" SET sharing_version=NULL WHERE id=${q(passId)};`);
+      return;
+    }
+    assert.equal(kind, 'guest', 'scoped links exist only in the SQL-backed run');
     const pass = state.passes.find(row => row.id === passId);
     assert(pass, 'Unknown guest pass');
     pass.sharing_version = null;
@@ -328,12 +394,24 @@ module.exports = function ({ container = null } = {}) {
   }
 
   const rpcCalls = [];
+  const SHARE_RPCS = ['mutate_home_external_share', 'read_home_external_share', 'authorize_home_share_document'];
   const db = { rpc: async (name, args) => {
-    assert(['mutate_home_external_share', 'read_home_external_share'].includes(name));
     rpcCalls.push(name);
+    if (!SHARE_RPCS.includes(name)) {
+      // Every other RPC (document quota, cleanup bookkeeping) is a production call
+      // through the real admin client; the share RPCs keep the accepted psql path.
+      assert(real, `${name} needs the api client`);
+      return real.rpc(name, args);
+    }
     if (container) return { data: callSql(name, args), error: null };
+    assert.equal(name !== 'authorize_home_share_document', true, 'document receipts exist only in the SQL-backed run');
     return { data: name === 'mutate_home_external_share' ? mutate(args) : read(args), error: null };
   } };
+  if (real) { db.from = table => real.from(table); db.storage = real.storage; }
+  // Synthetic identity for the authenticated routers: the seeded owner unless a
+  // request names another actor. Anonymous guest reads never pass through here.
+  const fixtureVerify = (req, _res, next) => { req.user = { id: req.headers['x-fixture-actor'] || actor }; next(); };
+  const passthroughLimiter = () => new Proxy({}, { get: () => (_req, _res, next) => next() });
 
   const passthrough = (_req, _res, next) => next();
   const load = Module._load;
@@ -345,7 +423,7 @@ module.exports = function ({ container = null } = {}) {
     if (parent?.filename?.endsWith('/routes/homeIam.js')) {
       if (['./homeMemberRemovals', './homeResidencyReviewHistory', './homeResidencyClaims'].includes(request)) return passthrough;
       if (request === '../middleware/verifyToken') {
-        const verify = (req, _res, next) => { req.user = { id: req.headers['x-fixture-actor'] || actor }; next(); };
+        const verify = (req, _res, next) => fixtureVerify(req, _res, next);
         verify.invalidateRoleCache = () => {};
         return verify;
       }
@@ -356,18 +434,50 @@ module.exports = function ({ container = null } = {}) {
     if (parent?.filename?.endsWith('/routes/homeGuest.js') && request === '../middleware/verifyToken') {
       return (_req, res) => res.status(401).json({ error: 'Invalid credentials' });
     }
-    if (parent?.filename?.endsWith('/services/homeExternalShareService.js') && request === './homeDocumentStorage') return {};
+    // Real document storage (through the admin client's Storage) only when the
+    // api client exists; the route-only run has no provider to talk to.
+    if (parent?.filename?.endsWith('/services/homeExternalShareService.js') && request === './homeDocumentStorage') {
+      return real ? load.call(this, request, parent, isMain) : {};
+    }
+    // The production home router, loaded the same way the accepted residency
+    // fixtures load it: identity and rate limits synthetic, permissions and the
+    // emergency/document handlers real, every unrelated service stubbed.
+    if (real && parent?.filename?.endsWith('/routes/home.js')) {
+      if (request === '../middleware/verifyToken') return fixtureVerify;
+      if (request === '../middleware/rateLimiter') return passthroughLimiter();
+      if (request === '../services/addressValidation') return { AddressVerdictStatus: {} };
+      if (request === '../middleware/requireAuthority') return (_req, _res, next) => next();
+      if (request === '../utils/homeDocumentAccess') return { HOME_DOCUMENT_TYPES: ['other'], HOME_DOCUMENT_VISIBILITIES: ['members'] };
+      if (!['express', 'joi', 'crypto', '../utils/parsePostGISPoint', '../middleware/validate', '../utils/requestSessionScope',
+        '../utils/homePermissions'].includes(request)) return {};
+    }
+    if (real && parent?.filename?.endsWith('/routes/homeDocumentFiles.js')) {
+      if (request === '../middleware/verifyToken') return fixtureVerify;
+      if (request === '../middleware/rateLimiter') return passthroughLimiter();
+    }
     return load.call(this, request, parent, isMain);
   };
   const iam = require(path.join(root, 'backend/routes/homeIam'));
   const guest = require(path.join(root, 'backend/routes/homeGuest'));
+  const home = real ? require(path.join(root, 'backend/routes/home')) : null;
+  const documentFiles = real ? require(path.join(root, 'backend/routes/homeDocumentFiles')) : null;
   Module._load = load;
 
   const app = express();
   app.use(express.json());
   app.use('/api/homes', guest);
   app.use('/api/homes', iam);
-  return { app, state, db, rpcCalls, actor, homeId, id, hash, clock, sql, seed, cleanup, demoteToLegacy, denyPermissions, restorePermissions,
+  if (real) {
+    app.use('/api/homes', documentFiles);
+    app.use('/api/homes', home);
+    // Same envelope as backend/app.js's global handler for routes that `next(error)`.
+    app.use((error, _req, res, next) => {
+      if (res.headersSent) return next(error);
+      res.status(error.status || 500).json({ error: error.message || 'Internal server error' });
+    });
+  }
+  return { app, state, db, real, BUCKET, rpcCalls, actor, homeId, id, hash, clock, sql, q, seed, cleanup, demoteToLegacy, denyPermissions, restorePermissions,
+    prepareStorage, cleanupStorage,
     setNow(value) { state.now = value; },
     reset() { state.passes = []; state.views = []; state.audits = []; state.now = null; state.sequence = 400;
       state.permissions = ['home.view', 'home.edit', 'members.manage', 'access.view_wifi']; },
