@@ -1,18 +1,17 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated September20, 2026, 22:57 UTC. **Stream incomplete; verification continues.**
+Updated September20, 2026, 23:17 UTC. **Stream incomplete; verification continues.**
 Sole live status: this neutral coordination file. No new unit tests requested/written.
 
-## Current safety handoff — frozen for coordinator review/publication
+## Current safety milestone — merged, broader verification continues
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
-`codex/workstream-accounts-social`. [Draft PR64](https://github.com/WangPantopus/skinny-pantopus/pull/64)
+`codex/workstream-accounts-social`. [Merged PR64](https://github.com/WangPantopus/skinny-pantopus/pull/64)
 final safety head **f387cd480**, committed and pushed. Includes separately reviewable
 `e83eaac91` chat actions, `b414ad6f6` cookie-login state retirement,
 `72823e366` stale-request retry guard, `f387cd480` pending refresh cancellation.
-Coordinator reviewed final source without a further finding; **exact-head CI still
-pending**. Prior728 CI35542480186 passed all6 applicable checks, not finalhead proof.
-No merge/integration claim. Safety/N04 and whole Stream3 remain open.
+Coordinator reviewed final source and exact-head CI passed; merged as **2d6ff2069**
+at23:00UTC. Safety/N04 and whole Stream3 remain open.
 
 | Reproduced problem | Existing implementation repaired | Actual candidate evidence |
 | --- | --- | --- |
@@ -23,7 +22,7 @@ No merge/integration claim. Safety/N04 and whole Stream3 remain open.
 
 No backend/socket/native source change in PR64. Web TypeScript passes on final
 source (`refresh-cookie-candidate-types.log`); focused lint0errors (one existing
-Settings ts-nocheck warning in separately held A02 page). CI remains distinct.
+Settings ts-nocheck warning in separately held A02 page). CI is distinct from browser acceptance.
 Expired/failed responses and delay schedules were injected privately. Local auth,
 HTTP handlers and PostgreSQL were real. No hosted OAuth/provider or installed
 native acceptance. Cross-tab cancellation depends on browser storage events;
@@ -35,14 +34,25 @@ Detailed private evidence, source hashes and actual timing:
 `real-auth-http.jsonl`, `real-auth-persistence.json`, `full-backend.log`,
 `cookie-race-baseline-release.json`, `cookie-race-candidate-release.json`,
 `cookie-race-new-refresh-release.json`, `stale-refresh-failure-candidate-release.json`.
+N03 detailed `beacon-ui-results.json`, `beacon-http-baseline.json`,
+`beacon-http-results.json`, `beacon-failure-results.json`, existing regression log.
+Transient dev404 came from multiple retired Stream3 Next processes writing own
+cache; exact owned processes/cache retired and UI replay passed. No peer runtime touched.
 Durable private mirror:
 `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/`
-(60 files at preceding refresh; MANIFEST SHA binds each file). Credentials/operator
+(70 files at latest refresh; MANIFEST SHA binds each file). Credentials/operator
 logs remain private, not Git/chat. CUA interaction history is in this Stream3 task.
 
-## Separate A02 candidate — verified, uncommitted
+## Separate A02 candidate — committed, review/CI pending
 
-Preserve existing changed web Settings page and SDK users.deleteAccount optional
+[Draft PR65](https://github.com/WangPantopus/skinny-pantopus/pull/65), head **e96be1ea4**,
+based on merged safety master2d6ff2069; coordinator source review found no new issue.
+Home PR60 merged as ebeea43d5; integrated in bce48b25b without conflicts.
+CI35543817853 **all applicable green**, including fresh schema replay/lint and CI OK.
+Coordinator integration pending; no author merge.
+Prior safeguard failed because proposed12000 lacked compatibility annotation and
+bounded lock_timeout; e96be1ea4 adds those only, no FK behavior change.
+Existing web Settings page and SDK users.deleteAccount optional
 X-Step-Up, plus new coordinator-granted forward
 `supabase/migrations/20260916012000_user_block_account_deletion.sql` (only2 UserBlock
 FK CASCADE rules). Do not include in safety merge. No users.js change. Existing
@@ -57,8 +67,19 @@ stepup/DELETE200 removes public/authAlice plus2 outgoingblocks; Charlie stepup/
 DELETE200 removes public/authCharlie plus incomingBobblock. Both tabs retire to
 sign-in. Evidence `deletion-stepup-baseline.json`, `delete-api-baseline.json`,
 `real-auth-ui-results.json`/source hashes and HTTP/SQL. Publish separate commit/PR
-against fresh master after safety disposition, then required CI/coordinator review.
+already based on fresh safety master; required CI/coordinator integration pending.
 Broader nontransactional deletion cleanup/provider failure and installed cases remain open.
+
+N03 follow/retry2-file candidate is ready for separate commit after PR65 disposition.
+Further UI journey: Dana follower-only update published via existing composer,
+canonical Post `2824a813-f632-4ead-adb6-baa42e27e453`; saved Bob notification
+`cf3a0c54-41e7-485b-8754-a1e447708072`, not provider delivery evidence. UI Delivered1
+is computed eligible-recipient count, not confirmed delivery. Creator notification
+click reaches /app/persona?tab=followers and reduces unread3→2. It reveals a new
+privacy defect: notification fan_4e567960 becomes Auth Bob/@stream3_auth_r3_1 on
+creator Followers screen. Existing legacy owner GET/PATCH serialize LocalProfile
+contrary to established protected-fan policy; canonical serializeFanForCreator
+already exists. Repair ownership requested, not yet edited. Preserve UI layout.
 
 ## Runtime, fixtures and continuation
 
@@ -85,7 +106,24 @@ September16 raw temporary artifacts were lost, so later reports remain source-bo
 accepted evidence, not newly recovered raw proof. No duplicate large-suite replays.
 
 Continue whole-stream N01–N05/A01–A05 mapping below. N03 current step: existing
-My Beacon setup on Dana, preview reached, **not yet published**; local development
+My Beacon setup on Dana published through real UI; persona
+`b1cb6c08-76d3-4b30-90af-6380ee76fd25`, channel
+`ea747ad3-ce3f-4f22-aafc-24b0868abda1`, handle `stream3-local-r3`. Bob Follow
+failed404 at23:00:14. Existing personaBlocks global feature guard intercepted
+legacy follow despite audience_profile=false supporting that path. Coordinator
+granted only existing personaBlocks.js route-scoped guards. Dirty candidate now
+returns201 through actual UI and stores Bob private active membership
+`a6a6c6b6-e8a2-4737-81e2-93b585d589a3`; actual UI mute/unmute + refresh and Unfollow succeeded. Repeat HTTP Unfollow500
+reproduced invalid UUID __missing__; UI lost committed reply503 then retry500 also
+reproduced. Coordinator additionally granted existing personas.js DELETE handler.
+Checked membership+joined-tier read now returns500 on unavailable read,200 only
+on confirmed absence. Same stale browser row retry200 clears it. Direct repeat200,
+duplicate Follow200/one row, flag-off block routes404/unauth401. Real local SQL SELECT
+privilege failure preserves row; restoredgrant verified. Synthetic subscription marker
+returns409/preserves row, restoredNULL. Existing3focused suites53tests pass; no newtests.
+No new service/table/flag activation; compared existing/archived contracts and paid
+branch (same route bytes). Candidate remains separate from open PR65.
+Local development
 identity/persona/broadcast defaults enabled, release cohort/provider unverified.
 N01/N02 provider/device, N03 public/private/follow/mute/post/old-link, N04 remaining
 access/moderation, N05 delivered reminders, A01 recovery/OAuth/onboarding, A03 storage,
