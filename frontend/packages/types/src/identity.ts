@@ -150,7 +150,7 @@ export interface PersonaFollower {
   approvedAt?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
-  follower: LocalProfile | null;
+  follower: Pick<LocalProfile, 'handle' | 'displayName' | 'avatarUrl'> | null;
 }
 
 // One row of the fan-side "Beacons You Follow" management screen.
