@@ -5,12 +5,18 @@ import CreateGuestPass from '../src/components/home/share/CreateGuestPass';
 import ScopedShareModal from '../src/components/home/share/ScopedShareModal';
 import ShareCenter from '../src/components/home/share/ShareCenter';
 import GuestViewPage from '../src/app/guest/[token]/page';
+import SharedResourcePage from '../src/app/shared/[token]/page';
+import SharePage from '../src/app/(app)/app/homes/[id]/share/page';
 
 jest.mock('@pantopus/api', () => ({ homeIam: {
   createGuestPass: jest.fn(), createScopedGrant: jest.fn(),
   getGuestPasses: jest.fn(), revokeGuestPass: jest.fn(),
-}, homeGuest: { viewGuestPass: jest.fn() } }));
-jest.mock('next/navigation', () => ({ useParams: () => ({ token: 'ab'.repeat(32) }) }));
+}, homeGuest: { viewGuestPass: jest.fn(), viewSharedResource: jest.fn() }, getAuthToken: () => '__session__' }));
+const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), prefetch: jest.fn() };
+jest.mock('next/navigation', () => ({
+  useParams: () => ({ token: 'ab'.repeat(32), id: 'home' }),
+  useRouter: () => mockRouter,
+}));
 jest.mock('../src/components/ui/toast-store', () => ({ toast: { error: jest.fn(), info: jest.fn(), success: jest.fn() } }));
 jest.mock('../src/components/ui/confirm-store', () => ({ confirmStore: { open: jest.fn(async () => true) } }));
 jest.mock('../src/components/home/SlidePanel', () => ({ __esModule: true,
@@ -219,4 +225,113 @@ test('a passcode challenge still opens the passcode form', async () => {
   const input = screen.getByPlaceholderText('Enter passcode') as HTMLInputElement;
   // The API accepts passcodes up to 128 characters; the guest must be able to enter them.
   expect(input.maxLength).toBe(128);
+});
+
+
+// ============================================================
+// Public scoped /shared/:token view. The same recovery codes as the guest
+// page: a retired link must never invite a retry, a link that only needs
+// reissuing is not an owner revocation, and the passcode accepts the API's
+// full 128 characters.
+// ============================================================
+
+async function sharedView(failure: Record<string, unknown>) {
+  jest.mocked(api.homeGuest.viewSharedResource).mockRejectedValue(failure);
+  await act(async () => { render(<SharedResourcePage />); });
+}
+
+test('a scoped link at its view limit is retired, not a retryable error', async () => {
+  await sharedView({ message: 'This share link has reached its view limit.',
+    code: 'SHARE_VIEW_LIMIT', statusCode: 410, data: { code: 'SHARE_VIEW_LIMIT' } });
+  expect(screen.getByText('View Limit Reached')).toBeInTheDocument();
+  expect(screen.queryByText('Something Went Wrong')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Try Again' })).not.toBeInTheDocument();
+});
+
+test('a scoped link whose window has not opened says so and may be retried later', async () => {
+  await sharedView({ message: 'This share link is not active yet.',
+    code: 'SHARE_NOT_STARTED', statusCode: 403, data: { code: 'SHARE_NOT_STARTED' } });
+  expect(screen.getByText('Not Active Yet')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Try Again' })).toBeInTheDocument();
+});
+
+test('a scoped link needing reissue is never reported as an owner revocation', async () => {
+  await sharedView({ message: 'This older share link is inactive. Ask the sender for a new link.',
+    code: 'SHARE_REISSUE_REQUIRED', statusCode: 410, data: { code: 'SHARE_REISSUE_REQUIRED' } });
+  expect(screen.getByText('Link Needs Replacing')).toBeInTheDocument();
+  expect(screen.queryByText(/revoked by the owner/)).not.toBeInTheDocument();
+});
+
+test('a scoped revocation keeps its existing revoked screen and an unknown link is not retried', async () => {
+  await sharedView({ message: 'This share link has been revoked.',
+    code: 'SHARE_REVOKED', statusCode: 410, data: { code: 'SHARE_REVOKED' } });
+  expect(screen.getByText('Access Revoked')).toBeInTheDocument();
+  expect(screen.getByText(/revoked by the owner/)).toBeInTheDocument();
+  cleanupRender();
+  await sharedView({ message: 'Share link not found.',
+    code: 'SHARE_NOT_FOUND', statusCode: 404, data: { code: 'SHARE_NOT_FOUND' } });
+  expect(screen.getByText('Link Not Found')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Try Again' })).not.toBeInTheDocument();
+});
+
+test('the scoped passcode challenge accepts the API limit and reports a wrong code without leaving the form', async () => {
+  await sharedView({ message: 'Enter the correct passcode to view this share link.',
+    code: 'SHARE_PASSCODE_REQUIRED', statusCode: 403, data: { code: 'SHARE_PASSCODE_REQUIRED', requiresPasscode: true } });
+  const input = screen.getByPlaceholderText('Enter passcode');
+  expect(input).toHaveAttribute('maxlength', '128');
+  fireEvent.change(input, { target: { value: 'p'.repeat(128) } });
+  fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+  expect(await screen.findByText('Incorrect passcode. Please try again.')).toBeInTheDocument();
+  expect(api.homeGuest.viewSharedResource).toHaveBeenLastCalledWith('ab'.repeat(32), 'p'.repeat(128));
+  jest.mocked(api.homeGuest.viewSharedResource).mockResolvedValue({
+    grant: { resource_type: 'HomeTask', can_view: true, can_edit: false, expires_at: '2099-01-01T00:00:00Z' },
+    resource: { id: 'task', title: 'Exact task', status: 'open' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+  // The success view names the resource in its heading and its body.
+  expect(await screen.findAllByText('Exact task')).not.toHaveLength(0);
+});
+
+function cleanupRender() { document.body.innerHTML = ''; }
+
+// ============================================================
+// The Settings "Guest Passes" entry (/app/homes/[id]/share). The API returns a
+// raw token; only the public /guest route opens it, so that is what "Share
+// link copied" must put on the clipboard, and the list must repeat the API's
+// status decisions instead of calling a scheduled or dead link Active.
+// ============================================================
+
+test('the Settings entry copies the public guest route, never the bare token', async () => {
+  listed([]);
+  jest.mocked(api.homeIam.createGuestPass).mockResolvedValue({ token, pass: {
+    id: 'pass', home_id: 'home', label: 'Ana (guest)', kind: 'guest', end_at: '2099-01-01T00:00:00Z',
+    included_sections: ['wifi'], view_count: 0, status: 'active',
+  } } as Awaited<ReturnType<typeof api.homeIam.createGuestPass>>);
+  render(<SharePage />);
+  fireEvent.click(await screen.findByRole('button', { name: /New Pass/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Guest 48 hours/ }));
+  fireEvent.change(screen.getByPlaceholderText('Guest name'), { target: { value: 'Ana' } });
+  fireEvent.click(screen.getByRole('button', { name: /Create & Share/ }));
+  await waitFor(() => expect(clipboard).toHaveBeenCalledWith(`${window.location.origin}/guest/${token}`));
+  expect(clipboard).not.toHaveBeenCalledWith(token);
+  expect(api.homeIam.createGuestPass).toHaveBeenCalledWith('home', { label: 'Ana (guest)', kind: 'guest' });
+});
+
+test('the Settings entry lists scheduled links as current and revocable, and dead links as past', async () => {
+  listed([
+    { ...basePass, id: 'legacy', label: 'Legacy pass', kind: 'guest', end_at: '2099-01-01T00:00:00Z', status: 'reissue_required' },
+    { ...basePass, id: 'later', label: 'Scheduled pass', kind: 'guest', start_at: '2099-01-01T00:00:00Z',
+      end_at: '2099-02-01T00:00:00Z', status: 'scheduled' },
+    { ...basePass, id: 'gone', label: 'Revoked pass', kind: 'guest', end_at: '2099-01-01T00:00:00Z',
+      revoked_at: '2021-01-01T00:00:00Z', status: 'revoked' },
+    { ...basePass, id: 'live', label: 'Live pass', kind: 'wifi_only', end_at: '2099-01-01T00:00:00Z', status: 'active' },
+  ]);
+  render(<SharePage />);
+  expect(await screen.findByText('Active Passes (2)')).toBeInTheDocument();
+  expect(screen.getByText('Past Passes (2)')).toBeInTheDocument();
+  expect(screen.getByText(/^Starts /)).toBeInTheDocument();
+  expect(screen.getAllByTitle('Revoke')).toHaveLength(2);
+  expect(screen.getByText('Needs new link')).toBeInTheDocument();
+  expect(screen.getByText('Revoked')).toBeInTheDocument();
+  expect(api.homeIam.getGuestPasses).toHaveBeenCalledWith('home', { include_revoked: true });
 });

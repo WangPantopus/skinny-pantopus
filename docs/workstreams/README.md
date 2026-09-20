@@ -4,6 +4,51 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## Active sessions and runtime ownership — September 20, 2026
+
+This table supersedes historical session/runtime rows below. No work is dispatched
+to the retired September16 coordinator or older Stream1 session.
+
+| Stream | Active task | Current work / sole writer | Local browser and API | Database |
+| --- | --- | --- | --- | --- |
+| 1 / coordinator | `01a0c0d1-0703-70c3-b842-6d01bc8ca48b` | Actual Stripe test checkout; sole writer `backend/stripe/gigTipProof.js` for reproduced absent-transfer receipt failure; base `aa168017e` | `localhost:18133` → HTTP18132 | Isolated `pantopus-stream1-tip-ui-r1`, API64561/SQL64562 |
+| 2 | `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` | PR60 merged as ebeea43d5; combined browser check and CI accepted; runtime released | `[::1]:18141` → HTTP18142 | Adopt existing `pantopus-stream2-guest-r1`, API64551/SQL64552; ports64550–64559 granted |
+| 3 | `01a0a824-301b-74e3-a1d9-b205714ed7a1` | PR64 safety merged as2d6ff2069; author owns separate granted Settings/SDK deletion and UserBlock forward migration | `stream3-auth.localhost:18131` → HTTP18130 | Existing `pantopus-stream3-block-r1`, API64531/SQL64532 |
+
+Stream3 runtime extension64534–64537 is granted for local GoTrue/Kong/mail only.
+Stream3 single-writer grants: existing Settings deletion UI and SDK users endpoint;
+`frontend/packages/api/src/client.ts`, `endpoints/auth.ts` and mounted web
+`lib/query-provider.tsx` for reproduced cookie-login cross-tab account retirement
+(preserve same-account refresh/drafts). Extension granted after admitted held401
+replayed Bob's block as new Dana after refresh: bind shared interceptor requests
+to session generation, recheck across awaits, prevent stale retry/session cleanup. Intact delayed old refresh200 then new login
+reproduced browser cookie rollback; granted same client AbortController and
+origin-bound mutex repair, with intact-header UI acceptance required.
+Existing `UserBlock` incoming/outgoing
+NO ACTION FKs caused admitted real-auth/step-up DELETE500: forward migration
+20260916012000 is granted for only those two CASCADE constraints, after canonical
+comparison. No applied migration rewrite or auth/socket redesign. Stream3 also owns a separate,
+reproduced N03 follow404 repair in existing `backend/routes/personaBlocks.js`:
+move auth/feature guards onto its actual three block routes so the supported
+flag-off legacy follow route can run. Verify follow persistence and block denial;
+no feature-flag activation, backend policy widening or new application file. Stream3 reports
+exact paths and real UI/API/SQL proof before integration.
+
+Browser hostnames deliberately differ because cookies are shared across ports.
+No shared cookie clearing, retained database mutation, cache cleaning or physical
+device use. Native slot **released** after Stream1's iOS and Android attempts. Android AVD
+boots but current computer-use cannot attach its qemu window; no native tip
+acceptance claimed. Owned emulator stopped; no rebuild/install. exact
+owned simulator shut down. Local Simulator became unavailable after an external
+shutdown/XPC/display failure; no build or system-service reset. Recheck actual
+availability before reserving. Stream1 HTTP18132/web18133 and isolated64561/64562
+project stopped after both actual Stripe TEST phases. Exact owned rows0; four test
+captures fully refunded, two intents canceled, two owned customers deleted. Provider
+history remains.
+Stream3 and Stream2 own their dirty live status files; coordinator stages
+only handed-off snapshots. Stream1 source changes remain confined to its assigned
+paid worktree, Stream2 to its Home worktree, Stream3 to its accounts/social worktree.
+
 ## Where to start
 
 | Document | Purpose | Writer |

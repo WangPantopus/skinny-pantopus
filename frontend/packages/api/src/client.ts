@@ -86,16 +86,35 @@ export const AUTH_SESSION_CHANGE_KEY = 'pantopus_auth_session_change';
 let _authChangeSequence = 0;
 
 function _emitTokenChange(token: string | null): void {
-  for (const handler of _tokenChangeHandlers) {
-    try { handler(token); } catch { /* listener must not break caller */ }
-  }
   if (_isWeb) {
+    ++_authChangeSequence;
+    cancelPendingWebRefresh();
     try {
       // Other tabs cannot observe httpOnly cookie replacement. Broadcast only
       // a nonsecret change marker, never the token or account identity.
-      window.localStorage.setItem(AUTH_SESSION_CHANGE_KEY, `${Date.now()}:${++_authChangeSequence}`);
+      window.localStorage.setItem(AUTH_SESSION_CHANGE_KEY, `${Date.now()}:${_authChangeSequence}`);
     } catch { /* Session mutation must still complete when storage is disabled. */ }
   }
+  for (const handler of _tokenChangeHandlers) {
+    try { handler(token); } catch { /* listener must not break caller */ }
+  }
+}
+
+type SessionBoundRequest = InternalAxiosRequestConfig & { _authSessionMarker?: string };
+
+function currentRequestSession(): string {
+  let marker = '';
+  try { marker = window.localStorage.getItem(AUTH_SESSION_CHANGE_KEY) || ''; } catch {}
+  return `${_authChangeSequence}:${marker}`;
+}
+
+function requestSessionChanged(request?: InternalAxiosRequestConfig): boolean {
+  const marker = (request as SessionBoundRequest | undefined)?._authSessionMarker;
+  return _isWeb && marker !== undefined && marker !== currentRequestSession();
+}
+
+function sessionChangedError() {
+  return { message: 'Your account changed. Please try again.', code: 'AUTH_SESSION_CHANGED', statusCode: 409 };
 }
 
 /**
@@ -105,6 +124,14 @@ function _emitTokenChange(token: string | null): void {
 export function onTokenChange(handler: TokenChangeHandler): () => void {
   _tokenChangeHandlers.add(handler);
   return () => { _tokenChangeHandlers.delete(handler); };
+}
+
+/** Successful web login replaces httpOnly cookies without returning body tokens. */
+export function acceptCookieAuthSession(): void {
+  if (!_isWeb || getCookie('pantopus_session') !== '1') return;
+  _tokenCache = null;
+  _refreshTokenCache = null;
+  _emitTokenChange('__session__');
 }
 
 // In-memory token cache (always synchronous for interceptor access)
@@ -405,6 +432,8 @@ const apiClient: AxiosInstance = axios.create({
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    if (requestSessionChanged(config)) return Promise.reject(sessionChangedError());
+    if (_isWeb) (config as SessionBoundRequest)._authSessionMarker = currentRequestSession();
     if (_isWeb) {
       // Web: auth token is in httpOnly cookie, sent automatically via
       // same-origin proxy. Tell backend not to include tokens in JSON body.
@@ -447,6 +476,20 @@ apiClient.interceptors.request.use(
 // Prevents concurrent 401 responses from triggering parallel refresh attempts.
 // The first 401 starts the refresh; subsequent 401s wait for the same promise.
 let _refreshPromise: Promise<AuthRefreshResult> | null = null;
+let _webRefreshController: AbortController | null = null;
+
+function cancelPendingWebRefresh(): void {
+  if (!_isWeb) return;
+  _webRefreshController?.abort();
+  _webRefreshController = null;
+  _refreshPromise = null;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', event => {
+    if (event.key === AUTH_SESSION_CHANGE_KEY || event.key === null) cancelPendingWebRefresh();
+  });
+}
 
 async function doTokenRefresh(): Promise<AuthRefreshResult> {
   // On web, the refresh token is in an httpOnly cookie sent automatically
@@ -461,13 +504,19 @@ async function doTokenRefresh(): Promise<AuthRefreshResult> {
   const baseURL = _isWeb ? '' : (apiClient.defaults.baseURL || API_BASE_URL);
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (_isWeb) headers['x-token-transport'] = 'cookie';
+  const controller = _isWeb ? new AbortController() : null;
+  if (controller) _webRefreshController = controller;
+  const sessionMarker = _isWeb ? currentRequestSession() : null;
 
   try {
     const { data } = await axios.post(
       `${baseURL}/api/users/refresh`,
       _isWeb ? {} : { refreshToken },
-      { headers, timeout: 10000 }
+      { headers, timeout: 10000, ...(controller ? { signal: controller.signal } : {}) }
     );
+    if (_isWeb && sessionMarker !== currentRequestSession()) {
+      return { status: 'transient', code: 'AUTH_SESSION_CHANGED', message: 'Account changed during refresh' };
+    }
     const newAccess = (data as any)?.accessToken ?? (data as any)?.access_token;
     const newRefresh = (data as any)?.refreshToken ?? (data as any)?.refresh_token;
     const expiresAt = (data as any)?.expiresAt ?? (data as any)?.expires_at;
@@ -509,6 +558,8 @@ async function doTokenRefresh(): Promise<AuthRefreshResult> {
       status: 'transient',
       message: error instanceof Error ? error.message : 'Failed to refresh session',
     };
+  } finally {
+    if (_webRefreshController === controller) _webRefreshController = null;
   }
 }
 
@@ -516,8 +567,13 @@ export async function refreshAuthSession(options?: { trigger?: string }): Promis
   const trigger = options?.trigger ?? 'manual';
 
   if (!_refreshPromise) {
-    _refreshPromise = doTokenRefresh().then(
+    const sessionMarker = _isWeb ? currentRequestSession() : null;
+    const pending: Promise<AuthRefreshResult> = doTokenRefresh().then(
       (result) => {
+        if (_refreshPromise === pending) _refreshPromise = null;
+        if (_isWeb && sessionMarker !== currentRequestSession()) {
+          return { status: 'transient' as const, code: 'AUTH_SESSION_CHANGED', message: 'Account changed during refresh' };
+        }
         if (result.status === 'success') {
           emitAuthEvent({
             type: 'session_refresh_ok',
@@ -534,14 +590,14 @@ export async function refreshAuthSession(options?: { trigger?: string }): Promis
             statusCode: result.statusCode,
           });
         }
-        _refreshPromise = null;
         return result;
       },
       (error) => {
-        _refreshPromise = null;
+        if (_refreshPromise === pending) _refreshPromise = null;
         throw error;
       }
     );
+    _refreshPromise = pending;
   }
   return _refreshPromise;
 }
@@ -550,6 +606,7 @@ export async function refreshAuthSession(options?: { trigger?: string }): Promis
 
 apiClient.interceptors.response.use(
   (response) => {
+    if (requestSessionChanged(response.config)) return Promise.reject(sessionChangedError());
     if (isDev && !isPrivateHomeRequest(response.config.url)) {
       console.info('[API response]', {
         status: response.status,
@@ -560,7 +617,9 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error: AxiosError<ApiResponse>) => {
+    if (error.code === 'AUTH_SESSION_CHANGED') return Promise.reject(error);
     const originalRequest = error.config;
+    if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
     let refreshResult: AuthRefreshResult | null = null;
     let didInvalidateSession = false;
 
@@ -591,6 +650,7 @@ apiClient.interceptors.response.use(
           try {
             // Mutex: reuse in-flight refresh promise or start a new one
             refreshResult = await refreshAuthSession({ trigger: 'response_401' });
+            if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
             if (refreshResult.status === 'success' && refreshResult.accessToken) {
               (originalRequest as any)._retry = true;
               // On web, auth is via httpOnly cookies — don't set a Bearer header.
@@ -602,9 +662,10 @@ apiClient.interceptors.response.use(
             }
           } catch {
             // Refresh threw unexpectedly — fall through to clear and redirect
-            _refreshPromise = null;
+            if (!requestSessionChanged(originalRequest)) _refreshPromise = null;
           }
         }
+        if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
         if (refreshResult?.status === 'invalid') {
           didInvalidateSession = true;
           emitAuthEvent({
@@ -623,7 +684,7 @@ apiClient.interceptors.response.use(
               // not replace the original API error observed by the caller.
             } finally {
               // Run after the hook so consumers can still read tokens for best-effort server logout.
-              await clearAuthSession();
+              if (!requestSessionChanged(originalRequest)) await clearAuthSession();
             }
           } else if (typeof window !== 'undefined' && window.location) {
             await clearAuthSession();

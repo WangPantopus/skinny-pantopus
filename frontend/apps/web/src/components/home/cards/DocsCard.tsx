@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import DashboardCard from '../DashboardCard';
 import VisibilityChip from '../VisibilityChip';
 import { toast } from '@/components/ui/toast-store';
+import { failureMessage } from '../share/shareFailure';
 
 const DOC_FOLDERS: { key: string; label: string; icon: ReactNode; types: string[] }[] = [
   { key: 'lease', label: 'Lease / Title', icon: <Scroll className="w-4 h-4" />, types: ['lease', 'title', 'deed', 'rental_agreement'] },
@@ -93,16 +94,15 @@ export default function DocsCard({
   const handleShare = async (doc: Record<string, any>) => {
     try {
       const res = await api.homeIam.createScopedGrant(homeId, {
-        resource_type: 'document',
+        resource_type: 'HomeDocument',
         resource_id: doc.id,
-        permission_scope: 'read',
+        permission_scope: 'view',
       });
-      const resData = res as { grant?: { token?: string }; token?: string };
-      const shareUrl = `${window.location.origin}/shared/${resData.grant?.token || resData.token}`;
+      const shareUrl = `${window.location.origin}/shared/${encodeURIComponent(res.token)}`;
       await navigator.clipboard.writeText(shareUrl);
       toast.success('Share link copied to clipboard!');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create share link');
+      toast.error(failureMessage(err, 'Failed to create share link'));
     }
   };
 

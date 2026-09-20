@@ -3665,6 +3665,11 @@ router.post('/:id/emergencies', verifyToken, async (req, res) => {
       .single();
 
     if (error) {
+      // HomeEmergency_type_chk refuses a type outside the HomeEmergencyType
+      // values; that is the caller's input, not a server failure.
+      if (error.code === '23514') {
+        return res.status(400).json({ error: 'This emergency type is not supported.', code: 'INVALID_EMERGENCY_TYPE' });
+      }
       logger.error('Error creating home emergency', { error: error.message, homeId });
       return res.status(500).json({ error: 'Failed to create emergency info' });
     }
@@ -3673,6 +3678,39 @@ router.post('/:id/emergencies', verifyToken, async (req, res) => {
   } catch (err) {
     logger.error('Emergency creation error', { error: err.message });
     res.status(500).json({ error: 'Failed to create emergency info' });
+  }
+});
+
+/**
+ * DELETE /api/homes/:id/emergencies/:emergencyId
+ */
+router.delete('/:id/emergencies/:emergencyId', verifyToken, async (req, res) => {
+  try {
+    const { id: homeId, emergencyId } = req.params;
+    const userId = req.user.id;
+
+    const access = await checkHomePermission(homeId, userId, 'can_manage_home');
+    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage home' });
+
+    const { data, error } = await supabaseAdmin
+      .from('HomeEmergency')
+      .delete()
+      .eq('id', emergencyId)
+      .eq('home_id', homeId)
+      .select('id');
+
+    if (error) {
+      logger.error('Error deleting home emergency', { error: error.message, homeId });
+      return res.status(500).json({ error: 'Failed to delete emergency info' });
+    }
+    if (!data || data.length === 0) {
+      return res.status(404).json({ error: 'Emergency info not found', code: 'EMERGENCY_NOT_FOUND' });
+    }
+
+    res.json({ message: 'Emergency info deleted' });
+  } catch (err) {
+    logger.error('Emergency deletion error', { error: err.message });
+    res.status(500).json({ error: 'Failed to delete emergency info' });
   }
 });
 
