@@ -86,16 +86,34 @@ export const AUTH_SESSION_CHANGE_KEY = 'pantopus_auth_session_change';
 let _authChangeSequence = 0;
 
 function _emitTokenChange(token: string | null): void {
-  for (const handler of _tokenChangeHandlers) {
-    try { handler(token); } catch { /* listener must not break caller */ }
-  }
   if (_isWeb) {
+    ++_authChangeSequence;
     try {
       // Other tabs cannot observe httpOnly cookie replacement. Broadcast only
       // a nonsecret change marker, never the token or account identity.
-      window.localStorage.setItem(AUTH_SESSION_CHANGE_KEY, `${Date.now()}:${++_authChangeSequence}`);
+      window.localStorage.setItem(AUTH_SESSION_CHANGE_KEY, `${Date.now()}:${_authChangeSequence}`);
     } catch { /* Session mutation must still complete when storage is disabled. */ }
   }
+  for (const handler of _tokenChangeHandlers) {
+    try { handler(token); } catch { /* listener must not break caller */ }
+  }
+}
+
+type SessionBoundRequest = InternalAxiosRequestConfig & { _authSessionMarker?: string };
+
+function currentRequestSession(): string {
+  let marker = '';
+  try { marker = window.localStorage.getItem(AUTH_SESSION_CHANGE_KEY) || ''; } catch {}
+  return `${_authChangeSequence}:${marker}`;
+}
+
+function requestSessionChanged(request?: InternalAxiosRequestConfig): boolean {
+  const marker = (request as SessionBoundRequest | undefined)?._authSessionMarker;
+  return _isWeb && marker !== undefined && marker !== currentRequestSession();
+}
+
+function sessionChangedError() {
+  return { message: 'Your account changed. Please try again.', code: 'AUTH_SESSION_CHANGED', statusCode: 409 };
 }
 
 /**
@@ -413,6 +431,8 @@ const apiClient: AxiosInstance = axios.create({
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    if (requestSessionChanged(config)) return Promise.reject(sessionChangedError());
+    if (_isWeb) (config as SessionBoundRequest)._authSessionMarker = currentRequestSession();
     if (_isWeb) {
       // Web: auth token is in httpOnly cookie, sent automatically via
       // same-origin proxy. Tell backend not to include tokens in JSON body.
@@ -558,6 +578,7 @@ export async function refreshAuthSession(options?: { trigger?: string }): Promis
 
 apiClient.interceptors.response.use(
   (response) => {
+    if (requestSessionChanged(response.config)) return Promise.reject(sessionChangedError());
     if (isDev && !isPrivateHomeRequest(response.config.url)) {
       console.info('[API response]', {
         status: response.status,
@@ -568,7 +589,9 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error: AxiosError<ApiResponse>) => {
+    if (error.code === 'AUTH_SESSION_CHANGED') return Promise.reject(error);
     const originalRequest = error.config;
+    if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
     let refreshResult: AuthRefreshResult | null = null;
     let didInvalidateSession = false;
 
@@ -599,6 +622,7 @@ apiClient.interceptors.response.use(
           try {
             // Mutex: reuse in-flight refresh promise or start a new one
             refreshResult = await refreshAuthSession({ trigger: 'response_401' });
+            if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
             if (refreshResult.status === 'success' && refreshResult.accessToken) {
               (originalRequest as any)._retry = true;
               // On web, auth is via httpOnly cookies — don't set a Bearer header.
@@ -614,6 +638,7 @@ apiClient.interceptors.response.use(
           }
         }
         if (refreshResult?.status === 'invalid') {
+          if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
           didInvalidateSession = true;
           emitAuthEvent({
             type: 'session_invalidated',
@@ -631,7 +656,7 @@ apiClient.interceptors.response.use(
               // not replace the original API error observed by the caller.
             } finally {
               // Run after the hook so consumers can still read tokens for best-effort server logout.
-              await clearAuthSession();
+              if (!requestSessionChanged(originalRequest)) await clearAuthSession();
             }
           } else if (typeof window !== 'undefined' && window.location) {
             await clearAuthSession();
