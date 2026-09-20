@@ -401,7 +401,13 @@ export default function PostDetailPanel({
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  {creatorHandle ? (
+                  {publicAuthor?.type === 'persona' ? (
+                  publicAuthor.href ? (
+                    <a href={publicAuthor.href} className="text-sm font-semibold text-app hover:underline">
+                      {creatorName}
+                    </a>
+                  ) : <span className="text-sm font-semibold text-app">{creatorName}</span>
+                ) : creatorHandle ? (
                     <UserIdentityLink
                       userId={post.creator?.id || post.user_id}
                       username={creatorHandle}
