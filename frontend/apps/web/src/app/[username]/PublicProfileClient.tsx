@@ -312,12 +312,14 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
   const handleMessage = async () => {
     if (!currentUser) { router.push('/login'); return; }
+    const recipientId = profile?.id;
+    if (!recipientId) return;
     try {
-      const res = await api.chat.createDirectChat(profile!.id) as Record<string, unknown>;
+      const res = await api.chat.createDirectChat(recipientId) as Record<string, unknown>;
       const resRoom = res.room as Record<string, unknown> | undefined;
       const roomId = (res.roomId as string) || (resRoom?.id as string);
       if (roomId) {
-        router.push(`/app/chat?room=${roomId}`);
+        router.push(`/app/chat/conversation/${recipientId}`);
       }
     } catch (err: unknown) {
       console.error('Failed to create chat:', err);
