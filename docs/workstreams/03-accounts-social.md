@@ -1,7 +1,24 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated September20, 2026, 23:47 UTC. **Stream incomplete; verification continues.**
-Sole live status: this neutral coordination file. No new unit tests requested/written.
+Updated 2026-09-21T00:23:11.336681+00:00. **Stream incomplete; bounded milestones under review.**
+Sole live status is this neutral coordination file. No new unit tests written.
+
+Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
+branch `codex/workstream-accounts-social`, local HEAD **423176969**, application tree
+clean. Only untracked owned `.next-stream3/` remains. Preserve it while Next runs.
+Remote primary branch deliberately stays **c4cbb4138** for PR70's current native CI.
+Coordinator requested explicit commit pushes for the later independent milestones:
+
+| Milestone | Branch / head | Review / current CI |
+| --- | --- | --- |
+| Beacon comment/privacy/drafts | codex/workstream-accounts-social / c4cbb4138 | [Draft PR70](https://github.com/WangPantopus/skinny-pantopus/pull/70), base master. CI35546207895 backend/web/SQL/Android instrumented/iOS lint+build pass; three iOS test jobs and Android quality/assembly still running. Not final green. |
+| Reminder receipt/destination | codex/stream3-booking-reminder-retry / cbfba3503 | [Draft PR72](https://github.com/WangPantopus/skinny-pantopus/pull/72), stacked on remote PR70 branch. Required CI started. Two-file source reviewed by coordinator. |
+| Personal posting/draft recovery | codex/stream3-personal-post-recovery / 423176969 | [Draft PR73](https://github.com/WangPantopus/skinny-pantopus/pull/73), stacked on PR72 branch. Required CI started. Five-file source reviewed by coordinator. |
+
+All three attached to this task. Author did not merge. Retarget master only after
+prerequisites merge; do not push later commits into PR70 or conflate another stream's
+CI with this one. Coordinator asked to finish these bounded handoffs before a new
+application scope. Independent evidence/inventory continues.
 
 ## Current safety milestone — merged, broader verification continues
 
@@ -29,140 +46,185 @@ native acceptance. Cross-tab cancellation depends on browser storage events;
 unavailable storage, frozen-tab event delivery and other browsers are unverified.
 No unauthorized message or Notification rows in these safety fixtures (both0).
 
-Detailed private evidence, source hashes and actual timing:
-`/private/tmp/pantopus-stream3-20260920-r1/real-auth-ui-results.json`,
-`real-auth-http.jsonl`, `real-auth-persistence.json`, `full-backend.log`,
-`cookie-race-baseline-release.json`, `cookie-race-candidate-release.json`,
-`cookie-race-new-refresh-release.json`, `stale-refresh-failure-candidate-release.json`.
-N03 detailed `beacon-ui-results.json`, `beacon-http-baseline.json`,
-`beacon-http-results.json`, `beacon-failure-results.json`, existing regression log.
-Transient dev404 came from multiple retired Stream3 Next processes writing own
-cache; exact owned processes/cache retired and UI replay passed. No peer runtime touched.
-Durable private mirror:
-`/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/`
-(70 files at latest refresh; MANIFEST SHA binds each file). Credentials/operator
-logs remain private, not Git/chat. CUA interaction history is in this Stream3 task.
 
-## Integrated A02/N03 milestones and current candidate
+## Integrated A02/N03 milestones
 
-PR65 **f30c7fe7a** merged by coordinator as **61080b399**, exact-head
-CI35544236662 all applicable green. Existing Settings StepUpPasswordModal and
-SDK users.deleteAccount optional X-Step-Up repair the actual missing-stepup UI.
-Granted forward migration20260916012000 changes only two UserBlock FKs to CASCADE,
-matching existing UserProfileBlock/UserReport precedent, with bounded lock_timeout.
-Actual local GoTrue UI cancellation/wrong-password retry/valid Alice deletion
-removed Auth/public Alice and two outgoing blocks; Charlie deletion removed an
-incoming Bob block. Tabs retired to sign-in. Migration applied only to owned SQL;
-no hosted activation. Broader cleanup/provider/native cases remain open.
+PR65 **f30c7fe7a** merged by coordinator as **61080b399**, exact-head CI35544236662
+all applicable green. Existing Settings StepUpPasswordModal and SDK optional X-Step-Up
+repair missing-stepup deletion. Forward migration20260916012000 changes only two
+UserBlock FKs to CASCADE, matching existing UserProfileBlock/UserReport precedent,
+with lock_timeout and compatibility annotation. Actual local GoTrue UI cancellation,
+wrong-password retry and valid Alice deletion removed Auth/publicAlice plus two
+outgoingblocks; Charlie deletion removed incomingBobblock. Tabs retired to sign-in.
+Migration only applied to owned SQL, not hosted. Broader cleanup/provider/native open.
 
-PR66 **3a2b18be5** merged as **2d12b85a7**, exact-head required CI green.
-Existing personaBlocks guards now apply to their three actual routes, fixing real
-Follow404 with audience_profile=false without enabling that feature. Existing
-personas DELETE-follow checks membership/tier errors and confirmed absence,
-replacing invalid UUID sentinel. Real browser Follow201/private active membership;
-public preference, seven-day mute/refresh/unmute/unfollow work. Lost committed
-unfollow reply503 then stale-row retry formerly500, now200 and clears. HTTP duplicate
-follow200/one row, repeatDELETE200, SQL read failure500 preserves row, flag-off block
-routes404, unauth401, synthetic paid marker409. Restored grant and marker. Existing
-three suites53 pass; no new tests. Not provider/native acceptance.
+PR66 **3a2b18be5** merged **2d12b85a7**, exact-head CI green. Existing personaBlocks
+route-scoped guards fix real Follow404 with audience_profile=false; no flag activation.
+Existing personas DELETE-follow checks membership/tier error versus confirmedabsence,
+replacing invalid UUID sentinel. Actual UI Follow201/private membership, preference,
+mute/refresh/unmute/unfollow work. Lost committed reply503 then stale retry formerly500,
+now200 clears. Real HTTP duplicateFollow200/one row, repeatDELETE200, SQLread500 retains
+row, blockflagoff404/unauth401. Synthetic paid marker409 restoredNULL. Existing3suites53pass.
 
-PR67 **0e976ad84** merged as **d69482d3f**, coordinator confirmed required CI green.
-Existing owner followers GET/PATCH now reuse canonical serializeFanForCreator and
-safe membership fields; PersonaFollow rank1 view/counts preserved. Frontend type
-narrows display fields. Actual owner UI formerly Auth Bob/personal username, now
-fan_4e567960; mute/restore work. HTTP whitelist, nonowner list/PATCH403 and SQL
-read failure500 verified; grant restored. Existing two suites31/web types pass.
-CI exposed one stale local-identity assertion; corrected existing fixture expectation
-uses canonical fan handle fallback (seven focused assertions pass). No new tests.
-Native optional status/id callers unchanged; no installed acceptance.
+PR67 **0e976ad84** merged **d69482d3f**, exact-head CI green. Existing owner follower
+GET/PATCH reuse canonical fan serializer and safe membership fields, preserving
+PersonaFollow rank1 view/counts. Actual UI formerly AuthBob/personalusername, now
+fan_4e567960; mute/restore works. HTTP whitelist, nonowner403, SQLread500 verified.
+Existing2suites31/webtypes pass; stale existing CI identity assertion corrected to
+canonical fan fallback (7focusedpass). No new tests; native existing DTOs compatible,
+no installed acceptance.
 
-[Draft PR69](https://github.com/WangPantopus/skinny-pantopus/pull/69) at **62bc6dd61**
-contains only existing web post page and PostDetailPanel author links. Actual full
-page and feed-card panel author clicks formerly reached nonexistent personal
-/stream3-local-r3; now use canonical /@stream3-local-r3. Personal/business link
-behavior and visual treatment preserved. CI35545384574 running (schema/identity
-E2E/safeguards pass at last inspection). Author did not merge.
+PR69 **62bc6dd61** merged **5eab68ab7**, CI35545384574 all applicable green. Existing
+web post page and PostDetailPanel author links now use canonical /@stream3-local-r3.
+Actual fullpage and feed-card panel clicks formerly opened missing personal profile;
+now reach publicBeacon. Personal/business paths and visual treatment preserved.
 
-Separate six-file dirty candidate: posts.js four comment response paths and future
-comment/reply notifications reuse protected fan/Beacon projection; CommentThread
-and two existing post callers preserve failed drafts; native PulsePostDetailViewModel
-mappers treat blank protected author ID as non-navigable. Coordinator granted all
-six files. No new file/schema/system or design. Actual baseline follower comment
-and saved notification exposed local identity. Candidate owner/fan screens show
-fan_4e567960/plaintext and public Beacon link, with own-only delete controls.
-Actual creator reply201 saves one safe audience notification; Bob notification
-click opens exact authorized post and clears unread. SQL AudienceIdentity read
-failure500 saves no comment; before draft repair form cleared. Candidate actual UI
-failure retains text/reply target, SQL remains two rows; restore grant and same-form
-retry201 yields three rows, one new safe fan reply, clears composer. Attachments,
-pending departure/newer submissions, API edit paths and installed native remain
-unverified. Existing two backend suites21 passed initial privacy candidate; final
-candidate checks pending. Historical unsafe notification row remains a separately
-reported acceptance gap; future-send repair does not sanitize existing records.
+## PR70 — comment privacy and failed draft evidence
 
-N03 restricted update was published via actual My Beacon composer into canonical
-Post2824a813-f632-4ead-adb6-baa42e27e453. UI Delivered1 counts eligible recipients,
-not delivery. Saved notification cf3a0c54-41e7-485b-8754-a1e447708072 clicked by Bob
-opens exact post/clears unread. Unfollow then old post refresh403; refollow restores
-access. Creator follow notification returns /app/persona?tab=followers. Directory
-post query-link auto-opening and follow-immediate-post refresh are unresolved source
-leads, not verified defects. No broad N03 closure.
+Core3ea8f3495, combined6f45690a9, correctionc4cbb4138. Six existing files only:
+posts.js four comment response paths/future comment+reply notifications; web
+CommentThread/page/Panel submit contract; two native PulsePostDetailViewModel mappers.
+Existing protected-fan policy and serializers reused. Private actor IDs omitted for
+other viewers; ownactor ID remains for own controls. Blank safeauthor ID is mapped
+to nil/null in native rows so private-profile navigation is unavailable. No schema,
+replacement service or visual change.
 
-A01 recovery partial: real forgot-password UI Evan → HTTP200 → nodemailer SMTP
-→ owned Mailpit receipt; actual email link opens existing reset form preserving
-original /@ destination. Owned SMTP outage produces503/retry message; restart and
-UI retry200 delivers new receipt. No external provider. Password entry/submission
-was not performed; computer-use credential-change handoff boundary remains explicit.
-No recovery-completion or native acceptance claim. Evidence smtp-ui-results.json.
+Actual creator/fan UI replies save safe fan/Beacon names, ownDelete controls only;
+creator reply notification click reaches exact authorized post and clears unread.
+SQL AudienceIdentity readfailure500 saves no comment. Beforedraftrepair text cleared;
+candidate failure retains text/reply target, SQL stays2, restoregrant sameformretry201
+saves one (total3), clears. Real HTTP all4projections safe, ownedit200/owndelete200,
+otheredit/delete403, outsider403; readfailure before create/edit500. Existing initial
+2suites21pass, final webtypes/lintpass. Required currentCI distinct from this evidence.
 
-## Runtime, fixtures and continuation
+Explicit controlled PersonaBlock fixture (direct SQL, no flagactivation/UIblockclaim)
+plus real owner reply201 formerly saved1 notice to blockedBob; persona_id metadata
+now activates existing suppression: same case0, unblockedreply1, selfreply0. Fixture
+block removed in finally. Historical unsafe notices, like notification identity,
+suppression-read-error behavior and native installed remain open. Ordinary personal
+comment HTTP201/edit200 and actual detailUI still show local identity/owncontrols on
+UI-created personal post; that post's creation used later independent helper repair.
 
-HTTP18130/web18131; real full backend/app.js, local GoTrue/Kong API64531, SQL64532,
-mail UI64534; additional64535–37 reserved. Owned local SMTP sink
-`pantopus-stream3-mail-r3` now uses127.0.0.1:64535 SMTP/64536 UI, existing Mailpit
-image, only stream3-*@example.com recipients/no relay. Backend uses real SMTP;
-earlier evidence remains log-mode only. Local recovery SMTP success/outage/retry verified as above; booking reminder delivery still pending. Project `pantopus-stream3-block-r1`,
-private workdir `/private/tmp/pantopus-stream3-auth-r3`. Browser
-`stream3-auth.localhost:18131`, separate from other streams' cookies. No hosted
-provider activation. Email log mode is not delivery. Own Next `.next-stream3/` and
-generated tsconfig remain uncommitted; preserve application edits when retiring them.
+Evidence: comment-ui-results.json, comment-http-results.json, comment-block-baseline.json,
+comment-block-results.json, comment-metadata-results.json, comment-personal-results.json,
+comment-final-types.log/lint.log. Relevant posts.js bytes bound to c4cbb4138 bySHA256.
+Attachments/pending departure/newer response/provider/native screens not accepted.
 
-Original synthetic phase stopped/cleaned0 (`cleanup.json`), bareREST removed.
-Current private auth-fixtures.json has5 exact owned Auth/public IDs: Alice/Charlie
-deleted by real UI; **Bob, Dana, Evan active**, one legitimate Dana→Evan block,
-0ChatMessage; Beacon follow/comment/reply/broadcast Notification fixtures now exist (earlier zero count is historical). Do not rerun seeds blindly; exact remaining cleanup
-is required after continued verification. No unrelated database/container changed.
-Native slot free, but current iOSSimulator failure/AndroidCUA window attachment
-prevent installed acceptance; physical Android unavailable in recorded setup.
+## PR72 — real reminder delivery and destination evidence
 
-Adopted merged PR51/6055bc2b9 transaction gate and later real PostgREST/socket replay
-within synthetic auth/READ COMMITTED/single-counterparty limits. PR51 mergec14657e35,
-CI35137410491 green; restored missing own worktree and advanced documentation-only
-master38f00dcc8 before current repairs. September15 mirror76files hashes verified;
-September16 raw temporary artifacts were lost, so later reports remain source-bound
-accepted evidence, not newly recovered raw proof. No duplicate large-suite replays.
+Existing bookingNotifyService.js uses recipient-stable existing Notification key and
+checked receipt after null return (duplicate and failedinsert both returnnull).
+Host reminder uses existing /app/scheduling/bookings/:id with ownerquery; invitee uses
+existing ownbookings list. schedulingShared preserves statusCode403 and adds status403
+for actual app.js handler. No notificationService/schema/worker change.
 
-Continue whole-stream N01–N05/A01–A05 mapping below. Current next action: finish
-comment response/edit/access/failure verification, final focused checks and separate
-reviewable milestone after PR69 disposition. Then actual delivered N05 reminder
-through existing scheduling UI/worker/SMTP and remaining independent N/A journeys.
-Persona b1cb6c08-76d3-4b30-90af-6380ee76fd25, channel
-ea747ad3-ce3f-4f22-aafc-24b0868abda1, handle stream3-local-r3; membership IDs change
-after refollow, fetch exact current IDs before cleanup. Original fan comment
-5f658152-8bc6-4a9d-88a9-8648e7eab3a0, owner reply11e2c862-aa6b-4b0a-8f5b-9be3403d7812,
-plus latest retained-draft retry need cleanup with post/persona/channel, memberships,
-audience identities, notifications, audit/session/security records and three remaining
-Auth/public fixture users. SELECT grants restored. SMTP sink no relay, local memory
-messages require cleanup; no broad deletion of other fixtures/resources.
+Actual existing setup/slotpicker/form→HTTP/SQL confirmed bookings:
+baseline af30791e-bf05-4e76-a9ba-63c1d1081574; retrycandidate
+9c7f570c-852f-4f22-b32d-6a754555c639; registeredinvitee
+7f8c6d81-1431-4328-9026-611a3b6810f6. Real SMTP confirmation receipts. Manual existing
+worker at real clock, naturally due1440m offset: SMTPoutage host1/log0; baseline
+retry guestemail1 but host2/log1. Baseline actualnoticeclick404. Candidate freshbooking
+outage1/log0→retry1/log1/guestSMTP1; repeat keeps counts/readstate. Actual host notice
+911b2828-a2b3-4ae7-9d44-fa54d41b7d88 opens correct4:15PMbooking, readtrue. Owner200,
+other403(no data), signedout401. Existing26schedulingregressions pass.
 
-N01/N02 provider/device, N03 identity/access/old links, N04 remaining access/moderation,
-N05 delivered reminders, A01 remaining auth/OAuth/onboarding, A03 storage, A04 providers
-and A05 reachable actions remain open. Route Home/payment findings to owners. Shared
-scope/runtime grants from active coordinator01a0c0d1-0703-70c3-b842-6d01bc8ca48b;
-retired coordinator not used. Stream remains incomplete.
+Actual LogoutBob/LoginEvan→publicform matching email binds invitee_user_id Evan;
+worker saves onehost/oneinvitee reminder. Evan click opens My bookings with only his
+4:30PMconfirmedrow; unread2→1. This is authorized list acceptance, not exact individual
+invitee detail. Local SMTP mailbox displayed real reminder and489BICS. Manualworker
+is not cron cadence, externalSMTP/SMS/push or native evidence. Home/business, preferences,
+lost email acknowledgement, concurrent newclaims/cancel timing remain open.
+Read-only current UI/source leads: reminder UI writes scheduling.reminder_minutes,
+getPrefs only returns canonical reminder_lead_times; Atstart0 is filtered by worker;
+requiredphone helper promises SMS though this path sends app/email. No repair scope
+started for these leads. Lifecycle notices retain old links and require separate work.
 
-**The historical sections below retain their original evidence. This current
-snapshot supersedes their stale draft/paused/no-migration/next-race instructions.**
+Evidence reminder-ui-results.json (baseline plus candidate/registered),
+reminder-authority-results.json, reminder-candidate-*.log/json and mailbox evidence;
+exact relevant service bytes bound to cbfba3503. New fixtures retained, not cleaned yet.
+
+## PR73 — personal profile creation and three composer paths
+
+Existing ensureLocalProfile inserted verified_resident absent from canonical table,
+swallowed failure into legacy-local-*; Post UUID field rejected it. Actual Bob
+Connections UI500/no post also discarded draft. Existing master and Beacon branches
+share failing bytes; current table suffices, no schema/newsystem. Helper now uses
+canonical fields, checkederrors and concurrent23505 reread; read-only legacyhandle
+fallback preserved. Existing PostComposer, useFeedData, AppShell submission function
+and feed/page wrapper return success before reset/close. Compose effect consumes only
+compose after feed.user exists, preserving surface through initial shell mounting.
+
+Actual inline/global/modal SQLread500 each retains text/form/audience with no post;
+restoregrant sameformretry201 creates one/clears/closes. First post58c020b1-13f6-40cf-8b2c-8a4011e37ad4
+uses realLocalProfile e18ee833-f979-4013-89e1-b3a0802bc32c. Cold Connections compose
+link retains ?surface=connections and opens NewPost. Concurrent DanaHTTP201/201 yields
+oneLocalProfile (unforced timing). EvanINSERTfailure500 yields0profile/0post; all grants
+restored. Existing3backend suites26pass; finalwebtypespass; scopedlint0errors and
+3preexistingwarnings. Personal post/comment realUI preserved local identity.
+
+Ownposts appear optimistically but Connections reload omits them: separate unresolved
+feed-reader gap, so fullposting/discovery acceptance is not claimed. Media/native,
+pending departure/newer replies/duplicate browser taps remain open. Evidence
+personal-post-ui-results.json, personal-profile-concurrency.json,
+personal-profile-insert-failure.json, personal-post-final-types.log/lint.log,
+personal-post-existing-regressions.log. Fivepersonalposts/twoLocalProfiles/owncomments
+retained; exact IDs in evidence. No new unit tests.
+
+## Runtime, retained fixtures and evidence
+
+Owned HTTP18130 (current launcher session49064), Next18131 (60362); real app.js,
+GoTrue/Kong64531/PostgREST/SQL64532 project pantopus-stream3-block-r1, private
+workdir /private/tmp/pantopus-stream3-auth-r3. Host stream3-auth.localhost isolates
+cookies from other streams. SMTP sink pantopus-stream3-mail-r3 binds127.0.0.1:64535
+SMTP/64536UI, existing Mailpit image, only stream3-*@example.com/no relay. SMTPhealthy.
+No hosted activation, retained64522 changes or anotherstream resource mutation.
+
+Private auth-fixtures.json: Alice/Charlie deleted by actualUI; Bob/Dana/Evan active.
+One legitimateDana→EvanUserBlock. Beacon persona b1cb6c08-76d3-4b30-90af-6380ee76fd25,
+channel ea747ad3-ce3f-4f22-aafc-24b0868abda1, followerpost2824a813-f632-4ead-adb6-baa42e27e453,
+currentBobmembership/fan_4e567960 plus comments/replies/notifications. Refollow changes
+membershipIDs; fetch current IDs before cleanup. BookingPage530c443e-c3dc-4c70-884b-b9ca6cdbf8c4,
+EventType0506244f-6c1e-4449-bd7e-47781154ae13 and threebookings above, related availability,
+attendee/token/reminder-log/notice rows remain. Personal fixture IDs in private evidence.
+AuthSession/AuthSecurityEvent/IdentityAuditLog and related records require exact cleanup.
+LocalProfile SELECT/INSERT, AudienceIdentity SELECT, PersonaMembership SELECT restored;
+synthetic paidmarkerNULL and temporaryPersonaBlocks removed. Mailpit memory resets on
+its own restart; current candidate mailbox retained. No broad unrelated cleanup.
+
+Earlier synthetic phase cleaned0/stopped; current phase uses real local auth.
+Adopted PR51/6055bc2b9 transactional gate and later realPostgREST/socket replay within
+reported synthetic-auth/READCOMMITTED/single-counterparty limits; no duplicate rerun.
+September15 rawmirror76files verified; September16 losttempraw remains source-bound
+reported acceptance. iOSSimulator failure/AndroidCUA window attachment and unavailable
+physicalAndroid prevent new installed acceptance; current native CI is not screen UI proof.
+
+Primary private /private/tmp/pantopus-stream3-20260920-r1; durable private mirror
+/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/
+contains **124 files**, MANIFEST SHA256 **89fa9ad2cf5130b5c880caea8004429f20d09621346c9759e234ab3f7260195b**. Coordinator checked fourcandidate
+hash bindings. Individual artifacts retain actual source/configuration, not a blanket
+HEAD rerun. Credentials/tokens/operatorlogs stay private, outside Git/chat.
+
+A01 partial recovery: realforgotUI→HTTP200→SMTPreceipt→actualemaillink opens resetform
+and preserves original /@destination; SMTPoutage503 and restore/retry delivery pass.
+Password entry/submission not performed (computer-use credential-change handoff boundary),
+so full recovery unverified. ExternalOAuth/provider/native unavailable in currentsetup.
+
+## Whole-stream continuation and exact next action
+
+Finish current-head CI/review for70→72→73; coordinator alone merges/retargets. No new
+application scope before bounded handoffs known, per active coordinator. Then resume
+existing N01–N05/A01–A05 coverage mapping in historical section below; no row is closed
+by these milestones. N03 restrictedpost oldlink403 afterunfollow/refollowrestore and
+actual notification destinations are bounded accepted evidence; UI Delivered1 is an
+eligible-recipient count, not providerreceipt. N05 realSMTP now supplements prior mock
+worker proof; remaining preferences/timing/individualinvitee/cancel/retry cases open.
+N04 wider authorization/moderation/socket/platform cases, N01/N02 delivery/device,
+A01 recovery/OAuth, A02 broader lifetime, A03 hostedstorage, A04 provider activation,
+A05 remaining reachable actions remain open. Sharedschema/auth/socket/notification/
+provider changes need assignment; Home/payment findings go to respective owners.
+
+**Historical sections below retain original evidence and are superseded by this
+current snapshot for Git/runtime/next-action disposition.**
 
 ## Source and reconciliation
 
