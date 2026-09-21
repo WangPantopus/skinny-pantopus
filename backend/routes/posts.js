@@ -685,6 +685,8 @@ const canViewPost = async (post, userId) => {
 const POST_VISIBILITY_SELECT = [
   'id',
   'user_id',
+  'archived_at',
+  'post_metadata',
   'identity_context_type',
   'identity_context_id',
   'target_tier_rank',
