@@ -125,7 +125,7 @@ function MembersContent() {
 
   const handleRoleChange = useCallback(async (member: any) => {
     if (!canManage) return;
-    const assignable = ROLE_ORDER.filter((r) => r !== 'owner' && r !== member.role);
+    const assignable = ROLE_ORDER.filter((r) => r !== 'owner');
     if (assignable.length === 0) return;
     // Cycle to the next assignable role
     const currentIdx = assignable.indexOf(member.role);
