@@ -7,6 +7,42 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## Latest integration — September21,00:21UTC
+
+Paid branch **8825c1928** is clean/pushed. It includes reviewed master61080b399 and
+the one-line Offers status refresh repair proven with actual Stripe authorization
+and reopening. The combined account-switch check, actual assigned hold releases,
+and partial500c/remaining750c refunds all passed through existing browser/UI/API/SQL.
+Prior9ae full CI35542623560 passed; current8825 CI35545431059 fully passed15
+applicable checks/one Seeder skip, including Android and all three iOS simulators.
+Current source, evidence and precise limits are in [Stream1 status](workstreams/01-gigs-payments.md).
+All Stream1 owned rows and runtimes are cleaned/stopped; five Stripe TEST captures
+fully refunded, five unpaid intents cancelled, four owned customers deleted. Provider
+history remains. Native/live/hosted/payout and broader backlog scopes remain open.
+
+Coordinator merged PR65/66/67/69 after each current-head checks and bounded UI/API
+proof; mastercefdadd3e contains those reviewed scopes and published coordination. PR70 comment privacy/draft
+retention is separately reviewed. Its iPhone16 CI failed on the existing expired
+InviteeManageBooking fixture, matching already accepted paid commits9ecf66fc7 and
+9ae1edb3b. Stream3 reused those exact commits in an isolated checkout and pushed PR70
+**07827d2b0** without changing its live423 runtime or combining dependent drafts.
+The repaired head requires fresh CI before integration; PR72/73 passed their own
+current-head checks and remain dependent drafts. Do not repeat the fixture repair. Stream3 continues actual
+SMTP reminder verification under its existing service/runtime grant. PR72 atcbfba3503
+and PR73 at423176969 publish separate dependent drafts for reminder recovery and
+personal profile/draft retention. Current CI and precise retained fixture limits are
+in Stream3 status; own-post visibility after reload remains a separate unresolved gap.
+Documentation PR68 merged4f951d29c, PR71 mergedcefdadd3e and PR74 merged707f8e2be.
+PR75 publishes the separate two-file preference database-failure repair5e3a8b963;
+real UI/API failure/retry and worker refusal are verified, exact-head CI passes;
+dependency integration remains. PR77 e11123328 now aligns the three existing web
+reminder callers with canonical BookingPage timing. Actual UI save/reload/failure/
+ordering evidence and source hashes are reviewed; required CI remains pending.
+Empty[] and0 persist correctly, but their delivery behavior is still unaccepted
+and requires separate worker verification/repair. PR76 mergedfd2c5d9d7. A subsequent held offers
+read ended correct without another app repair; browser serialization limits its ordering evidence. Stream3 reminder
+and personal composer repairs have separate bounded grants in the live README.
+
 ## Resumed coordination — September 20, 2026
 
 Active coordinator/Stream1 task `01a0c0d1-0703-70c3-b842-6d01bc8ca48b` restored the
@@ -52,13 +88,14 @@ wrong-account retry after a delayed401, and an old refresh response overwriting 
 new login's cookies. Existing client code now cancels the old refresh and preserves
 new-account state. Storage-event delivery, frozen tabs, other browsers and native
 limits remain explicit; no broad safety row closed. The separately verified A02
-Settings step-up and two UserBlock FK repairs are now in draft PR65 at `bce48b25b`, with Home master integrated and combined CI
-running. Source reviewed; the new `20260916012000` migration follows Home11000. Single-writer scopes and migration20260916012000 are in
+Settings step-up and two UserBlock FK repairs passed e96be1ea4 CI35543817853.
+PR65 is ready; f30c7fe7a integrates required docs-only master8ed60f6ed for GitHub
+up-to-date protection, with CI35544236662 running. Source reviewed; the new `20260916012000` migration follows Home11000. Single-writer scopes and migration20260916012000 are in
 README. Frozen03 was published; later dirty updates are author-owned.
 
-Next: finish paid current-head CI, review combined Home and A02 candidates, and
-continue remaining provider/native acceptance. Fee payer/recipient/timing decision
-is pending. Documentation PR63 publishes milestones separately from feature code.
+Next: finish paid current-head CI and A02 merge, then verify payment session recovery
+on the combined paid branch. Home is already merged. Continue remaining provider/native acceptance. Fee payer/recipient/timing decision
+is pending. Documentation PR63 merged as8ed60f6ed; subsequent milestones publish separately from feature code.
 Preserve PR34 draft and unrelated PR46; paid PR47 remains draft.
 
 ## Current coordination and next action — September 16, 2026
