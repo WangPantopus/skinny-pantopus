@@ -6857,7 +6857,10 @@ router.delete('/:gigId/questions/:questionId', verifyToken, async (req, res) => 
       return res.status(403).json({ error: 'Only the question author or gig poster can delete' });
     }
 
-    await supabaseAdmin.from('GigQuestion').delete().eq('id', questionId);
+    const { error: deleteError } = await supabaseAdmin.from('GigQuestion').delete().eq('id', questionId);
+    if (deleteError) {
+      return res.status(500).json({ error: 'Failed to delete question' });
+    }
 
     emitGigUpdate(req, gigId, 'qa-update');
     res.json({ deleted: true });

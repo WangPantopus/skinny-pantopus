@@ -113,14 +113,18 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
     try {
       await api.gigs.toggleUpvoteQuestion(gigId, questionId);
       await loadQuestions();
-    } catch {}
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update upvote');
+    }
   };
 
   const handlePin = async (questionId: string) => {
     try {
       await api.gigs.togglePinQuestion(gigId, questionId);
       await loadQuestions();
-    } catch {}
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update pin');
+    }
   };
 
   const handleDelete = async (questionId: string) => {
@@ -129,7 +133,9 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
     try {
       await api.gigs.deleteGigQuestion(gigId, questionId);
       await loadQuestions();
-    } catch {}
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete question');
+    }
   };
 
   const pinnedQuestions = questions.filter((q) => q.is_pinned && q.status === 'answered');
@@ -179,6 +185,22 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
             <div key={q.id} className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <div className="flex items-center gap-1.5 text-xs text-blue-600 font-medium mb-1">
                 <Pin className="w-3 h-3 inline-block" /> Pinned Answer
+                {isMyGig && (
+                  <button
+                    onClick={() => handlePin(q.id)}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    Unpin
+                  </button>
+                )}
+                {(isMyGig || (currentUserId && String(q.asker?.id) === String(currentUserId))) && (
+                  <button
+                    onClick={() => handleDelete(q.id)}
+                    className="text-xs text-red-500 hover:text-red-700"
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
               <p className="text-sm font-medium text-app-text mb-1">Q: {q.question}</p>
               {renderAttachments(q.question_attachments || [])}
