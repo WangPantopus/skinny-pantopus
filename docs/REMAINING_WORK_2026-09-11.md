@@ -16,6 +16,12 @@ N04 personal blocking/direct messages (Stream 3). Discovery closes no rows.
 The current handoff supersedes historical PR state below; source-specific paid
 candidate evidence is linked there and does not establish master acceptance.
 
+September21 P08 additionally verifies actual Stripe TEST capture→existing worker
+wallet release→web notification return, including concurrent/repeated workers and
+history failure/retry after a fresh credit. A two-file existing wallet refresh gap
+is repaired at02706ba39; integrated head/current CI and exact limits are in
+[Stream1 status](workstreams/01-gigs-payments.md). No broad row-count change.
+
 September21 P09 now additionally verifies an intact successful refund response after
 an actual browser account switch, followed by same-owner saved receipt recovery,
 with actual Stripe TEST/SQL and exact cleanup. This is a bounded web acceptance;

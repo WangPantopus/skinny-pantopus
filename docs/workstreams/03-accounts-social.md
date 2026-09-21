@@ -1,12 +1,12 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T03:12:01.381784+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T03:54:26.540179+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-notification-actions`, local/pushed HEAD **c5802b4a1849c758e0725f00d83790073e990685**.
+branch `codex/stream3-listing-notification-routes`, local/pushed HEAD **ea8e8603c106233369e04b655248a5091edb5c20**.
 Application tree clean; only owned untracked `.next-stream3/` remains. Runtime source
-matches masterd2b833049 plus exactly the three notification action web files below.
+matches masterfd04ae43c plus exactly notificationRoutes.ts below.
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -21,6 +21,193 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## Current A05/N04 milestone — listing reporting
+
+[Draft PR88](https://github.com/WangPantopus/skinny-pantopus/pull/88), application6ee007f7e,
+review/pushed956dab1d1 includes current docs masterbc06d6b39; exactly two existing
+files (useListingDetail.ts handleReport and shared ReportModal.tsx listing choice data).
+Coordinator granted scope after actual failures; no new files/tests/schema/policy/design.
+PR86 exactc5802b4a1 passed applicable CI35556598901 and coordinator merged3277477fc;
+its prior bounded UI evidence is reused, not rerun or confused with native acceptance.
+
+Baseline actual Bob UI created free remote fixture54f29656-3872-44a9-be3c-3cfcc5ef6953
+on owned18131→18130/localGoTrue/PostgREST/SQL64532. Evan signed in through real UI.
+Safety concern was offered but POST400; modal closed. Other/details under scoped
+ListingReport INSERT denial returned500 and also lost draft. Hook source identical
+SHA74196b1a7e69f8a871bcfc20f5b2ebcffe84a2c9e1866a021fac9d7bbb0226b4 across master,
+paid, web staging and Beacon. Shared modal matches initial archive and already retains
+rejected submissions; reuse suffices. All modal callers audited; other entities retain
+original six choices. Existing API/SQL seven listing reasons reused without policy edits.
+
+Candidate actual UI500 keeps Other/details and re-enables submission; sameform retry200
+persists exact draft. Each offered spam/harassment/inappropriate/scam/prohibited/
+counterfeit/other produces200 and one corresponding record. HTTP invalid/safety/
+misinformation/oversized400 and unauthenticated401 leave exactly7reports. Profile
+report modal still displays original six options; cancelled without submission.
+Typecheck gate0errors; scoped ESLint0errors/2pre-existing warnings. Required current
+CI pending at handoff; no new unit tests. Lost-success deduplication, moderation
+processing, native/provider acceptance remain unverified. A failed request does not
+prove no write; no report idempotency policy is invented here.
+
+Exact fixture listing deleted through scopedSQL after evidence capture: Listing,
+ListingReport, ListingView, ListingInteraction, ListingQuestion, ListingSave,
+ListingMessage and ListingOffer counts0. Seven reports retired via existingFKcascade.
+INSERT privilege restored, auxiliary HTTP session logout200; browser Evan remains
+active and earlier fixtures/auth audit history retained. No broad cleanup claim.
+Evidence marketplace-report-baseline.json/candidate.json/boundaries.json, source
+comparison and private listing snapshot, lint/types logs. Durable private289files at
+owner .pantopus-recovery/audits/20260920-stream3-accounts-social-r3; MANIFEST SHA
+78b7d94c591173675bb63563585ce891dd852c2b6fdc6f74d190ba765b99aa63. Each artifact source
+is authoritative, manifest head is not blanket retest evidence.
+
+Next independent A05 finding: actual listing Seller is User/disabled ViewProfile
+while real detail API returns canonical safe local identity displayName/handle/href.
+SellerSection still reads removed legacy name/username/profile_picture_url. Existing
+public href opens Auth Bob correctly. No repair yet; request bounded component
+assignment and preserve typed safe contract (do not restore private legacy fields).
+
+## A05 seller identity follow-up
+
+[Draft PR89](https://github.com/WangPantopus/skinny-pantopus/pull/89), e3627adeb,
+stacked on PR88; exact two existing files SellerSection.tsx and optionalhref only
+in types/listing.ts. Coordinator granted both after actual detail User/disabled
+ViewProfile versus correct canonical API identity. Both files unchanged across
+master/paid/staging/Beacon/initialarchive. No backend privacy restoration or design
+change; canonical fields/href reused, legacy fields left for other consumers.
+
+Actual Evan UI detail→ViewProfile Enter→Auth Bob public page and sellername click
+both pass. Separate SQLseeded free fixture9f6a46b8-7127-4e1b-a7d1-27e552a1020a
+avoids repeating accepted creation. Controlled persisted empty ownerusername/local
+handle made real API hrefnull; UI retained safe displayname and disabled navigation.
+Both original handles restored exactly; reload recovered links. This is unavailable
+publicdestination evidence, not proof of production redaction or completenullcreator.
+Native/avatar-download/businessdestination unverified. Types0errors/scopedlint0;
+no newtests. Current requiredCI/integration pending at handoff.
+
+Exact sellerfixture deleted; Listing/View/Interaction/Report counts0, originalprofile
+handles restored. Authaudits retained, Evanbrowseractive. marketplace-seller-candidate,
+missing-href, identity-before/sourcecomparison and lint/types artifacts private.
+Durablemanifest 73943dfb9040775b5651bbadd9c0e3cfeb2a4a3af691c0b8fb16b54b0185db23 (296files), source-bound as usual.
+Next: existing marketplace Q&A/save/read journeys and existing broader N/A limits;
+no stream closure.
+
+## Current A05 Q&A read milestone
+
+[Draft PR90](https://github.com/WangPantopus/skinny-pantopus/pull/90), app0ce235cfc,
+reviewfdb37a904 includes currentmastera12610270. PR88 mergedcc28ddd3e after exactCI
+35557360294; PR89 strict216e533af passed CI35557699093 and merged by coordinator
+asa12610270. Source unchanged by branch updates; no blanket journey rerun.
+
+Actual Evan question201 persistedae15b954 on SQLseeded listingaa065fb0-ed74-4846-
+802b-2e0a2dff169a, but UIAnonymous/no link despite safe canonical asker fields. Real
+ListingQuestion SELECT denial GET500 rendered Questions0/Noquestionsyet. Existing
+QASection and caller identical across six archive/open/master variants. Granted
+three-file in-place loader/error/Retry/canonical askernames+href repair; no mutation,
+backend/schema/newfile/type/design change or newtests. Loader keeps knownrows and
+checks listing/request/token/session marker; existing QueryProvider remount retained.
+
+Actual cold/repeated500 explicitRetry/no falseempty, restoredSELECT sameRetry200
+recovers question. Bob actual answer200 persisted and created exactlyone asker notice;
+post-save read200 injected503 retained knownquestion/error; Retry200 recovered answer
+without resubmission. Subsequent warmupvote/read503 and delayedRetry200 followed by
+newerunvote/read200 left0. Older read held03:35:06.001, newerUI06.601, olderrelease
+16.001/finish16.002 destroyedfalse/socketfalse/writableFinishedtrue; finalUI29.986
+still0. Faultlog records questioncount, not full oldpayload; priorvote value follows
+successful toggle sequence. Askerlink actually opens Auth Evan profile. Owner UI
+Delete200 then GET200 yields genuineempty. Existing Save/reload/Unsave worksunchanged.
+
+Generated seller question notice opened correct public/listing preview through bell.
+OpenListing's native handoff was blocked by browsersecuritypolicy and not retried or
+bypassed; native continuation unverified. Saved notification/webbell is not provider
+push evidence. Intact crossaccount Q&A reply notnewlyexercised; existing account
+remount/interceptor evidence reused, newhook guards source-bound only for thatcase.
+
+Exact aa065 listing/question/save/view/interaction/upvote0; both generatednotices
+4930ee07-eba1-49d6-8849-dfc9df8c45e2 and5b9d909c-22e2-4e45-b186-b4eba819e94c deleted.
+OriginalnotificationIDs/readflags unchanged. SELECTrestored, faultflagconsumed;
+Bobbrowseractive/authaudits retained. Backendrestartedowned session36821 appending
+same log, Next18131unchanged; no otherstreamresources touched. Types0errors,
+lint0errors/3pre-existing warnings; currentCIpending, integrationseparate.
+
+Private marketplace-qa-baseline/candidate/sourcecomparison, workflow-before,
+listing-questions-response-faults and lint/types logs; durable304files manifest
+bd043a4acc666aac39a8343eae3f67461c68bfc5027a0d780b9155652f88b9fb. No broad N/A closure. Next read-onlynotification destination trace:
+web resolver maps posts/Home but passes /listings through to publicpreview with no
+Q&A; canonical authenticated listing screen is separate. Request assignment before
+any sharednotification repair. Broader A05/native/provider/authorization stillopen.
+
+## Current N01/A05 listing notification destination milestone
+
+[Draft PR91](https://github.com/WangPantopus/skinny-pantopus/pull/91), appe23406bde,
+reviewea8e8603c includes currentmasterfd04ae43c (PR90 exactfdb passedCI35558194245
+and coordinator merged). Existing notificationRoutes.ts alone maps valid-ID
+listing/listings/marketplace links to /app/marketplace while preserving suffixes,
+URLvalidation and other mappings. Current/master/Home/paid had identical0deebaae;
+archive/oldnotification branches also lacklistingmapping. No native/publicshare/
+backend/provider/schema/newfiles/tests or permissions changes.
+
+Earlier actual listing question notice reached publicpreview without Q&A; native
+handoff was blocked/not retried. First uncommitted candidate had an accidental
+UUIDregex suffix omission and still routed public; corrected to byte-identical
+original regex before accepted checks/commit. Final actual fullnotification click
+opens ownerAnswer, actual UIanswer200 persists; asker answer notice opens sameweb
+listing without sellercontrols. Bell /marketplace alias preservesquery, fullpage
+/listing alias preservesquery+fragment. 2aliasnotices SQLseeded; questionnotice from
+existing authenticated HTTPquestion handler, accepted unchanged creationUI reused.
+After exactlisting deletion, retainednoticenavigation→HTTP404/Listingnotfound/no
+stalequestion. Explicitlogin?redirectTo returns Evan to correctauthorizedlisting.
+Directloggedout listing route still follows existingmiddleware publicalias and
+localredirecthostlocalhost; this is not fullguestcontinuation/native acceptance.
+
+Exact d53498d0-9411-4a0b-b5ba-d4176f88cb34 listing/question/view/save/interaction0
+and all4relatednotices0. OriginalnotificationIDs/readflags unchanged; auxiliary
+HTTPsessionlogout200; Evanbrowseractive/authaudit retained. Types/lint0errors;
+29existing routing/HomeTask cases pass2suites. CurrentCIpending/reviewseparate;
+no provider/native/business/allaccess-change coverage claim.
+
+Private marketplace-notification fixtures/persisted/candidate/sourcecomparison,
+existing-regression/types/lint logs. Durable313files manifest
+19dfb8b2c669141ee28c28974c3c1381344d290bae5e91cd4a8b4a5af1051fdc. Next independent N04/A05 existingMarketplace
+MessageSeller blocked-entry verification, reusing accepted backendblock policy;
+no new repair assignment or sharedfilechange. Other whole-stream limits remain.
+
+## N04/A05 no-code Marketplace messaging extension and next findings
+
+On ea8e8603c, actual Marketplace MessageSeller→existing createDirectChat denies
+Evan→Dana403 and Dana→Evan403 under the retained DanaUserBlock. Both actualforms
+retain unsentdraft/error. Revoked isolatedUserBlockSELECT and restarted onlyowned
+API to ensure coldcache: sameform503. SELECTrestored, retry403; no sendMessage call.
+ChatRoom/Participant/Message/Notification totals unchanged. Exact two disposable
+listings d2a6286c-2687-4a56-a748-43c0b4fb08f1 and8af13f77-5bd9-457e-a17b-d590f5145938,
+views/interactions/messages/offers cleaned0; originalblock unchanged. No source
+change/newtests. This extends entry-point evidence, not independent socket/native
+or unblock/concurrency acceptance. Backend now session94409 on18130, same private
+launcher/log append; Next18131 unchanged. Dana browseractive/authauditsretained.
+
+Independent successful-message baseline found next concrete defects, not repaired
+while coordinator closes current integrationbatch. SQLseeded Boblisting6a18d868-
+0aa9-410f-9c6c-e39ca84a597b; actual DanaUI direct201/message201 saved exactlyone
+listing_offer in newroom eed0f38e-1a06-4d68-8039-a4c14c5b87e8. Existing caller sends
+/app/chat?room=... but ChatList ignoresquery and opens inbox. Inboxrow opens existing
+/app/chat/conversation/Bob correctly and shows persistedmessage. Its existing
+ChatRichCard ViewListing uses /app/listings/id and actualNext404. Hydrated public
+Bobprofile Message repeats sameignoredroomquery/inbox. UserIdentityLink has a third
+samequery caller; sourcelead only, popoverUI not verified. No file edits/grant yet.
+
+Exact positivefixture listing/newroom/message/participants cleaned0 via canonical
+FKcascade; no newNotification rows in thisphase. Initial cleanup read used wrong
+message_typecolumn, failed beforemutation; corrected canonical type query/cleanup
+succeeded. OriginalroomIDs preserved, DanaEvan block retained. Evidence private
+marketplace-block-before/results and marketplace-message-before/baseline/persisted.
+Durable318files manifest 79012cecb848844bb52acbc910f6f578494dabbbcd0815b77e0fcc13bf753073. CurrentPR91 exactea8
+passedCI35558601157; coordinator merging bounded route scope, author doesnotmerge.
+
+Next after documentationbatch: obtain assignment for reproduced existing
+useListingDetail send-success destination, PublicProfileClient.handleMessage and
+ChatRichCard listinghref. Compare allopen/archive variants; reuse canonical existing
+conversation and marketplace screens, preservestyles/policies; no replacementroutes
+or tests. Continue other whole-stream limits; this is not Stream3 completion.
 
 ## Coordinator integration progress (read-only reconciliation)
 
