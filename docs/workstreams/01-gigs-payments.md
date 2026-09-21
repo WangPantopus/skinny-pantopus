@@ -5,13 +5,13 @@
 PR117 e729a516a (stacked115) changes only the existing professional block guard's
 position. All481 durable hashes and3 source bindings match;10 housemate cases and20
 affected HTTP/SQL controls pass, all exact fixture rows/sessions/grants restored.
-No public-screen/native acceptance. OriginalCI35579542422 is still required.
+No public-screen/native acceptance. OriginalCI35579542422 passed at exacte729.
 PR118 1ad1a0693 (stacked116) checks the existing HomePrivacy PATCH read error before
 merge/upsert. All11 durable hashes and route bytes match; all13 actualHTTP/SQL cases
 reviewed and every rejected request preserves full before/after SQL rows. Controlled
 read-recovery timing is explicit; genuine absence retains defaults. Cleanup/auth/
 privacy/storage counts0, SELECT/INSERT restored, own runtime released. No UI/native/
-concurrent partial-write acceptance. OriginalCI35579547138 is still required.
+concurrent partial-write acceptance. OriginalCI35579547138 passed at exact1ad1.
 
 Capture frozen live02 db729875 and03 1ddfb536; preserve114/115/116 accepted evidence.
 Paid2ea9 fullCI35576926687 has all iOS and Android instrumented jobs passed; only
