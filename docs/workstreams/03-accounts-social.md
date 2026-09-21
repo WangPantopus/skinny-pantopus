@@ -1,12 +1,12 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T03:12:01.381784+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T03:24:23.690368+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-notification-actions`, local/pushed HEAD **c5802b4a1849c758e0725f00d83790073e990685**.
+branch `codex/stream3-marketplace-report`, local/pushed HEAD **956dab1d193a126c045820d13aa13ce8f23a3679**.
 Application tree clean; only owned untracked `.next-stream3/` remains. Runtime source
-matches masterd2b833049 plus exactly the three notification action web files below.
+matches masterbc06d6b39 plus exactly the two marketplace report web files below.
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -21,6 +21,51 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## Current A05/N04 milestone — listing reporting
+
+[Draft PR88](https://github.com/WangPantopus/skinny-pantopus/pull/88), application6ee007f7e,
+review/pushed956dab1d1 includes current docs masterbc06d6b39; exactly two existing
+files (useListingDetail.ts handleReport and shared ReportModal.tsx listing choice data).
+Coordinator granted scope after actual failures; no new files/tests/schema/policy/design.
+PR86 exactc5802b4a1 passed applicable CI35556598901 and coordinator merged3277477fc;
+its prior bounded UI evidence is reused, not rerun or confused with native acceptance.
+
+Baseline actual Bob UI created free remote fixture54f29656-3872-44a9-be3c-3cfcc5ef6953
+on owned18131→18130/localGoTrue/PostgREST/SQL64532. Evan signed in through real UI.
+Safety concern was offered but POST400; modal closed. Other/details under scoped
+ListingReport INSERT denial returned500 and also lost draft. Hook source identical
+SHA74196b1a7e69f8a871bcfc20f5b2ebcffe84a2c9e1866a021fac9d7bbb0226b4 across master,
+paid, web staging and Beacon. Shared modal matches initial archive and already retains
+rejected submissions; reuse suffices. All modal callers audited; other entities retain
+original six choices. Existing API/SQL seven listing reasons reused without policy edits.
+
+Candidate actual UI500 keeps Other/details and re-enables submission; sameform retry200
+persists exact draft. Each offered spam/harassment/inappropriate/scam/prohibited/
+counterfeit/other produces200 and one corresponding record. HTTP invalid/safety/
+misinformation/oversized400 and unauthenticated401 leave exactly7reports. Profile
+report modal still displays original six options; cancelled without submission.
+Typecheck gate0errors; scoped ESLint0errors/2pre-existing warnings. Required current
+CI pending at handoff; no new unit tests. Lost-success deduplication, moderation
+processing, native/provider acceptance remain unverified. A failed request does not
+prove no write; no report idempotency policy is invented here.
+
+Exact fixture listing deleted through scopedSQL after evidence capture: Listing,
+ListingReport, ListingView, ListingInteraction, ListingQuestion, ListingSave,
+ListingMessage and ListingOffer counts0. Seven reports retired via existingFKcascade.
+INSERT privilege restored, auxiliary HTTP session logout200; browser Evan remains
+active and earlier fixtures/auth audit history retained. No broad cleanup claim.
+Evidence marketplace-report-baseline.json/candidate.json/boundaries.json, source
+comparison and private listing snapshot, lint/types logs. Durable private289files at
+owner .pantopus-recovery/audits/20260920-stream3-accounts-social-r3; MANIFEST SHA
+78b7d94c591173675bb63563585ce891dd852c2b6fdc6f74d190ba765b99aa63. Each artifact source
+is authoritative, manifest head is not blanket retest evidence.
+
+Next independent A05 finding: actual listing Seller is User/disabled ViewProfile
+while real detail API returns canonical safe local identity displayName/handle/href.
+SellerSection still reads removed legacy name/username/profile_picture_url. Existing
+public href opens Auth Bob correctly. No repair yet; request bounded component
+assignment and preserve typed safe contract (do not restore private legacy fields).
 
 ## Coordinator integration progress (read-only reconciliation)
 
