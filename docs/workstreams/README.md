@@ -4,6 +4,16 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 04:52 UTC — gig payment reader reservation
+
+Root reserves18132/18133/64561–67 using clean isolated wallet-read-r1/full77 schema,
+private gig-payment-read-r1/f9200330. Existing PaymentSection → SDK getPaymentForGig
+→ gigs/:id/payment → SQL, with one synthetic saved financial reader record. No new
+charge/provider/mutation/settlement claim. Verify real failure before existing-component
+repair; no backend/schema/newfile/style/tests. Published42d/currentCI35562351562 stays
+fixed while local verification runs. Peer96/97 refs frozen/currentCI pending; root
+reviewed popup one-line diff and captures03, no peer application edits.
+
 ## September 21, 04:45 UTC — conditional next map destination grant
 
 After Stream3 freezes its current three-file map error milestone, it owns a separate
