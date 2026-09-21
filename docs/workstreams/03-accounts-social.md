@@ -2738,3 +2738,50 @@ pnpm isolatedcommand couldn't resolve workspace; direct existingtsc used. Initia
 webeslint invocation ignored externalfile; actualpackageconfig rerun recorded.
 No newtests or testcoverage claim. RequiredCI pending, no merge/integration claim.
 Durable653 hashes verified; MANIFEST **2786b1fae61dbc82ed908c0c055900c7d4aeaff203e16157c7947cd6c9cdcd55**. Coordinatorreview.
+
+
+Next source-only A02 proposal: ordinary local logout pre-forwardfailure. PR82
+revocation partialfailure happened AFTER commit; PR136 local200 retirement and
+refreshnatural/transient cannot establish this boundary. Existing profilelogout
+catch assumes cookiescleared and navigateslogin after localclear; SDK clearsession
+only after POSTsuccess; retained sessionflag can still authenticate middlewarelogin
+redirect. Potential misleading failure handling requires actual baseline, not policy
+invention. Proposed separately granted exact owned507ef9ec session + one-shot
+preExpress POSTlogout503, noforward/SetCookie, fullmetadata/prefs equality/UIobserve.
+No runtime, retry/logout/login or appedit executed. Restore privatehook/env/restart
+ownAPI only ifgrant, close ownnewtab, preserve natural session; no cookie/clock/JWT/
+device/DBreset. Not genuineoffline or lostsuccessfulreply. Detailed existingfive
+bindings/isolation/cleanup in logout-failure-source-proposal.json. PR136fixed;
+CI35599880117 browserE2E/database/safeguards passed, webjob stillrunning.
+Durable654 hashes; MANIFEST **e4000f55b7a1c627d96027ca49e8e9e0880825b6081d9f0afa428b10b92877eb**; coordinatorreviewpending.
+
+
+PR136 exact d6fba68d3 CI35599880117 **SUCCESS**: weblint/typegate/Jest/productionbuild,
+IdentityFirewallE2E, database replay/safeguards andCI OK allpassed. Backend/native/
+Seeder jobs skipped bychangefilter, not runtimeverified. Receiptlogout-fix-ci.json;
+durable655 MANIFEST **b95bd5576d3d29058da1fef589f133638cdd744ca0d3775b2f01611f0a87c8b4**. Draft remains coordinatorreview/
+integration pending; standaloneSDKdiagnostic limitation unchanged.
+
+
+## Separate local logout pre-forward503 baseline — reproduced UI failure
+
+Granted exact Bob/current507ef9ec preflight matched complete prior metadata and UI.
+Private one-shot matched all exactlogout/18130/loopback/Origin/transport/Referer
+conditions;50312:37:15.297UTC, descriptorconsumed/noforward/noSetCookie. Actual
+Settings keyboardlogout showed no appfailure/retry, navigated automatically to
+/app/place displaying AuthBob. Devissuebadge briefly visible, not usablelogouterror.
+Full own app/GoTrue metadata and prefs[] unchanged; no GoTrue token receipt or
+HTTPlogin/refresh/retry, subsequent profile304s. Sessionretained as expected for
+pre-forwardfailure; silentlyreturning to authenticatedPlace is the reproducedgap.
+No manualretry/login/logout or apprepair. This is synthetic503, not actualoffline
+or lostsuccessfulreply; no native/provider/broadauthclosure.
+
+Cleanup complete: faultAPI3022stopped, restoredAPI3800/exec20593 originalargv/env/cwd
+exact in-memory comparison; originalhookSHAd7c8b95318bab69c34050b6924df8ed9f7a5b44be79d0a3f39e8b35cd9768a5d
+restored, markerabsent, testtab28closed, Next42165/42493+DB retained. Actualcurrent
+507ef9ec session retained, no DB/grant/device/cookie/clock/JWTmutation. Locald6f
+source/PR136 frozen; no new appedit/tests/CI in baseline. Privateenv/operatorlogs
+excluded. Safe logout-failure-before/after/intercept/runtime-change/cleanup/UI
+artifacts mirrored, 662 hashes; MANIFEST **c511bc373dccac4d4c578277c4376f00ca945675986e28931e2244ec1004fc14**. Coordinator
+review/repairassignment pending; scopedproposal reuse existing handleLogout error
+feedback and return before localclear/navigation on rejection, preservingdesign.
