@@ -2832,3 +2832,29 @@ IdentityFirewallE2E, database replay/safeguards, aggregatepassed. Backend/native
 Seeder skipped byscope, not runtimeproof. Receiptlogout-feedback-ci.json; durable
 676 verifiedhashes MANIFEST **bcd878a527a399fb842ffe0e80d75f5a79fea752430371b0cb539eca36022349**. Originalbranchfixed,
 coordinator merge/integration reviewpending. No further runtimeexpansion inbatch.
+
+
+## Final cohort disposition — PR138 merged, bounded acceptance retained
+
+Remote read confirms PR138 updated head532296c802ae9aba5616f26568c4398edd096db4
+CI35601772751 SUCCESS and merge b946eb9ea99819ffb27f42252cdaab237d02dea0.
+Coordinator reports update added only four accepted Home137 paths; tested Settings
+page bytes unchanged. PR137 merged274e6e1c first; coordinator combined paidlocal
+1f1c353c sourcebindings/checks reported passing. Those combined checks are coordinator
+evidence, not a Stream3 rerun. Original287058421/CI35601204534 evidence retained.
+Corrected original toast AX/provenance remains accepted; original later diff preserved.
+
+Implementation/CI/merge complete for this narrow handler repair. Actual acceptance
+remains synthetic pre-forward503 keeping Settings/error/currentidentity, unchanged
+fullownmetadata/prefs, then real local logoutretry200 retiring only507/currentGoTrue
+and reachinglogin without refreshburst/429. No native/hosted/genuineoffline/lostcommit
+or wholeauth/stream completion claim. Prior136 destinationreturn reused only for
+unchanged successfulflow. Fullstream broader acceptance remains open.
+
+Retained last-verified runtime API7948/exec60505, Next42165/42493, ownedDB; original
+privatehook/env restored, descriptorabsent/testtab29closed, browser signedout, natural
+revoked/auditrecords retained. This disposition update does not probe runtime again.
+No local sourceadoption, UI/API/check replay or new scope. Localoriginal287058421
+branch and old136ref preserved. Durable676 manifest remains
+bcd878a527a399fb842ffe0e80d75f5a79fea752430371b0cb539eca36022349.
+Coordinator finaldocumentation/publication owns next integration step.
