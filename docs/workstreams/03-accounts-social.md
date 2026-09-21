@@ -1,15 +1,68 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated September21 07:22UTC. **Stream incomplete; ongoing verification.**
-Sole live status is this neutral coordination file. No new unit tests written.
+Updated September21 — **Stream incomplete; ongoing verification.**
+Sole live status remains this neutral coordination file. No new unit tests written.
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
-`codex/stream3-search-block-verification`, local/pushed **7e91907a7a23a8ff0961018012e8469a3e48da1e**,
-tracked clean plus owned .next-stream3. [Draft PR107](https://github.com/WangPantopus/skinny-pantopus/pull/107)
-is stacked on frozenPR105/f43; automatic [CI35572584966](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35572584966)
-queued exact7e919. PR105 exactf43 CI35571949622SUCCESS and PR103 exact7e165
-CI35571103116SUCCESS, coordinator integrationpending. PR101/99 alreadymerged.
-Owned18130/PID18749,18131/PID14742,Supabase64531–37 retained. No localnativebuild.
-All prior feature refs and originalfixtures preserved; no broad row-completion claim.
+`codex/stream3-relationship-read-verification`, local/pushed
+**36fbfe1626623868d70363ff0f13d86b4a025c7f**, tracked clean plus owned .next-stream3.
+[Draft PR111](https://github.com/WangPantopus/skinny-pantopus/pull/111) targets master;
+automatic [CI35574234363](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35574234363)
+is running exact36fb. Local implementation/verification complete within the bounded
+legacy Relationship failure scope below; CI/review/integration pending separately.
+Coordinator reports PR103 and PR105 merged after updated-head CI. Independently
+confirmed PR107 merged as **4e69c23b8e71e66a23c223523a345d3f1368f158** from55ef4c6ab;
+coordinator reports exact CI35573379836 success. Earlier pending entries are historical.
+Owned18130/PID48152,18131/PID14742,Supabase64531–37 retained. No local native build.
+All frozen feature refs and original fixtures preserved; no broad row-completion claim.
+
+## Legacy Relationship read failure — PR111 handoff
+
+Coordinator granted only existing getRelationshipStatus after actual Bob Beacon UI
+exposed Dana under Relationship SELECT denial despite a saved blocked relationship.
+Seven current/master/paid/staging/place/Beacon/original fc99 variants have identical
+helper bytes: query errors ignored and exceptions converted to none. Reuse the existing
+helper with maybeSingle, checked error propagation, and no catch-to-none. Preserve
+successful absence, self/missing-input and existing status/direction mappings. No new
+file/service/schema/UI/policy/unit tests. Fast-forwarded this separate branch to merged
+PR107/master4e69 before repair; frozen earlier refs untouched.
+
+Actual real local GoTrue/browser/Next18131/API18130/PostgREST64531/SQL64532:
+saved blocked row hides Beacon; actual SELECT denial yields existing unavailable/Retry
+search with no search result; restored permission and keyboard Return retry keeps it
+hidden; exact block deletion plus fresh reload restores the original Beacon. Tab14
+closed afterward. Relationship creation itself was SQL-seeded, not UI acceptance.
+
+Eleven affected HTTP reads (public/local identity search, users search and three profile
+variants, four LocalProfile variants, relationship status) return error-only500 under
+lookup denial. Follow POST500 leaves full UserFollow and Notification table snapshots
+unchanged; healthy blocked follow403. Actual SQL status transitions plus HTTP verify
+blocked in both directions, accepted→connected, pending_sent/pending_received, successful
+absence→none and self→none. Restored public search200 returns original result. Non-Beacon
+callers are HTTP-only. Existing58 tests across3 suites pass; syntax/diffcheck pass.
+
+Caller review: users profile/search visibility and identity/local search use existing
+helpers; follow check occurs before insert/notification; relationship GET has existing
+500 catch. relationships.js helper imports unused. Professional helper call currently
+has always-null viewerId and is a separate unmodified source lead. Chat/socket use
+separate blockService and are untouched. No installed native, socket, hosted provider,
+offline, intact session-race or whole N03/N04 acceptance from this milestone.
+
+Exact temporary **14e37cd2-5d12-45e7-a043-fcc123c037e7** removed, original Relationship[]
+restored and SELECT restored; auxiliary real auth session logged out200. Original other
+safety tables, profiles, posts and memberships retained. No failed-follow insert/notice.
+Private relationship-read-final-evidence.json binds source hashes, comparison, actual
+baseline/UI, HTTP mappings/effects, checks and cleanup. Durable **448 files** hash-verified
+in existing `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/`;
+MANIFEST SHA256 **cca38fc28830dcfad59513da6062a496b44576974d61d032033de70cb7b1926a**.
+Each older artifact retains its own source/runtime limits; latest review head is not a
+blanket rerun. Coordinator review and exact-head CI/integration remain pending.
+
+Next: finish PR111 gate/handoff without duplicating CI; continue independent existing
+inventory journeys. Professional optional-auth source lead requires actual reproduction
+and a fresh route grant before repair. Broader notification/provider/native/session and
+reminder delivery limits in the whole-stream table remain open. Stream2 owns homes.ts
+and HomeSettingsTab save contract; leave untouched. Root completion upload runtime
+18132/18133/64561–67 and f9200360 fixtures are separate and untouched.
 
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.

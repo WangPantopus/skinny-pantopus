@@ -2,6 +2,17 @@
 
 Updated September 20, 2026. Owner: Home stream.
 
+## September 21 D05 Home editor coordinates — reviewable handoff
+
+**Current: published, CI queued; stream incomplete and continuing.** Granted separate branch `codex/home-edit-coordinate-read`, clean/pushed **`e50ed198723030208c4cf7016dc8561fee916436`**, [draft PR110](https://github.com/WangPantopus/skinny-pantopus/pull/110) stacked109. [Exact CI35574072291](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35574072291) queued. Sole existing `frontend/apps/web/src/app/(app)/app/homes/[id]/edit/page.tsx`:3parser lines plus finalnewline; no presentation/SDK/backend/schema/newfile/unit test.
+
+- Reproduced actual canonical Home detailGET200 returned `{longitude:-122.33,latitude:47.61}` with savedSQLPOINT; editor fullreload falsely claimed No coordinates. Six source/branch parsers only handledGeoJSON/WKT. Extend existing localparser with finite-number canonicalobject branch; no exported existinghelper available, no replacement architecture.
+- Actual UI→canonical Home detail/current permission service/route→SQL: valid47.61/-122.33 fills existing inputs; currentverified-coordinate UI replacement48/-123 is stripped by unchangedserverguard and originalpointreloaded; user_assertedSQL0/-12.34 displays correctly; UIlatitude0/longitude-75.5 saves200 and SQLmatches; invalid91→400/retaineddraft/SQLunchanged. DeliberateSQLNaNpoint→canonicalGET503 beforeform; existingerrornavigation leads/homes, whose listisunsupported infixture and excluded. RestoreSQLNULL→actual200/original emptycoordinates state. LegacyGeoJSON/WKT branches unchanged/reused, not synthetically re-tested.
+- Typecheck0errors, scopedlint0errors/6warnings, diffclean. Syntheticidentity, deliberatemalformedSQL, localprovider; native/hosted/geocoder and full unrelatedHomeslist recovery remain unverified. Reuse previoussave/authority/provenance evidence.
+- Cleanup12fixturecounts0, API18142stopped, Next18141/own5containers retained; lintsymlinkremoved, no native/peerresource changes. Durable owner `.pantopus-recovery/audits/20260921-stream2-home-edit-coordinate-r1/`12files+flatmanifest, exactsource/comparison/baseline/browser+HTTP+SQL/validation/cleanup.
+
+**Handoff frozen for coordinator capture.** Nextgranted work: existing HomeSettingsTab optional-clearing payload after eachfield's actualfailure and canonicalcontract are established. Welcome/rules already reproduced bothcalls200 with oldvaluesreappearing; othertext/day fields require own baseline beforeinclusion. Preserve all existingcontrols/PATCHorder/partial-save semantics; no save-lifetime/schema extension. PR109 and thissource remain frozen while coordinator integrates.
+
 ## September 21 D05 settings save contract — reviewable handoff
 
 **Current: published, CI queued; stream incomplete and continuing.** Granted follow-up branch `codex/home-settings-save-contract`, clean/pushed **`cb29cef1eff41802c0d0a6458b9203590267fce3`**, [draft PR109](https://github.com/WangPantopus/skinny-pantopus/pull/109), stacked on PR108. [Exact CI35573559457](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35573559457) queued. PR108 original39ced [CI35572724323](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35572724323) passed; coordinator owns integration. PR104 merged by coordinator after d304f08df CI35572440658 passed, component unchanged.
