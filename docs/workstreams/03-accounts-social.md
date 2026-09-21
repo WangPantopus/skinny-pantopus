@@ -2698,3 +2698,163 @@ retry executed. PR82 client/provider bytes identical; historical retirement reta
 openPR metadata47/46/34 no dedicatedauthfix. Detailed source hashes/sequence/limits
 logout-burst-source-attribution.json; durable637 MANIFEST **edbf0d6a92976197bbcfd117b6447187555a08e7907669b056b7a0dc45feee9a**.
 Coordinator review pending; original failedreturn remains unverified.
+
+
+## PR136 — stop signed-out automatic web refresh
+
+Granted oneexisting SDK client.ts gate now requires hasActiveSession for automatic
+web401 refresh. Mobile branch, explicitrefresh, staleaccess sessionflag, generation
+guards/singleflight/privacy retirement unchanged. No limiter/backend/UI/provider
+redesign/newfiles/tests. Commit d6fba68d3cf1154211849a1b659a7e48d03012a6 pushed
+on codex/stream3-session-return-reconciliation; draft
+https://github.com/WangPantopus/skinny-pantopus/pull/136 (separate paidbatch).
+
+After naturalratewindow ordinary UI login created14312967-9a68-4c51-bcb0-0266f6898285;
+other own sessions unchanged. Candidate Nextcompiled SDK guard present in loaded
+page/layoutchunks; DOM script list recorded. Actual Settings keyboardlogout retired
+only14312967 registry/GoTrue;9 trailing privateGET401, **zero refreshPOST/429**.
+Observed immediate intermediate remounted shell had blankaccount/defaultsettings;
+then login navigation completed. Protected own scheduling-settings query redirected
+to exactlogin redirectTo, no private settings content in observedloginUI. Actual
+login200/localGoTrue passwordgrant20012:27:45 returned original path/query/AuthBob.
+Newsession507ef9ec-89b6-4ff3-a04c-6c69d5e0618c onlyaddition; all other own app/GoTrue
+metadata unchanged from postlogout. Fullprefs[] unchanged; identity-bound prefsGET304
+12:27:45.738 cachevalidation. Complete measuredcandidate interval:2POST200 (logout/
+returnlogin),9GET401, zero refresh/429; initial setup login precedes this interval.
+
+Cleanup: tab27closed, zero-delaydescriptorconsumed, retained natural revoked/audit/
+newloginrecords. API73610/Next42165+42493/DB unchanged, no counterreset/restart.
+Sourcebefore-finalcommit hash in logout-fix-before; UI/script/safeHTTP/SQL/GoTrue
+snapshots in logout-fix-*. Prior natural/explicitrefresh evidence reused for unchanged
+controlflow only; new401gate staleaccess compatibility sourcechecked, no newexpiry
+runtime claim. No native/hosted/negative-destination/broadsessionclosure. Baseline
+historical tab initiator stillunproven; candidate boundedjourney passes.
+
+Existing57 authArrival/sessionRefresh tests pass; web typegate0errors; SDKscoped
+lint0errors/33existingwarnings; diffcheckpass. StandaloneSDK typecheck stillfails35
+diagnostics. Isolated old/candidate compilecomparison both59normalizedidentical
+(includes copy-specific module resolutionerrors), not standalonegreen. Initial
+pnpm isolatedcommand couldn't resolve workspace; direct existingtsc used. Initial
+webeslint invocation ignored externalfile; actualpackageconfig rerun recorded.
+No newtests or testcoverage claim. RequiredCI pending, no merge/integration claim.
+Durable653 hashes verified; MANIFEST **2786b1fae61dbc82ed908c0c055900c7d4aeaff203e16157c7947cd6c9cdcd55**. Coordinatorreview.
+
+
+Next source-only A02 proposal: ordinary local logout pre-forwardfailure. PR82
+revocation partialfailure happened AFTER commit; PR136 local200 retirement and
+refreshnatural/transient cannot establish this boundary. Existing profilelogout
+catch assumes cookiescleared and navigateslogin after localclear; SDK clearsession
+only after POSTsuccess; retained sessionflag can still authenticate middlewarelogin
+redirect. Potential misleading failure handling requires actual baseline, not policy
+invention. Proposed separately granted exact owned507ef9ec session + one-shot
+preExpress POSTlogout503, noforward/SetCookie, fullmetadata/prefs equality/UIobserve.
+No runtime, retry/logout/login or appedit executed. Restore privatehook/env/restart
+ownAPI only ifgrant, close ownnewtab, preserve natural session; no cookie/clock/JWT/
+device/DBreset. Not genuineoffline or lostsuccessfulreply. Detailed existingfive
+bindings/isolation/cleanup in logout-failure-source-proposal.json. PR136fixed;
+CI35599880117 browserE2E/database/safeguards passed, webjob stillrunning.
+Durable654 hashes; MANIFEST **e4000f55b7a1c627d96027ca49e8e9e0880825b6081d9f0afa428b10b92877eb**; coordinatorreviewpending.
+
+
+PR136 exact d6fba68d3 CI35599880117 **SUCCESS**: weblint/typegate/Jest/productionbuild,
+IdentityFirewallE2E, database replay/safeguards andCI OK allpassed. Backend/native/
+Seeder jobs skipped bychangefilter, not runtimeverified. Receiptlogout-fix-ci.json;
+durable655 MANIFEST **b95bd5576d3d29058da1fef589f133638cdd744ca0d3775b2f01611f0a87c8b4**. Draft remains coordinatorreview/
+integration pending; standaloneSDKdiagnostic limitation unchanged.
+
+
+## Separate local logout pre-forward503 baseline — reproduced UI failure
+
+Granted exact Bob/current507ef9ec preflight matched complete prior metadata and UI.
+Private one-shot matched all exactlogout/18130/loopback/Origin/transport/Referer
+conditions;50312:37:15.297UTC, descriptorconsumed/noforward/noSetCookie. Actual
+Settings keyboardlogout showed no appfailure/retry, navigated automatically to
+/app/place displaying AuthBob. Devissuebadge briefly visible, not usablelogouterror.
+Full own app/GoTrue metadata and prefs[] unchanged; no GoTrue token receipt or
+HTTPlogin/refresh/retry, subsequent profile304s. Sessionretained as expected for
+pre-forwardfailure; silentlyreturning to authenticatedPlace is the reproducedgap.
+No manualretry/login/logout or apprepair. This is synthetic503, not actualoffline
+or lostsuccessfulreply; no native/provider/broadauthclosure.
+
+Cleanup complete: faultAPI3022stopped, restoredAPI3800/exec20593 originalargv/env/cwd
+exact in-memory comparison; originalhookSHAd7c8b95318bab69c34050b6924df8ed9f7a5b44be79d0a3f39e8b35cd9768a5d
+restored, markerabsent, testtab28closed, Next42165/42493+DB retained. Actualcurrent
+507ef9ec session retained, no DB/grant/device/cookie/clock/JWTmutation. Locald6f
+source/PR136 frozen; no new appedit/tests/CI in baseline. Privateenv/operatorlogs
+excluded. Safe logout-failure-before/after/intercept/runtime-change/cleanup/UI
+artifacts mirrored, 662 hashes; MANIFEST **c511bc373dccac4d4c578277c4376f00ca945675986e28931e2244ec1004fc14**. Coordinator
+review/repairassignment pending; scopedproposal reuse existing handleLogout error
+feedback and return before localclear/navigation on rejection, preservingdesign.
+
+
+## PR138 — actionable profile Settings logout failure
+
+Adopted finalmaster2d66626c on separate codex/stream3-logout-failure-feedback; old
+136branch preserved. Only existinghandleLogout catch: existingtoast.error safe
+Could not confirm sign-out. Please try again. thenreturn beforelocalclear/navigation.
+Successfulpath/otherhandlers/design unchanged. Commit287058421aea780806c59142fa7796df971b3e98
+pushed draft https://github.com/WangPantopus/skinny-pantopus/pull/138 . No newfiles/tests.
+
+ActualUI Bob/current507ef9ec preflight; reviewedprivate exactone-shot50312:41:56.166
+allmatchtrue/noforward/noSetCookie. Settings/identity retained; error visible inAX
+and keyboard LogOut stillusable. Full own app/GoTrue metadata andprefs[] unchanged.
+Fault consumed; samebutton keyboardretry real200 retiresonly507ef9ec inregistry/
+GoTrue and reacheslogin. Allotherownmetadata/prefs unchanged; zero refresh/429;
+no loginreturn replay (accepted136 unchangedsuccessfulpath reused). Onefault only,
+no optionalduplicateattempt. Synthetic preforward failure, not offline/lostcommit;
+wording doesnotassert stillsignedin for all errors. Native/hosted remainsunverified.
+
+Cleanup: faultAPI6394 stopped, restoredAPI7948/exec60505 originalenv/argv/cwd exact
+in-memory verified, originalhookSHA d7c8b95318bab69c34050b6924df8ed9f7a5b44be79d0a3f39e8b35cd9768a5d
+restored; descriptorabsent/tab29closed. Next42165/42493+DB retained. Naturalrevoked/
+auditrecords retained; browser now signedout, no resurrection/newlogin. Baseline
+andcandidate ownmetadata/UI/HTTP/cleanup in logout-feedback-*; privateenv/rawlogs
+excluded. Existing57authchecks pass, webtypegate0errors, scopedlint0errors/one
+existingts-nocheckwarning, diffpass. Sourcepage retains existingts-nocheck, so type
+gate alone doesnotverify handler; actualUI/HTTP/SQL is primary.
+
+ExactCI35601204534 queued at287058421; draftreview/integrationpending. Durable
+673 hashes; MANIFEST **6c40498319ab8d84d371dbf982c9d81b4eae7a2ac9533fa3cbc9dd3f80122272**. Fullstream remainsincomplete.
+
+
+Evidence correction: initial logout-feedback-ui-failure.txt saved a later AXdiff
+after toast removal, so alone didnot substantiate errorvisibility. Recovered original
+CUA function_call_output at12:41:56.394 from ownsession logline20980 into NEW
+logout-feedback-ui-failure-original-tool.txt: Settings URL/AuthBob and exacterror
+text at107, reusableLogout92 focused, Dismissnotification108. ProvenanceJSON records
+originalcall/timestamp/source/hash. Originaldiff preserved, no reconstruction or
+browser/relogin/logout replay. Durable675 verifiedhashes; MANIFEST
+**c6117ee2ec41d001556967f0b6b91ddf600d5afed7d1e9fefc7b1ee5b22a76cc**. PR138sourceunchanged; coordinatorreview.
+
+
+PR138 original exact287058421 CI35601204534 **SUCCESS**: webchecks/build,
+IdentityFirewallE2E, database replay/safeguards, aggregatepassed. Backend/native/
+Seeder skipped byscope, not runtimeproof. Receiptlogout-feedback-ci.json; durable
+676 verifiedhashes MANIFEST **bcd878a527a399fb842ffe0e80d75f5a79fea752430371b0cb539eca36022349**. Originalbranchfixed,
+coordinator merge/integration reviewpending. No further runtimeexpansion inbatch.
+
+
+## Final cohort disposition — PR138 merged, bounded acceptance retained
+
+Remote read confirms PR138 updated head532296c802ae9aba5616f26568c4398edd096db4
+CI35601772751 SUCCESS and merge b946eb9ea99819ffb27f42252cdaab237d02dea0.
+Coordinator reports update added only four accepted Home137 paths; tested Settings
+page bytes unchanged. PR137 merged274e6e1c first; coordinator combined paidlocal
+1f1c353c sourcebindings/checks reported passing. Those combined checks are coordinator
+evidence, not a Stream3 rerun. Original287058421/CI35601204534 evidence retained.
+Corrected original toast AX/provenance remains accepted; original later diff preserved.
+
+Implementation/CI/merge complete for this narrow handler repair. Actual acceptance
+remains synthetic pre-forward503 keeping Settings/error/currentidentity, unchanged
+fullownmetadata/prefs, then real local logoutretry200 retiring only507/currentGoTrue
+and reachinglogin without refreshburst/429. No native/hosted/genuineoffline/lostcommit
+or wholeauth/stream completion claim. Prior136 destinationreturn reused only for
+unchanged successfulflow. Fullstream broader acceptance remains open.
+
+Retained last-verified runtime API7948/exec60505, Next42165/42493, ownedDB; original
+privatehook/env restored, descriptorabsent/testtab29closed, browser signedout, natural
+revoked/auditrecords retained. This disposition update does not probe runtime again.
+No local sourceadoption, UI/API/check replay or new scope. Localoriginal287058421
+branch and old136ref preserved. Durable676 manifest remains
+bcd878a527a399fb842ffe0e80d75f5a79fea752430371b0cb539eca36022349.
+Coordinator finaldocumentation/publication owns next integration step.

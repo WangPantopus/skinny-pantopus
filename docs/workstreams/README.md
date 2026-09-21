@@ -1,5 +1,116 @@
 # Three-stream coordination
 
+## September 21 — reviewed application batch ready for final publication
+
+The application batch is merged through master
+`b946eb9ea99819ffb27f42252cdaab237d02dea0`. Paid branch
+`codex/paid-gig-integration` has a clean local integration commit
+`1f1c353cf529e7df4acdb1a1c5e84f13036e9479`; it is not pushed yet. Seven incoming
+application paths match their reviewed candidates exactly, including earlier Audit133.
+Financial backend and native source are unchanged. Remote paid48702 retains its
+successful full CI35596223401 (15 applicable passes, one Seeder skip).
+
+- SDK136 merged `2d66626c058ca6d57232fc0dd57311c58086fcf5` after original
+  CI35599880117 and updated CI35600453583 passed. Actual logout no longer causes
+  the automatic refresh burst; real login returns to the exact protected destination.
+- Atomic Settings137 merged `274e6e1c91c9049e855f6fe91e0484deebaedb2c` after original
+  CI35600568312 and updated CI35601168238 passed, including fresh schema validation.
+  One UI command saves name/type/settings/preferences together. Actual RPC denial
+  and final audit-insert failure left complete state unchanged; retry saved all
+  intended fields and one audit. Compatibility and validation evidence was reviewed.
+- Logout feedback138 merged `b946eb9ea99819ffb27f42252cdaab237d02dea0` after original
+  CI35601204534 and updated CI35601772751 passed. Actual pre-forward503 stays on
+  Settings with a usable error/retry; real retry200 retires only the current session
+  and reaches login without refresh/429. The original toast AX observation was
+  recovered from the recorded tool output, without another browser journey.
+
+Combined local verification passed: web type gate zero errors; scoped web lint zero
+errors/22 existing warnings; SDK lint zero errors/80 warnings; 57 existing auth checks;
+backend syntax and whitespace. No new unit tests. Existing page ts-nocheck and standalone
+SDK type diagnostics remain explicit limits; the latter was not rerun or claimed green.
+No accepted UI journey was replayed for this source-identical integration.
+
+Evidence: root owner audit `20260921-stream1-payment-method-removal-late-r2` now holds
+23 verified artifacts, including cohort-review.json, combined-source-bindings.json,
+combined-validation.json and check logs. Home candidate36 and Stream3 durable676 hashes
+were reviewed independently, including full rollback/session comparisons and cleanup.
+Final live02 hash44293645 and live03 hash32f46a2d were captured in f9b9b82ea; the earlier
+incorrect provisional live02 hash was rejected before staging and corrected by its owner.
+
+No private fault remains active. Root API/tab are closed; Next18133/PID47970 and owned
+Supabase are retained. Stream2 fixtures/constraint/ports are clean, five containers
+stopped/preserved; its approved forward migration and ledger56 intentionally remain.
+Stream3 restored API7948/session60505, Next42165/42493 and DB are retained, browser signed
+out and natural revocation records preserved. No local native build or provider send.
+Root retained DB has not applied the new Home migration: no combined local Home schema
+or runtime claim is made. Required rollout is migration, updated backend, then web;
+the old backend ignores profile keys. No hosted rollout is authorized or performed.
+
+Next: publish this documentation separately, adopt only its final documentation delta
+into the checked paid integration, verify source bindings again and push once for full
+CI. Reuse these local checks when that delta is docs-only. PR34/47 remain drafts and46
+separate. Later Home save-lifetime and other proposals remain outside this fixed batch.
+All three streams are incomplete; provider/device, unknown-commit, concurrency and wider
+acceptance limits remain in the existing backlog. Do not equate this batch with closure.
+
+## Fixed next integration batch
+
+Next paid integration is limited to reviewed136 signed-out refresh gate,137 atomic
+Settings command and the currently assigned profileSettings logout-error repair.
+After their exactCI/review/merge and a separate final documentation publication,
+adopt finalmaster once into clean paid48702, bind testedsource and run affected
+combined checks/requiredCI. No further runtime/feature expansion is added to this
+batch; later peer findings stay source-only proposals until separately assigned.
+Current137 updatedbba09eefda263c1d8cdf8fc4c785fa18acfa67fe adds only five docs and
+reviewed136 SDKclient; all four candidatepaths unchanged. OriginalCI35600568312
+passed; updatedCI35601168238 pending. PR34/47 remain drafts,46 separate.
+
+## Later-batch profile Settings logout-error repair grant
+
+PR136 merged2d66626c058ca6d57232fc0dd57311c58086fcf5 after updated0d5ee430 CI35600453583
+passed; SDK scope complete only within recorded limits. Coordinator verified662
+logout-failure artifacts and full ownsession/prefs equality: matchedpre-forward503
+silently returned to authenticated Place, noerror/retry. No session retirement occurred.
+Original privatehook/env restored; API3800/session20593, Next42165/42493/DB retained.
+Frozenlive03 187551b captured769917ca0; original136 branch/evidence preserved.
+
+Stream3 sole writer existing profile/settings/page.tsx handleLogout only. Adopt final
+master2d66626c on separate follow-up branch and rebind existingpage/callers. On API
+rejection use alreadyimported toast.error with safe cannot-confirm-signout/retry
+wording and return before clearPendingPlaces/clearAuthToken/navigation. Preserve
+successful path and all otherhandlers/layout/styles. Do not assert session is active
+for every failure (lost successful replies remain another boundary). No newfile/helper/
+SDK/backend/limiter/schema/unit test or unrelated refactor/pending-state redesign.
+
+Use same exactowned current507ef9ec preflight and reviewed private503 isolation with
+completehook/env/source restoration. Actual keyboardlogout503 must keep Settings and
+currentidentity, show error, retain fullownsession/prefs; repeatcurrentfailure at most
+once if needed for reusablecontrol. Removefault/sameUIretry must call realbackend200,
+retire onlythatcurrent app/GoTrue session, reachlogin withoutrefreshburst/429, keep
+otherownmetadata/prefs unchanged. Reuse136 successfulloginreturn/explicitrefresh evidence
+with source/controlflow limits; no duplicate loginjourney. Restorehook/descriptors/API,
+close ownedtab, retain natural signedout/revocation state and DB/Next. Scopedchecks/
+requiredCI/draftPR/exactcleanup handoff; no native/hosted/lostcommit/session-lifetime
+claim. Keep137 and paid48702 independent until next reviewedbatch.
+
+## Later-batch pre-forward local logout failure baseline grant
+
+Coordinator verified654 hashes and existing five-file source/contract comparison.
+PR82 after-revocation failure and136 successful logout do not cover this boundary.
+Stream3 may extend only existing private pre-Express one-shot hook for exact owned
+POST/api/users/logout, port18130/loopback/aliasOrigin/cookie transport/exactSettings
+Referer with short expiry/atomicconsume. No forwarding/SetCookie; record safe match
+booleans/time/path/status only. Preflight exact Bob/current507ef9ec session; otherwise
+stop. Preserve original hook hash/env/argv/cwd and auth-source bytes, restart only own
+API to load instrumentation; do not use restart to bypass rate limits. Next/DB retained.
+One actual existing Settingslogout, observe UI/error/navigation and full own session/
+prefs metadata; do not force an expected outcome. Record any automatic auth activity
+and stop if unexpected; no manual retry/login/logout or application repair yet.
+Restore exact original hook/remove descriptors/restart only ownAPI sameconfiguration,
+verify restoredprocess provenance, close newtab, preserve actualsession state. No
+cookie/JWT/clock/device/grant mutation, newtests/native/hosted/realoffline/lost-commit
+claim. Separate later baseline; PR136 source/evidence and current integration stayfixed.
+
 ## Later-batch SDK signed-out refresh repair and scoped rollback fault
 
 Stream3 sole writer: existing frontend/packages/api/src/client.ts response401 gate.

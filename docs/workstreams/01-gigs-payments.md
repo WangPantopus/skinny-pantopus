@@ -1,5 +1,113 @@
 # Stream 1 — Gigs and payments
 
+## September 21 — reviewed application batch ready for final publication
+
+The application batch is merged through master
+`b946eb9ea99819ffb27f42252cdaab237d02dea0`. Paid branch
+`codex/paid-gig-integration` has a clean local integration commit
+`1f1c353cf529e7df4acdb1a1c5e84f13036e9479`; it is not pushed yet. Seven incoming
+application paths match their reviewed candidates exactly, including earlier Audit133.
+Financial backend and native source are unchanged. Remote paid48702 retains its
+successful full CI35596223401 (15 applicable passes, one Seeder skip).
+
+- SDK136 merged `2d66626c058ca6d57232fc0dd57311c58086fcf5` after original
+  CI35599880117 and updated CI35600453583 passed. Actual logout no longer causes
+  the automatic refresh burst; real login returns to the exact protected destination.
+- Atomic Settings137 merged `274e6e1c91c9049e855f6fe91e0484deebaedb2c` after original
+  CI35600568312 and updated CI35601168238 passed, including fresh schema validation.
+  One UI command saves name/type/settings/preferences together. Actual RPC denial
+  and final audit-insert failure left complete state unchanged; retry saved all
+  intended fields and one audit. Compatibility and validation evidence was reviewed.
+- Logout feedback138 merged `b946eb9ea99819ffb27f42252cdaab237d02dea0` after original
+  CI35601204534 and updated CI35601772751 passed. Actual pre-forward503 stays on
+  Settings with a usable error/retry; real retry200 retires only the current session
+  and reaches login without refresh/429. The original toast AX observation was
+  recovered from the recorded tool output, without another browser journey.
+
+Combined local verification passed: web type gate zero errors; scoped web lint zero
+errors/22 existing warnings; SDK lint zero errors/80 warnings; 57 existing auth checks;
+backend syntax and whitespace. No new unit tests. Existing page ts-nocheck and standalone
+SDK type diagnostics remain explicit limits; the latter was not rerun or claimed green.
+No accepted UI journey was replayed for this source-identical integration.
+
+Evidence: root owner audit `20260921-stream1-payment-method-removal-late-r2` now holds
+23 verified artifacts, including cohort-review.json, combined-source-bindings.json,
+combined-validation.json and check logs. Home candidate36 and Stream3 durable676 hashes
+were reviewed independently, including full rollback/session comparisons and cleanup.
+Final live02 hash44293645 and live03 hash32f46a2d were captured in f9b9b82ea; the earlier
+incorrect provisional live02 hash was rejected before staging and corrected by its owner.
+
+No private fault remains active. Root API/tab are closed; Next18133/PID47970 and owned
+Supabase are retained. Stream2 fixtures/constraint/ports are clean, five containers
+stopped/preserved; its approved forward migration and ledger56 intentionally remain.
+Stream3 restored API7948/session60505, Next42165/42493 and DB are retained, browser signed
+out and natural revocation records preserved. No local native build or provider send.
+Root retained DB has not applied the new Home migration: no combined local Home schema
+or runtime claim is made. Required rollout is migration, updated backend, then web;
+the old backend ignores profile keys. No hosted rollout is authorized or performed.
+
+Next: publish this documentation separately, adopt only its final documentation delta
+into the checked paid integration, verify source bindings again and push once for full
+CI. Reuse these local checks when that delta is docs-only. PR34/47 remain drafts and46
+separate. Later Home save-lifetime and other proposals remain outside this fixed batch.
+All three streams are incomplete; provider/device, unknown-commit, concurrency and wider
+acceptance limits remain in the existing backlog. Do not equate this batch with closure.
+
+## September21 — SDK136 merged; atomic Home137 reviewed
+
+PR136 updated0d5ee430 passedCI35600453583 and merged
+`2d66626c058ca6d57232fc0dd57311c58086fcf5`; tested SDK bytes unchanged by five-doc
+branch update. Preserved standaloneSDK type-error limitation and realUI/session bounds.
+
+PR137 originald225ff1e86e68ba6ff9e14c4ec43587760d0c65d is fixed/draft, current
+CI35600568312 pending. Coordinator reviewed four authorizedpaths,36 durablehashes,
+fullbefore/failure rows for RPC503 and finalauditinsert503 rollback, exactfunction/
+constraintcatalog restoration, eightUIwrites503/200/503/200/400/403/200/200 with no
+profilePATCH. Existing canonicalname/type/UTF16 validation, oldsettings-only sixfield
+clearing/profileomission/preferencepreservation,9invalidAPI+DB/14validDBrollback/
+5validHTTP cases inspected.24totalHTTPsettingsPATCHes, zero provider/newunit tests.
+TS/lint/syntax pass (6existinglintwarnings); freshschema replay remains CI-bound.
+Originalauthority/lock/audit/preferences/clearing contract retained. Exactfixtures/
+constraint/tab23/API/Next cleaned, ownfivecontainers stopped/preserved; candidate
+forwardmigration/ledger56 intentionallyretained. Frozenlive02 64fabc captured65a62c64e.
+Required rollout order: migration, updatedbackend, then webcaller. Oldbackend ignores
+name/type while saving otherfields, so webmustnotprecede backend. No hosted rollout.
+
+Separate logoutpre-forward503 baseline662hashes/fullownmetadata reviewed: current
+507ef9ec remainsactive and unchanged as expected, but existing handler silently returns
+to authenticatedPlace without error. Frozenlive03 187551b captured769917ca0; exacthook
+restored/API3800/session20593, Next/DBretained/tab28closed. TopREADME assigns only
+existingprofileSettings handleLogout catch/error/return repair on separatefinalmaster
+branch, real503/currentUIretry200/retirement checks and exactinstrumentationcleanup.
+This new boundary is not covered by136 successfullogout or PR82 postrevocationfailure.
+Keep paid48702 clean and green while these later milestones finish independently.
+
+## September21 — logout-return repair reviewed; next CI gate pending
+
+PR136 original d6fba68d3cf1154211849a1b659a7e48d03012a6 passedCI35599880117.
+Coordinator updated only five docs to current master893c1dc29; SDK bytes unchanged at
+updated `0d5ee43037e4e735d6313f84c2c5c896e8cc2f17`, CI35600453583 pending.
+Sole existing client.ts automaticweb401 gate now uses existing hasActiveSession;
+mobile/explicitrefresh/stale-sessionflag/generation/privacy retirement unchanged.
+
+Coordinator verified653 candidate artifacts, actual UIlogout/protecteddestination/
+login and independent complete own-session comparisons: only14312967 retired, new
+507ef9ec only addition; other own app/GoTrue metadata and fullprefs[] unchanged.
+Nine trailing privateGET401, zero refreshPOST/429; real login200/localGoTrue password
+200, exact originalquery return, identity-bound prefsGET304. Brief emptyaccount/default
+settings shell before login is not zero-frame retirement proof. Tab27closed/descriptor
+consumed, natural old/new session records and API73610/Next/DB retained.
+Existing57 auth tests passed, webtypegate0, SDKlint0errors/33warnings. StandaloneSDK
+35type diagnostics remain failing; isolated old/candidate59 normalizeddiagnostics are
+identical (copy adds resolutionerrors), not a green standaloneSDK claim. No new tests.
+Frozenlive03 aa065b5 captured950d299d5; rootreviewreceipt in later-review.json.
+
+Next one-shot pre-forward logout503 baseline is separately granted in liveREADME;
+no additional appfix accepted yet. Home atomiccandidate progress is peer-reported,
+awaiting final source/evidence/cleanup review. Keep136 and paid48702 fixed until gates
+resolve; combine only reviewed complete milestones. Docs135 merged893c1dc29 after
+exactCI35599630531 success. Rootr2 durablemirror now16 artifacts with later review.
+
 ## September21 — paid48702 full CI passed
 
 Exact published `48702bc9d6ef89d30361962b2acf49090e2ad83e` completed
