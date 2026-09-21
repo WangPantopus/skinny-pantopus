@@ -14,6 +14,17 @@ const REPORT_REASONS = [
 
 export type ReportReason = typeof REPORT_REASONS[number]['value'];
 
+// Listing reports use the existing listings endpoint and ListingReport reasons.
+const LISTING_REPORT_REASONS = [
+  REPORT_REASONS[0],
+  REPORT_REASONS[1],
+  REPORT_REASONS[2],
+  { value: 'scam', label: 'Scam or fraud', icon: AlertTriangle },
+  { value: 'prohibited', label: 'Prohibited item', icon: Ban },
+  { value: 'counterfeit', label: 'Counterfeit item', icon: ShieldCheck },
+  REPORT_REASONS[5],
+] as const;
+
 const ENTITY_LABELS: Record<string, string> = {
   post: 'Post',
   gig: 'Task',
@@ -30,13 +41,14 @@ interface ReportModalProps {
 }
 
 export default function ReportModal({ open, onClose, onSubmit, entityType }: ReportModalProps) {
-  const [reason, setReason] = useState<ReportReason | ''>('');
+  const [reason, setReason] = useState<ReportReason | typeof LISTING_REPORT_REASONS[number]['value'] | ''>('');
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   if (!open) return null;
 
   const label = ENTITY_LABELS[entityType] || 'Content';
+  const reasons = entityType === 'listing' ? LISTING_REPORT_REASONS : REPORT_REASONS;
 
   const handleSubmit = async () => {
     if (!reason) return;
@@ -81,7 +93,7 @@ export default function ReportModal({ open, onClose, onSubmit, entityType }: Rep
 
         {/* Reasons */}
         <div className="px-6 py-3 space-y-1.5">
-          {REPORT_REASONS.map((r) => {
+          {reasons.map((r) => {
             const Icon = r.icon;
             return (
               <button

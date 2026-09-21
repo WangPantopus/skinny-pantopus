@@ -12,6 +12,8 @@ interface QASectionProps {
   isOwner: boolean;
   questions: ListingQuestion[];
   questionsLoading: boolean;
+  questionsError: string | null;
+  onRetryQuestions: () => Promise<void>;
   onAskQuestion: (question: string) => Promise<void>;
   onAnswerQuestion: (questionId: string, answer: string) => Promise<void>;
   onUpvote: (questionId: string) => Promise<void>;
@@ -24,6 +26,8 @@ export default function QASection({
   isOwner,
   questions,
   questionsLoading,
+  questionsError,
+  onRetryQuestions,
   onAskQuestion,
   onAnswerQuestion,
   onUpvote,
@@ -67,7 +71,7 @@ export default function QASection({
   return (
     <div className="bg-app-surface rounded-xl border border-app-border p-6 mb-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-app-text">Questions ({questions.length})</h2>
+        <h2 className="text-lg font-semibold text-app-text">Questions{questions.length > 0 || (!questionsLoading && !questionsError) ? ` (${questions.length})` : ''}</h2>
         <div className="flex gap-2">
           {answeredCount > 0 && (
             <span className="px-2 py-0.5 bg-green-50 text-green-700 text-xs font-medium rounded-full">{answeredCount} answered</span>
@@ -112,17 +116,26 @@ export default function QASection({
       )}
 
       {/* Questions list */}
-      {questionsLoading ? (
+      {questionsError && (
+        <div role="alert" className="mb-3 text-sm text-app-text-secondary">
+          <p>{questionsError}</p>
+          <button onClick={onRetryQuestions} disabled={questionsLoading} className="mt-1 text-primary-600 font-medium hover:underline disabled:opacity-50">
+            Retry
+          </button>
+        </div>
+      )}
+      {questionsLoading && questions.length === 0 ? (
         <div className="text-center py-6">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mx-auto" />
         </div>
       ) : otherQuestions.length === 0 && pinnedQuestions.length === 0 ? (
-        <p className="text-sm text-app-text-secondary text-center py-4">No questions yet. Be the first to ask!</p>
+        !questionsError && <p className="text-sm text-app-text-secondary text-center py-4">No questions yet. Be the first to ask!</p>
       ) : (
         <div className="space-y-3">
           {otherQuestions.map(q => {
             const asker = q.asker;
-            const askerName = asker?.name || asker?.first_name || asker?.username || 'Anonymous';
+            const askerName = asker?.displayName || asker?.handle || 'Anonymous';
+            const askerHref = asker?.href?.startsWith('/') && !asker.href.startsWith('//') ? asker.href : null;
             const isMyQuestion = user?.id && asker?.id && String(asker.id) === String(user.id);
 
             return (
@@ -138,8 +151,8 @@ export default function QASection({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-app-text">{q.question}</p>
                     <div className="flex items-center gap-1.5 mt-1 text-xs text-app-text-secondary">
-                      {asker?.username ? (
-                        <Link href={`/${asker.username}`} className="font-medium text-app-text-secondary">
+                      {askerHref ? (
+                        <Link href={askerHref} className="font-medium text-app-text-secondary">
                           {askerName}
                         </Link>
                       ) : (

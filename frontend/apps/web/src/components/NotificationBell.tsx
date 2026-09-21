@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Megaphone } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { useBadges } from '@/contexts/BadgeContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { useNotificationTap } from '@/hooks/useNotificationTap';
+import { toast } from '@/components/ui/toast-store';
+import { queryKeys } from '@/lib/query-keys';
 import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import type { Notification } from '@pantopus/types';
@@ -31,12 +34,19 @@ export default function NotificationBell({
   mode?: NotificationBellMode;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const socket = useSocket();
   const [open, setOpen] = useState(false);
   const tapNotification = useNotificationTap(open);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const { notifications: totalUnread, notificationsByContext } = useBadges();
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const readRequest = useRef(0);
+  const loadedScope = useRef('');
+  const actionScope = useRef(0);
+  const pendingActions = useRef(new Set<string>());
+  const [pendingKeys, setPendingKeys] = useState<string[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   // Legacy in-dropdown sub-filter for the all-zones bell only.
   const [contextFilter, setContextFilter] = useState<'all' | 'personal' | 'business'>('all');
@@ -83,44 +93,56 @@ export default function NotificationBell({
   }, [mode, contextFilter]);
 
   const loadNotifications = useCallback(async () => {
+    const request = ++readRequest.current;
+    const token = api.getAuthToken();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => request === readRequest.current
+      && token === api.getAuthToken()
+      && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const scope = `${mode}:${contextFilter}`;
+    if (loadedScope.current !== scope) {
+      loadedScope.current = scope;
+      setNotifications([]);
+    }
     setLoading(true);
+    setLoadError(false);
     try {
-      const params: Record<string, any> = { limit: 20 };
-      if (mode === 'audience') {
-        params.context = 'audience';
-      } else if (mode === 'personal') {
-        // Personal-zone bell scopes to personal+platform. The route only
-        // accepts a single firewall value, so request 'personal' and
-        // merge with a second 'platform' fetch below.
-        params.context = 'personal';
-      } else if (contextFilter !== 'all') {
-        // Legacy mode keeps the personal/business sub-filter.
-        params.context_type = contextFilter;
-      }
-      const res = await api.notifications.getNotifications(params);
-      let list = res.notifications || [];
-      if (mode === 'personal') {
-        const platRes = await api.notifications.getNotifications({ limit: 20, context: 'platform' });
-        const platform = platRes.notifications || [];
-        const seen = new Set(list.map((n) => n.id));
-        for (const n of platform) {
-          if (!seen.has(n.id)) list.push(n);
-        }
-        list = list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      }
-      setNotifications(list);
+      const params: Parameters<typeof api.notifications.getNotifications>[0] = { limit: 20 };
+      if (mode === 'audience' || mode === 'personal') params.context = mode;
+      else if (contextFilter !== 'all') params.context_type = contextFilter;
+      const requests = mode === 'personal'
+        ? [params, { limit: 20, context: 'platform' as const }]
+        : [params];
+      const results = await Promise.allSettled(requests.map(p => api.notifications.getNotifications(p)));
+      if (!current()) return;
+      setLoadError(results.some(result => result.status === 'rejected'));
+      setNotifications(previous => {
+        if (!current()) return previous;
+        const rows = results.flatMap((result, index) => {
+          if (result.status === 'fulfilled') return result.value.notifications;
+          // Keep known rows only from the same account and failed slice.
+          if (mode !== 'personal') return previous;
+          const context = requests[index].context;
+          return previous.filter(n => (n.context || 'personal') === context);
+        });
+        return [...new Map(rows.map(n => [n.id, n])).values()]
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      });
     } catch {
-      // silent
+      if (current()) setLoadError(true);
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }, [mode, contextFilter]);
 
-  // Load full list when panel opens or context filter changes
+  // Closing, changing scope or leaving the view retires its pending reads.
+  // QueryProvider already remounts account-local state on session changes.
   useEffect(() => {
-    if (open) {
-      loadNotifications();
-    }
+    const retire = () => { readRequest.current++; actionScope.current++; };
+    pendingActions.current.clear();
+    setPendingKeys([]);
+    if (open) void loadNotifications();
+    return retire;
   }, [open, loadNotifications]);
 
   // Listen for real-time notification:new from socket
@@ -162,19 +184,51 @@ export default function NotificationBell({
       if (path) { setOpen(false); router.push(path); }
     });
 
-  const handleMarkAllRead = async () => {
+  const runAction = async (key: string, operation: () => Promise<unknown>, apply: () => void | Promise<void>, message: string) => {
+    if (pendingActions.current.has(key)) return;
+    const scope = actionScope.current;
+    const token = api.getAuthToken();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const sameAccount = () => token === api.getAuthToken()
+      && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => scope === actionScope.current && sameAccount();
+    pendingActions.current.add(key);
+    setPendingKeys([...pendingActions.current]);
     try {
-      await api.notifications.markAllAsRead(readAllScope());
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    } catch {}
+      await operation();
+      if (sameAccount()) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
+      }
+      if (current()) {
+        // Reads started before the committed action must not restore its rows.
+        readRequest.current++;
+        setLoading(false);
+        await apply();
+      }
+    } catch {
+      if (sameAccount()) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.notifications(), refetchType: 'none' });
+      }
+      if (current()) toast.error(message);
+    } finally {
+      if (current()) {
+        pendingActions.current.delete(key);
+        setPendingKeys([...pendingActions.current]);
+      }
+    }
   };
 
-  const handleDelete = async (e: React.MouseEvent, notifId: string) => {
+  const handleMarkAllRead = () => runAction('read-all',
+    () => api.notifications.markAllAsRead(readAllScope()),
+    // Fetch authoritative flags, including notifications arriving while pending.
+    async () => { await loadNotifications(); },
+    'Could not confirm marking notifications as read. Please try again.');
+
+  const handleDelete = (e: React.MouseEvent, notifId: string) => {
     e.stopPropagation();
-    try {
-      await api.notifications.deleteNotification(notifId);
-      setNotifications((prev) => prev.filter((n) => n.id !== notifId));
-    } catch {}
+    void runAction(notifId, () => api.notifications.deleteNotification(notifId),
+      () => { setNotifications(prev => prev.filter(n => n.id !== notifId)); },
+      'Could not confirm notification removal. Please try again.');
   };
 
   return (
@@ -222,6 +276,7 @@ export default function NotificationBell({
               {unreadCount > 0 && (
                 <button
                   onClick={handleMarkAllRead}
+                  disabled={loading || pendingKeys.includes('read-all')}
                   className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                 >
                   Mark all read
@@ -250,6 +305,15 @@ export default function NotificationBell({
             ) : null}
           </div>
 
+          {loadError && (
+            <div role="alert" className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p>Could not load all notifications.</p>
+              <button onClick={() => void loadNotifications()} disabled={loading} className="mt-1 font-medium underline underline-offset-2 disabled:opacity-50">
+                {loading ? 'Retrying…' : 'Retry'}
+              </button>
+            </div>
+          )}
+
           {/* List */}
           <div className="max-h-[400px] overflow-y-auto">
             {loading && notifications.length === 0 ? (
@@ -257,7 +321,7 @@ export default function NotificationBell({
                 <div className="animate-spin rounded-full h-6 w-6 border-2 border-app-border border-t-gray-600 dark:border-t-gray-300 mx-auto" />
                 <p className="text-xs text-app-muted mt-2">Loading...</p>
               </div>
-            ) : notifications.length === 0 ? (
+            ) : notifications.length === 0 && !loadError ? (
               <div className="px-4 py-8 text-center">
                 <div className="text-3xl mb-2">🔔</div>
                 <p className="text-sm text-app-muted">No notifications yet</p>
@@ -303,6 +367,8 @@ export default function NotificationBell({
                     {/* Delete on hover */}
                     <button
                       onClick={(e) => handleDelete(e, notif.id)}
+                      disabled={pendingKeys.includes(notif.id)}
+                      onKeyDown={(e) => e.stopPropagation()}
                       className="opacity-0 group-hover:opacity-100 text-app-muted hover:text-red-500 p-1 flex-shrink-0 transition"
                       title="Remove"
                     >

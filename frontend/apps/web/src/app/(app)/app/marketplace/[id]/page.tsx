@@ -27,6 +27,8 @@ export default function ListingDetailPage() {
     isOwner,
     questions,
     questionsLoading,
+    questionsError,
+    retryQuestions,
     refreshing,
     canRefresh,
 
@@ -171,6 +173,8 @@ export default function ListingDetailPage() {
           isOwner={isOwner}
           questions={questions}
           questionsLoading={questionsLoading}
+          questionsError={questionsError}
+          onRetryQuestions={retryQuestions}
           onAskQuestion={handleAskQuestion}
           onAnswerQuestion={handleAnswerQuestion}
           onUpvote={handleUpvote}

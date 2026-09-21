@@ -7,6 +7,157 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## Current checkpoint — September21,03:08UTC
+
+Latest03:16UTC: PR86 exactc5802b4a1 passed CI35556598901 and merged
+**3277477fc73e8588c0975fafa7f5a417c3b0e9af**. Coordinator verified3sourcehashes,
+actualfailure/retry/lostcommittedresponse/keyboard/cachedfilter recovery and exact4
+fixturecleanup with13originalrows/readflagsunchanged. Crossaccount response was
+disconnected, not intact-delivery evidence. Frozen03 4aa01061 captured at e97b1257d.
+Currentpaid03bf9 CI35556379254 has allnon-native checks passed; Android/iOS run.
+Nextpublishdocumentation-onlyPR79 at this feature-batch boundary; retain currentpaid
+source/CI instead of churning it for unrelatednotification changes. FurtherStream3
+A05 catalog work is read-only until a verified gap receives ownership.
+
+Paid branch clean/pushed03bf9bd1b includes reviewed masterc1c03a3c6 and two focused
+wallet read/retry repairs, verified in real UI/routes/SQL. Refund session intact-reply
+acceptance and earlier Stripe TEST evidence are preserved. Details, hashes and
+limits in [live Stream1 status](workstreams/01-gigs-payments.md). Current required
+CI35556379254 runs; prior75f372 run superseded/cancelled, not green. Root fixtures0,
+grantsrestored/runtimesstopped/tabsclosed; no new tests or provider writes in wallet
+phases. Master additionallycontains reviewedPR85 atd2b833049; currentStream3 mutation
+repair remains separate. Next: finish currentpaidCI, review boundedpeerhandoff and
+retain native/provider/policy limits; do notmerge unfinishedPR34/47.
+
+## September21,02:52UTC — wallet history failure/retry repaired
+
+Latest02:54UTC: PR85 exacted5b4a8bb passed CI35555390569 and merged
+**d2b83304922b28ff1f12ceaab70d284b1bec3682**. Coordinator verified both source hashes,
+13before/after notification rows identical, actual failure/retry/partial/ordering
+proof and its disconnected-only crossaccount limit. Paid75f372 remains separate/current
+CI35555446600 running; do not invalidate this gate for unrelated further social edits.
+
+Clean/pushed paid head **75f372833c4383dad9192a6620656863b8e0c314**, includes reviewed
+masterc1c03a3c6 via cfb9b9d80. Existing WalletTransactionList.tsx alone changed:
+show existing loading/error/retry states for every query, including a new filter or
+page after earlier data. Actual baseline Refunds GET500 left20Adjustment rows under
+Refunds/Showing1-20of25 with no error/Retry. Existing component/source hashes identical
+across master, paid staging, web staging, place-design and initial archive; reuse
+in-place, no file/schema/backend/style change or new unit tests.
+
+Candidate real IAB UI→SDK→wallet route/service→PostgREST/full77SQL: failed filter
+shows error/retry; repeated500 stays retryable; restoredSELECT same query returns
+exact2Refunds. Withdrawals200 shows genuineempty. Page2 failure500 displays error;
+samequeryretry200 returns rows21–25/Nextdisabled. Coldreload500/retry200 restores
+page1. Actual Settingslogout/otherlogin wallet shows0/empty, no owner history. No
+intact delayed wallet/account response or arbitrary ordering claim. Scoped ESLint
+exit0/one existing warning. Required current
+[CI35555446600](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35555446600)
+running; prior combined35555007933 superseded/cancelled, not green.
+
+Private `/private/tmp/pantopus-stream1-wallet-read-r1`;12files mirrored/hash-verified
+at owner's `.pantopus-recovery/audits/20260921-stream1-wallet-read-r1`.
+Synthetic local identities and25history records through existingwallet_creditRPC;
+real reads/UI, no earned-release/withdrawal/Connect/provider acceptance. Provider
+creates/customers/refunds0. Original table SELECT restored; SQL aggregate including
+Wallet/WalletTransaction0. API/Next/ownedSupabase stopped; Chrome+IABownedtabs closed;
+owncache preserved privately/tsconfig restored. Initial Chrome remained prehydration
+disabled during bounded attempt; IAB worked, no login repair or Chrome claim.
+
+Coordinator PR85 notification read/error scope reviewed against actual cold/warm/
+partial/ordering evidence, currentCI pending. Frozen03 d93562fd captured at e20229545;
+writerreleased for separate granted mutation feedback. Next: current paidCI, PR85
+strict gate and existing P08/P09/provider/native limits; no broad backlog row closed.
+
+## September21,02:38UTC — intact refund reply after account switch verified
+
+Latest02:44UTC: PR84 strictf19349e38 passed CI35554806445 and merged
+**c1c03a3c62944c0a07570db285f945a338c9f1c5**. Paid master batch integrated cleanly and
+pushed **cfb9b9d804bdad7a3cdc75fdf165c64a0338397e**; payment routes/services/UI and
+shared API source unchanged, so accepted payment evidence is reused. Required
+[combined CI35555007933](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35555007933)
+is running; no completed-current-CI claim yet. Next bounded P08 wallet read/history
+verification reserves owned18132/18133/64561–67, private wallet-read-r1/f9200270,
+full77SQL and real wallet UI/routes/service. Seeded wallet history is synthetic and
+cannot establish earnings release/withdrawal. No new app code or tests yet.
+
+Paid branch remains clean/pushed at **6d40d8b2a1b60675f8cf1ff182abd48720b3fc15**.
+No application change or new tests: reused current green
+[CI35551123265](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35551123265).
+Fresh owned Chrome journey accepted1250c, authorized actual Stripe TEST card, worker
+Start Work/completion, owner capture, then500c partial and750c remaining refunds.
+Both provider refunds succeeded. During the second request, SQL/provider committed
+02:29:33.293; another account completed profile200 at02:29:43.310 and visibly loaded
+02:29:43.482; original200 released02:29:44.381 and finished02:29:44.383 with socket
+intact/destroyedfalse/writableFinishedtrue, within the SDK30s deadline. New account
+remained intact; original tab retired to login without owner refund data. Original
+payer returned02:35:52 to both saved receipts, Refunded1250c/Net0/no further refund
+action, without resubmitting. Exactly1intent/2refund calls/2successful SQL requests;
+no refund requests by the other account. First500c hold exceeded30s and disconnected:
+retained as recovery-only evidence, not intact-delivery proof.
+
+Private evidence `/private/tmp/pantopus-stream1-refund-session-r2`;19 files mirrored
+and hash-verified at owner's `.pantopus-recovery/audits/20260921-stream1-refund-session-r2`.
+Full77SQL, actual app UI/routes/SDK/Stripe TEST; local auth/ancillary transport synthetic.
+Expected fake-Connect lookup errors remain outside payout scope; stub assertions0.
+One test customer deleted, SQL aggregate0, no extra cleanup refund needed. Owned
+API18132/Next18133/Supabase64561–67 stopped, both owned Chrome tabs closed, own cache
+preserved privately/generated tsconfig restored. No peer resources touched.
+Cumulative session13 Stripe TEST originals:6 captures fully refunded7250c,
+7 unpaid cancelled intents,6 customers deleted. Provider history retained.
+This supersedes earlier P09 browser-control limitation for this bounded scenario only.
+Native/live/hosted/Connect and broader acceptance remain open; PR34/47 remain draft.
+
+Coordinator: PR82 strict914e68764 passed CI35553548674 and merged01e842aef;
+PR83 exactbf595fa80 passed CI35554056362 and merged
+**0fb600391ea6bd88c8f39e9f72bfa6b0b059f765**. Report two-handler source hashes,
+real fullpage/feed failure/retry/SQL and cleanup reviewed; no new tests/design changes.
+PR84 archived/draft visibility two-field selector repair source/evidence reviewed,
+retargeted master and updating for required current-head CI. Keep documentation PR79
+draft during feature integration. Frozen03 2f9ae27c captured at ea2781251; writer released.
+Next: finish PR84 strict gate, then appropriate paid/master integration; reuse unchanged
+accepted payment evidence and preserve native/provider/policy limits.
+
+## Current integration gate — September21,02:07UTC
+
+Latest02:16UTC: PR81 strict8dd0cd01d passed CI35553310103 and merged
+**6f4703065055f42a9def558e0e72c1e09024a03a**. PR82 now master/updated
+**914e68764c525fc60a6e78c8f7c9a7e7fd4c2951**, verified app bytes unchanged,
+exact three app files plus two existing assertions. CI35553548674 queued/running.
+Root Chrome page control recovered on a fresh owned blank tab. Isolated refund-session
+r2 now reserves18132/18133 and64561–67, f9200260, source6d40; setup only, no new
+acceptance/cleanup claim. Earlier completed r1 remains cleaned/accepted within limits.
+
+Latest02:11UTC: PR80 exact05acf4031 passed CI35553066162 and merged
+**e92aeab69044ea3eeccbd6e2c4ebe096e26cb0cb**. PR81 retargeted master/updated
+**8dd0cd01db36bd5d5491cbb36ebdc660b5421668**, accepted application bytes unchanged,
+exact two reviewed host-choice web files; currentCI35553310103 running. PR82 final
+**afe8d2f4c** changes only two existing assertions over verified57e application;
+three source hashes and corrected read/global UI/SQL evidence reviewed, CI35553113322
+pending. Frozen03 3bcd7d52 captured. Repeated refresh500 in operator evidence is a
+read-only triage lead, not a proven new app defect or clean-auth acceptance.
+
+Coordinator integrated PR70→72→73→75→77 after each exact updated-head required CI
+passed and its source/evidence review remained valid. Current master is
+**b49dd59224d38c060d726a11bc45148f36404fcf** (PR77,02:06:41UTC); earlier merge SHAs
+70=358daaa17,72=703e70508,73=ae85bad59,75=cc560bce6. No unfinished payment scope merged.
+
+PR80 retargeted master and updated to **05acf40319313d935edc682535623402386caa02**;
+accepted backend/web/packages/SQL bytes unchanged from6e422, diff exactly two worker/
+notification files. Current CI35553066162 queued/running. Continue80→81→82 with strict
+current-head gates; freeze documentation merges until integration finishes. Reviewed
+PR81 dd805 has greenCI and corrected disconnection-only overlap evidence. PR82
+57e495460 fixes the actual candidate global-signout regression and expanded-history
+refresh; author updates only two stale existing assertions before final CI/review.
+No new tests, provider policy, schema or design changes; failed202a retained.
+
+Paid head **6d40d8b2a** is clean/pushed and exact CI35551123265 fully SUCCESS:
+15 applicable checks/one Seeder skip, Android and all three iOS simulators. Actual
+cancellation UI/API/Stripe TEST/SQL proof accepted; ownfixtures0/runtime stopped.
+P09 held-refund/new-login remains unverified due checkout control; native/hosted/
+Connect/policy boundaries remain open. Stream3 native slot released after capability
+failure, live social runtime/retained fixtures remain owned and must be preserved.
+
 ## Latest integration — September21,00:21UTC
 
 Paid branch **8825c1928** is clean/pushed. It includes reviewed master61080b399 and
