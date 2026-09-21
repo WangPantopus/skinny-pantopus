@@ -3,17 +3,56 @@
 Updated September21 — **Stream incomplete; ongoing verification.**
 Sole live status remains this neutral coordination file. No new unit tests written.
 Application `/private/tmp/pantopus-workstream-accounts-social`, branch
-`codex/stream3-professional-read-recovery`, pushed/local
-**59b67ee84bd4f06afa18d98d87bf23bea1d9eb88**, tracked clean plus owned .next-stream3.
-[Draft PR114](https://github.com/WangPantopus/skinny-pantopus/pull/114) targets released
-master721d46e6d; automatic [CI35577190208](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35577190208)
-is running exact59b. Bounded implementation/local verification complete; CI, coordinator
-review and integration pending separately. No whole N03/N04/A05 or Stream3 closure.
-Coordinator merged PR111 as4b6b8e21157839eb71252647222702240c7b79af after updated
-23b33833a exactCI35575532878 success; four relevant source bindings unchanged.
-Docs106 finalmaster721d and110/111/112 integration adopted only on this new branch.
-All prior frozen feature refs preserved. Owned18130/PID8432,18131/PID14742,
-Supabase64531–37 retained; no local native build or peer runtime mutation.
+`codex/stream3-professional-viewer-auth`, pushed/local
+**e47eb37de098f076b307d109ee20953b45b51307**, tracked clean plus owned .next-stream3.
+[Draft PR115](https://github.com/WangPantopus/skinny-pantopus/pull/115) targets released
+master721d46e6d; automatic [CI35577904476](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35577904476)
+completed SUCCESS exacte47. Bounded implementation/HTTP-SQL verification and CI complete;
+coordinator review/integration pending separately. No current public-screen caller or UI acceptance.
+PR114 remains frozen59b67ee84; exactCI35577190208 independently SUCCESS, final receipt
+professional-self-ci-latest.json. Coordinator captured prior live03 in21f42c142 and
+verified461files/5sourcebindings. PR114 review passed; merge held during paid fullCI.
+PR111 already integrated4b6b8e211; all prior frozen refs preserved. Owned18130/PID30349,
+18131/PID14742,Supabase64531–37 retained. No native build/peer mutation/whole-row closure.
+
+## Professional public viewer identity — PR115 handoff
+
+Separate README grant limited to professional.js GET /:username optional identity.
+Six current/archive/open route tails identical, viewerId alwaysnull. Actual prior
+blocked-public200 and accepted-private404 baseline already cleaned. Existing optionalAuth
+middleware plus req.user identity now reach existing canViewProfessionalProfile; only
+3added/2removed lines. No helper/middleware/global-auth/UI/schema/newfile/unit test change.
+Branch independently based721d; PR114 source/ref untouched.
+
+Actual local GoTrue bearer and cookie login→HTTP→PostgREST/SQL **20cases pass**:
+blocked public both transports403, reverseblock403, owner200, anonymouspublic200;
+Bearer blocked viewer wins over another owner's cookie. Relationship SELECT denial
+returns500 for authenticated nonowner, owner/anonymous existing policy unaffected;
+restore retry403. Private accepted connection both transports200, owner200, unrelated403,
+anonymous404; relationship lookup500 then restore200. Inactiveowner404/missing404 unchanged.
+No current public screen caller: explicitly HTTP/SQL-only; records SQL seeded, not UI
+creation. Housemate/private helper-policy expansion and installed native remain unverified.
+
+Two first cookie attempts accidentally used bearer-mode login (deliberately clears
+cookies); not an app regression. Preserved attempts are excluded from cookie acceptance.
+Corrected run requests x-token-transport:cookie, checks actual nonempty issued cookie and
+absence of tokens in JSON; both transports then pass. Diagnostic and final sessions
+logged out. Existing optionalAuth/visibilityPolicy suites37/37, syntax/diffcheckpass.
+
+Final exact temporary IDs and six logout200 receipts are in
+professional-auth-candidate-results.json; both original UserProfessionalProfile[] and
+Relationship[] restored, RelationshipSELECT restored. Earlier failedattempt rows also
+removed finally. No other fixture changes. Original retained profiles/posts/memberships
+unchanged; owned runtime retained. No external provider/native activity.
+
+Private professional-auth-final-evidence.json binds4sourcehashes/comparison/baseline/
+corrected20cases/checks/cleanup/limits. Durable **470files**, all hashes verified; MANIFEST
+**c5c01720b601f776e3aad1f26388d963530992261cf6ef3ac08076a5c8e694bc** in existing
+accounts-social-r3 mirror. Includes final114CI; older artifacts retain own revision and
+runtime, latest head not blanket rerun. Coordinator owns integration after current batch.
+Next: exact115CI/review handoff; preserve114. No helper expansion without reproduced
+case/assignment. Continue original whole-stream inventory; broad native/provider/session
+and reminder-delivery limits remain open. Local expiry-origin/CORS lead stays separate.
 
 ## Professional self-editor load recovery — PR114 handoff
 
@@ -1891,3 +1930,12 @@ Coordinator captured prior live03c09d8f4a in documentationPR100. This append is 
 only Stream3 status change; coordinator owns publication. Paiddd0 fullCI35567323534
 was still running native jobs at coordinator handoff and remains a separate gate;
 no claim here about its completion or persona integration into that branch.
+
+## PR115 final exact-head CI
+
+Independently confirmed automaticCI35577904476 completed SUCCESS on exact
+e47eb37de098f076b307d109ee20953b45b51307. Final job receipt is
+professional-auth-ci-latest.json; durable mirror now471files, all hashes verified,
+MANIFEST **a653476145474080a0f32bc48382d48ecc2fce31c79b163a4ea0cb3114d3afaa**. Source remains frozen;
+no repeated runtime journeys, new fixture or policy expansion. PR114 exact59bCI also
+passed. Coordinator owns review/integration; no broader/native/UI acceptance implied.

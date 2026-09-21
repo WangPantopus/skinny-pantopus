@@ -1,5 +1,36 @@
 # Pantopus project handoff
 
+## September 21, 08:38 UTC — saved-method reads verified; next batch reviewed
+
+Paid source remains clean/pushed2ea9d93ca; CI35576926687 application/web/schema and
+Android instrumented jobs passed, iOS bundles built. Android assembly/lint and the
+three iOS test jobs remain pending; no new-head full success claim. No app change
+or new unit test in this milestone. Existing PaymentMethodList→SDK→pays GET/methods
+→PaymentMethod SQL displays exact Visa4242 Default/12-30 before Mastercard4444/06-31.
+Actual SELECT denial and repeated keyboard retry return500 with the existing error;
+restore SELECT/Return recovers both cards. Full SQL rows unchanged. Actual UI logout/
+other-login shows genuine empty list, no previous cards; HTTP owner2/other0/query
+spoof0/anonymous401. Ordinary account switch only, no held-response race claim.
+
+Synthetic saved-card rows/sign-in/ancillary wallet; existing Stripe TEST publishable
+configuration, no provider writes or card add/delete/default/charge acceptance.
+Initial ancillary response shape, missing publishable-key gate and stale tab script
+failure were excluded and corrected in the private runtime only. Fresh IAB26 works;
+25/26closed. API18132 stopped; User/authUser/PaymentMethod/Notification counts all0,
+SELECT restored and rows compared unchanged. Owned Next nowPID47970/session18138
+retains18133/.next-dev with TEST key, owned79-schema Supabase64561–67 retained.
+No cache deletion/peer resources/native build. Durable payment-method-read-r1 mirror
+has14 verified files/five source bindings; credentials and operator logs excluded.
+
+Next peer batch reviewed:114 professional loader59b67ee84 exactCI35577190208 passes;
+115 professional optional-auth e47eb37de exactCI35577904476 passes,20HTTP/SQL cases;
+116 Home privacy service99e0cba3a exactCI35578111441 passes, actual Place error/retry
+and saved true/false/genuine absence. All471 Stream3 hashes/four latest source bindings
+and14 Home hashes/service binding reviewed, exact cleanup and excluded driver attempts
+retained. Capture frozen02 bf9c9c5b and03 6927f40b; do not conflate HTTP-only115 with UI.
+Hold114→115→116 and doc113 merges until paid fullCI completes. All streams remain open.
+
+
 ## September 21 integration checkpoint
 
 All three streams remain incomplete. The current bounded Home/social repairs are

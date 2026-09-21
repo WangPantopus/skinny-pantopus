@@ -1,5 +1,29 @@
 # Three-stream coordination
 
+## Next verification window while the paid integration gate runs
+
+Root saved-method read verification passed without an application repair; detailed
+source/runtime/cleanup and excluded initial attempts are in live01. Paid2ea9 remains
+fixed under35576926687; no native build slot. Peer114/115/116 original-head CI passed,
+source-bound evidence reviewed; hold merges for the next coordinated batch.
+
+Stream2 may verify only the existing HomePrivacy PATCH ignored-read lead over actual
+HTTP/SQL after comparing existing routes/contracts. Reacquire only owned released
+18141/18142/64550–59 after listener/ownership checks. Prove before/after persistence
+and restored grants/fixtures; a read denial that also blocks the write is not proof
+of overwritten settings. No existing web toggle caller/native control is available:
+label this API-only, do not invent UI. No application edit until a reproduced failure
+and exact route proposal;116 source stays frozen on a separate follow-up branch.
+
+Stream3 may verify only the existing private professional-profile blocked-housemate
+boundary over actual HTTP/SQL. Read canViewProfessionalProfile/shareHome contracts,
+reuse exact owned rows or narrowly scoped temporary fixtures, restore original state.
+Owner/anonymous/public/connection behavior accepted in115 is reused. Source suspicion
+alone does not authorize a helper edit; report a demonstrated failure and exact repair
+proposal before expanding.114/115 refs stay frozen; separate follow-up branch and
+existing owned18130/18131/64531–37, no new UI/schema/helper or native build yet.
+
+
 ## September 21 next bounded privacy repairs
 
 Stream2 is sole writer for existing `backend/services/homePrivacyService.js` read
