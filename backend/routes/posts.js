@@ -2159,12 +2159,14 @@ router.post('/hide/:id', verifyToken, async (req, res) => {
     const { id: postId } = req.params;
     const userId = req.user.id;
 
-    const { data: post } = await supabaseAdmin.from('Post').select('id').eq('id', postId).single();
+    const { data: post, error: postError } = await supabaseAdmin.from('Post').select('id').eq('id', postId).maybeSingle();
+    if (postError) throw postError;
     if (!post) return res.status(404).json({ error: 'Post not found' });
 
-    await supabaseAdmin
+    const { error: hideError } = await supabaseAdmin
       .from('PostHide')
       .upsert({ user_id: userId, post_id: postId }, { onConflict: 'user_id,post_id', ignoreDuplicates: true });
+    if (hideError) throw hideError;
 
     feedService.invalidateFilterCache(userId);
     res.json({ message: 'Post hidden' });
