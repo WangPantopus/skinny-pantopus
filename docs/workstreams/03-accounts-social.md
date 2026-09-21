@@ -1,12 +1,12 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T02:50:12.716195+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T03:12:01.381784+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-notification-read-errors`, local/pushed HEAD **ed5b4a8bbe49d18e275f413c55b3eb8659b8d283**.
+branch `codex/stream3-notification-actions`, local/pushed HEAD **c5802b4a1849c758e0725f00d83790073e990685**.
 Application tree clean; only owned untracked `.next-stream3/` remains. Runtime source
-matches masterc1c03a3c6 plus exactly the two notification web files below.
+matches masterd2b833049 plus exactly the three notification action web files below.
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -145,7 +145,7 @@ bellcohortoff; fullpagepersonal/platformpartial actual, bellall/legacyfiltersact
 splitbell behavior only existingregressions, not installedacceptance. No providerpush,
 native/physical, allmutationfailures, pagination-scale or frozen-tab delivery closure.
 Typecheckgate0; focusedlint0errors/twopre-existingunusedwarnings.16existingcases/2suites
-pass; no newtests. RequiredCI/integrationpending. Initialtypenarrowingerror fixedbefore
+pass; no newtests. PR85 exacted5 requiredCI passed; coordinator merged **d2b83304922b28ff1f12ceaab70d284b1bec3682**. Initialtypenarrowingerror fixedbefore
 commit; cleanup-refwarningremoved. Notifications/unreadcounteroutages remain distinct.
 
 Evidence notification-read-baseline.json, notification-read-candidate.json,
@@ -155,6 +155,59 @@ SHA8c83abe7d01b2251a09d815c7bebd1a1dce96e328482d8c2f35caa45509ec9e3.
 Durable private268file MANIFEST30d163bb66f40b4c2cb8d59a5f1fc76692feeba5547a550e7576f2fb50676e87.
 Owned18130 currentlauncher session91329 (private response-fault instrumentation only),
 web18131 unchanged. No otherstreamruntime/cache/provider changed.
+
+## N01/N02 notification actions and keyboard removal — PR86
+
+[Draft PR86](https://github.com/WangPantopus/skinny-pantopus/pull/86), c5802b4a1,
+branch codex/stream3-notification-actions, base masterd2b833049. Sole granted existing
+NotificationBell.tsx, app/notifications/page.tsx, and narrowly added NotificationRow.tsx
+keyboard/pending prop. Compare current/master/paid/Beacon: handlers all silent catch;
+row identical hashfcf3d21253c71fc3014237d894ea0dbb48f35151d390980f891d72153d1381d8.
+Existing selecteddetail and row Remove callers audited; sole NotificationRow caller
+updated. No new files/tests/layout/backend/SDK/socket/schema/provider edit.
+
+Actualed5baseline: Evan fullpage+bell MarkAll/Remove each500 under Notification
+UPDATE/DELETE denial, no feedback. A SQL-created disposable notification Remove Enter
+DELETE200 then unintended PATCHread500 and navigationSecurity. Candidate error toasts
+truthfully say could notconfirm/tryagain; pending guards prevent duplicates; child
+Remove Enter/Space stop propagation, ordinaryrowkeys remain. Successful same-account
+commands invalidate existing notification cache family; reads started before committed
+mutation retire. Markall uses authoritative rows instead of marking newly arrived
+rows optimistically. Owner/view marker guards suppress obsolete completions/toasts.
+
+ActualUIcandidate: scoped Audience(fullpage) and Business(bell) failure+retry succeed;
+real UPDATE/DELETE grants restored.4keyboardremovals (Enter/Space eachsurface) exactly
+DELETE200, no parentPATCH/navigation; ordinaryrowEnter/Space stillopenSecurity both
+surfaces. Lostcommitted readall200→503 leaves uncertaintoast/knownunread, SQLflags true;
+retry200 refreshes. Lostcommitted DELETE200→503 leaves knownrow/toast, SQL0; retry200
+removes idempotently. No rollbackclaim. Disposables reused by exactID between phases,
+recorded ledger; source createdrecords in SQL, UI/API mutations real, no deliveryclaim.
+
+An initial candidate canceled an in-flight initial list on mutation start; rapid
+MarkAll interrupted loading. Repaired by allowing initial reads and disabling initial
+MarkAll, retaining success-time retirement. Another actual candidate failure: DeleteA
+held10s, switch Read, oldresponsefinishes, returncachedAll<30s resurrectsdeletedA.
+Existing cache invalidation fixes it. Finalhold03:05:59.804, Read00.376, intactrelease
+03:06:09.806/finish09.808; returnAll19.909 showsAabsent. Doubleclick exactly1DELETE,
+pendingRemove disabled. Cached-filter failure/repair evidence retained, not erased.
+
+Accountswitch mutation: oldEvanDeleteheld03:08:15.569, Bobvisible27.509, oldrelease40.572
+destroyed/sockettrue/nofinish. Pendingtabretiredtologin; nointactcrossaccountdelivery
+claim. No socket/provider/newnotificationarrival matrix closure. All4disposable IDs
+retired; finalSQLdeleted onlyremainingDbdcbad0a..., other3alreadygone. Original13Bob/Evan
+notification IDs/context/readflags compareidentical; grantsSELECT/UPDATE/DELETE restored,
+allnotificationfaultflagsabsent. Evanloggedout/currentBobleftactive; audit/sessionrows
+and earlier acceptancefixtures retained. No broadcleanup claim.
+
+Typecheckgate0; focusedlint0errors/twopre-existingwarnings;16existingcases pass onfinal
+source. No newtests. RequiredCI/coordinatorintegrationpending. Source-bound private
+notification-mutation-candidate.json SHA
+d323a40aff2b9b5fd75b0d504e85adb1f0ec1d747ee20692893938f0bc953f46;
+linked baseline/keyboard/fixture/transport/check artifacts. Durable280file MANIFEST
+**a0d847a7a2d68b4a3fd00dc01572d90ce16e78193d7d4f175bf416e5c961c864**.
+Ownedbackend18130 currentlauncher session71561;18131 unchanged. Private responsefault
+instrumentation logs are not application edits. Next independent A05 marketplace
+reachable-action verification from existing catalog/screens; route payment/Home toowners.
 
 ## PR75 — preference database failures, ready for review / CI
 
