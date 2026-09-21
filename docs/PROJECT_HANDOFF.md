@@ -7,46 +7,28 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
-## Current integration gate — September21,01:40UTC
+## Current integration gate — September21,02:07UTC
 
-Latest gate01:57UTC: PR75 current5edcaad6c passed CI35552345621 and merged
-**cc560bce6c61d915d8a3c503a55b8c167270a43e**. PR77 retargeted master and updated
-**cc252a47405cdc264f07b3c0737de00ce32952c9**; accepted app bytes unchanged and diff
-exactly three reminder-timing web callers. Fresh requiredCI pending. PR82 remains
-author-owned and blocked from integration: actual global signout revoked session
-but strict token guard left UI busy after expected cookie clearing. Author repairs
-and retests existing page before next review; failed202a evidence preserved.
+Coordinator integrated PR70→72→73→75→77 after each exact updated-head required CI
+passed and its source/evidence review remained valid. Current master is
+**b49dd59224d38c060d726a11bc45148f36404fcf** (PR77,02:06:41UTC); earlier merge SHAs
+70=358daaa17,72=703e70508,73=ae85bad59,75=cc560bce6. No unfinished payment scope merged.
 
-Latest gate: PR73 exact806d64635 passed CI35551789461 and merged as
-**ae85bad599f87933ac00e3f76ca23ac5cb6daa53** at01:53:15UTC. PR75 retargeted master
-and updated to **5edcaad6caaa161d5e4b970ef3e49b78a7755b21**; accepted application
-source unchanged, PR diff exactly two scheduling preference-error files.
-Current CI35552345621 running. PR82 security-read candidate202a under review;
-author may append proven Show-more loader repair before coordinator owns that ref.
-Its old500 finished before newer GET200; do not claim reversed-response delivery.
+PR80 retargeted master and updated to **05acf40319313d935edc682535623402386caa02**;
+accepted backend/web/packages/SQL bytes unchanged from6e422, diff exactly two worker/
+notification files. Current CI35553066162 queued/running. Continue80→81→82 with strict
+current-head gates; freeze documentation merges until integration finishes. Reviewed
+PR81 dd805 has greenCI and corrected disconnection-only overlap evidence. PR82
+57e495460 fixes the actual candidate global-signout regression and expanded-history
+refresh; author updates only two stale existing assertions before final CI/review.
+No new tests, provider policy, schema or design changes; failed202a retained.
 
-Subsequent gate: PR72 exactf2ea CI35551618913 passed and merged as
-**703e7050867d4747db958dfda8a20bf2224d1991** at01:42:45UTC. PR73 retargeted master
-and updated to **806d64635a54b0e7097b2a5d5a735f30852ac864**; accepted application
-bytes unchanged, only five docs/reused iOS fixture added. PR diff exactly five
-reviewed personal-post files. Current CI35551789461 running, no merge yet.
-
-PR70 exact21b93aa62 passed all15 applicable checks/one Seeder skip in CI35549733796;
-coordinator marked ready and merged as **358daaa17068ebbb6c9591b13bf0378cea7d02b1**.
-PR72 is retargeted to master and updated through GitHub as **f2ea16704**. Its diff
-against master is exactly the accepted two backend service files. Update added only
-five docs and accepted existing iOS clock-fixture changes; backend/web/packages/SQL
-bytes unchanged from acceptedcbfba3503. Current CI35551618913 running. Keep docs
-master frozen until reviewed72→73→75→77→80→81 integrate with strict current CI.
-
-Stream1 current6d40d8b2a repairs reproduced checkout-cancel Offers refresh and passed
-actual UI/API/Stripe TEST/SQL verification; CI35551123265 running. Owned rows0 and
-services stopped. Held-refund/new-login remains unverified due checkout controls.
-Stream3 native slot released after capability-only UI failure; no build/install.
-PR81 dd805 source/hash/worker proof reviewed; exact CI35551218783 passed. Its25s
-account-switch rerun proves old request disconnected before release and new account
-unchanged, not delivery of old success to client. Remaining unsupported notification
-channel/pause and provider/native boundaries remain open; see live statuses.
+Paid head **6d40d8b2a** is clean/pushed and exact CI35551123265 fully SUCCESS:
+15 applicable checks/one Seeder skip, Android and all three iOS simulators. Actual
+cancellation UI/API/Stripe TEST/SQL proof accepted; ownfixtures0/runtime stopped.
+P09 held-refund/new-login remains unverified due checkout control; native/hosted/
+Connect/policy boundaries remain open. Stream3 native slot released after capability
+failure, live social runtime/retained fixtures remain owned and must be preserved.
 
 ## Latest integration — September21,00:21UTC
 
