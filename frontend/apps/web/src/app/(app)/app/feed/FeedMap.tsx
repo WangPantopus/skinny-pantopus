@@ -194,6 +194,7 @@ export default function FeedMap({
   const isPlaceSurface = surface === 'place';
   const [pins, setPins] = useState<MapMarker[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const [selectedPin, setSelectedPin] = useState<MapMarker | null>(null);
   const [clusterPosts, setClusterPosts] = useState<MapMarker[]>([]);
   const [mapDirty, setMapDirty] = useState(false);
@@ -205,6 +206,7 @@ export default function FeedMap({
   const mapFilter = isPlaceSurface ? postTypeFilter : 'all';
 
   const mapRef = useRef<L.Map | null>(null);
+  const requestGeneration = useRef(0);
 
   const center: [number, number] = useMemo(
     () => [userLat ?? 40.7128, userLng ?? -74.006],
@@ -220,6 +222,9 @@ export default function FeedMap({
   const ZOOM_GATE = 8;
   const fetchPins = useCallback(async (currentBounds: Bounds | null) => {
     if (!currentBounds) return;
+    const requestId = ++requestGeneration.current;
+    const token = api.getAuthToken();
+    const isCurrent = () => requestId === requestGeneration.current && token === api.getAuthToken();
     setLoading(true);
     try {
       const res = await api.posts.getMapMarkers({
@@ -231,22 +236,25 @@ export default function FeedMap({
         surface,
         limit: 200,
       });
+      if (!isCurrent()) return;
       const postPins = (res.markers || []).filter(
         (m) => m.layer_type === 'post' || !m.layer_type
       );
+      setError(false);
       setPins(postPins);
       setNearestActivity(res.nearest_activity_center ?? null);
     } catch {
-      setPins([]);
-      setNearestActivity(null);
+      if (isCurrent()) setError(true);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, [isPlaceSurface, mapFilter, surface]);
 
   // Fetch on filter change
   useEffect(() => {
     if (bounds) fetchPins(bounds);
+    const requests = requestGeneration;
+    return () => { requests.current++; };
   }, [bounds, fetchPins]);
 
   // ─── Clustered pins (Supercluster) ─────────────────────
@@ -394,11 +402,11 @@ export default function FeedMap({
         onClick={handleFitAll}
         className="absolute top-3 right-3 z-[500] bg-surface/95 backdrop-blur text-app text-[11px] font-bold px-3 py-1.5 rounded-full shadow-md border border-app hover-bg-app transition"
       >
-        {postCount} in view
+        {error && pins.length === 0 ? 'Unavailable' : `${postCount} in view`}
       </button>
 
       {/* ─── Overlay: Search this area ─────────────────────── */}
-      {mapDirty && (
+      {mapDirty && !error && !loading && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[500]">
           <button
             onClick={handleSearchArea}
@@ -408,6 +416,18 @@ export default function FeedMap({
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             Search this area
+          </button>
+        </div>
+      )}
+
+      {error && !loading && (
+        <div role="alert" className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] bg-surface/95 backdrop-blur-sm border border-app text-app-muted text-xs font-medium px-4 py-2 rounded-full shadow-md flex items-center gap-2">
+          <span>Couldn&apos;t load posts.</span>
+          <button
+            onClick={() => fetchPins(bounds)}
+            className="font-bold text-primary-600 dark:text-primary-300"
+          >
+            Try again
           </button>
         </div>
       )}
@@ -437,7 +457,7 @@ export default function FeedMap({
       <ZoomGateOverlay visible={belowZoomGate} contentLabel="posts" />
 
       {/* ─── Overlay: Empty state / Nearest activity ───────── */}
-      {!loading && !belowZoomGate && pins.length === 0 && bounds && (
+      {!error && !loading && !belowZoomGate && pins.length === 0 && bounds && (
         <NearestActivityPrompt
           viewCenter={viewCenter}
           nearest={nearestActivity}
