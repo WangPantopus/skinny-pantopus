@@ -4,9 +4,9 @@ Updated 2026-09-21T00:29:59.111864+00:00. **Stream incomplete; bounded milestone
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/workstream-accounts-social`, local HEAD **5e3a8b963**, application tree
+branch `codex/workstream-accounts-social`, local HEAD **e11123328**, application tree
 clean. Only untracked owned `.next-stream3/` remains. Preserve it while Next runs.
-Remote primary branch is **07827d2b0** after isolated reuse of the accepted iOS fixture correction; live runtime includes the separate preference failure repair5e3a8b963.
+Remote primary branch is **07827d2b0** after isolated reuse of the accepted iOS fixture correction; live runtime includes separate preference failure5e3a8b963 and canonical timingUI e11123328.
 Coordinator requested explicit commit pushes for the later independent milestones:
 
 | Milestone | Branch / head | Review / current CI |
@@ -31,7 +31,7 @@ Source423, private reminder-prefs-baseline.json and before/after snapshots.
 
 Committed/pushed **5e3a8b963** on codex/stream3-preference-failures in
 [Draft PR75](https://github.com/WangPantopus/skinny-pantopus/pull/75), stacked on PR73
-branch423. Coordinator reviewed exact two-file source; required CI pending. No older
+branch423. Coordinator reviewed exact two-file source; exact-head CI35548342100 all applicable green. No older
 PR ref changed. Current repair checks database errors, preserving genuine absent-row defaults.
 Actual candidate UI: failed GET500 shows Try Again; restored SELECT and Retry returns200.
 INSERT/UPDATE denial500 shows safe error and retains selected15/30; sameformretry200
@@ -51,6 +51,34 @@ prefs. Master/paid/Beacon variants inspected; no replacement implementation need
 Controlled ownerHTTP page[0] plus SQL booking start+2min and real-clock manual worker
 produced0 reminder_0m logs/notices; original page/times restored in finally. This is a
 controlled API/SQL reproduction, not natural timing or UI delivery acceptance.
+
+## PR77 — canonical web reminder timing, ready for review / CI
+
+Coordinator assigned exactly RemindersQuickSetup.tsx, WorkflowList.tsx, and
+NotificationPrefsForm.tsx reminder section. Reuse existing SDK get/updateBookingPage,
+canonical reminder_minutes already used by native/worker; preserve[]/0 and existing
+five/43200 limits. Existing design/channel/pause policy stays. Scope async responses
+and pending timers to originating owner/mount; serialize auto-saved reminder edits.
+Committed/pushed **e11123328** on codex/stream3-reminder-timing-ui in
+[Draft PR77](https://github.com/WangPantopus/skinny-pantopus/pull/77), base PR75branch.
+Coordinator reviewed source. CI35549296796 running; local finaltypes/lint pass,
+no new helper/test/schema. ActualH1[0]save/reload,[]→WorkflowNoReminders→A4none;
+rapidA4edits under2200msfirstreplyhold persist latest15/30/60; reloadmatches.
+Five-choicecap and31days rejected;30days43200 saved. Readfailure500 across all3
+surfaces is explicit/retryable. UPDATEfailure H1retains/A4rollsbackconfirmed; restore
+and retry saves. H1doubleSave/lostcommitted503 with neweredit retainslatest/retry;
+A4pendingdeparture retires queuedsecondwrite and latecompletion. SQLgrants restored.
+
+Actuallogout during heldEvanPUT retiresoldtab. Boblogin and reopenedH1 show onlyBob
+1day+1hour; BobSQL unchanged. **Newlogin occurred1.1s after oldreply release**, so no
+new-login-before-old-reply claim. Home/business owners and native/provider/offline
+remainunverified. Worker0/empty/30day delivery unchanged; channel/pause mismatch and
+oldWorkflow helper copy remain separate. This is persisted timingUI acceptance only.
+CreatedEvanBookingPage27c8a4f3-4e62-43ef-8c40-cd25c5ae6637 deleted0; Evanprefs0,
+Bobpage1440/60 unchanged; all faultflags consumed. Otheroriginalfixtures retained.
+Evidence reminder-alignment-ui-results.json, page-response-faults.jsonl,
+reminder-alignment-types-final.log/lint-final.log, bound to committed3file hashes.
+Prior PR75 failure repair remains separate at5e3a8b963; all existing PR refs intact.
 
 ## Current safety milestone — merged, broader verification continues
 
@@ -204,7 +232,7 @@ retained; exact IDs in evidence. No new unit tests.
 
 ## Runtime, retained fixtures and evidence
 
-Owned HTTP18130 (current launcher session31958), Next18131 (60362); real app.js,
+Owned HTTP18130 (current launcher session34592), Next18131 (60362); real app.js,
 GoTrue/Kong64531/PostgREST/SQL64532 project pantopus-stream3-block-r1, private
 workdir /private/tmp/pantopus-stream3-auth-r3. Host stream3-auth.localhost isolates
 cookies from other streams. SMTP sink pantopus-stream3-mail-r3 binds127.0.0.1:64535
@@ -232,7 +260,7 @@ physicalAndroid prevent new installed acceptance; current native CI is not scree
 
 Primary private /private/tmp/pantopus-stream3-20260920-r1; durable private mirror
 /Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/
-contains **144 files**, MANIFEST SHA256 **8ee9f1276a31843166eaace412e5663a61125a82949514f88c9d7546d31ecf87**. Coordinator checked fourcandidate
+contains **153 files**, MANIFEST SHA256 **fadb56f5412df7ed0ad857bac92b0fef52efb95a3dbeccd920aa81afe609952c**. Coordinator checked fourcandidate
 hash bindings. Individual artifacts retain actual source/configuration, not a blanket
 HEAD rerun. Credentials/tokens/operatorlogs stay private, outside Git/chat.
 
