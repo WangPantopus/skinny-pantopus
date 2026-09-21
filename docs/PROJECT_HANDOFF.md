@@ -1,5 +1,72 @@
 # Pantopus project handoff
 
+## September21 — Requests error/retry candidate reviewed
+
+PR131 original `7d70f45f39b8602dde592c98cb45164d576e6e96` passed exactCI35594780550.
+Coordinator verified20 candidate hashes, page bytes, full request/invite/occupancy/
+audit/count equality across repeated503,403 and recovery, and complete RPC function
+owner/definition/ACL/EXECUTE restoration. Existing page +9/-3 uses existing ErrorState/
+failureMessage and guarded fetchData; genuine empty200 stays unchanged. Three initial
+automatic empty reads were reconciled from receipts without repeating UI. Existing
+mutation handlers are byte-identical; no new unit tests or native/session acceptance.
+Exact base12/extra fixtures0, runtime released and private provider calls0. Source12/
+baseline16 evidence reused. Updated head45c3be38b4a8c67b33dbe6a2fdfcbe8bf7a4b6ec
+adds only five documents; page source unchanged. Updated-head CI required before merge.
+Frozen live02 c0b4cc99df2301da82a8f9e6fc08896806866931317027ec4655c1a2fd952d85
+is captured with this record. Standalone Audit source12/63bindings is a separate lead;
+conditional runtime-only grant begins after131 integration, never new app work here.
+
+Stream3 natural-session plan608 hashes verified. Recorded login10:40:13.684 and
+3600s access-cookie lifetime allow earliest timing-based expiry check11:40:20UTC only
+if no later renewal. One protected-route navigation, safe same-origin refresh/actor
+receipts and unchanged preferences are granted; no cookie/clock/JWT/auth DB mutation,
+manual refresh substitution, silent relogin or native/provider claim. Owned Next now
+42165/42493 on loopbackalias18131; API7996/DB/session retained. Actual natural refresh
+is still pending and must not be claimed from the prior no-token redirect probes.
+
+Paid1aecd is clean/pushed and unchanged; fullCI35592232217 continues Android and iOS
+matrix checks. Its isolated Following job had a diagnosed Docker Hub connection reset,
+not an application failure; failed-job retry deferred until workflow completion.
+Previously published128/129/130 stays closed. All streams remain incomplete.
+
+
+## Later work — verified Requests read failure and local redirect correction
+
+Stream2 baseline16 artifacts independently verified, live02 frozen941da545. Actual
+Requests503 while members/me200 falsely rendered No pending requests; full row/count
+state unchanged and exact RPC function/owner/ACL/EXECUTE restored. Cleanup complete.
+README grants only existing Requests error/retry state with existing ErrorState and
+safe failure helper; no mutation-handler/design/service/schema/new test changes.
+
+Stream3 hostname correction607 hashes and structured process/environment/probe
+receipts reviewed. Only owned Next startup hostname changed: old14400/14742 absent,
+new42165/42493, retained API7996 unchanged. Same cwd/distDir/API proxy and exact
+private environment preserved; alias loopback validated. Synthetic no-token probes
+now307 relative session/refresh with exact query and no Set-Cookie. Local runtime
+configuration is corrected; no real expiry/refresh, production auth/native/provider
+acceptance. Next actual-session phase requires a bounded evidence/retention plan.
+
+Published128/129/130 batch remains complete within recorded scope. Paid1aecd still
+awaits nativeCI completion and the already diagnosed Docker Hub failed-job retry.
+No paid source/push changes, no actual Stripe operations, no duplicate UI journeys.
+
+
+## September21 — documentation130 published and merged
+
+Documentation130 exacte3458772ea1c8d3646aa2c8a6c8e1697fd25b6f2 passedCI35593602903
+and merged `d8657ee7a161268f8dfd1742170496c08deb4e1f`. Fixed128/129 source, reviewed
+runtime evidence and cleanup now published separately from feature changes. Durable
+root removal audit36 files includes next-batch source/merge/CI receipts. Paid1aecd is
+still fixed under native CI; failed Following job retry is deferred by GitHubHTTP403
+while workflow active. No new paid update or current full-CI success is claimed.
+
+Later Home Requests-list verification and Stream3 local Next hostname correction are
+separate README assignments. The latter follows verified no-token redirects and local
+startup evidence only; no shared auth code or real expiry acceptance. All streams
+remain incomplete. Next: finish current paid CI and retry the diagnosed image-pull
+failure, then adopt final reviewed master once with appropriate combined checks.
+
+
 ## September21 — reviewed Home approval and host email repairs merged
 
 PR128 merged `b412b1b589bd9fa1755887e7c6afe26112c7c55e` after exact updated
