@@ -2924,3 +2924,70 @@ env/argv/cwd exactinmemory; descriptor/decisionabsent, tab30closed. Next42165/42
 token/cookie export. Safe logout-loss-* snapshots/observer/transport/UI/cleanup
 mirrored, 691 verifiedhashes MANIFEST **d49d23a7d72e93b75e6f7f2379e8a8d3a0d83d763ed874ca0eecc818b421120f**. No newCI/source
 change; coordinatorreviewpending within above limits.
+
+
+## Next inventory priority — A02 remote revocation/open browser (proposal only)
+
+Reuse accepted82/136/138/691. PR82 proved sign-out-others auxiliaryHTTP401, not
+private-state retirement/current authorization in a still-open secondary browser.
+Local logout/reply-loss acceptance cannot substitute. This is the next bounded
+security/session gap; native/provider/platform limitations remainopen. No repeated
+source searches or runtimejourneys thismilestone. ExistingSecurity step-up action→
+/api/auth/sessions/revoke-others→authDeviceService/AuthSession/GoTrue contract from
+accepted82; latest client/middleware bindings reused with exact priorlimits.
+
+Propose one visible secondarybrowser case after coordinator narrowremote-action
+source rebind and isolationreview. Existing authorizedfixture must have zeroactive
+sessions before creating two ownlogins; do not revoke retainedBob/peerfixture
+sessions. Two independent cookie/store contexts and distinctsessionIDs required;
+two tabs alone insufficient. Supported separateprofile capability or reviewedowned
+alternateorigin stillunverified. If no zero-sessionfixture/context, stop for exact
+assignment; no speculativeaccountcreation. ClientA actualSecurity signoutothers,
+clientBprotectedSettings read/poll denied/private-state retired; Aretained/Brevoked
+SQL/GoTrue, eventualsafe logincontinuation undercurrentauthorization. No global/
+offline/native/frozenbrowser/provider expansion or oldcancel/passwordtestrepeat.
+Naturalrecords retained, newlycreatedsessions cleanup onlywithinfuturegrant.
+Detailed a02-remote-open-browser-next-proposal.json. Not runtime-ready: fixture/context
+availability and narrowremoteroute binding pending. Current signedout/API48548/
+NextDB/source preserved. Durable692 MANIFEST **b5d2ea6bfc7064d33a17d47c34720268f3eae3223064e94ed6ea1a7c81418576**.
+
+
+A02 assigned readonlypreflight:12 targeted Security/StepUpSDK/routes/middleware/
+services/socket/config bindings exactmasterf4b277861, no sourceadoption/change.
+Knownowned AuthEvan d3671605-b8cc-4e92-8c82-99aa5041ff48 existsinapp+auth, email
+confirmed, zero unrevokedapp/GoTrue sessions/devices/resumegrants. Alice/Charlie
+zero counts excluded because actualaccountsdeleted; Bob3/Dana14actives preserved.
+Currentbrowser signedout; recoverytab4 untouched. No accountcreation/login/revoke.
+
+Supportedcontext inventory IAB1 andChromeextension4; distinctbrowser surfaces, not
+yet provenisolatedauthenticatedsessions. Proposed sameownedalias18131 inboth, no
+alternatehost/profileinstallation. Host-onlylax cookies, refreshpath/api/users/refresh;
+APIcapturedoriginalenv explicitlyallowsalias. AliasSocketContext uses sameorigin
+/socket.io rewrite, not literal-localhostdirectbranch. Actualsocketconnect/delivery
+stillunverified. Passwordstepup creates thenrevokes temporaryGoTrue session; future
+evidence must accountforit and confirmabsence, not assumeonlytwo sessioncreations.
+
+Future narrowjourney: verifydistinctA/Bsession IDs on sameexistingEvanfixture after
+recheckingzeroactive; AexistingSecuritystepup signoutothers, BvisibleprotectedSettings
+read/poll/sessionevent denies+retiresUI/login; Aretained/Brevoked andtempstepups gone.
+No historicalcancel/passwordcase replay/native/provider/global/offline expansion.
+CleanupnormalA logout onlyifgranted/newtabs only/naturalrecords retained. No runtime
+restart/appedit/tests/cookie-storage mutation or userhistory access. Detailed source/
+fixture/context/config a02-remote-open-browser-preflight.json plus two safe inventory
+artifacts; durable695 MANIFEST **c772d3d05b9548edf915893272db8bf7fcddd07799760ea4837df9a6e6f71655**. Runtimegrantpending.
+
+
+Assigned two-browser runtime stopped before authentication: exactEvanzero/full
+baseline confirmed (27historicalapp rows, GoTrue0,prefs0,devices/grants0). IABtab31
+opened login only. Chromecreate request timedout30s and resetCUA; oldChrome4 then
+reportedunavailable. No credentials entered in eitherbrowser; no login/revocation.
+Recovered/closed onlynewIAB31; laterbrowserinventory showsChrome2 andIAB1. Readonly
+Chrome2 ownedtargettab query returnednone; no Chromecreationconfirmed, no borrowed
+user tabs closed or storage/history read. No blindcreate retry/profile workaround.
+
+Full afterEvanmetadata/prefs exactlybaseline; no authHTTP sincebaseline. API48548/
+NextDB/source unchanged; originaltab4/signedoutstate preserved. This is capability
+interruption, not product failure or remote-revocation acceptance. Context4→2
+identity/retry scope needs coordinatorreconciliation; actual two-context isolation
+unverified. Safe remote-browser-before/abort artifacts; durable697
+MANIFEST **622e0f021ff1778933d0089cb65905867e8c23862bf94909c8dd569df1891eeb**. No tests/appedit/runtime restart.
