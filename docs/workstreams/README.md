@@ -4,6 +4,24 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21,04:01UTC — bidder identity verification and message destination grant
+
+Documentation PR87 exactc3e116a91 passed CI35559237804 and merged9f14a638a529dd272817b08c797fd11e79047ae6.
+Root reserves18132/18133/64561–67 for private bidder-identity-r1/f9200300, reusing clean
+owned wallet-read-r1/full77 schema. Existing OffersPanel canonical bidder identity only:
+previous actual UI Anonymous; API serializer publishes displayName/handle/avatarUrl/href.
+Verify the concrete mismatch and navigation before repair. No backend/private-field/
+newfile/schema/style/test change, no provider writes, no native reservation.
+
+Stream3 sole writer existing marketplace useListingDetail send-success destination,
+PublicProfileClient.handleMessage navigation and ChatRichCard listinghref for reproduced
+message201→ignored roomquery/inbox and ViewListing404. Compare existing/archive/open;
+reuse canonical conversation/marketplace screens, preserve other cards/styles/policy and
+draft/error behavior. Verify actual send/persisted message/destination, profile Message,
+card navigation and missing/deleted boundaries. No new routes/files/backend/schema/tests.
+UserIdentityLink remains an unverified source lead; neither stream edits that shared file.
+Live03 writer released after publication; peer runtime retained.
+
 ## September21,03:57UTC — Stream1 runtime released; integration batch closing
 
 Paid2a05e797e includes verified wallet history-refresh repair02706ba39 and reviewed

@@ -21,7 +21,7 @@ actual SELECT500 showed existing error/retry, restored SELECT plus same Retry sh
 both exact credits. Payer notice returned to the exact second completed gig with
 owner controls. No bank payout or real48-hour waiting claim.
 
-Private wallet-release-r1/f9200290 evidence:35 mirrored/hash-verified files under
+Private wallet-release-r1/f9200290 evidence:36 mirrored/hash-verified files under
 owner `.pantopus-recovery/audits/20260921-stream1-wallet-release-r1`.
 Synthetic local identity/socket/push; actual payment/SQL and in-app notification
 returns. Existing unchanged relay/concurrency evidence reused; outbox transport
