@@ -7,6 +7,24 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## September 21, 04:49 UTC — new paid batch pushed; prior full CI green
+
+Paid **42dbe4b2ccd696101b733519be5541b9819f8082** is clean/pushed, integrating reviewed
+master4e58b0bca through PR95 plus verified identity7ad896338 and Q&A reader4b8296f10.
+[Current CI35562351562](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35562351562)
+was explicitly dispatched because no automatic PR run appeared; it is pending.
+Prior exact24c519653 completed [CI35560003741](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35560003741)
+SUCCESS15 applicable checks/one Seeder skip, including Android and allthreeiOS.
+Final receipt is saved in the bidder mirror (now16files). Both newer private mirrors
+have27files including integration receipts; payment/wallet/SDK source unchanged by
+integration. The earlier QA identity body is preserved by its later loader repair.
+
+Root fixtures/privileges/runtimes/tabs are cleaned as recorded; no native reservation.
+PR34/47 remain draft, PR46/user work untouched. PR96 exactd10e source/evidence and
+354-file durable manifest reviewed; its manual CI35562211102 includes native jobs
+and remains pending. Later popup repair stays separate. No unfinished scope merged.
+Hold published paid source until its own new gate completes; preserve prior evidence.
+
 ## September 21, 04:41 UTC — Q&A read failure and recovery verified
 
 Local paid **4b8296f10** follows7ad896338 and changes only existing QASection.tsx.
