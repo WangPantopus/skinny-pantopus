@@ -30,10 +30,15 @@ final class InviteeManageBookingViewModelTests: XCTestCase {
 
     // swiftlint:disable line_length
     private func body(status: String, canAct: Bool) -> String {
-        """
+        let start = Date().addingTimeInterval(7 * 24 * 60 * 60)
+        let formatter = ISO8601DateFormatter()
+        return """
         {"booking":{"id":"b1","status":"\(
             status
-        )","start_at":"2026-09-17T16:30:00Z","end_at":"2026-09-17T17:00:00Z","invitee_name":"Maya Chen","invitee_timezone":"America/Los_Angeles","location_mode":"video"},
+        )","start_at":"\(formatter.string(from: start))","end_at":"\(formatter
+            .string(from: start
+                .addingTimeInterval(30 *
+                    60)))","invitee_name":"Maya Chen","invitee_timezone":"America/Los_Angeles","location_mode":"video"},
         "actions":{"can_cancel":\(canAct),"can_reschedule":\(canAct)},
         "eventType":{"id":"et1","name":"Intro call","slug":"intro","default_duration":30,"location_mode":"video","cancellation_window_min":1440},
         "page":{"slug":"ada","title":"Maria Kessler","owner_type":"user","timezone":"America/Los_Angeles"}}
