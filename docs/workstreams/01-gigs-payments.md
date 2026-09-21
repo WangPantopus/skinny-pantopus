@@ -2,6 +2,17 @@
 
 ## September21,04:08UTC — canonical bidder identity verified
 
+Latest04:12UTC: paid **24c5196537c06de9b03f45fa8b6b78357247cb82** is clean/pushed,
+including bidder repaira3ff82a01 and reviewed mastere8ece6ebc through PR93. Current
+[combined CI35560003741](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35560003741)
+pending. Prior2a05 CI35559173441 is superseded (non-native checks passed, native
+unfinished), not green. Accepted Offers/wallet/backend/SQL/SDK hashes unchanged by
+integration; bidder durable mirror now15files including integration receipt. PR93
+exacte036af696 passed CI35559652324 and merged e8ece6ebc9a8f3696fd903831e5a98ea0fd6579a
+only after three source hashes, real retry/destination and cleanup review. Hold paid
+source stable until this gate; later Stream3 Hide/mute findings remain separate.
+Root fixtures/runtimes remain cleaned/stopped. PR34/47 remain draft.
+
 Local paid **a3ff82a01** adds one existing OffersPanel.tsx repair: read canonical
 public displayName/handle/avatarUrl/locality and enable the existing identity link
 only when its canonical href matches that handle. Actual baseline displayed Anonymous

@@ -9,6 +9,17 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 ## Current checkpoint — September 21, 03:57 UTC
 
+Latest04:12UTC: paid **24c5196537c06de9b03f45fa8b6b78357247cb82** is clean/pushed,
+including bidder repaira3ff82a01 and reviewed mastere8ece6ebc through PR93. Current
+[combined CI35560003741](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35560003741)
+pending. Prior2a05 CI35559173441 is superseded (non-native checks passed, native
+unfinished), not green. Accepted Offers/wallet/backend/SQL/SDK hashes unchanged by
+integration; bidder durable mirror now15files including integration receipt. PR93
+exacte036af696 passed CI35559652324 and merged e8ece6ebc9a8f3696fd903831e5a98ea0fd6579a
+only after three source hashes, real retry/destination and cleanup review. Hold paid
+source stable until this gate; later Stream3 Hide/mute findings remain separate.
+Root fixtures/runtimes remain cleaned/stopped. PR34/47 remain draft.
+
 Paid **2a05e797e** is clean/pushed, including reviewed masteref7382ea1 through PR91.
 Actual Stripe TEST capture→wallet release→notification return found and repaired
 stale history after the balance refreshed. Two real captures, exact1063c/638c credits,
