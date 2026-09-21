@@ -270,6 +270,7 @@ async function notifyBookingEvent({ booking, eventType, page, kind, manageToken 
  */
 /** Human lead label for a reminder offset in minutes. */
 function formatLead(min) {
+  if (min === 0) return 'now';
   if (min >= 1440) {
     const d = Math.round(min / 1440);
     return d === 1 ? 'tomorrow' : `in ${d} days`;
