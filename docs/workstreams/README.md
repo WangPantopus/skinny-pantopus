@@ -4,6 +4,13 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 04:22 UTC — gig identity baseline reservation
+
+Root reserves owned API18132/web18133/Supabase64561–67, reusing clean isolated
+wallet-read-r1 full77 schema for gig-identity-r1/f9200310. Verify existing poster/Q&A
+identity contracts and real UI before repair; paid24c source remains unchanged during
+current CI. No provider writes intended, no native reservation or peer runtime use.
+
 ## September 21, 04:19 UTC — checked feed reads and unmute grant
 
 PR94 exact1fb5a58adc passed CI35560095912 and merged
