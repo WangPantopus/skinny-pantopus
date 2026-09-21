@@ -2178,7 +2178,7 @@ router.post('/hide/:id', verifyToken, async (req, res) => {
 });
 
 /**
- * POST /api/posts/mute — Mute a user or business
+ * POST /api/posts/mute — Mute a user, business, or persona
  */
 router.post('/mute', verifyToken, async (req, res) => {
   try {
@@ -2188,8 +2188,8 @@ router.post('/mute', verifyToken, async (req, res) => {
     if (!entityType || !entityId) {
       return res.status(400).json({ error: 'entityType and entityId are required' });
     }
-    if (!['user', 'business'].includes(entityType)) {
-      return res.status(400).json({ error: 'entityType must be "user" or "business"' });
+    if (!['user', 'business', 'persona'].includes(entityType)) {
+      return res.status(400).json({ error: 'entityType must be "user", "business", or "persona"' });
     }
 
     await ensurePostMute({
@@ -2208,7 +2208,7 @@ router.post('/mute', verifyToken, async (req, res) => {
 });
 
 /**
- * DELETE /api/posts/mute — Unmute a user or business
+ * DELETE /api/posts/mute — Unmute a user, business, or persona
  */
 router.delete('/mute', verifyToken, async (req, res) => {
   try {

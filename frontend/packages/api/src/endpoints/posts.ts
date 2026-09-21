@@ -295,14 +295,14 @@ export async function hidePost(postId: string): Promise<{ message: string }> {
 }
 
 export async function muteEntity(data: {
-  entityType: 'user' | 'business';
+  entityType: 'user' | 'business' | 'persona';
   entityId: string;
 }): Promise<{ message: string }> {
   return post('/api/posts/mute', data);
 }
 
 export async function unmuteEntity(params: {
-  entityType: 'user' | 'business';
+  entityType: 'user' | 'business' | 'persona';
   entityId: string;
 }): Promise<{ message: string }> {
   return del('/api/posts/mute', params);
