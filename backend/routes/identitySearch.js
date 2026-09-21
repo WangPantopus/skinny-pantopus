@@ -104,10 +104,10 @@ async function searchTableFields({ table, fields, patterns, eq = {}, limit = 80 
   const settled = await Promise.allSettled(queries);
   const rows = [];
   for (const item of settled) {
-    if (item.status !== 'fulfilled') continue;
+    if (item.status !== 'fulfilled') throw item.reason;
     if (item.value?.error) {
       logger.warn('identity.search.field_query_error', { table, error: item.value.error.message });
-      continue;
+      throw item.value.error;
     }
     rows.push(...(item.value?.data || []));
   }
