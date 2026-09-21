@@ -4,6 +4,28 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21,03:43UTC — marketplace notification destination grant
+
+Stream3 sole writer existing web lib/notificationRoutes.ts for supported listing,
+listings and marketplace links to existing /app/marketplace/:id. Actual question
+notification opened public preview lacking Q&A; native handoff was blocked and is
+not to be retried/bypassed. Compare existing/archive/open source, preserve URL validation,
+query/fragment, other domains/entities and authorization. Verify actual notification
+click to authorized detail/reply and missing/deleted destination; reuse question CRUD.
+No public share/native/backend/provider changes or new files/tests. PR90 frozen at
+fdb37a904 remains coordinator-owned; separate branch. Root wallet-return verification
+uses existing resolver without editing it, so no shared writer conflict.
+
+## September21,03:40UTC — Stream1 wallet release and notification return
+
+Root reserves owned18132/18133/64561–67, reusing cleaned wallet-read-r1 Supabase/full77
+schema. Private wallet-release-r1/f9200290 on paid03bf9; fresh actual Stripe TEST
+payment followed by existing settlement worker, wallet and notification UI/API/SQL.
+Synthetic local identity/ancillary transport and controlled cooling-clock advancement;
+no live funds/Connect bank payout/native claim. Reuse accepted authorization/worker
+concurrency evidence where unchanged. No application edit/new tests without failure.
+Stream3 runtime and Q&A ownership remain separate; no native build reservation.
+
 ## September21,03:35UTC — bounded marketplace Q&A read grant
 
 Stream3 is sole writer of the existing marketplace detail useListingDetail.ts questions

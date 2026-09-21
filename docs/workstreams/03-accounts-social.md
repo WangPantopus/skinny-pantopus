@@ -4,9 +4,9 @@ Updated 2026-09-21T03:24:23.690368+00:00. **Stream incomplete; bounded milestone
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-marketplace-seller`, local/pushed HEAD **e3627adeb356e409f58cd1398b9f76c8a0533d8b**.
+branch `codex/stream3-marketplace-questions`, local/pushed HEAD **fdb37a9047dc55f747325e8224f89272129d873d**.
 Application tree clean; only owned untracked `.next-stream3/` remains. Runtime source
-matches masterbc06d6b39 plus PR88 report and PR89 seller changes below.
+matches mastera12610270 plus exactly three Q&A files below.
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -91,6 +91,51 @@ missing-href, identity-before/sourcecomparison and lint/types artifacts private.
 Durablemanifest 73943dfb9040775b5651bbadd9c0e3cfeb2a4a3af691c0b8fb16b54b0185db23 (296files), source-bound as usual.
 Next: existing marketplace Q&A/save/read journeys and existing broader N/A limits;
 no stream closure.
+
+## Current A05 Q&A read milestone
+
+[Draft PR90](https://github.com/WangPantopus/skinny-pantopus/pull/90), app0ce235cfc,
+reviewfdb37a904 includes currentmastera12610270. PR88 mergedcc28ddd3e after exactCI
+35557360294; PR89 strict216e533af passed CI35557699093 and merged by coordinator
+asa12610270. Source unchanged by branch updates; no blanket journey rerun.
+
+Actual Evan question201 persistedae15b954 on SQLseeded listingaa065fb0-ed74-4846-
+802b-2e0a2dff169a, but UIAnonymous/no link despite safe canonical asker fields. Real
+ListingQuestion SELECT denial GET500 rendered Questions0/Noquestionsyet. Existing
+QASection and caller identical across six archive/open/master variants. Granted
+three-file in-place loader/error/Retry/canonical askernames+href repair; no mutation,
+backend/schema/newfile/type/design change or newtests. Loader keeps knownrows and
+checks listing/request/token/session marker; existing QueryProvider remount retained.
+
+Actual cold/repeated500 explicitRetry/no falseempty, restoredSELECT sameRetry200
+recovers question. Bob actual answer200 persisted and created exactlyone asker notice;
+post-save read200 injected503 retained knownquestion/error; Retry200 recovered answer
+without resubmission. Subsequent warmupvote/read503 and delayedRetry200 followed by
+newerunvote/read200 left0. Older read held03:35:06.001, newerUI06.601, olderrelease
+16.001/finish16.002 destroyedfalse/socketfalse/writableFinishedtrue; finalUI29.986
+still0. Faultlog records questioncount, not full oldpayload; priorvote value follows
+successful toggle sequence. Askerlink actually opens Auth Evan profile. Owner UI
+Delete200 then GET200 yields genuineempty. Existing Save/reload/Unsave worksunchanged.
+
+Generated seller question notice opened correct public/listing preview through bell.
+OpenListing's native handoff was blocked by browsersecuritypolicy and not retried or
+bypassed; native continuation unverified. Saved notification/webbell is not provider
+push evidence. Intact crossaccount Q&A reply notnewlyexercised; existing account
+remount/interceptor evidence reused, newhook guards source-bound only for thatcase.
+
+Exact aa065 listing/question/save/view/interaction/upvote0; both generatednotices
+4930ee07-eba1-49d6-8849-dfc9df8c45e2 and5b9d909c-22e2-4e45-b186-b4eba819e94c deleted.
+OriginalnotificationIDs/readflags unchanged. SELECTrestored, faultflagconsumed;
+Bobbrowseractive/authaudits retained. Backendrestartedowned session36821 appending
+same log, Next18131unchanged; no otherstreamresources touched. Types0errors,
+lint0errors/3pre-existing warnings; currentCIpending, integrationseparate.
+
+Private marketplace-qa-baseline/candidate/sourcecomparison, workflow-before,
+listing-questions-response-faults and lint/types logs; durable304files manifest
+bd043a4acc666aac39a8343eae3f67461c68bfc5027a0d780b9155652f88b9fb. No broad N/A closure. Next read-onlynotification destination trace:
+web resolver maps posts/Home but passes /listings through to publicpreview with no
+Q&A; canonical authenticated listing screen is separate. Request assignment before
+any sharednotification repair. Broader A05/native/provider/authorization stillopen.
 
 ## Coordinator integration progress (read-only reconciliation)
 
