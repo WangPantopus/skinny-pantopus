@@ -91,6 +91,16 @@ was repaired after actual pre-hydration native GET leakage with synthetic data.
 All four forms pass disabled/delayed JavaScript checks. This is a bounded
 subjourney; the authentication change itself closes no additional acceptance row.
 
+## September 21, 06:10 UTC — publication disposition
+
+Paiddd0ee04b5 publishes verified Q&A actions6a with master027afc13a; application bytes
+unchanged from the verified source. Priorc426 fullCI35564679691 passed15/oneSeeder skip;
+new exact-head automatic scheduling pending. PR34/47 remain draft. Persona mute stays
+in Stream3's separate bounded grant until frozen source/evidence review. Root fixtures,
+privileges and runtimes are cleaned; no new unit tests or duplicate accepted journeys.
+No acceptance row closes here; existing native/provider/policy and vote-count atomicity
+limits remain. See live01/03 for source-bound evidence and next actions.
+
 ## 1. Home identity and current access — active work
 
 - [x] H01 **Implemented and locally verified:** Detail/property-detail current authority and held-result retirement pass real SDK/HTTP/SQL acceptance. See [the bounded repair](home-detail-authority-2026-09-11.md); final-head CI remains G05. H02/H06 are also locally verified; H03/H04 projections are now locally verified; H05 native identity is now locally verified; H07/H08 remain partial.

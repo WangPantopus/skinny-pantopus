@@ -4,6 +4,16 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 06:10 UTC — paid milestone published separately
+
+Paiddd0ee04b5 publishes verified Q&A actions with master027afc13a; app bytes match6a.
+Priorc426 fullCI35564679691 passed15/oneSeeder skip; new automatic scheduling pending.
+No root runtime/native reservation; exact cleanup remains recorded in live01.
+Stream3 continues only its existing persona grant, final cleanup/commit/handoff;
+its uncommitted source is excluded from paid. Its completed race and regression
+receipts are reused, not rerun solely because the prior task ended. Coordinator will
+review the frozen source, migration13000 and durable evidence before integration.
+
 ## September 21, 05:57 UTC — Stream1 runtime released
 
 Local6a0858690 Q&A action repair is verified within live01 limits. Exact f9200340

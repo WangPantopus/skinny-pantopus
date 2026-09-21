@@ -1,5 +1,26 @@
 # Stream 1 — Gigs and payments
 
+## September 21, 06:10 UTC — question actions published; prior full CI passed
+
+Paid **dd0ee04b59cf6f18d4f8fd0779a7ffa5622dc2f0** is clean/pushed in the required
+worktree/branch. It publishes verified6a0858690 and integrates master027afc13a;
+backend/frontend/schema/workflow bytes are identical to verified6a. PR47 remains
+draft with current scope and limits. Automatic CI scheduling is pending; no current
+head green claim. Prior exactc426 passed [full CI35564679691](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35564679691):
+15 checks passed, one Seeder skip, including Android and all three iOS checks.
+Payment-reader mirror29files and Q&A-action mirror35files are hash verified with
+final prior-CI and integration receipts. No accepted journey was repeated.
+
+All root fixtures, privileges, provider cleanup and released runtimes remain as
+recorded below. No new unit tests or design changes. Stream3's separate persona work
+is not in this head: its task was resumed from uncommitted source after cutoff; the
+existing completed server race/regression evidence is being adopted, then its owner
+will finish cleanup and a frozen commit/draft PR/live03 for coordinator review.
+QueryProvider already replaces the client and keyed children on session changes;
+no new intact cross-account mute acceptance is claimed. PR34 stays draft; PR46 and
+unrelated work remain separate. Finish exact CI and the documentation publication;
+review Stream3's final handoff before any further integration.
+
 ## September 21, 05:57 UTC — question actions verified and cleaned
 
 Local paid **6a085869048c927ffb677905a247bcc93853ddf0** changes only existing

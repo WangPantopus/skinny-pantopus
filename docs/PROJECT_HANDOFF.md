@@ -7,6 +7,19 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## September 21, 06:10 UTC — Q&A repair published; prior candidate fully green
+
+Paid **dd0ee04b5** publishes verified question-action repair6a0858690 and master027afc13a
+without further application changes. PR47 remains draft; new automatic CI scheduling
+pending. Priorc426 fullCI35564679691 passed15 checks/oneSeeder skip, including Android
+and all three iOS checks. Source, real UI/API/SQL evidence and exact cleanup are in
+[Stream1](workstreams/01-gigs-payments.md); durable mirrors now29payment/35Q&A files.
+No new unit tests or accepted journey repeats. Stream3's persona milestone remains
+separate pending frozen source, final cleanup and draft PR review; its interrupted
+work and already completed race evidence are being adopted. PR34 stays draft,
+PR46/user work untouched. Broader native/provider/policy and count-atomicity limits
+remain open. Finish current gates and publish this documentation-only batch.
+
 ## September 21, 05:57 UTC — question actions verified
 
 Local paid **6a0858690** repairs silent question-action failures, a false-success delete,
