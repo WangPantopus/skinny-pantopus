@@ -4,6 +4,16 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 05:41 UTC — Q&A mutation verification reservation
+
+Root reserves18132/18133/64561–67, reusing cleaned owned wallet-read-r1/full77 schema,
+private gig-qa-mutation-r1/f9200340. Existing QASection vote/pin/delete → SDK → gigs
+routes → SQL; source catch blocks silently discard failures, not yet runtime proof.
+Verify actual denial/retry before any in-place repair. Reuse recent question creation,
+identity and read-recovery evidence; synthetic saved question reader fixture, no provider
+writes/native build/newtests. Publishedc426 stays fixed for CI35564679691. Stream3
+persona grant remains separate; no shared application file or runtime conflict.
+
 ## September 21, 05:39 UTC — persona feed-mute repair grant
 
 Map97/96 integrated027afc13a after exact9b CI35564770177; prior4c6f full native CI
