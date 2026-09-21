@@ -77,11 +77,12 @@ export default function SecuritySettingsPage() {
   const pendingConfirmation = useRef<PendingStepUp | null>(null);
   const scope = useRef(0);
   const request = useRef(0);
-  const captureScope = useCallback(() => {
+  const captureScope = useCallback((allowClearedToken = false) => {
     const generation = scope.current;
     const token = getAuthToken();
     const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
-    return () => generation === scope.current && token === getAuthToken()
+    return () => generation === scope.current
+      && (token === getAuthToken() || (allowClearedToken && getAuthToken() === null))
       && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
   }, []);
 
@@ -105,6 +106,7 @@ export default function SecuritySettingsPage() {
         setDevices(devicesRes.value.devices);
         setSessions(devicesRes.value.sessions);
         setEvents(devicesRes.value.events);
+        setEventsExpanded(false);
       } else {
         setLoadError(errorMessage(devicesRes.reason, 'Could not load your devices.'));
       }
@@ -172,12 +174,15 @@ export default function SecuritySettingsPage() {
   const runWithStepUp = useCallback(
     async (key: string, request: StepUpRequest, action: (token: string, current: () => boolean) => Promise<void>): Promise<boolean> => {
       const current = captureScope();
+      // Successful revoke-all clears the current cookies itself. Only that
+      // response may finish with no token; an account/mount change still retires it.
+      const completed = captureScope(key === 'revoke-all');
       const token = await requestStepUp(request);
       if (!token || !current()) return false;
       setBusy(key);
       try {
         await action(token, current);
-        return current();
+        return completed();
       } catch (err: unknown) {
         if (!current()) return false;
         if (authDevices.isStepUpRequired(err)) {
@@ -187,7 +192,7 @@ export default function SecuritySettingsPage() {
         }
         return false;
       } finally {
-        if (current()) setBusy(null);
+        if (completed()) setBusy(null);
       }
     },
     [requestStepUp, captureScope],
@@ -261,12 +266,8 @@ export default function SecuritySettingsPage() {
       },
     );
     if (!ok) return;
-    // Server-side everything is dead now; clear our cookies + local state and leave.
-    try {
-      await api.auth.logout();
-    } catch {
-      /* cookies are already invalid server-side */
-    }
+    // revoke-all already revokes the sessions and clears the same four cookies
+    // as logout. Retire local state synchronously before another login can occur.
     clearPendingPlaces();
     clearAuthToken();
     toast.success('Signed out everywhere');
