@@ -168,8 +168,10 @@ function ScopedOffersPanel({
           <div className="space-y-3">
             {offers.map((o) => {
               const bidder = o.bidder || {};
-              const bidderName = bidder.name || [bidder.first_name, bidder.middle_name, bidder.last_name].filter(Boolean).join(' ') || bidder.username || 'Anonymous';
-              const bidderUsername = bidder.username;
+              const bidderName = bidder.displayName || bidder.handle || 'Anonymous';
+              const bidderUsername = typeof bidder.handle === 'string' && bidder.handle
+                && !bidder.handle.startsWith('/') && bidder.href === `/${bidder.handle}`
+                ? bidder.handle : null;
 
               const statusColor: Record<string, string> = {
                 accepted: 'bg-green-100 text-green-800',
@@ -212,9 +214,9 @@ function ScopedOffersPanel({
                         userId={bidder?.id || null}
                         username={bidderUsername}
                         displayName={bidderName}
-                        avatarUrl={bidder?.profile_picture_url || null}
-                        city={bidder?.city || null}
-                        state={bidder?.state || null}
+                        avatarUrl={bidder?.avatarUrl || null}
+                        city={bidder?.locality?.city || null}
+                        state={bidder?.locality?.state || null}
                         textClassName="text-sm text-primary-600 hover:underline"
                       />
                     ) : (
