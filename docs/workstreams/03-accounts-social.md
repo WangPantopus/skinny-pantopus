@@ -1,12 +1,12 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T04:27:33.897143+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T04:46:20.184756+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-pulse-filter-errors`, local/pushed HEAD **436a93c190b02cc740836759f37f75e807b472e0**.
-Application tree clean; only owned untracked `.next-stream3/` remains. Runtime source
-matches masterb463ee385 plus four filter/unmute/read-feedback files below.
+branch `codex/stream3-feed-map-errors`, local/pushed HEAD **d10e39b5e05d6ce85d27b40e010b3902b29300ba**.
+Application tree clean; only owned untracked `.next-stream3/` remains. Current map
+milestone frozen for coordinator review; next popup repair belongs on a new branch.
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -21,6 +21,48 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## Current N03/A05 map failure and response ordering milestone
+
+[Draft PR96](https://github.com/WangPantopus/skinny-pantopus/pull/96), app7cebdd5d8,
+review **d10e39b5e05d6ce85d27b40e010b3902b29300ba** after docs-only master merge.
+Prior PR95 exact378c9ee passedCI35561104880 and coordinator merged4e58b0bc;
+its four accepted source hashes/evidence are reused, not a blanket rerun.
+
+Granted existing posts.js posts-only map catch, FeedMap and DiscoverMap posts feedback.
+Baseline FeedMap Search this area under PostSELECT denial returned200/0 in view;
+DiscoverMap actual ShowPosts returned500/blank without feedback. Intact old Askempty200
+also replaced newer Updates1. Six-reference current/archive/open comparison confirms
+reuse in place. Posts-only errors now reach existing500, both callers expose retry,
+FeedMap retains known pins and retires old callbacks by request generation/token/unmount.
+DiscoverMap uses existing abort flag, including turning posts off. No new files/tests/
+SDK/schema/policy change; mixed-layer legacy partial success deliberately remains open.
+
+Actual IAB Evan→local GoTrue/Next18131→full app18130→PostgREST/SQL64532: FeedMap warm
+and cold500, repeated error and keyboard retry200; known1 pin retained and cold state
+Unavailable. Intact old Ask200 release04:35:21.339 leaves newer Updates1. DiscoverMap
+cold50004:42:59/repeated50004:43:02 show error/retry, restored Enter20004:43:13 restores
+marker. Turning posts off during8s hold leaves layer off/no pins/error after intact
+cached304 finish04:43:45.648. This is disabled-layer proof, not reverse-order200 proof
+for DiscoverMap. No mocked authentication/persistence; SQL-seeded public post at synthetic
+NYC then PDX default-map coordinates; SELECT fault and response delay are controlled.
+
+Exact post45a9939c-5852-45e9-9d37-ddae11ca4f07 removed; Post/File/Comment/Hide/Like/
+NotHelpful/Report/Save/Share/View counts0. Original six Post IDs preserved; SELECT
+restoredtrue, responseflag consumed. Original fixtures/authaudit retained. Owned backend
+session44858/Next60362 remain active; Evan browser at deleted popup404. Types0/lint0,
+backend syntax/diff0; no newtests. Required CI pending; integration coordinator-owned.
+Native/provider, broader map session transitions, DiscoverMap warm-failure/reordering
+and mixed partial reporting remain unverified. No N/A row closure.
+
+Private pulse-map-candidate/source-comparison/baseline/boundaries/fixture/types/lint/pr,
+map-response-faults and real-auth-http artifacts; durable 354 files manifest
+**52f815c85d345303a845dc112788b6702eca882dd35b8262affbab3bb7b82656**. Artifact-specific source/config remains authoritative.
+
+Next separate assigned repair: actual DiscoverMap popup View Post used /app/posts/:id
+and Next404. Confirm existing full-post route/API, compare references, then href only
+and actual authorized/missing navigation. No new routes/identity/schema/persona scope.
+Persona feed-mute extension still proposal-only; never repurpose notification mute.
 
 ## Current N03/A05 filter read and unmute failure milestone
 
