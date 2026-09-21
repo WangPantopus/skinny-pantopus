@@ -60,6 +60,7 @@ function MembersContent() {
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
   const [membersError, setMembersError] = useState('');
   const generation = useRef(0);
+  const pageConfirmation = useRef<ReturnType<typeof confirmStore.getSnapshot>>(null);
 
   const tabFromUrl = searchParams.get('tab');
   const accessRequesterParam = searchParams.get('access_requester');
@@ -68,7 +69,10 @@ function MembersContent() {
 
   const retire = useCallback(() => {
     generation.current++;
-    setMembers([]); setMyAccess(null); setAuditLog([]); setAccessRequests([]); setMembersError('');
+    const dialog = pageConfirmation.current;
+    pageConfirmation.current = null;
+    if (dialog && confirmStore.getSnapshot() === dialog) confirmStore.close(false);
+    setMembers([]); setMyAccess(null); setAuditLog([]); setAccessRequests([]); setMembersError(''); setBusyRequestId(null);
   }, []);
   const fetchData = useCallback(async () => {
     if (!homeId) return;
@@ -131,18 +135,27 @@ function MembersContent() {
     const currentIdx = assignable.indexOf(member.role);
     const nextRole = assignable[(currentIdx + 1) % assignable.length];
     const roleLabel = ROLE_META[nextRole]?.label || nextRole;
-    const yes = await confirmStore.open({
+    const revision = generation.current, token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => generation.current === revision && api.getAuthToken() === token && api.getApiBaseUrl() === origin
+      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker && document.visibilityState !== 'hidden';
+    const confirmation = confirmStore.open({
       title: 'Change Role',
       description: `Change ${member.display_name || member.email} to ${roleLabel}?`,
       confirmLabel: `Set as ${roleLabel}`,
       variant: 'primary',
     });
-    if (!yes) return;
+    const dialog = confirmStore.getSnapshot();
+    pageConfirmation.current = dialog;
+    const yes = await confirmation;
+    if (pageConfirmation.current === dialog) pageConfirmation.current = null;
+    if (!yes || !current()) return;
     try {
       await api.homeIam.updateMemberRole(homeId!, member.user_id || member.id, { role_base: nextRole });
+      if (!current()) return;
       toast.success(`Role changed to ${roleLabel}`);
       await fetchData();
-    } catch (err: any) { toast.error(err?.message || 'Failed to update role'); }
+    } catch (err: any) { if (current()) toast.error(err?.message || 'Failed to update role'); }
   }, [homeId, canManage, fetchData]);
 
   const handleRemove = useCallback((member: any) => {
@@ -173,22 +186,31 @@ function MembersContent() {
 
   const handleRejectAccessRequest = useCallback(async (row: HouseholdAccessRequestRow) => {
     if (!canManage || !homeId) return;
-    const yes = await confirmStore.open({
+    const revision = generation.current, token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => generation.current === revision && api.getAuthToken() === token && api.getApiBaseUrl() === origin
+      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker && document.visibilityState !== 'hidden';
+    const confirmation = confirmStore.open({
       title: 'Decline request',
       description: `Decline ${requesterDisplayName(row)}'s request to join as ${formatRequestedIdentity(row.requested_identity)}?`,
       confirmLabel: 'Decline',
       variant: 'destructive',
     });
-    if (!yes) return;
+    const dialog = confirmStore.getSnapshot();
+    pageConfirmation.current = dialog;
+    const yes = await confirmation;
+    if (pageConfirmation.current === dialog) pageConfirmation.current = null;
+    if (!yes || !current()) return;
     setBusyRequestId(row.id);
     try {
       await api.rejectHouseholdAccessRequest(homeId, row.id);
+      if (!current()) return;
       toast.success('Request declined');
       await fetchData();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to decline request');
+      if (current()) toast.error(err?.message || 'Failed to decline request');
     } finally {
-      setBusyRequestId(null);
+      if (current()) setBusyRequestId(null);
     }
   }, [homeId, canManage, fetchData]);
 

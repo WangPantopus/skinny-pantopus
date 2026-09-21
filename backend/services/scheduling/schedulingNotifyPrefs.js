@@ -59,6 +59,7 @@ function kindToHostKey(kind) {
 async function hostWants(userId, kind) {
   if (!userId) return false;
   const prefs = await getPrefs(userId);
+  if (prefs.scheduling?.paused === true) return false;
   return prefs.notify_me[kindToHostKey(kind)] !== false;
 }
 
@@ -66,6 +67,7 @@ async function hostWants(userId, kind) {
 async function hostWantsKey(userId, key) {
   if (!userId) return false;
   const prefs = await getPrefs(userId);
+  if (prefs.scheduling?.paused === true) return false;
   return prefs.notify_me[key] !== false;
 }
 

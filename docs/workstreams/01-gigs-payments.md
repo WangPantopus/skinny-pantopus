@@ -1,5 +1,115 @@
 # Stream 1 — Gigs and payments
 
+## September21, 10:33 UTC — isolated natural reminder timer accepted
+
+Coordinator verified all511 Stream3 durable hashes (manifest6eeeb6178), six source
+bindings unchanged on b409/current master,14 real local PostgREST requests and the
+original UTC10:33 callback at10:33:00.005. Exactly one job callback ran;49 other
+registrations were skipped. ReminderLog201, Notification201 and local SMTP acceptance
+at10:33:00.156 are confirmed. All retained full rows are unchanged with exactly one
+owned Booking/log/notice added. Exact new rows/mail removed, six tables restored,
+original12 Mailpit message IDs restored, child exited0/absent, retained API7996 and
+Next14742 untouched. No source change or duplicate CI run was needed.
+
+Acceptance is limited to the unchanged selected node-cron job under synthetic
+registration/query/transport isolation and a SQL-seeded booking, with real wall clock,
+local SQL and SMTP. No new UI, native, hosted, all-jobs startup, daily-agenda or pause-
+policy acceptance. Existing prior manual-worker evidence remains separately bounded.
+Stream3 may perform source-only reconciliation of the existing pause/resume delivery
+promise and consumers before proposing any runtime or policy change.
+
+Stream2's frozen decline baseline11 artifacts and live02 hash881e4e777 reviewed;
+README grants only existing caller lifetime repair after exact cleanup, reusing the
+role guard/ref. Full paid e970 CI passed. Keep paid head fixed while this peer repair
+is completed/reviewed, then integrate final master once. All streams remain incomplete.
+
+
+## September21 — paid full CI passed; next peer repair under review
+
+Published paid `e970ea26a16526c684ce2087fef0563f7bc26403` full
+[CI35586627926](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35586627926)
+completed SUCCESS:15 applicable jobs passed, including iOS/Android; Seeder skipped.
+No new runtime or broad acceptance follows from CI. PR34/47 stay draft;46 stays
+separate. The default-phase durable mirror now has38 verified artifacts with final
+CI and documentation122 publication receipt. Documentation122 merged
+`9ae572d748cadad856b5a2c8561e7bc3e7cc4624` after exact84915de34
+CI35588730986 passed;123's bounded role repair is included in master.
+
+Keep paid e970 fixed until the next reviewed peer batch is ready, then adopt final
+master once and run relevant combined checks. Root API/tabs remain closed, owned
+Next18133/Supabase64561–67 retained, no provider calls or native build reservation.
+Stream2 reproduced actual Requests Decline confirmation surviving departure to
+Settings: rejection POST200 changed exact pending request to rejected/resolved_by
+owner with one rejection audit, while full occupancy/invite rows stayed identical.
+Current Cancel produced no rejection and unchanged full snapshots. Actual route/
+service/SQL; synthetic identity and two intercepted notification methods, no delivery
+acceptance. Its exact repair/cleanup review is separate from123's completed scope.
+Stream3 has adopted its one isolated timer child and exact temporary booking;
+registration/import inspection reports one selected/49 skipped jobs and no requests,
+sockets or violations on import. Natural callback/SQL/local SMTP/cleanup evidence
+is still pending, so no scheduler closure. All three streams remain incomplete.
+
+
+## September21, 10:25 UTC — member confirmation repair integrated
+
+PR123 merged as `55856362bd736355616da740ff2fda8b8a5fd01c` after exact
+`178b4a17854b56de6b1ace25b58d26d4ea8289e3` CI35588215044 passed. Sole app
+change is the existing standalone Members role caller (+16/-3); accepted source
+bytes match. Coordinator verified18 candidate artifact hashes, four real role POSTs
+(200/403/200/200), full occupancy/audit equality on departure and denial, and intact
+6,003ms delayed response after departure. Existing15-file baseline/121 regressions
+are reused. Pending confirmation closes/noPOST; submitted writes still commit and
+are not canceled. Late-response evidence proves no stale list refresh; toast absence
+is an observation, not a continuous timeline. Session/other-dialog/native/hosted
+limits remain open. All exact fixture counts0, owned runtime stopped/preserved and
+ports released. Frozen live02 SHA25630274412dd7937e92439bfb7a92d2dea7eb8865e12f6d1e99992e8d84a45d429
+captured in coordination005d3e645.
+
+Paid e970 remains fixed under fullCI35586627926; web/backend/schema and Android
+instrumented checks pass, Android assembly and iOS device jobs remain pending.
+No paid merge/adoption or repeated local journey yet. Documentation122 is updated
+to publish123 separately with required new-head CI. Stream3's isolated scheduler
+check continues under its existing grant; no runtime/acceptance expansion.
+All streams remain incomplete and PR34/47 remain draft;46 stays separate.
+
+
+## September21 — paid default repair published; next scopes assigned
+
+Paid branch `codex/paid-gig-integration` is clean/pushed at
+`e970ea26a16526c684ce2087fef0563f7bc26403`, including the verified default-card
+repair `d1da221dbf01a75a863b147c32f0c0fc7640c8f8` and final master
+`b409bc9190dd43bbdcee0cdba8f307ae959d2dc3`. Documentation119 merged after
+exact667563758 CI35586138577. Required new-head
+[CI35586627926](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35586627926)
+is running; application/web/schema gates passed, native gates remain pending.
+Keep this published head fixed. Prior a795 full CI passed15 applicable jobs/one skip.
+
+Combined TypeScript and scoped lint exit0 (19 existing warnings), whitespace clean.
+The three application files exactly match accepted candidate bytes: default-card
+component and merged120/121 notification/member components. Backend/native unchanged;
+70 affected backend checks and bounded peer UI/SQL evidence are reused. No broad
+current-runtime rerun or new unit tests. PR47 describes the published head/evidence;
+PR34/47 stay draft, unrelated46 remains separate.
+
+Default-phase durable mirror has34 verified artifacts, including source bindings,
+combined checks and publication receipts. Actual intact reversed default replies
+reproduced the defect; the repaired UI serializes writes, survives two real database
+denials/retry and reload. The first timed-out reply remains excluded. All four exact
+fixture counts0, original grants restored, API/tab closed; Next18133 and owned
+Supabase64561–67 retained. Zero provider calls; native/provider/session/cross-tab
+boundaries are unchanged.
+
+Stream2's new actual role confirmation survived navigation and then sent POST200,
+changing Guest to Admin with one SQL audit. Coordinator reviewed15 frozen baseline
+artifacts, source map and complete fixture/runtime cleanup. README grants only an
+in-place role-dialog ownership/lifetime repair; no repeat baseline or shared UI change.
+Stream3's495-file source reconciliation was hash-verified. README grants one natural
+node-cron tick with exact fixture/query/transport isolation and retained-row snapshots;
+whole-app scheduler, hosted delivery and daily agenda remain unverified. No heavy
+native build is reserved. All three streams remain incomplete; no restart prompts,
+duplicate tasks or speculative policy work are needed.
+
+
 ## September21, 09:55 UTC — web follow-ups integrated; paid gate passed
 
 PR120 merged `246407e8ea2fa1973b2ba242b9c80c67284b18d3` after exact03279bd78
