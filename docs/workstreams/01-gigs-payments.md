@@ -1,5 +1,64 @@
 # Stream 1 — Gigs and payments
 
+## September21 — saved-card default repair verified; next peer batch ready
+
+Local paid commit `d1da221dbf01a75a863b147c32f0c0fc7640c8f8` changes only existing
+PaymentMethodList (10 additions/1 deletion). Published a795 remains fixed while
+fullCI35582693975 finishes; no new-head CI claim. Actual same-screen Mastercard
+then Visa default requests committed in that order; the older Mastercard200 was
+delivered intact after Visa200 and incorrectly replaced the UI default while SQL
+remained Visa. The first43-second held attempt had a destroyed client connection
+and is explicitly excluded from intact-response proof. Corrected automatic release
+occurred0.575seconds after hold with live socket and completed response.
+
+Six current/archive/open web handlers were identical. Existing native serialization
+and canonical SQL preference transaction informed an in-place default-action guard:
+synchronously admit one default change, disable only existing default buttons while
+pending, and release in finally. Successful styling/layout/navigation is unchanged.
+No service/schema/new application file or unit test. Actual repaired UI held-success
+plus repeated Enter sends exactlyone RPC; both default controls disable, intact
+reply yields matching Discover UI/SQL, and the next Mastercard change succeeds.
+Two real RPC-EXECUTE-denied UI attempts return503 with exact full rows unchanged;
+controls remain retryable. Restore original grant, keyboard retry saves Visa and
+full reload matches. TypeScript, scoped ESLint and whitespace all exit0.
+
+Private payment-method-default-r1 and durable owner audit of the same dated name
+contain26 verified artifacts/five source bindings. Exact User/authUser/PaymentMethod/
+Notification counts0; SELECT and RPC EXECUTE restored, API18132 stopped, tab27closed.
+Owned Next47970/18133 and79-schema Supabase64561–67 retained. Synthetic cards/sign-in/
+ancillary shell; actual UI/SDK/routes/service/RPC/SQL, no Stripe calls. Existing native/
+provider saved-card actors/setup/cleanup were not replayed. Cross-tab/account/departure,
+other card mutations, native/provider and broader financial acceptance remain open.
+
+PR12003279bd78 exactCI35583298837 passes. All494 durable artifacts/five source hashes
+reviewed; live03 snapshot5b112649 captured with finalCI and source-only unverified
+scheduler/daily-agenda leads. PR121dc9611bc6 exactCI35583917301 passes; one-line existing
+cycle repair,24 durable hashes and candidate page binding reviewed. All10 actual role
+requests checked:8successful persisted roles and2denials. Both denied full member/
+audit states match before exactly; five-role cycle, Cancel/noPOST, nonowner controls,
+rank denial/retry and exact cleanup accepted within recorded local limits.
+Capture frozen live02 SHA2566b0045953ab043a2fd18777f16a02f2b910d8f222e1f9573f158698c8b3ed8b2.
+All12 base counts and extra user/auth/occupancy/override/audit counts0; Stream2 runtime
+released. Preserve missing initial HTTP-log and unrelated fixture503 limitations.
+
+After a795 fullCI passes, integrate120→121 with exact updated-head gates, then doc119;
+adopt that final master with the local default repair and publish one paid update.
+Hold further feature/runtime expansions while this batch catches up. All streams
+remain incomplete; PR34/47 remain draft and unrelated46 stays separate. Fee policy,
+provider/device/session boundaries are unchanged.
+
+## Current runtime verification — web saved-card default replies
+
+Source a795 remains fixed under fullCI35582693975. Root reuses owned18132/18133/
+64561–67 for private payment-method-default-r1, unique f9200390 actors/three synthetic
+saved cards. Existing PaymentMethodList→SDK→pays→stripeService→transactional preference
+RPC/SQL; no provider calls. Verify overlapping selections and an intact delayed
+successful reply, with actual UI/current SQL. Prior native/provider saved-card
+journeys remain accepted and are not replayed. No app edit before actual failure,
+no new unit tests/native build. API18132 was free; owned Next47970 and database
+retained. Exact rows/grants/API/tab cleanup required; peer resources untouched.
+
+
 ## September21 — scheduling Resume handoff reviewed
 
 PR120 is frozen at `03279bd78b2c9691bcfb5fc76305a1b38834a78f`, based on released

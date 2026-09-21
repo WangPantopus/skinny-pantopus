@@ -7,8 +7,8 @@ Application `/private/tmp/pantopus-workstream-accounts-social`, branch
 **03279bd78b2c9691bcfb5fc76305a1b38834a78f**, tracked clean plus owned .next-stream3.
 [Draft PR120](https://github.com/WangPantopus/skinny-pantopus/pull/120) targets released
 master0d6a; automatic [CI35583298837](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35583298837)
-queued exact03279. Bounded implementation/local UI-HTTP-SQL verification complete;
-CI/coordinator review/integration pending separately. Earlier114–118/docs113 integrated;
+completed SUCCESS exact03279. Bounded implementation/local UI-HTTP-SQL verification
+and coordinator review complete; integration remains pending separately. Earlier114–118/docs113 integrated;
 all original feature refs preserved. No whole-stream/native/provider closure.
 Owned18130/PID7996,18131/PID14742,Supabase64531–37 retained. No peer runtime mutation.
 
@@ -2065,3 +2065,18 @@ AutomaticCI35579542422 independently confirmed SUCCESS on exacte729a516a87fb4e40
 durable mirror482files all hashverified, MANIFEST **5cbf7d8b2530cfe1bd323bbdadd8f0937543699c103d41536fe6ebc63f1bdb5c**.
 Earlier481source/runtime artifacts unchanged; no repeat journey/new fixture/code edit.
 Coordinator owns review/integration, held behind paid fullCI; no whole-stream closure.
+
+## PR120 final exact-head CI and source-only limits
+
+Coordinator reviewed493files/fivebindings and captured live03248883e0 in f07a40cdc.
+AutomaticCI35583298837 now independently confirmed SUCCESS on exact
+03279bd78b2c9691bcfb5fc76305a1b38834a78f. Final jobreceipt scheduling-resume-ci-final.json;
+mirror494files allhashverified, MANIFEST **88077e0ddcd7fa4c4b32c607d1cd0f2f53a57ca289699a95a412f53981bdfc1d**.
+Source frozen; no repeated runtime acceptance/new fixture/app change. Coordinator holds
+new featuremerges/repairs behind paid a795 fullCI.
+
+Source-only N05 reconciliation: notificationPrefs.ts daily_agenda row promises each
+morning8am, but scoped backend search found no key consumer. Existing bookingReminders
+cron is minutes3,18,33,48 in jobs/index.js. Prior manually invoked worker/localSMTP
+evidence does not establish natural scheduler/daily-agenda delivery. These are separate
+unverified contract leads, not missing-feature proof or new delivery-policy authorization.
