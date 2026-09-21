@@ -4,9 +4,9 @@ Updated 2026-09-21T03:24:23.690368+00:00. **Stream incomplete; bounded milestone
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-marketplace-report`, local/pushed HEAD **956dab1d193a126c045820d13aa13ce8f23a3679**.
+branch `codex/stream3-marketplace-seller`, local/pushed HEAD **e3627adeb356e409f58cd1398b9f76c8a0533d8b**.
 Application tree clean; only owned untracked `.next-stream3/` remains. Runtime source
-matches masterbc06d6b39 plus exactly the two marketplace report web files below.
+matches masterbc06d6b39 plus PR88 report and PR89 seller changes below.
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -66,6 +66,31 @@ while real detail API returns canonical safe local identity displayName/handle/h
 SellerSection still reads removed legacy name/username/profile_picture_url. Existing
 public href opens Auth Bob correctly. No repair yet; request bounded component
 assignment and preserve typed safe contract (do not restore private legacy fields).
+
+## A05 seller identity follow-up
+
+[Draft PR89](https://github.com/WangPantopus/skinny-pantopus/pull/89), e3627adeb,
+stacked on PR88; exact two existing files SellerSection.tsx and optionalhref only
+in types/listing.ts. Coordinator granted both after actual detail User/disabled
+ViewProfile versus correct canonical API identity. Both files unchanged across
+master/paid/staging/Beacon/initialarchive. No backend privacy restoration or design
+change; canonical fields/href reused, legacy fields left for other consumers.
+
+Actual Evan UI detail→ViewProfile Enter→Auth Bob public page and sellername click
+both pass. Separate SQLseeded free fixture9f6a46b8-7127-4e1b-a7d1-27e552a1020a
+avoids repeating accepted creation. Controlled persisted empty ownerusername/local
+handle made real API hrefnull; UI retained safe displayname and disabled navigation.
+Both original handles restored exactly; reload recovered links. This is unavailable
+publicdestination evidence, not proof of production redaction or completenullcreator.
+Native/avatar-download/businessdestination unverified. Types0errors/scopedlint0;
+no newtests. Current requiredCI/integration pending at handoff.
+
+Exact sellerfixture deleted; Listing/View/Interaction/Report counts0, originalprofile
+handles restored. Authaudits retained, Evanbrowseractive. marketplace-seller-candidate,
+missing-href, identity-before/sourcecomparison and lint/types artifacts private.
+Durablemanifest 73943dfb9040775b5651bbadd9c0e3cfeb2a4a3af691c0b8fb16b54b0185db23 (296files), source-bound as usual.
+Next: existing marketplace Q&A/save/read journeys and existing broader N/A limits;
+no stream closure.
 
 ## Coordinator integration progress (read-only reconciliation)
 
