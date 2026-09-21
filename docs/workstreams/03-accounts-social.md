@@ -2698,3 +2698,43 @@ retry executed. PR82 client/provider bytes identical; historical retirement reta
 openPR metadata47/46/34 no dedicatedauthfix. Detailed source hashes/sequence/limits
 logout-burst-source-attribution.json; durable637 MANIFEST **edbf0d6a92976197bbcfd117b6447187555a08e7907669b056b7a0dc45feee9a**.
 Coordinator review pending; original failedreturn remains unverified.
+
+
+## PR136 — stop signed-out automatic web refresh
+
+Granted oneexisting SDK client.ts gate now requires hasActiveSession for automatic
+web401 refresh. Mobile branch, explicitrefresh, staleaccess sessionflag, generation
+guards/singleflight/privacy retirement unchanged. No limiter/backend/UI/provider
+redesign/newfiles/tests. Commit d6fba68d3cf1154211849a1b659a7e48d03012a6 pushed
+on codex/stream3-session-return-reconciliation; draft
+https://github.com/WangPantopus/skinny-pantopus/pull/136 (separate paidbatch).
+
+After naturalratewindow ordinary UI login created14312967-9a68-4c51-bcb0-0266f6898285;
+other own sessions unchanged. Candidate Nextcompiled SDK guard present in loaded
+page/layoutchunks; DOM script list recorded. Actual Settings keyboardlogout retired
+only14312967 registry/GoTrue;9 trailing privateGET401, **zero refreshPOST/429**.
+Observed immediate intermediate remounted shell had blankaccount/defaultsettings;
+then login navigation completed. Protected own scheduling-settings query redirected
+to exactlogin redirectTo, no private settings content in observedloginUI. Actual
+login200/localGoTrue passwordgrant20012:27:45 returned original path/query/AuthBob.
+Newsession507ef9ec-89b6-4ff3-a04c-6c69d5e0618c onlyaddition; all other own app/GoTrue
+metadata unchanged from postlogout. Fullprefs[] unchanged; identity-bound prefsGET304
+12:27:45.738 cachevalidation. Complete measuredcandidate interval:2POST200 (logout/
+returnlogin),9GET401, zero refresh/429; initial setup login precedes this interval.
+
+Cleanup: tab27closed, zero-delaydescriptorconsumed, retained natural revoked/audit/
+newloginrecords. API73610/Next42165+42493/DB unchanged, no counterreset/restart.
+Sourcebefore-finalcommit hash in logout-fix-before; UI/script/safeHTTP/SQL/GoTrue
+snapshots in logout-fix-*. Prior natural/explicitrefresh evidence reused for unchanged
+controlflow only; new401gate staleaccess compatibility sourcechecked, no newexpiry
+runtime claim. No native/hosted/negative-destination/broadsessionclosure. Baseline
+historical tab initiator stillunproven; candidate boundedjourney passes.
+
+Existing57 authArrival/sessionRefresh tests pass; web typegate0errors; SDKscoped
+lint0errors/33existingwarnings; diffcheckpass. StandaloneSDK typecheck stillfails35
+diagnostics. Isolated old/candidate compilecomparison both59normalizedidentical
+(includes copy-specific module resolutionerrors), not standalonegreen. Initial
+pnpm isolatedcommand couldn't resolve workspace; direct existingtsc used. Initial
+webeslint invocation ignored externalfile; actualpackageconfig rerun recorded.
+No newtests or testcoverage claim. RequiredCI pending, no merge/integration claim.
+Durable653 hashes verified; MANIFEST **2786b1fae61dbc82ed908c0c055900c7d4aeaff203e16157c7947cd6c9cdcd55**. Coordinatorreview.
