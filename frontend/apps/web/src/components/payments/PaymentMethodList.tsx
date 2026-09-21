@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { CreditCard } from 'lucide-react';
 import { payments } from '@pantopus/api';
 const { getPaymentMethods, deletePaymentMethod, setDefaultPaymentMethod } = payments;
@@ -89,6 +89,8 @@ export default function PaymentMethodList({
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [settingDefault, setSettingDefault] = useState(false);
+  const defaultChangePending = useRef(false);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -124,6 +126,9 @@ export default function PaymentMethodList({
   };
 
   const handleSetDefault = async (id: string) => {
+    if (defaultChangePending.current) return;
+    defaultChangePending.current = true;
+    setSettingDefault(true);
     try {
       await setDefaultPaymentMethod(id);
       setMethods((prev) =>
@@ -131,6 +136,9 @@ export default function PaymentMethodList({
       );
     } catch {
       toast.error('Failed to set default payment method.');
+    } finally {
+      defaultChangePending.current = false;
+      setSettingDefault(false);
     }
   };
 
@@ -248,6 +256,7 @@ export default function PaymentMethodList({
                   }}
                   className="text-xs text-app-text-secondary hover:text-emerald-600 px-2 py-1"
                   title="Set as default"
+                  disabled={settingDefault}
                 >
                   Set default
                 </button>
