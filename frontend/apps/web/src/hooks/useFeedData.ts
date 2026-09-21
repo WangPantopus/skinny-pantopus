@@ -193,12 +193,20 @@ export function useFeedData({
   const loadingMore = feedQuery.isFetchingNextPage;
   const hasMore = feedQuery.hasNextPage ?? false;
 
+  const retryFeed = useCallback(async () => {
+    if (feedQuery.isFetchNextPageError) {
+      await feedQuery.fetchNextPage({ cancelRefetch: false });
+    } else {
+      await feedQuery.refetch({ cancelRefetch: false });
+    }
+  }, [feedQuery]);
+
   // Load feed — preserves external signature: loadFeed(reset?: boolean)
   const loadFeed = useCallback(
     async (reset = false) => {
       if (reset) {
         await queryClient.resetQueries({ queryKey: currentKey, exact: true });
-      } else if (feedQuery.hasNextPage && !feedQuery.isFetchingNextPage) {
+      } else if (feedQuery.hasNextPage && !feedQuery.isFetchingNextPage && !feedQuery.isError) {
         await feedQuery.fetchNextPage();
       }
     },
@@ -208,7 +216,7 @@ export function useFeedData({
   // Infinite scroll — keep sentinel observer for back-compat (P1.5 primary path
   // is virtualizer-driven; this is a fallback).
   useEffect(() => {
-    if (!sentinelRef.current || !hasMore) return;
+    if (!sentinelRef.current || !hasMore || feedQuery.isError) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && !loading && !loadingMore && hasMore) {
@@ -468,6 +476,9 @@ export function useFeedData({
     setFilter,
     loading,
     loadingMore,
+    error: feedQuery.isError,
+    retrying: feedQuery.isFetching,
+    retryFeed,
     hasMore,
     isPosting,
     likingIds,

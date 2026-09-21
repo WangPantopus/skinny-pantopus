@@ -2214,12 +2214,13 @@ router.delete('/mute', verifyToken, async (req, res) => {
     const { entityType, entityId } = req.body || req.query;
     const userId = req.user.id;
 
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('PostMute')
       .delete()
       .eq('user_id', userId)
       .eq('muted_entity_type', entityType)
       .eq('muted_entity_id', entityId);
+    if (error) throw error;
 
     feedService.invalidateFilterCache(userId);
     res.json({ message: 'Unmuted successfully' });
