@@ -7,18 +7,20 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
-## September 21, 05:28 UTC — combined source published
+## September 21, 05:57 UTC — question actions verified
 
-Paid **c426f4729** is clean/pushed, adding verified payment-detail read recovery and
-reviewed map source. All202 financial/client/schema hashes and3map hashes are preserved;
-combined TypeScript passes. Prior42d fullCI35562351562 is green15/1; currentc426
-automatic gate pending. Details, actual UI/API/SQL evidence and cleanup limits are in
-[live Stream1](workstreams/01-gigs-payments.md). No new unit tests or provider writes.
+Local paid **6a0858690** repairs silent question-action failures, a false-success delete,
+and unreachable existing pinned-question controls. Actual UI/API/SQL recovery and
+permissions pass; eight fixture table counts0, privileges restored, owned services/tabs
+closed. TypeScript/lint/syntax pass; no new unit tests or provider writes. The 34-file
+mirror, source comparison and precise limits are in [Stream1](workstreams/01-gigs-payments.md).
 
-Docs98 merged63a27fd24 after exact60da CI35564213230. Combined mapPR97 source4c6f
-passed fullCI35562416370; its documentation-only9b update awaits its own gate/merge.
-Stream3 durable364hashes verified/latest03 captured. PR34/47 remain draft, root
-runtimes stopped, peer resources preserved. Finish the integration batch next.
+Published **c426f4729** remains fixed for CI35564679691; all iOS passed, Android build
+pending. Map97/96 merged027afc13a after exact9b CI35564770177; source is already included
+in paid. Docs98 merged63a27fd24. Stream3 continues only its separate persona-mute grant
+and reserved13000 enum extension. PR34/47 remain draft; broader native/provider/policy
+and vote-count atomicity boundaries remain open. Publish the next reviewed batch after
+current CI, preserving accepted source-bound evidence and peer resources.
 
 ## September 21, 05:00 UTC — payment-details read recovery verified
 

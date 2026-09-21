@@ -1,5 +1,43 @@
 # Stream 1 — Gigs and payments
 
+## September 21, 05:57 UTC — question actions verified and cleaned
+
+Local paid **6a085869048c927ffb677905a247bcc93853ddf0** changes only existing
+`QASection.tsx` and `backend/routes/gigs.js`. Actual worker upvote and poster pin
+returned 500 without feedback; a denied question DELETE returned 200 while the row
+remained. After a successful pin, both poster Unpin and author Delete became unreachable.
+Six current/master/staging/place/archive variants had the same gaps. Reuse existing
+toasts, check the existing delete result, and restore existing authorized actions in
+the pinned header with the original card/control classes. No new file, schema,
+service, unit test, screen or navigation pattern.
+
+Real browser → SDK → route → PostgREST/full77 SQL verifies repeated vote/pin failures,
+keyboard recovery, vote/count1, pinned/unpinned state, delete failure with the card
+retained, Cancel sending no DELETE, and author deletion of a pinned answer with
+question/vote rows0. Poster Unpin and author Delete are present; unrelated viewer
+has neither, while direct handler boundaries retain403/404 (fixture auth401).
+A stale poster action after deletion returns404/error; reload settles genuine empty.
+TypeScript, scoped ESLint and backend syntax pass (two existing lint warnings).
+
+Evidence: `gig-qa-mutation-r1` / f9200340; 34 hash-verified files in owner's
+`.pantopus-recovery/audits/20260921-stream1-gig-qa-mutation-r1`. Baseline cleanup before
+candidate restart is retained separately. Final eight explicit table counts0, all
+three privileges restored, provider writes0, API/Next/Supabase stopped and four owned
+phase tabs closed; cache preserved. Old loopback fixture-session traffic was excluded;
+fresh phase-specific origins were used. No new authentication acceptance claim.
+
+Limits: synthetic auth/ancillary transport and saved question fixture; no new
+question creation, attachments, native/business/provider, lost reply, account-switch,
+simultaneous mutation or vote-count atomicity acceptance. Existing separate vote/count
+writes remain a source lead to verify, not a claim of transactional safety. Recent
+unchanged identity and question-read evidence remains reusable.
+
+Published paid **c426f4729** stays fixed for automatic CI35564679691 (all iOS passed;
+Android build still running). Push this local milestone with the next reviewed batch
+after that gate. Map97/96 merged027afc13a after exact9b CI35564770177; paid already
+contains identical map files. PR34/47 remain draft. Stream3's separately granted
+persona-mute work and reserved migration13000 remain isolated from this candidate.
+
 ## September 21, 05:28 UTC — combined candidate published
 
 Paid **c426f4729e6ab0311c9908d71b278a8d09255d0d** is clean/pushed on the required

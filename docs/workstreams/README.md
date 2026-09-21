@@ -4,6 +4,14 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 05:57 UTC — Stream1 runtime released
+
+Local6a0858690 Q&A action repair is verified within live01 limits. Exact f9200340
+rows0, three privileges restored; API18132/web18133/Supabase64561–67 stopped, phase
+IAB tabs17–20 closed, cache preserved. No provider writes or native reservation.
+Publishedc426 stays fixed for CI35564679691. Stream3 persona grant and owned runtime
+remain active; root has no shared writer conflict. Map97/96 integration is complete.
+
 ## September 21, 05:41 UTC — Q&A mutation verification reservation
 
 Root reserves18132/18133/64561–67, reusing cleaned owned wallet-read-r1/full77 schema,
