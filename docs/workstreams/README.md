@@ -6,6 +6,12 @@ backlog, acceptance evidence, or verification-first instructions.
 
 ## September21 current bounded grants and runtime update
 
+Root resumes P09 held-refund session attempt only after fresh Chrome control works.
+Private /private/tmp/pantopus-stream1-refund-session-r2, f9200260, API18132/web18133,
+owned Supabase64561–67 reserved/starting; source6d40 green. Reuse accepted prior
+journeys; no native build/shared runtime/cache use. Test auth/ancillary transport,
+actualStripeTEST/full77SQL; no new acceptance yet. Source unchanged.
+
 N04 report retry grant: Stream3 owns only existing full postpage handleReport and
 useFeedData.handleReport after actual PostReport INSERT500 closed modal/lost details.
 Shared ReportModal already preserves draft on rejected promise; reuse that contract,

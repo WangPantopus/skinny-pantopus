@@ -65,6 +65,14 @@ capability-only failure; no build/install or native acceptance.
 
 ## Coordinator integration gate — September21,02:07UTC
 
+Latest02:16UTC: PR81 strict8dd0cd01d passed CI35553310103 and merged
+**6f4703065055f42a9def558e0e72c1e09024a03a**. PR82 now master/updated
+**914e68764c525fc60a6e78c8f7c9a7e7fd4c2951**, verified app bytes unchanged,
+exact three app files plus two existing assertions. CI35553548674 queued/running.
+Root Chrome page control recovered on a fresh owned blank tab. Isolated refund-session
+r2 now reserves18132/18133 and64561–67, f9200260, source6d40; setup only, no new
+acceptance/cleanup claim. Earlier completed r1 remains cleaned/accepted within limits.
+
 Latest02:11UTC: PR80 exact05acf4031 passed CI35553066162 and merged
 **e92aeab69044ea3eeccbd6e2c4ebe096e26cb0cb**. PR81 retargeted master/updated
 **8dd0cd01db36bd5d5491cbb36ebdc660b5421668**, accepted application bytes unchanged,
