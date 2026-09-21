@@ -1,8 +1,312 @@
 # Three-stream coordination
 
+## September 21 integration checkpoint
+
+All three streams remain incomplete. The current bounded Home/social repairs are
+being integrated before the next application work; do not start duplicate tasks.
+Paid branch `codex/paid-gig-integration` is clean/pushed at
+`b75637fd82f4554ffbd51fb85a3115cf97aa9d17`. Its full
+[CI35572520685](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35572520685)
+passed all 15 applicable jobs, including iOS and Android, with one Seeder skip.
+The updated PR47 body and final CI receipt are mirrored with 33 verified vote-phase
+artifacts. Completion-proof phases remain separately verified at 11 and 14 files;
+no new application repair or unit tests were needed for those journeys.
+
+PR110 merged `adfe78b5ded941f55c5f20ccdbad0f572c445a0a` after exact
+`33414dda8` [CI35574554620](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35574554620).
+PR111 merged `4b6b8e21157839eb71252647222702240c7b79af` after exact
+`23b33833a` [CI35575532878](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35575532878).
+Both integrations preserve their reviewed source bytes and acceptance limits.
+PR112 merged `3d1672d0d2727b37e074020b871a04fc213e3919` after exact
+`529f19aae` [CI35575801501](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35575801501).
+The clearing component is unchanged from reviewed22d2; its originalCI also passed.
+The corrected keyboard/DOM-empty clearing baseline is accepted; earlier no-op
+fill('') textarea attempts remain explicitly excluded. Live02 final original-head
+CI snapshot869ebd99 was captured in11f601d87; all17 clearing artifacts verified.
+
+Next: publish the separate five-document PR106, then adopt final master
+once into the paid branch and run relevant combined checks. PR34/47 stay draft;
+unrelated46 is untouched. Root API18132 and completion tabs are closed, exact
+fixtures/grants restored; owned Next18133 and79-migration Supabase64561–67 retained.
+Stream2 released its runtime with12 zero counts; Stream3 retains only its owned
+18130/18131/64531–37 runtime and original fixtures, with new temporary rows removed.
+No native build is reserved. Provider/device limits and the unanswered cancellation/
+no-show fee policy remain open; no broad acceptance row is closed.
+
+
+## Next bounded work after this documentation publication
+
+After PR106 merges, coordinator releases both existing tasks to adopt that final
+master in their own application worktrees on separate follow-up branches. Preserve
+all prior feature refs and evidence; do not overwrite remote integration heads.
+
+- Stream3 sole writer: existing `frontend/apps/web/src/app/(app)/app/professional/page.tsx`
+  load/error/retry path. Actual saved profile plus SQL SELECT denial returned500,
+  but this page showed an enabled create form. Seven existing/archive/open refs have
+  identical failure-to-create behavior. Reuse existing ErrorState and established
+  session lifetime; show creation only after confirmed absence, preserve the normal
+  screen/forms/navigation. Verify real denied load/repeated retry/restoration and
+  genuine absent profile, with exact fixture/grant cleanup. No new route, schema,
+  service, file, unit test or public-profile optional-auth repair in this grant.
+  Existing owned18130/18131/64531–37 reservation continues; no native slot.
+- Stream2 runtime verification only: existing D06 restrictive Home address privacy
+  through its actual Place consumer and caller, including database read denial/retry.
+  Reacquire only its released18141/18142/64550–59 resources after checking ownership
+  and listeners. Compare existing policy/service/route/SQL and preserved evidence;
+  no application repair until a reproduced failure and exact path proposal. Existing
+  web settings/security uses ownership policy, not HomePrivacy toggles; do not
+  conflate these. D05 partial-save and D07 standalone-member leads remain separate.
+
+Both streams preserve design and report source-bound UI/API/SQL evidence, limitations,
+cleanup and a reviewable commit/PR. Coordinator holds new merges for the next batch;
+current paid full CI and unchanged accepted journeys must not be duplicated.
+
 Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
+
+## September21, 07:49 UTC — completion-proof UI verification complete
+
+Paid source remains **b75637fd82f4554ffbd51fb85a3115cf97aa9d17**, clean/pushed,
+fullCI35572520685 application/web/schema gates passed; native jobs still running.
+No application edit or new unit test in the completion-proof milestone. Existing
+CompletionFlow/FileUpload→SDK→upload.js/gigs.js→s3Service→File/mark_gig_completed
+and local private Supabase Storage verified, with9source bindings including existing
+21600/21700 contracts. Reuse prior32/32 completion/review/stop HTTP/SQL and paid
+capture evidence; do not repeat their unchanged policies.
+
+Actual IAB22–24, two independently cleaned phases:
+- Mismatched PNGbytes/jpg declaration returns400; note/file retained, File0 and
+  Gig stillin_progress. Exact owned bucket absence makes valid upload503 with same
+  retained draft/no completion command. Restore private bucket, keyboard Enter
+  uploads200→mark-completed200, one File/object and exact note/private reference.
+- Separate requester existing Review & Confirm/Review Work shows exact note and
+  one real image (complete/natural192×192/displayblock) and blob proof link. Owner/
+  worker protected GET200 bytes match storedSHA; unrelated403/anonymous401;
+  direct public Storage URL400, protected response private,no-store.
+- Second phase destroys only successful upload reply after actual File/object
+  persistence. UI error retains draft; no completion command. Enter retry reuses
+  exact File/object1 and completes once.
+- Second task uploads two files; after first actual save, private harness revokes
+  service-role completion RPC execution. Second file fails503, two UI attachments
+  retained, first File stays and Gig in_progress. Restore grant, Enter retry reuses
+  first and adds only missing second, then completes once. Final3Files/3objects/
+  2owner notices across phase2, one completion POST per task; protected reads match.
+
+No demonstrated application defect requiring repair in this bounded sequence.
+Synthetic fixture sign-in/ancillary shell and preassigned free gigs; real UI/SDK/
+routes/SQL/local Storage, controlled reply loss/privilege change. Existing generic
+completion error toast observed; no specific-message improvement claim. No provider
+writes, owner approval, native/hosted storage, or whole attachment/financial closure.
+
+Exact final cleanup for each phase: User/authUser/Gig/GigBid/GigQuestion/Payment/
+File/Notification/storage.objects/storage.buckets all0; original service-role EXECUTE
+restored. APIs stopped, tabs22–24closed, fault markers consumed; Next18133 and owned
+79schema Supabase64561–67 retained. Peer resources untouched. Private originals
+/private/tmp/pantopus-stream1-completion-proof-r1 and-r2; durable owner audits
+20260921-stream1-completion-proof-r1 **11files** and-r2 **14files**, each manifest
+verified,9source bindings, final cleanup. Credentials/operator logs excluded.
+
+Integration: PR103 merged74ab0f74e on7a9bea32d CI35572773645; PR105 mergeda0b952379
+ona8941dd1e CI35573070220; PR107 merged4e69c23b8 on55ef4c6ab CI35573379836;
+PR108 merged12eddf992 ona18a26ea4 CI35573732930; PR109 mergedc7755c345 oncad6ba789
+CI35574099206. All guarded exact heads, source/evidence reviewed, no override.
+PR110 master update requested after originale50ed CI passed; PR111 original36fb
+CI35574234363 passed and4source bindings/448durable files reviewed. Live02/03 frozen
+coordinate/relationship handoffs captured05fa6f0b9. Doc-only106 remains unmerged.
+
+Stream2 completes only current optional-clearing grant before another repair:
+initial fill('') text-clear attempts were invalid and excluded; candidate reverted.
+Corrected keyboard deletion plus DOM-empty readback proves5text fields and empty
+trash select omitted by unchanged payload, then restored by save. Only six payload
+lines may change after each actual baseline/contract. No schema/transaction expansion.
+Coordinate parser grant remains a separate frozen3-line milestone. Stream3 may run
+professional self-editor verification with exact temporary actor profile/restoration;
+no new app repair granted while111 integrates. Public endpoint without a screen caller
+can be HTTP-only; no fabricated UI. Fee-policy question remains unanswered.
+
+## September21 completion-proof runtime reservation
+
+Root reserves existing18132/18133/64561–67 for private completion-proof-r1/f9200360.
+Phase1 cleaned to0, bucket deleted/tabs22–23closed. Follow-up r2/f9200370 verifies
+lost upload acknowledgement and partial multi-file retry using the same source,
+new private bucket stream1-completion-proof-r2; no provider writes/native build.
+Existing CompletionFlow→upload SDK→upload.js/s3Service→File/mark_gig_completed and
+private local Supabase bucket stream1-completion-proof-r1. Reuse prior32/32 completion/
+review/stop HTTP/SQL and later paid capture; focus on existing UI attachment upload,
+storage-error/retry and authorized private read. No application repair before a
+reproduced gap, no new unit tests, no financial provider writes/native build. Synthetic
+local identity and preassigned free fixture; actual upload/router/SQL/local Storage.
+Copy existing private harness; unique bucket/rows cleaned exactly afterward, peer
+resources untouched. Published b756 stays fixed under CI35572520685.
+
+## September 21, 07:26 UTC — paid publication and Home integrations
+
+Paid **b75637fd82f4554ffbd51fb85a3115cf97aa9d17** is pushed to draft47, including
+verified atomic vote e2b03de6b and reviewed master f273712ec. Prior3025 full
+CI35570109862 passed15/oneSeeder skip, all iOS/Android included. New automatic
+**CI35572520685** is running; keep this head fixed. Combined TypeScript passes,
+all3vote and2integrated peer source bindings match. PR47 description updated;
+32durable vote-phase files include final prior CI, integration and published body.
+No new root runtime fixtures/provider writes; existing Next/79schema runtime retained.
+
+Home audit PR102 merged **f273712ec4b31e08cbcb10be05661f7e7a463ba4** at07:19:35Z
+on exact3de541d72 CI35571953892. Member PR104 merged
+**0cca2d4e2d6f902dc19677e96dee4443dd31b72f** at07:23:53Z on exactd304f08df
+CI35572440658. Both updated heads changed only reviewed booking worker relative
+to their accepted candidates; component bytes/evidence unchanged. No overrides.
+PR103 updated to **7a9bea32d373cac5e849a1a5ce2123eac2a46f2f**, only reviewed worker
+and two Home components added; pending current-head gate. Then105→107→108 integrate
+in sequence after exact source/evidence and up-to-date CI. Docs-only draft106 remains
+held behind this feature batch. Paid34/47 remain draft; unrelated46 untouched.
+
+PR107 frozen7e91907a on105: checked UserProfileBlock error in isScopedBlocked;
+all440durable hashes/4source bindings reviewed, actual UI and10REST routes fail
+without exposing blocked data and recover after restored query access. Scope/direction,
+self/anonymous controls retained; no new policy. OriginalCI35572584966 passes.
+Live03 c9b9022f captured871ec4885. Legacy Relationship blocked-read error is a separately
+granted runtime verification, no global helper edit yet; exact fixture cleanup required.
+
+PR108 frozen39ced0c27 on member branch: existing settings error/retry hides Save
+until known values arrive. Actual503/repeated retry, saved24h/text/false preferences,
+genuine absent-row defaults,403/departure/current reload proof reviewed. Component
+bytes and15durable hashes match. First coordinator manifest parser expected another
+bundle format and failed; corrected flat-map validation passes before acceptance.
+Live02 c3eaa722 captured1916b8f6f; peer may update. OriginalCI35572724323 pending.
+No same-mounted Home/account reversed-response or successful-save claim.
+
+New Stream2 sole-writer grant: existing SDK homes.ts updateHome PUT→PATCH plus
+canonical name input and existing HomeSettingsTab name payload. Actual UI Save404;
+canonical PATCH already accepts name/home_type with home.edit/location guards.
+Five callers enumerated including two paid location fallbacks; preserve their existing
+provenance and authorization and verify affected route payloads. No backend/schema/
+migration/newtests. Legacy nickname public_info lead needs actual failure before any
+extra caller edit; optional clearing/lifetime remain separate. Stream3 notified of
+SDK ownership. Pending product question asks cancellation/no-show payer, recipient,
+amount and trigger; no answer or fee execution inferred. Other work continues.
+
+## September 21, 07:19 UTC — search handoff and historical-tip boundary
+
+PR105 frozen **f43b9664a319935a4e03553fa14a568e033fb2d4** has exactCI35571949622
+passing; coordinator reviewed its two-line existing identitySearch helper repair,
+all429durable hashes and4source bindings. Live03 frozen6f10a681 captured in939233cf7.
+Original PR104 deda CI35571776785 also passes; its stack still waits for102 integration.
+No source/retest duplication or broad row closure. Shared publication remains doc-only
+and should not merge ahead of the current feature integration sequence.
+
+New Stream3 grant: existing visibilityPolicy.js isScopedBlocked UserProfileBlock
+query only. Actual saved search_only block hid a Beacon; SELECT denial returned200
+and exposed it again. Propagate failed block checks through existing REST error paths,
+preserve current scopes/direction and legacy Relationship policy. Verify affected
+identitySearch/users/localProfiles callers and exact fixture/grant cleanup. No other
+helper/schema/newtests granted. Original baseline temporary row removed/grant restored.
+
+Root P02 source reconciliation confirms existing SQL discovery is age-unbounded;
+provider discovery starts before original provider_started_at and paginates, while
+new provider creation refuses aged23h originals. Four exact prior owned Stripe TEST
+tip intents were read without writes at07:17UTC: only8.62–8.87h old, created September20
+22:24–22:40UTC. They cannot prove actual beyond24h provider discovery. Reuse accepted
+synthetic-age checks; do not backdate a local clock and claim real provider-age proof.
+P02 remains open at this boundary. Receipt added to vote mirror, now29files. No new
+root runtime fixture, provider/customer/charge or application change for this check.
+
+## September 21, 07:15 UTC — verified repairs and current integration queue
+
+Stream1 local **e2b03de6b0fa17c15199ead374fce57959b0fb79** atomically toggles
+question votes and their count in the existing handler plus reserved forward22200
+function. Actual UI late-write failures roll back both records, error/retry recovers;
+real concurrent actors, same-actor toggles, wrong-gig404, denied access and lock timeout
+pass. Existing250 regressions and pinned2.116 schema-function gate pass. Detailed
+28-file evidence and limits are in live01. Published3025 remains fixed while its full
+CI35570109862 native jobs finish; e2b is not yet pushed. PR34/47 remain draft.
+
+PR101 is merged **944489d5449286d2b362cd96334bcd771636f0fc** after exact CI.
+PR102 original50289 CI35570755239 passed; guarded master update produced
+**3de541d72295f98ed905df32d2d7ec87eaf86ca4**. Only the already-reviewed booking worker
+changed during integration; Home source/evidence remain identical. Await new exact-head
+checks before merge. PR103 frozen7e165 CI35571103116 passed; one-line getPrefs repair
+and4source bindings reviewed. Its required master update follows102 to avoid redundant
+CI. PR104 frozen **deda07ecf57f5cf9d8e052e1215782afd60db790**, stacked on102, is reviewed
+within member read/retry and delayed-response limits; all14durable hashes/7source
+bindings match. ExactCI35571776785 still required. Live02 frozen d209c063 captured in
+**96047e4f5**; peer may continue status updates. No broader acceptance-row closure.
+
+Current sole-writer grants after actual failures:
+- Stream2 existing HomeSettingsTab.tsx only: actual settings503 rendered false48h/
+  blank defaults despite saved24h/text and left Save enabled. Existing error/retry,
+  loading and current Home/authority lifetime; no save-protocol/backend/schema changes.
+  Separate follow-up branch preserves PR104. Own18141/18142/64551–59; no native slot.
+- Stream3 existing identitySearch.js searchTableFields only: actual PublicPersona
+  SELECT failure returned200/false empty search. Surface failed field queries through
+  existing error path, preserve auth/visibility/ranking/shape. Five variants compared;
+  following failure/retry works and is reused. Own18130/18131/64531–37; no native slot.
+- Previous Stream3 schedulingNotifyPrefs.js getPrefs-only grant produced PR103:
+  preserve saved scheduling keys before canonical normalization. Actual save/reload,
+  UPDATE500 rollback/retry and peer-account HTTP isolation verified. Original no-row
+  state restored, grant restored, no worker/provider delivery claim.
+
+Root retains Next18133 and own79-migration Supabase64561–67; API18132 stopped after
+exact8table cleanup0,5privileges restored and temporary constraints removed. IAB21 closed.
+Peer runtimes/evidence remain owned and untouched. No heavy native build is active.
+Continue bounded verification and integration; no new unit tests or design changes.
+
+## September 21, 06:54 UTC — atomic question-vote repair reserved
+
+Root reproduced actual UI upvote200 with saved vote1/count0 when count UPDATE fails;
+UI keyboard removal200 with vote1/count0 when DELETE fails. Direct wrong-gig path
+also removed the question's vote200. Parallel real HTTP from two fixture actors
+returned200 twice but SQL held2votes/count1, without forced interleaving. Existing
+six current/master/staging/place/archive handlers are byte-identical and have no RPC.
+No existing question-vote transaction/trigger was found in canonical schema.
+
+Root sole writer: existing backend/routes/gigs.js upvote handler plus one forward
+**20260916022200_gig_question_vote_atomic.sql**, version collision absent across the
+compared refs. Reuse GigQuestion/GigQuestionUpvote and unique/FK contracts, lock the
+parent question scoped to gig, toggle and update exact count in one transaction.
+Keep public response shape and current authenticated toggle policy; no new table,
+service/UI/design/unit tests. Separate PostgREST writes cannot safely roll back or
+serialize this operation; applied baseline cannot be rewritten, requiring one new
+forward function migration. Service-role execution only, no anonymous/authenticated
+RPC grant. Verify real UI denial/retry, rollback, wrong-gig/missing question, parallel
+actors and same-actor toggles, relevant existing regressions and full schema replay.
+Fixture f9200350, own18132/18133/64561–67; baseline evidence retained before cleanup.
+
+## September 21, 06:51 UTC — reminder stale-scan repair grant
+
+Stream3 sole writer for existing backend/jobs/bookingReminders.js: actual host UI
+cancellation persisted before a held confirmed-booking scan was released; the worker
+then created reminder log/notice and local SMTP after cancellation. After existing/
+archive/open comparison, re-read booking before claim/send and skip terminal or
+changed relevant start/end/host versus scan. Preserve dedupe/retry/offset policy.
+Verify cancellation/reschedule/unchanged/error boundaries; no new schema/service/tests.
+This narrows stale-scan behavior, not atomic cancellation versus provider delivery.
+Original fixtures preserved; temporary exact IDs cleaned by Stream3. Scope stays owned
+18130/18131/64531–37; no shared notificationService edit or native build.
+
+## September 21, 06:49 UTC — all streams resumed; integration candidate published
+
+User explicitly resumed all three existing tasks beyond single milestones. Paid
+**3025ded4b3eda6d9cf96401ba033f69143fe2f24** integrates reviewed master0f6e55e01;
+prior exactdd0 CI35567323534 passed15/oneSeeder skip including all native jobs.
+201of202 tracked source bindings unchanged; only reviewed posts SDK persona target
+union differs, and all6persona hashes match1d835. Paid services/UI/migrations unchanged;
+combined TypeScript passes. New automatic CI pending. PR34/47 stay draft; PR46 separate.
+
+Root next bounded verification: existing QASection upvote→SDK→gigs route→GigQuestion/
+GigQuestionUpvote count consistency and write-failure behavior. Separate row/count
+writes and unchecked reads/deletes are source leads, not runtime findings. Reuse prior
+question creation/read/identity/action evidence; no new unit tests or presentation work.
+Root reserves18132/18133/64561–67 using owned cleaned wallet-read-r1 database and new
+private gig-qa-vote-r1/f9200350 fixtures. Apply only missing reviewed schema to this
+owned runtime; no shared database/cache cleanup. Compare existing/archive/open source
+before any new artifact/migration; repair only reproduced gaps.
+
+Stream2 owns18141/18142/64551–59. Native control remains unavailable on read-only
+check; heavy native slot released without rebuild. Proceed D07 Home Members/Security
+browser role/error-vs-empty journey, preserving PR60 evidence. Stream3 owns18130/18131/
+64531–37 for N05 cancellation/reschedule versus reminders, existing UI/API/SQL/manual
+worker/local SMTP; no shared worker edits granted until a concrete failure/request.
+No active local native build. Streams continue independent work while peer CI runs.
 
 ## September 21, 06:19 UTC — persona repair integrated on master
 
