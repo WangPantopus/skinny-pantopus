@@ -1,5 +1,181 @@
 # Three-stream coordination
 
+## Later-batch SDK signed-out refresh repair and scoped rollback fault
+
+Stream3 sole writer: existing frontend/packages/api/src/client.ts response401 gate.
+Coordinator verified637 artifacts, full logout retirement/failure snapshot and inspected
+existing canRefresh/hasActiveSession/clear paths. Source plus captured repeated private
+reads/refreshes supports a feedback loop; historical tab initiator remains unproven.
+Use existing active-session signal for automatic web401 refresh; logged-out401 must
+reject without refresh/repeatedsessionclear. Preserve mobile refresh, explicit refresh
+page, stale-access sessionflag, singleflight/generationguards and privacy retirement.
+No limiter/QueryProvider/layout/backend/schema change or newfile/unit test.
+
+Only owned Stream3 runtime and synthetic Bob: after natural limiter window expires,
+ordinary login to establish new owned current session if needed; apply exactSDK repair
+and verify loaded source, then actual Settingslogout→protected own settings query→
+login/currentdestination. Capture bounded private-read/refresh/status counts and safe
+session metadata before/after, no burst/429, expected local retirement/newlogin only,
+all other own metadata/fullprefs unchanged. If errors persist stop attribution before
+furtherpatching. Relevant existing SDK/web regression checks required; accepted
+explicitrefresh/naturalexpiry paths can be reused only with source/controlflow limits.
+No cookie/clock/JWT/devicebinding/limiterbypass/restart to clear counters, hosted/native
+claim. Close newtabs/descriptor; retain natural session records/runtime. Hand off draft.
+
+Stream2 midtransaction rollback fault approved only on ownedr1DB and exact Home
+f0e51100-0000-4000-8000-000000000100: uniquelynamed NOT VALID HomeAuditLog CHECK rejects
+only that home_id AND action=home_settings_updated. First prove name absent and capture
+full constraint definitions/validatedflags/tableowner/ACL. No trigger/function/privilege
+changes. One actual UI one-command save fails at finalauditinsert; compare fullHome/
+Preference/Audit/ancillary state unchanged. Immediately drop only exactnewconstraint,
+prove complete catalog/provenance restored, UIretry200/oneaudit/intendedfields. Other
+homes/actions unaffected; candidate function/forwardmigration remains installed and
+recorded. Do not run broader existing contract trigger fault without isolated review.
+No new unit tests; coordinate any further shared SDK edits with Stream3 currentwriter.
+
+## Later-batch D05 atomic Settings repair ownership
+
+Coordinator verified17 baseline artifacts and independently compared full failure
+state: only Home.name/updated_at changed after profile200/settings503; all other rows/
+counts unchanged, originalRPC provenance restored, same-draft200/200 recovery and
+exactfixture/runtime cleanup reviewed. Source11/56bindings and existing applied
+20260911010000_home_settings_preferences function show reuse is appropriate.
+
+Stream2 is sole writer for existing HomeSettingsTab.tsx, API homeProfile.ts settings
+payload, backend homeIam.js settingsPATCH, and one compatible forward migration that
+CREATE OR REPLACEs existing update_home_settings(uuid,uuid,jsonb,jsonb). No new table/
+service/functionsignature or rewriting appliedmigration; new migration is necessary
+only to extend existing applied transaction safely. No other application file writer.
+Add optional canonical name/home_type to existing command; validate same existing
+profile name string<=120/empty/null and exact HOME_TYPES/no nulltype, including DB
+boundary. Preserve omission/settings-only clients, field clearing/defaults/preferences,
+current authorization/lock/audit and updated_at semantics. Existing screen sends one
+settingsPATCH containing original draft; preserve all controls/layout/navigation.
+Existing safe failureMessage may replace generic failure extraction in same handler.
+Do not change other profile callers or introduce a fallback two-write path.
+
+Verify actual UI original changed-name/welcome scenario: deniedRPC leaves all fields/
+rows unchanged, exactrestore/currentretry onePATCH200 saves intended fields and one
+audit, reload; canonical invalid/permissiondenied calls leave fullstate unchanged.
+Verify settings-only compatibility and affected existing112 clearing behavior within
+source limits; no broad replay/newunit tests. Before injecting a midtransaction failure,
+propose exact fixture-only SQL fault/provenance/cleanup to demonstrate rollback after
+Home write; do not alter shared permissions/triggers indiscriminately. Run relevant
+schema replay/checks/requiredCI, document local forwardmigration persistence, clean
+exactfixtures/resources and hand off draftPR; no native/hosted activation or broader
+concurrency/session/save-lifetime closure. Keep paid48702/docs134 prior batch separate.
+
+## Later-batch ordinary local logout and destination-return runtime grant
+
+Coordinator verified629 Stream3 durable hashes and nine unchanged auth source
+bindings against retained c3f runtime/current de0ac master. Existing profile Settings
+calls default local SDK logout; backend resolves proof before local GoTrue revocation
+and current registry retirement. Existing login uses safe relative redirectTo.
+Reuse PR82 and natural/transient evidence; do not replay others/global/partialfailure.
+
+Stream3 may use only retained API73610/Next42165+42493/ownedDB and real synthetic Bob
+browser session for one ordinary Settings Log out, direct own scheduling-settings URL
+with harmless query, unauthenticated login redirect and actual Bob login return.
+Preflight current actor/session must exactly match owned fdbea9cf; otherwise stop and
+report changed identity rather than selecting another session. Record safe HTTP and
+own GoTrue/AuthSession before/after metadata, full preferences and exact destination.
+Require old current GoTrue removal/registryrevocation, all other own session metadata
+unchanged, no unauthenticated private settings content, expected new login/session and
+current actor preference read. Do not claim these outcomes before observation.
+Retain naturally revoked/audit/newlogin records; no session resurrection or database
+reset. Close only new tabs/remove observation descriptor; preserve runtime and caches.
+No others/global action, devicebinding/cookie/JWT/clock/grant mutation, private failure
+hook, app edit/newtest/native/hosted or negative-destination authorization claim.
+Report any actual mismatch before repair. Current paid48702 and docs134 CI fixed.
+
+## September21 — transient session retry reviewed
+
+Coordinator verified628 durable Stream3 artifact hashes (MANIFEST18bb02a8) and
+independently compared full own-session snapshots: synthetic pre-Express503 made
+no preference/app/GoTrue metadata or grant-receipt change. Keyboard retry reached
+real backend200/GoTrue200 and exact original settings query/Bob. Same73 app and4
+GoTrue session IDs retained; only current fdbea9cf session metadata changed, one new
+GoTrue200. Full preferences[] unchanged; identity-bound GET304 is cache revalidation,
+not a fresh200. Actual UI transient failure and recovery snapshots reviewed.
+
+Private hook restored exactly d7c8b953; descriptor/metadata flag absent, faultAPI63469
+stopped, restoredAPI73610/session69695 retains exact original argv/env/backendcwd.
+Next42165/42493 and DB retained, tab25 closed, successful natural session rotation
+retained. Manual refresh-page entry and synthetic pre-forward503 do not establish
+natural expiry/provider outage/native/hosted/OAuth/cross-account acceptance. No app
+edit/newtest. Frozen live03 4acfa26c captured in6a3c7c692; details/evidence remain in
+existing accounts-social-r3 durable mirror. Next Stream3 assignment is source-only
+logout/revocation/current-destination reconciliation after accepted-evidence review;
+no new auth mutation/device association or runtime expansion granted. All streams
+remain incomplete. Paid48702 currentCI unchanged and pending.
+
+## Later-batch D05 changed-profile partial-save baseline grant
+
+Coordinator verified11 source-artifact hashes/56bindings and accepted112 reuse.
+PR133 merged de0ac6ef3 after exact updated CI35597307862 passed; live02 captured
+in a5357f314. Stream2 may adopt final master on separate follow-up branch and rebind
+relevant source, then use only owned18141/18142/64550–59 and existing privatefixture.
+Runtime-only: actual dashboard Settings changes one valid name plus one textsetting;
+only exact ownedHome profilePATCH/settingsPATCH allowed, no provider/other writes.
+Capture full Home/Preference/Audit/Occupancy and ancillary state plus complete existing
+update_home_settings definition/owner/ACL/effectiveEXECUTE. Transactional directEXECUTE
+fault only if effectivefalse; otherwise rollback. One UI Save, actual both replies,
+SQL per-field state and retained draft/error. Restore complete original provenance
+immediately, inspect same UI retry and verify intended values/reload. Clean exact
+fixtures/processes/ports, preserve containers and report actual baseline before edits.
+No app/schema/service/newfile/test/migration grant or atomicity claim from source alone.
+Reuse108/109/112 within limits; do not replay accepted clearing/validation journeys.
+Current paid48702/CI35596223401 remains fixed and independent.
+
+Root late-removal r2 reservation released: API68546/tab29 closed, exact fixture/RPC
+restored. Next18133/PID47970 and ownedSupabase retained. Late-error receipt/UI evidence
+is recorded in live01; no new shared application file writer or native build.
+
+## Later-batch standalone Audit read repair grant
+
+Coordinator verified15 frozen baseline hashes and actual audit500 while members/me/
+requests200. Existing Audit Log falsely displayed no entries; full fault-state rows/
+counts independently equal. Exact owner/tableACL/columnACL/RLS/effectiveSELECT
+restored, Refresh recovered exact seeded row200, cleanup/runtime release verified.
+Source12/63bindings and accepted102 dashboard evidence reused; no replacement needed.
+Stream2 is sole writer for existing standalone members/page.tsx Audit read state only:
+auditError reset byretire, rejected auditRes mapped with already imported failureMessage,
+existing ErrorState/onRetry(fetchData) before empty branch. Preserve successful Audit
+rows/styles/navigation, current access/generation and all Requests/mutation handlers.
+No new app file/helper/schema/test or other-tab refactor.
+Use owned existing runtime/fixture and directSELECT fault with complete provenance
+restoration. Verify genuineempty200, repeatedactual500/keyboardretry, restored exact
+row200/fullstate and optional isolatedcurrent403/restore. No application mutations,
+provider sends/dashboardreplay/native/session/stale-read claims. Exact fixture/privilege/
+process cleanup and draft source/evidence/checks handoff required. This later repair
+stays outside published131/132 and paid48702bc9d; current paidCI remains fixed.
+
+
+## Later-batch Stream3 synthetic transient refresh retry grant
+
+Coordinator verified619 hashes and actual associationPresent=false; earlier PRESENT
+handoff was a reporting mistake and is not accepted evidence. Do not apply AuthDevice
+SELECT faults or manufacture a device binding. Existing post-GoTrue hold is also
+unsuitable for a pre-forward failure. Grant only private http-probe emit-hook extension,
+not repository code: one-shot descriptor matches exact POST/api/users/refresh, owned
+18130 loopback, exact alias Origin, cookie transport and full unique-marker Referer.
+Use short expiry and consume atomically before synthetic503; nonmatches untouched.
+No original Express/GoTrue forwarding, no Set-Cookie/logout; record safe match booleans/
+method/path/status/time only, never credentials/cookievalues/tokenhashes.
+
+Verify current API process ownership, preserve exact private environment/port/cwd and
+relevant auth-source bytes, restart only ownedAPI to load privatehook. Preserve Next/
+DB/browser session. One manual existing refreshpage navigation with safe relative
+settingsdestination, explicitly manual/synthetic rather than naturalexpiry. Verify
+transientUI and keyboard Tryagain, no first-attempt GoTrue/registryrotation/logout,
+then actual forwarded retry200/GoTrue/currentBobdestination. Fullprefs unchanged;
+only owned successful session rotation may persist. Restore original privatehook
+bytes/remove descriptor and restart only ownAPI to restored configuration, close tab,
+verify exact process/resources/env/source provenance. No app edit, devicebinding,
+clock/cookie/JWT/DB/grant mutation/newtests/native/hosted scope. Keep current131/
+documentation132/paid integration batch fixed; later findings are separate.
+
+
 ## Later-batch standalone Audit runtime-only grant
 
 Coordinator verified12 source artifacts/63 bindings (59 present,4 historical missing).
