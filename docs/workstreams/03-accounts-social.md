@@ -1,12 +1,14 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T01:33:20.261710+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T02:25:36.063680+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/workstream-accounts-social`, local HEAD **afe8d2f4c** (application source **57e495460**), application tree
-clean. Only untracked owned `.next-stream3/` remains. Preserve it while Next runs.
-Remote primary branch is **21b93aa62** after isolated reuse of the accepted iOS fixture correction; live runtime includes separate preference failure5e3a8b963 and canonical timingUI e11123328.
+branch `codex/stream3-post-report-retry`, local/pushed HEAD **bf595fa804a2c9ff96b5f6e559d8650ed4f7e91a**.
+Application tree clean; only owned untracked `.next-stream3/` remains. Runtime source
+matches master01e842aef plus exactly the two reporting-handler changes below.
+Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
+primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
 
 | Milestone | Branch / head | Review / current CI |
@@ -26,10 +28,55 @@ PR70 merged358daaa; PR72 currentf2ea16704 merged703e7050867d4747db958dfda8a20bf2
 PR73 current806d64635 mergedae85bad599f87933ac00e3f76ca23ac5cb6daa53; PR75 current5edcaad6c
 mergedcc560bce6c61d915d8a3c503a55b8c167270a43e; PR77 currentcc252a474 mergedb49dd59224d38c060d726a11bc45148f36404fcf.
 Coordinator checked each strict update changed only docs/accepted clock fixture before
-required CI. Accepted application bytes/evidence unchanged. PR80 is now coordinator-owned
-at05acf40319313d935edc682535623402386caa02, pending strict CI/integration. PR81 remainsdd805.
-Author did not merge or mutate those refs. Historical milestone sections below retain
-original source heads and acceptance boundaries. Local runtime remains the newer source.
+required CI. Accepted application bytes/evidence unchanged. Coordinator merged
+PR80 ase92aeab69044ea3eeccbd6e2c4ebe096e26cb0cb and PR81 as6f4703065055f42a9def558e0e72c1e09024a03a.
+PR82 strict914e68764 passed CI35553548674 and merged **01e842aef4b8877773712a17f1c5a545fc7f5081**
+at02:20:58Z. All reviewed stack70/72/73/75/77/80/81/82 integrated. Author did not merge
+or mutate coordinator-owned refs. Historical sections retain original source/limits.
+
+## N04 post report retry — PR83, current milestone
+
+[Draft PR83](https://github.com/WangPantopus/skinny-pantopus/pull/83), branch
+codex/stream3-post-report-retry, headbf595fa80, base master01e842aef. Exactly two existing
+handlers: useFeedData.handleReport and full feed/post/[id]/page.tsx handleReport now
+rethrow after the existing error toast. Existing ReportModal already retains reason
+and details on rejection; all feed-handler callers await it through this modal.
+No shared modal/backend/schema/layout/new test change. Existing master, paid/Beacon
+branch variants and modal were compared; no replacement was needed.
+
+Baselineafe8: actual Bob full post Report and Nearby→Pulse→Beacons→card menu Report
+both received500 under isolated PostReport INSERT denial, showed error then closed
+modal and lost details. Candidate both actual browser entry points retain Other
+and exact details on500; restoring INSERT and submitting the same form returns200,
+closes with success, and persists exactly one report per UI journey. Real local
+GoTrue cookies/HTTP/Express/PostgREST/PostgreSQL, no mocked identity/persistence.
+Additional separate authenticated HTTP: visibleGET200, invalid reason400,1001char
+input400, unauthenticated401, SQL-controlled inaccessible403, missing404; zero extra
+reports. First fixture setup used an invalid audience enum and failed atomically;
+finally restored, then rerun with canonical nearby audience and private visibility.
+These are controlled access checks, not actual moderation-state lifecycle evidence.
+
+Exact reportsa2032035-9d26-497c-a5ef-0fe662cb910c and8eba4713-8fd4-4beb-8a2d-966e645bae59
+removed, target Bob/Post report count0. Post visibility/audience/distribution restored;
+PostReport INSERT restored; both auxiliary HTTP sessions logout200. Current browser
+and earlier fixtures remain. Local typecheck gate/focused ESLint pass. No new unit
+tests. Required CI and integration pending, not inferred from local success.
+
+Evidence post-report-baseline-results.json, post-report-candidate-results.json,
+post-report-boundaries.json and setup-failed snapshot, post-report-types.log/lint.log.
+Candidate SHA b53034572475e53547c01aab15e8db7eb1e7c2c97d4f9602d2741a9855b01c02.
+Durable private mirror now243files; MANIFEST SHA
+2c321c806b41ff73db8ac32fb90a8b357626654fdb9a957fe73dfa9264dc320e.
+Artifact-specific source/config remains authoritative, not blanket rerun evidence.
+Installed native, provider/moderator processing, report idempotency/concurrency,
+account-switch/departure and whole N04 remain unverified.
+
+A02 evidence qualification: repeated refresh500 in private operator logs corresponds
+to rejected Origin http://localhost:18131 before auth/cookie parsing. Owned IAB uses
+stream3-auth.localhost:18131; coordinator Chrome/IAB inventories have no localhost18131
+tab. Exact originating client unknown. Coordinator requested no further unrelated
+investigation/CORS broadening. Do not classify these as authenticated refresh failures
+or claim all auth error handling verified.
 
 ## PR75 — preference database failures, ready for review / CI
 
