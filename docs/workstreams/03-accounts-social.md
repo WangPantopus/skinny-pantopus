@@ -22,6 +22,23 @@ prerequisites merge; do not push later commits into PR70 or conflate another str
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
 
+## Final map integration disposition — frozen for coordinator capture
+
+Independently verified remote PR97 **MERGED**, merge commit
+**027afc13a361330f16539ea98133eb793367eb24**, at 2026-09-21T05:36:32Z.
+Coordinator reports exact updated-head9b1fa0d43 automaticCI35564770177 passed with
+CLEAN mergeability/source review. Earlier exact4c6f full-nativeCI35562416370 also passed;
+its durable receipt and actual UI/API/SQL evidence remain separately source-bound.
+Remote PR96 is also **MERGED**, at 2026-09-21T05:36:34Z, automatically closed by
+combined integration; its head remainsd10e. Both repairs are integrated, not a whole
+N03/A05 or Stream3 closure. Duplicate canceledCI35562211102 remains superseded, not passed.
+
+Only this live status changed. Application checkout/runtime are untouched; do not
+push old local4c6f over coordinator-updated remote9b. Paidc426 already contains identical
+three map files and has its own pending integration gate. Persona feed-mute migration
+sequencing remains coordinator review only; no new application grant. Freeze this
+status for capture before coordinator merges master into the neutral worktree.
+
 ## Final map full-CI receipt
 
 Independently fetched GitHub run35562416370: **SUCCESS** on exact
