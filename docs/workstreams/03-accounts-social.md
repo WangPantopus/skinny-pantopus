@@ -11,7 +11,7 @@ Coordinator requested explicit commit pushes for the later independent milestone
 
 | Milestone | Branch / head | Review / current CI |
 | --- | --- | --- |
-| Beacon comment/privacy/drafts | codex/workstream-accounts-social / 21b93aa62 | [Draft PR70](https://github.com/WangPantopus/skinny-pantopus/pull/70), base master. Prior CI35546207895 failed all three iOS test jobs; iPhone16 log confirms four assertions from the expired September17 booking fixture. Reused accepted paid9ecf66fc7/9ae1edb3b as b30f4b330/07827d2b0, identical final fixture bytes. Exact078 CI35547834908 all applicable green. Strict branch protection required docs-only master e8b49c963 merge in isolated checkout→21b93aa62. Diff exactly5docs, backend/frontend/supabase bytes unchanged. Fresh required CI35549733796 running; no UI rerun for docs. Detached owned /private/tmp/pantopus-stream3-pr70-ci is clean; runtime checkout untouched. |
+| Beacon comment/privacy/drafts | codex/workstream-accounts-social / 21b93aa62 | [Draft PR70](https://github.com/WangPantopus/skinny-pantopus/pull/70), base master. Prior CI35546207895 failed all three iOS test jobs; iPhone16 log confirms four assertions from the expired September17 booking fixture. Reused accepted paid9ecf66fc7/9ae1edb3b as b30f4b330/07827d2b0, identical final fixture bytes. Exact078 CI35547834908 all applicable green. Strict branch protection required docs-only master e8b49c963 merge in isolated checkout→21b93aa62. Diff exactly5docs, backend/frontend/supabase bytes unchanged. Exact21b required CI35549733796 all15 applicable/aggregate green. Coordinator merged PR70 as358daaa17068ebbb6c9591b13bf0378cea7d02b1 at01:39:03Z; no UI rerun for docs. Detached owned /private/tmp/pantopus-stream3-pr70-ci is clean; runtime checkout untouched. |
 | Reminder receipt/destination | codex/stream3-booking-reminder-retry / cbfba3503 | [Draft PR72](https://github.com/WangPantopus/skinny-pantopus/pull/72), stacked on remote PR70 branch. Exact-head CI35547400223 CI OK/all applicable green; native/web skipped by paths. Two-file source reviewed by coordinator. |
 | Personal posting/draft recovery | codex/stream3-personal-post-recovery / 423176969 | [Draft PR73](https://github.com/WangPantopus/skinny-pantopus/pull/73), stacked on PR72 branch. Exact-head CI35547412275 CI OK/all applicable green, including web/identity E2E; native skipped. Five-file source reviewed by coordinator. |
 
@@ -124,16 +124,22 @@ reuse native notify_me contract, no replacement service/schema needed.
 
 Committed/pushed **dd80580e4**, codex/stream3-host-notification-choices,
 [Draft PR81](https://github.com/WangPantopus/skinny-pantopus/pull/81), base PR80branch.
-CI35551218783 running. Map five supported host push rows to canonical notify_me
+Exact-head CI35551218783 all applicable green. Map five supported host push rows to canonical notify_me
 (reminder_sent→reminder), serialize saves, latest-response guards, confirmed rollback,
 retire queue/timers on owner/mount departure; explicit accessible names, same layout.
 Actual off save/reload persists; worker hostnotice delta0, attendeeSMTP/log delta1
 under unchanged transactional policy. UPDATE500 rolls back; restore/retry200.
 Rapid changes with8000ms earlier reply held persist latest choices/reload; committed
 reply replaced503 rolls back and retry200 converges. Leave with15000ms held first
-write retires queued second edit. **New account overlap established**: Bob PUT held
+write retires queued second edit. **New login before server release established (not late response delivery)**: Bob PUT held
 01:29:27.913Z; logout20001:29:41.254Z; Evan login20001:29:53.325Z; Evan screen01:30:02.532Z
 has own defaults before old release01:30:12.913Z; after01:30:20.813Z remainsEvan defaults.
+The45s hold exceeds SDK30s timeout, so late successful client delivery is unproven.
+Bounded25s repeat: Evan UI01:37:28.091Z before release31.545Z, but response/socket
+destroyed=true, no finish event. Navigation/session retirement disconnects the old
+request. After55.558Z Evan remainsunchanged; NO intact late-response delivery claim.
+Evidence channel-overlap-transport-results.json. New exact emptyEvanpage66629ef2-03c3-44c5-bd8f-f2e677c05514
+and new Bobpreference row cleaned; no app change or broad rerun.
 Bob queued cancellation never saved. Reschedule/no-show also actualsave/reload/SQL.
 Type gate/focusedlint passed, no new unit tests. Source hashes in private
 channel-candidate-results.json; baseline channel-baseline-results.json, linked worker
@@ -345,18 +351,22 @@ physicalAndroid prevent new installed acceptance; current native CI is not scree
 
 Primary private /private/tmp/pantopus-stream3-20260920-r1; durable private mirror
 /Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/
-contains **182 files**, MANIFEST SHA256 **920efefeb153da95386ba82d6b4b4dd91064e2e178fb6c8ba0daac56fed55367**. Coordinator checked fourcandidate
+contains **203 files**, MANIFEST SHA256 **c694212d601ae13c230bf58f1eec7cba54b1300d742ddefd2be20e05686f3af4**. Coordinator checked fourcandidate
 hash bindings. Individual artifacts retain actual source/configuration, not a blanket
 HEAD rerun. Credentials/tokens/operatorlogs stay private, outside Git/chat.
 
 A01 partial recovery: realforgotUI→HTTP200→SMTPreceipt→actualemaillink opens resetform
 and preserves original /@destination; SMTPoutage503 and restore/retry delivery pass.
 Password entry/submission not performed (computer-use credential-change handoff boundary),
-so full recovery unverified. ExternalOAuth/provider/native unavailable in currentsetup.
+so full recovery unverified. ExternalOAuth/provider/native unavailable in currentsetup. Actual Google UI initiates
+GET200 but IAB blocks exact local authorization URL (ERR_BLOCKED_BY_CLIENT); real
+GoTrue HTTP400 says provider disabled. Local Google/Apple enabled=false; Apple UI
+not exercised, no provider activation. Private oauth-local-boundary.json records
+source/config and actual UI vs HTTP boundary; successful/cancelled OAuth remainsopen.
 
 ## Whole-stream continuation and exact next action
 
-Finish current-head CI/review for70→72→73; coordinator alone merges/retargets. No new
+PR70 merged by coordinator; coordinator exclusively retargets72 and later stack; coordinator alone merges/retargets. No new
 application scope before bounded handoffs known, per active coordinator. Then resume
 existing N01–N05/A01–A05 coverage mapping in historical section below; no row is closed
 by these milestones. N03 restrictedpost oldlink403 afterunfollow/refollowrestore and
