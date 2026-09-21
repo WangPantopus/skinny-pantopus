@@ -1,5 +1,135 @@
 # Three-stream coordination
 
+## Current integration checkpoint — September21, 09:12 UTC
+
+PR114–118 are merged into master27cd8b112 after source review, actual bounded
+UI/HTTP/SQL evidence and exact updated-head CI. Paid2ea9 fullCI35576926687 passed
+all15 applicable jobs/oneSeeder skip, including native jobs. Detailed merge SHAs,
+source bindings and acceptance limits are in the current handoff/live01.
+Documentation-only PR113 publishes this batch before paid adopts final master.
+No new application edits or runtime acquisition until the coordinator releases
+the following verification scopes. All three streams remain incomplete; PR34/47
+stay draft and unrelated46 remains separate.
+
+## Next bounded verification after the privacy integration batch
+
+These scopes begin only after PR114–118 and documentation PR113 are merged and
+the coordinator releases the existing tasks. Until then, preserve frozen feature
+refs and the application/runtime hold. All three streams remain incomplete.
+
+- Stream2: verify the existing standalone Home Members role action through its
+  current screen, SDK role POST, Home IAM/authority service and canonical SQL
+  transaction. The source-only comparison predicts incorrect role cycling; it
+  does not establish a reproduced failure. Reuse accepted MemberDetail evidence,
+  while preserving the standalone members.manage permission and existing designs.
+  Reacquire only owned18141/18142/64550–59 after current ownership/listener checks.
+  Verify real UI/request/persisted role and relevant denied/retry behavior, then
+  report any failure and the smallest exact-path proposal before application edits.
+  No replacement role selector, broader permissions or new UI/file/schema/test.
+- Stream3: verify the existing scheduling notification settings Resume action in
+  `frontend/apps/web/src/components/scheduling/hub/NotificationPrefsForm.tsx`.
+  Source shows the existing PauseBanner callback changes local paused state only;
+  verify actual UI → SDK/preferences route → saved JSON and full reload before
+  calling it a defect. Reuse PR103 read/save/retry and the accepted reminder-offset
+  evidence. Use an exact temporary preference row with original state captured,
+  preserve unrelated keys, and restore it afterward. Existing18130/18131/64531–37
+  reservation only. Worker delivery/pause policy is a separate boundary, without
+  a repair grant or notification-delivery acceptance. Report the reproduced case
+  and exact in-place proposal before editing any application path.
+
+Neither scope authorizes new unit tests, native builds, screen redesigns, shared
+helpers or application files. No heavy native slot is reserved. Shared ownership
+remains with the coordinator; retain accepted source/runtime limits and exact
+fixture/grant/session cleanup in the existing live stream status.
+
+## September 21 confirmed privacy follow-ups — exact repair grants
+
+Stream3 is sole writer only for `canViewProfessionalProfile` in existing
+`backend/utils/visibilityPolicy.js`. Actual active private housemates returned200
+with either-direction blocked Relationship; inactive/ended occupancy controls403.
+Five temporary rows cleaned and four original table counts0, auxiliary logout200;
+473 durable hashes verified. Existing getProfileVisibility already puts blocking
+before shared-home visibility; compared helper variants retain the defective public-
+only guard. Move the existing block check after owner/inactive guards and before
+public/private branches. Preserve all other helper/safety scopes, connection/home
+policy, middleware, schemas and presentation. Verify both block directions refuse
+profile data, legitimate unblocked housemates still work, read-failure/retry and
+existing owner/public/private controls, exact rows/grants/session cleanup. HTTP/SQL-
+only; no new screen/native acceptance or unit tests.114/115 remain separate/frozen.
+
+Stream2 is sole writer only for existing `backend/routes/homePrivacy.js` PATCH's
+read-error check and stale fallback comments. Actual persistent SELECT denial
+prevented writing (negative control). A real failed PostgREST SELECT403 followed by
+restoring the original privilege before the route consumed that failure let the
+unchanged PATCH200 reset three unrelated saved true settings to defaults. Controlled
+recovery timing, real database replies/SQL persistence, synthetic identity; API-only.
+Capture/throw the read error before merging/upsert; successful absence keeps defaults,
+existing permissions/validation/error envelope remain. No service/schema/UI/new file/
+unit tests. Verify repeated recovered-read failure causes no write, retry preserves
+unrelated settings, true/false partial write, absence, validation/denial controls and
+exact cleanup. This does not close concurrent partial-write or native UI boundaries.
+116 stays frozen on its own branch. Both scopes use existing separate owned runtimes;
+no native build or shared-file overlap. Paid2ea9 stays fixed while nativeCI completes.
+
+
+## Next verification window while the paid integration gate runs
+
+Root saved-method read verification passed without an application repair; detailed
+source/runtime/cleanup and excluded initial attempts are in live01. Paid2ea9 remains
+fixed under35576926687; no native build slot. Peer114/115/116 original-head CI passed,
+source-bound evidence reviewed; hold merges for the next coordinated batch.
+
+Stream2 may verify only the existing HomePrivacy PATCH ignored-read lead over actual
+HTTP/SQL after comparing existing routes/contracts. Reacquire only owned released
+18141/18142/64550–59 after listener/ownership checks. Prove before/after persistence
+and restored grants/fixtures; a read denial that also blocks the write is not proof
+of overwritten settings. No existing web toggle caller/native control is available:
+label this API-only, do not invent UI. No application edit until a reproduced failure
+and exact route proposal;116 source stays frozen on a separate follow-up branch.
+
+Stream3 may verify only the existing private professional-profile blocked-housemate
+boundary over actual HTTP/SQL. Read canViewProfessionalProfile/shareHome contracts,
+reuse exact owned rows or narrowly scoped temporary fixtures, restore original state.
+Owner/anonymous/public/connection behavior accepted in115 is reused. Source suspicion
+alone does not authorize a helper edit; report a demonstrated failure and exact repair
+proposal before expanding.114/115 refs stay frozen; separate follow-up branch and
+existing owned18130/18131/64531–37, no new UI/schema/helper or native build yet.
+
+
+## September 21 next bounded privacy repairs
+
+Stream2 is sole writer for existing `backend/services/homePrivacyService.js` read
+behavior and its stale fallback comments. Actual saved address_precision=true hid
+an owned fixture unit; HomePrivacy SELECT denial made real Place/intelligence200
+expose the unit and GETprivacy200 falsely report false while SQL remained true.
+Thirty source/ref comparisons and both production callers were reviewed. Propagate
+database/transport failures through their existing error paths; only successful
+absence retains existing defaults. No route, PATCH, schema, new file or UI change.
+Verify real Place error/retry without unit exposure, GET error, saved true/false and
+genuine absence, affected existing regressions and exact grant/fixture cleanup.
+Native fallback and PATCH ignored reads remain separate, unaccepted leads.
+
+Stream3 PR114 at59b67ee84 has reviewed scope, all461 durable hashes and5 source
+bindings verified, including unchanged-row/original-empty cleanup and restored SELECT.
+Actual self-editor failure/retry/absence evidence is accepted within its recorded
+local-runtime limits; held-response/session/native boundaries remain unverified.
+Its currentCI35577190208 and paid2ea9 fullCI remain required; do not merge yet.
+
+Stream3 next sole writer, separate branch with114 frozen: existing
+`backend/routes/professional.js` GET /:username optional viewer authentication only.
+Actual authenticated blocked viewer received public200 and accepted connection got
+private404 because viewerId was always null. Compare existing/archive/open route
+implementations before editing; reuse existing optionalAuth plus req.user identity
+and current canViewProfessionalProfile policy. No middleware/helper/global-auth/UI/
+schema/new file/unit test changes. Verify real bearer and cookie identities,
+owner/connection/blocked/anonymous controls and relationship read failure/retry;
+report any newly exposed helper-policy defect separately before changing that helper.
+No current public-screen caller was found: this milestone is HTTP/SQL-only, without
+inventing a screen or claiming UI acceptance. Exact temporary rows/session cleanup.
+Existing stream runtimes stay separately reserved; no native slot. Hold new merges
+until the current paid full gate completes and the next batch is reconciled.
+
+
 ## September 21 integration checkpoint
 
 All three streams remain incomplete. The current bounded Home/social repairs are
