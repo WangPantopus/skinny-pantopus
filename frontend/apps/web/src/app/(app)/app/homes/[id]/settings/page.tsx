@@ -62,7 +62,7 @@ function SettingsContent() {
     if (!nickname.trim() || !canEdit) return;
     setSaving(true);
     try {
-      await api.homes.updateHome(homeId!, { public_info: { nickname: nickname.trim() } });
+      await api.homes.updateHome(homeId!, { name: nickname.trim() });
       setEditing(false);
       toast.success('Name updated');
       await fetchData();

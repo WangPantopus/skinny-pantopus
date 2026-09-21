@@ -1,15 +1,102 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T06:15Z. **Stream incomplete; persona-mute milestone frozen for review.**
-Sole live status is this neutral coordination file. No new unit tests written.
+Updated September21 — **Stream incomplete; ongoing verification.**
+Sole live status remains this neutral coordination file. No new unit tests written.
+Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
+`codex/stream3-relationship-read-verification`, local/pushed
+**36fbfe1626623868d70363ff0f13d86b4a025c7f**, tracked clean plus owned .next-stream3.
+[Draft PR111](https://github.com/WangPantopus/skinny-pantopus/pull/111) targets master;
+automatic [CI35574234363](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35574234363)
+completed SUCCESS exact36fb. Local implementation/verification and CI complete within
+the bounded legacy Relationship failure scope below; review/integration pending separately.
+Coordinator reports PR103 and PR105 merged after updated-head CI. Independently
+confirmed PR107 merged as **4e69c23b8e71e66a23c223523a345d3f1368f158** from55ef4c6ab;
+coordinator reports exact CI35573379836 success. Earlier pending entries are historical.
+Owned18130/PID48152,18131/PID14742,Supabase64531–37 retained. No local native build.
+All frozen feature refs and original fixtures preserved; no broad row-completion claim.
 
-Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-persona-feed-mute`, local/pushed HEAD **1d835733025cf85cae00f000f61c1c45d509b642**.
-Application tree clean; only owned untracked `.next-stream3/` remains. Separate draft
-[PR99](https://github.com/WangPantopus/skinny-pantopus/pull/99), base master027afc13a.
-Automatic [CI35567483902](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35567483902)
-is running on exact1d835; no manual duplicate dispatched. No merge/hosted activation.
-Coordinator review and integration remain separate from local implementation/verification.
+## Legacy Relationship read failure — PR111 handoff
+
+Coordinator granted only existing getRelationshipStatus after actual Bob Beacon UI
+exposed Dana under Relationship SELECT denial despite a saved blocked relationship.
+Seven current/master/paid/staging/place/Beacon/original fc99 variants have identical
+helper bytes: query errors ignored and exceptions converted to none. Reuse the existing
+helper with maybeSingle, checked error propagation, and no catch-to-none. Preserve
+successful absence, self/missing-input and existing status/direction mappings. No new
+file/service/schema/UI/policy/unit tests. Fast-forwarded this separate branch to merged
+PR107/master4e69 before repair; frozen earlier refs untouched.
+
+Actual real local GoTrue/browser/Next18131/API18130/PostgREST64531/SQL64532:
+saved blocked row hides Beacon; actual SELECT denial yields existing unavailable/Retry
+search with no search result; restored permission and keyboard Return retry keeps it
+hidden; exact block deletion plus fresh reload restores the original Beacon. Tab14
+closed afterward. Relationship creation itself was SQL-seeded, not UI acceptance.
+
+Eleven affected HTTP reads (public/local identity search, users search and three profile
+variants, four LocalProfile variants, relationship status) return error-only500 under
+lookup denial. Follow POST500 leaves full UserFollow and Notification table snapshots
+unchanged; healthy blocked follow403. Actual SQL status transitions plus HTTP verify
+blocked in both directions, accepted→connected, pending_sent/pending_received, successful
+absence→none and self→none. Restored public search200 returns original result. Non-Beacon
+callers are HTTP-only. Existing58 tests across3 suites pass; syntax/diffcheck pass.
+
+Caller review: users profile/search visibility and identity/local search use existing
+helpers; follow check occurs before insert/notification; relationship GET has existing
+500 catch. relationships.js helper imports unused. Professional helper call currently
+has always-null viewerId and is a separate unmodified source lead. Chat/socket use
+separate blockService and are untouched. No installed native, socket, hosted provider,
+offline, intact session-race or whole N03/N04 acceptance from this milestone.
+
+Exact temporary **14e37cd2-5d12-45e7-a043-fcc123c037e7** removed, original Relationship[]
+restored and SELECT restored; auxiliary real auth session logged out200. Original other
+safety tables, profiles, posts and memberships retained. No failed-follow insert/notice.
+Private relationship-read-final-evidence.json binds source hashes, comparison, actual
+baseline/UI, HTTP mappings/effects, checks and cleanup. Durable **448 files** hash-verified
+in existing `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/`;
+MANIFEST SHA256 **cca38fc28830dcfad59513da6062a496b44576974d61d032033de70cb7b1926a**.
+Each older artifact retains its own source/runtime limits; latest review head is not a
+blanket rerun. Coordinator review and exact-head CI/integration remain pending.
+
+Next: finish PR111 gate/handoff without duplicating CI; continue independent existing
+inventory journeys. Professional optional-auth source lead requires actual reproduction
+and a fresh route grant before repair. Broader notification/provider/native/session and
+reminder delivery limits in the whole-stream table remain open. Stream2 owns homes.ts
+and HomeSettingsTab save contract; leave untouched. Root completion upload runtime
+18132/18133/64561–67 and f9200360 fixtures are separate and untouched.
+
+## Post-PR111 runtime-only professional findings
+
+Coordinator captured prior live03 SHA9a4e4ece in05fa6f0b9 and released status writer.
+PR111 exact36fb automaticCI35574234363 independently confirmed SUCCESS; private
+relationship-read-ci-final.json records exact head/jobs. No new source change.
+
+Granted isolated runtime-only follow-up reproduced existing self-editor failure:
+actual Bob web /app/professional displays SQL-seeded active profile headline;
+UserProfessionalProfile SELECT denial yields backend500 but UI switches to enabled
+Enable Professional Mode/create form, with no load error or retry. Restore SELECT
+and reload returns the same saved headline. No create/update/verification clicked.
+Proposed existing-page load-only error/retry repair awaits coordinator assignment;
+no new application edits. Backend /profile/me already propagates query error; current
+iOS/Android source handles500 as error. Old catalog missing-native-enable/disable
+claims are stale against current source; no rebuilding or new native acceptance.
+
+Separate HTTP-only /api/professional/:username baseline: real authenticated Bob with
+saved blocked Relationship still receives Dana public profile200; accepted relationship
+with private profile incorrectly gets404. Anonymous public200/private404 controls.
+Existing viewerId always null bypasses canViewProfessionalProfile. Web and iOS public
+endpoint definitions found, no current public-screen caller found. Do not invent a
+screen or claim UI coverage. Future route repair requires separate scoped grant.
+
+Cleanup: Dana profile3e7c651d-85bb-4ae5-a6e1-9bb0c994514a and relation
+dbb2ea03-9ec6-404c-ba56-0c0ac193378d removed; Bob self profile
+e3cd7ca0-7858-4f80-8c14-d68d327b5baf removed. Both tables restored to original[];
+UserProfessionalProfile SELECT restored, auxiliary session logout200, tab15closed.
+Original retained fixtures untouched. Private professional-auth-baseline.json and
+professional-self-baseline.json distinguish HTTP/UI/SQL-seeded boundaries.
+Durable mirror now **453 files**, hashes verified; MANIFEST
+**01efc9daef3b4b90cb94109517d811a1c7899ae399f6359f7b19db77b0c53e5d**.
+Previous448 manifest remains the coordinator-reviewed PR111 evidence snapshot;
+new files add finalCI and next baseline findings, not changed implementation.
 
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
@@ -25,6 +112,162 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## N03/N04 unavailable scoped block check — PR107 handoff
+
+Coordinator separately approved temporary UserProfileBlock search_only verification,
+then granted only existing visibilityPolicy.js isScopedBlocked after actual exposure.
+Normal real BobUI search hidDana's publicBeacon; denyUserProfileBlockSELECT and a new
+search exposed it despite savedblock. Existing followingrow remains visible by current
+search_onlypolicy. Five current/master/paid/staging/Beacon helperhashes identical and
+ignored queryerror. Reuse existinghelper; destructureerror andthrow it. No newtable/service/
+UI/policy/test or merging of UserBlock/UserProfileBlock/PersonaBlock/Relationship scopes.
+
+Actual candidate realGoTrue/browser/API/PostgREST/SQL: identical deniedblockread produces
+existing searcherror/0resultlinks; restoredgrant+Enterretry confirms0matchingresults while
+blockpersists. Exactblockremoval thenfreshreloadsearch restorespublicBeacon.
+Ten affected REST callers (identitysearchpublic/local, userssearch/id/username/compatibility,
+localprofile/detail/activity/gigs/listings) underdenial all500 with onlyerror/no targetdata.
+Restorednormalblock:3searches200empty,3userprofiles403,4localroutes404. Selfprofile200 and
+anonymouslocal200 retain existingpolicy. Non-Beacon caller evidence is HTTP-only.
+Reverse search_only0, business_context search1, reversefull0, removal1 confirmedHTTP;
+no otherblockscope rowschanged. No socketcaller tothishelper found.
+
+Existing3suites/58tests pass (visibilityPolicy,identitySearch,identityFirewallPrivacy),
+syntax/diffcheckpass. No newunit tests. LegacyRelationship lookup error remains a
+separate unverifiedlead; broadvisibilityrefactor/native/offline/provider/sessionrace
+notaccepted. Source/publicpresentation/policy otherwiseunchanged. N03/N04 remainopen.
+
+Cleanup: temporary7a00181d-f20e-45b0-bb22-6ce114f28985 removed both baselineandcandidate,
+originalUserProfileBlocktable[] restored, SELECTrestored, auxiliarysessionslogout,
+actualnormalUIrestored/tab12closed. Originalprofiles/posts/memberships/blockfixtures
+preserved; authaudit/sessioneffectsretained. Private search-block-final-evidence.json
+binds4sourcehashes, fivevariantcomparison, actualbaseline/UI/10route/scopedcontrols,
+checks/cleanup. Durable440files hashverified, MANIFEST
+**ba7611c262e30585b6a8ebb8ed5c8b4958fc344dce5dea1c078c661181bf20e8**
+in existing accounts-social-r3 mirror. ExactCI35572584966queued; coordinator ownsreview,
+retarget afterPR105integration and merge. Prior103/105/101refs remainfrozen.
+
+## N03 Beacon/profile search errors — PR105 handoff
+
+Actual Bob directory searchstream3 returned original publicBeacon. PublicPersonaSELECT
+failure then newstream3-localquery returnedHTTP200/empty and false No public Beacons
+matched. Five current/master/paid/staging/Beacon searchTableFields helpers identical:
+Promise.allSettled rejections/queryerrors ignored. Coordinator granted only existing
+identitySearch.js helper; replace two continues with throws, reusing route500 and existing
+UIerror/Retrysearch. No UI/design/schema/service/newfile/tests or ranking/privacy change.
+
+Actual candidate web→realGoTrue→HTTP→PostgREST/SQL: deniedPublicPersonaSELECT now500,
+explicit unavailable/Retrysearch; restoregrant+Enterretry gives originalpublicBeacon.
+Genuineabsentquery200 remainsNoMatches. One field's synthetic403 with otherqueriesreal
+causeserror; Enterretry200 recovers. Earlier one-shot503 ended200 and is excluded from
+error-state proof (transient recovery, not persistent field failure acceptance).
+Unchanged following-list actual PersonaMembershipSELECTdenial shows expliciterror;
+restore+Enterretry returnsoriginalBeacon, so no followingrepair. Prior follow/unfollow/
+privateidentity/link evidence reused within source limits, not repeatedwholesale.
+
+Affected scopes realauthenticatedHTTP: public200/onepersona, local200/oneLocalProfile,
+combined200/both, genuineempty200; LocalProfileSELECTdenial local500+combined500,
+restoreretrylocal200, shortquery400. Localprofile scope is HTTP-only, not new UIacceptance.
+Existing identitySearch10/10, syntax/diffcheckpass. No newunit tests. Native/hostedprovider,
+broader access-change/stale-session and other helper privacy-read errors remainoutside
+this bounded repair. No wholeN03/A05 closure.
+
+Cleanup: no applicationfixture rowscreated/modified; PublicPersona/PersonaMembership/
+LocalProfile SELECTrestored, singlefieldfaultconsumed, auxiliaryauthsessionlogout200,
+tab11closed. Originalprofiles/posts/membership retained; authaudit/sessioneffectsretained.
+Private beacon-directory-final-evidence.json binds4sourcehashes, comparison/baseline/
+actualUI/HTTP/fault/checks/cleanup limits. Durable429files hashverified; MANIFEST
+**2f963c5541e66437d00b8bd1c569492f77e790a9eb025dda820e84b1df952551**
+in existing accounts-social-r3 mirror. ExactheadCI35571949622running; coordinator review
+and integrationpending. Do not alter frozenPR103/101 refs or repeat acceptedjourneys.
+
+## Scheduling channel preference retention — PR103 handoff
+
+Granted getPrefs-only in existing schedulingNotifyPrefs.js. Actual A4 host Reminder
+sent—Email on →PUT200 at06:57:44.741→SQL scheduling.host.reminder_sent.email=true,
+but actual reload off. Existing helper returned only three canonical fields, dropping
+stored scheduling choices. Five current/master/paid/staging/Beacon comparisons confirmed
+same omission. One-line spread preserves own stored keys before existing canonical
+normalization; no new file/UI/schema/worker/channel-delivery policy or unit tests.
+
+Actual candidate browser on real BobGoTrue/Next18131/app18130/PostgREST64531/SQL64532:
+reload existingtrue shows on; saveCancellationEmailoff preservesReminderEmailtrue.
+Actual UPDATE denial500 leavesSQLtrue, existing UI rolls back and repeated failure
+shows explicit Unable to save notification preferences error. Restoregrant, Enterretry
+savesfalse; reloadshows reminderfalse/cancellationfalse. Direct authenticated GET matches;
+separate real EvanGET200 has no Bob scheduling data. Canonical defaults remain. No new
+intact-held-response crossaccount UI claim; unchanged queue/lifetime source evidence reused.
+Existing scheduling26/26 and syntax/diffcheckpass; no newtests.
+
+Cleanup: originalBob snapshot was empty (no preference row), not an existingrow.
+Removed exact UIcreated61338118-5cb8-4c59-8819-30b3a1fb2e97; Bobrowcount0 restored,
+UPDATEgrantrestored, auxiliaryHTTPsessionsloggedout, tab10closed. First cleanup parser
+assumed a row and failed before anywrite; corrected absence restoration is final proof.
+Original booking/page/otherfixtures unchanged; no worker/provider/mail executed here.
+
+Private scheduling-channel-final-evidence.json binds4sourcehashes plus comparison,
+baseline/savedSQL/HTTPcandidate/denial/retry/cleanup/checks. Durable419files hashverified,
+manifest **7d966c8b3261da236ed1e8196fc6810ace890192e01f708eac5537f3b3cd295a**
+in existing accounts-social-r3 mirror. CurrentPR103CI35571103116queued; review and
+integration pending. Persistence/readback only: hostemail/attendee/dailyagenda/pause
+actual delivery and policy remain open; no native/hosted acceptance or N05 closure.
+
+## PR101 final CI/integration disposition
+
+Independently verified exacta5b CI35570564542SUCCESS6jobs/5pathskips and remotePR101
+MERGED as **944489d5449286d2b362cd96334bcd771636f0fc** at2026-09-21T06:59:55Z.
+Passed detection/safeguards/backend/Docker/schema/aggregate; web/identity/native/Seeder
+skipped. Coordinator reviewed and merged; author did not self-merge. Earlier pending
+wording below is historical. No repeat of accepted race journeys; actual UI/localSMTP
+and after-final-read/provider/rearming limits remain unchanged. Frozena5bref preserved.
+
+## N05 cancellation/reschedule stale reminder — PR101 review handoff
+
+Coordinator granted existing bookingReminders.js only after actual failure. Compare
+current/master/paid worker (samehash) and older staging/Beacon variants: none rechecks
+booking byID between scan and claim. Reuse existing worker/table/notifications;15-line
+in-place check, no schema/service/newfile/unit test/design change. Fresh read errors,
+missing/terminal booking or changed start/end/host skip claim; later scan handles current
+schedule. This does not atomically exclude cancellation after the final read/provider start.
+
+**Actual baseline:** isolated Bob GoTrue browser existing host BookingDetail→More→Cancel,
+Changed plans→Cancel persistedcancelled06:49:56.099. Real worker confirmed scan completed
+06:49:31.536 but its reply deliberately held until06:50:08. Reminder log0ad13372 and
+notice5fd60919 saved after cancellation, local SMTP reminder e5inJdnVoHHZjKzriyyT2m
+arrived06:50:08.274 after cancellationANhcidg9 at06:49:56.202. Actual Mailpit UI showedboth.
+Only real scan delivery delayed; no mocked row/auth. Temporary free bookingSQL-cloned,
+not creationUI acceptance; original retained booking untouched.
+
+**Candidate actual UI/API/SQL:** reset only temporary booking; keyboard host cancel
+commits06:52:29.358 while real scan held, release produces0reminder logs/notices/newmail.
+Reschedule screen selects09:00PDT available slot→Reschedule now→toast/time updated,
+SQLstart16:00Z at06:53:21.692; released oldscan produces0reminder logs/notices.
+Then temporary timestamp controlled due; actual BookingSELECT revoked after real scan
+before fresh read:0claims/notices, grant restoredfinally. Fresh retry produces1log/1notice/
+1SMTPQe6ugzjRXgGUbmJwFmrWyZ; repeat unchanged. Original baseline mail remains separately
+identified, never counted as candidate send. Host/notification-only settings unchanged.
+
+**Checks/limits:** existing schedulingLogic26/26, syntax/diffcheckpass; no new tests.
+Manual worker real clock/localSMTP64535+Mailpit64536, not natural cron or hostedprovider.
+No native/paidbooking/intact account-switch/provider-race acceptance. Existing receipt
+key booking/kind is not rearmed after a previously delivered reminder and later move;
+that policy/acceptance remains separate. Prior offset/0/empty/30day and destination
+proofs retain their unchanged-source limits. N05 and wholeStream remainopen.
+
+**Cleanup:** exacttemporaryeb013de4-a517-49f2-972c-45f744ba4e78 and its notices deleted;
+BookingAttendee/BookingReminderLog/BookingToken/Payment/Booking/Notification all0 forID.
+Original booking9c7f570c fullrowunchanged, BookingSELECTrestored; hold/releaseflagsremoved.
+Five newlocal test emails retained as private evidence; no externalrelay/provideractivation.
+Phase browser tabs8/9 closed; ownedruntime/originalfixtures retained. Otherstreamsuntouched.
+
+Private `booking-lifecycle-final-evidence.json` binds revision and6 source hashes,
+comparison/baseline/candidate/reschedule/readfailure/retry/cleanup artifacts and actual
+UI versus synthetic boundaries. Durable407files hashverified in existing
+`.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/`; manifest
+**92837977efcc7751f53e83a20f2707b05bd5db46a7be0f69aea5b42004927bfb**.
+Current exact-headCI35570564542pending; coordinator review/integration separate.
+Keepa5bfrozen while continuing read-only reconciliation for next bounded grant.
 
 ## Persona feed mute — final bounded handoff, September21 06:15UTC
 

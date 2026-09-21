@@ -30,6 +30,9 @@ const VISIBILITY_OPTIONS = [
 
 function parseLocation(loc: Record<string, any> | string | null | undefined): { latitude: number | null; longitude: number | null } {
   if (!loc) return { latitude: null, longitude: null };
+  if (typeof loc === 'object' && Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude)) {
+    return { latitude: loc.latitude, longitude: loc.longitude };
+  }
   if (loc?.coordinates?.length >= 2) {
     const [lng, lat] = loc.coordinates;
     if (Number.isFinite(lat) && Number.isFinite(lng)) return { latitude: lat, longitude: lng };
