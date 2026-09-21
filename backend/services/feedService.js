@@ -285,6 +285,10 @@ async function getMuteAndHideFilters(userId) {
     return cached.data;
   }
 
+  // A mute/unmute can invalidate this read while its database response is pending.
+  const pendingEntry = { data: null, expires: 0 };
+  _filterCache.set(userId, pendingEntry);
+
   const [
     { data: mutes, error: mutesError },
     { data: hides, error: hidesError },
@@ -327,6 +331,7 @@ async function getMuteAndHideFilters(userId) {
   const result = {
     mutedUserIds: new Set((mutes || []).filter(m => m.muted_entity_type === 'user').map(m => m.muted_entity_id)),
     mutedBusinessIds: new Set((mutes || []).filter(m => m.muted_entity_type === 'business').map(m => m.muted_entity_id)),
+    mutedPersonaIds: new Set((mutes || []).filter(m => m.muted_entity_type === 'persona').map(m => m.muted_entity_id)),
     hiddenPostIds: new Set((hides || []).map(h => h.post_id)),
     blockedUserIds,
     blockedPersonaIds: new Set((personaBlocks || []).map(block => block.persona_id).filter(Boolean)),
@@ -338,7 +343,10 @@ async function getMuteAndHideFilters(userId) {
     },
   };
 
-  _filterCache.set(userId, { data: result, expires: Date.now() + FILTER_CACHE_TTL });
+  if (_filterCache.get(userId) === pendingEntry) {
+    pendingEntry.data = result;
+    pendingEntry.expires = Date.now() + FILTER_CACHE_TTL;
+  }
   return result;
 }
 
@@ -356,6 +364,7 @@ function applyMuteHideFilters(posts, filters, surface, viewerUserId = null) {
     if (filters.hiddenPostIds.has(p.id)) return false;
     if (!isOwnPost) {
       if (filters.mutedUserIds.has(p.user_id)) return false;
+      if (p.identity_context_type === 'persona' && filters.mutedPersonaIds?.has(p.identity_context_id)) return false;
       if (p.business_id && filters.mutedBusinessIds.has(p.business_id)) return false;
       if (filters.blockedUserIds && filters.blockedUserIds.has(p.user_id)) return false;
       if (
