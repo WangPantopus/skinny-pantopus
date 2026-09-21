@@ -1771,6 +1771,7 @@ router.get('/map', verifyToken, async (req, res) => {
         }));
       } catch (error) {
         logger.error('Error fetching map posts', { error: error.message, userId, surface });
+        if (enabledLayers.filter(Boolean).every(layer => layer === 'posts')) throw error;
       }
     }
 

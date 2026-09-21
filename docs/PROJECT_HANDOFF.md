@@ -7,6 +7,137 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## September 21, 05:19 UTC — exact-source CI reconciliation
+
+Paid published42d remains on full gate35562351562; local795ad998d payment-read
+candidate is clean and verified, awaiting the integration batch push. Delayed
+automatic paid35562395559 duplicated that exact head and was canceled as redundant,
+not passed. All78 files in the three latest Stream1 identity/QA/payment mirrors
+were rechecked; current PaymentSection matches its accepted candidate hash.
+
+Map PR97 is retargeted to master at unchanged4c6f11771, combining the three-file
+read-error/order repair and popup destination while preserving separate commits and
+real UI/SQL evidence. Automatic96/d10e35562256054 and original97/4c6f35562565822
+passed their changed surfaces. Redundant manual96/35562211102 was canceled, not passed;
+combined final-tree97/35562416370 remains the full gate. Native/workflow bytes are
+identical between96 and97. No merge claim yet. Stream3 latest03 hash5c13c460 captured.
+Documentation98 exactbb37437b8 automatic35563086879 passed; it remains draft until
+this batch disposition is published. Automatic CI may appear several minutes late;
+do not dispatch a duplicate after a short absence. Root runtimes remain stopped;
+peer runtime/fixtures preserved. PR34/47 stay draft and PR46/user work untouched.
+
+## September 21, 05:00 UTC — payment-details read recovery verified
+
+Local paid **795ad998d** changes only existing PaymentSection.tsx. Actual worker UI
+showed1500c gross/225c fee/1275c earnings; Payment SELECT denial made the existing
+payment endpoint503 and silently removed that breakdown while PaymentHeld remained.
+All six current/master/staging/place/archive components lacked read error/retry.
+Reuse existing scoped child and active callback retirement; add existing ErrorState,
+loading and retry. No new file/backend/schema/design/unit tests.
+
+Real IAB→SDK→gigs/:id/payment→PostgREST/full77SQL verifies cold/repeated503 and Enter
+retry200, correct worker earnings and payer summary, owner200 paymentnull/genuineempty,
+unrelated viewer no panel/direct403, and actual owned payee mismatch409/error followed
+by exact identity restoration and same Retry200. TypeScript and scoped ESLint pass.
+One synthetic captured_hold reader record only; no actual capture/refund/settlement or
+provider writes. The refund panel correctly required verification for this incomplete
+fixture proof; no refund attempted. No new native/business-manager/held-response or
+cross-account lifetime claim. Earlier unchanged financial evidence remains bounded.
+
+Private gig-payment-read-r1/f9200330:24 mirrored/hash-verified files in owner's
+`.pantopus-recovery/audits/20260921-stream1-gig-payment-read-r1`. Seven explicit table
+counts0, original payee identity and Payment SELECT restored; API/Next/ownedSupabase
+stopped, three IABtabsclosed/cachepreserved. Provider totals unchanged15originals.
+Local commit is not pushed yet: published42dbe4b2c stays fixed for CI35562351562,
+which has web/backend/schema/privacy/Seeder passed and native jobs running. Prior24c
+fullCI35560003741 remains accepted; no current-head green claim. PR34/47 staydraft.
+
+Coordinator captured latest Stream3 reconciliationd0def39a at1eba6fbfb and verified
+all363durable hashes; no row closed or accepted journey repeated. PR96/97 remain
+separate/frozen under their full exact-head CI; documentation-onlyPR98 remainsdraft.
+Close this integration batch before any new feature scope.
+
+## September 21, 04:49 UTC — new paid batch pushed; prior full CI green
+
+Paid **42dbe4b2ccd696101b733519be5541b9819f8082** is clean/pushed, integrating reviewed
+master4e58b0bca through PR95 plus verified identity7ad896338 and Q&A reader4b8296f10.
+[Current CI35562351562](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35562351562)
+was explicitly dispatched because no automatic PR run appeared; it is pending.
+Prior exact24c519653 completed [CI35560003741](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35560003741)
+SUCCESS15 applicable checks/one Seeder skip, including Android and allthreeiOS.
+Final receipt is saved in the bidder mirror (now16files). Both newer private mirrors
+have27files including integration receipts; payment/wallet/SDK source unchanged by
+integration. The earlier QA identity body is preserved by its later loader repair.
+
+Root fixtures/privileges/runtimes/tabs are cleaned as recorded; no native reservation.
+PR34/47 remain draft, PR46/user work untouched. PR96 exactd10e source/evidence and
+354-file durable manifest reviewed; its manual CI35562211102 includes native jobs
+and remains pending. Later popup repair stays separate. No unfinished scope merged.
+Hold published paid source until its own new gate completes; preserve prior evidence.
+
+## September 21, 04:41 UTC — Q&A read failure and recovery verified
+
+Local paid **4b8296f10** follows7ad896338 and changes only existing QASection.tsx.
+Actual GigQuestion SELECT denial returned500 twice while SQL held one question and
+answer; UI showed Questions0/No questions yet with no retry. Six current/master/
+staging/place/archive variants cleared questions on read failure. Reuse current
+loader and existing ErrorState; retain known rows and scope the new error/data/loading
+callbacks to current gig/actor/component. No new file/backend/schema/design/tests.
+
+Real IAB→SDK→routes→PostgREST/full77SQL verifies cold/repeated500, keyboard retry200,
+and actual committed vote followed by a controlled SELECT denial: known question/
+answer remain with error; restored SELECT plus Enter fetches persisted count1 without
+another vote. Existing second gig returns200/genuineempty. Private reader question is
+synthetic; actual question/answer creation and identity navigation reuse the prior
+phase. Provider writes0. TypeScript/ESLint pass (two existing lint warnings).
+
+Ordering limits are explicit: same-URL reads serialized in the browser, old200 then
+fresh200, so no reversed-order acceptance. Changing gig during a12s held response
+left the new empty gig correct, but the old socket was already destroyed; this is
+navigation retirement only, not intact delivery. Mutation errors/idempotency, arbitrary
+malformed responses, native/business/provider and broader lifetime cases remain open.
+
+Private gig-qa-read-r1/f9200320:26 files mirrored/hash-verified under owner
+`.pantopus-recovery/audits/20260921-stream1-gig-qa-read-r1`. Eight explicit tablecounts0,
+SELECT restoredtrue/faultconsumed; API/Next/Supabase stopped, one IABtabclosed, owncache
+preserved. First cold baseline restart also cleaned0 before reseeding. Local branch
+clean; published24c retained until CI35560003741 completes (allthreeiOS/emulator passed,
+Androidquality remains). Push local milestones after that gate, then gate combinedhead.
+PR34/47 remain draft. PR95 exact378c passed CI35561104880 and merged4e58b0bca974e42b90d298d14f1ae0509866aaf4;
+source hashes and real error/retry/cleanup reviewed. Separate map work remains peer-owned.
+
+## September 21, 04:30 UTC — gig poster and Q&A identities verified
+
+Local paid commit **7ad896338** repairs three existing files: gig detail page.tsx,
+gig-detail/QASection.tsx and optional canonical href/locality fields in types/gig.ts.
+Actual worker question and poster answer persisted, but the screen displayed
+Anonymous/Anonymous/Poster while the API supplied canonical public identities.
+Current/master/staging/place/archive comparison showed the same legacy field reads;
+repair in place, no new file/backend/schema/private field restoration/design/tests.
+
+Real IAB UI→SDK→routes→PostgREST/full77 SQL verifies correct poster mouse link,
+question-author Enter and answer attribution Enter to the corresponding public
+profiles. Persisted empty owner handle retains poster/answer names without links;
+restored owner plus empty worker handle retains asker name without link. All original
+handles restored and links recovered. TypeScript passes; ESLint0errors/7 existing
+warnings. Initial npx compiler dispatch/private inspector syntax failures were tooling
+attempts, corrected before final checks or SQL mutation. No new unit tests.
+
+Private gig-identity-r1/f9200310 has26 mirrored/hash-verified files in owner's
+`.pantopus-recovery/audits/20260921-stream1-gig-identity-r1`. Seven explicit table
+counts0; ownedAPI/Next/Supabase stopped and both IABtabs closed, cache preserved.
+Provider writes0. Synthetic local auth/ancillary transport; no native/business-seat/
+remote-avatar/full-redaction or anonymous-policy end-to-end claim. Existing business
+answer display override stays unlinked rather than linking a different actor. Q&A
+read/error/order/mutation retries remain separate unverified leads.
+
+Published paid **24c519653** remains unchanged for CI35560003741: Androidemulator
+passed, Androidquality and three iOS simulator jobs remain running. Local7ad896338
+will be pushed only after that gate finishes, preserving exact-head CI evidence.
+PR34/47 remain drafts. DocsPR92 exactddaa679f5 passed CI35560752881 and merged
+b67b32d0f3263926b9c41d65f8dbca6df7a40bae. Stream3 PR95 source/evidence reviewed,
+current-master update/CI pending; map and persona proposals remain separate.
+
 ## Latest coordination — September 21, 04:19 UTC
 
 PR94 Hide persistence error repair is merged as b463ee3850e089b523426317b90d9bb246f82c89
