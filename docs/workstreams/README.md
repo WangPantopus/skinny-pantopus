@@ -4,6 +4,16 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 04:45 UTC — conditional next map destination grant
+
+After Stream3 freezes its current three-file map error milestone, it owns a separate
+existing DiscoverMap popup href repair only for actual /app/posts/:id404. Confirm
+canonical existing full-post screen/API and compare archived/open variants; reuse
+/app/feed/post/:id if confirmed. Verify popup→authorized detail and missing/deleted
+boundary. Preserve visibility/styles; no new route/file/schema/SDK/tests/persona edit.
+Root local42dbe4b2c integrates reviewed master through95; published24c remains fixed
+until CI35560003741 finishes. No active root runtime/native reservation.
+
 ## September 21, 04:41 UTC — root Q&A runtime released
 
 Local4b8296f10 read-error/retry milestone is verified within live01 limits. Exact
