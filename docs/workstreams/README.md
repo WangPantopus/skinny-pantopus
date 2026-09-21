@@ -1,5 +1,38 @@
 # Three-stream coordination
 
+## Later-batch SDK signed-out refresh repair and scoped rollback fault
+
+Stream3 sole writer: existing frontend/packages/api/src/client.ts response401 gate.
+Coordinator verified637 artifacts, full logout retirement/failure snapshot and inspected
+existing canRefresh/hasActiveSession/clear paths. Source plus captured repeated private
+reads/refreshes supports a feedback loop; historical tab initiator remains unproven.
+Use existing active-session signal for automatic web401 refresh; logged-out401 must
+reject without refresh/repeatedsessionclear. Preserve mobile refresh, explicit refresh
+page, stale-access sessionflag, singleflight/generationguards and privacy retirement.
+No limiter/QueryProvider/layout/backend/schema change or newfile/unit test.
+
+Only owned Stream3 runtime and synthetic Bob: after natural limiter window expires,
+ordinary login to establish new owned current session if needed; apply exactSDK repair
+and verify loaded source, then actual Settingslogout→protected own settings query→
+login/currentdestination. Capture bounded private-read/refresh/status counts and safe
+session metadata before/after, no burst/429, expected local retirement/newlogin only,
+all other own metadata/fullprefs unchanged. If errors persist stop attribution before
+furtherpatching. Relevant existing SDK/web regression checks required; accepted
+explicitrefresh/naturalexpiry paths can be reused only with source/controlflow limits.
+No cookie/clock/JWT/devicebinding/limiterbypass/restart to clear counters, hosted/native
+claim. Close newtabs/descriptor; retain natural session records/runtime. Hand off draft.
+
+Stream2 midtransaction rollback fault approved only on ownedr1DB and exact Home
+f0e51100-0000-4000-8000-000000000100: uniquelynamed NOT VALID HomeAuditLog CHECK rejects
+only that home_id AND action=home_settings_updated. First prove name absent and capture
+full constraint definitions/validatedflags/tableowner/ACL. No trigger/function/privilege
+changes. One actual UI one-command save fails at finalauditinsert; compare fullHome/
+Preference/Audit/ancillary state unchanged. Immediately drop only exactnewconstraint,
+prove complete catalog/provenance restored, UIretry200/oneaudit/intendedfields. Other
+homes/actions unaffected; candidate function/forwardmigration remains installed and
+recorded. Do not run broader existing contract trigger fault without isolated review.
+No new unit tests; coordinate any further shared SDK edits with Stream3 currentwriter.
+
 ## Later-batch D05 atomic Settings repair ownership
 
 Coordinator verified17 baseline artifacts and independently compared full failure
