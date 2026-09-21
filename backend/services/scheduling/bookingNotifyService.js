@@ -281,34 +281,53 @@ function formatLead(min) {
   return `in ${min} minutes`;
 }
 
+async function notifyReminderUser(userId, booking, kind, notice) {
+  const idempotencyKey = `booking-reminder:${booking.id}:${kind}:${userId}`;
+  const notification = await notificationService.createNotification({
+    userId,
+    ...notice,
+    icon: '📅',
+    context: 'personal',
+    idempotencyKey,
+  });
+  if (notification) return;
+
+  // createNotification returns null for both a duplicate and a failed insert.
+  // Only a checked receipt for this recipient/event permits the worker to proceed.
+  const { data, error } = await supabaseAdmin.from('Notification')
+    .select('id').eq('idempotency_key', idempotencyKey).eq('user_id', userId)
+    .eq('type', 'booking_reminder').maybeSingle();
+  if (error || !data) throw new Error('BOOKING_REMINDER_NOTIFICATION_UNAVAILABLE');
+}
+
 async function sendBookingReminder({ booking, eventType, page, kind, offsetMinutes }) {
   const eventName = (eventType && eventType.name) || 'Appointment';
   const inviteeTz = booking.invitee_timezone || (page && page.timezone) || 'UTC';
   const whenInvitee = formatWhen(booking.start_at, booking.end_at, inviteeTz);
   const label = Number.isFinite(offsetMinutes) ? formatLead(offsetMinutes) : (kind === 'reminder_1h' ? 'in about an hour' : 'tomorrow');
-  const link = `/app/profile/schedule/bookings/${booking.id}`;
+  const ownerQuery = ['home', 'business'].includes(booking.owner_type)
+    ? `?ot=${booking.owner_type}&oid=${encodeURIComponent(booking.owner_id)}` : '';
+  const link = `/app/scheduling/bookings/${booking.id}${ownerQuery}`;
 
   // Host reminder respects the host's 'reminder' notify-me toggle.
   if (booking.host_user_id && (await notifyPrefs.hostWantsKey(booking.host_user_id, 'reminder'))) {
-    const notification = await notifyAppUser(booking.host_user_id, {
+    await notifyReminderUser(booking.host_user_id, booking, kind, {
       type: 'booking_reminder',
       title: `Reminder: ${eventName} ${label}`,
       body: whenInvitee,
       link,
       metadata: { booking_id: booking.id, kind },
     });
-    if (!notification) throw new Error('BOOKING_REMINDER_NOTIFICATION_UNAVAILABLE');
   }
 
   if (booking.invitee_user_id) {
-    const notification = await notifyAppUser(booking.invitee_user_id, {
+    await notifyReminderUser(booking.invitee_user_id, booking, kind, {
       type: 'booking_reminder',
       title: `Reminder: ${eventName} ${label}`,
       body: whenInvitee,
-      link,
+      link: booking.invitee_user_id === booking.host_user_id ? link : '/app/scheduling/my-bookings',
       metadata: { booking_id: booking.id, kind },
     });
-    if (!notification) throw new Error('BOOKING_REMINDER_NOTIFICATION_UNAVAILABLE');
   } else if (booking.invitee_email) {
     if (await isEmailSuppressed(booking.invitee_email, booking.owner_type, booking.owner_id)) return;
     const organizer = await getUserContact(booking.host_user_id || booking.owner_user_id);
