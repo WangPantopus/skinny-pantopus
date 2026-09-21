@@ -1,5 +1,26 @@
 # Three-stream coordination
 
+## September21 — transient session retry reviewed
+
+Coordinator verified628 durable Stream3 artifact hashes (MANIFEST18bb02a8) and
+independently compared full own-session snapshots: synthetic pre-Express503 made
+no preference/app/GoTrue metadata or grant-receipt change. Keyboard retry reached
+real backend200/GoTrue200 and exact original settings query/Bob. Same73 app and4
+GoTrue session IDs retained; only current fdbea9cf session metadata changed, one new
+GoTrue200. Full preferences[] unchanged; identity-bound GET304 is cache revalidation,
+not a fresh200. Actual UI transient failure and recovery snapshots reviewed.
+
+Private hook restored exactly d7c8b953; descriptor/metadata flag absent, faultAPI63469
+stopped, restoredAPI73610/session69695 retains exact original argv/env/backendcwd.
+Next42165/42493 and DB retained, tab25 closed, successful natural session rotation
+retained. Manual refresh-page entry and synthetic pre-forward503 do not establish
+natural expiry/provider outage/native/hosted/OAuth/cross-account acceptance. No app
+edit/newtest. Frozen live03 4acfa26c captured in6a3c7c692; details/evidence remain in
+existing accounts-social-r3 durable mirror. Next Stream3 assignment is source-only
+logout/revocation/current-destination reconciliation after accepted-evidence review;
+no new auth mutation/device association or runtime expansion granted. All streams
+remain incomplete. Paid48702 currentCI unchanged and pending.
+
 ## Later-batch D05 changed-profile partial-save baseline grant
 
 Coordinator verified11 source-artifact hashes/56bindings and accepted112 reuse.
