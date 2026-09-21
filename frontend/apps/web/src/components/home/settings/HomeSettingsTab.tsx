@@ -166,12 +166,12 @@ export default function HomeSettingsTab({
 
       // Update settings & preferences
       await api.homeProfile.updateHomeSettings(homeId, {
-        house_rules: houseRules.trim() || undefined,
-        parking_instructions: parkingInstructions.trim() || undefined,
-        entry_instructions: entryInstructions.trim() || undefined,
-        trash_day: trashDay || undefined,
-        local_tips: localTips.trim() || undefined,
-        guest_welcome_message: guestWelcome.trim() || undefined,
+        house_rules: houseRules.trim(),
+        parking_instructions: parkingInstructions.trim(),
+        entry_instructions: entryInstructions.trim(),
+        trash_day: trashDay,
+        local_tips: localTips.trim(),
+        guest_welcome_message: guestWelcome.trim(),
         default_visibility: defaultVisibility,
         default_guest_pass_hours: Number(defaultGuestHours) || 48,
         preferences: {
