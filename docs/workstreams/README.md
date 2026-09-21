@@ -4,6 +4,15 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 05:00 UTC — root runtime released; batch frozen
+
+Local795ad998d PaymentSection error/retry verified within live01 limits, all owned
+f9200330 rows0/identity+SELECTrestored; API18132/web18133/Supabase64561–67 stopped,
+threeIABtabsclosed/cachepreserved, no native reservation/provider writes. Published42d
+CI35562351562 runs. Stream3 current96/97 refs remain frozen, no further app grants;
+its363-file reconciliation captured. Complete current integration and documentation
+batch before new feature scope. PR98 only four live docs, no application diff.
+
 ## September 21, 04:52 UTC — gig payment reader reservation
 
 Root reserves18132/18133/64561–67 using clean isolated wallet-read-r1/full77 schema,

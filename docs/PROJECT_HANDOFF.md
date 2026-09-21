@@ -7,6 +7,37 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## September 21, 05:00 UTC — payment-details read recovery verified
+
+Local paid **795ad998d** changes only existing PaymentSection.tsx. Actual worker UI
+showed1500c gross/225c fee/1275c earnings; Payment SELECT denial made the existing
+payment endpoint503 and silently removed that breakdown while PaymentHeld remained.
+All six current/master/staging/place/archive components lacked read error/retry.
+Reuse existing scoped child and active callback retirement; add existing ErrorState,
+loading and retry. No new file/backend/schema/design/unit tests.
+
+Real IAB→SDK→gigs/:id/payment→PostgREST/full77SQL verifies cold/repeated503 and Enter
+retry200, correct worker earnings and payer summary, owner200 paymentnull/genuineempty,
+unrelated viewer no panel/direct403, and actual owned payee mismatch409/error followed
+by exact identity restoration and same Retry200. TypeScript and scoped ESLint pass.
+One synthetic captured_hold reader record only; no actual capture/refund/settlement or
+provider writes. The refund panel correctly required verification for this incomplete
+fixture proof; no refund attempted. No new native/business-manager/held-response or
+cross-account lifetime claim. Earlier unchanged financial evidence remains bounded.
+
+Private gig-payment-read-r1/f9200330:24 mirrored/hash-verified files in owner's
+`.pantopus-recovery/audits/20260921-stream1-gig-payment-read-r1`. Seven explicit table
+counts0, original payee identity and Payment SELECT restored; API/Next/ownedSupabase
+stopped, three IABtabsclosed/cachepreserved. Provider totals unchanged15originals.
+Local commit is not pushed yet: published42dbe4b2c stays fixed for CI35562351562,
+which has web/backend/schema/privacy/Seeder passed and native jobs running. Prior24c
+fullCI35560003741 remains accepted; no current-head green claim. PR34/47 staydraft.
+
+Coordinator captured latest Stream3 reconciliationd0def39a at1eba6fbfb and verified
+all363durable hashes; no row closed or accepted journey repeated. PR96/97 remain
+separate/frozen under their full exact-head CI; documentation-onlyPR98 remainsdraft.
+Close this integration batch before any new feature scope.
+
 ## September 21, 04:49 UTC — new paid batch pushed; prior full CI green
 
 Paid **42dbe4b2ccd696101b733519be5541b9819f8082** is clean/pushed, integrating reviewed
