@@ -9,6 +9,14 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 ## Current integration gate — September21,01:40UTC
 
+Latest gate01:57UTC: PR75 current5edcaad6c passed CI35552345621 and merged
+**cc560bce6c61d915d8a3c503a55b8c167270a43e**. PR77 retargeted master and updated
+**cc252a47405cdc264f07b3c0737de00ce32952c9**; accepted app bytes unchanged and diff
+exactly three reminder-timing web callers. Fresh requiredCI pending. PR82 remains
+author-owned and blocked from integration: actual global signout revoked session
+but strict token guard left UI busy after expected cookie clearing. Author repairs
+and retests existing page before next review; failed202a evidence preserved.
+
 Latest gate: PR73 exact806d64635 passed CI35551789461 and merged as
 **ae85bad599f87933ac00e3f76ca23ac5cb6daa53** at01:53:15UTC. PR75 retargeted master
 and updated to **5edcaad6caaa161d5e4b970ef3e49b78a7755b21**; accepted application
