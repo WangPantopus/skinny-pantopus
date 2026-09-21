@@ -2418,3 +2418,129 @@ backend/image/schema/CI OK. Coordinator reviewed601 source/runtimehashes and
 independent retained-row equality; guarded master update/newheadCI remain separate.
 Source/runtime frozen. FinalCI receipt mirrored:602hashesverified, MANIFEST
 **2b37a97af78791d5493cc802ce80610cb0fe74ded9a5da682f323f81a0202d24**. No repeated journey or extra product change.
+
+
+## Next A02 source-only proposal — local session-refresh origin
+
+129 source/runtime frozen on localc3f; coordinator guarded03a2 update has identical
+service and requiredCI underway. No app/runtime/fixture/newtest or acceptedjourney
+replay. Reused actual prior incidental stale-session observations: configured
+stream3-auth.localhost navigation reached localhost/session/refresh transientfailure;
+ordinary correct-origin login recovered. No current production/authdefect asserted.
+
+Sevenrefs/35bindings map middleware→refreshpage→SDK/client→Nextconfig. Middleware
+builds redirects with new URL(...,req.url), client refresh uses same-originrelative
+POST and transient preservescookies. InstalledNext15.5.15 runMiddleware constructs
+absolute URL using server fetchHostname or localhost. This is a configuration lead,
+not proof of rootcause/deploymentfailure. Source proposal artifact includes exacthash.
+
+Propose first nonmutating HTTP redirect check on retainedNext with only synthetic
+sessionflag1/noauth token: existing protected settings path on configuredalias vs
+localhost, inspect Location origin/preservedpathquery and current startup/reverseproxy
+contract. Explicitly not real refresh/authacceptance. If configuration-only, propose
+local runtime correction before sharedauth edits; real browser expirycontinuation
+requires separatecontrolledownedsession scope. No tokens/timeadvance/foreigncookies.
+Durable603hashesverified, MANIFEST **61f6c35d991164c94541ad1b56e117084c99b69b910755df6eb5adb9ab6b56c2**, artifact
+session-refresh-origin-source-proposal.json. Await coordinator bounded assignment.
+
+
+## Local refresh redirect origin — nonmutating observation11:22UTC
+
+Granted retainedNext HTTP-only check: same protected notifications path+two query
+parameters, synthetic sessionflag1/noaccess/auth token. AliasHost and localhostHost
+both307 to http://localhost:18131/session/refresh; redirectTo preserves exactpath/query,
+no Set-Cookie on eitherresponse. Redirects notfollowed, no browser/session/SQLchanges.
+Actual parent14400 starts next dev --hostname127.0.0.1 --port18131, child14742
+listensloopback. InstalledNext builds middleware URL using serverfetchHostname and
+normalizes127.0.0.1 tolocalhost; app usesreq.url. This explains the local observed
+origin with existing startup; no hosted/production/authdefect or realexpiryclaim.
+
+Propose changing only owned Next startup hostname to stream3-auth.localhost if
+OSloopbackresolution confirmed, keepingport/distDir/proxy/session. No restart applied;
+requires coordinator runtimegrant. Then repeat just redirect-origin check before any
+real expiryjourney. Do not change auth/CORS/trustforwardedhost to mask localsetup.
+Resolution details, bothHTTPheaders and startupcontract in session-refresh-origin-http.json.
+Durable604hashesverified, MANIFEST **a2ada5a8c84c7cceafb5ed16fb97fb868240d6552480664ba6e33eaed26c5ba6**. All prior129/runtimeevidence preserved.
+
+
+## Owned Next hostname corrected — local runtime only11:26UTC
+
+Granted correction performed after PID/cwd/parent and exclusive loopback alias checks.
+Captured original process argv/env through NUL-separated OS procargs into private
+launch file (not mirrored or printed). Stopped only parent14400/listener14742; both
+absent/portreleased. Same executable/cwd/env/distDir/cache/port18131/APIproxy started
+with only --hostname stream3-auth.localhost changed. Newparent42165/listener42493,
+exec61129, listenerIPv6::1. Independently compared newprocess environment exactequal
+and argv hostname-only. API7996/18130 retained, no DB/cache/cookies/authsession/source
+changes. Private restore runner retained; restoration not needed because startupworks.
+
+Both aliasHost and localhostHost probes now307 with relative /session/refresh Location
+and exact original redirectTo path/query preserved; no SetCookie. Synthetic marker
+only/noaccess/auth token, no redirectfollowing/browserauth. This fixes recorded local
+redirectorigin configuration; real expiry/refresh continuity remains unverified and
+requires separate grant. No productionauthfix/CI/newtests/provider/nativeclaim.
+
+Structured next-hostname-change/probes receipts plus nonsecret restartoperator mirrored;
+private raw launch environment/runtime log excluded. Durable607hashesverified, MANIFEST
+**f7ae6e2e3d3d2ce16336e8c5e3946fbbcb0dec805be43c9fa9116e40fd15111b**. New ownedNext reservation42493/42165 replaces old14742/14400;
+API/DB/session remainretained.129/evidence/application branch unchanged.
+
+
+## Natural access-cookie expiry proposal — plan only
+
+Existing Bob browserlogin receipt10:40:13.684UTC, accesscookie maxAge3600 source,
+no later login/refresh success recorded through11:27:50. Natural expiry candidate
+after11:40:13.684; keep closed tabs/session and recheck renewal receipts before
+any granted navigation. No cookie deletion/manualrefreshpage/clock/JWT/authDBchange.
+Propose one actual protected settings navigation afterexpiry (harmlessquery marker),
+observe middleware recovery→same-origin refreshPOST→localGoTrue→originaldestination
+and Bob identity/identity-boundpreferencesGET, full unchangedprefs SQL. SafeHTTP
+receipts already record method/path/status; GoTrue evidence only narrowly parsed
+metadata+whitelisted nonsecret session fields, no rawtokens/hashes/headers/logs. If
+unavailable distinguish source-inferred provider path rather than inventreceipt.
+Naturalexpiry label remains timing-based unless safeexpiry metadata available; missing
+cookie simulation/manualrefreshentry would be different scopes, not substitutes.
+
+Close only new ownedtab; remove unusedmetadataflag; preserve rotated ordinarysession/
+registry timestamps. No authDBrestoration claim/logout/revocation/other-sessionchange.
+If no recovery or failure, preserve/report actualstate rather than silently relogin.
+Plan/cleanup/observability detail session-natural-refresh-plan.json; no execution yet.
+Durable608hashesverified, MANIFEST **e10f218b9bfa68cc161b8063df0141a0e7c39f64e98ff1f690e08bdf0c862a72**. Coordinatorreview pending.
+
+
+Natural-session runtime grant active: waiting with owned testtabs closed until
+11:40:20UTC; renewed-history check through11:36:32 still latestlogin10:40:13.684.
+Before snapshot records originalprefsabsence0 and actor-only whitelisted app/GoTrue
+session metadata, no token/hash/cookie fields. No navigation or session mutation yet.
+Next exactaction: recheck no renewal, capture receipt offsets, open protectedsettings
+with harmlessquery on correctedalias; never manuallyenter refresh or relogin.
+
+
+## A02 natural local session recovery — verified bounded11:41UTC
+
+Granted actual UI continuation passed after natural access-cookie window: lastlogin
+10:40:13.684+3600s source lifetime, no intervening renewal, navigation after11:40:20.
+No cookie removal/manualrefreshentry/clock/JWT/authDBmanipulation. Timing-based
+naturalexpiry, not directcookie-store inspection. Actual tab24 first displayed same-
+origin /session/refresh and Restoring your session; automatically returned to original
+settings URL with stream3_natural_refresh=1 and Auth Bob identity. APIrefreshPOST200
+11:40:41.755; independent localGoTruePOST/token grant_type refresh_token200 at11:40:41.
+Actor sessionfdbea9cf-e8b0-4c4c-a666-09b88887a880 last_refresh_at11:40:41.744,
+issued10:40:13.676/unrevoked. Other actor appsession metadata unchanged.
+
+PreferencesGET20011:40:45.081 exactBob actor; fullSQLprefs originalabsence0 unchanged.
+One actualreload stays same destination/query/account; only one refreshPOST total,
+no recoveryloop. Tab24closed, zero-delay metadataflag consumed, naturalbrowser/session
+rotation/authregistry timestamps retained; no authDBrestore/logout/revocation claim.
+No credentials/tokens/cookies/hashes/rawGoTrue logs exported. Existing API7996 auth
+source bytes unchanged0d6→c3f; corrected Next42165/42493 currentc3f. No source edit/
+CI/newtests/native/hosted/OAuth/otherdestination or crossaccount acceptance.
+
+Safe session-natural-before/after/start/UI/final metadata/operator mirrored, 616
+hashesverified, MANIFEST **bd26e7cfbaa7640f166d00bb8d50ebd21cef9440e3791dc809985995b6a0ad76**. Existing fullstream limits remain;
+coordinator review/next bounded assignment. Localhostname correction remains configonly.
+
+Postcheck found Next automatic tsconfig generated-types include/reordering from
+ownedrestart. Prior trackedclean confirmed; restored exact HEAD bytes, sourceclean
+again except owneduntracked .next-stream3. No intended application/config edit.
+Private session-natural-generated-config-cleanup.json records before/restored hashes.
