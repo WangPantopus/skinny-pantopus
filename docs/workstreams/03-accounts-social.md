@@ -4,7 +4,7 @@ Updated 2026-09-21T01:33:20.261710+00:00. **Stream incomplete; bounded milestone
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/workstream-accounts-social`, local HEAD **dd80580e4**, application tree
+branch `codex/workstream-accounts-social`, local HEAD **afe8d2f4c** (application source **57e495460**), application tree
 clean. Only untracked owned `.next-stream3/` remains. Preserve it while Next runs.
 Remote primary branch is **21b93aa62** after isolated reuse of the accepted iOS fixture correction; live runtime includes separate preference failure5e3a8b963 and canonical timingUI e11123328.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -19,6 +19,17 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## Coordinator integration progress (read-only reconciliation)
+
+PR70 merged358daaa; PR72 currentf2ea16704 merged703e7050867d4747db958dfda8a20bf2224d1991;
+PR73 current806d64635 mergedae85bad599f87933ac00e3f76ca23ac5cb6daa53; PR75 current5edcaad6c
+mergedcc560bce6c61d915d8a3c503a55b8c167270a43e; PR77 currentcc252a474 mergedb49dd59224d38c060d726a11bc45148f36404fcf.
+Coordinator checked each strict update changed only docs/accepted clock fixture before
+required CI. Accepted application bytes/evidence unchanged. PR80 is now coordinator-owned
+at05acf40319313d935edc682535623402386caa02, pending strict CI/integration. PR81 remainsdd805.
+Author did not merge or mutate those refs. Historical milestone sections below retain
+original source heads and acceptance boundaries. Local runtime remains the newer source.
 
 ## PR75 — preference database failures, ready for review / CI
 
@@ -154,6 +165,69 @@ Host email, attendee toggles, dailyagenda8am and pause remain separate unresolve
 policy/wiring rows; no inventedpolicy. Non-reminder rows have UI/API/SQL evidence,
 not full lifecycle delivery. Home/business switches, true offline/reconnect and
 same-user multitab writes remain unverified. Stream and N05 remain incomplete.
+
+## PR82 — Security records, refresh and session cleanup
+
+Coordinator assigned existing authDeviceService.js list helpers, authSessionService.js
+listActiveSessions/listSecurityEvents, and web settings/security/page.tsx loader and
+lifetime behavior. Baseline dd805: actual Security Refresh during denied
+AuthSecurityEvent SELECT returned GET devices200 and “No security activity recorded
+yet,” despite previously visible history. Restored grant/Refresh recovered the events.
+The same list helpers returned [] for device/session read failures. Native/current
+master/paid implementations and all helper callers were inspected before editing.
+
+Draft [PR82](https://github.com/WangPantopus/skinny-pantopus/pull/82), branch
+codex/stream3-security-read-errors, current review head **afe8d2f4cab1c9cbda5558f5d067451fb4a69213**,
+application source **57e495460e9aaacb6c50c062ef7dfee7b3f05632**,
+stacked on PR81. Three application files plus one existing assertion file. Checked reads reuse route500 handling;
+warm known rows remain usable with existing retry banner, cold failure is unavailable.
+Loader ordering and session/mount guards retire old results and pending confirmations.
+Successful refresh resets expanded history to the existing collapsed/Show more state:
+baseline39→Refresh20/noShowMore; candidate ShowMore40, failedRefresh preserves40,
+restoredRetry10+ShowMore→40. No layout redesign, new service/schema/provider or unit test.
+
+Actual local GoTrue/CUA/HTTP/PostgREST/PostgreSQL verification: cancel/wrong password
+leave auxiliary Evan session200 and Bob200; valid “sign out others” yields Evan401,
+Bob200 and current browser still signed in. Registry revoked, GoTrue session removed.
+Three individual table SELECT failures now return devices500; standalone events500;
+all restored and recovered200. AuthDevice failure during revocation now reports500
+AFTER earlier GoTrue/session revocation committed; restored UI retry succeeds with0
+additional sessions. This is explicit partial failure, not atomic revocation.
+
+Initial202a candidate global sign-out regression was caught by actual UI: endpoint200
+revoked Bob, but strict token comparison after expected cookie removal left private UI
+busy. Final57e permits token absence only for successful revoke-all with unchanged
+captured marker/mount. Existing endpoint clears the same four cookies as logout;
+removed redundant second logout and retained synchronous local cleanup/token-change
+broadcast. Actual final Bob global action exits private UI to login01:58:18.275Z;
+Bob auxiliary401, Evan200. Local Mailpit received the security email. No physical push.
+
+Evidence ordering limits: old devices500 was held15s, released01:49:53.963/finished.964;
+a newer refresh began51.159 but its200 finished54.021. This proves old failure after a
+newer request began, not after newer success. Pending unsubmitted global confirmation
+retired on Evan→Bob without POST revoke-all. A separate held global response from Evan
+at02:02:02.000 preceded Bob login/UI03.835 and release27.002; response/socket were
+destroyed, no finish. Bob actual authenticated reload56.636 succeeded. This proves
+session retirement/disconnection; **no intact old-account response delivery claim**.
+An earlier held attempt logged in only after release and is not overlap evidence.
+
+Private security-read-baseline-results.json, security-read-candidate-results.json,
+security-read-http-results.json, security-response-faults.jsonl, security-global-results.json
+and global-response-faults.jsonl bind source, exact sequence and boundaries. Existing
+2auth suites/100 tests passed before the client-only follow-up; backend bytes unchanged.
+Final web type gate/lint pass. Initial CI35552276595 failed an old exact banner-text
+assertion. Coordinator granted only the two existing assertion updates (banner wording and
+absence of redundant logout; retained local-clear/navigation checks). Committed
+afe8d2f4c, application bytes unchanged. All11 existing page cases pass; no new tests.
+Current required CI35553113322 runs at afe8d2f4c. Earlier202a/57e CI failures are retained
+as obsolete-assertion failures, not current application acceptance.
+
+Cleanup: all AuthDevice/AuthSession/AuthSecurityEvent SELECT grants restored; extra
+probe sessions revoked/GoTrue0, audit rows retained. Deliberate global/revoke-others
+operations revoked earlier isolated-account sessions; no session resurrection. Current
+Bob browser remains for continuing work. No device keys, resume grants, physical/native,
+provider activation or hosted persistence acceptance. PR82 not integration-ready until
+required final CI is green. Coordinator owns all older stack refs; do not push into them.
 
 ## Installed iOS capability attempt — slot released
 
@@ -351,7 +425,7 @@ physicalAndroid prevent new installed acceptance; current native CI is not scree
 
 Primary private /private/tmp/pantopus-stream3-20260920-r1; durable private mirror
 /Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/
-contains **203 files**, MANIFEST SHA256 **c694212d601ae13c230bf58f1eec7cba54b1300d742ddefd2be20e05686f3af4**. Coordinator checked fourcandidate
+contains **234 files**, MANIFEST SHA256 **1140457cf2cec8a2497eb9c7f3995897b455d05737f6fc266ca20f992cd8348e**. Coordinator checked fourcandidate
 hash bindings. Individual artifacts retain actual source/configuration, not a blanket
 HEAD rerun. Credentials/tokens/operatorlogs stay private, outside Git/chat.
 
