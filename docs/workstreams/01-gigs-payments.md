@@ -1,5 +1,30 @@
 # Stream 1 — Gigs and payments
 
+## September 21, 07:19 UTC — search handoff and historical-tip boundary
+
+PR105 frozen **f43b9664a319935a4e03553fa14a568e033fb2d4** has exactCI35571949622
+passing; coordinator reviewed its two-line existing identitySearch helper repair,
+all429durable hashes and4source bindings. Live03 frozen6f10a681 captured in939233cf7.
+Original PR104 deda CI35571776785 also passes; its stack still waits for102 integration.
+No source/retest duplication or broad row closure. Shared publication remains doc-only
+and should not merge ahead of the current feature integration sequence.
+
+New Stream3 grant: existing visibilityPolicy.js isScopedBlocked UserProfileBlock
+query only. Actual saved search_only block hid a Beacon; SELECT denial returned200
+and exposed it again. Propagate failed block checks through existing REST error paths,
+preserve current scopes/direction and legacy Relationship policy. Verify affected
+identitySearch/users/localProfiles callers and exact fixture/grant cleanup. No other
+helper/schema/newtests granted. Original baseline temporary row removed/grant restored.
+
+Root P02 source reconciliation confirms existing SQL discovery is age-unbounded;
+provider discovery starts before original provider_started_at and paginates, while
+new provider creation refuses aged23h originals. Four exact prior owned Stripe TEST
+tip intents were read without writes at07:17UTC: only8.62–8.87h old, created September20
+22:24–22:40UTC. They cannot prove actual beyond24h provider discovery. Reuse accepted
+synthetic-age checks; do not backdate a local clock and claim real provider-age proof.
+P02 remains open at this boundary. Receipt added to vote mirror, now29files. No new
+root runtime fixture, provider/customer/charge or application change for this check.
+
 ## September 21, 07:15 UTC — atomic question votes verified
 
 Branch codex/paid-gig-integration; local **e2b03de6b0fa17c15199ead374fce57959b0fb79**,
