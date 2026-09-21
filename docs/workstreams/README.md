@@ -1,5 +1,43 @@
 # Three-stream coordination
 
+## Next Stream3 source-only scope after pause repair integration
+
+PR126 is merged5b8027964 after exact49becdb41 CI35591151829. Stream3 may adopt
+that final application master on a separate follow-up branch, preserving prior refs,
+evidence and retained runtime. Reuse existing pause/source maps and inspect the
+existing host per-channel push/email controls, their saved JSON keys, notify_me gates
+and actual delivery consumers. Separate in-app persistence from push/email delivery
+and already defined recipient policy; identify one bounded verification proposal.
+No runtime expansion/application change/new tests/native/provider send or invented
+channel policy. Do not rerun accepted paused/Resume/manual/natural timing journeys.
+Later findings stay outside the completed125/126/root-removal integration batch.
+
+
+## Integration batch boundary and Home approval runtime scope
+
+Current integration batch is limited to merged125, reviewed126 host pause repair
+and root e167 saved-card removal lifetime repair, followed by documentation publication
+and one paid update. Later findings/PRs belong to the next batch; keep current heads
+fixed under required CI and do not continually extend this integration.
+
+Coordinator reviewed13 Send invitation source artifacts/77 bindings and the existing
+transaction/notification side effects. PR125 mergedbc2bec5ad after exact1c9181a59 CI.
+Stream2 may adopt that master on a separate follow-up branch, preserve125 refs and
+reacquire only owned18141/18142/64550–59 after checks. Runtime-only: real request
+creation/list200/rendered applicant without membership, current Cancel/no approval
+POST/full snapshots equal, then pending Send invitation across same-document Settings
+departure. If confirmation survives, record actual approvalPOST/status/exact request,
+one targeted pending invite/audit and unchanged occupancy before proposing repair.
+Keep real service/SQL and process-lifetime dynamic notification/email interception;
+block external transports/unexpected mutations. Record safe method counts only,
+never raw invite tokens or email bodies. Notification/inbox/provider delivery and
+sender-recovery semantics are not established by this route or its success toast.
+Reuse accepted invitation/role/decline evidence; no replay or new shared store/UI/
+service/schema/app file/tests/native scope. Capture full request/invite/occupancy/audit
+and fixture notification/capability/command counts, restore exact data/grants and
+release owned runtime. Report actual failure before application edits.
+
+
 ## Home next source-only task while PR125 integration finishes
 
 Keep125's application source/runtime frozen. Compare the remaining existing Requests

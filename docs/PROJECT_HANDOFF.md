@@ -1,5 +1,30 @@
 # Pantopus project handoff
 
+## September21, 10:57 UTC — reviewed repair batch integrated locally
+
+PR125 merged `bc2bec5adb7aab01f1fd098be7cd9df202739864` after exact
+1c9181a596474b1e0e9cae60e589757690cf64fc CI35590631566 passed. PR126 merged
+`5b80279643bb72c800648cb922685e8818afc4f1` after exact
+49becdb41f11ffa6f5d7452981a788889b9e9849 CI35591151829 passed. Both updated source
+files match their accepted candidates. Home real UI/SQL and scheduling real Resume/
+manual worker/local SMTP evidence retain their original limits; all owned fixtures
+were cleaned. Stream3 original auth session/retained runtime remains explicitly retained.
+
+Local paid integration `a293b6a30` combines final feature master5b802 with root
+removal repaire167. Three source hashes match exact tested candidates. Combined
+TypeScript and scoped lint exit0 (19 existing warnings);26 existing scheduling checks
+pass, whitespace clean. Financial backend/native are unchanged. No new unit tests,
+provider operations or runtime replay. Published e970 full15-job CI remains passed;
+new local integration is not yet published/current-CI accepted.
+
+Publish this separate five-document update, then adopt its docs-only final master and
+push the paid batch once. PR34/47 remain drafts,46 separate. The current batch is now
+closed to further feature additions. Later Send invitation/notification-channel work
+belongs to a new batch. Root removal mirror has23 verified artifacts before integration
+receipts; exact cleanup and limitations in the preceding entry. No root API/tab or
+heavy native build remains; own Next/Supabase retained. All streams remain incomplete.
+
+
 ## September21 — saved-card removal lifetime repaired and verified
 
 Local paid commit `e16736465db835fe6a493abe2216071693c8df1a` changes only existing

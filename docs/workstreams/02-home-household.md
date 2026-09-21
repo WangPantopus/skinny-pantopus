@@ -2,6 +2,30 @@
 
 Updated September 20, 2026. Owner: Home stream.
 
+## September 21 D07 Send invitation — actual baseline frozen
+
+Adopted merged125 master **bc2bec5adb7aab01f1fd098be7cd9df202739864** on separate `codex/home-request-invite-verification`, preserved125refs, clean/no appedit. Eleven relevant current source bytes match the accepted13file/77binding source bundle. Coordinator runtime-only grant followed; current batch125/126/rootremoval is not expanded.
+
+Actual real requestcreation200/list200 rendered exact synthetic applicant(nooccupancy) in IAB16. Current Send invitation→Cancel produced no approvalPOST and identical full request/invite/occupancy/audit snapshots plus notification/capability/sender/decisioncommandcounts. Existing HomeSettings/Back creates same-document history; Send invitation opened then BrowserForward /edit leaves modal. Click Send invite onSettings→actual approvalPOST200, exact request approved/resolved_by owner, one targeted pending HomeInvite/source_request_id, one HOME_INVITE_CREATED audit. Full occupancy unchanged, no applicant membership. Success toast Invitation sent observed onSettings; it is not delivery evidence.
+
+Private process-lifetime dynamic transport interception suppressed requestnotification/sendHomeInviteEmail/notifyHomeInvite (3safe method records, no raw tokens/emailbody).0realprovider/blockedunexpectedattempts;notification/capability/commandcounts0. Real service/SQL, synthetic identity/transport, localledger55. No recipient acceptance/receiptsemantic/native/hosted/session or broad invitation replay claim.
+
+Proposed smallest repair: only existing handleApproveAccessRequest adopts pageConfirmation identity/current generation/token/origin/session guard beforePOST and success/error/finally, reuses retire busyclear; no sharedstore/UIcopy/backend/schema/newfile/tests. No app change yet; coordinator exact repair review pending.
+
+Durable owner `.pantopus-recovery/audits/20260921-stream2-request-invite-baseline-r1/`,12files+flatmanifest: final11sourcebinding/exactpage/actualbaseline+Cancel/fullSQL/privatefixture/cleanup. Source13bundle reused separately. Cleanup all12base counts0 plus exactrequest/invite/occupancy/audit/Notification/capability/sender+decisioncommands/applicantUser/auth/override0; noDBgrantschanged. Tab16/API/Nextclosed,5ownedcontainersstopped/preserved, reservedIPv4/6portsfree. Runtime released. Frozen baseline ready for capture; no repeated verification before candidate scope.
+
+## September 21 D07 Requests Send invitation — source-only comparison
+
+PR125 original e7865fd81 [CI35589989322](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35589989322) passed. Coordinator updated125 to1c9181a596474b1e0e9cae60e589757690cf64fc with identical reviewed page bytes/docs-only additions; updatedCI35590631566 remains coordinator gate. Prior candidate live02 hash0af76cb4 captured54772e50a; frozen original local branch/source and released runtime preserved. No branch switch or application edit for this source-only task.
+
+Existing Requests Invite→Send invitation confirm→SDK approveHouseholdAccessRequest→home.js→homeInvitationService.write(approve_request)→write_home_invitation traced. SQL current authority/source/policy checks and same-actor replay already exist; creates one targeted pending HomeInvite/source_request_id, request approved/resolver/audit, no membership. Awaited UI confirmation lacks accepted role/decline lifetime guards; source similarity alone is not a reproduced defect.11paths×7current/archive/openrefs=77bindings/72present/5historicalmissing, identical approval-handler hashes across all7.
+
+Policy/side-effect distinction: approval separately awaits notifyCreated, which dynamically attempts email with raw token and in-app notification (real helper may badge/socket/push). Proposed private fixture must intercept both modules for process lifetime; log only safe method/count data, no raw capability. Unlike sender-recovery commands this route returns no delivery proof; existing Invitation sent toast cannot establish actual delivery. No recipient acceptance, receipt-policy replacement or copy change is in scope.
+
+Proposed runtime after125integration: adopt finalmaster on separate follow-up and rebind relevant source; only own18141/18142/64550–59. Exact applicant/no occupancy, actual request creation/list200/rendered request; current Cancel noPOST/full state equal, then same-document departure with Send invitation pending. Record any actual stale approvePOST/status and exact pending-invite/request/audit changes while complete membership unchanged. All provider/unrelated mutations blocked; observe transport suppression and zero Notification/command/capability additions; clean exact invitations/requests/applicant and original fixture counts, then release own runtime. Reuse accepted sender/recipient/role/decline/SQL evidence; do not replay it.
+
+Durable owner `.pantopus-recovery/audits/20260921-stream2-request-invite-source-r1/`,13files+flatmanifest (11sources,77bindings,scope/sideeffects/proposal). Source-only; no new acceptance/runtime/tests/native/provider activity. Coordinator scope review pending; original125 and runtime remain frozen.
+
 ## September 21 D07 Requests decline — reviewable repair
 
 **Published, CI queued; stream incomplete.** Clean/pushed `codex/home-request-decline-verification` at **e7865fd81d15fe3802b65d2a18b7a3eacc9462e3**, [draft PR125](https://github.com/WangPantopus/skinny-pantopus/pull/125), merged55856362b base. [Exact CI35589989322](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35589989322) queued, no green claim. Coordinator exact caller grant followed; frozen baseline/source evidence below reused unchanged.
