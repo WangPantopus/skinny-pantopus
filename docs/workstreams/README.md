@@ -6,6 +6,15 @@ backlog, acceptance evidence, or verification-first instructions.
 
 ## September21 current bounded grants and runtime update
 
+New A02 bounded grant after real Security Refresh returned200/false empty activity
+under owned AuthSecurityEvent SELECT denial: Stream3 owns existing authSessionService
+listSecurityEvents/listActiveSessions, authDeviceService listDevices/listActiveDevices,
+and web settings/security/page.tsx loader/lifetime/error handling only. Inspect all
+callers including revokeOtherDevices before checked-read changes; preserve mutation
+failure semantics, existing route500, known rows/error/retry and owner scope. No
+schema/provider/interceptor redesign/new tests. Separate milestone after81; exact
+SQL grants restored and owned session cleanup required. Coordinator owns stack refs.
+
 Coordinator inspected PR81 two-file diff, both source hashes and durable200file manifest.
 UI/SQL/worker opt-out proof accepted within local scope; requiredCI pending.
 The45000ms account-switch hold exceeds SDK30000ms timeout: new login preceded
