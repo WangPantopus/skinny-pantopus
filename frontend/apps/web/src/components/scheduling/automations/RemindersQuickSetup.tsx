@@ -1,17 +1,15 @@
 "use client";
 
 // W16 · H1 — Default Reminders Quick-Setup. Pick the lead-times that auto-attach
-// to every event you own. Backed by GET/PUT /notification-preferences, writing
-// `scheduling.reminder_minutes` (the same key A4 uses) while round-tripping every
-// other pref key untouched. Personal sky pillar (themes green/violet elsewhere).
+// to every event you own. Uses the existing booking-page reminder_minutes field,
+// shared with native reminder settings and the delivery worker.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import { Bell, BellOff, Check, CheckCircle2, Circle, Mail, Plus, X } from "lucide-react";
 import * as api from "@pantopus/api";
 import type {
-  NotificationPreferences,
   SchedulingOwnerRef,
 } from "@pantopus/types";
 import { useSchedulingOwner } from "@/components/scheduling/SchedulingOwnerProvider";
@@ -19,7 +17,6 @@ import {
   pillarForOwner,
   pillarTokens,
 } from "@/components/scheduling/pillarTokens";
-import { decodeError } from "@/components/scheduling/decodeError";
 import { toast } from "@/components/ui/toast-store";
 import { ShimmerBlock } from "@/components/ui/Shimmer";
 import ErrorState from "@/components/ui/ErrorState";
@@ -27,11 +24,8 @@ import {
   CUSTOM_UNITS,
   REMINDER_OPTIONS,
   customToMinutes,
-  readReminders,
   reminderRowLabel,
-  writeReminders,
   type CustomUnit,
-  type Prefs,
 } from "./reminders";
 
 function sameSet(a: number[], b: number[]): boolean {
@@ -42,11 +36,17 @@ function sameSet(a: number[], b: number[]): boolean {
 }
 
 export default function RemindersQuickSetup() {
-  const owner: SchedulingOwnerRef = useSchedulingOwner();
+  const owner = useSchedulingOwner();
+  return <RemindersQuickSetupForOwner key={JSON.stringify(owner)} owner={owner} />;
+}
+
+function RemindersQuickSetupForOwner({ owner }: { owner: SchedulingOwnerRef }) {
   const pillar = pillarForOwner(owner.ownerType);
   const tk = pillarTokens(pillar);
 
-  const [prefs, setPrefs] = useState<Prefs | null>(null);
+  const [lastSaved, setLastSaved] = useState<number[] | null>(null);
+  const generation = useRef(0);
+  const pendingSave = useRef<number | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [phase, setPhase] = useState<"loading" | "error" | "ready">("loading");
   const [saving, setSaving] = useState(false);
@@ -75,21 +75,26 @@ export default function RemindersQuickSetup() {
   const [customUnit, setCustomUnit] = useState<CustomUnit>("hours");
 
   const load = useCallback(async () => {
+    const current = ++generation.current;
     setPhase("loading");
+    setLastSaved(null);
+    setSelected([]);
+    setSaved(false);
+    setSaving(false);
     try {
-      const { prefs: loaded } =
-        await api.scheduling.getNotificationPreferences(owner);
-      const p = (loaded ?? {}) as Prefs;
-      setPrefs(p);
-      setSelected(readReminders(p));
+      const { page } = await api.scheduling.getBookingPage(owner);
+      if (current !== generation.current) return;
+      setLastSaved(page.reminder_minutes);
+      setSelected(page.reminder_minutes);
       setPhase("ready");
     } catch {
-      setPhase("error");
+      if (current === generation.current) setPhase("error");
     }
   }, [owner]);
 
   useEffect(() => {
     void load();
+    return () => { generation.current += 1; };
   }, [load]);
 
   // Render the presets plus any saved/added custom lead-times, sorted desc.
@@ -100,9 +105,13 @@ export default function RemindersQuickSetup() {
     return all;
   }, [selected]);
 
-  const dirty = prefs ? !sameSet(selected, readReminders(prefs)) : false;
+  const dirty = lastSaved !== null && !sameSet(selected, lastSaved);
 
   const toggle = (min: number) => {
+    if (!selected.includes(min) && selected.length >= 5) {
+      toast.error("Choose up to 5 reminder times.");
+      return;
+    }
     setSaved(false);
     setSelected((cur) =>
       cur.includes(min) ? cur.filter((m) => m !== min) : [...cur, min],
@@ -113,6 +122,10 @@ export default function RemindersQuickSetup() {
     const mins = customToMinutes(Number(customValue), customUnit);
     if (mins === null) {
       toast.error("Enter a positive number.");
+      return;
+    }
+    if (mins > 43200 || (!selected.includes(mins) && selected.length >= 5)) {
+      toast.error("Choose up to 5 reminder times, each within 30 days.");
       return;
     }
     if (selected.includes(mins)) {
@@ -126,24 +139,27 @@ export default function RemindersQuickSetup() {
   };
 
   const save = async () => {
-    if (!prefs) return;
+    const current = generation.current;
+    if (lastSaved === null || pendingSave.current === current) return;
+    const submitted = [...selected];
+    pendingSave.current = current;
     setSaving(true);
     try {
-      const next = writeReminders(prefs, selected);
-      const { prefs: updated } =
-        await api.scheduling.updateNotificationPreferences(
-          next as NotificationPreferences,
-          owner,
-        );
-      const merged = (updated ?? next) as Prefs;
-      setPrefs(merged);
-      setSelected(readReminders(merged));
+      const { page } = await api.scheduling.updateBookingPage(
+        { reminder_minutes: submitted }, owner,
+      );
+      if (current !== generation.current) return;
+      setLastSaved(page.reminder_minutes);
+      setSelected((latest) => sameSet(latest, submitted) ? page.reminder_minutes : latest);
       setSaved(true);
       toast.success("Reminders saved. They'll apply to new events.");
-    } catch (err) {
-      toast.error(decodeError(err).message || "Couldn't save reminders");
+    } catch {
+      if (current === generation.current) {
+        toast.error("Couldn't save reminders. Please try again.");
+      }
     } finally {
-      setSaving(false);
+      if (pendingSave.current === current) pendingSave.current = null;
+      if (current === generation.current) setSaving(false);
     }
   };
 
@@ -156,7 +172,7 @@ export default function RemindersQuickSetup() {
     );
   }
 
-  if (phase === "error" || !prefs) {
+  if (phase === "error" || lastSaved === null) {
     return (
       <div className="mx-auto max-w-2xl">
         <ErrorState
