@@ -1,12 +1,12 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T02:25:36.063680+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T02:50:12.716195+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-post-report-retry`, local/pushed HEAD **bf595fa804a2c9ff96b5f6e559d8650ed4f7e91a**.
+branch `codex/stream3-notification-read-errors`, local/pushed HEAD **ed5b4a8bbe49d18e275f413c55b3eb8659b8d283**.
 Application tree clean; only owned untracked `.next-stream3/` remains. Runtime source
-matches master01e842aef plus exactly the two reporting-handler changes below.
+matches masterc1c03a3c6 plus exactly the two notification web files below.
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -60,7 +60,7 @@ Exact reportsa2032035-9d26-497c-a5ef-0fe662cb910c and8eba4713-8fd4-4beb-8a2d-966
 removed, target Bob/Post report count0. Post visibility/audience/distribution restored;
 PostReport INSERT restored; both auxiliary HTTP sessions logout200. Current browser
 and earlier fixtures remain. Local typecheck gate/focused ESLint pass. No new unit
-tests. Required CI and integration pending, not inferred from local success.
+tests. PR83 exactbf595 CI35554056362 all applicable/aggregate green. Coordinator merged PR83 as0fb600391ea6bd88c8f39e9f72bfa6b0b059f765.
 
 Evidence post-report-baseline-results.json, post-report-candidate-results.json,
 post-report-boundaries.json and setup-failed snapshot, post-report-types.log/lint.log.
@@ -77,6 +77,84 @@ stream3-auth.localhost:18131; coordinator Chrome/IAB inventories have no localho
 tab. Exact originating client unknown. Coordinator requested no further unrelated
 investigation/CORS broadening. Do not classify these as authenticated refresh failures
 or claim all auth error handling verified.
+
+## N03/N04 Beacon publication access — PR84
+
+[Draft PR84](https://github.com/WangPantopus/skinny-pantopus/pull/84), c89949f62,
+branch codex/stream3-post-visibility-fields, basePR83. Coordinator granted exactly
+existing posts.js POST_VISIBILITY_SELECT additions archived_at/post_metadata. Shared
+helper omitted the fields its existing canViewPost policy needs. Current/master/paid/
+Beacon selector+helper variants identical, SHA f3434e6897e6bb48bd42026272765f19249900c1779a1a797a16d54b2c26cb24.
+No replacement/schema/newtest; no phantom Post.status column added.
+
+Actual baselinebf595: owner Dana HTTParchive200; follower postGET403 and real reload
+Post not found, but standalonecomments200 exposed7/8 and likes200. Bob already-open
+actual UI Send persisted1comment201 and1ownerNotification after archive. Exact both
+removed, original7comments restored via ownerunarchive200. Candidate actual staleUI
+Send403 retains draft, no persistedcomment/notice. Archived and SQL-controlled draft
+matrices each cover11 follower reads/actions, all403; owner detail/comments/likes200,
+seven effect-table counts plus Notification unchanged. Published restoration gives
+reads200; retainedUIcomment first hits existing20/min content limiter429, draft still
+retained, natural expiry retry201 yields1comment/1notice. No limiter override.
+Baseline/candidate exact newcomments/notices removed, original7comments/published
+metadata restored; auxiliary owner/fan sessions local logout200. Owner archive/
+unarchive naturally updates updated_at; not rewound. Existing31cases/3suites pass.
+Coordinator updated PR84 to strictf19349e38, unchanged accepted app bytes; CI35554806445 green and mergedc1c03a3c62944c0a07570db285f945a338c9f1c5. Personal policy unchanged/source+existingtests;
+no new personal/native/provider/socket or atomic archive-versus-write race acceptance.
+
+Detailed archive-visibility-results.json SHA
+aaceb9644a6e5f8d04e7453bd194de4726e0b8964a7eec5e181f81d11c4a907f,
+phase snapshots and candidate-matrix. Private mirror258files, MANIFEST
+4c758ece1dc28343d3e0d74eb40c8e1b0127950d97a7a67dc492aeef669e217e.
+Backend now PID8033/session61160 on18130; old log preserved from durable snapshot as
+real-auth-backend-before-archive.log, current log begins candidate restart.18131 unchanged.
+
+## N01/N02 notification read recovery — PR85
+
+[Draft PR85](https://github.com/WangPantopus/skinny-pantopus/pull/85), headed5b4a8bb,
+branch codex/stream3-notification-read-errors, base masterc1c03a3c6. Exactly two granted
+existing web files NotificationBell.tsx and app/notifications/page.tsx. No backend,
+BadgeContext/socket/SDK/provider/schema/newtest change. Master/paid identical before;
+older Beacon differs only accepted guardedtap/route code. Existing QueryProvider
+already remounts account-local state on session change; reuse it. Bell now rejects
+outdated filter/closed/unmounted reads and token/marker changes; fullpage consumes
+query cancellation and checks session. Existing lists use explicit error/Retry,
+keep successful/known same-owner slice rows, and suppress false confirmed-empty.
+
+Actual c899 baseline Bob bell11saved/7unread. Isolated Notification SELECT denial:
+warmfullpage silently keeps cache; coldfullpage after HTTP500 says All caught up/No
+notifications yet, bell likewise. Candidate real coldSQL500 both expliciterror/Retry;
+known11warmbell/fullpage rows retained with error. Restored SELECT + actual Retry
+recovers; unread filter failure truthful. ScopedPersonal fullpage repeated platform503
+transport fault after real SQL keeps7personalrows+error; Retry recovers5unread. Failed
+personal503+successful platform200empty gives incomplete/Retry, not empty. One-shot
+initialfault was superseded by overlappinginitialreads and is not partialstate proof.
+
+Warm ordering: old Personal500 held02:44:49.897, newer Business200empty UI50.358,
+oldrelease59.898/finish59.900 destroyed/socketfalse; after02:45:09.612 stillconfirmed
+Businessempty/noolderror orrows. Actual cross-tab Boblogout/Evanlogin whileoldBob
+Personal200held02:45:27.797: newEvanUI48.176 beforeoldrelease52.798. Pendingtabretired
+tologin, Evanbell/maininbox2ownrows. Oldresponse destroyed/sockettrue/no finish:
+**retirement/disconnection only, not intact cross-account delivery evidence**.
+Actual EvanAudience GET200empty at02:47:14 usesexisting Allcaughtup/Nonotifications.
+
+All13original Bob/Evan notification IDs/context/readflags unchanged before/after.
+No notification mutations; SELECTrestored, privatefaultflagabsent. Bobbrowserloggedout,
+newEvanbrowseractive; authaudit/sessioneffectsretained. Earlierfixturesremain. Split
+bellcohortoff; fullpagepersonal/platformpartial actual, bellall/legacyfiltersactual;
+splitbell behavior only existingregressions, not installedacceptance. No providerpush,
+native/physical, allmutationfailures, pagination-scale or frozen-tab delivery closure.
+Typecheckgate0; focusedlint0errors/twopre-existingunusedwarnings.16existingcases/2suites
+pass; no newtests. RequiredCI/integrationpending. Initialtypenarrowingerror fixedbefore
+commit; cleanup-refwarningremoved. Notifications/unreadcounteroutages remain distinct.
+
+Evidence notification-read-baseline.json, notification-read-candidate.json,
+notification-response-faults.jsonl, notification-records-before/after.json,
+notification-read-types-final.log/lint-final.log/existing-regressions.log. Candidate
+SHA8c83abe7d01b2251a09d815c7bebd1a1dce96e328482d8c2f35caa45509ec9e3.
+Durable private268file MANIFEST30d163bb66f40b4c2cb8d59a5f1fc76692feeba5547a550e7576f2fb50676e87.
+Owned18130 currentlauncher session91329 (private response-fault instrumentation only),
+web18131 unchanged. No otherstreamruntime/cache/provider changed.
 
 ## PR75 — preference database failures, ready for review / CI
 
