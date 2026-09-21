@@ -310,6 +310,20 @@ async function sendBookingReminder({ booking, eventType, page, kind, offsetMinut
     ? `?ot=${booking.owner_type}&oid=${encodeURIComponent(booking.owner_id)}` : '';
   const link = `/app/scheduling/bookings/${booking.id}${ownerQuery}`;
 
+  let hostEmail = null;
+  if (booking.host_user_id) {
+    const prefs = await notifyPrefs.getPrefs(booking.host_user_id);
+    if (prefs.scheduling?.paused !== true
+      && prefs.scheduling?.host?.reminder_sent?.email === true) {
+      const { data: host, error } = await supabaseAdmin.from('User')
+        .select('id,email,name').eq('id', booking.host_user_id).maybeSingle();
+      if (error || !host || typeof host.email !== 'string' || !host.email.trim()) {
+        throw new Error('BOOKING_REMINDER_HOST_CONTACT_UNAVAILABLE');
+      }
+      hostEmail = host.email.trim();
+    }
+  }
+
   // Host reminder respects the host's 'reminder' notify-me toggle.
   if (booking.host_user_id && (await notifyPrefs.hostWantsKey(booking.host_user_id, 'reminder'))) {
     await notifyReminderUser(booking.host_user_id, booking, kind, {
@@ -319,6 +333,21 @@ async function sendBookingReminder({ booking, eventType, page, kind, offsetMinut
       link,
       metadata: { booking_id: booking.id, kind },
     });
+  }
+
+  if (hostEmail) {
+    const html = bookingEmailHtml({
+      heading: `Reminder: ${eventName}`,
+      intro: `You are hosting <strong>${escapeHtml(eventName)}</strong>, ${label}.`,
+      whenLabel: whenInvitee,
+      locationLabel: booking.location_detail || null,
+      manageUrl: `${APP_URL}${link}`,
+      footerNote: 'You enabled email reminders for your hosted bookings.',
+    });
+    const delivery = await emailService.sendEmail({
+      to: hostEmail, subject: `Reminder: ${eventName} ${label}`, html,
+    });
+    if (delivery?.success !== true) throw new Error('BOOKING_REMINDER_HOST_EMAIL_UNAVAILABLE');
   }
 
   if (booking.invitee_user_id) {
