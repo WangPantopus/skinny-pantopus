@@ -11,7 +11,7 @@ import type { PostComment } from '@pantopus/types';
 
 interface CommentThreadProps {
   comments: PostComment[];
-  onAddComment: (input: { text: string; parentId?: string; files?: File[] }) => Promise<void>;
+  onAddComment: (input: { text: string; parentId?: string; files?: File[] }) => Promise<boolean | void>;
   onDeleteComment: (commentId: string) => Promise<void>;
   onLikeComment?: (commentId: string) => Promise<void>;
   currentUserId?: string;
@@ -94,12 +94,16 @@ export default function CommentThread({
 
   const handleSubmit = async () => {
     if (!newComment.trim() && selectedFiles.length === 0) return;
-    await onAddComment({
-      text: newComment.trim(),
-      parentId: replyTo?.id,
-      files: selectedFiles,
-    });
-    resetComposer();
+    try {
+      const saved = await onAddComment({
+        text: newComment.trim(),
+        parentId: replyTo?.id,
+        files: selectedFiles,
+      });
+      if (saved !== false) resetComposer();
+    } catch {
+      // The caller reports the error. Keep the unsent draft available to retry.
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -181,7 +185,9 @@ export default function CommentThread({
 
           <div className="flex-1 min-w-0">
             <div className="bg-surface-muted rounded-xl px-3 py-2 border border-app">
-              {comment.author?.handle ? (
+              {comment.author?.type === 'persona' && comment.author.href ? (
+                <a href={comment.author.href} className="text-xs font-semibold text-app hover:underline">{authorName}</a>
+              ) : comment.author?.id && comment.author.handle ? (
                 <UserIdentityLink
                   userId={comment.author?.id || comment.user_id}
                   username={comment.author.handle}
