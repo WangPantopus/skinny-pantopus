@@ -2,6 +2,18 @@
 
 ## September21,03:08UTC — pending wallet read failure repaired
 
+Latest03:46UTC: paid **03bf9bd1b4a3504b8a71eb1f835c1bc3a3e59169** completed
+[CI35556379254](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35556379254)
+**SUCCESS:15 applicable checks passed/one Seeder skip**, including Android quality,
+emulator and all three iOS simulators. Final CI receipt expands pending-wallet durable
+manifest to15 verified files. No new unit tests. PR34/47 remain draft for open scopes.
+PR90 exactfdb37a904 passed CI35558194245 and merged
+**fd04ae43cc7b8ebe5b93e6bbd8a7aa753982ea83** after three source hashes and real Q&A
+failure/retry/order/navigation/cleanup review. Destination repair is separate/liveREADME.
+Root now runs owned wallet-release-r1/f9200290 on unchanged03bf9: actual Stripe TEST
+1250c UI authorization/start/completion/capture succeeded; next verify worker wallet
+release and both notification returns. No release acceptance yet; fixture remains active.
+
 Latest03:37UTC: PR88 passed CI35557360294 and merged cc28ddd3e78eccd24dd7615f4bfe7cbbc938feb4.
 PR89 canonical seller identity at216e533af passed CI35557699093 and merged
  a1261027024cad7171348813e9dc750b8cf07b58. Both existing source hashes and unchanged

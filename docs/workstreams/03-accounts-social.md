@@ -4,9 +4,9 @@ Updated 2026-09-21T03:24:23.690368+00:00. **Stream incomplete; bounded milestone
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-marketplace-questions`, local/pushed HEAD **fdb37a9047dc55f747325e8224f89272129d873d**.
+branch `codex/stream3-listing-notification-routes`, local/pushed HEAD **ea8e8603c106233369e04b655248a5091edb5c20**.
 Application tree clean; only owned untracked `.next-stream3/` remains. Runtime source
-matches mastera12610270 plus exactly three Q&A files below.
+matches masterfd04ae43c plus exactly notificationRoutes.ts below.
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -136,6 +136,41 @@ bd043a4acc666aac39a8343eae3f67461c68bfc5027a0d780b9155652f88b9fb. No broad N/A c
 web resolver maps posts/Home but passes /listings through to publicpreview with no
 Q&A; canonical authenticated listing screen is separate. Request assignment before
 any sharednotification repair. Broader A05/native/provider/authorization stillopen.
+
+## Current N01/A05 listing notification destination milestone
+
+[Draft PR91](https://github.com/WangPantopus/skinny-pantopus/pull/91), appe23406bde,
+reviewea8e8603c includes currentmasterfd04ae43c (PR90 exactfdb passedCI35558194245
+and coordinator merged). Existing notificationRoutes.ts alone maps valid-ID
+listing/listings/marketplace links to /app/marketplace while preserving suffixes,
+URLvalidation and other mappings. Current/master/Home/paid had identical0deebaae;
+archive/oldnotification branches also lacklistingmapping. No native/publicshare/
+backend/provider/schema/newfiles/tests or permissions changes.
+
+Earlier actual listing question notice reached publicpreview without Q&A; native
+handoff was blocked/not retried. First uncommitted candidate had an accidental
+UUIDregex suffix omission and still routed public; corrected to byte-identical
+original regex before accepted checks/commit. Final actual fullnotification click
+opens ownerAnswer, actual UIanswer200 persists; asker answer notice opens sameweb
+listing without sellercontrols. Bell /marketplace alias preservesquery, fullpage
+/listing alias preservesquery+fragment. 2aliasnotices SQLseeded; questionnotice from
+existing authenticated HTTPquestion handler, accepted unchanged creationUI reused.
+After exactlisting deletion, retainednoticenavigation→HTTP404/Listingnotfound/no
+stalequestion. Explicitlogin?redirectTo returns Evan to correctauthorizedlisting.
+Directloggedout listing route still follows existingmiddleware publicalias and
+localredirecthostlocalhost; this is not fullguestcontinuation/native acceptance.
+
+Exact d53498d0-9411-4a0b-b5ba-d4176f88cb34 listing/question/view/save/interaction0
+and all4relatednotices0. OriginalnotificationIDs/readflags unchanged; auxiliary
+HTTPsessionlogout200; Evanbrowseractive/authaudit retained. Types/lint0errors;
+29existing routing/HomeTask cases pass2suites. CurrentCIpending/reviewseparate;
+no provider/native/business/allaccess-change coverage claim.
+
+Private marketplace-notification fixtures/persisted/candidate/sourcecomparison,
+existing-regression/types/lint logs. Durable313files manifest
+19dfb8b2c669141ee28c28974c3c1381344d290bae5e91cd4a8b4a5af1051fdc. Next independent N04/A05 existingMarketplace
+MessageSeller blocked-entry verification, reusing accepted backendblock policy;
+no new repair assignment or sharedfilechange. Other whole-stream limits remain.
 
 ## Coordinator integration progress (read-only reconciliation)
 
