@@ -120,6 +120,21 @@ async function runBookingReminders() {
       if (minutesUntil < offset - CATCHUP_MIN) continue; // stale beyond usefulness
       const kind = `reminder_${offset}m`;
       if (await alreadySent(booking.id, kind)) continue;
+      // The scan may be old by the time this booking is processed. Do not claim
+      // an offset for a cancelled or moved booking; a later scan handles its new time.
+      const { data: currentBooking, error: currentBookingError } = await supabaseAdmin
+        .from('Booking')
+        .select('status,start_at,end_at,host_user_id')
+        .eq('id', booking.id)
+        .maybeSingle();
+      if (currentBookingError) {
+        logger.error('[bookingReminders] current booking lookup failed', { bookingId: booking.id, error: currentBookingError.message });
+        continue;
+      }
+      if (!currentBooking || currentBooking.status !== 'confirmed'
+        || currentBooking.start_at !== booking.start_at
+        || currentBooking.end_at !== booking.end_at
+        || currentBooking.host_user_id !== booking.host_user_id) continue;
       if (!(await logSent(booking.id, kind))) continue;
 
       try {
