@@ -3,15 +3,78 @@
 Updated September21 — **Stream incomplete; ongoing verification.**
 Sole live status remains this neutral coordination file. No new unit tests written.
 Application `/private/tmp/pantopus-workstream-accounts-social`, branch
-`codex/stream3-professional-housemate-verification`, local/pushed
-**e729a516a87fb4e406b93462a86ff5b57d6a25d0**, tracked clean plus owned .next-stream3.
-[Draft PR117](https://github.com/WangPantopus/skinny-pantopus/pull/117) stacks on frozen
-PR115/e47. Automatic [CI35579542422](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35579542422)
-completed SUCCESS exacte729. Bounded implementation/local HTTP-SQL verification and CI
-complete; coordinator review/integration remain separate and pending. PR114 exact59b and PR115 exacte47 CI green;
-refs frozen. No current public screen caller/native acceptance/whole-stream closure.
-Coordinator captured prior6927 live03 in d4ce6c85a; current helper grant is in README.
-Owned18130/PID68284,18131/PID14742,Supabase64531–37 retained, no native build/peer mutation.
+`codex/stream3-scheduling-resume-verification`, local/pushed
+**03279bd78b2c9691bcfb5fc76305a1b38834a78f**, tracked clean plus owned .next-stream3.
+[Draft PR120](https://github.com/WangPantopus/skinny-pantopus/pull/120) targets released
+master0d6a; automatic [CI35583298837](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35583298837)
+completed SUCCESS exact03279. Bounded implementation/local UI-HTTP-SQL verification
+and coordinator review complete; integration remains pending separately. Earlier114–118/docs113 integrated;
+all original feature refs preserved. No whole-stream/native/provider closure.
+Owned18130/PID7996,18131/PID14742,Supabase64531–37 retained. No peer runtime mutation.
+
+## Scheduling Resume persistence — PR120 handoff
+
+Exact component-only grant recorded README661ada630 after real no-PUT/unchangedSQL/
+reloadbaseline. Seven existing/archive/open Resume callbacks identical. Only existing
+NotificationPrefsForm changed: import existing readGroup, derive paused from existing
+prefs, call existing serialized persist with scheduling spread/paused:false. Existing
+rollback/owner generation handles the banner along with all preferences. Normal controls,
+layout and navigation preserved; no backend/SDK/schema/newfile/unit test/worker edits.
+
+Actual Bob GoTrue/browser(tab18)→SDK→existing preferencesPUT→PostgREST/SQL:
+UPDATEdenial then two keyboardResume attempts produce500 at09:24:03.952 and09:24:27.828;
+paused banner/disabledcontrols return and originalJSON remains exactlyunchanged. Restore
+UPDATE, keyboardretryPUT200 at09:25:02.544 saves paused:false, preserves nestedhost channels,
+notify_me.reminder and unrelated sentinel key. Fullreload no pausedbanner/Resumebutton,
+reminderpush/email remainenabled. This verifies persisted Resume state, not paused worker
+or notification delivery. SQL seeded pausedfixture; no pause-creationUI claim.
+
+Installed TypeScript --noEmit and scopedESLint both exit0/emptylogs; diffcheckpass.
+No new unit tests. Reuse unchanged PR103 read/save/retry and reminder-offset evidence;
+no broad suite repeats. New intact held-response account-switch/departure/native checks
+not performed; current owner-generation/serializedqueue behavior reused unchanged.
+No SMTP/provider/worker execution or pause-delivery policy expansion.
+
+Cleanup: exactabf9180d-de0c-4251-af8d-9a0801f616ba removed, originalBobpreference
+absence0 restored; UPDATEgrant restored, tab18closed. Original bookings/page/otherfixtures
+untouched. Private scheduling-resume-final-evidence.json binds5sourcehashes, comparison,
+baseline,failedwrites,savedJSON,actualUI/fullreload,checks/cleanup/limits. Durable
+**493files** hashverified, MANIFEST
+**01c10c465af654c5d6220bdb808dd365afc88f0bad15d2f629ac482c070e133d**
+in existing accounts-social-r3 mirror. Older artifacts retain ownsource/runtime limits.
+Next: exact120CI and coordinatorreview; featuremerge held behind paid a795 fullCI35582693975.
+Whole N01–N05/A01–A05 provider/native/session/delivery acceptance remains open below.
+
+## N05/A05 Scheduling Resume — actual baseline, no application edit
+
+README granted existing NotificationPrefsForm/PauseBanner runtime-only verification.
+Actual Bob real GoTrue UI /app/scheduling/settings/notifications loaded saved
+SchedulingNotificationPreference.prefs.scheduling.paused=true: banner and disabled
+matrix. Keyboard Resume hides banner/enables controls; HTTP log records no preferences
+PUT, and SQL JSON remains exactly unchanged including paused=true. Full reload restores
+the banner/disabled controls. No worker/SMTP/provider execution or delivery-policy claim.
+State was SQL seeded; no pause-creation UI claim. PR103 key retention/read/save/retry
+and prior reminder offsets/delivery evidence reused within their unchanged boundaries.
+
+Existing screen→SDK get/updateNotificationPreferences→scheduling.js GET/PUT
+/notification-preferences→existing preference JSON contract traced. Seven current/master/
+paid/staging/place/Beacon/originalfc99 Resume callbacks identical and local-only.
+Proposed smallest existing component repair: call existing serialized persist with
+nested scheduling spread/paused:false, derive banner state from prefs so existing
+optimistic/confirmed rollback and owner generation retirement apply. Assignment pending;
+no app edit/new file/test/schema/worker/global notification policy change.
+
+Exact temporary preference **abf9180d-de0c-4251-af8d-9a0801f616ba** removed; original
+Bob preference absence restored0. Unrelated keys stayed unchanged, no privileges changed,
+tab17closed. Original booking/page/fixtures retained; no peer runtime touched.
+Private scheduling-resume-fixture.json, after-click.json, baseline.json and source-
+comparison.json bind source, original state, HTTP/SQL and actual UI history. Durable
+**486files** hashverified; MANIFEST
+**09b13897635dfc265f6a5941a715ef02e7db102bf28f042677840b968eee6349**
+in existing accounts-social-r3 mirror. Latesthead does not rebind older evidence.
+Next: coordinator component-only proposal review; if granted, actual UPDATE failure/
+rollback/retry, persisted Resume/fullreload and unrelated-key preservation. Worker pause,
+channel delivery and native/session-held-response acceptance remain separate/unverified.
 
 ## Private professional blocked-housemate repair — PR117 handoff
 
@@ -2002,3 +2065,18 @@ AutomaticCI35579542422 independently confirmed SUCCESS on exacte729a516a87fb4e40
 durable mirror482files all hashverified, MANIFEST **5cbf7d8b2530cfe1bd323bbdadd8f0937543699c103d41536fe6ebc63f1bdb5c**.
 Earlier481source/runtime artifacts unchanged; no repeat journey/new fixture/code edit.
 Coordinator owns review/integration, held behind paid fullCI; no whole-stream closure.
+
+## PR120 final exact-head CI and source-only limits
+
+Coordinator reviewed493files/fivebindings and captured live03248883e0 in f07a40cdc.
+AutomaticCI35583298837 now independently confirmed SUCCESS on exact
+03279bd78b2c9691bcfb5fc76305a1b38834a78f. Final jobreceipt scheduling-resume-ci-final.json;
+mirror494files allhashverified, MANIFEST **88077e0ddcd7fa4c4b32c607d1cd0f2f53a57ca289699a95a412f53981bdfc1d**.
+Source frozen; no repeated runtime acceptance/new fixture/app change. Coordinator holds
+new featuremerges/repairs behind paid a795 fullCI.
+
+Source-only N05 reconciliation: notificationPrefs.ts daily_agenda row promises each
+morning8am, but scoped backend search found no key consumer. Existing bookingReminders
+cron is minutes3,18,33,48 in jobs/index.js. Prior manually invoked worker/localSMTP
+evidence does not establish natural scheduler/daily-agenda delivery. These are separate
+unverified contract leads, not missing-feature proof or new delivery-policy authorization.

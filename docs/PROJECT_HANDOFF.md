@@ -1,5 +1,64 @@
 # Pantopus project handoff
 
+## September21, 09:55 UTC — web follow-ups integrated; paid gate passed
+
+PR120 merged `246407e8ea2fa1973b2ba242b9c80c67284b18d3` after exact03279bd78
+CI35583298837. PR121 merged `e61cffed6fbf0e81c00020b3bfab967ab259fe5d` after
+updated03c69505c CI35585373240. The update added only the reviewed notification
+component; the role page bytes remained identical to accepteddc961. Both repairs
+retain their actual UI/SQL, source, cleanup and excluded-attempt limits. No broader
+notification delivery, explicit role-selector, native or session closure is implied.
+
+Published paid a795 full [CI35582693975](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35582693975)
+passed all15 applicable jobs, including iOS/Android, with oneSeeder skip. Local paid
+d1da221db is the verified single-component default-card serialization repair: actual
+intact old-response inversion reproduced, repaired UI prevents overlapping default
+commands, two database failures preserve rows and allow retry, saved default survives
+reload. TypeScript/lint/diff pass; all four fixture counts0, grants restored, API/tab
+closed and zero Stripe calls. The first timeout attempt remains excluded. Twenty-seven
+verified default-phase artifacts include the final a795 CI receipt; full details in01.
+
+Publish this documentation-only PR119, then adopt final master with d1da and push
+one paid update. New-head required CI remains necessary; PR34/47 stay draft,46 is
+unrelated. The next scopes below begin only after publication and coordinator dispatch.
+Keep all existing accepted evidence and feature refs; no new unit tests or redesign.
+All three streams remain incomplete, including original provider/device/fee boundaries.
+
+## September21, 09:21 UTC — paid integration published; next tasks active
+
+`codex/paid-gig-integration` is clean/pushed at
+`a7956fb434d8df9716e336e5d62c7728be895ed9`, adopting final master
+`0d6a1f57b19ddebbaa78df1485546903929aca39`. Documentation PR113 merged after
+exact2bcbe4baf CI35582051884. All five accepted peer source hashes match; the merge
+changes only those five application files and five published documents. Gigs,
+payment routes/service and the atomic-vote migration are unchanged. Four affected
+existing backend suites pass70 tests with exit0, TypeScript exit0, whitespace clean.
+No new unit tests or application repair were added by this integration.
+
+New exact-head [CI35582693975](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35582693975)
+is running; keep a795 fixed. Prior2ea9 fullCI35576926687 passed15 applicable jobs and
+oneSeeder skip, including all native jobs. PR47 body records the new head/checks;
+PR34/47 stay draft and46 stays separate. Existing vote-phase mirror has48 verified
+artifacts with publication receipts, five source bindings, combined checks and
+updated PR47 body. Accepted real UI/API/SQL/provider evidence is reused within its
+original limits; no whole-stream/device/provider acceptance follows from these checks.
+
+Both existing peer tasks are active on the next README scopes after final-master
+adoption. Stream3 reproduced scheduling Resume's local-only state change; four
+baseline/comparison/cleanup artifacts are verified, and the exact existing-component
+repair grant is in README. Stream2 reproduced an Admin/Manager-only role cycle in
+the existing Members screen. Its initial private filter missed HTTP receipts; that
+limitation is retained. The corrected capture verifies two actual POST200 requests,
+returned roles and matching SQL. Existing page source binding matches; the README
+now grants only its in-place cycle repair, preserving controls and permissions.
+
+Root API/tabs remain closed; owned Next18133 and Supabase64561–67 remain reserved.
+Stream2 has reacquired only its owned18141/18142/64550–59 runtime for exact fixtures;
+Stream3 retains its owned18130/18131/64531–37 runtime. No heavy native build reserved.
+All three streams remain incomplete. The existing fee-policy question and remaining
+provider/device/session boundaries stay open. No duplicate task or restart prompt
+from the user is needed.
+
 ## September 21, 09:12 UTC — privacy batch integrated
 
 All five bounded Home/professional repairs are merged into master

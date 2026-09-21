@@ -1,5 +1,87 @@
 # Three-stream coordination
 
+## Next bounded work after PR119 publication
+
+PR120/121 are merged; paid a795 fullCI passed. Coordinator will adopt final master
+with the verified local default-card repair and keep the next published paid head
+fixed under its own required CI. Existing scopes/refs remain preserved.
+
+- Stream2 runtime verification only: existing standalone Members role confirmation
+  lifetime. Compare confirmStore/global navigation cleanup and accepted MemberDetail
+  guards, then verify actual departure/cancellation behavior with the existing
+  confirmation and caller. Reuse121 role-cycle/permission evidence; do not rerun it.
+  Reacquire only owned18141/18142/64550–59 after ownership/listener checks. Restore
+  exact fixture/member/audit state and report any actual post-departure command before
+  proposing an exact in-place repair. No application edit, replacement selector,
+  backend/schema/new file/test, broader permission or native scope is granted yet.
+- Stream3 source-only N05 reconciliation: map the actual scheduler registration,
+  its existing reminder worker/preferences consumers and the advertised daily-agenda
+  control. Compare current/archive/open implementations before calling a feature
+  absent. Identify whether a bounded natural-cadence check can use only exact owned
+  fixtures and local transport without touching retained bookings or other jobs.
+  Report a concrete existing contract and isolation proposal before scheduler/runtime
+  expansion or application changes. Earlier manual-worker/SMTP evidence remains
+  valid within its limits and is not natural-scheduler or daily-agenda acceptance.
+
+No heavy native build is reserved. Existing Stream3 runtime may remain retained;
+Stream2's previous role fixtures/runtime were cleaned and released. No new agents,
+duplicate tasks, provider sends, speculative daily-agenda system or unit tests.
+
+## Integration sequencing update — independently verified web fixes
+
+Coordinator may integrate PR120 then PR121 while the existing paid a795 native
+run finishes. Both bounded web changes have reviewed actual UI/SQL evidence and
+passing exact original-head CI; they touch separate notification/member components
+and no paid/native contracts. This supersedes the earlier blanket peer-merge hold.
+Require each peer's current-master source comparison and exact updated-head gate.
+Keep published paid a795 fixed: do not push the local d1da default-card repair until
+its current fullCI35582693975 completes and final master is adopted. This permits
+independent integration without cancelling that native run or weakening any merge
+gate. Publish doc119 after the peer batch; do not merge unfinished broader scopes.
+
+
+## Home standalone role-cycle repair grant — September21, 09:23 UTC
+
+Stream2 is sole writer only for existing
+`frontend/apps/web/src/app/(app)/app/homes/[id]/members/page.tsx` role-cycle logic.
+Actual UI/SQL baseline cycled Guest→Admin→Manager→Admin. After correcting only
+its private mounted-router log filter, two exact POST200/response/SQL receipts
+reproduced Admin→Manager→Admin; current page hash7cadcd28 matches the source map.
+The initial UI/SQL observations retain their missing-HTTP-receipt limitation.
+An unrelated fixture request-queue503 is not a role-flow application defect.
+
+Exclude owner only from the existing role cycle, locate the current role, then
+advance through the same role order. Preserve the existing button, confirmation,
+layout/navigation, members.manage gate and canonical server authority. Existing
+MemberDetail is not a drop-in replacement because its action permission differs.
+No replacement selector or explicit-role-choice product expansion, backend, SDK,
+schema, new file or unit test. Verify all five roles via actual UI/request/SQL,
+Cancel with no POST, current permission denial/retry and the existing nonowner
+manager boundary; reuse accepted role-route checks. Clean exact owned rows/audits/
+grants afterward and publish bounded evidence/commit. Only owned18141/18142/64550–59;
+no native build. Hold integration behind paid a795 fullCI and coordinator review.
+
+## Scheduling Resume repair grant — September21, 09:21 UTC
+
+Stream3 is sole writer only for existing
+`frontend/apps/web/src/components/scheduling/hub/NotificationPrefsForm.tsx`.
+Actual keyboard Resume hid the paused banner/enabled controls without a preferences
+PUT; SQL remained paused:true and full reload restored the banner. Exact temporary
+row was removed, original absence restored. Four new evidence hashes and the seven
+unchanged current/archive/open callback comparisons were reviewed.
+
+Reuse the existing serialized preference persist/rollback path with a nested
+scheduling spread and paused:false. Derive rendered paused state from the existing
+optimistic/confirmed preference state so failure rollback and owner-generation
+retirement remain effective. Preserve unrelated keys, controls, layout and normal
+navigation. Verify actual UI PUT/SQL/full reload, real write-failure rollback and
+retry, and exact fixture/grant cleanup. No SDK/backend/schema/new file/unit test,
+worker pause/delivery-policy change or new native acceptance. Use only the existing
+owned runtime. This is a bounded repair grant, not merge approval or broad closure.
+Paid a795 remains fixed under full CI35582693975; hold the next feature merges until
+that gate and the next batch review. Stream2's newly reported role-cycle baseline
+remains under review; its corrected HTTP receipt capture is not application work.
+
 ## Current integration checkpoint — September21, 09:12 UTC
 
 PR114–118 are merged into master27cd8b112 after source review, actual bounded
