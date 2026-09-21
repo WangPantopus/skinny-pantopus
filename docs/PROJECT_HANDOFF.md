@@ -7,6 +7,31 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## September 21, 06:49 UTC — all streams resumed; integration candidate published
+
+User explicitly resumed all three existing tasks beyond single milestones. Paid
+**3025ded4b3eda6d9cf96401ba033f69143fe2f24** integrates reviewed master0f6e55e01;
+prior exactdd0 CI35567323534 passed15/oneSeeder skip including all native jobs.
+201of202 tracked source bindings unchanged; only reviewed posts SDK persona target
+union differs, and all6persona hashes match1d835. Paid services/UI/migrations unchanged;
+combined TypeScript passes. New automatic CI pending. PR34/47 stay draft; PR46 separate.
+
+Root next bounded verification: existing QASection upvote→SDK→gigs route→GigQuestion/
+GigQuestionUpvote count consistency and write-failure behavior. Separate row/count
+writes and unchecked reads/deletes are source leads, not runtime findings. Reuse prior
+question creation/read/identity/action evidence; no new unit tests or presentation work.
+Root reserves18132/18133/64561–67 using owned cleaned wallet-read-r1 database and new
+private gig-qa-vote-r1/f9200350 fixtures. Apply only missing reviewed schema to this
+owned runtime; no shared database/cache cleanup. Compare existing/archive/open source
+before any new artifact/migration; repair only reproduced gaps.
+
+Stream2 owns18141/18142/64551–59. Native control remains unavailable on read-only
+check; heavy native slot released without rebuild. Proceed D07 Home Members/Security
+browser role/error-vs-empty journey, preserving PR60 evidence. Stream3 owns18130/18131/
+64531–37 for N05 cancellation/reschedule versus reminders, existing UI/API/SQL/manual
+worker/local SMTP; no shared worker edits granted until a concrete failure/request.
+No active local native build. Streams continue independent work while peer CI runs.
+
 ## September 21, 06:19 UTC — persona repair integrated on master
 
 PR99 exact1d8357330 passed [CI35567483902](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35567483902)
