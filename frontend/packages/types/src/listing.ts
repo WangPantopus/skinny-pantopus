@@ -150,6 +150,8 @@ export type ListingUserSummary = {
   displayName?: string;
   /** P0.4 canonical avatar URL. Prefer this over profile_picture_url. */
   avatarUrl?: string | null;
+  /** Canonical public destination; absent when no public profile is available. */
+  href?: string | null;
   /** Legacy. */
   username?: string;
   name?: string;
