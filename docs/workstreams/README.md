@@ -1,5 +1,17 @@
 # Three-stream coordination
 
+## Fixed next integration batch
+
+Next paid integration is limited to reviewed136 signed-out refresh gate,137 atomic
+Settings command and the currently assigned profileSettings logout-error repair.
+After their exactCI/review/merge and a separate final documentation publication,
+adopt finalmaster once into clean paid48702, bind testedsource and run affected
+combined checks/requiredCI. No further runtime/feature expansion is added to this
+batch; later peer findings stay source-only proposals until separately assigned.
+Current137 updatedbba09eefda263c1d8cdf8fc4c785fa18acfa67fe adds only five docs and
+reviewed136 SDKclient; all four candidatepaths unchanged. OriginalCI35600568312
+passed; updatedCI35601168238 pending. PR34/47 remain drafts,46 separate.
+
 ## Later-batch profile Settings logout-error repair grant
 
 PR136 merged2d66626c058ca6d57232fc0dd57311c58086fcf5 after updated0d5ee430 CI35600453583
