@@ -173,13 +173,13 @@ export function useListingDetail() {
           listingImage: listing?.media_urls?.[0],
         },
       });
-      return { roomId };
+      return { sellerId };
     },
     onMutate: () => setSendingMessage(true),
-    onSuccess: ({ roomId }) => {
+    onSuccess: ({ sellerId }) => {
       setShowMessageModal(false);
       setMessageText('');
-      router.push(`/app/chat?room=${roomId}`);
+      router.push(`/app/chat/conversation/${sellerId}`);
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : 'Failed to send message.';

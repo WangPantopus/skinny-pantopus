@@ -105,7 +105,7 @@ export default function ChatRichCard({ msgType, metadata, msgText, isMine }: Cha
 
     return (
       <a
-        href={listingId ? `/app/listings/${listingId}` : '#'}
+        href={listingId ? `/app/marketplace/${listingId}` : '#'}
         className={`block rounded-2xl overflow-hidden border ${
           isMine ? 'bg-primary-600 border-primary-500' : 'bg-surface border-app'
         } ${isMine ? 'rounded-br-md' : 'rounded-bl-md'} hover:opacity-90 transition-opacity`}
