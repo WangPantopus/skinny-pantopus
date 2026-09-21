@@ -1,24 +1,56 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T00:23:11.336681+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T00:29:59.111864+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/workstream-accounts-social`, local HEAD **423176969**, application tree
+branch `codex/workstream-accounts-social`, local HEAD **5e3a8b963**, application tree
 clean. Only untracked owned `.next-stream3/` remains. Preserve it while Next runs.
-Remote primary branch deliberately stays **c4cbb4138** for PR70's current native CI.
+Remote primary branch is **07827d2b0** after isolated reuse of the accepted iOS fixture correction; live runtime includes the separate preference failure repair5e3a8b963.
 Coordinator requested explicit commit pushes for the later independent milestones:
 
 | Milestone | Branch / head | Review / current CI |
 | --- | --- | --- |
-| Beacon comment/privacy/drafts | codex/workstream-accounts-social / c4cbb4138 | [Draft PR70](https://github.com/WangPantopus/skinny-pantopus/pull/70), base master. CI35546207895 backend/web/SQL/Android instrumented/iOS lint+build pass; three iOS test jobs and Android quality/assembly still running. Not final green. |
-| Reminder receipt/destination | codex/stream3-booking-reminder-retry / cbfba3503 | [Draft PR72](https://github.com/WangPantopus/skinny-pantopus/pull/72), stacked on remote PR70 branch. Required CI started. Two-file source reviewed by coordinator. |
-| Personal posting/draft recovery | codex/stream3-personal-post-recovery / 423176969 | [Draft PR73](https://github.com/WangPantopus/skinny-pantopus/pull/73), stacked on PR72 branch. Required CI started. Five-file source reviewed by coordinator. |
+| Beacon comment/privacy/drafts | codex/workstream-accounts-social / 07827d2b0 | [Draft PR70](https://github.com/WangPantopus/skinny-pantopus/pull/70), base master. Prior CI35546207895 failed all three iOS test jobs; iPhone16 log confirms four assertions from the expired September17 booking fixture. Reused accepted paid9ecf66fc7/9ae1edb3b as b30f4b330/07827d2b0, identical final fixture bytes. Fresh CI35547834908 pending; no app behavior change or new tests. Detached owned /private/tmp/pantopus-stream3-pr70-ci is clean; runtime checkout untouched. |
+| Reminder receipt/destination | codex/stream3-booking-reminder-retry / cbfba3503 | [Draft PR72](https://github.com/WangPantopus/skinny-pantopus/pull/72), stacked on remote PR70 branch. Exact-head CI35547400223 CI OK/all applicable green; native/web skipped by paths. Two-file source reviewed by coordinator. |
+| Personal posting/draft recovery | codex/stream3-personal-post-recovery / 423176969 | [Draft PR73](https://github.com/WangPantopus/skinny-pantopus/pull/73), stacked on PR72 branch. Exact-head CI35547412275 CI OK/all applicable green, including web/identity E2E; native skipped. Five-file source reviewed by coordinator. |
 
 All three attached to this task. Author did not merge. Retarget master only after
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## PR75 — preference database failures, ready for review / CI
+
+Coordinator grants sole writer for existing scheduling.js GET/PUT notification-preferences
+handlers and schedulingNotifyPrefs.js getPrefs only. Actual Evan UI Save of Atstart
+stores nested[0] but resets to defaults with success; UPDATE denial likewise returns200
+and success while SQL unchanged. SELECT denial renders defaults with200. All grants
+restored; exact created Evan preference row retired, restoring original absence.
+Source423, private reminder-prefs-baseline.json and before/after snapshots.
+
+Committed/pushed **5e3a8b963** on codex/stream3-preference-failures in
+[Draft PR75](https://github.com/WangPantopus/skinny-pantopus/pull/75), stacked on PR73
+branch423. Coordinator reviewed exact two-file source; required CI pending. No older
+PR ref changed. Current repair checks database errors, preserving genuine absent-row defaults.
+Actual candidate UI: failed GET500 shows Try Again; restored SELECT and Retry returns200.
+INSERT/UPDATE denial500 shows safe error and retains selected15/30; sameformretry200
+persists one row. Canonical HTTP save/read200; read and PUT readfailure500; worker
+rejects before claiming and notice/log counts unchanged; recovery200/absentdefaults200.
+Existing26 scheduling regressions pass, no new tests. Evidence prefs-ui-results.json,
+prefs-http-results.json and prefs-existing-regressions-final.log bound to5e3a8b963.
+Exact Evan preference row retired (0); SELECT/INSERT/UPDATE restored. Successful
+web save still resets due to separate nested-field mismatch; no fulljourney closure.
+Concurrent first inserts/updates, installed native and provider delivery remain open.
+getPrefs consumers: HTTP GET/PUT; reminder worker reads before claiming delivery;
+hostWants/hostWantsKey gate existing lifecycle/reminder notification service. Existing
+lifecycle wrapper catches/logs notification failure; broader delivery retry remains open.
+No new storage, test, schema or presentation change. Web lead-time alignment is separate:
+existing native H1/A4 use BookingPage.reminder_minutes; webH1/A4/WorkflowList use nested
+prefs. Master/paid/Beacon variants inspected; no replacement implementation needed.
+Controlled ownerHTTP page[0] plus SQL booking start+2min and real-clock manual worker
+produced0 reminder_0m logs/notices; original page/times restored in finally. This is a
+controlled API/SQL reproduction, not natural timing or UI delivery acceptance.
 
 ## Current safety milestone — merged, broader verification continues
 
@@ -172,7 +204,7 @@ retained; exact IDs in evidence. No new unit tests.
 
 ## Runtime, retained fixtures and evidence
 
-Owned HTTP18130 (current launcher session49064), Next18131 (60362); real app.js,
+Owned HTTP18130 (current launcher session31958), Next18131 (60362); real app.js,
 GoTrue/Kong64531/PostgREST/SQL64532 project pantopus-stream3-block-r1, private
 workdir /private/tmp/pantopus-stream3-auth-r3. Host stream3-auth.localhost isolates
 cookies from other streams. SMTP sink pantopus-stream3-mail-r3 binds127.0.0.1:64535
@@ -189,7 +221,7 @@ attendee/token/reminder-log/notice rows remain. Personal fixture IDs in private 
 AuthSession/AuthSecurityEvent/IdentityAuditLog and related records require exact cleanup.
 LocalProfile SELECT/INSERT, AudienceIdentity SELECT, PersonaMembership SELECT restored;
 synthetic paidmarkerNULL and temporaryPersonaBlocks removed. Mailpit memory resets on
-its own restart; current candidate mailbox retained. No broad unrelated cleanup.
+its own restart; current candidate mailbox retained. No broad unrelated cleanup. Read-only fixture-inventory.json now records17 nonempty direct User-reference tables,3 auth users,3 reminder logs,3 booking tokens and5 availability rules. Initial read-only inventory failed on an assumed owner column; corrected to actual AvailabilitySchedule.user_id. This is an inventory, not cleanup.
 
 Earlier synthetic phase cleaned0/stopped; current phase uses real local auth.
 Adopted PR51/6055bc2b9 transactional gate and later realPostgREST/socket replay within
@@ -200,7 +232,7 @@ physicalAndroid prevent new installed acceptance; current native CI is not scree
 
 Primary private /private/tmp/pantopus-stream3-20260920-r1; durable private mirror
 /Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/
-contains **124 files**, MANIFEST SHA256 **89fa9ad2cf5130b5c880caea8004429f20d09621346c9759e234ab3f7260195b**. Coordinator checked fourcandidate
+contains **144 files**, MANIFEST SHA256 **8ee9f1276a31843166eaace412e5663a61125a82949514f88c9d7546d31ecf87**. Coordinator checked fourcandidate
 hash bindings. Individual artifacts retain actual source/configuration, not a blanket
 HEAD rerun. Credentials/tokens/operatorlogs stay private, outside Git/chat.
 

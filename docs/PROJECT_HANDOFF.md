@@ -32,7 +32,11 @@ SMTP reminder verification under its existing service/runtime grant. PR72 atcbfb
 and PR73 at423176969 publish separate dependent drafts for reminder recovery and
 personal profile/draft retention. Current CI and precise retained fixture limits are
 in Stream3 status; own-post visibility after reload remains a separate unresolved gap.
-Documentation PR68 merged4f951d29c and PR71 mergedcefdadd3e. A subsequent held offers
+Documentation PR68 merged4f951d29c, PR71 mergedcefdadd3e and PR74 merged707f8e2be.
+PR75 publishes the separate two-file preference database-failure repair5e3a8b963;
+real UI/API failure/retry and worker refusal are verified, CI/dependencies remain.
+The next three existing web reminder callers are granted to reuse canonical
+BookingPage timing; the current nested-field mismatch remains open. A subsequent held offers
 read ended correct without another app repair; browser serialization limits its ordering evidence. Stream3 reminder
 and personal composer repairs have separate bounded grants in the live README.
 

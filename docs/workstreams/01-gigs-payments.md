@@ -99,7 +99,11 @@ Stream3's
 real-SMTP reminder repair and personal composer repair are separate dependent
 draft PR72 atcbfba3503 and PR73 at423176969. Coordinator source and exact-source
 evidence review found no issue within those bounded scopes; CI/dependency merges
-remain required. Live README contains exact shared-file/runtime grants.
+remain required. The separate PR75 at5e3a8b963 repairs swallowed preference
+database errors; coordinator reviewed actual UI/API recovery and worker refusal
+with source hashes. Its required CI/dependencies remain open. Stream3 owns the next
+three existing web timing callers to reuse BookingPage; no new storage or design.
+Live README contains exact shared-file/runtime grants.
 
 Documentation PR68 merged as4f951d29c and PR71 ascefdadd3e after all applicable checks passed.
 

@@ -306,3 +306,22 @@ September21 bounded Stream3 grants after actual UI/API failures:
   other parameters after reproduced modal Connections→Place diversion. Preserve
   read-only legacy profile behavior, current UI and all unrelated session code.
   Separate PR from70 and N05; no new schema/profile system/files/tests.
+
+September21 N05 follow-up: Stream3 is sole writer for existing scheduling.js
+GET/PUT notification-preferences and schedulingNotifyPrefs.js getPrefs, now
+committed5e3a8b963 in dependent draft PR75. Actual denied reads/writes must surface
+errors while genuine absence retains defaults. Existing UI/API/worker proof and
+restored fixture/grant limits are in the live03 snapshot; CI still required.
+
+Next bounded timing repair grant: only existing web
+`components/scheduling/automations/RemindersQuickSetup.tsx`,
+`components/scheduling/automations/WorkflowList.tsx`, and
+`components/scheduling/hub/NotificationPrefsForm.tsx` reminder section, under
+frontend/apps/web/src. Reuse SDK get/updateBookingPage(owner) and canonical
+reminder_minutes already used by native, after real web save/read mismatch.
+Preserve presentation, unrelated channels/pause, explicit[]/0 and existing5/43200
+route limits. Bound timers/replies to the originating owner/mount and verify UI
+save/reload, error/retry, rapid edits and owned owner transitions. No new storage,
+helper/service/schema/test. Worker0/empty handling remains a separate verified
+requirement and needs its own exact-file grant. Existing PR70/72/73/75 refs remain
+separate; this is not approval to merge unfinished scopes.
