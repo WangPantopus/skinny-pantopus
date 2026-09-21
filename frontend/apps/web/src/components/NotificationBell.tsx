@@ -37,6 +37,9 @@ export default function NotificationBell({
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const { notifications: totalUnread, notificationsByContext } = useBadges();
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const readRequest = useRef(0);
+  const loadedScope = useRef('');
   const panelRef = useRef<HTMLDivElement>(null);
   // Legacy in-dropdown sub-filter for the all-zones bell only.
   const [contextFilter, setContextFilter] = useState<'all' | 'personal' | 'business'>('all');
@@ -83,44 +86,54 @@ export default function NotificationBell({
   }, [mode, contextFilter]);
 
   const loadNotifications = useCallback(async () => {
+    const request = ++readRequest.current;
+    const token = api.getAuthToken();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => request === readRequest.current
+      && token === api.getAuthToken()
+      && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const scope = `${mode}:${contextFilter}`;
+    if (loadedScope.current !== scope) {
+      loadedScope.current = scope;
+      setNotifications([]);
+    }
     setLoading(true);
+    setLoadError(false);
     try {
-      const params: Record<string, any> = { limit: 20 };
-      if (mode === 'audience') {
-        params.context = 'audience';
-      } else if (mode === 'personal') {
-        // Personal-zone bell scopes to personal+platform. The route only
-        // accepts a single firewall value, so request 'personal' and
-        // merge with a second 'platform' fetch below.
-        params.context = 'personal';
-      } else if (contextFilter !== 'all') {
-        // Legacy mode keeps the personal/business sub-filter.
-        params.context_type = contextFilter;
-      }
-      const res = await api.notifications.getNotifications(params);
-      let list = res.notifications || [];
-      if (mode === 'personal') {
-        const platRes = await api.notifications.getNotifications({ limit: 20, context: 'platform' });
-        const platform = platRes.notifications || [];
-        const seen = new Set(list.map((n) => n.id));
-        for (const n of platform) {
-          if (!seen.has(n.id)) list.push(n);
-        }
-        list = list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      }
-      setNotifications(list);
+      const params: Parameters<typeof api.notifications.getNotifications>[0] = { limit: 20 };
+      if (mode === 'audience' || mode === 'personal') params.context = mode;
+      else if (contextFilter !== 'all') params.context_type = contextFilter;
+      const requests = mode === 'personal'
+        ? [params, { limit: 20, context: 'platform' as const }]
+        : [params];
+      const results = await Promise.allSettled(requests.map(p => api.notifications.getNotifications(p)));
+      if (!current()) return;
+      setLoadError(results.some(result => result.status === 'rejected'));
+      setNotifications(previous => {
+        if (!current()) return previous;
+        const rows = results.flatMap((result, index) => {
+          if (result.status === 'fulfilled') return result.value.notifications;
+          // Keep known rows only from the same account and failed slice.
+          if (mode !== 'personal') return previous;
+          const context = requests[index].context;
+          return previous.filter(n => (n.context || 'personal') === context);
+        });
+        return [...new Map(rows.map(n => [n.id, n])).values()]
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      });
     } catch {
-      // silent
+      if (current()) setLoadError(true);
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }, [mode, contextFilter]);
 
-  // Load full list when panel opens or context filter changes
+  // Closing, changing scope or leaving the view retires its pending reads.
+  // QueryProvider already remounts account-local state on session changes.
   useEffect(() => {
-    if (open) {
-      loadNotifications();
-    }
+    const retire = () => { readRequest.current++; };
+    if (open) void loadNotifications();
+    return retire;
   }, [open, loadNotifications]);
 
   // Listen for real-time notification:new from socket
@@ -250,6 +263,15 @@ export default function NotificationBell({
             ) : null}
           </div>
 
+          {loadError && (
+            <div role="alert" className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p>Could not load all notifications.</p>
+              <button onClick={() => void loadNotifications()} disabled={loading} className="mt-1 font-medium underline underline-offset-2 disabled:opacity-50">
+                {loading ? 'Retrying…' : 'Retry'}
+              </button>
+            </div>
+          )}
+
           {/* List */}
           <div className="max-h-[400px] overflow-y-auto">
             {loading && notifications.length === 0 ? (
@@ -257,7 +279,7 @@ export default function NotificationBell({
                 <div className="animate-spin rounded-full h-6 w-6 border-2 border-app-border border-t-gray-600 dark:border-t-gray-300 mx-auto" />
                 <p className="text-xs text-app-muted mt-2">Loading...</p>
               </div>
-            ) : notifications.length === 0 ? (
+            ) : notifications.length === 0 && !loadError ? (
               <div className="px-4 py-8 text-center">
                 <div className="text-3xl mb-2">🔔</div>
                 <p className="text-sm text-app-muted">No notifications yet</p>

@@ -37,7 +37,7 @@ type ZoneTab = 'personal' | 'audience';
 
 type ApiNotificationsPage = Awaited<ReturnType<typeof api.notifications.getNotifications>>;
 type NotificationPageParam = { all: number; personal: number; platform: number; audience: number };
-type NotificationsPage = ApiNotificationsPage & { nextPageParam?: NotificationPageParam };
+type NotificationsPage = ApiNotificationsPage & { nextPageParam?: NotificationPageParam; incomplete?: boolean };
 
 const LIMIT = 30;
 const INITIAL_PAGE_PARAM: NotificationPageParam = { all: 0, personal: 0, platform: 0, audience: 0 };
@@ -96,13 +96,23 @@ export default function NotificationsPage() {
   const notifQuery = useInfiniteQuery<NotificationsPage, Error, InfiniteData<NotificationsPage>, typeof notifKey, NotificationPageParam>({
     queryKey: notifKey,
     initialPageParam: INITIAL_PAGE_PARAM,
-    queryFn: async ({ pageParam }) => {
+    queryFn: async ({ pageParam, signal }) => {
+      const token = getAuthToken();
+      const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+      const read = async (params: Parameters<typeof api.notifications.getNotifications>[0]) => {
+        const result = await api.notifications.getNotifications(params);
+        if (signal.aborted || token !== getAuthToken()
+          || marker !== localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY)) {
+          throw new Error('Notification request retired');
+        }
+        return result;
+      };
       const baseParams = {
         limit: LIMIT,
         ...(filter === 'unread' ? { unread: true as const } : {}),
       };
       if (!useScopedZones) {
-        const res = await api.notifications.getNotifications({
+        const res = await read({
           ...baseParams,
           offset: pageParam.all,
         });
@@ -115,7 +125,7 @@ export default function NotificationsPage() {
         };
       }
       if (zone === 'audience') {
-        const res = await api.notifications.getNotifications({
+        const res = await read({
           ...baseParams,
           offset: pageParam.audience,
           context: 'audience',
@@ -130,18 +140,30 @@ export default function NotificationsPage() {
       }
       // Personal-zone tab = personal + platform notifications. The route
       // accepts a single firewall value, so fan out and merge client-side.
-      const [personalRes, platformRes] = await Promise.all([
-        api.notifications.getNotifications({
+      const results = await Promise.allSettled([
+        read({
           ...baseParams,
           offset: pageParam.personal,
           context: 'personal',
         }),
-        api.notifications.getNotifications({
+        read({
           ...baseParams,
           offset: pageParam.platform,
           context: 'platform',
         }),
       ]);
+      if (signal.aborted) throw new Error('Notification request retired');
+      if (results[0].status === 'rejected' && results[1].status === 'rejected') {
+        throw results[0].reason;
+      }
+      const cached = queryClient.getQueryData<InfiniteData<NotificationsPage>>(notifKey);
+      const previous = cached?.pages.flatMap(page => page.notifications) || [];
+      const [personalRes, platformRes] = results.map((result, index) => {
+        if (result.status === 'fulfilled') return result.value;
+        const context = index === 0 ? 'personal' : 'platform';
+        return { notifications: previous.filter(n => (n.context || 'personal') === context), unreadCount: 0, hasMore: false };
+      });
+      const incomplete = results.some(result => result.status === 'rejected');
       const seen = new Set<string>();
       const merged: Notification[] = [];
       for (const n of [...personalRes.notifications, ...platformRes.notifications]) {
@@ -152,17 +174,18 @@ export default function NotificationsPage() {
       merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       return {
         notifications: merged,
+        incomplete,
         unreadCount: (personalRes.unreadCount || 0) + (platformRes.unreadCount || 0),
         hasMore: Boolean(personalRes.hasMore || platformRes.hasMore),
         nextPageParam: {
           ...pageParam,
-          personal: pageParam.personal + (personalRes.notifications?.length || 0),
-          platform: pageParam.platform + (platformRes.notifications?.length || 0),
+          personal: pageParam.personal + (results[0].status === 'fulfilled' ? personalRes.notifications.length : 0),
+          platform: pageParam.platform + (results[1].status === 'fulfilled' ? platformRes.notifications.length : 0),
         },
       };
     },
     getNextPageParam: (lastPage, allPages) => {
-      if (!lastPage?.hasMore) return undefined;
+      if (!lastPage?.hasMore || lastPage.incomplete) return undefined;
       return lastPage.nextPageParam;
     },
     staleTime: 30_000,
@@ -183,6 +206,7 @@ export default function NotificationsPage() {
     return out.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [notifQuery.data]);
 
+  const loadError = notifQuery.isError || Boolean(notifQuery.data?.pages.some(page => page.incomplete));
   const loading = notifQuery.isPending;
   const loadingMore = notifQuery.isFetchingNextPage;
   const hasMore = notifQuery.hasNextPage ?? false;
@@ -350,7 +374,7 @@ export default function NotificationsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-app-text">Notifications</h1>
-          <p className="text-sm text-app-text-secondary mt-0.5">{unreadCount > 0 ? `${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}` : 'All caught up!'}</p>
+          <p className="text-sm text-app-text-secondary mt-0.5">{loading ? 'Loading notifications…' : loadError ? 'Notifications may be incomplete.' : unreadCount > 0 ? `${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}` : 'All caught up!'}</p>
         </div>
         <div className="flex items-center gap-2">
           {unreadCount > 0 && (
@@ -422,13 +446,22 @@ export default function NotificationsPage() {
         </div>
       )}
 
+      {loadError && (
+        <div role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p>Could not load all notifications.</p>
+          <button onClick={() => void notifQuery.refetch()} disabled={notifQuery.isFetching} className="mt-1 font-medium underline underline-offset-2 disabled:opacity-50">
+            {notifQuery.isFetching ? 'Retrying…' : 'Retry'}
+          </button>
+        </div>
+      )}
+
       {/* Notification list */}
       {loading ? (
         <div className="text-center py-16">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-600 mx-auto" />
           <p className="mt-4 text-sm text-app-text-secondary">Loading notifications...</p>
         </div>
-      ) : displayedNotifications.length === 0 ? (
+      ) : displayedNotifications.length === 0 && !loadError ? (
         <div className="text-center py-16 bg-app-surface rounded-xl border border-app-border">
           <div className="text-5xl mb-3">🔔</div>
           <h3 className="text-lg font-semibold text-app-text mb-1">{filter === 'unread' ? 'No unread notifications' : filter === 'read' ? 'No read notifications' : 'No notifications yet'}</h3>
