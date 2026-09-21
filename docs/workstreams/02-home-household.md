@@ -2,6 +2,24 @@
 
 Updated September 20, 2026. Owner: Home stream.
 
+## September 21 D05 changed-profile partial save — actual baseline frozen
+
+PR133 merged **de0ac6ef3c051485b5800a288194ee563396a12a** after exactupdated78f137b72 [CI35597307862](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35597307862) passed. Coordinator captured prior live02b339 in a5357f314. Per runtime-only grant adopted finalmasterde0 on separate `codex/home-settings-partial-verification`, preserved133ref and rebound all8 relevant sources unchanged. Clean appsource/no edit/newtest/native/schema change.
+
+Source11-artifact proposal remains at owner `.pantopus-recovery/audits/20260921-stream2-settings-partial-source-r1/`; all11 hashes checked, manifest SHA256e26b66358d33fc793a9f73d2441090912970d48e054ebad6b89338a55fdae032. Eightpaths×7current/master/paid/staging/design/archive/accepted112 refs=56bindings/52present4missing. Existingcomponent/exacttwohandlers/RPC equal112. Reuse108/109/112 acceptance;112's profile200/settings400 had unchangedprofileinputs, not changed-name atomicity.
+
+Actual IAB22 dashboardSettings GET200 loaded originalname/welcome. Changed validname and welcome text, UIreadback confirmed. Captured fullHome/Preference/Audit/Occupancy plus request/invite/notification/capability/commandstate and exact update_home_settings definition/owner/ACL/effectiveEXECUTE. Transactional directservice_role EXECUTErevoke confirmed effectivefalse. SingleUI Save produced profilePATCH200 then settingsPATCH503. OnlyHome.name and updated_at persisted; oldwelcome/preferences/audits/allotherfullrows/counts unchanged. UI retained both intendeddraft values/enabledSave but showed only Failed to save; heading/sidebar retained oldname. Complete originalRPCprovenance restored immediately.
+
+SamecurrentUI retry sent identical originalprofile/settings bodies→200/200, saved intendedname/welcome plusone home_settings_updated audit; fullreload showsbothvalues. Notificationpreferences/otherentities unchanged. Accepted112 behavior also normalizes pre-existing null local_tips to explicit empty on successfulsave; recorded rather than falsely claiming exactlytwofinalHomefields. Recovery works within this scope; initialpartialcommit violates atomic-save requirement and remains unrepaired.
+
+Privatefixture limits: initial staticdashboardpermissions disagreed with realauthority; then unsupported task/eventstubs blocked load. Both attempts had zeroPATCHes/excluded. Aggregate now uses actualgetUserAccess; unrelatedtask/eventcollections explicitlysynthetic. Firstsetup exactcleaned; secondseedstate preserved. Identity/ancillarydashboard synthetic; actualprofile/settings/IAM/RPC/PostgREST/SQL. No providers/blockedattempts/newnative/hosted/session/concurrency/save-lifetime acceptance.
+
+Proposed smallest atomic direction forreview: extend existing update_home_settings/route/SDK with canonicalname/home_type and send onecommand fromexistingHomeSettingsTab, preserving currentauthority/locks/clearing/preferences/design. No newtable/service/parallelrecords. Anyfunctionextension requires compatibleforwardmigration because appliedhistory must notbe rewritten; no migration/appedit isauthorizedyet. ExistingfailureMessage may convey safeerrors but copyalone doesnotestablishatomicity. Concurrency/unknowncommit/navigationretainedintent remain separate.
+
+Durable owner `.pantopus-recovery/audits/20260921-stream2-settings-partial-baseline-r1/`,17files+flatmanifest: exactcomponent/finalbinding/privatefixture/SQL/HTTP/draft/fullstate/provenance/recovery/cleanup/scope. Cleanupbase12counts0 plus Home/Preference/request/invite/occupancy/audit/notification/capability/commands/override0, originalRPCprovenance verified aftercleanup. Tab22/API/Nextclosed, fiveowncontainersstopped/preserved; reservedIPv4/6ports18141/18142/64550–59 free. No peer/native/cachechanges.
+
+**Actual baseline frozen for coordinator review before any application/schema repair.** Runtime released, no sourcecommit because this milestone changed noapplicationcode. Shared backlog remains open; no independent merge.
+
 ## September 21 D07 standalone Audit — reviewable repair
 
 **Published; required CI running; stream incomplete.** Clean/pushed `codex/home-standalone-audit-verification` at **0e91b0cfd3d304762bb8a98031568081f0cd3196**, [draft PR133](https://github.com/WangPantopus/skinny-pantopus/pull/133), a165finalmaster base. [Exact CI35596780993](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35596780993) running; no green claim. Separate later work outside published131/132 and fixed paid48702bc9d. Exact topREADME page-only grant followed; prior baseline unchanged below.
