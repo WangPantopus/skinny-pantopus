@@ -1,5 +1,67 @@
 # Three-stream coordination
 
+## Stream3 next source-only scope — pause/resume delivery contract
+
+The isolated natural reminder timer is accepted within its recorded source/runtime
+limits; do not repeat it. On a separate follow-up branch adopt current master after
+checking source bindings, preserve scheduler/private evidence and retained runtime.
+Trace existing web/native pause/resume controls, saved scheduling.paused and actual
+notification/worker consumers across current/archive/open implementations. Separate
+visible product promise from unspecified channel/recipient policy; reuse accepted
+Resume persistence and reminder timing evidence. Identify one concrete runtime
+scenario and exact isolated fixture proposal before execution or application edits.
+No new daily-agenda system, invented pause policy, worker/SDK/schema/UI change,
+provider send, native build or unit tests. Keep owned runtime retained and clean;
+source-only reads require no user prompt. Coordinator retains shared-file ownership.
+
+
+## Home Requests decline repair grant — verified departure failure
+
+Coordinator reviewed11 frozen baseline artifacts and actual creation/list/rendered
+applicant/Cancel/departure/rejection200/SQL evidence, plus the reused10-file source
+map. Cleanup restored all base and extra request/applicant/audit/invite/member counts0,
+no grants changed, two notification methods suppressed, no provider/network writes;
+owned tab/API/Next closed and five containers stopped/preserved. Baseline is accepted
+within synthetic identity/transport limits and must not be rerun.
+Stream2 is sole writer for decline-confirmation lifetime in existing
+`frontend/apps/web/src/app/(app)/app/homes/[id]/members/page.tsx`.
+Reuse the existing role dialog ownership ref for role plus decline (rename locally
+if needed), and the current retire/generation/token/origin/session guard. Close only
+the still-owned dialog on retirement; reject stale continuation before rejection
+POST and guard success/error/finally UI. Ensure retire clears stale request-busy state
+if guarded completion can no longer do so. Preserve existing role behavior and other
+dialog ownership, policy, controls/navigation. Approval remains outside this repair.
+No shared store/global UI/backend/schema/new application file/unit tests/native.
+Reacquire only owned18141/18142/64550–59 after checks; retain fail-closed local fixture
+transport/mutation limits. Verify current decline once, departure closes/noPOST/full
+rows unchanged, fresh return, current denial/retry, and a focused role confirmation
+check because the ownership ref is shared. Reuse123/121 broader role evidence. Report
+only actual exercised session/late/other-dialog cases. Complete exact rows/grants/
+transports/runtime cleanup and publish a reviewable draft for coordinator integration.
+
+
+## Home Requests runtime-only grant — after source review
+
+Coordinator reviewed the10-artifact source bundle on55856362b: existing Requests
+Decline→SDK→homeInvitationService→write_home_invitation and canonical request/list
+contracts,48 reference bindings. Earlier ancillary queue503 was a private service
+stub and is not a production failure. No decline defect is yet reproduced.
+Stream2 may reacquire only owned18141/18142/64550–59 after ownership/listener checks.
+Reuse existing private fixture with real invitation service/PostgREST; preserve the
+accepted process-lifetime interception of dynamic notification transports. Block all
+external provider calls and unexpected mutating routes; record transport attempts.
+Only exact synthetic applicant/no occupancy, owned Home/current owner, request creation
+and rejection. Real creation/list200 and rendered applicant are required before the
+lifetime check. Verify current Cancel/noPOST/full request/audit/occupancy/invite rows
+unchanged, then pending Decline with actual same-document departure. If it survives,
+record actual old confirmation POST/status/SQL and report before application edits.
+Reuse invitation/role evidence; no broader replay, approval, provider delivery, shared
+store/global UI, schema/new application file/unit test/native work. Capture full
+snapshots, remove exact owned rows/overrides, close tab/API/Next and stop/preserve only
+owned containers; report complete cleanup. Current candidate scopes need separate
+review after an actual failure. This extends runtime verification only.
+
+
 ## Next Home source-only reconciliation after PR123
 
 PR123's existing role-confirmation repair is merged55856362b after exact178b4a1

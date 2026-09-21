@@ -1,5 +1,10 @@
 # Stream 3 — Accounts, social and notifications
 
+Current September21 10:33UTC: approved isolated natural scheduler check completed
+and exact fixtures/messages cleaned; final evidence/limits appended below. Prior
+source-only/pending paragraphs are historical. Stream remains incomplete; unchanged
+b409 source and retained runtime preserved, no new application edits.
+
 Updated September21 — **Stream incomplete; ongoing verification.**
 Sole live status remains this neutral coordination file. No new unit tests written.
 Application `/private/tmp/pantopus-workstream-accounts-social`, separate branch
@@ -2120,3 +2125,52 @@ morning8am, but scoped backend search found no key consumer. Existing bookingRem
 cron is minutes3,18,33,48 in jobs/index.js. Prior manually invoked worker/localSMTP
 evidence does not establish natural scheduler/daily-agenda delivery. These are separate
 unverified contract leads, not missing-feature proof or new delivery-policy authorization.
+
+
+## N05 natural scheduler verification — active September21 10:28UTC
+
+The later top-README runtime-only grant supersedes the earlier pending proposal.
+Resumed/adopted private harness and plan; no existing child or SQL fixture was running.
+Import inspection selected bookingReminders and skipped49 registrations, with zero
+network requests/sockets/violations. Source b409 unchanged; retained API7996/Next14742
+remain untouched. Full retained Booking3/Page1/ReminderLog3/Notification20/EventType1/
+SchedulingNotificationPreference0 rows and Mailpit12 messages captured privately.
+Exact temporary Booking be6c416f-550e-4d56-80e0-01d4e524aca4 created; one private
+child armed for original UTC10:33 tick, no manual worker call or time advance.
+Every Booking query/sweep scoped to that ID; downstream fixture-only writes/local
+transport guards installed before imports. Current acceptance pending callback,
+SQL/SMTP observation and cleanup. Private scheduler-natural-* artifacts in existing
+20260920-r1 directory; no application changes/new unit tests/provider/native work.
+
+
+## N05 isolated natural tick — completed September21 10:33UTC
+
+Unchanged b409 selected bookingReminders registration ran once at10:33:00.005UTC
+for original10:33:00.000 schedule (node-cron4.2.1), without manual invocation or
+time advance.49 other registrations skipped. Guards installed before imports:
+zero violations,14 real local PostgREST calls, every Booking GET/PATCH exact-ID
+scoped including terminal sweep. Real receipt POST201 and Notification POST201;
+local SMTP accepted one exact invitee email at10:33:00.156. SQL snapshots confirm
+one new reminder_60m receipt and one saved host notification, no unrelated additions
+or retained mutations. Child stopped after one callback and exited0; independently
+confirmed absent. API7996/Next14742 remain retained/unchanged.
+
+Exact cleanup: Booking be6c416f-550e-4d56-80e0-01d4e524aca4, ReminderLog
+6417de49-52a8-471d-9cd5-941261f1c6fb, Notification129c7777-aace-460e-bfee-58bde8e76e79
+and Mailpit message DZ7KzVpdR4MKPd73fxm9Sv removed. Full Booking/Page/ReminderLog/
+Notification/EventType/SchedulingNotificationPreference rows equal pre-test snapshots;
+original12 Mailpit message IDs restored. No grants, sessions, providers or appfiles
+changed; no new unit tests or repeated manual-worker journey.
+
+Evidence scheduler-natural-source/import-inspection/result/observations/cleanup.json
+and private harness/snapshots in existing durable accounts-social-r3 directory.
+Mirror 511files allhashverified; MANIFEST **6eeeb6178d8bbca87ac1fc1a31b18e1f6f66b37b7d598c4a7555e4accc964ebd**.
+Synthetic boundaries: selected-job registration filter, exact query/write/transport
+isolation and SQL-seeded booking. Timer, PostgREST/SQL persistence and local SMTP
+were real. This is not a new UI journey, unmodified all-jobs startup, hosted provider,
+physical-device/native or daily-agenda acceptance. Prior UI/manual-worker evidence
+retains its own sources/limits. No implementation commit/PR/CI needed for runtime-only
+work; integrated PR120 gates remain unchanged. Whole stream remains incomplete.
+Next: coordinator evidence review/next bounded assignment; unresolved daily-agenda,
+worker pause/channel policy, after-final-check cancellation and provider/native/session
+boundaries remain open. Do not repeat this accepted isolated timer check unchanged.
