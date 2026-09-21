@@ -1,5 +1,58 @@
 # Pantopus project handoff
 
+## September 21 — reviewed application batch ready for final publication
+
+The application batch is merged through master
+`b946eb9ea99819ffb27f42252cdaab237d02dea0`. Paid branch
+`codex/paid-gig-integration` has a clean local integration commit
+`1f1c353cf529e7df4acdb1a1c5e84f13036e9479`; it is not pushed yet. Seven incoming
+application paths match their reviewed candidates exactly, including earlier Audit133.
+Financial backend and native source are unchanged. Remote paid48702 retains its
+successful full CI35596223401 (15 applicable passes, one Seeder skip).
+
+- SDK136 merged `2d66626c058ca6d57232fc0dd57311c58086fcf5` after original
+  CI35599880117 and updated CI35600453583 passed. Actual logout no longer causes
+  the automatic refresh burst; real login returns to the exact protected destination.
+- Atomic Settings137 merged `274e6e1c91c9049e855f6fe91e0484deebaedb2c` after original
+  CI35600568312 and updated CI35601168238 passed, including fresh schema validation.
+  One UI command saves name/type/settings/preferences together. Actual RPC denial
+  and final audit-insert failure left complete state unchanged; retry saved all
+  intended fields and one audit. Compatibility and validation evidence was reviewed.
+- Logout feedback138 merged `b946eb9ea99819ffb27f42252cdaab237d02dea0` after original
+  CI35601204534 and updated CI35601772751 passed. Actual pre-forward503 stays on
+  Settings with a usable error/retry; real retry200 retires only the current session
+  and reaches login without refresh/429. The original toast AX observation was
+  recovered from the recorded tool output, without another browser journey.
+
+Combined local verification passed: web type gate zero errors; scoped web lint zero
+errors/22 existing warnings; SDK lint zero errors/80 warnings; 57 existing auth checks;
+backend syntax and whitespace. No new unit tests. Existing page ts-nocheck and standalone
+SDK type diagnostics remain explicit limits; the latter was not rerun or claimed green.
+No accepted UI journey was replayed for this source-identical integration.
+
+Evidence: root owner audit `20260921-stream1-payment-method-removal-late-r2` now holds
+23 verified artifacts, including cohort-review.json, combined-source-bindings.json,
+combined-validation.json and check logs. Home candidate36 and Stream3 durable676 hashes
+were reviewed independently, including full rollback/session comparisons and cleanup.
+Final live02 hash44293645 and live03 hash32f46a2d were captured in f9b9b82ea; the earlier
+incorrect provisional live02 hash was rejected before staging and corrected by its owner.
+
+No private fault remains active. Root API/tab are closed; Next18133/PID47970 and owned
+Supabase are retained. Stream2 fixtures/constraint/ports are clean, five containers
+stopped/preserved; its approved forward migration and ledger56 intentionally remain.
+Stream3 restored API7948/session60505, Next42165/42493 and DB are retained, browser signed
+out and natural revocation records preserved. No local native build or provider send.
+Root retained DB has not applied the new Home migration: no combined local Home schema
+or runtime claim is made. Required rollout is migration, updated backend, then web;
+the old backend ignores profile keys. No hosted rollout is authorized or performed.
+
+Next: publish this documentation separately, adopt only its final documentation delta
+into the checked paid integration, verify source bindings again and push once for full
+CI. Reuse these local checks when that delta is docs-only. PR34/47 remain drafts and46
+separate. Later Home save-lifetime and other proposals remain outside this fixed batch.
+All three streams are incomplete; provider/device, unknown-commit, concurrency and wider
+acceptance limits remain in the existing backlog. Do not equate this batch with closure.
+
 ## September21 — SDK136 merged; atomic Home137 reviewed
 
 PR136 updated0d5ee430 passedCI35600453583 and merged
