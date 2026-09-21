@@ -1,5 +1,60 @@
 # Three-stream coordination
 
+## Later-batch D05 atomic Settings repair ownership
+
+Coordinator verified17 baseline artifacts and independently compared full failure
+state: only Home.name/updated_at changed after profile200/settings503; all other rows/
+counts unchanged, originalRPC provenance restored, same-draft200/200 recovery and
+exactfixture/runtime cleanup reviewed. Source11/56bindings and existing applied
+20260911010000_home_settings_preferences function show reuse is appropriate.
+
+Stream2 is sole writer for existing HomeSettingsTab.tsx, API homeProfile.ts settings
+payload, backend homeIam.js settingsPATCH, and one compatible forward migration that
+CREATE OR REPLACEs existing update_home_settings(uuid,uuid,jsonb,jsonb). No new table/
+service/functionsignature or rewriting appliedmigration; new migration is necessary
+only to extend existing applied transaction safely. No other application file writer.
+Add optional canonical name/home_type to existing command; validate same existing
+profile name string<=120/empty/null and exact HOME_TYPES/no nulltype, including DB
+boundary. Preserve omission/settings-only clients, field clearing/defaults/preferences,
+current authorization/lock/audit and updated_at semantics. Existing screen sends one
+settingsPATCH containing original draft; preserve all controls/layout/navigation.
+Existing safe failureMessage may replace generic failure extraction in same handler.
+Do not change other profile callers or introduce a fallback two-write path.
+
+Verify actual UI original changed-name/welcome scenario: deniedRPC leaves all fields/
+rows unchanged, exactrestore/currentretry onePATCH200 saves intended fields and one
+audit, reload; canonical invalid/permissiondenied calls leave fullstate unchanged.
+Verify settings-only compatibility and affected existing112 clearing behavior within
+source limits; no broad replay/newunit tests. Before injecting a midtransaction failure,
+propose exact fixture-only SQL fault/provenance/cleanup to demonstrate rollback after
+Home write; do not alter shared permissions/triggers indiscriminately. Run relevant
+schema replay/checks/requiredCI, document local forwardmigration persistence, clean
+exactfixtures/resources and hand off draftPR; no native/hosted activation or broader
+concurrency/session/save-lifetime closure. Keep paid48702/docs134 prior batch separate.
+
+## Later-batch ordinary local logout and destination-return runtime grant
+
+Coordinator verified629 Stream3 durable hashes and nine unchanged auth source
+bindings against retained c3f runtime/current de0ac master. Existing profile Settings
+calls default local SDK logout; backend resolves proof before local GoTrue revocation
+and current registry retirement. Existing login uses safe relative redirectTo.
+Reuse PR82 and natural/transient evidence; do not replay others/global/partialfailure.
+
+Stream3 may use only retained API73610/Next42165+42493/ownedDB and real synthetic Bob
+browser session for one ordinary Settings Log out, direct own scheduling-settings URL
+with harmless query, unauthenticated login redirect and actual Bob login return.
+Preflight current actor/session must exactly match owned fdbea9cf; otherwise stop and
+report changed identity rather than selecting another session. Record safe HTTP and
+own GoTrue/AuthSession before/after metadata, full preferences and exact destination.
+Require old current GoTrue removal/registryrevocation, all other own session metadata
+unchanged, no unauthenticated private settings content, expected new login/session and
+current actor preference read. Do not claim these outcomes before observation.
+Retain naturally revoked/audit/newlogin records; no session resurrection or database
+reset. Close only new tabs/remove observation descriptor; preserve runtime and caches.
+No others/global action, devicebinding/cookie/JWT/clock/grant mutation, private failure
+hook, app edit/newtest/native/hosted or negative-destination authorization claim.
+Report any actual mismatch before repair. Current paid48702 and docs134 CI fixed.
+
 ## September21 — transient session retry reviewed
 
 Coordinator verified628 durable Stream3 artifact hashes (MANIFEST18bb02a8) and

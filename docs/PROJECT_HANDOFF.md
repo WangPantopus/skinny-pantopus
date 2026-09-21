@@ -1,5 +1,35 @@
 # Pantopus project handoff
 
+## September21 — two later failures reproduced; focused follow-up assigned
+
+Documentation134 exact180436a1c passedCI35598584853 and merged
+`fe143e959a4c25fe04d5c839f49d3d2ff88544a7`. Paid48702 remains clean/fixed while
+CI35596223401 waits final Android lint/test/assemble; no current full-green claim.
+
+Stream3 ordinary logout retired only current fdbea9cf app/GoTrue session and kept
+all other own metadata/prefs unchanged. Protected destination reached login with exact
+query and no observed private settings. But29 automaticrefresh400 and2refresh429
+preceded actual login429/noGoTrue/newsession: return acceptance failed. Coordinator
+verified636 hashes and fullbefore/after/final rows; frozenlive03 f8f619c captured in
+4fae2a648. Tab26closed/descriptorremoved, API73610/Next/DB retained, signed-out state
+preserved. Source-only SDK refresh/lifetime/limiter attribution assigned before repair;
+no retry/bypass/sessionresurrection. Root's separate113blockedfixture-refresh attempts
+are only a lead, not attributed to the same cause. Broader auth acceptance stays open.
+
+Stream2 D05 baseline17 hashes reviewed: actual profile200/settings503 saved only new
+Home.name/updated_at, all other full state remained old; same-draft retry200/200 saved
+both intended values and oneaudit. ExactRPCprovenance and fixtures/runtime restored.
+Frozenlive02 fee6ba8d captured cdd164b72. Existing-source11/56bindings justify extending
+existing Settings RPC rather than adding a parallelservice/table. Singlewriter grant
+in liveREADME covers existing screen/SDK/route plus one compatible forwardmigration,
+canonical name/type validation, one transaction and preserved settings-only callers.
+Actual rollback/error/retry/authority/compatibility verification required; midtransaction
+fault design needs exact fixture/provenance review. No new unit tests or design changes.
+
+Next reviewed batch contains these independent follow-ups; do not cancel/push over
+paidCI or claim all streams complete. Rootr2 mirror has15 verified artifacts including
+coordinator review; earlier14 refers to runtime evidence before that receipt was added.
+
 ## September21 — transient session retry reviewed
 
 Coordinator verified628 durable Stream3 artifact hashes (MANIFEST18bb02a8) and
