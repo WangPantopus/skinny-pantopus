@@ -7,6 +7,37 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## September 21, 04:41 UTC — Q&A read failure and recovery verified
+
+Local paid **4b8296f10** follows7ad896338 and changes only existing QASection.tsx.
+Actual GigQuestion SELECT denial returned500 twice while SQL held one question and
+answer; UI showed Questions0/No questions yet with no retry. Six current/master/
+staging/place/archive variants cleared questions on read failure. Reuse current
+loader and existing ErrorState; retain known rows and scope the new error/data/loading
+callbacks to current gig/actor/component. No new file/backend/schema/design/tests.
+
+Real IAB→SDK→routes→PostgREST/full77SQL verifies cold/repeated500, keyboard retry200,
+and actual committed vote followed by a controlled SELECT denial: known question/
+answer remain with error; restored SELECT plus Enter fetches persisted count1 without
+another vote. Existing second gig returns200/genuineempty. Private reader question is
+synthetic; actual question/answer creation and identity navigation reuse the prior
+phase. Provider writes0. TypeScript/ESLint pass (two existing lint warnings).
+
+Ordering limits are explicit: same-URL reads serialized in the browser, old200 then
+fresh200, so no reversed-order acceptance. Changing gig during a12s held response
+left the new empty gig correct, but the old socket was already destroyed; this is
+navigation retirement only, not intact delivery. Mutation errors/idempotency, arbitrary
+malformed responses, native/business/provider and broader lifetime cases remain open.
+
+Private gig-qa-read-r1/f9200320:26 files mirrored/hash-verified under owner
+`.pantopus-recovery/audits/20260921-stream1-gig-qa-read-r1`. Eight explicit tablecounts0,
+SELECT restoredtrue/faultconsumed; API/Next/Supabase stopped, one IABtabclosed, owncache
+preserved. First cold baseline restart also cleaned0 before reseeding. Local branch
+clean; published24c retained until CI35560003741 completes (allthreeiOS/emulator passed,
+Androidquality remains). Push local milestones after that gate, then gate combinedhead.
+PR34/47 remain draft. PR95 exact378c passed CI35561104880 and merged4e58b0bca974e42b90d298d14f1ae0509866aaf4;
+source hashes and real error/retry/cleanup reviewed. Separate map work remains peer-owned.
+
 ## September 21, 04:30 UTC — gig poster and Q&A identities verified
 
 Local paid commit **7ad896338** repairs three existing files: gig detail page.tsx,

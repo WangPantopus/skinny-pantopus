@@ -4,6 +4,14 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 04:41 UTC — root Q&A runtime released
+
+Local4b8296f10 read-error/retry milestone is verified within live01 limits. Exact
+f9200320 rows0/SELECTrestored/faultconsumed; API18132/Next18133/Supabase64561–67 stopped,
+oneIABtabclosed/cachepreserved. No native reservation/provider writes. Published24c
+CI35560003741 remains running only Androidquality; do not supersede before completion.
+PR95 merged4e58b0bc after exact378c CI35561104880; map branch remains separate.
+
 ## September 21, 04:33 UTC — gig Q&A read verification reservation
 
 Root reserves18132/18133/64561–67 for gig-qa-read-r1/f9200320, isolated retained
@@ -16,7 +24,10 @@ Stream3 map reservation remains separate, no shared files or runtime overlap.
 ## September 21, 04:31 UTC — posts-only map error grant
 
 Stream3 sole writer existing posts.js posts-only map error handling and existing
-FeedMap error/retry/known pins after actual Search this area under Post SELECT denial
+FeedMap error/retry/known pins. Extended04:39UTC to existing DiscoverMap.tsx posts-only
+error/retry after actual ShowPosts GET500 rendered blank without error; preserve other
+layers. FeedMap request-generation retirement included after intact old Askempty
+replaced newer Updates marker. Verify actual boundaries, no newfiles/tests. Original scope after actual Search this area under Post SELECT denial
 returned200/0 in view, then restored SELECT/filter recovered1 owned public post.
 Preserve normalized mixed-layer contract and current map visuals/viewport/filter/
 private-location policy; mixed partial-error reporting remains separate. Verify
