@@ -1,5 +1,32 @@
 # Three-stream coordination
 
+## Next bounded work after PR119 publication
+
+PR120/121 are merged; paid a795 fullCI passed. Coordinator will adopt final master
+with the verified local default-card repair and keep the next published paid head
+fixed under its own required CI. Existing scopes/refs remain preserved.
+
+- Stream2 runtime verification only: existing standalone Members role confirmation
+  lifetime. Compare confirmStore/global navigation cleanup and accepted MemberDetail
+  guards, then verify actual departure/cancellation behavior with the existing
+  confirmation and caller. Reuse121 role-cycle/permission evidence; do not rerun it.
+  Reacquire only owned18141/18142/64550–59 after ownership/listener checks. Restore
+  exact fixture/member/audit state and report any actual post-departure command before
+  proposing an exact in-place repair. No application edit, replacement selector,
+  backend/schema/new file/test, broader permission or native scope is granted yet.
+- Stream3 source-only N05 reconciliation: map the actual scheduler registration,
+  its existing reminder worker/preferences consumers and the advertised daily-agenda
+  control. Compare current/archive/open implementations before calling a feature
+  absent. Identify whether a bounded natural-cadence check can use only exact owned
+  fixtures and local transport without touching retained bookings or other jobs.
+  Report a concrete existing contract and isolation proposal before scheduler/runtime
+  expansion or application changes. Earlier manual-worker/SMTP evidence remains
+  valid within its limits and is not natural-scheduler or daily-agenda acceptance.
+
+No heavy native build is reserved. Existing Stream3 runtime may remain retained;
+Stream2's previous role fixtures/runtime were cleaned and released. No new agents,
+duplicate tasks, provider sends, speculative daily-agenda system or unit tests.
+
 ## Integration sequencing update — independently verified web fixes
 
 Coordinator may integrate PR120 then PR121 while the existing paid a795 native

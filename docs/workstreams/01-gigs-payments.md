@@ -1,5 +1,29 @@
 # Stream 1 — Gigs and payments
 
+## September21, 09:55 UTC — web follow-ups integrated; paid gate passed
+
+PR120 merged `246407e8ea2fa1973b2ba242b9c80c67284b18d3` after exact03279bd78
+CI35583298837. PR121 merged `e61cffed6fbf0e81c00020b3bfab967ab259fe5d` after
+updated03c69505c CI35585373240. The update added only the reviewed notification
+component; the role page bytes remained identical to accepteddc961. Both repairs
+retain their actual UI/SQL, source, cleanup and excluded-attempt limits. No broader
+notification delivery, explicit role-selector, native or session closure is implied.
+
+Published paid a795 full [CI35582693975](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35582693975)
+passed all15 applicable jobs, including iOS/Android, with oneSeeder skip. Local paid
+d1da221db is the verified single-component default-card serialization repair: actual
+intact old-response inversion reproduced, repaired UI prevents overlapping default
+commands, two database failures preserve rows and allow retry, saved default survives
+reload. TypeScript/lint/diff pass; all four fixture counts0, grants restored, API/tab
+closed and zero Stripe calls. The first timeout attempt remains excluded. Twenty-seven
+verified default-phase artifacts include the final a795 CI receipt; full details in01.
+
+Publish this documentation-only PR119, then adopt final master with d1da and push
+one paid update. New-head required CI remains necessary; PR34/47 stay draft,46 is
+unrelated. The next scopes below begin only after publication and coordinator dispatch.
+Keep all existing accepted evidence and feature refs; no new unit tests or redesign.
+All three streams remain incomplete, including original provider/device/fee boundaries.
+
 ## September21 — saved-card default repair verified; next peer batch ready
 
 Local paid commit `d1da221dbf01a75a863b147c32f0c0fc7640c8f8` changes only existing
