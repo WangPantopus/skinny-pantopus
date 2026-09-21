@@ -4,6 +4,115 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21,03:08UTC — root wallet runtime released
+
+Pending-balance phase completed within live01limits; paid03bf9bd1b/currentCI35556379254.
+Owned18132/18133/64561–67 released, exactrows0/SELECT+EXECUTE restored; ownIABtabclosed,
+cachepreserved/tsconfigrestored. No native reservation/providerwrites. Stream3's
+existing notification mutation/NotificationRow grant and live runtime remain active.
+
+## September21,03:00UTC — next pending-release read verification
+
+Root reserves18132/18133/64561–67 for private wallet-pending-r1/f9200280 on paid75f372.
+Reuse clean owned wallet-read-r1 Supabase volume/full77 schema; no repeat migration
+acceptance. Synthetic500c wallet adjustment/two captured-hold reader fixtures only,
+no provider writes or actual-release claim. Verify existing WalletBalanceCard caller,
+wallet/pending-release route and persisted amounts under read failures before repair.
+Current paidCI35555446600 continues; no native reservation/peer resource use.
+
+## September21,02:52UTC — runtime release and next notification grant
+
+Extension02:54UTC: Stream3 also owns existing NotificationRow.tsx for reproduced
+nested Remove Enter bubbling into parent read/navigation, plus optional pending disabled
+prop. Verify Enter/Space only intended DELETE and preserve row activation, no style
+change. Exact disposable fixtures only; existing13records retained. PR85 reviewed/green
+and mergedd2b833049; mutation milestone remains separate.
+
+Root wallet-read-r1 complete within live01 limits; paid75f372833 pushed/currentCI
+35555446600 running. Owned18132/18133/64561–67 released, rows0/grant restored/tabs
+closed/cache retained. No provider writes or native reservation.
+Stream3 sole writer next separate notification mutation feedback in existing
+NotificationBell.tsx and app/notifications/page.tsx only after actual Mark all read/
+Remove HTTP500 silently failed in both UIs. Reuse existing toast/owner/query guards;
+verify pending/retry/duplicate/delayed behavior with exact disposable rows and preserve
+retained records/readflags. No backend/socket/provider/SDK/newtests; preserve unknown
+committed-write semantics. PR85 read milestone stays frozen/coordinator-owned.
+
+## September21,02:38UTC — current ownership and runtime
+
+Latest02:44UTC: root reserves18132/18133/64561–67 again for isolated
+wallet-read-r1/f9200270, full77SQL/sourcecfb9. Existing wallet page/components,
+wallet routes/service/RPC under Stream1 ownership; verify before any repair, no
+new tests/design change. Only synthetic history fixture, no withdrawal/provider writes.
+PR84 mergedc1c03a3c6; paid integrationcfb9 pushed/currentCI35555007933 running.
+
+Stream1 refund-session-r2 completed on unchanged6d40: intact old refund200 after
+new login, owner receipt recovery, actual Stripe TEST/SQL accepted within live01 limits.
+Owned18132/18133/64561–67 now released; own rows0/customer deleted/cache retained,
+both owned Chrome tabs closed. No native reservation. Stream3 runtime remains active.
+
+N04 visibility grant: Stream3 owns only posts.js POST_VISIBILITY_SELECT existing
+archived_at/post_metadata fields after archived child reads/actions bypassed existing
+canViewPost checks. PR84 source and staleUI403/draft-retention,11-caller archive/draft
+matrix, owner reads, published recovery and exact cleanup reviewed. No new schema or
+policy/atomic-concurrency claim; strict updated-head CI required before merge.
+
+N01/N02 next bounded grant: Stream3 sole writer existing NotificationBell.tsx and
+app/notifications/page.tsx read/error/retry/lifetime only, after actual SELECT500
+showed false empty on cold page/bell and silently retained warm rows. Compare existing,
+archived/open implementations; preserve known same-owner rows and styles. Verify
+cold/warm failure, retry, genuine empty, session retirement and cleanup. No routes,
+BadgeContext, sockets, shared SDK, provider changes or new tests. Separate milestone.
+
+## September21 current bounded grants and runtime update
+
+Root resumes P09 held-refund session attempt only after fresh Chrome control works.
+Private /private/tmp/pantopus-stream1-refund-session-r2, f9200260, API18132/web18133,
+owned Supabase64561–67 reserved/starting; source6d40 green. Reuse accepted prior
+journeys; no native build/shared runtime/cache use. Test auth/ancillary transport,
+actualStripeTEST/full77SQL; no new acceptance yet. Source unchanged.
+
+N04 report retry grant: Stream3 owns only existing full postpage handleReport and
+useFeedData.handleReport after actual PostReport INSERT500 closed modal/lost details.
+Shared ReportModal already preserves draft on rejected promise; reuse that contract,
+check all callers, preserve toast/layout/backend. Verify fullpage/feed-card failure,
+retry/SQL and exact cleanup; separate milestone after82, no new tests. Older stack
+refs remain coordinator-owned. Refresh500 triage identified rejected localhost18131
+origin before auth, not auth-result500. Root Chrome/IAB inventory has no such tab;
+exact originating client remains unknown. No CORS broadening or shared cleanup.
+Root refund-session owned Chrome tab is now absent from fresh inventory; earlier
+closure-unconfirmed limit resolved for that tab only.
+
+New A02 bounded grant after real Security Refresh returned200/false empty activity
+under owned AuthSecurityEvent SELECT denial: Stream3 owns existing authSessionService
+listSecurityEvents/listActiveSessions, authDeviceService listDevices/listActiveDevices,
+and web settings/security/page.tsx loader/lifetime/error handling only. Inspect all
+callers including revokeOtherDevices before checked-read changes; preserve mutation
+failure semantics, existing route500, known rows/error/retry and owner scope. No
+schema/provider/interceptor redesign/new tests. Separate milestone after81; exact
+SQL grants restored and owned session cleanup required. Coordinator owns stack refs.
+
+Coordinator inspected PR81 two-file diff, both source hashes and durable200file manifest.
+UI/SQL/worker opt-out proof accepted within local scope; requiredCI pending.
+The45000ms account-switch hold exceeds SDK30000ms timeout: new login preceded
+server release, but this does not prove an old successful reply reached the client.
+Author asked to qualify evidence or verify an intact reply within timeout. No
+application change requested for this evidence limitation.
+
+Stream3 released the sole native slot after owned0AE boot but unavailable Simulator/
+DeviceHub UI control; exact simulator stopped, no build/install/source edit. New
+bounded N05 grant: existing web scheduling `hub/notificationPrefs.ts` and
+`NotificationPrefsForm.tsx` only, after actual Reminder sent push save returned200
+but reverted and worker still notified. Reuse canonical notify_me host keys,
+serial/owner-bound writes and confirmed rollback; preserve visuals. Email, attendee,
+pause and daily agenda policy gaps remain unresolved. Separate milestone after80.
+Root refund-session phase stopped/cleaned0 after browser checkout control failure;
+its original account-switch scope is unverified. Actual cancellation exposed stale
+Offers; existing page refresh callback repaired at6d40d8b2a and verified UI/API/Stripe/
+SQL. Two unpaid intents cancelled/customer deleted. Paid CI35551123265 runs.
+Test launcher publishable key omission corrected privately. PR70 strict-head CI runs;
+keep further documentation merges frozen until feature integration.
+
 ## Active sessions and runtime ownership — September 20, 2026
 
 This table supersedes historical session/runtime rows below. No work is dispatched
@@ -325,3 +434,43 @@ save/reload, error/retry, rapid edits and owned owner transitions. No new storag
 helper/service/schema/test. Worker0/empty handling remains a separate verified
 requirement and needs its own exact-file grant. Existing PR70/72/73/75 refs remain
 separate; this is not approval to merge unfinished scopes.
+
+## Current integration batching — September21
+
+Master **e8b49c963** includes the final documentation batch through PR78. The
+repository requires `CI OK` with strict up-to-date branches. PR70 at07827d2b0
+passed every applicable check but was behind only on documentation. Stream3 owns
+a single merge of this master into its isolated PR70 checkout and normal push,
+completed as21b93aa62. Coordinator verified only five documentation files changed,
+zero backend/frontend/supabase diff. Reuse unchanged application UI evidence while
+required current-head CI runs.
+**Hold further documentation merges while70→72→73→75→77 integrate.** Publish live
+status/grants as unmerged documentation drafts meanwhile; do not invalidate another
+long native run with status-only master changes. Coordinator alone merges feature
+PRs after exact updated-head checks and bounded acceptance.
+
+New N05 worker grant: Stream3 sole writer in existing backend/jobs/bookingReminders.js
+and only formatLead in existing bookingNotifyService.js. Actual UI-saved[] sent a
+reminder,0 omitted due delivery,43200 omitted long-offset delivery under controlled
+owned booking timestamps. Honor explicit[], accepted integer0..43200 and30-day scan;
+include recently-started only for zero, never send zero early. Preserve120-minute
+catchup/completion/dedupe/retry-release. Check page/event-type read errors instead
+of treating unavailable data as absence; label zero as now. No cron/schema/newservice/
+provider/new tests. Verify actual worker/SQL/localSMTP/no duplicate receipts and
+restore exact original settings/timestamps/new rows; manual cadence is not scheduler
+or external delivery acceptance. Keep this separate from PR77 timing UI.
+
+Stream1 reserves18132/18133 and isolated64561–64567 for
+`pantopus-stream1-refund-session-r1`, source8825, owned f9200250 fixtures. Verify
+retained/refund response ownership across logout/login using existing UI/API/SQL
+and Stripe TEST, synthetic local identity/ancillary transport. No live funds or
+native build. Preserve peer18130/18131/64531/64532/SMTP and shared caches. Release
+only owned resources after exact cleanup. Current docs remain unmerged per gate.
+
+Current sole heavy-native slot: Stream3 may use exact owned simulator
+0AE16FA0-E244-414F-86C8-24893BDFD979 for bounded N04/N03 existing screens. A new
+read-only capability check found simctl available, no booted devices. Verify CUA
+control first; only if usable build/install existing current app for18130 using
+private owned derived output. No other simulator/device/cache/system-service
+changes or native source edits. Release after the bounded result. Stream1 browser
+refund-session verification does not use the native slot.
