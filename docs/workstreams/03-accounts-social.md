@@ -1,16 +1,61 @@
 # Stream 3 — Accounts, social and notifications
 
+Current September21 10:33UTC: approved isolated natural scheduler check completed
+and exact fixtures/messages cleaned; final evidence/limits appended below. Prior
+source-only/pending paragraphs are historical. Stream remains incomplete; unchanged
+b409 source and retained runtime preserved, no new application edits.
+
 Updated September21 — **Stream incomplete; ongoing verification.**
 Sole live status remains this neutral coordination file. No new unit tests written.
-Application `/private/tmp/pantopus-workstream-accounts-social`, branch
-`codex/stream3-scheduling-resume-verification`, local/pushed
-**03279bd78b2c9691bcfb5fc76305a1b38834a78f**, tracked clean plus owned .next-stream3.
-[Draft PR120](https://github.com/WangPantopus/skinny-pantopus/pull/120) targets released
-master0d6a; automatic [CI35583298837](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35583298837)
-completed SUCCESS exact03279. Bounded implementation/local UI-HTTP-SQL verification
-and coordinator review complete; integration remains pending separately. Earlier114–118/docs113 integrated;
-all original feature refs preserved. No whole-stream/native/provider closure.
-Owned18130/PID7996,18131/PID14742,Supabase64531–37 retained. No peer runtime mutation.
+Application `/private/tmp/pantopus-workstream-accounts-social`, separate branch
+`codex/stream3-scheduler-reconciliation` at released master
+**b409bc9190dd43bbdcee0cdba8f307ae959d2dc3**, tracked clean plus owned .next-stream3.
+Coordinator integrated PR120 as246407e8e, PR121e61cffed6 and docs119→b409 after exact
+gates. All earlier feature refs preserved. Current assignment source-only N05 scheduler/
+daily-agenda reconciliation, no new runtime or application edit. Retained API18130/PID7996
+was started before this source-only adoption; Next18131/PID14742 and Supabase64531–37
+remain reserved. No natural scheduler test yet, no native/provider/full-stream closure.
+
+## N05 scheduler/daily-agenda source reconciliation and isolation proposal
+
+Source-only README assignment followed. Seven current/master/paid/staging/place/Beacon/
+originalfc99 revisions map jobs/index.js, bookingReminders, schedulingNotifyPrefs,
+bookingNotifyService and web notificationPrefs. All register bookingReminders with
+real node-cron UTC3,18,33,48 * * * *; neither pg-boss nor Lambda exclusion set includes
+it. app.js starts jobs after listening unless CRON_ENABLED=false; test environment skips.
+Installed node-cron4.2.1. Retained local runtime CRON_ENABLED/PGBOSS_ENABLED=false,
+SMTP127.0.0.1:64535. No environment changed or jobs activated.
+
+Worker first globally completes past confirmed Bookings, then scans confirmed bookings.
+BookingPage.reminder_minutes precedes host reminder_lead_times; current <=8minute early
+allowance/120minutecatchup/up-to30day offset and booking/kind receipt remain. Host
+notify_me.reminder gates existing notification; invitee savednotification/email is separate.
+Accepted earlier manual-worker/SQL/localSMTP/offset/retry/cancellation evidence remains
+valid but does not establish natural registration execution or whole-app startup.
+
+Web daily_agenda row promises each morning8am in all7refs, with no backend daily-agenda
+keyword consumer found. Current iOS/Android explicitly label existing booking_request
+as Booking request after older misleading Daily agenda copy. This is a separate unresolved
+contract, not proof that an implementation is absent or authorization to build a digest.
+No native execution or worker pause/hostemail/attendee/daily-agenda delivery acceptance.
+
+Proposed natural-cadence check, **not started; coordinator approval pending**:
+private child loads unchanged jobs/index.js; allow only wrapped jobName bookingReminders
+through to real node-cron, record/skip other registrations. Fail-closed transport query
+isolation adds exact temporary Booking id to every Booking read/PATCH, including completion
+sweep. One future owned temporary booking uses existing read-only account/page/event;
+real wall clock waits for next original UTC tick, no manual invocation/time advance.
+Observe callback/ownedlog+notice/localSMTP, stop task after completion, verify original
+retained rows unchanged and no unexpected additions, clean exact new IDs. Isolation
+wrappers are synthetic boundaries: natural selected-job timing only, not unmodified
+all-jobs app startup or hosted provider delivery. Alternative emptyDB/PostgREST expansion
+would need new runtime assignment/replay; not acquired. Never enable all cron on retainedDB.
+
+Private scheduler-source-reconciliation.json contains exact revision/sourcehash map;
+mirror now495files, allhashverified, MANIFEST **c73d600dc87b9d4f140feaad01dda2422e0a2fb64a5799c5a087da3b81c1e2fb**.
+No app/harness/fixture/schema/provider mutation, no new tests or repeated acceptedjourney.
+Next: coordinator reviews contract/isolation before any runtime expansion; continue to
+preserve N01–N05/A01–A05 platform/provider/session limits below.
 
 ## Scheduling Resume persistence — PR120 handoff
 
@@ -2080,3 +2125,52 @@ morning8am, but scoped backend search found no key consumer. Existing bookingRem
 cron is minutes3,18,33,48 in jobs/index.js. Prior manually invoked worker/localSMTP
 evidence does not establish natural scheduler/daily-agenda delivery. These are separate
 unverified contract leads, not missing-feature proof or new delivery-policy authorization.
+
+
+## N05 natural scheduler verification — active September21 10:28UTC
+
+The later top-README runtime-only grant supersedes the earlier pending proposal.
+Resumed/adopted private harness and plan; no existing child or SQL fixture was running.
+Import inspection selected bookingReminders and skipped49 registrations, with zero
+network requests/sockets/violations. Source b409 unchanged; retained API7996/Next14742
+remain untouched. Full retained Booking3/Page1/ReminderLog3/Notification20/EventType1/
+SchedulingNotificationPreference0 rows and Mailpit12 messages captured privately.
+Exact temporary Booking be6c416f-550e-4d56-80e0-01d4e524aca4 created; one private
+child armed for original UTC10:33 tick, no manual worker call or time advance.
+Every Booking query/sweep scoped to that ID; downstream fixture-only writes/local
+transport guards installed before imports. Current acceptance pending callback,
+SQL/SMTP observation and cleanup. Private scheduler-natural-* artifacts in existing
+20260920-r1 directory; no application changes/new unit tests/provider/native work.
+
+
+## N05 isolated natural tick — completed September21 10:33UTC
+
+Unchanged b409 selected bookingReminders registration ran once at10:33:00.005UTC
+for original10:33:00.000 schedule (node-cron4.2.1), without manual invocation or
+time advance.49 other registrations skipped. Guards installed before imports:
+zero violations,14 real local PostgREST calls, every Booking GET/PATCH exact-ID
+scoped including terminal sweep. Real receipt POST201 and Notification POST201;
+local SMTP accepted one exact invitee email at10:33:00.156. SQL snapshots confirm
+one new reminder_60m receipt and one saved host notification, no unrelated additions
+or retained mutations. Child stopped after one callback and exited0; independently
+confirmed absent. API7996/Next14742 remain retained/unchanged.
+
+Exact cleanup: Booking be6c416f-550e-4d56-80e0-01d4e524aca4, ReminderLog
+6417de49-52a8-471d-9cd5-941261f1c6fb, Notification129c7777-aace-460e-bfee-58bde8e76e79
+and Mailpit message DZ7KzVpdR4MKPd73fxm9Sv removed. Full Booking/Page/ReminderLog/
+Notification/EventType/SchedulingNotificationPreference rows equal pre-test snapshots;
+original12 Mailpit message IDs restored. No grants, sessions, providers or appfiles
+changed; no new unit tests or repeated manual-worker journey.
+
+Evidence scheduler-natural-source/import-inspection/result/observations/cleanup.json
+and private harness/snapshots in existing durable accounts-social-r3 directory.
+Mirror 511files allhashverified; MANIFEST **6eeeb6178d8bbca87ac1fc1a31b18e1f6f66b37b7d598c4a7555e4accc964ebd**.
+Synthetic boundaries: selected-job registration filter, exact query/write/transport
+isolation and SQL-seeded booking. Timer, PostgREST/SQL persistence and local SMTP
+were real. This is not a new UI journey, unmodified all-jobs startup, hosted provider,
+physical-device/native or daily-agenda acceptance. Prior UI/manual-worker evidence
+retains its own sources/limits. No implementation commit/PR/CI needed for runtime-only
+work; integrated PR120 gates remain unchanged. Whole stream remains incomplete.
+Next: coordinator evidence review/next bounded assignment; unresolved daily-agenda,
+worker pause/channel policy, after-final-check cancellation and provider/native/session
+boundaries remain open. Do not repeat this accepted isolated timer check unchanged.
