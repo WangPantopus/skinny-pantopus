@@ -1,5 +1,29 @@
 # Stream 1 — Gigs and payments
 
+## September 21, 06:17 UTC — final peer handoff adopted
+
+Paiddd0ee04b5 remains fixed for [automatic CI35567323534](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35567323534).
+Web/backend/identity checks pass; schema/native still running. Source-reuse receipt
+compares202 financial/client/schema paths with accepted795:200 unchanged, only the
+verified Q&A route/component differ. Q&A durable mirror36files; no blanket runtime
+retest. Priorc426 fullCI remains green and its final receipt is preserved.
+
+Reviewed frozen Stream3 **1d835733025cf85cae00f000f61c1c45d509b642**, [draft PR99](https://github.com/WangPantopus/skinny-pantopus/pull/99):
+five existing paths plus reserved additive enum13000. Verified all6 changed/3 session
+source hashes, actual browser/HTTP/SQL receipts, cache-race baseline/candidate and exact
+cleanup. Current actor isolation reuses replaced QueryClients/SDK session retirement;
+no new intact cross-account mute claim. Server earlier read may return its prior
+snapshot but cannot replace the newer cache. Recorded cached304 UI proof is not fresh
+200 ordering. No source blocker within this scope; own-persona/personal-post/privacy
+and existing notification mute policy remain intact. No coordinator UI rerun.
+
+Captured live03c09d8f4a; all387 durable hashes verified (manifest76973233).
+Temporary persona/posts and mute rows removed, original7IDsets/membership restored,
+8related tables0, grants restored/fault flags absent. Peer intentionally retains owned
+runtime/fixtures/cache/tab for continuation; root resources remain stopped/clean.
+Exact peerCI35567483902 pending; review is not integration or a whole-row closure.
+Finish gates before any next application scope. PR34/47 remain draft; PR46 separate.
+
 ## September 21, 06:10 UTC — question actions published; prior full CI passed
 
 Paid **dd0ee04b59cf6f18d4f8fd0779a7ffa5622dc2f0** is clean/pushed in the required

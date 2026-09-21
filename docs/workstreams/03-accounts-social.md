@@ -1,12 +1,16 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T04:50:29.950452+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T06:15Z. **Stream incomplete; persona-mute milestone frozen for review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-map-post-destination`, local/pushed HEAD **4c6f117712428452f041e997d76e007e0dbfb62a**.
-Application tree clean; only owned untracked `.next-stream3/` remains. Both current map
-milestones frozen for coordinator review; no additional feature scope until integration.
+branch `codex/stream3-persona-feed-mute`, local/pushed HEAD **1d835733025cf85cae00f000f61c1c45d509b642**.
+Application tree clean; only owned untracked `.next-stream3/` remains. Separate draft
+[PR99](https://github.com/WangPantopus/skinny-pantopus/pull/99), base master027afc13a.
+Automatic [CI35567483902](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35567483902)
+is running on exact1d835; no manual duplicate dispatched. No merge/hosted activation.
+Coordinator review and integration remain separate from local implementation/verification.
+
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -21,6 +25,91 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## Persona feed mute — final bounded handoff, September21 06:15UTC
+
+**Implementation:** six files in1d8357330: existing posts.js route, feedService,
+SDK posts.ts, PostCard, useFeedData, plus granted enum-only forward migration13000.
+Existing/archive/open-branch comparison found no persona feed-mute implementation;
+existing PostMute table/uniqueness and endpoint are reused. Existing enum needs one
+additive value; no new table/service/index/screen, applied history rewrite or unit test.
+Apply enum migration before persona writes. Applied only on owned local SQL64532.
+
+**Baseline:** actual Beacon menu sent user/public-persona UUID; successful local
+removal returned after reload. Repair uses public persona type/id and matches only
+persona identity_context_id. Private owner remains redacted, user/business/topic and
+notification-only membership mute retain their contracts. Actual followup found own
+persona mute offered despite safe viewer.isOwner; reuse that flag to suppress it and
+preserve own cards in optimistic cache removal, matching existing server own-post policy.
+Warm alternate feed filters also restored the post; persona success now cancels and
+updates all existing feed queries on the captured session's QueryClient.
+
+**Actual UI/API/persistence:** real isolated GoTrue accounts, Next18131, full app18130,
+PostgREST64531/PostgreSQL64532. Existing menu and keyboard confirmation, denied INSERT500
+with usable cards/error, restored retry200, SQL persona/public-ID row, reload removal,
+HTTP unmute plus actual reload restoration. No existing web unmute UI found or invented.
+Lost successful POST reply changed to synthetic503 after real commit: error/cards remain;
+retry converges to same single row. Dana own menu excludes mute; server own-post bypass
+also verified directly. Isolation covers other-owner persona and same-owner personal post.
+One-active-persona-per-user constraint preserved; no two-active-same-owner proof.
+
+Thirteen direct HTTP/SQL groups cover owner-only deletion, another actor cannot delete
+Bob's row, DELETE500/retained row/retry, repeated/concurrent POST with one saved row,
+unauth401/invalid400, authorized fullpost/private-owner redaction and legacy user scope.
+This matrix predates final cache edits; separate following proofs cover those changes.
+
+**Ordering:** actual warm Updates cache retains only other persona after mute.
+Held Questions304 at05:56:33.785, mute200 at41.791, intact release53.787 and finish53.788;
+selecting Questions still excludes target. This is cached304 retirement, not a new200
+body or cross-account proof. Earlier12s attempt finished before mutation and is excluded.
+Server real SQL-read race baseline restored target in fresh final feed. Candidate mute
+05:59:55.708, newer55.794 excludes target, older pre-mutation read06:00:07.701 retains
+its earlier snapshot, final fresh07.761 correctly excludes target. pendingEntry ownership
+prevents old database reads republishing after invalidation/replacement. Only transport
+completion delayed12s; real SQL rows/auth unchanged. No claim that old in-flight HTTP
+snapshots are retroactively changed.
+
+**Session review:** feed keys omit actor IDs, but existing QueryProvider creates a new
+QueryClient and keyed child generation on token/session storage changes. Both old hook
+closures retain the old client; its all-feed cancellation/write cannot address the new
+client. Existing SDK additionally rejects changed-session replies. Reviewed exact source
+hashes, no speculative provider/shared-auth change. Intact held-mute account switch,
+complete offline/reconnect and installed native journeys remain unverified.
+
+**Local validation:** final backend cache source passed existing2suites/24tests;
+web typecheck0errors and scoped ESLint0errors after final frontend cache repair;
+backend syntax/diffcheck passed. No new tests. Final-source actual Bob menu mute/reload
+kept target absent; after cleanup a fresh actual browser shows original Beacon post.
+CI35567483902 running; CI success and integration are not yet claimed.
+
+**Cleanup:** authenticated Bob/Dana DELETE200; exact temporary posts e16b4607 and
+d924073b removed, other-owner persona fd7d431a with its temporary tier/channel/member
+removed. Original seven table IDsets restored (PublicPersona/PersonaTier/BroadcastChannel/
+PersonaMembership/Post/PostMute/Notification); target membership full row unchanged.
+Eight existing post-related table counts0. PostMute SELECT/INSERT/DELETE all restored;
+three fault flags absent. Original six posts, persona/membership, actors, block/booking
+fixtures retained. Additive enum remains installed locally; auth/security audit/session
+effects retained. No hosted/provider mutation or peer-runtime changes.
+
+**Evidence:** private `persona-feed-mute-final-evidence.json` binds all6 source hashes,
+three reused session sources, source revision/config, actual UI/HTTP/SQL and synthetic
+limits. Supporting source comparison, migration preservation, fixture, HTTP13groups,
+owner/cache baselines, excluded ordering attempt, server race baseline/candidate,
+transport logs, existing checks and exact cleanup are in durable
+`/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/`.
+387files hash-verified; MANIFEST SHA256
+**7697323376753b3a05d6a2711daae5d07cdc956b90db48c40fb069b06cdb4bf1**.
+Artifacts retain their actual source/config; manifest head is not blanket retesting.
+Private source/runtime directory `/private/tmp/pantopus-stream3-20260920-r1` retained.
+
+**Handoff:** coordinator review frozen1d835/PR99 and automatic exact-head CI, then
+integrate if accepted. No self-merge or new feature scope. Owned backend18130/PID13145,
+Next18131/PID14742 and Supabase64531–37 remain for continuation; no active fault or
+new native reservation. Original prior browser tabs ended with the previous turn;
+new tab7 is the cleaned real Bob feed. The pre-existing stale Post-not-found sidepanel
+is unrelated to this milestone and unchanged. N03/N04/A05 and whole Stream3 remain open;
+use the current coverage matrix below with this persona-mute evidence replacing its
+older ungranted/reproduced-only entry. Native enum/UI compatibility is not accepted.
 
 ## Final map integration disposition — frozen for coordinator capture
 
@@ -81,7 +170,7 @@ end-to-end success. No additional application edits during coordinator integrati
 | --- | --- | --- |
 | N01 | Actual web saved-notification list/bell reads, mutations, keyboard removal, post/booking/listing destinations and preferences (PR75/81/85/86/91); exact UI/API/SQL evidence above. | Provider-delivered foreground/background/cold-start, denied permission, token lifecycle, login continuation and all destinations under current authority. Saved records alone do not establish push delivery. |
 | N02 | Historical Android emulator FCM and owner-confirmed physical iPhone Beacon preferences retain their original source/device limits. | Physical Android unavailable; current installed iOS/Android interaction capability unavailable. CI simulator/emulator tests are not installed-screen or physical-device evidence. |
-| N03 | Real local follow/unfollow/retry; fan identity/privacy, restricted oldlinks, posting/draft recovery, comments/replies, hide/filter failures and web maps under current milestones. | Persona feed mute is reproduced ineffective and remains an ungranted schema/SDK proposal; release-cohort eligibility, broader access transitions, native discovery/posting/reply and remaining map layers unverified. Notification-only membership mute remains distinct. |
+| N03 | Real local follow/unfollow/retry; fan identity/privacy, restricted oldlinks, posting/draft recovery, comments/replies, hide/filter failures and web maps under current milestones. | Persona feed mute is repaired and locally verified in PR99 above, awaiting CI/review/integration; release-cohort eligibility, broader access transitions, native discovery/posting/reply and remaining map layers unverified. Notification-only membership mute remains distinct. |
 | N04 | Existing safety/report entry repairs, realGoTrue session retirement, persisted block/messaging denials and unavailable checks; distinct UserBlock/UserProfileBlock/PersonaBlock/Relationship scopes retained. | Remaining installed entry points, moderation processing, broad socket/provider side effects, full offline/reconnect/concurrent/lost-reply/session matrix across all scopes. Existing bounded evidence does not close whole row. |
 | N05 | Actual booking UI/API/SQL, manual existing worker/local SMTP delivery, saved notices and owner/invitee destination boundaries, canonical timing/host choices. | Natural cron/timing, lost SMTP acknowledgement, partial delivery/concurrent cancellation or reschedule, individual invitee destination, remaining host-email/attendee/dailyagenda/pause contracts and native/provider delivery. Home calendar belongs to Stream2. |
 | A01 | LocalGoTrue real login and recovery-email delivery/return-form evidence; isolated accounts provisioned for testing, no new public-signup acceptance claimed. Disabled Google/provider boundary recorded. | Complete signup/email verification remains open. Password-reset final credential change needs user takeover; Apple/Google success/cancel cannot run while providers disabled. No provider activation or native claim. |
