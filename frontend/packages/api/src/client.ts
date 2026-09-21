@@ -645,7 +645,12 @@ apiClient.interceptors.response.use(
         const refreshToken = getRefreshToken();
         // On web, refresh token is in httpOnly cookie (getRefreshToken returns null)
         // but doTokenRefresh will send it via withCredentials.
-        const canRefresh = _isWeb || (refreshToken && _storage.getRefreshToken);
+        // A logged-out web request must not refresh and invalidate the session
+        // again: that can remount private readers and repeat the same 401 loop.
+        // The session flag still permits recovery when only access has expired.
+        const canRefresh = _isWeb
+          ? hasActiveSession()
+          : (refreshToken && _storage.getRefreshToken);
         if (canRefresh) {
           try {
             // Mutex: reuse in-flight refresh promise or start a new one
