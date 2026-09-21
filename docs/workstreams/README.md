@@ -4,12 +4,105 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 05:19 UTC — exact-source CI reconciliation
+
+Paid published42d remains on full gate35562351562; local795ad998d payment-read
+candidate is clean and verified, awaiting the integration batch push. Delayed
+automatic paid35562395559 duplicated that exact head and was canceled as redundant,
+not passed. All78 files in the three latest Stream1 identity/QA/payment mirrors
+were rechecked; current PaymentSection matches its accepted candidate hash.
+
+Map PR97 is retargeted to master at unchanged4c6f11771, combining the three-file
+read-error/order repair and popup destination while preserving separate commits and
+real UI/SQL evidence. Automatic96/d10e35562256054 and original97/4c6f35562565822
+passed their changed surfaces. Redundant manual96/35562211102 was canceled, not passed;
+combined final-tree97/35562416370 remains the full gate. Native/workflow bytes are
+identical between96 and97. No merge claim yet. Stream3 latest03 hash5c13c460 captured.
+Documentation98 exactbb37437b8 automatic35563086879 passed; it remains draft until
+this batch disposition is published. Automatic CI may appear several minutes late;
+do not dispatch a duplicate after a short absence. Root runtimes remain stopped;
+peer runtime/fixtures preserved. PR34/47 stay draft and PR46/user work untouched.
+
+## September 21, 05:00 UTC — root runtime released; batch frozen
+
+Local795ad998d PaymentSection error/retry verified within live01 limits, all owned
+f9200330 rows0/identity+SELECTrestored; API18132/web18133/Supabase64561–67 stopped,
+threeIABtabsclosed/cachepreserved, no native reservation/provider writes. Published42d
+CI35562351562 runs. Stream3 current96/97 refs remain frozen, no further app grants;
+its363-file reconciliation captured. Complete current integration and documentation
+batch before new feature scope. PR98 only four live docs, no application diff.
+
+## September 21, 04:52 UTC — gig payment reader reservation
+
+Root reserves18132/18133/64561–67 using clean isolated wallet-read-r1/full77 schema,
+private gig-payment-read-r1/f9200330. Existing PaymentSection → SDK getPaymentForGig
+→ gigs/:id/payment → SQL, with one synthetic saved financial reader record. No new
+charge/provider/mutation/settlement claim. Verify real failure before existing-component
+repair; no backend/schema/newfile/style/tests. Published42d/currentCI35562351562 stays
+fixed while local verification runs. Peer96/97 refs frozen/currentCI pending; root
+reviewed popup one-line diff and captures03, no peer application edits.
+
+## September 21, 04:45 UTC — conditional next map destination grant
+
+After Stream3 freezes its current three-file map error milestone, it owns a separate
+existing DiscoverMap popup href repair only for actual /app/posts/:id404. Confirm
+canonical existing full-post screen/API and compare archived/open variants; reuse
+/app/feed/post/:id if confirmed. Verify popup→authorized detail and missing/deleted
+boundary. Preserve visibility/styles; no new route/file/schema/SDK/tests/persona edit.
+Root local42dbe4b2c integrates reviewed master through95; published24c remains fixed
+until CI35560003741 finishes. No active root runtime/native reservation.
+
+## September 21, 04:41 UTC — root Q&A runtime released
+
+Local4b8296f10 read-error/retry milestone is verified within live01 limits. Exact
+f9200320 rows0/SELECTrestored/faultconsumed; API18132/Next18133/Supabase64561–67 stopped,
+oneIABtabclosed/cachepreserved. No native reservation/provider writes. Published24c
+CI35560003741 remains running only Androidquality; do not supersede before completion.
+PR95 merged4e58b0bc after exact378c CI35561104880; map branch remains separate.
+
+## September 21, 04:33 UTC — gig Q&A read verification reservation
+
+Root reserves18132/18133/64561–67 for gig-qa-read-r1/f9200320, isolated retained
+wallet-read-r1 full77 schema. Existing QASection read error/retry/lifetime only after
+real failure reproduction. Reuse just-accepted question/answer creation and identity
+navigation; synthetic saved question reader fixture, no provider/native writes/newtests.
+Local7ad896338 retained; published24c fixed until current native CI completes.
+Stream3 map reservation remains separate, no shared files or runtime overlap.
+
+## September 21, 04:31 UTC — posts-only map error grant
+
+Stream3 sole writer existing posts.js posts-only map error handling and existing
+FeedMap error/retry/known pins. Extended04:39UTC to existing DiscoverMap.tsx posts-only
+error/retry after actual ShowPosts GET500 rendered blank without error; preserve other
+layers. FeedMap request-generation retirement included after intact old Askempty
+replaced newer Updates marker. Verify actual boundaries, no newfiles/tests. Original scope after actual Search this area under Post SELECT denial
+returned200/0 in view, then restored SELECT/filter recovered1 owned public post.
+Preserve normalized mixed-layer contract and current map visuals/viewport/filter/
+private-location policy; mixed partial-error reporting remains separate. Verify
+FeedMap and DiscoverMap posts-only callers; report additional caller repairs before
+expansion. No SDK/schema/new files/tests/persona edits. PR95 updated378c source hashes
+match accepted436a; exact-head CI pending. Separate map branch and exact cleanup.
+
+## September 21, 04:30 UTC — root runtime released
+
+Local paid7ad896338 canonical poster/Q&A identity journey verified; live01 contains
+source,26-file evidence, no-code-provider limits and cleanup. API18132/web18133/
+Supabase64561–67 stopped; exactf9200310 rows0/identitiesrestored/twoIABtabsclosed/cache
+preserved, no native reservation. Published24c retained until its currentCI finishes.
+DocsPR92 merged b67b32d0 after exactddaa CI35560752881; PR95 four source hashes and
+bounded actual failure/retry/cleanup reviewed, updated-master CI pending. Live03
+1d0b647e captured atc7cc2c8c0/writerreleased; map read-only, persona schema ungranted.
+
 ## September 21, 04:22 UTC — gig identity baseline reservation
 
 Root reserves owned API18132/web18133/Supabase64561–67, reusing clean isolated
 wallet-read-r1 full77 schema for gig-identity-r1/f9200310. Verify existing poster/Q&A
-identity contracts and real UI before repair; paid24c source remains unchanged during
-current CI. No provider writes intended, no native reservation or peer runtime use.
+identity contracts and real UI before repair. Actual saved question/answer and canonical
+API identities reproduced poster/asker/answerer false anonymous labels. Root now owns
+local in-place page.tsx, QASection.tsx and optional canonical href/locality fields in
+existing types/gig.ts. Published paid24c remains fixed until current CI completes;
+prepare/verify locally without cancelling that gate. No shared UserIdentityLink,
+backend/schema/new files/tests/design changes. No provider writes or native reservation.
 
 ## September 21, 04:19 UTC — checked feed reads and unmute grant
 
