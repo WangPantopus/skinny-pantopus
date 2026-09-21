@@ -1,5 +1,26 @@
 # Three-stream coordination
 
+## Home standalone role-cycle repair grant — September21, 09:23 UTC
+
+Stream2 is sole writer only for existing
+`frontend/apps/web/src/app/(app)/app/homes/[id]/members/page.tsx` role-cycle logic.
+Actual UI/SQL baseline cycled Guest→Admin→Manager→Admin. After correcting only
+its private mounted-router log filter, two exact POST200/response/SQL receipts
+reproduced Admin→Manager→Admin; current page hash7cadcd28 matches the source map.
+The initial UI/SQL observations retain their missing-HTTP-receipt limitation.
+An unrelated fixture request-queue503 is not a role-flow application defect.
+
+Exclude owner only from the existing role cycle, locate the current role, then
+advance through the same role order. Preserve the existing button, confirmation,
+layout/navigation, members.manage gate and canonical server authority. Existing
+MemberDetail is not a drop-in replacement because its action permission differs.
+No replacement selector or explicit-role-choice product expansion, backend, SDK,
+schema, new file or unit test. Verify all five roles via actual UI/request/SQL,
+Cancel with no POST, current permission denial/retry and the existing nonowner
+manager boundary; reuse accepted role-route checks. Clean exact owned rows/audits/
+grants afterward and publish bounded evidence/commit. Only owned18141/18142/64550–59;
+no native build. Hold integration behind paid a795 fullCI and coordinator review.
+
 ## Scheduling Resume repair grant — September21, 09:21 UTC
 
 Stream3 is sole writer only for existing

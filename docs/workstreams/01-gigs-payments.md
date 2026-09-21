@@ -23,9 +23,10 @@ Both existing peer tasks are active on the next README scopes after final-master
 adoption. Stream3 reproduced scheduling Resume's local-only state change; four
 baseline/comparison/cleanup artifacts are verified, and the exact existing-component
 repair grant is in README. Stream2 reproduced an Admin/Manager-only role cycle in
-the existing Members screen; its private mounted-router log filter initially missed
-HTTP receipts, so a corrected capture is pending before the final baseline review.
-No application edit or accepted HTTP status is inferred from that missing log.
+the existing Members screen. Its initial private filter missed HTTP receipts; that
+limitation is retained. The corrected capture verifies two actual POST200 requests,
+returned roles and matching SQL. Existing page source binding matches; the README
+now grants only its in-place cycle repair, preserving controls and permissions.
 
 Root API/tabs remain closed; owned Next18133 and Supabase64561–67 remain reserved.
 Stream2 has reacquired only its owned18141/18142/64550–59 runtime for exact fixtures;
