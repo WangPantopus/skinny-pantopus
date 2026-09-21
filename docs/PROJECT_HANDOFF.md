@@ -7,6 +7,24 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## Latest integration — September20,23:54UTC
+
+Paid branch **8825c1928** is clean/pushed. It includes reviewed master61080b399 and
+the one-line Offers status refresh repair proven with actual Stripe authorization
+and reopening. The combined account-switch check, actual assigned hold releases,
+and partial500c/remaining750c refunds all passed through existing browser/UI/API/SQL.
+Prior9ae full CI35542623560 passed; current8825 CI35545431059 is running. Current
+source, evidence and precise limits are in [Stream1 status](workstreams/01-gigs-payments.md).
+All Stream1 owned rows and runtimes are cleaned/stopped; five Stripe TEST captures
+fully refunded, five unpaid intents cancelled, four owned customers deleted. Provider
+history remains. Native/live/hosted/payout and broader backlog scopes remain open.
+
+Coordinator merged PR65/66/67/69 after each current-head checks and bounded UI/API
+proof; master5eab68ab7 contains those reviewed scopes. PR70 comment privacy/draft
+retention is separately reviewed with native CI pending. Stream3 continues actual
+SMTP reminder verification under its existing service/runtime grant. Documentation
+PR68 publishes only handoff/backlog/ownership evidence, independently from paid drafts.
+
 ## Resumed coordination — September 20, 2026
 
 Active coordinator/Stream1 task `01a0c0d1-0703-70c3-b842-6d01bc8ca48b` restored the
@@ -52,13 +70,14 @@ wrong-account retry after a delayed401, and an old refresh response overwriting 
 new login's cookies. Existing client code now cancels the old refresh and preserves
 new-account state. Storage-event delivery, frozen tabs, other browsers and native
 limits remain explicit; no broad safety row closed. The separately verified A02
-Settings step-up and two UserBlock FK repairs are now in draft PR65 at `bce48b25b`, with Home master integrated and combined CI
-running. Source reviewed; the new `20260916012000` migration follows Home11000. Single-writer scopes and migration20260916012000 are in
+Settings step-up and two UserBlock FK repairs passed e96be1ea4 CI35543817853.
+PR65 is ready; f30c7fe7a integrates required docs-only master8ed60f6ed for GitHub
+up-to-date protection, with CI35544236662 running. Source reviewed; the new `20260916012000` migration follows Home11000. Single-writer scopes and migration20260916012000 are in
 README. Frozen03 was published; later dirty updates are author-owned.
 
-Next: finish paid current-head CI, review combined Home and A02 candidates, and
-continue remaining provider/native acceptance. Fee payer/recipient/timing decision
-is pending. Documentation PR63 publishes milestones separately from feature code.
+Next: finish paid current-head CI and A02 merge, then verify payment session recovery
+on the combined paid branch. Home is already merged. Continue remaining provider/native acceptance. Fee payer/recipient/timing decision
+is pending. Documentation PR63 merged as8ed60f6ed; subsequent milestones publish separately from feature code.
 Preserve PR34 draft and unrelated PR46; paid PR47 remains draft.
 
 ## Current coordination and next action — September 16, 2026

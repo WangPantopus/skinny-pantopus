@@ -11,7 +11,7 @@ to the retired September16 coordinator or older Stream1 session.
 
 | Stream | Active task | Current work / sole writer | Local browser and API | Database |
 | --- | --- | --- | --- | --- |
-| 1 / coordinator | `01a0c0d1-0703-70c3-b842-6d01bc8ca48b` | Actual Stripe test checkout; sole writer `backend/stripe/gigTipProof.js` for reproduced absent-transfer receipt failure; base `aa168017e` | `localhost:18133` → HTTP18132 | Isolated `pantopus-stream1-tip-ui-r1`, API64561/SQL64562 |
+| 1 / coordinator | `01a0c0d1-0703-70c3-b842-6d01bc8ca48b` | Actual Stripe TEST tip/paid capture milestones complete on9ae1edb3b; combinedsession/actualstop verified; OffersPanel stale status repair8825c1928; CI pending | `localhost:18133` → HTTP18132 | Isolated `pantopus-stream1-tip-ui-r1`, API64561/SQL64562 |
 | 2 | `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` | PR60 merged as ebeea43d5; combined browser check and CI accepted; runtime released | `[::1]:18141` → HTTP18142 | Adopt existing `pantopus-stream2-guest-r1`, API64551/SQL64552; ports64550–64559 granted |
 | 3 | `01a0a824-301b-74e3-a1d9-b205714ed7a1` | PR64 safety merged as2d6ff2069; author owns separate granted Settings/SDK deletion and UserBlock forward migration | `stream3-auth.localhost:18131` → HTTP18130 | Existing `pantopus-stream3-block-r1`, API64531/SQL64532 |
 
@@ -31,8 +31,31 @@ comparison. No applied migration rewrite or auth/socket redesign. Stream3 also o
 reproduced N03 follow404 repair in existing `backend/routes/personaBlocks.js`:
 move auth/feature guards onto its actual three block routes so the supported
 flag-off legacy follow route can run. Verify follow persistence and block denial;
-no feature-flag activation, backend policy widening or new application file. Stream3 reports
+no feature-flag activation, backend policy widening or new application file.
+The same separate N03 scope includes existing `personas.js` DELETE-follow only:
+repeated unfollow passed a non-UUID sentinel to SQL and returned500. Use a checked
+membership read, preserve paid-tier guards, return success only for confirmed
+absence and failure for an unavailable read. Stream3 reports
 exact paths and real UI/API/SQL proof before integration.
+Subsequent N03 privacy grant: existing personas.js owner followers GET/PATCH must
+reuse canonical serializeFanForCreator after actual creator UI exposed protected
+local identity; existing frontend/packages/types/src/identity.ts follower display
+shape may narrow to safe handle/displayName/avatarUrl. Preserve layout, no new
+profile system/schema. Commit follow/retry separately before this repair. Existing
+post detail page and PostDetailModal caller may subsequently repair the reproduced
+Beacon author destination using the canonical typed href; preserve personal/business
+destinations, exact caller is frontend/apps/web/src/components/feed/PostDetailPanel.tsx
+(not Modal); no shared UserIdentityLink rewrite. Subsequent persona-comment privacy
+grant: existing backend/routes/posts.js four comment response paths and comment/reply
+notifications, plus existing frontend/apps/web/src/components/feed/CommentThread.tsx.
+Use canonical fan/Beacon identities per protected-fan policy; preserve internal
+recipient/self/duplicate handling and ordinary personal/business posts. Confirm own
+versus other-actor edit controls and native DTO/caller compatibility before choosing
+redacted id shape; no schema/new identity system. Separate milestone after owner-fan repair. Narrow iOS/Android PulsePostDetailViewModel
+mapper grant maps intentionally blank safe author IDs to nil/null, preventing invalid
+private-profile actions while preserving layout/personal navigation. Existing post
+page/Panel/CommentThread submit-success contract may retain composer text/files/reply
+after reproduced SQL500; inspect all void/boolean callers, no newfile/schema.
 
 Browser hostnames deliberately differ because cookies are shared across ports.
 No shared cookie clearing, retained database mutation, cache cleaning or physical
@@ -42,7 +65,14 @@ acceptance claimed. Owned emulator stopped; no rebuild/install. exact
 owned simulator shut down. Local Simulator became unavailable after an external
 shutdown/XPC/display failure; no build or system-service reset. Recheck actual
 availability before reserving. Stream1 HTTP18132/web18133 and isolated64561/64562
-project stopped after both actual Stripe TEST phases. Exact owned rows0; four test
+project stopped after both actual Stripe TEST phases. Combined-session project `pantopus-stream1-session-integration-r1` replayed77migrations
+and verified account-switch recovery onf0a98a974; exactrows0. Stream1 now reserves
+18132/18133 and64561–64567 for isolated `pantopus-stream1-stop-stripe-r1` actual
+TEST authorization release via existing reopen/cancel UI finished/cleaned0. New
+`pantopus-stream1-refund-stripe-r1` uses the same ownedports for actual captured-payment
+partial/full refund UI completed. All Stream1 exact rows0 and ownports released;
+five actual test captures fully refunded, five unpaid intents cancelled, four owned
+customers deleted across the session. No native build or retained DB mutation. Exact owned rows0; four test
 captures fully refunded, two intents canceled, two owned customers deleted. Provider
 history remains.
 Stream3 and Stream2 own their dirty live status files; coordinator stages
