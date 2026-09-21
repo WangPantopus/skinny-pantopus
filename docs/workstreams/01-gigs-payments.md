@@ -1,5 +1,137 @@
 # Stream 1 — Gigs and payments
 
+## September21 — paid48702 full CI passed
+
+Exact published `48702bc9d6ef89d30361962b2acf49090e2ad83e` completed
+[CI35596223401](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35596223401)
+successfully:15 applicable checks passed including Android instrumented/lint/test/
+assemble, three iPhone test jobs and backend/web/schema; one Seeder skip. PR47 body
+updated with exact success and bounded late-removal evidence; PR34/47 stay drafts.
+No additional paid-source push while current Home atomic-save and SDK signed-out
+refresh repairs are independently verified. Review next completed peer handoffs, then
+adopt a coherent batch and run only affected combined checks/requiredCI. CI success
+does not close remaining real provider/native/acceptance scope.
+
+## September21 — two later failures reproduced; focused follow-up assigned
+
+Documentation134 exact180436a1c passedCI35598584853 and merged
+`fe143e959a4c25fe04d5c839f49d3d2ff88544a7`. Paid48702 remains clean/fixed while
+CI35596223401 waits final Android lint/test/assemble; no current full-green claim.
+
+Stream3 ordinary logout retired only current fdbea9cf app/GoTrue session and kept
+all other own metadata/prefs unchanged. Protected destination reached login with exact
+query and no observed private settings. But29 automaticrefresh400 and2refresh429
+preceded actual login429/noGoTrue/newsession: return acceptance failed. Coordinator
+verified636 hashes and fullbefore/after/final rows; frozenlive03 f8f619c captured in
+4fae2a648. Tab26closed/descriptorremoved, API73610/Next/DB retained, signed-out state
+preserved. Source-only SDK refresh/lifetime/limiter attribution assigned before repair;
+no retry/bypass/sessionresurrection. Root's separate113blockedfixture-refresh attempts
+are only a lead, not attributed to the same cause. Broader auth acceptance stays open.
+
+Stream2 D05 baseline17 hashes reviewed: actual profile200/settings503 saved only new
+Home.name/updated_at, all other full state remained old; same-draft retry200/200 saved
+both intended values and oneaudit. ExactRPCprovenance and fixtures/runtime restored.
+Frozenlive02 fee6ba8d captured cdd164b72. Existing-source11/56bindings justify extending
+existing Settings RPC rather than adding a parallelservice/table. Singlewriter grant
+in liveREADME covers existing screen/SDK/route plus one compatible forwardmigration,
+canonical name/type validation, one transaction and preserved settings-only callers.
+Actual rollback/error/retry/authority/compatibility verification required; midtransaction
+fault design needs exact fixture/provenance review. No new unit tests or design changes.
+
+Next reviewed batch contains these independent follow-ups; do not cancel/push over
+paidCI or claim all streams complete. Rootr2 mirror has15 verified artifacts including
+coordinator review; earlier14 refers to runtime evidence before that receipt was added.
+
+## September21 — transient session retry reviewed
+
+Coordinator verified628 durable Stream3 artifact hashes (MANIFEST18bb02a8) and
+independently compared full own-session snapshots: synthetic pre-Express503 made
+no preference/app/GoTrue metadata or grant-receipt change. Keyboard retry reached
+real backend200/GoTrue200 and exact original settings query/Bob. Same73 app and4
+GoTrue session IDs retained; only current fdbea9cf session metadata changed, one new
+GoTrue200. Full preferences[] unchanged; identity-bound GET304 is cache revalidation,
+not a fresh200. Actual UI transient failure and recovery snapshots reviewed.
+
+Private hook restored exactly d7c8b953; descriptor/metadata flag absent, faultAPI63469
+stopped, restoredAPI73610/session69695 retains exact original argv/env/backendcwd.
+Next42165/42493 and DB retained, tab25 closed, successful natural session rotation
+retained. Manual refresh-page entry and synthetic pre-forward503 do not establish
+natural expiry/provider outage/native/hosted/OAuth/cross-account acceptance. No app
+edit/newtest. Frozen live03 4acfa26c captured in6a3c7c692; details/evidence remain in
+existing accounts-social-r3 durable mirror. Next Stream3 assignment is source-only
+logout/revocation/current-destination reconciliation after accepted-evidence review;
+no new auth mutation/device association or runtime expansion granted. All streams
+remain incomplete. Paid48702 currentCI unchanged and pending.
+
+## September21, 12:12 UTC — delayed payment-removal error verified; Audit133 merged
+
+Paid branch remains clean/pushed at `48702bc9d6ef89d30361962b2acf49090e2ad83e`.
+Current CI35596223401 is still running: completed web/backend/database/Android
+instrumented checks passed; remaining native jobs pending. Keep this head fixed.
+PR34/47 remain drafts and46 separate; no whole-stream completion claim.
+
+Root reused accepted e167 PaymentMethodList source (SHA25624fb5e95456ebc6b98172a9ceb8761ef2a07f40573761b16eb4fa006ce9df942)
+and r1 pending-confirmation/current503 retry evidence. New runtime-only r2 checks
+actual UI DELETE already dispatched, then navigation to Settings before real SQL
+permission failure is delivered. Two exact DELETE503/RPC-denial receipts, full three
+card rows unchanged and no removal rows. Both held replies finished on intact sockets;
+browser API-error timestamps corroborate receipt after destination commit. First
+attempt lacked timely toast observation and supports transport only. Second visible
+observation windows12:10:21.994–12:10:37.114 cover response12:10:22.950 and browser
+receipt12:10:22.955: no stale error on Settings. Initial requested16s locator wait
+was capped near3s; subsequent consecutive bounded observations supplied this evidence.
+Fresh Payments showed all three unchanged cards and controls. No application edit or
+new unit test; source-bound accepted journeys not replayed.
+
+Synthetic login/ancillary/card records, actual UI/SDK/payment router/service/PostgREST/
+SQL fault; no provider-success/committed-removal/new-session/native acceptance.
+Private write allowlist blocked113 unrelated refresh attempts from retained browser
+activity; these did not reach authentication and are excluded from acceptance, not
+reported as zero unexpected attempts. Zero provider calls. RPC full definition/owner/
+ACL/effectiveEXECUTE restored exactly; owned users/auth/methods/notifications/removals0.
+Tab29 closed/API68546 exited0, ownedNext47970 and Supabase retained. Durable14 verified
+artifacts: owner `.pantopus-recovery/audits/20260921-stream1-payment-method-removal-late-r2/`
+(final-evidence.json, structured SQL/transport/provenance/cleanup, private harness and
+MANIFEST.json). Credentials and raw operator logs excluded.
+
+PR133 exact updated78f137b72d82b2884b31622ecfd5878f3587b32c passed
+[CI35597307862](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35597307862)
+and merged `de0ac6ef3c051485b5800a288194ee563396a12a`. Updated commit changed only
+five docs, tested Audit page bytes unchanged. Reviewed candidate20/source12/baseline15,
+actual empty200/repeated500/recovery200/current403/recovery200 and full state/privilege/
+fixture cleanup; sole existing Audit error handling repair, no design/newtests.
+Frozen live02 b339a929 captured in a5357f314. This later merge stays outside current
+paid48702 until that CI resolves and next reviewed batch is ready.
+
+Next: receive Stream3 granted transient-refresh handoff, review exact source/runtime
+limits; Stream2 may verify only the separately granted D05 partial-save baseline.
+P02 natural >24h provider retry and broader provider/device/security cases remain open.
+
+## September21 — reviewed batch pushed at48702bc9d
+
+Paid branch codex/paid-gig-integration is clean/pushed at
+`48702bc9d6ef89d30361962b2acf49090e2ad83e` with reviewed final master
+`0d8ec2a64cb3083ceaff8afdb32eff94998336e0`. Documentation132 exact6d559b636 passed
+CI35595907295 and merged separately. Combined localc2deb5f57 verified exact Home131,
+host-email129 and unchanged root-removal source bindings. TypeScript/scoped lint
+exit0 (15 existing warnings),26 existing scheduling checks and whitespace pass.
+Final adoption changes only five docs; checks/runtime evidence reused, no new tests
+or duplicate UI journeys. Financial backend/native source unchanged.
+
+Prior1aecd fullCI35592232217 attempt2 passed15 applicable jobs/one Seeder skip.
+Initial Docker Hub image-pull failure retained; only failed backend job was retried,
+all native passes preserved. Current exact [CI35596223401](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35596223401)
+is running, not yet accepted. PR47 updated; PR34/47 remain drafts,46 separate.
+Root durable audit now48 verified artifacts with final publication/source/CI
+receipts. No root API/tab; own Next18133/Supabase retained and fixtures/grants clean.
+
+Keep this published batch fixed. Later standalone Audit failure/repair and synthetic
+transient refresh are separate peer scopes. Natural session recovery remains bounded
+to one timing-based personalsettings journey, localGoTrue, unchangedprefs and retained
+rotation. All streams incomplete; continue next bounded issues without replaying
+accepted journeys or cancelling current CI for more feature additions.
+
+
 ## September21 — Requests repair merged; paid infrastructure retry active
 
 PR131 merged `a165506795b7d4919a1ec596d0cd5322de0c2388` after exact
