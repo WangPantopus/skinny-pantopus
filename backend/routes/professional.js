@@ -23,6 +23,7 @@ const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
+const optionalAuth = require('../middleware/optionalAuth');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
@@ -400,7 +401,7 @@ router.get('/verification/status', verifyToken, async (req, res) => {
  * IMPORTANT: This route uses a dynamic param, so it must be registered LAST
  * to avoid catching /discover, /verification/*, /profile/* etc.
  */
-router.get('/:username', async (req, res) => {
+router.get('/:username', optionalAuth, async (req, res) => {
   try {
     const { username } = req.params;
 
@@ -427,7 +428,7 @@ router.get('/:username', async (req, res) => {
     }
 
     // Check visibility
-    const viewerId = req.headers.authorization ? null : null; // Will be populated by optional auth
+    const viewerId = req.user?.id ?? null;
     if (viewerId) {
       const canView = await canViewProfessionalProfile(viewerId, profile);
       if (!canView) {

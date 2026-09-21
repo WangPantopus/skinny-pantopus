@@ -3,16 +3,15 @@
  *
  * Single source of truth for the per-home privacy toggle set (the 9
  * consumer toggles backing the "Security" screen, migration 153):
- * key list, defaults, and a resilient read used by BOTH the
- * GET/PATCH /api/homes/:id/privacy routes and any feature that must
- * honor the toggles when composing a response (placeIntelligenceService
+ * key list and defaults shared by GET/PATCH /api/homes/:id/privacy,
+ * plus a checked read for GET and features that must honor the toggles
+ * when composing a response (placeIntelligenceService
  * consumes `address_precision` today; the documents/identity surfaces
  * consume `doc_lock` as they land).
  *
- * Reads NEVER throw: a missing row — or a database that does not have
- * the HomePrivacy table yet (migration not applied) — resolves to the
- * defaults, so consumers degrade to the design's "balanced setup"
- * baseline instead of failing.
+ * A successfully read missing row resolves to the defaults. Read failures
+ * propagate so consumers cannot replace saved restrictive preferences with
+ * a more permissive "balanced setup" baseline when privacy is unknown.
  */
 
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -51,9 +50,6 @@ const DEFAULTS = {
   vault_auto_lock: false,
 };
 
-// Log the missing-table condition once per process, not once per request.
-let warnedMissingTable = false;
-
 /** Project a HomePrivacy row (or null) into the toggle set, defaults applied. */
 function resolveToggles(row) {
   const toggles = {};
@@ -64,7 +60,7 @@ function resolveToggles(row) {
 }
 
 /**
- * Read the effective privacy toggle set for a home. Never throws.
+ * Read the effective privacy toggle set for a home. Throws on read failure.
  *
  * @param {string} homeId
  * @returns {Promise<object>} `{ [toggle]: boolean }` for all 9 keys.
@@ -77,20 +73,11 @@ async function getHomePrivacy(homeId) {
       .eq('home_id', homeId)
       .maybeSingle();
 
-    if (error) {
-      if (!warnedMissingTable) {
-        warnedMissingTable = true;
-        logger.warn('homePrivacy: read failed — serving defaults (is migration 153 applied?)', {
-          homeId,
-          error: error.message,
-        });
-      }
-      return { ...DEFAULTS };
-    }
+    if (error) throw error;
     return resolveToggles(row);
   } catch (err) {
-    logger.warn('homePrivacy: read threw — serving defaults', { homeId, error: err.message });
-    return { ...DEFAULTS };
+    logger.warn('homePrivacy: current settings unavailable', { homeId, error: err.message });
+    throw err;
   }
 }
 
