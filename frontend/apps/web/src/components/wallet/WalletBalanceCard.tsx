@@ -34,6 +34,7 @@ export default function WalletBalanceCard({
   const [error, setError] = useState<string | null>(null);
 
   const loadWallet = useCallback(async () => {
+    setLoading(true);
     try {
       setError(null);
       const [walletRes, pendingRes] = await Promise.allSettled([
@@ -48,6 +49,8 @@ export default function WalletBalanceCard({
       }
       if (pendingRes.status === 'fulfilled') {
         setPendingRelease(pendingRes.value);
+      } else {
+        setError((pendingRes.reason as Error)?.message || 'Failed to load pending release info');
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to load wallet');
