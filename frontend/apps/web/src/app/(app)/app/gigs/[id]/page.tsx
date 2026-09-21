@@ -154,7 +154,7 @@ export default function GigDetailsPage() {
 
   const completionRef = useRef<CompletionFlowHandle>(null);
 
-  // Key incremented on socket bid events to trigger OffersPanel refresh
+  // Refresh offers after local mutations as well as socket bid events.
   const [offersRefreshKey, setOffersRefreshKey] = useState(0);
 
   // ---------- Loaders ----------
@@ -373,6 +373,7 @@ export default function GigDetailsPage() {
   };
 
   const handleRefresh = () => {
+    setOffersRefreshKey((key) => key + 1);
     void loadGigDetails();
   };
 
