@@ -165,22 +165,31 @@ function MembersContent() {
 
   const handleApproveAccessRequest = useCallback(async (requestId: string) => {
     if (!canManage || !homeId) return;
-    const yes = await confirmStore.open({
+    const revision = generation.current, token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => generation.current === revision && api.getAuthToken() === token && api.getApiBaseUrl() === origin
+      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker && document.visibilityState !== 'hidden';
+    const confirmation = confirmStore.open({
       title: 'Send invitation',
       description: 'This creates a personal invitation for them to accept in the app.',
       confirmLabel: 'Send invite',
       variant: 'primary',
     });
-    if (!yes) return;
+    const dialog = confirmStore.getSnapshot();
+    pageConfirmation.current = dialog;
+    const yes = await confirmation;
+    if (pageConfirmation.current === dialog) pageConfirmation.current = null;
+    if (!yes || !current()) return;
     setBusyRequestId(requestId);
     try {
       await api.approveHouseholdAccessRequest(homeId, requestId);
+      if (!current()) return;
       toast.success('Invitation sent');
       await fetchData();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to approve request');
+      if (current()) toast.error(err?.message || 'Failed to approve request');
     } finally {
-      setBusyRequestId(null);
+      if (current()) setBusyRequestId(null);
     }
   }, [homeId, canManage, fetchData]);
 
