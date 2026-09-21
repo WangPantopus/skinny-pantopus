@@ -27,11 +27,12 @@ const DEFAULTS = {
 
 async function getPrefs(userId) {
   if (!userId) return DEFAULTS;
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('SchedulingNotificationPreference')
     .select('prefs')
     .eq('user_id', userId)
     .maybeSingle();
+  if (error) throw new Error('Unable to load notification preferences. Please try again.', { cause: error });
   const p = (data && data.prefs) || {};
   return {
     notify_me: { ...DEFAULT_NOTIFY_ME, ...(p.notify_me || {}) },
