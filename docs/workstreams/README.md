@@ -1,5 +1,84 @@
 # Three-stream coordination
 
+## Home lifetime timing limitation reviewed; one bounded follow-up assigned
+
+Coordinator verified35 baseline artifacts (manifest22fe382e), full held/before-release/
+after state equality, oneaudit/noBwrite, unchangedRPCprovenance/ledger56 and exact
+cleanup/freeports/stoppedfivecontainers. Corrected original200 was attempted56221ms
+after commit on an already destroyed socket/no finish. B was entered after42seconds;
+unchangedSDK timeout is30seconds, but exact timeout causality was not independently
+captured. No successful-late-response acceptance or applicationdefect. Earlier missed-
+matcher ordinary200 is excluded and separatelycleaned. Frozenlive02 hash26a1b0c3.
+
+Stream2 is assigned one shorter attempt from its reviewed next-proposal.md, same
+unchanged source/ownedfixtures and ports18141/18142/64550–59. Prepare A/observed
+controls before arming; one supported CUA invocation Save→freshpendingAX→Share→
+freshAX→Settings→freshcommittedA/readback→unsavedB/readback. No intervening shell/API
+roundtrip. Add only private request-arrival and close/finish observation at capture;
+automatically send untouched original200/body on originalsocket20seconds after
+commit regardless of UIprogress. Keep SDK30seconds unchanged. Stop interactions if
+A/readback/ordering fails or deadline passes; do not repeatwrite or manufacture
+success. Accept only freshGET200/readbackA and unsavedB before intact200 delivery,
+with onePATCH/oneaudit/fullsavedA. Observe B without newnavigation/focus/reload.
+No applicationrepair unless a defect is reproduced and handedoff. No schema/session/
+provider/native/newtest or duplicateatomicity/errorjourney. Exactcleanup as before.
+
+## September 21 — committed local sign-out response loss reviewed
+
+Coordinator independently verified691 Stream3 artifact hashes and complete own-session
+metadata comparisons. One ordinary local login added only its current session. Actual
+Settings logout retired that app/GoTrue session, with all other own metadata and full
+preferences unchanged, while original200 and four clearing-cookieheaders were held.
+After proof, only the original socket was destroyed at149ms; headersSent=false,
+close/destroyed=true and no finish. Final state exactly equals commit proof: no
+resurrection/newsession. Actual browser reachedlogin with original Settings redirect;
+one automaticrefresh401, no GoTrue token call or429. InitialAX retainedSettings/Bob.
+Browser-facing failure status and intermediate toast were not captured: no502/toast
+or zero-frame retirement claim. Manualretry was unavailable after Logout retired;
+no relogin/workaround performed. This accepts this bounded local upstream-response
+loss/recovery only, not physicaloffline/native/hosted or broad auth closure.
+
+Originalhook/env/argv/cwd restored; API48548/session80449, Next42165/42493 and DB
+retained. Fault/descriptors/tab30 removed, natural signedout/revoked state preserved.
+No applicationedit/newtest/acceptedjourney replay. Root review receipt is in owner
+audit20260921-stream1-migration-order-r3/logout-loss-reviewed.json. Frozenlive03
+745697b8 supplies owner details. Shared documentation140 passedCI and merged as
+ a5ef4d49ceb986a6655ae1ea5f8404bbf7a3cded. Paid localeb56ab2a1 adds only its three
+documents to verified renameeb6d612; actual-base guard still passes. Publication
+waits for prior99baa CI native jobs; fresh repaired-head replay/CI not yet accepted.
+
+## Stream3 local logout lost-response runtime assignment
+
+Coordinator verified677 durable artifacts (MANIFEST06df0aa1), all eight bindings
+against masterf4b277861, and frozenlive03 hash13ccd0c6. Seven also match paid; paid
+next.config.js differs only by existing /status/:token privacy headers. Auth/API
+proxy source is unchanged. An initial overbroad eight-paid-matches assertion failed;
+the premature runtime message was immediately withdrawn before this corrected grant.
+Stream3 confirmed no login/logout/refresh, hook write or APIrestart occurred before
+the correction; only read-only source/process inspection had run.
+Accepted82/136/138 do not cover same-account local logout with original reply lost
+after retirement. Existing implementation/instrumentation suffices; no defect yet.
+
+Stream3 reserves only retainedAPI18130/Next18131/ownDB and one new browser tab.
+One ordinary real local Bob login is assigned because browser is signedout; record
+new exact ownsession, full own app/GoTrue metadata/preferences. Rebind source and
+original hook/env/argv/cwd. Extend only existing private end-hook for one exact
+owned POSTlogout, loopback/aliasOrigin/cookie transport/SettingsReferer, expiring
+atomic descriptor. Hold original200 only with headersSent=false, at most8seconds
+below client timeout. On original pending socket prove currentapprevoked/GoTrueabsent
+and unchangedotherownmetadata/prefs before destroying only that original socket.
+Mismatch, non200, sentheaders, incomplete proof or deadline must release original
+untouched response if possible and stop; early disconnect gets its actual label.
+No manufacturedresponse/cookie/session, authDBwrite or secret logging.
+
+Observe actual Nextproxy/browser result and automaticauth; stale sessionflag can
+cause refresh. One samebutton retry is included only if currentLogout remains usable
+and identity is unchanged; no relogin/workaroundnavigation/resurrection. Verify actual
+recovery/no new or other-session changes; retain natural revocations/audits. Stop on
+unexpectedmutation/accountswitch. Restore exact hook/descriptor/APIconfiguration,
+close newtab, preserveNext/DB/peers. No newtests, native/hosted/externalprovider or
+applicationedit. Local API-to-Next reply loss does not establish physicaloffline.
+
 ## Next independent verification while paid CI finishes
 
 The migration filename repair is localeb6d612beb96377c37ea546190e0d85f78529d7d:
