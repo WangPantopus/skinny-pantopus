@@ -1,5 +1,33 @@
 # Three-stream coordination
 
+## Later-batch profile Settings logout-error repair grant
+
+PR136 merged2d66626c058ca6d57232fc0dd57311c58086fcf5 after updated0d5ee430 CI35600453583
+passed; SDK scope complete only within recorded limits. Coordinator verified662
+logout-failure artifacts and full ownsession/prefs equality: matchedpre-forward503
+silently returned to authenticated Place, noerror/retry. No session retirement occurred.
+Original privatehook/env restored; API3800/session20593, Next42165/42493/DB retained.
+Frozenlive03 187551b captured769917ca0; original136 branch/evidence preserved.
+
+Stream3 sole writer existing profile/settings/page.tsx handleLogout only. Adopt final
+master2d66626c on separate follow-up branch and rebind existingpage/callers. On API
+rejection use alreadyimported toast.error with safe cannot-confirm-signout/retry
+wording and return before clearPendingPlaces/clearAuthToken/navigation. Preserve
+successful path and all otherhandlers/layout/styles. Do not assert session is active
+for every failure (lost successful replies remain another boundary). No newfile/helper/
+SDK/backend/limiter/schema/unit test or unrelated refactor/pending-state redesign.
+
+Use same exactowned current507ef9ec preflight and reviewed private503 isolation with
+completehook/env/source restoration. Actual keyboardlogout503 must keep Settings and
+currentidentity, show error, retain fullownsession/prefs; repeatcurrentfailure at most
+once if needed for reusablecontrol. Removefault/sameUIretry must call realbackend200,
+retire onlythatcurrent app/GoTrue session, reachlogin withoutrefreshburst/429, keep
+otherownmetadata/prefs unchanged. Reuse136 successfulloginreturn/explicitrefresh evidence
+with source/controlflow limits; no duplicate loginjourney. Restorehook/descriptors/API,
+close ownedtab, retain natural signedout/revocation state and DB/Next. Scopedchecks/
+requiredCI/draftPR/exactcleanup handoff; no native/hosted/lostcommit/session-lifetime
+claim. Keep137 and paid48702 independent until next reviewedbatch.
+
 ## Later-batch pre-forward local logout failure baseline grant
 
 Coordinator verified654 hashes and existing five-file source/contract comparison.

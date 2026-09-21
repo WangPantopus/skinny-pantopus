@@ -1,5 +1,34 @@
 # Stream 1 — Gigs and payments
 
+## September21 — SDK136 merged; atomic Home137 reviewed
+
+PR136 updated0d5ee430 passedCI35600453583 and merged
+`2d66626c058ca6d57232fc0dd57311c58086fcf5`; tested SDK bytes unchanged by five-doc
+branch update. Preserved standaloneSDK type-error limitation and realUI/session bounds.
+
+PR137 originald225ff1e86e68ba6ff9e14c4ec43587760d0c65d is fixed/draft, current
+CI35600568312 pending. Coordinator reviewed four authorizedpaths,36 durablehashes,
+fullbefore/failure rows for RPC503 and finalauditinsert503 rollback, exactfunction/
+constraintcatalog restoration, eightUIwrites503/200/503/200/400/403/200/200 with no
+profilePATCH. Existing canonicalname/type/UTF16 validation, oldsettings-only sixfield
+clearing/profileomission/preferencepreservation,9invalidAPI+DB/14validDBrollback/
+5validHTTP cases inspected.24totalHTTPsettingsPATCHes, zero provider/newunit tests.
+TS/lint/syntax pass (6existinglintwarnings); freshschema replay remains CI-bound.
+Originalauthority/lock/audit/preferences/clearing contract retained. Exactfixtures/
+constraint/tab23/API/Next cleaned, ownfivecontainers stopped/preserved; candidate
+forwardmigration/ledger56 intentionallyretained. Frozenlive02 64fabc captured65a62c64e.
+Required rollout order: migration, updatedbackend, then webcaller. Oldbackend ignores
+name/type while saving otherfields, so webmustnotprecede backend. No hosted rollout.
+
+Separate logoutpre-forward503 baseline662hashes/fullownmetadata reviewed: current
+507ef9ec remainsactive and unchanged as expected, but existing handler silently returns
+to authenticatedPlace without error. Frozenlive03 187551b captured769917ca0; exacthook
+restored/API3800/session20593, Next/DBretained/tab28closed. TopREADME assigns only
+existingprofileSettings handleLogout catch/error/return repair on separatefinalmaster
+branch, real503/currentUIretry200/retirement checks and exactinstrumentationcleanup.
+This new boundary is not covered by136 successfullogout or PR82 postrevocationfailure.
+Keep paid48702 clean and green while these later milestones finish independently.
+
 ## September21 — logout-return repair reviewed; next CI gate pending
 
 PR136 original d6fba68d3cf1154211849a1b659a7e48d03012a6 passedCI35599880117.
