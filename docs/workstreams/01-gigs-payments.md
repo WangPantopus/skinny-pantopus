@@ -1,5 +1,40 @@
 # Stream 1 — Gigs and payments
 
+## September 21, 08:15 UTC — final master adopted and paid head published
+
+`codex/paid-gig-integration` is clean/pushed at
+**2ea9d93ca6bd322ffeecdc411a289f10c7e7e17f**, including final master
+**721d46e6d2ad6bfc1e67ea70b375d7b2d129d9f0**. PR106 published only the five
+coordination documents after exact ceb5a5ba1 CI35576403371 passed. PR110,111,112
+were integrated after their exact updated-head gates; merge SHAs/source limits are
+recorded below and in integration-batch-pr-state.json. PR34/47 remain draft;46 is
+separate and untouched. New full [CI35576926687](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35576926687)
+is pending for2ea9; prior b756 fullCI passed15 jobs/one skip, including all native.
+Keep2ea9 fixed while its full gate runs; do not claim new-head CI success yet.
+
+The merge changes eight reviewed Home/social files and five published documents.
+All eight application hashes match accepted feature heads; payment/vote/completion
+implementation is unchanged. Combined existing regressions pass334 tests across
+six suites, TypeScript exit0 and whitespace checks pass. No new unit tests or
+application repairs in this integration. Reuse the source-bound actual UI/API/SQL/
+provider evidence; combined tests do not expand end-to-end or device acceptance.
+
+Durable vote-phase mirror now contains39 verified files, including all final batch
+PR states, eight source bindings, combined checks, prior fullCI and updated PR47
+body. Existing completion-proof mirrors remain11 and14 files. All prior fixture,
+storage/grant and provider cleanup limits remain unchanged; root API/tabs stopped,
+owned Next18133 and79-schema Supabase64561–67 retained. No native slot reserved.
+
+Both existing peer tasks were released under the published README grants. Stream2
+has adopted721d46e6 on `codex/home-privacy-read-verification` and is reacquiring only
+its owned runtime after listener checks for actual D06 privacy verification. Stream3
+continues the existing professional self-editor load-error repair after its actual
+500-to-create baseline and seven-ref comparison. No duplicate task or automation.
+Next: complete2ea9 CI, review bounded peer handoffs, and continue the remaining
+payment acceptance gaps without repeating accepted journeys. All three streams and
+the app remain incomplete; fee policy, provider and installed-device limits stay open.
+
+
 ## September 21 integration checkpoint
 
 All three streams remain incomplete. The current bounded Home/social repairs are
