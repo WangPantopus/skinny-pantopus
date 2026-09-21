@@ -1,5 +1,48 @@
 # Stream 1 — Gigs and payments
 
+## September 21, 09:12 UTC — privacy batch integrated
+
+All five bounded Home/professional repairs are merged into master
+`27cd8b112064997927acc21c92c5eae0b56d8fcc`, using normal protected merges:
+
+- PR114: reviewed source `59b67ee84`, merged `e1a757d139b32358d1492ebe694f5fb000838cd9` after exact `59b67ee84` [CI35577190208](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35577190208).
+- PR115: reviewed source `e47eb37de`, merged `e6e3ae6aff9950eb25c04dc8f580c2fb23a0f904` after exact `1ace297d7` [CI35580566121](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35580566121).
+- PR116: reviewed source `99e0cba3a`, merged `be2163744066c4989fa0d60d24ea2fcb7c9a985f` after exact `a5823ba87` [CI35580856148](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35580856148).
+- PR117: reviewed source `e729a516a`, merged `8368959a4eff3675d9705872eae686ef8fd10301` after exact `22cb3cbfd` [CI35581223453](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35581223453).
+- PR118: reviewed source `1ad1a0693`, merged `27cd8b112064997927acc21c92c5eae0b56d8fcc` after exact `6a0f05bcb` [CI35581547015](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35581547015).
+
+Each updated branch was compared with its accepted source before merging; only
+previously reviewed preceding fixes were added. All five target file hashes remain
+identical to the accepted candidates. Original UI or explicitly HTTP/SQL-only
+acceptance, controlled-failure timing, excluded driver attempts and exact cleanup
+remain bounded as recorded in live02/03. No broad row, native/provider/session or
+concurrent partial-write acceptance is inferred from CI or integration.
+
+Paid `codex/paid-gig-integration` remains clean/pushed at
+`2ea9d93ca6bd322ffeecdc411a289f10c7e7e17f`. Full
+[CI35576926687](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35576926687)
+passed all 15 applicable jobs, including iOS and Android; Seeder skipped. The
+existing vote-phase mirror has42 verified artifacts, including final paid CI,
+all five guarded integrations and prior saved-card source reconciliation. Eighteen
+file/section bindings retain the accepted September9 native saved-card source;
+relevant service/routes and migration are unchanged. Preserve the earlier actual
+Stripe TEST/native evidence and cleanup; no actors, setups or cleanup were replayed.
+This source comparison does not certify changed runtime/configuration/dependencies.
+
+Frozen live02/03 final receipts were captured in coordination75c7006b0. Their
+feature branches remain frozen. Publish this five-document PR113 separately,
+then adopt final master once into paid and run relevant combined checks/current CI.
+Keep PR34/47 draft; unrelated PR46 remains untouched. Release only the next README
+verification scopes: existing Home Members role action and scheduling Resume
+persistence. Source leads require actual failure before an exact repair grant;
+no new unit tests, native build, replacement screen or speculative refactor.
+
+All three streams remain incomplete. Root API/tabs are closed; owned Next18133
+and Supabase64561–67 remain reserved. Stream2 released its runtime; Stream3 retains
+only its owned18130/18131/64531–37 resources. No heavy native slot is reserved.
+Fixture/provider/grant cleanup limits are unchanged. The cancellation/no-show fee
+policy question remains unanswered; no policy or fee execution is invented.
+
 ## September 21 pending integration batch — privacy follow-ups reviewed
 
 PR117 e729a516a (stacked115) changes only the existing professional block guard's

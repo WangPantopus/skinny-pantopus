@@ -1,5 +1,47 @@
 # Three-stream coordination
 
+## Current integration checkpoint — September21, 09:12 UTC
+
+PR114–118 are merged into master27cd8b112 after source review, actual bounded
+UI/HTTP/SQL evidence and exact updated-head CI. Paid2ea9 fullCI35576926687 passed
+all15 applicable jobs/oneSeeder skip, including native jobs. Detailed merge SHAs,
+source bindings and acceptance limits are in the current handoff/live01.
+Documentation-only PR113 publishes this batch before paid adopts final master.
+No new application edits or runtime acquisition until the coordinator releases
+the following verification scopes. All three streams remain incomplete; PR34/47
+stay draft and unrelated46 remains separate.
+
+## Next bounded verification after the privacy integration batch
+
+These scopes begin only after PR114–118 and documentation PR113 are merged and
+the coordinator releases the existing tasks. Until then, preserve frozen feature
+refs and the application/runtime hold. All three streams remain incomplete.
+
+- Stream2: verify the existing standalone Home Members role action through its
+  current screen, SDK role POST, Home IAM/authority service and canonical SQL
+  transaction. The source-only comparison predicts incorrect role cycling; it
+  does not establish a reproduced failure. Reuse accepted MemberDetail evidence,
+  while preserving the standalone members.manage permission and existing designs.
+  Reacquire only owned18141/18142/64550–59 after current ownership/listener checks.
+  Verify real UI/request/persisted role and relevant denied/retry behavior, then
+  report any failure and the smallest exact-path proposal before application edits.
+  No replacement role selector, broader permissions or new UI/file/schema/test.
+- Stream3: verify the existing scheduling notification settings Resume action in
+  `frontend/apps/web/src/components/scheduling/hub/NotificationPrefsForm.tsx`.
+  Source shows the existing PauseBanner callback changes local paused state only;
+  verify actual UI → SDK/preferences route → saved JSON and full reload before
+  calling it a defect. Reuse PR103 read/save/retry and the accepted reminder-offset
+  evidence. Use an exact temporary preference row with original state captured,
+  preserve unrelated keys, and restore it afterward. Existing18130/18131/64531–37
+  reservation only. Worker delivery/pause policy is a separate boundary, without
+  a repair grant or notification-delivery acceptance. Report the reproduced case
+  and exact in-place proposal before editing any application path.
+
+Neither scope authorizes new unit tests, native builds, screen redesigns, shared
+helpers or application files. No heavy native slot is reserved. Shared ownership
+remains with the coordinator; retain accepted source/runtime limits and exact
+fixture/grant/session cleanup in the existing live stream status.
+
 ## September 21 confirmed privacy follow-ups — exact repair grants
 
 Stream3 is sole writer only for `canViewProfessionalProfile` in existing
