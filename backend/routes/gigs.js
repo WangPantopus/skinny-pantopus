@@ -6763,56 +6763,20 @@ router.post('/:gigId/questions/:questionId/upvote', verifyToken, async (req, res
     const { gigId, questionId } = req.params;
     const userId = req.user.id;
 
-    // Check if already upvoted
-    const { data: existing } = await supabaseAdmin
-      .from('GigQuestionUpvote')
-      .select('id')
-      .eq('question_id', questionId)
-      .eq('user_id', userId)
-      .maybeSingle();
+    const { data: result, error } = await supabaseAdmin.rpc('toggle_gig_question_upvote', {
+      p_gig_id: gigId,
+      p_question_id: questionId,
+      p_user_id: userId,
+    });
 
-    if (existing) {
-      // Remove upvote
-      await supabaseAdmin.from('GigQuestionUpvote').delete().eq('id', existing.id);
-
-      // Decrement count
-      const { data: q } = await supabaseAdmin
-        .from('GigQuestion')
-        .select('upvote_count')
-        .eq('id', questionId)
-        .single();
-
-      await supabaseAdmin
-        .from('GigQuestion')
-        .update({ upvote_count: Math.max(0, (q?.upvote_count || 1) - 1) })
-        .eq('id', questionId);
-
-      return res.json({ upvoted: false });
-    } else {
-      // Add upvote
-      const { error: insertErr } = await supabaseAdmin
-        .from('GigQuestionUpvote')
-        .insert({ question_id: questionId, user_id: userId });
-
-      if (insertErr) {
-        logger.error('Upvote insert error', { error: insertErr.message });
-        return res.status(500).json({ error: 'Failed to upvote' });
-      }
-
-      // Increment count
-      const { data: q } = await supabaseAdmin
-        .from('GigQuestion')
-        .select('upvote_count')
-        .eq('id', questionId)
-        .single();
-
-      await supabaseAdmin
-        .from('GigQuestion')
-        .update({ upvote_count: (q?.upvote_count || 0) + 1 })
-        .eq('id', questionId);
-
-      return res.json({ upvoted: true });
+    if (error || !result) {
+      logger.error('Upvote transaction error', { error: error?.message, gigId, questionId });
+      return res.status(500).json({ error: 'Failed to toggle upvote' });
     }
+    if (result.error === 'QUESTION_NOT_FOUND') {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+    return res.json({ upvoted: result.upvoted });
   } catch (err) {
     logger.error('Upvote toggle error', { error: err.message });
     res.status(500).json({ error: 'Failed to toggle upvote' });
