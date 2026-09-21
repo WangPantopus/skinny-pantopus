@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { removalLink } from '../member-removals/removalModel';
 import * as api from '@pantopus/api';
 import SlidePanel from '../SlidePanel';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
+import ErrorState from '@/components/ui/ErrorState';
+import { failureMessage } from '../share/shareFailure';
 
 // ---- Permission display groups ----
 
@@ -128,6 +130,9 @@ export default function MemberDetail({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [readError, setReadError] = useState('');
+  const generation = useRef(0);
+  const readSequence = useRef(0);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferConfirmText, setTransferConfirmText] = useState('');
@@ -139,104 +144,119 @@ export default function MemberDetail({
   const isTargetOwner = member?.role === 'owner' || member?.role_base === 'owner';
   const joinedDate = member?.created_at || member?.start_at;
 
-  // Load member permissions
+  const loadPermissions = useCallback(async (revision: number) => {
+    if (!member) return;
+    const sequence = ++readSequence.current;
+    const current = () => revision === generation.current && sequence === readSequence.current;
+    setLoading(true);
+    setReadError('');
+    try {
+      const res = await api.homeIam.getMemberPermissions(homeId, member.user_id);
+      if (!current()) return;
+      setPermissions(res.permissions || []);
+      setRoleBase(res.role_base || member.role_base || 'member');
+    } catch (err: unknown) {
+      if (!current()) return;
+      setPermissions([]);
+      setReadError(failureMessage(err, 'Member permissions could not be loaded. Please try again.'));
+    } finally {
+      if (current()) setLoading(false);
+    }
+  }, [homeId, member]);
+
+  // Retire reads and mutations when this panel no longer represents that member.
   useEffect(() => {
-    if (!open || !member) return;
+    const revision = ++generation.current;
+    setPermissions([]);
     setError('');
+    setReadError('');
+    setSaving(false);
     setShowAdvanced(false);
     setShowTransfer(false);
     setTransferConfirmText('');
+    setExpiryDate(member?.end_at?.split('T')[0] || '');
+    if (open && member) void loadPermissions(revision);
+    return () => { generation.current++; };
+  }, [open, member, homeId, isOwner, loadPermissions]);
 
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await api.homeIam.getMemberPermissions(homeId, member.user_id);
-        setPermissions(res.permissions || []);
-        setRoleBase(res.role_base || member.role_base || 'member');
-      } catch {
-        setPermissions([]);
-        setRoleBase(member?.role_base || 'member');
-      }
-      setExpiryDate(member?.end_at?.split('T')[0] || '');
-      setLoading(false);
-    })();
-  }, [open, member, homeId]);
-
-	  const handleRoleChange = async (newRole: string) => {
-	    if (!member) return;
-	    const memberUserId = member.user_id;
-	    setSaving(true);
-	    setError('');
-	    try {
-	      await api.homeIam.updateMemberRole(homeId, memberUserId, {
-	        role_base: newRole,
-	        end_at: expiryDate || undefined,
-	      });
-      setRoleBase(newRole);
-
-      // Reload permissions for updated role
-	      const res = await api.homeIam.getMemberPermissions(homeId, memberUserId);
-      setPermissions(res.permissions || []);
-      onUpdate();
+  const handleRoleChange = async (newRole: string) => {
+    if (!member || saving || loading || readError) return;
+    const revision = generation.current;
+    setSaving(true);
+    setError('');
+    try {
+      await api.homeIam.updateMemberRole(homeId, member.user_id, {
+        role_base: newRole,
+        end_at: expiryDate || undefined,
+      });
+      if (revision !== generation.current) return;
+      await loadPermissions(revision);
+      if (revision === generation.current) onUpdate();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to change role');
+      if (revision === generation.current) setError(failureMessage(err, 'Failed to change role'));
+    } finally {
+      if (revision === generation.current) setSaving(false);
     }
-    setSaving(false);
   };
 
-	  const handleTogglePermission = async (perm: string, allowed: boolean) => {
-	    if (!member) return;
-	    const memberUserId = member.user_id;
-	    setSaving(true);
-	    setError('');
-	    try {
-	      await api.homeIam.toggleMemberPermission(homeId, memberUserId, { permission: perm, allowed });
+  const handleTogglePermission = async (perm: string, allowed: boolean) => {
+    if (!member || saving || loading || readError) return;
+    const revision = generation.current;
+    setSaving(true);
+    setError('');
+    try {
+      await api.homeIam.toggleMemberPermission(homeId, member.user_id, { permission: perm, allowed });
+      if (revision !== generation.current) return;
       if (allowed) {
         setPermissions((prev) => [...new Set([...prev, perm])]);
       } else {
         setPermissions((prev) => prev.filter((p) => p !== perm));
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to update permission');
+      if (revision === generation.current) setError(failureMessage(err, 'Failed to update permission'));
+    } finally {
+      if (revision === generation.current) setSaving(false);
     }
-    setSaving(false);
   };
 
   const handleRemove = () => {
     if (member) router.push(removalLink(homeId, member.user_id));
   };
 
-	  const handleTransfer = async () => {
-	    if (!member) return;
-	    if (transferConfirmText !== 'TRANSFER') return;
-	    setSaving(true);
-	    setError('');
-	    try {
+  const handleTransfer = async () => {
+    if (!member || saving || loading || readError || transferConfirmText !== 'TRANSFER') return;
+    const revision = generation.current;
+    setSaving(true);
+    setError('');
+    try {
       await api.homeProfile.transferAdmin(homeId, { new_admin_user_id: member.user_id });
+      if (revision !== generation.current) return;
       setShowTransfer(false);
       onUpdate();
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to transfer ownership');
+      if (revision === generation.current) setError(failureMessage(err, 'Failed to transfer ownership'));
+    } finally {
+      if (revision === generation.current) setSaving(false);
     }
-    setSaving(false);
   };
 
-	  const handleSetExpiry = async () => {
-	    if (!member) return;
-	    const memberUserId = member.user_id;
-	    setSaving(true);
-	    setError('');
-	    try {
-	      await api.homeIam.updateMemberRole(homeId, memberUserId, {
+  const handleSetExpiry = async () => {
+    if (!member || saving || loading || readError) return;
+    const revision = generation.current;
+    setSaving(true);
+    setError('');
+    try {
+      await api.homeIam.updateMemberRole(homeId, member.user_id, {
         role_base: roleBase,
         end_at: expiryDate || undefined,
       });
-      onUpdate();
+      if (revision === generation.current) onUpdate();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to update expiry');
+      if (revision === generation.current) setError(failureMessage(err, 'Failed to update expiry'));
+    } finally {
+      if (revision === generation.current) setSaving(false);
     }
-    setSaving(false);
   };
 
   // Human-readable permission summary
@@ -258,6 +278,8 @@ export default function MemberDetail({
           <div className="flex justify-center py-8">
             <div className="w-6 h-6 border-2 border-app-border border-t-gray-700 rounded-full animate-spin" />
           </div>
+        ) : readError ? (
+          <ErrorState message={readError} onRetry={() => loadPermissions(generation.current)} />
         ) : (
           <>
             {/* Profile Header */}
