@@ -2285,3 +2285,136 @@ Exact efaeaab5c automaticCI35590893520 completed SUCCESS (6applicable passes/5pa
 skips), including backend/privacy, image, schema and CI OK. No new web/native
 acceptance. Final CI structured receipt mirrored:550files hashesverified, MANIFEST
 **d4efa3b39f3a7e2e7aff66ee7f746819b707a5281bcbaa3e3a5fda03977839eb**. Coordinator owns review/integration; source frozen and no rerun.
+
+
+## Host channel source-only reconciliation after PR126 integration
+
+Independently confirmed126 MERGED5b80279643bb72c800648cb922685e8818afc4f1,
+updated49becdb41 exactCI35591151829 success; accepted gatehash8c40b8d4 matches.
+Separate codex/stream3-scheduling-channel-contract adopts5b802, preserves priorrefs,
+evidence and retained runtime. No new appedit/runtime/tests or accepted-journey replay.
+Seven refs/49bindings in scheduling-channel-source-reconciliation.json supplement
+existing maps. Web host Push writes notify_me plus nested scheduling.host row; Email
+only writes nested email. GET/PUT preserve JSON. Existing host gates precede saved
+Notification insert; shared notification service then independently gates physical
+push using global MailPreferences/type prefs. Saved notice is not physicalpush.
+Native host P/E bind one notify_me boolean, not separate nested email (source-only).
+Existing scheduling fanout emails non-user invitee; no host nested-email consumer
+found in inspected delivery path. Existing recipient policy keeps invitee transactional
+reminders; emergency/dailyagenda/hostemail policy cannot be invented from this search.
+
+Propose one exact temporary unpaused prefs+due booking; actual web Reminder sent
+Email off→on while Push/notify_me.reminder staysfalse, preserve unknownkeys, bind
+PUT/GET/SQL/reload. One unchanged manually invoked worker with exact query/sweep/
+write/recipient guards/localSMTP only; observe hostemail independently of savednotice
+and transactional inviteemail. Allow exacthost/inviteerecipients only and reject external
+providers. Fullsnapshot/exactcleanup, no timer/native/provider rerun. This is proposed
+verification, not reproduced defect or repair authorization; awaiting coordinator scope.
+Durable 551 hashesverified, MANIFEST **a3c5e0d35c33106683d8489155152a58e68f98f4f7cb38bea9dba54531de5852**. No rawlogs added.
+
+
+## Host Reminder sent Email — actual baseline September21 11:02UTC
+
+Granted later-batch runtime-only check on5b802; no appedit. Exact actorBob matches
+bookinghost. Actual existing web Emailoff→on, Push staysfalse; instrumented PUT200
+identifies actor, SQL retains notify_me.reminder=false, nestedhost.reminder_sent.email
+true and sentinel. Actual reload GET200 sameactor/visible Emailon Push off. Initial
+Playwright checkbox selector found no DOMrole match; observed native AX checkbox
+click succeeded. No request occurred from failed locator.
+
+One unchanged manually invoked worker, exactfixture/sweep/write/recipient/socket
+guards, violations0, exit0: one reminder receipt, no host Notification, no host SMTP,
+one transactional invitee SMTP accepted11:02:18.081. Saved Emailon therefore does
+not produce host mail in this bounded existing reminder path. Source map established
+no nestedhostemail consumer; existing getUserContact/bookingEmailHtml/emailService
+and worker failure release can be reused. Propose extend existing sendBookingReminder
+only for strict explicit host email opt-in independently of push, respecting strict
+pause, exacthost contact and existing email/template transport; require success and
+preserve invitee/default/page/shared-service policies. Lookup/suppression handling and
+partial-recipient retry boundaries must be resolved in exact repair grant; no new
+system/schema/defaults or implementation yet. This does not close other host emails.
+
+Exact bookingf09a3df3-2a72-4c93-8255-8a09cf31d119,preference
+2a02dc86-61e1-4007-9a43-d372d7259f60,receiptbce24579-1567-40b4-9a92-e4eca7b023ec
+and Mailpit7WYq9JJMpa5vJB9V5Lga3y removed. Six fulltable snapshots/original12mailIDs
+restored; originalprefabsence0, no hostnotice created. Childabsent/tab21closed, retained
+API/Next/DB/authsession unchanged. No grants/providers/native/timer/newtests. Initial
+prefs/booking SQLseeded, actual UI emailcommand; manual worker/isolation limits explicit.
+Structured scheduling-channel-* receipts/UI/snapshots/scripts mirrored, rawlog private.
+Durable 567 hashesverified, MANIFEST **0acba78f4c5cb57089dfdfedd98f587ad2874786c2a7babdef4f9ae9ffc0ac88**.
+Next coordinator evidence review/exact repair proposal; closed125/126batch untouched.
+
+
+## Host-email repair proposal — contact/suppression/retry source reconciliation
+
+No code/runtime changes or baseline rerun. Sevenrefs/42bindings added in structured
+scheduling-channel-repair-proposal.json. Exact proposed path only existing
+bookingNotifyService.js sendBookingReminder: explicit nestedhost reminderemailtrue,
+strictpausefalse, exactassignedhost (no owner fallback), checked existing User contact
+select fields, existing template/format/emailService. Lookup error/missingrow/emptyemail
+throws before email fanout and worker releases receipt; no silent completed delivery or
+address fallback. User.email normally NOTNULL; invalid-data case must retain synthetic
+boundary if canonical fixture cannot express it. Existing generic getUserContact callers
+remain unchanged. Candidate source/semantics still require coordinator assignment.
+
+Do not reuse invitee EmailSuppression for host: unsubscribe scope uses caller-supplied
+invitee address and booking owner, so doing so could grant guests suppression over a
+host. Existing invitee branch untouched. MailPreferences.email_notifications exists,
+but web description is Receive email updates about your gigs and bids; inspected
+scheduling/genericemail consumers do not establish broaderglobal precedence. Proposed
+minimal repair leaves this contract unchanged and uses explicit scheduling opt-in/pause.
+A global scheduling-email optout rule needs explicit product decision; no inventedpolicy.
+
+Preflight opted-in hostcontact before recipient emails; hostsend before unchanged
+invitee branch avoids invitee duplication on known hostfailure. Check success===true
+or throw/releaseclaim. Hostsuccess→inviteefailure still releases claim and can repeat
+hostmail on retry; accepted-but-lostSMTPack likewise can duplicate. Existing savednotice
+idempotency stays; no exactly-once claim/new ledger/schema. Same-address role
+deduplication not invented. Runtime proposal includes actualUI→localSMTP, off/absent/
+pause negatives, lookupfailure/restore, host SMTPfailure/retry/dedupe and partialrecipient
+failure/retry with exact message accounting. LostACK remains limited unless separately
+exercised. Full fixture/grant/mail restoration, no native/timer/provider/newtests.
+Durable 568hashesverified, MANIFEST **fcc7206c1e70967f334f10b0a58662925b6ba7b9b66c020882218819e26bd39d**; rawlogs private.
+Next coordinator scope/policy review before any repair.
+
+
+## Host reminder Email repair — next-batch candidate September21 11:13UTC
+
+Exact grant fulfilled only in existing sendBookingReminder,29addedlines. Strict
+explicit nestedhost email opt-in/notpaused, checked exactassignedhost User contact
+(no ownerfallback), existingtemplate/emailService success requirement before invitee
+email. Existing hostnotice/idempotency/invitee branches/sharedhelpers/gigs-bidsglobal
+setting/defaults untouched. No guest-controlled suppression applied tohost. Source
+**c3f1bd03868d916530e0477c318e3f5ddd43c91a**, branch codex/stream3-scheduling-channel-contract committed/pushed.
+Draft publication/automaticCI pending, coordinator owns next-batch integration.
+
+15 bounded worker attempts: actual web Emailopt-in PUT200/SQL→host1/invitee1;
+completed repeat0/0. Off/absent/paused eachhost0/invitee1. Real exactUserSELECT403
+via privilege denial→mail0/claimreleased; restore→1/1. Synthetic missingcontact→0/0/
+released; restore1/1. Synthetic hostpreacceptanceSMTP rejection→0/0/released; retry
+1/1 thencompletedrepeat0/0. Inviteerejection afterhostaccepted→1/0/released; retry
+1/1 thenrepeat0/0. Partialcase exacthost2/invitee1 proves at-least-once limit, not
+exactlyonce; lostSMTPack untested/can duplicate. Allguards violations0/childrenexit0.
+SMTPfaults are injected sendMail rejection responses; successful deliveries real local
+SMTP. Missingcontact response synthetic afterrealquery, contactpermissionfailure real.
+No timer/native/provider rerun. Negativeprefs SQLseeded. First tab22closed too soon
+after optimisticclick, SQLoff; reopenedtab23/retried and waited PUT200/SQLon before
+worker. Initial unpersisted attempt excluded; no account/session-lifetime claim.
+
+Exact8ownedbookingIDs in hostmail-cleanup.json; intermediate bookings/logs removed by
+exactID between cases. Finalreceipt4092324f-f0f5-4a1e-84f9-7b541891faa1 and preference
+ff053c30-a55a-43f4-8670-38a6c3b2ab64 removed;14mailIDs cleaned (host6/invitee8).
+Six fulltable snapshots/original12mailIDs restored, originalSELECT privilege true
+restored, childabsent/tabs22+23closed. API/Next/DB/authsession retainedunchanged.
+26existing schedulingLogic tests/syntax/diffcheckpass, no newtests. Structured
+hostmail-final/matrix/percase/SQL/SMTP/UI/cleanup/operator artifacts private mirrored;
+rawlogs excluded. Durable 601hashesverified, MANIFEST **063354ba650ec189fa7345431ddab1a4bcaf5f04684537e322eaf1fd80ed47e9**.
+Whole stream and otherhostemail/native/provider/session acceptance remain open.
+
+
+PR129 draft https://github.com/WangPantopus/skinny-pantopus/pull/129 published.
+Exactc3f originalCI35592896635 SUCCESS:6applicablepasses/5pathskips, including
+backend/image/schema/CI OK. Coordinator reviewed601 source/runtimehashes and
+independent retained-row equality; guarded master update/newheadCI remain separate.
+Source/runtime frozen. FinalCI receipt mirrored:602hashesverified, MANIFEST
+**2b37a97af78791d5493cc802ce80610cb0fe74ded9a5da682f323f81a0202d24**. No repeated journey or extra product change.

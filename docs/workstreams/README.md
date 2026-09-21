@@ -1,5 +1,103 @@
 # Three-stream coordination
 
+## Next batch fixed to reviewed Home approval and host reminder email
+
+PR128 is mergedb412b1b58 after exactd34ca7e341 CI35592633526. PR129 originalc3f1bd038
+passedCI35592896635; updated03a2dac07f1f17df9222c0a9fc1e0f5b1984b6ac adopts only
+accepted128 Home source plus five documents. Service source is identical; updated
+CI35593202158 must pass before merge. Coordinator verified602 Stream3 durable hashes,
+15 delivery/failure/retry cases, full retained-row equality and exact cleanup. Keep
+this batch limited to128/129 and its documentation publication; no later findings.
+
+Paid1aecd remains fixed while fullCI35592232217 finishes native jobs. Backend privacy/
+Jest and canonical Following contract passed; isolated Following setup failed pulling
+pinned PostgREST from Docker Hub due connection reset. Single-job rerun was rejected
+while the workflow remains active. Retry only the failed job after completion; retain
+failure provenance and do not change product code for this infrastructure failure.
+After the paid gate is resolved, adopt final reviewed master once and run the affected
+combined checks before one new paid publication. PR34/47 drafts,46 separate.
+
+Home runtime remains released. Stream3 children/tabs closed, API18130/Next18131/DB/
+auth session retained. Root API/tab closed, Next18133/DB retained. No native local
+build reserved; no shared caches/devices/databases were cleaned or reset. All streams
+remain incomplete; no new unit tests or expanded provider/native acceptance.
+
+
+## Next-batch Stream3 host reminder Email repair grant
+
+Coordinator verified568 durable hashes, the actor-bound Emailon/Pushfalse PUT/SQL/
+reload baseline, one guarded real worker with hostmail0/inviteemail1, and exact six-
+table/mail restoration. Seven refs/42 additional bindings establish reuse in existing
+bookingNotifyService.js. Stream3 is sole writer only for sendBookingReminder there.
+Read existing prefs; require strict scheduling.host.reminder_sent.email===true and
+scheduling.paused!==true for exact assigned host, independent of push. Check exact
+User lookup result/error and nonempty email; no owner fallback. Fail before recipient
+email fanout on missing/error contact. Reuse existing formatting/template/emailService;
+require success===true and preserve existing worker receipt-release retry behavior.
+Keep current host notice idempotency and invitee branches unchanged. Host email may
+precede invitee; host success followed by invitee failure can repeat host mail on retry.
+Record this at-least-once limitation, including untested lost SMTP acknowledgement;
+no new ledger/schema/service or exactly-once claim.
+
+Existing invitee unsubscribe suppression is scoped to guest-provided address/owner,
+not an authenticated host opt-out; do not apply it to host. Leave gigs/bids email
+setting and all other channel/default/recipient policies unchanged. Strict existing
+scheduling opt-in and pause govern this repair; no new global-email policy. Preserve
+all UI, shared helpers/notification services and native code; no new application file
+or unit tests. Reuse accepted baseline and paused notice/timer evidence.
+
+Use retained owned runtime with exact fixture/query/sweep/write/recipient guards and
+local SMTP only. Verify actual UI opt-in plus host/invitee mail, off/absent/paused host
+negatives, real host lookup denial/restored retry, rejected host SMTP/claim release/
+retry/completed-attempt dedupe, and partial-recipient failure with exact repeat counts.
+Label synthetic missing-contact/fault injection separately from real SQL/SMTP. No
+provider/native/natural-timer replay. Restore all exact rows/messages/grants; close
+private child/tab and retain shared runtime. Commit/push reviewable draft for next
+batch; current paid1aecd/CI35592232217 and closed125/126/127 remain fixed.
+
+
+## Next-batch Stream3 host reminder Email runtime check
+
+Coordinator reviewed551 durable hashes and existing channel source map. Web Push
+writes notify_me plus nested scheduling; Email writes nested host-row email. Existing
+fanout's nonuser invitee mail and host saved-notification/push gates are distinct.
+Source absence of a host-email consumer is a lead, not runtime acceptance.
+Use retained owned runtime and exact temporary unpaused preference/due booking.
+Through actual web Reminder sent controls change Email off to on while Push/reminder
+is false; require exact actor/host and PUT/GET/SQL/reload representation binding.
+Run unchanged worker once with fixture-only read/write/completion-sweep guards and
+local SMTP restricted to exact synthetic host/invitee recipients. Observe host email,
+saved host notice and invitee transactional email independently. No natural timer
+rerun, new native/provider acceptance, application edit or invented recipient policy.
+Preserve original preference absence/full JSON and retained tables/mail snapshots;
+clean exact fixture/messages/child/tab and retain existing API/Next/DB. Any repair
+requires actual failure and comparison of existing email/fanout implementations.
+This later scope must not alter closed125/126/root-removal or documentation127.
+
+
+## Next-batch Home Send invitation repair grant
+
+Coordinator reviewed12 frozen baseline artifacts and source13/77 bindings. Real
+request/list/rendered applicant and current Cancel/noPOST/full-state equality precede
+the actual post-departure approval200: exact request approved, one targeted pending
+invite/source link/audit, full occupancy unchanged. Three notification/email methods
+were suppressed and provider/Notification/capability/command counts0; exact fixture
+cleanup/runtime release verified. Do not repeat this baseline or sender/recipient
+acceptance. Existing success toast is not delivery proof.
+Stream2 is sole writer for handleApproveAccessRequest in existing
+`frontend/apps/web/src/app/(app)/app/homes/[id]/members/page.tsx` only. Reuse current
+pageConfirmation ownership and generation/token/origin/session checks before POST
+and success/error/finally; existing retire already clears busy state. No other handler
+refactor, shared store/global UI/copy/backend/schema/new application file/tests/native.
+Use owned18141/18142/64550–59 after checks and existing exact-route/transport guards.
+Verify ordinary approval once, pending confirmation departure closes/noPOST/full
+request/invite/occupancy/audit/counts unchanged, fresh return and current denial/retry.
+Reuse shared-ref role/decline regressions because those implementations stay unchanged.
+Capture safe transport attempt counts, never raw tokens/email bodies; no delivery or
+membership acceptance claim. Clean exact fixtures/grants/runtime and publish draft
+for next batch, keeping current127/paid publication scope fixed.
+
+
 ## Next Stream3 source-only scope after pause repair integration
 
 PR126 is merged5b8027964 after exact49becdb41 CI35591151829. Stream3 may adopt
