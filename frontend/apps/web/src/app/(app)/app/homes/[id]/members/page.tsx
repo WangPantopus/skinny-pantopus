@@ -62,6 +62,7 @@ function MembersContent() {
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
   const [membersError, setMembersError] = useState('');
   const [requestsError, setRequestsError] = useState('');
+  const [auditError, setAuditError] = useState('');
   const generation = useRef(0);
   const pageConfirmation = useRef<ReturnType<typeof confirmStore.getSnapshot>>(null);
 
@@ -75,7 +76,7 @@ function MembersContent() {
     const dialog = pageConfirmation.current;
     pageConfirmation.current = null;
     if (dialog && confirmStore.getSnapshot() === dialog) confirmStore.close(false);
-    setMembers([]); setMyAccess(null); setAuditLog([]); setAccessRequests([]); setRequestsError(''); setMembersError(''); setBusyRequestId(null);
+    setMembers([]); setMyAccess(null); setAuditLog([]); setAuditError(''); setAccessRequests([]); setRequestsError(''); setMembersError(''); setBusyRequestId(null);
   }, []);
   const fetchData = useCallback(async () => {
     if (!homeId) return;
@@ -101,6 +102,7 @@ function MembersContent() {
       if (access?.hasAccess === true && Array.isArray(access.permissions) && access.permissions.every(p => typeof p === 'string')) setMyAccess(access);
     }
     if (auditRes.status === 'fulfilled') setAuditLog((auditRes.value as any)?.entries || (auditRes.value as any)?.log || []);
+    else setAuditError(failureMessage(auditRes.reason, 'The audit log could not be loaded. Please try again.'));
     if (reqRes.status === 'fulfilled') setAccessRequests(reqRes.value.requests || []);
     else setRequestsError(failureMessage(reqRes.reason, 'Requests could not be loaded. Please try again.'));
     setLoading(false);
@@ -385,7 +387,9 @@ function MembersContent() {
         )
       ) : (
         <div className="space-y-2">
-          {auditLog.length === 0 ? (
+          {auditError ? (
+            <ErrorState message={auditError} onRetry={fetchData} />
+          ) : auditLog.length === 0 ? (
             <div className="text-center py-16"><p className="text-sm text-app-text-secondary">No audit log entries</p></div>
           ) : auditLog.map((entry: any, idx: number) => (
             <div key={entry.id || idx} className="flex items-start gap-3 bg-app-surface border border-app-border rounded-lg p-3">
