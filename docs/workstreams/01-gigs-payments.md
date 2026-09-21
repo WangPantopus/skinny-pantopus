@@ -1,5 +1,34 @@
 # Stream 1 — Gigs and payments
 
+## September21,03:08UTC — pending wallet read failure repaired
+
+Paid clean/pushed **03bf9bd1b4a3504b8a71eb1f835c1bc3a3e59169** adds only three lines
+in existing WalletBalanceCard.tsx: treat rejected pending-release read as existing
+carderror, and set existingloading while retrying both wallet reads. Baseline actual
+UI showed available500c/pending1275inreview+850releasing; PaymentSELECTdenial made
+pending-release500 whilewallet/history succeeded. ColdUI silently removed pending
+funds with noerror/retry. Same component bytes across master/staging/archive/place
+branches; in-place reuse, no newfile/schema/style/backend/newtests.
+
+Candidate IAB UI→SDK→real wallet routes/services→PostgREST/SQL: pending500 now shows
+existingerror/Clicktoretry; repeated500 staysretryable; restoredSELECT samebutton
+restoresallamounts. Separate get_or_create_wallet EXECUTEdenial shows primarywallet
+error; restoredEXECUTE/retry restoresallamounts. Actualotheraccount200empty shows0/
+no funds towithdraw/noerror. Seeded500c adjustment/two held-payment reader fixtures;
+no actualcapture/release/withdrawal/provider/native acceptance. Existing history
+repair/evidence75f372 reused. Scoped2fileESLint exit0/sixexistingwarnings.
+
+Private `/private/tmp/pantopus-stream1-wallet-pending-r1`;14files mirrored/hash-verified
+at owner's `.pantopus-recovery/audits/20260921-stream1-wallet-pending-r1`. Reused clean
+owned wallet-read-r1 Supabase/full77schema; bothSQLgrants restored, exactownedrows0,
+API/Next/ownedSupabase stopped/IABtabclosed, owncachepreserved/tsconfigrestored.
+Providercreates/customers/refunds0; previousStripe totals unchanged. Peerresourcesuntouched.
+Current required[CI35556379254](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35556379254)
+queued/running on03bf9. Previous75f372 CI35555446600 superseded/cancelled after web/
+backend/schema/webE2Epassed and nativejobsstillrunning; not a green run. No further
+app changes planned before this gate unless a failure justifies them. Broader
+native/provider/fee-policy/P01–P10 remain open, PR34/47 draft.
+
 ## September21,02:52UTC — wallet history failure/retry repaired
 
 Latest02:54UTC: PR85 exacted5b4a8bb passed CI35555390569 and merged

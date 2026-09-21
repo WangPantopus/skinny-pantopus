@@ -7,6 +7,18 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## Current checkpoint — September21,03:08UTC
+
+Paid branch clean/pushed03bf9bd1b includes reviewed masterc1c03a3c6 and two focused
+wallet read/retry repairs, verified in real UI/routes/SQL. Refund session intact-reply
+acceptance and earlier Stripe TEST evidence are preserved. Details, hashes and
+limits in [live Stream1 status](workstreams/01-gigs-payments.md). Current required
+CI35556379254 runs; prior75f372 run superseded/cancelled, not green. Root fixtures0,
+grantsrestored/runtimesstopped/tabsclosed; no new tests or provider writes in wallet
+phases. Master additionallycontains reviewedPR85 atd2b833049; currentStream3 mutation
+repair remains separate. Next: finish currentpaidCI, review boundedpeerhandoff and
+retain native/provider/policy limits; do notmerge unfinishedPR34/47.
+
 ## September21,02:52UTC — wallet history failure/retry repaired
 
 Latest02:54UTC: PR85 exacted5b4a8bb passed CI35555390569 and merged

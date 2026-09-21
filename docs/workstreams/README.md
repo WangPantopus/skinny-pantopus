@@ -4,6 +4,22 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21,03:08UTC — root wallet runtime released
+
+Pending-balance phase completed within live01limits; paid03bf9bd1b/currentCI35556379254.
+Owned18132/18133/64561–67 released, exactrows0/SELECT+EXECUTE restored; ownIABtabclosed,
+cachepreserved/tsconfigrestored. No native reservation/providerwrites. Stream3's
+existing notification mutation/NotificationRow grant and live runtime remain active.
+
+## September21,03:00UTC — next pending-release read verification
+
+Root reserves18132/18133/64561–67 for private wallet-pending-r1/f9200280 on paid75f372.
+Reuse clean owned wallet-read-r1 Supabase volume/full77 schema; no repeat migration
+acceptance. Synthetic500c wallet adjustment/two captured-hold reader fixtures only,
+no provider writes or actual-release claim. Verify existing WalletBalanceCard caller,
+wallet/pending-release route and persisted amounts under read failures before repair.
+Current paidCI35555446600 continues; no native reservation/peer resource use.
+
 ## September21,02:52UTC — runtime release and next notification grant
 
 Extension02:54UTC: Stream3 also owns existing NotificationRow.tsx for reproduced
