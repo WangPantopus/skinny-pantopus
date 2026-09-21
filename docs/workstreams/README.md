@@ -1,5 +1,51 @@
 # Three-stream coordination
 
+## Stream3 host pause repair grant — actual UI/delivery failure
+
+Coordinator reviewed526 durable hashes, actual paused web banner/GET200 and cached
+304 identity binding, exact paused=true SQL preference and one guarded manual worker
+that saved a host reminder despite pause. Local invitee SMTP was observed separately.
+Six tables/original mail IDs restored, preference absence0, child/tab closed; ordinary
+browser login retained and auth tables explicitly outside cleanup claim.
+Stream3 is sole writer only for existing
+`backend/services/scheduling/schedulingNotifyPrefs.js` hostWants and hostWantsKey:
+after getPrefs, return false for strict prefs.scheduling?.paused === true before
+existing notify_me checks. Preserve read-error behavior, defaults, invitee transactional
+branches, BookingPage.is_paused/new-booking behavior, reminder offsets and all UI.
+No new policy for emergency/host email/attendee channels, no shared notification
+service/SDK/schema/new app file/tests/native or provider scope.
+Verify exact paused host notice absence with unchanged transactional local mail,
+actual existing web Resume persistence followed by a fresh fixture reminder producing
+a host notice, and an existing lifecycle consumer of hostWants with exact local
+fixtures. Reuse natural timer/Resume baseline, do not repeat scheduler timing. Retain
+fixture-only guards across every query/write/sweep/recipient and local SMTP. Relevant
+existing checks only. Report actual exercised paths and limits, full original data/
+mail/grant cleanup, exact source commit/push/draft; coordinator owns integration.
+
+
+## Stream3 runtime-only grant — web notification pause delivery
+
+Coordinator reviewed510 durable hashes and the seven-ref/49-binding pause map.
+Existing web banner says Notifications paused with emergency exception and reads
+scheduling.paused. Native page.is_paused controls a distinct new-booking contract;
+no parity repair or broader recipient/channel policy is authorized by this check.
+Use only retained18130/18131/64531–37 and one exact temporary booking/preference.
+Capture original preference absence/full JSON and all retained booking/page/log/
+notification/event/preference rows plus local mail IDs. Seed scheduling.paused=true
+and notify_me.reminder=true, verify actual web banner/current GET/SQL identity, then
+invoke the unchanged existing reminder worker once through the accepted private
+fixture-only query/write/transport guards. This is a manual worker check; do not
+repeat or relabel the accepted natural timer. Scope every Booking read/PATCH including
+completion sweep, every downstream write and recipient to exact owned fixture IDs;
+reject unexpected writes/providers, local SMTP only. Observe host saved notice and
+transactional invitee mail separately, preserving existing recipient policy.
+No application changes until actual failure/precise proposal. No daily agenda,
+new pause UI/native run, all-jobs activation, provider send or new tests. Restore
+exact original preference/data/mail state, stop private child/owned tab and retain
+existing API/Next/DB. Report full unchanged snapshots and explicit SQL-seeded pause,
+manual-worker/local transport limits; this does not verify creating a pause via UI.
+
+
 ## Stream3 next source-only scope — pause/resume delivery contract
 
 The isolated natural reminder timer is accepted within its recorded source/runtime

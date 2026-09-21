@@ -1,5 +1,44 @@
 # Stream 1 — Gigs and payments
 
+## September21 — saved-card removal lifetime repaired and verified
+
+Local paid commit `e16736465db835fe6a493abe2216071693c8df1a` changes only existing
+PaymentMethodList (+38/-5). Published e970 fullCI35586627926 remains passed; this
+new local commit is awaiting the next combined publication/current CI. Real saved-
+card Remove dialog survived same-document navigation to Settings. Confirming there
+sent original DELETE503 through SDK/route/service/PostgREST and rendered an old-caller
+failure toast. Exact begin-removal RPC EXECUTE was deliberately denied, preserving
+all card rows and preventing provider operations/removal-fence writes.
+
+Six identical existing/archive/open delete handlers and42 source bindings established
+an in-place repair: owned-dialog retirement plus generation/token/origin/session guards
+before command and after await. No store/backend/schema/design/new app file or unit
+test. Actual repaired UI Cancel and completed Settings departure send no DELETE;
+fresh return and two current confirmations reach real RPC denial503 with existing
+error/retry controls. Full card rows unchanged/removal records0. First transition
+snapshot still contained the modal; closure is verified after destination commit,
+not claimed instantaneous. Session/other-dialog/late-response/provider successful
+removal/native boundaries remain unverified. Existing service/native provider evidence
+and unchanged default-handler/rendering bytes are reused within original limits.
+
+TypeScript/scopedESLint/diff exit0. Exact User/authUser/PaymentMethod/Notification
+counts0, removal records0, original RPC EXECUTE restored; API82117 stopped exit0,
+tab28closed, owned Next18133 and Supabase64561–67 retained. No Stripe calls. Private
+setup username overflow rolled back and grant restored before retry; initial navigation
+race discarded before the corrected URL-bound baseline. Durable owner audit
+20260921-stream1-payment-method-removal-lifetime-r1 has22 verified artifacts, no keys
+or raw operator logs. Runtime/API and financial success limitations remain explicit.
+
+PR125 originale7865fd81 exactCI35589989322 passed. Coordinator verified14 candidate
+hashes/source bytes and independent full4table departure/denial equality. Guarded
+master update produced1c9181a596474b1e0e9cae60e589757690cf64fc with docs only, candidate
+page unchanged; updated-head CI is pending. Frozen live02 hash0af76cb46d3b139df90f560589cb9b2ddadcdbe1761a5602da14f37a59851577
+captured in this publication. Home runtime remains released. Stream3 paused-host
+notice failure/526 verified artifacts and exact cleanup are reviewed; README grants
+only the two existing host preference gates. Batch integration follows reviewed source
+and exact gates, then one paid adoption/push. All streams remain incomplete.
+
+
 ## September21, 10:33 UTC — isolated natural reminder timer accepted
 
 Coordinator verified all511 Stream3 durable hashes (manifest6eeeb6178), six source

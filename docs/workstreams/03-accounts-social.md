@@ -2174,3 +2174,76 @@ work; integrated PR120 gates remain unchanged. Whole stream remains incomplete.
 Next: coordinator evidence review/next bounded assignment; unresolved daily-agenda,
 worker pause/channel policy, after-final-check cancellation and provider/native/session
 boundaries remain open. Do not repeat this accepted isolated timer check unchanged.
+
+
+## Pause/resume source contract — next bounded proposal
+
+Source-only grant: separate codex/stream3-scheduling-pause-contract adopts
+9ae572d748cadad856b5a2c8561e7bc3e7cc4624; prior refs/evidence/retained runtime preserved.
+Diff from b409 is coordination docs and Home role caller only; accepted scheduler
+source bindings unchanged. Seven current/archive/open references,49 source bindings
+recorded in scheduling-pause-source-reconciliation.json. No runtime or app changes.
+
+Web NotificationPrefsForm reads scheduling.paused and Resume persists false via
+existing per-user preference GET/PUT/JSONB. Banner promises Notifications paused /
+Emergency alerts still come through. iOS and Android notification models instead
+read BookingPage.is_paused and Resume updates that page flag. Existing web accepting-
+bookings card says Bookings are paused / New bookings are turned off; public scheduling
+route uses is_paused to reject new bookings409. These are distinct persisted contracts.
+Native parity/runtime effects remain unverified; do not conflate or change either policy.
+
+Existing schedulingNotifyPrefs hostWants/hostWantsKey read notify_me only; worker
+uses reminder offsets and sendBookingReminder invokes hostWantsKey(reminder). Service
+explicitly documents host in-app/push gating with transactional invitee reminders
+unaffected. Source predicts host saved-notification delivery despite scheduling.paused,
+but no new delivery failure reproduced. Email/attendee/emergency/daily-agenda behavior
+is not specified sufficiently to invent broader suppression rules.
+
+Propose one new exact temporary booking and host preference scheduling.paused=true/
+notify_me.reminder=true, preserving original absence. Bind actual web paused banner
+to GET/SQL, run existing worker once with exact fixture/query/write/local-SMTP guards,
+observe saved host notification separately from transactional invitee mail, clean exact
+rows/mail and verify retained snapshots. Reuse accepted Resume persistence and natural
+timer evidence; no repeat timer or provider/native sends. Runtime execution and any
+repair await coordinator assignment; source-only grant fully completed.
+
+Durable mirror now510 hashesverified, MANIFEST **1db1537fc545f860e72ce2c1189ed9b5f230c60517184d8b71acf671e22a9819**. Two natural-check
+raw import/runtime log copies removed from durable bundle as requested; originals
+preserved private in20260920-r1. Structured import/result/SMTP/SQL/cleanup receipts
+remain, so accepted evidence is intact. New source-only head does not imply rerun.
+
+
+## Web paused notifications — reproduced delivery baseline September21 10:41UTC
+
+Runtime-only grant executed on9ae source, existing API/Next retained. Real authorized
+Bob GoTrue UI sign-in → notification settings shows Notifications paused / Emergency
+alerts still come through, disabled host controls, Resume. Exact SQL-seeded preference
+c2afadb8-91d5-4011-829e-6c9c72c74247 has scheduling.paused=true/notify_me.reminder=true.
+Initial actual GET200 logged; zero-delay unmodified reload GET304 binds Bob actor to
+current cached representation. First private assertion wrongly expected200 and rejected
+304; corrected receipt retains this limitation. No response fault or synthetic auth.
+Known local expired-session origin issue required ordinary sign-in at configured origin;
+this does not establish expiry continuation acceptance.
+
+Unchanged worker manually invoked exactly once under accepted exact-ID/query/write/
+recipient/local transport guards (not natural timer). Zero violations, real host
+Notification a7a9be50-acaa-4f82-80da-06d635bf21ed saved despite paused banner/SQL.
+Receipt661c99de-209f-487c-afb1-0584cd7a969e saved; one transactional invitee localSMTP
+mail accepted10:40:42.961 and observed separately. UI after delivery still paused;
+no physical push/provider claim. Source confirms both hostWants/hostWantsKey ignore
+scheduling.paused. Proposed smallest repair: each existing host gate returns false
+on strict prefs.scheduling?.paused===true before existing notify_me check. Preserve
+invitee transactional branches/page availability/offsets/error handling/UI. No edits;
+coordinator assignment required. This does not define emergency/email/attendee policy.
+
+Exact temporary booking70d010f7-ccc8-43e0-a35e-e48d8fdc1b95/preference/log/notice
+and mailPRRojHUrBgNKzwUTKsvLnu removed. All six full retained-table snapshots equal
+originals, preferenceabsence0 restored, original12 mailIDs restored. Child exited0
+and absent, tab19closed, retained API/Next/DB unchanged. Ordinary browser authsession
+retained; auth/audit tables are not claimed restored. No grants changed/new unit tests.
+
+Private scheduling-pause-* structured evidence/UI captures/operator scripts mirrored,
+raw runtime log remains private only. Durable 526files hashesverified; MANIFEST
+**d4139b811d92ce4f2e6ee36521ab2c3929815c117691d5d2a233fe6adfac4d5d**. Prior Resume and natural scheduler acceptance reused without rerun.
+Next coordinator review/exact repair assignment; native page-pause mismatch/dailyagenda
+and full-stream provider/session/native boundaries remain open.
