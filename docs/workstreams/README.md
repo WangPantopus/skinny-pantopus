@@ -1,5 +1,103 @@
 # Three-stream coordination
 
+## Next Stream3 source-only scope after pause repair integration
+
+PR126 is merged5b8027964 after exact49becdb41 CI35591151829. Stream3 may adopt
+that final application master on a separate follow-up branch, preserving prior refs,
+evidence and retained runtime. Reuse existing pause/source maps and inspect the
+existing host per-channel push/email controls, their saved JSON keys, notify_me gates
+and actual delivery consumers. Separate in-app persistence from push/email delivery
+and already defined recipient policy; identify one bounded verification proposal.
+No runtime expansion/application change/new tests/native/provider send or invented
+channel policy. Do not rerun accepted paused/Resume/manual/natural timing journeys.
+Later findings stay outside the completed125/126/root-removal integration batch.
+
+
+## Integration batch boundary and Home approval runtime scope
+
+Current integration batch is limited to merged125, reviewed126 host pause repair
+and root e167 saved-card removal lifetime repair, followed by documentation publication
+and one paid update. Later findings/PRs belong to the next batch; keep current heads
+fixed under required CI and do not continually extend this integration.
+
+Coordinator reviewed13 Send invitation source artifacts/77 bindings and the existing
+transaction/notification side effects. PR125 mergedbc2bec5ad after exact1c9181a59 CI.
+Stream2 may adopt that master on a separate follow-up branch, preserve125 refs and
+reacquire only owned18141/18142/64550–59 after checks. Runtime-only: real request
+creation/list200/rendered applicant without membership, current Cancel/no approval
+POST/full snapshots equal, then pending Send invitation across same-document Settings
+departure. If confirmation survives, record actual approvalPOST/status/exact request,
+one targeted pending invite/audit and unchanged occupancy before proposing repair.
+Keep real service/SQL and process-lifetime dynamic notification/email interception;
+block external transports/unexpected mutations. Record safe method counts only,
+never raw invite tokens or email bodies. Notification/inbox/provider delivery and
+sender-recovery semantics are not established by this route or its success toast.
+Reuse accepted invitation/role/decline evidence; no replay or new shared store/UI/
+service/schema/app file/tests/native scope. Capture full request/invite/occupancy/audit
+and fixture notification/capability/command counts, restore exact data/grants and
+release owned runtime. Report actual failure before application edits.
+
+
+## Home next source-only task while PR125 integration finishes
+
+Keep125's application source/runtime frozen. Compare the remaining existing Requests
+Send invitation confirmation with the accepted role/decline lifetime implementation,
+its SDK/route/transaction and notification side effects. Map current/archive/open
+variants and reusable accepted invitation fixtures/evidence. Source-only reads are
+authorized while updated125 CI runs; no runtime or application change. Identify a
+bounded local UI/SQL proposal that blocks all external transports and preserves
+request/invite/membership state, without replaying accepted sender/recipient journeys.
+Report any policy distinction before expanding scope. After integration, adopt final
+master on a separate follow-up branch before runtime work. No global dialog/store,
+new invitation system/schema/UI/tests/native or provider sends.
+
+
+## Stream3 host pause repair grant — actual UI/delivery failure
+
+Coordinator reviewed526 durable hashes, actual paused web banner/GET200 and cached
+304 identity binding, exact paused=true SQL preference and one guarded manual worker
+that saved a host reminder despite pause. Local invitee SMTP was observed separately.
+Six tables/original mail IDs restored, preference absence0, child/tab closed; ordinary
+browser login retained and auth tables explicitly outside cleanup claim.
+Stream3 is sole writer only for existing
+`backend/services/scheduling/schedulingNotifyPrefs.js` hostWants and hostWantsKey:
+after getPrefs, return false for strict prefs.scheduling?.paused === true before
+existing notify_me checks. Preserve read-error behavior, defaults, invitee transactional
+branches, BookingPage.is_paused/new-booking behavior, reminder offsets and all UI.
+No new policy for emergency/host email/attendee channels, no shared notification
+service/SDK/schema/new app file/tests/native or provider scope.
+Verify exact paused host notice absence with unchanged transactional local mail,
+actual existing web Resume persistence followed by a fresh fixture reminder producing
+a host notice, and an existing lifecycle consumer of hostWants with exact local
+fixtures. Reuse natural timer/Resume baseline, do not repeat scheduler timing. Retain
+fixture-only guards across every query/write/sweep/recipient and local SMTP. Relevant
+existing checks only. Report actual exercised paths and limits, full original data/
+mail/grant cleanup, exact source commit/push/draft; coordinator owns integration.
+
+
+## Stream3 runtime-only grant — web notification pause delivery
+
+Coordinator reviewed510 durable hashes and the seven-ref/49-binding pause map.
+Existing web banner says Notifications paused with emergency exception and reads
+scheduling.paused. Native page.is_paused controls a distinct new-booking contract;
+no parity repair or broader recipient/channel policy is authorized by this check.
+Use only retained18130/18131/64531–37 and one exact temporary booking/preference.
+Capture original preference absence/full JSON and all retained booking/page/log/
+notification/event/preference rows plus local mail IDs. Seed scheduling.paused=true
+and notify_me.reminder=true, verify actual web banner/current GET/SQL identity, then
+invoke the unchanged existing reminder worker once through the accepted private
+fixture-only query/write/transport guards. This is a manual worker check; do not
+repeat or relabel the accepted natural timer. Scope every Booking read/PATCH including
+completion sweep, every downstream write and recipient to exact owned fixture IDs;
+reject unexpected writes/providers, local SMTP only. Observe host saved notice and
+transactional invitee mail separately, preserving existing recipient policy.
+No application changes until actual failure/precise proposal. No daily agenda,
+new pause UI/native run, all-jobs activation, provider send or new tests. Restore
+exact original preference/data/mail state, stop private child/owned tab and retain
+existing API/Next/DB. Report full unchanged snapshots and explicit SQL-seeded pause,
+manual-worker/local transport limits; this does not verify creating a pause via UI.
+
+
 ## Stream3 next source-only scope — pause/resume delivery contract
 
 The isolated natural reminder timer is accepted within its recorded source/runtime
