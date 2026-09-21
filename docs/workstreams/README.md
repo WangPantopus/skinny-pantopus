@@ -1,5 +1,66 @@
 # Three-stream coordination
 
+## September 21 integration checkpoint
+
+All three streams remain incomplete. The current bounded Home/social repairs are
+being integrated before the next application work; do not start duplicate tasks.
+Paid branch `codex/paid-gig-integration` is clean/pushed at
+`b75637fd82f4554ffbd51fb85a3115cf97aa9d17`. Its full
+[CI35572520685](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35572520685)
+passed all 15 applicable jobs, including iOS and Android, with one Seeder skip.
+The updated PR47 body and final CI receipt are mirrored with 33 verified vote-phase
+artifacts. Completion-proof phases remain separately verified at 11 and 14 files;
+no new application repair or unit tests were needed for those journeys.
+
+PR110 merged `adfe78b5ded941f55c5f20ccdbad0f572c445a0a` after exact
+`33414dda8` [CI35574554620](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35574554620).
+PR111 merged `4b6b8e21157839eb71252647222702240c7b79af` after exact
+`23b33833a` [CI35575532878](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35575532878).
+Both integrations preserve their reviewed source bytes and acceptance limits.
+PR112 merged `3d1672d0d2727b37e074020b871a04fc213e3919` after exact
+`529f19aae` [CI35575801501](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35575801501).
+The clearing component is unchanged from reviewed22d2; its originalCI also passed.
+The corrected keyboard/DOM-empty clearing baseline is accepted; earlier no-op
+fill('') textarea attempts remain explicitly excluded. Live02 final original-head
+CI snapshot869ebd99 was captured in11f601d87; all17 clearing artifacts verified.
+
+Next: publish the separate five-document PR106, then adopt final master
+once into the paid branch and run relevant combined checks. PR34/47 stay draft;
+unrelated46 is untouched. Root API18132 and completion tabs are closed, exact
+fixtures/grants restored; owned Next18133 and79-migration Supabase64561–67 retained.
+Stream2 released its runtime with12 zero counts; Stream3 retains only its owned
+18130/18131/64531–37 runtime and original fixtures, with new temporary rows removed.
+No native build is reserved. Provider/device limits and the unanswered cancellation/
+no-show fee policy remain open; no broad acceptance row is closed.
+
+
+## Next bounded work after this documentation publication
+
+After PR106 merges, coordinator releases both existing tasks to adopt that final
+master in their own application worktrees on separate follow-up branches. Preserve
+all prior feature refs and evidence; do not overwrite remote integration heads.
+
+- Stream3 sole writer: existing `frontend/apps/web/src/app/(app)/app/professional/page.tsx`
+  load/error/retry path. Actual saved profile plus SQL SELECT denial returned500,
+  but this page showed an enabled create form. Seven existing/archive/open refs have
+  identical failure-to-create behavior. Reuse existing ErrorState and established
+  session lifetime; show creation only after confirmed absence, preserve the normal
+  screen/forms/navigation. Verify real denied load/repeated retry/restoration and
+  genuine absent profile, with exact fixture/grant cleanup. No new route, schema,
+  service, file, unit test or public-profile optional-auth repair in this grant.
+  Existing owned18130/18131/64531–37 reservation continues; no native slot.
+- Stream2 runtime verification only: existing D06 restrictive Home address privacy
+  through its actual Place consumer and caller, including database read denial/retry.
+  Reacquire only its released18141/18142/64550–59 resources after checking ownership
+  and listeners. Compare existing policy/service/route/SQL and preserved evidence;
+  no application repair until a reproduced failure and exact path proposal. Existing
+  web settings/security uses ownership policy, not HomePrivacy toggles; do not
+  conflate these. D05 partial-save and D07 standalone-member leads remain separate.
+
+Both streams preserve design and report source-bound UI/API/SQL evidence, limitations,
+cleanup and a reviewable commit/PR. Coordinator holds new merges for the next batch;
+current paid full CI and unchanged accepted journeys must not be duplicated.
+
 Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
