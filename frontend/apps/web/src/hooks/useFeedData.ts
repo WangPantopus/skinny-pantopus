@@ -10,7 +10,7 @@ import {
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import type { FeedSurface, Post, PostType } from '@pantopus/api';
-import type { User } from '@pantopus/types';
+import type { AudienceProfile, User } from '@pantopus/types';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { queryKeys } from '@/lib/query-keys';
 import type { SportsMode, TopicKey } from '@/constants/feedTopics';
@@ -247,8 +247,11 @@ export function useFeedData({
   );
 
   const removePostsFromCache = useCallback(
-    (predicate: (post: Post) => boolean) => {
-      queryClient.setQueryData<InfiniteData<FeedPage>>(currentKey, (old) => {
+    (predicate: (post: Post) => boolean, allFeeds = false) => {
+      queryClient.setQueriesData<InfiniteData<FeedPage>>({
+        queryKey: allFeeds ? ['feed'] : currentKey,
+        exact: !allFeeds,
+      }, (old) => {
         if (!old) return old;
         return {
           ...old,
@@ -439,15 +442,21 @@ export function useFeedData({
     }
   }, [showToast]);
 
-  const handleMute = useCallback(async (userId: string) => {
+  const handleMute = useCallback(async (target: Parameters<typeof api.posts.muteEntity>[0]) => {
     try {
-      await api.posts.muteEntity({ entityType: 'user', entityId: userId });
-      removePostsFromCache((p) => (p.creator?.id || p.user_id) === userId);
-      showToast('User muted — their posts are hidden from your feed');
+      await api.posts.muteEntity(target);
+      if (target.entityType === 'persona') {
+        await queryClient.cancelQueries({ queryKey: ['feed'] });
+      }
+      removePostsFromCache((p) => target.entityType === 'persona'
+        ? p.identity_context_type === 'persona' && p.identity_context_id === target.entityId
+          && !(p.author as AudienceProfile | null)?.viewer?.isOwner
+        : (p.creator?.id || p.user_id) === target.entityId, target.entityType === 'persona');
+      showToast(`${target.entityType === 'persona' ? 'Profile' : 'User'} muted — their posts are hidden from your feed`);
     } catch {
-      showToast('Failed to mute user');
+      showToast(`Failed to mute ${target.entityType === 'persona' ? 'profile' : 'user'}`);
     }
-  }, [showToast, removePostsFromCache]);
+  }, [showToast, removePostsFromCache, queryClient]);
 
   const handleMuteTopic = useCallback(async (postType: string) => {
     try {
