@@ -1,14 +1,15 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated September21 07:14UTC. **Stream incomplete; ongoing verification.**
+Updated September21 07:22UTC. **Stream incomplete; ongoing verification.**
 Sole live status is this neutral coordination file. No new unit tests written.
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
-`codex/stream3-beacon-directory-check`, local/pushed **f43b9664a319935a4e03553fa14a568e033fb2d4**,
-tracked clean plus owned .next-stream3. [Draft PR105](https://github.com/WangPantopus/skinny-pantopus/pull/105)
-from master944489d; automatic [CI35571949622](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35571949622)
-running exactf43. PR103 exact7e165 CI35571103116SUCCESS, review/integrationpending;
-PR101 merged944489d and PR99 mergeddd24 after exact-headCI/review. Prior refs preserved.
-Owned18130/PID4033 and18131/PID14742, Supabase64531–37 retained; no new native build.
+`codex/stream3-search-block-verification`, local/pushed **7e91907a7a23a8ff0961018012e8469a3e48da1e**,
+tracked clean plus owned .next-stream3. [Draft PR107](https://github.com/WangPantopus/skinny-pantopus/pull/107)
+is stacked on frozenPR105/f43; automatic [CI35572584966](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35572584966)
+queued exact7e919. PR105 exactf43 CI35571949622SUCCESS and PR103 exact7e165
+CI35571103116SUCCESS, coordinator integrationpending. PR101/99 alreadymerged.
+Owned18130/PID18749,18131/PID14742,Supabase64531–37 retained. No localnativebuild.
+All prior feature refs and originalfixtures preserved; no broad row-completion claim.
 
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
@@ -24,6 +25,41 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## N03/N04 unavailable scoped block check — PR107 handoff
+
+Coordinator separately approved temporary UserProfileBlock search_only verification,
+then granted only existing visibilityPolicy.js isScopedBlocked after actual exposure.
+Normal real BobUI search hidDana's publicBeacon; denyUserProfileBlockSELECT and a new
+search exposed it despite savedblock. Existing followingrow remains visible by current
+search_onlypolicy. Five current/master/paid/staging/Beacon helperhashes identical and
+ignored queryerror. Reuse existinghelper; destructureerror andthrow it. No newtable/service/
+UI/policy/test or merging of UserBlock/UserProfileBlock/PersonaBlock/Relationship scopes.
+
+Actual candidate realGoTrue/browser/API/PostgREST/SQL: identical deniedblockread produces
+existing searcherror/0resultlinks; restoredgrant+Enterretry confirms0matchingresults while
+blockpersists. Exactblockremoval thenfreshreloadsearch restorespublicBeacon.
+Ten affected REST callers (identitysearchpublic/local, userssearch/id/username/compatibility,
+localprofile/detail/activity/gigs/listings) underdenial all500 with onlyerror/no targetdata.
+Restorednormalblock:3searches200empty,3userprofiles403,4localroutes404. Selfprofile200 and
+anonymouslocal200 retain existingpolicy. Non-Beacon caller evidence is HTTP-only.
+Reverse search_only0, business_context search1, reversefull0, removal1 confirmedHTTP;
+no otherblockscope rowschanged. No socketcaller tothishelper found.
+
+Existing3suites/58tests pass (visibilityPolicy,identitySearch,identityFirewallPrivacy),
+syntax/diffcheckpass. No newunit tests. LegacyRelationship lookup error remains a
+separate unverifiedlead; broadvisibilityrefactor/native/offline/provider/sessionrace
+notaccepted. Source/publicpresentation/policy otherwiseunchanged. N03/N04 remainopen.
+
+Cleanup: temporary7a00181d-f20e-45b0-bb22-6ce114f28985 removed both baselineandcandidate,
+originalUserProfileBlocktable[] restored, SELECTrestored, auxiliarysessionslogout,
+actualnormalUIrestored/tab12closed. Originalprofiles/posts/memberships/blockfixtures
+preserved; authaudit/sessioneffectsretained. Private search-block-final-evidence.json
+binds4sourcehashes, fivevariantcomparison, actualbaseline/UI/10route/scopedcontrols,
+checks/cleanup. Durable440files hashverified, MANIFEST
+**ba7611c262e30585b6a8ebb8ed5c8b4958fc344dce5dea1c078c661181bf20e8**
+in existing accounts-social-r3 mirror. ExactCI35572584966queued; coordinator ownsreview,
+retarget afterPR105integration and merge. Prior103/105/101refs remainfrozen.
 
 ## N03 Beacon/profile search errors — PR105 handoff
 
