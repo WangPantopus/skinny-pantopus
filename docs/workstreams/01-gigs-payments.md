@@ -1,5 +1,144 @@
 # Stream 1 — Gigs and payments
 
+## September21, 09:55 UTC — web follow-ups integrated; paid gate passed
+
+PR120 merged `246407e8ea2fa1973b2ba242b9c80c67284b18d3` after exact03279bd78
+CI35583298837. PR121 merged `e61cffed6fbf0e81c00020b3bfab967ab259fe5d` after
+updated03c69505c CI35585373240. The update added only the reviewed notification
+component; the role page bytes remained identical to accepteddc961. Both repairs
+retain their actual UI/SQL, source, cleanup and excluded-attempt limits. No broader
+notification delivery, explicit role-selector, native or session closure is implied.
+
+Published paid a795 full [CI35582693975](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35582693975)
+passed all15 applicable jobs, including iOS/Android, with oneSeeder skip. Local paid
+d1da221db is the verified single-component default-card serialization repair: actual
+intact old-response inversion reproduced, repaired UI prevents overlapping default
+commands, two database failures preserve rows and allow retry, saved default survives
+reload. TypeScript/lint/diff pass; all four fixture counts0, grants restored, API/tab
+closed and zero Stripe calls. The first timeout attempt remains excluded. Twenty-seven
+verified default-phase artifacts include the final a795 CI receipt; full details in01.
+
+Publish this documentation-only PR119, then adopt final master with d1da and push
+one paid update. New-head required CI remains necessary; PR34/47 stay draft,46 is
+unrelated. The next scopes below begin only after publication and coordinator dispatch.
+Keep all existing accepted evidence and feature refs; no new unit tests or redesign.
+All three streams remain incomplete, including original provider/device/fee boundaries.
+
+## September21 — saved-card default repair verified; next peer batch ready
+
+Local paid commit `d1da221dbf01a75a863b147c32f0c0fc7640c8f8` changes only existing
+PaymentMethodList (10 additions/1 deletion). Published a795 remains fixed while
+fullCI35582693975 finishes; no new-head CI claim. Actual same-screen Mastercard
+then Visa default requests committed in that order; the older Mastercard200 was
+delivered intact after Visa200 and incorrectly replaced the UI default while SQL
+remained Visa. The first43-second held attempt had a destroyed client connection
+and is explicitly excluded from intact-response proof. Corrected automatic release
+occurred0.575seconds after hold with live socket and completed response.
+
+Six current/archive/open web handlers were identical. Existing native serialization
+and canonical SQL preference transaction informed an in-place default-action guard:
+synchronously admit one default change, disable only existing default buttons while
+pending, and release in finally. Successful styling/layout/navigation is unchanged.
+No service/schema/new application file or unit test. Actual repaired UI held-success
+plus repeated Enter sends exactlyone RPC; both default controls disable, intact
+reply yields matching Discover UI/SQL, and the next Mastercard change succeeds.
+Two real RPC-EXECUTE-denied UI attempts return503 with exact full rows unchanged;
+controls remain retryable. Restore original grant, keyboard retry saves Visa and
+full reload matches. TypeScript, scoped ESLint and whitespace all exit0.
+
+Private payment-method-default-r1 and durable owner audit of the same dated name
+contain26 verified artifacts/five source bindings. Exact User/authUser/PaymentMethod/
+Notification counts0; SELECT and RPC EXECUTE restored, API18132 stopped, tab27closed.
+Owned Next47970/18133 and79-schema Supabase64561–67 retained. Synthetic cards/sign-in/
+ancillary shell; actual UI/SDK/routes/service/RPC/SQL, no Stripe calls. Existing native/
+provider saved-card actors/setup/cleanup were not replayed. Cross-tab/account/departure,
+other card mutations, native/provider and broader financial acceptance remain open.
+
+PR12003279bd78 exactCI35583298837 passes. All494 durable artifacts/five source hashes
+reviewed; live03 snapshot5b112649 captured with finalCI and source-only unverified
+scheduler/daily-agenda leads. PR121dc9611bc6 exactCI35583917301 passes; one-line existing
+cycle repair,24 durable hashes and candidate page binding reviewed. All10 actual role
+requests checked:8successful persisted roles and2denials. Both denied full member/
+audit states match before exactly; five-role cycle, Cancel/noPOST, nonowner controls,
+rank denial/retry and exact cleanup accepted within recorded local limits.
+Capture frozen live02 SHA2566b0045953ab043a2fd18777f16a02f2b910d8f222e1f9573f158698c8b3ed8b2.
+All12 base counts and extra user/auth/occupancy/override/audit counts0; Stream2 runtime
+released. Preserve missing initial HTTP-log and unrelated fixture503 limitations.
+
+After a795 fullCI passes, integrate120→121 with exact updated-head gates, then doc119;
+adopt that final master with the local default repair and publish one paid update.
+Hold further feature/runtime expansions while this batch catches up. All streams
+remain incomplete; PR34/47 remain draft and unrelated46 stays separate. Fee policy,
+provider/device/session boundaries are unchanged.
+
+## Current runtime verification — web saved-card default replies
+
+Source a795 remains fixed under fullCI35582693975. Root reuses owned18132/18133/
+64561–67 for private payment-method-default-r1, unique f9200390 actors/three synthetic
+saved cards. Existing PaymentMethodList→SDK→pays→stripeService→transactional preference
+RPC/SQL; no provider calls. Verify overlapping selections and an intact delayed
+successful reply, with actual UI/current SQL. Prior native/provider saved-card
+journeys remain accepted and are not replayed. No app edit before actual failure,
+no new unit tests/native build. API18132 was free; owned Next47970 and database
+retained. Exact rows/grants/API/tab cleanup required; peer resources untouched.
+
+
+## September21 — scheduling Resume handoff reviewed
+
+PR120 is frozen at `03279bd78b2c9691bcfb5fc76305a1b38834a78f`, based on released
+master0d6a. Only existing NotificationPrefsForm changes: reuse readGroup, derive
+paused from current preferences and send paused:false through the existing serialized
+save/rollback path. Five committed source hashes and all493 durable artifacts match
+MANIFEST01c10c465. Actual UI twice receives UPDATE-denied500 and restores the paused
+banner/disabled controls with unchanged JSON; restored grant plus keyboard retry200
+persists false and survives reload while preserving nested/unrelated preferences.
+Exact temporary row removed, original absence0, UPDATE restored and tab18 closed.
+TypeScript/scoped ESLint/whitespace pass; no new unit tests or application files.
+
+Capture live03 SHA256 `248883e05d7c8851015c8e560b4fb8f4b65d38faf1247891ace3f1c7b1ed99ab`. Existing reminder/read/save evidence is reused;
+worker pause/delivery policy, providers, installed native and newly held session/
+departure responses remain unverified. Original CI35583298837 is still pending;
+hold120 integration behind paid a795 fullCI35582693975 and exact updated-head checks.
+Paid application/web/backend/schema gates passed, native jobs still running with
+no observed failure. No new root source/runtime/provider changes. Stream2 continues
+its separately granted existing role-cycle repair; its in-progress live02 is not
+included in this capture. Documentation-only119 remains unmerged despite green CI.
+
+## September21, 09:21 UTC — paid integration published; next tasks active
+
+`codex/paid-gig-integration` is clean/pushed at
+`a7956fb434d8df9716e336e5d62c7728be895ed9`, adopting final master
+`0d6a1f57b19ddebbaa78df1485546903929aca39`. Documentation PR113 merged after
+exact2bcbe4baf CI35582051884. All five accepted peer source hashes match; the merge
+changes only those five application files and five published documents. Gigs,
+payment routes/service and the atomic-vote migration are unchanged. Four affected
+existing backend suites pass70 tests with exit0, TypeScript exit0, whitespace clean.
+No new unit tests or application repair were added by this integration.
+
+New exact-head [CI35582693975](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35582693975)
+is running; keep a795 fixed. Prior2ea9 fullCI35576926687 passed15 applicable jobs and
+oneSeeder skip, including all native jobs. PR47 body records the new head/checks;
+PR34/47 stay draft and46 stays separate. Existing vote-phase mirror has48 verified
+artifacts with publication receipts, five source bindings, combined checks and
+updated PR47 body. Accepted real UI/API/SQL/provider evidence is reused within its
+original limits; no whole-stream/device/provider acceptance follows from these checks.
+
+Both existing peer tasks are active on the next README scopes after final-master
+adoption. Stream3 reproduced scheduling Resume's local-only state change; four
+baseline/comparison/cleanup artifacts are verified, and the exact existing-component
+repair grant is in README. Stream2 reproduced an Admin/Manager-only role cycle in
+the existing Members screen. Its initial private filter missed HTTP receipts; that
+limitation is retained. The corrected capture verifies two actual POST200 requests,
+returned roles and matching SQL. Existing page source binding matches; the README
+now grants only its in-place cycle repair, preserving controls and permissions.
+
+Root API/tabs remain closed; owned Next18133 and Supabase64561–67 remain reserved.
+Stream2 has reacquired only its owned18141/18142/64550–59 runtime for exact fixtures;
+Stream3 retains its owned18130/18131/64531–37 runtime. No heavy native build reserved.
+All three streams remain incomplete. The existing fee-policy question and remaining
+provider/device/session boundaries stay open. No duplicate task or restart prompt
+from the user is needed.
+
 ## September 21, 09:12 UTC — privacy batch integrated
 
 All five bounded Home/professional repairs are merged into master
