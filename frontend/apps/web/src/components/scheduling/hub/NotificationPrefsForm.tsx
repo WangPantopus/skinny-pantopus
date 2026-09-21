@@ -38,11 +38,13 @@ import {
 
 function ChannelChip({
   letter,
+  label,
   state,
   pillar,
   onClick,
 }: {
   letter: string;
+  label: string;
   state: "on" | "off" | "disabled" | "locked";
   pillar: Pillar;
   onClick?: () => void;
@@ -54,6 +56,7 @@ function ChannelChip({
       onClick={onClick}
       disabled={state === "disabled" || state === "locked" || !onClick}
       aria-pressed={state === "on"}
+      aria-label={label}
       className={clsx(
         "relative flex h-[22px] w-[22px] items-center justify-center rounded-md border font-mono text-[10px] font-bold",
         state === "on"
@@ -153,17 +156,19 @@ function MatrixRow({
       </div>
       <ChannelChip
         letter="P"
+        label={`${isAttendeeGroup ? "Notify attendees" : "Notify me"}: ${row.label} — Push`}
         state={pState}
         pillar={pillar}
         onClick={pState === "on" || pState === "off" ? () => onToggle("push") : undefined}
       />
       <ChannelChip
         letter="E"
+        label={`${isAttendeeGroup ? "Notify attendees" : "Notify me"}: ${row.label} — Email`}
         state={eState}
         pillar={pillar}
         onClick={eState === "on" || eState === "off" ? () => onToggle("email") : undefined}
       />
-      <ChannelChip letter="S" state={sState} pillar={pillar} />
+      <ChannelChip letter="S" label={`${isAttendeeGroup ? "Notify attendees" : "Notify me"}: ${row.label} — SMS`} state={sState} pillar={pillar} />
     </div>
   );
 }
@@ -296,6 +301,10 @@ function NotificationPrefsFormForOwner({ owner }: { owner: SchedulingOwnerRef })
   const [saved, setSaved] = useState<"notifications" | "reminders" | null>(null);
   const [reminders, setReminders] = useState<number[]>([]);
   const generation = useRef(0);
+  const confirmedPrefs = useRef<Prefs>({});
+  const prefsVersion = useRef(0);
+  const prefsQueue = useRef<{ prefs: Prefs; version: number } | null>(null);
+  const prefsSaving = useRef<number | null>(null);
   const confirmedReminders = useRef<number[]>([]);
   const reminderVersion = useRef(0);
   const reminderQueue = useRef<{ minutes: number[]; version: number } | null>(null);
@@ -314,6 +323,7 @@ function NotificationPrefsFormForOwner({ owner }: { owner: SchedulingOwnerRef })
     setReminders([]);
     setSaved(null);
     reminderQueue.current = null;
+    prefsQueue.current = null;
     confirmedReminders.current = [];
     try {
       const [{ prefs: loaded }, { page }] = await Promise.all([
@@ -324,6 +334,7 @@ function NotificationPrefsFormForOwner({ owner }: { owner: SchedulingOwnerRef })
       confirmedReminders.current = page.reminder_minutes;
       setReminders(page.reminder_minutes);
       const raw = (loaded ?? {}) as Prefs;
+      confirmedPrefs.current = raw;
       setPrefs(raw);
       // Read paused + push_off flags if the API surfaces them (keys round-tripped)
       const sched = (raw.scheduling && typeof raw.scheduling === "object"
@@ -343,6 +354,7 @@ function NotificationPrefsFormForOwner({ owner }: { owner: SchedulingOwnerRef })
     return () => {
       generation.current += 1;
       reminderQueue.current = null;
+      prefsQueue.current = null;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       if (savedTimer.current) clearTimeout(savedTimer.current);
     };
@@ -357,33 +369,43 @@ function NotificationPrefsFormForOwner({ owner }: { owner: SchedulingOwnerRef })
     }, 2000);
   };
 
-  const persist = useCallback(
-    (next: Prefs) => {
+  const persist = (next: Prefs) => {
       const current = generation.current;
+      const version = ++prefsVersion.current;
       setPrefs(next);
       setSaved(null);
+      prefsQueue.current = { prefs: next, version };
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(async () => {
-        if (current !== generation.current) return;
+        if (current !== generation.current || prefsSaving.current === current) return;
+        prefsSaving.current = current;
         try {
-          const { prefs: updated } =
-            await api.scheduling.updateNotificationPreferences(
-              next as NotificationPreferences,
-              owner,
-            );
-          if (current !== generation.current) return;
-          setPrefs((updated ?? next) as Prefs);
-          showSaved("notifications");
-        } catch (err) {
-          if (current !== generation.current) return;
-          toast.error(
-            decodeError(err).message || "Couldn’t save notifications",
-          );
+          while (current === generation.current && prefsQueue.current) {
+            const queued = prefsQueue.current;
+            prefsQueue.current = null;
+            try {
+              const { prefs: updated } = await api.scheduling.updateNotificationPreferences(
+                queued.prefs as NotificationPreferences, owner,
+              );
+              if (current !== generation.current) return;
+              confirmedPrefs.current = (updated ?? queued.prefs) as Prefs;
+              if (queued.version === prefsVersion.current) {
+                setPrefs(confirmedPrefs.current);
+                showSaved("notifications");
+              }
+            } catch (err) {
+              if (current !== generation.current) return;
+              if (queued.version === prefsVersion.current) {
+                setPrefs(confirmedPrefs.current);
+                toast.error(decodeError(err).message || "Couldn’t save notifications");
+              }
+            }
+          }
+        } finally {
+          if (prefsSaving.current === current) prefsSaving.current = null;
         }
       }, 500);
-    },
-    [owner],
-  );
+  };
 
   const persistReminders = async (minutes: number[]) => {
     if (minutes.length > 5 || minutes.some((m) => !Number.isInteger(m) || m < 0 || m > 43200)) {
