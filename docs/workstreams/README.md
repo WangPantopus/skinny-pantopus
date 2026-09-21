@@ -4,6 +4,17 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 04:31 UTC — posts-only map error grant
+
+Stream3 sole writer existing posts.js posts-only map error handling and existing
+FeedMap error/retry/known pins after actual Search this area under Post SELECT denial
+returned200/0 in view, then restored SELECT/filter recovered1 owned public post.
+Preserve normalized mixed-layer contract and current map visuals/viewport/filter/
+private-location policy; mixed partial-error reporting remains separate. Verify
+FeedMap and DiscoverMap posts-only callers; report additional caller repairs before
+expansion. No SDK/schema/new files/tests/persona edits. PR95 updated378c source hashes
+match accepted436a; exact-head CI pending. Separate map branch and exact cleanup.
+
 ## September 21, 04:30 UTC — root runtime released
 
 Local paid7ad896338 canonical poster/Q&A identity journey verified; live01 contains
