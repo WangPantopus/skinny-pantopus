@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Paperclip, CheckCircle, Clock, Pin } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { GigQuestion } from '@pantopus/types';
 import FileUpload from '@/components/FileUpload';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
+import ErrorState from '@/components/ui/ErrorState';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
@@ -23,6 +24,10 @@ interface QASectionProps {
 export default function QASection({ gigId, isMyGig, currentUserId }: QASectionProps) {
   const [questions, setQuestions] = useState<GigQuestion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const readGeneration = useRef(0);
+  const activeScope = useRef<string | null>(null);
+  const scope = `${gigId}:${currentUserId || ''}`;
   const [newQuestion, setNewQuestion] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [answeringId, setAnsweringId] = useState<string | null>(null);
@@ -33,18 +38,31 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
   const [uploadingQuestionFiles, setUploadingQuestionFiles] = useState(false);
   const [uploadingAnswerFiles, setUploadingAnswerFiles] = useState(false);
 
-  const loadQuestions = async () => {
+  const loadQuestions = useCallback(async () => {
+    if (activeScope.current !== scope) return;
+    const generation = ++readGeneration.current;
+    const isCurrent = () => activeScope.current === scope && readGeneration.current === generation;
+    setLoading(true);
+    setLoadError(false);
     try {
       const data = await api.gigs.getGigQuestions(gigId);
-      setQuestions(data.questions || []);
+      if (isCurrent()) setQuestions(data.questions || []);
     } catch {
-      setQuestions([]);
+      if (isCurrent()) setLoadError(true);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  };
+  }, [gigId, scope]);
 
-  useEffect(() => { loadQuestions(); }, [gigId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    activeScope.current = scope;
+    setQuestions([]);
+    void loadQuestions();
+    return () => {
+      activeScope.current = null;
+      readGeneration.current += 1;
+    };
+  }, [loadQuestions, scope]);
 
   const handleAsk = async () => {
     if (!newQuestion.trim() || newQuestion.trim().length < 5) return;
@@ -206,10 +224,16 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
         </div>
       )}
 
+      {loadError && (
+        <div role="alert">
+          <ErrorState message="We couldn't load questions. Please try again." onRetry={loadQuestions} />
+        </div>
+      )}
+
       {/* Questions list */}
-      {loading ? (
+      {loading && questions.length === 0 ? (
         <p className="text-sm text-app-text-secondary text-center py-4">Loading questions...</p>
-      ) : otherQuestions.length === 0 && pinnedQuestions.length === 0 ? (
+      ) : loadError && questions.length === 0 ? null : otherQuestions.length === 0 && pinnedQuestions.length === 0 ? (
         <p className="text-sm text-app-text-secondary text-center py-4">No questions yet. Be the first to ask!</p>
       ) : (
         <div className="space-y-3">
