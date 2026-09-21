@@ -28,6 +28,7 @@ import {
   NOTIFY_ATTENDEES,
   NOTIFY_ME,
   REMINDER_PRESETS,
+  readGroup,
   readChannels,
   writeChannels,
   type Channels,
@@ -310,8 +311,7 @@ function NotificationPrefsFormForOwner({ owner }: { owner: SchedulingOwnerRef })
   const reminderQueue = useRef<{ minutes: number[]; version: number } | null>(null);
   const reminderSaving = useRef<number | null>(null);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // paused: scheduling notifications muted by host; pushOff: OS-level push denied
-  const [paused, setPaused] = useState(false);
+  // pushOff: OS-level push denied
   const [pushOff, setPushOff] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -336,11 +336,10 @@ function NotificationPrefsFormForOwner({ owner }: { owner: SchedulingOwnerRef })
       const raw = (loaded ?? {}) as Prefs;
       confirmedPrefs.current = raw;
       setPrefs(raw);
-      // Read paused + push_off flags if the API surfaces them (keys round-tripped)
+      // Read push_off if the API surfaces it (key round-tripped)
       const sched = (raw.scheduling && typeof raw.scheduling === "object"
         ? raw.scheduling
         : {}) as Record<string, unknown>;
-      setPaused(sched.paused === true);
       setPushOff(sched.push_off === true);
     } catch {
       if (current === generation.current) setError("Couldn't load notification settings. Please try again.");
@@ -466,6 +465,9 @@ function NotificationPrefsFormForOwner({ owner }: { owner: SchedulingOwnerRef })
     );
   }
 
+  const schedulingPrefs = readGroup(prefs);
+  const paused = schedulingPrefs.paused === true;
+
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div className="flex items-center justify-between">
@@ -486,8 +488,7 @@ function NotificationPrefsFormForOwner({ owner }: { owner: SchedulingOwnerRef })
       {paused && (
         <PauseBanner
           onResume={() => {
-            // Optimistically clear local paused flag; real clear is server-side
-            setPaused(false);
+            persist({ ...prefs, scheduling: { ...schedulingPrefs, paused: false } });
           }}
         />
       )}
