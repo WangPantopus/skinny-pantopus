@@ -6,6 +6,13 @@ backlog, acceptance evidence, or verification-first instructions.
 
 ## September21 current bounded grants and runtime update
 
+Coordinator inspected PR81 two-file diff, both source hashes and durable200file manifest.
+UI/SQL/worker opt-out proof accepted within local scope; requiredCI pending.
+The45000ms account-switch hold exceeds SDK30000ms timeout: new login preceded
+server release, but this does not prove an old successful reply reached the client.
+Author asked to qualify evidence or verify an intact reply within timeout. No
+application change requested for this evidence limitation.
+
 Stream3 released the sole native slot after owned0AE boot but unavailable Simulator/
 DeviceHub UI control; exact simulator stopped, no build/install/source edit. New
 bounded N05 grant: existing web scheduling `hub/notificationPrefs.ts` and
