@@ -1,5 +1,26 @@
 # Pantopus project handoff
 
+## September 21 — reviewed batch pushed at99baa92b6
+
+Paid branch `codex/paid-gig-integration` is clean/pushed at
+`99baa92b6e776d5a1fb95aa7355e8be9f6277c17`, including final documentation master
+`f4b27786172d7b2cae641b4c94f9e77aa75928c1`. Documentation139 passedCI35602856156.
+Final adoption changed only five documents; all seven application source bindings
+remain identical to checked local1f1c353c, so local checks were reused. Exact published
+CI35603240733 is queued/running, not yet accepted. Prior48702 fullCI remains green.
+PR47 body is current; PR34/47 remain drafts,46 separate. Root durable review now26
+verified artifacts with final publication and PR-body receipts. No additional code
+or unit tests were added for publication.
+
+Next Stream1 boundary is P03 installed native tips. Read-only readiness checks found
+owned simulator C2BCF36A-F300-48C1-9BA7-876CA9F61E55 available/shutdown and no booted
+devices; installed Pantopus/debug-dylib hashes match the prior a65411758 candidate.
+Relevant ContentDetail, core auth/payment/environment source remains unchanged; other
+native areas differ, so any reuse is candidate-specific rather than full current build
+acceptance. Previous Simulator GUI and Android control failures remain unresolved
+until actual supported UI access is demonstrated. No native tip request/provider call
+or new build has run. Source/config/runtime evidence will remain separate from currentCI.
+
 ## September 21 — reviewed application batch ready for final publication
 
 The application batch is merged through master

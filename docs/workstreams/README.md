@@ -1,5 +1,17 @@
 # Three-stream coordination
 
+## Stream1 native-tip readiness reservation after batch publication
+
+Published paid99baa92b6/CI35603240733 stays fixed. Stream1 reserves only its existing
+simulator C2BCF36A-F300-48C1-9BA7-876CA9F61E55 (Pantopus Stream1 Start R2) for a bounded
+boot/GUI/control-readiness check. No native build, application edit, fixture/API start,
+provider operation or tip acceptance yet. Other simulators were shutdown in read-only
+inventory; preserve their state and all caches. Existing installed a654 binary hashes
+match earlier evidence; source comparison must bound any later reuse. Only owned-device
+boot/GUI access; no global daemon/cache reset, license acceptance or other-device work.
+Record exact readiness outcome and owned-device cleanup before further runtime scope.
+All peer native resources remain free; Stream2 stopped, Stream3 restoredAPI/Next retained.
+
 ## September 21 — reviewed application batch ready for final publication
 
 The application batch is merged through master
