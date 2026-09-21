@@ -79,7 +79,12 @@ export default function SettingsPage() {
   };
 
   const handleLogout = async () => {
-    try { await api.auth.logout(); } catch { /* cookies cleared by backend */ }
+    try {
+      await api.auth.logout();
+    } catch {
+      toast.error('Could not confirm sign-out. Please try again.');
+      return;
+    }
     clearPendingPlaces();
     clearAuthToken();
     router.push('/login');
