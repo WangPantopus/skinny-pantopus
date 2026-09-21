@@ -1,5 +1,130 @@
 # Three-stream coordination
 
+## Later-batch standalone Audit runtime-only grant
+
+Coordinator verified12 source artifacts/63 bindings (59 present,4 historical missing).
+All seven standalone variants handle only fulfilled audit reads, then share the same
+empty display. Accepted dashboard102 and exact homeIam audit handler remain source-
+identical and reusable within prior limits; no new standalone defect accepted yet.
+After131 merges, adopt final master on separate follow-up branch. Use only owned
+18141/18142/64550–59 and existing fixtures with one explicitly seeded synthetic audit
+row, no application mutation/provider send. Actual standalone Audit200/exact row first.
+Capture HomeAuditLog owner/tableACL/columnACL/RLS/effective service_role SELECT.
+Temporarily revoke direct SELECT only inside a transaction that verifies effective
+access becomes false; rollback if inherited/column privileges prevent isolation.
+Actual existing Refresh must yield audit500 with members/me/requests200; inspect
+false empty and full retained request/invite/occupancy/audit/ancillary state unchanged.
+Immediately restore original privilege and full provenance, then recover exact row200
+through Refresh. Clean exact fixtures and release owned runtime, preserve containers.
+Report actual baseline before application edit. No dashboard replay, design/change
+of navigation, new tests/schema/service/invalid-payload policy/native/provider scope.
+This work is separate from fixed131 and previously published128/129/130.
+
+
+## Later-batch Stream3 natural session continuation grant
+
+Coordinator verified608 durable hashes and existing session-natural-refresh-plan.
+Use only existing synthetic Bob account's real retained local GoTrue/browser session.
+Recorded login10:40:13.684UTC and existing access-cookie lifetime3600s permit an initial
+natural-expiry observation after11:40:20UTC, only if safe receipt history confirms no
+new successful login/refresh. Recompute window on renewal; never delete cookies,
+change JWT lifetime/clock/auth DB or manually enter refresh route as a substitute.
+Keep testtabs closed while waiting and use interruptible bounded waits.
+
+Snapshot full actor scheduling preferences and only actor-scoped whitelisted nonsecret
+auth registry metadata; no token/hash/cookie/header/body export. Open one existing
+protected scheduling-settings URL with harmless query on corrected alias. Observe
+middleware recovery, same-origin refresh POST/status, destination/query and exact Bob
+identity with existing zero-delay metadata-only GET instrumentation. Read only narrowly
+parsed GoTrue method/path/grant_type/status/time; if unavailable, label that boundary
+source-inferred. Reload once for absence of a recovery loop, compare unchanged prefs.
+Natural expiry is timing-based unless direct safe expiry metadata exists; no revoked-
+access/crossaccount/native/hosted/OAuth acceptance. If recovery does not occur or fails,
+preserve evidence/session and report; do not silently re-login or force missing cookies.
+Close owned tab/remove unused metadata flag, retain rotated session and natural auth
+registry changes; no auth DB restoration claim. No app edits/provider sends/new tests.
+Keep this later scope outside published128/129/130 and fixed paid1aecd.
+
+
+## Later-batch Home Requests read error repair grant
+
+Coordinator verified16 frozen baseline hashes, actual list503 with members/me200,
+false No pending requests, independent full-state equality and exact function
+owner/definition/ACL/EXECUTE restoration. Existing Refresh restored pending applicant.
+Exact fixture cleanup/runtime release recorded; one request notification suppressed,
+no provider calls. Source12/63 bindings establish an in-place existing-page repair.
+Stream2 is sole writer for Requests read state in existing members/page.tsx only.
+Add requestsError cleared by existing retire, record rejected reqRes with existing
+safe failureMessage, and use existing ErrorState/onRetry(fetchData) for this failure.
+Omit false numerical zero while error is present; successful tab/count/empty/pending
+rows and all styling/navigation remain unchanged. Preserve current canManage and
+owner-generation guards, approval/decline/role handlers and all service contracts.
+No new app file, schema, helper, tests, invalid-payload policy or other-tab refactor.
+
+Reuse exact owned runtime/fixture/RPC fault and cleanup guards. Verify genuine200empty,
+actual repeated503 plus keyboard retry, exact pending200 recovery and unchanged full
+rows/counts/function provenance. A fixture current authority denial/restoration may
+be checked if it follows existing isolated permission controls; do not broaden grants
+or reinterpret current-access policy. Reuse accepted departure/role/decline/approval
+source-bound evidence; no new session/native/provider claim or broad replay. Commit/
+push a draft with exact source/evidence/checks and cleanup; coordinator owns merge.
+Keep completed128/129/130 and fixed paid1aecd batch separate from this later repair.
+
+
+## Later-batch Stream3 owned Next hostname correction
+
+Coordinator verified604 durable hashes and two no-token/no-follow HTTP307 probes:
+alias and localhost Host both redirect to localhost with exact query preserved and
+no Set-Cookie. Existing Next15.5.15 startup binds --hostname127.0.0.1; alias resolves
+to loopback. This is local configuration evidence, not a production auth defect.
+Stream3 may replace only its owned Next parent14400/listener14742 after verifying
+current PID identity, preserving port18131, existing distDir, API proxy/environment
+and browser alias session. Change startup hostname to stream3-auth.localhost only
+if OS resolution is still exclusively loopback; retain API18130/Supabase and caches.
+Do not kill unrelated processes or reset cache/DB/cookies. Record old/new commands
+without secrets, process cleanup and retained resources. Repeat only non-mutating
+redirect probes with synthetic marker/no auth tokens; no real expiry/refresh/browser
+session mutation or application edit. If alias startup fails, restore original owned
+startup and report. Subsequent real-session verification requires a bounded scope.
+Keep fixed128/129 and merged documentation130/d8657ee7 outside this later work.
+
+
+## Later-batch Stream3 session redirect origin observation
+
+Coordinator verified603 durable hashes and source-only35 bindings including installed
+Next15.5.15 middleware URL construction. Prior incidental alias-to-localhost refresh
+failure is reused only as a lead. Use retained Next18131 for non-mutating HTTP requests
+to the same existing protected settings path with a synthetic pantopus_session=1
+marker, no access/auth tokens, comparing stream3-auth.localhost and localhost Host.
+Record redirect Location origin and preserved target query, actual server hostname/
+startup configuration and existing proxy contract. No automatic following into real
+auth, browser cookie/session changes, credential logging, runtime restart or app edit.
+If runtime configuration explains the difference, propose the smallest local change
+before applying it. No auth rewrite, real expiry/refresh acceptance, native/provider
+or new tests. Findings stay outside fixed128/129/documentation130.
+
+
+## Later-batch Home Requests list runtime verification
+
+Coordinator verified12 source artifacts/63 bindings (57 present,6 historical missing).
+Six refs have fulfilled-only request handling; historical place variant explicitly
+clears rows on failure, with the same empty display. This is still a source lead.
+After129 merges, adopt final application master on a separate follow-up branch.
+Use owned18141/18142/64550–59 after checks and existing actual request fixture with
+process-lifetime notification/email interception. Permit exact request creation only,
+no approval/decline/provider sends. Verify pending applicant rendered from real list200.
+Capture exact list_home_household_requests(uuid,uuid,text) definition/owner/ACL and
+effective service_role EXECUTE before fault. Revoke only original direct service_role
+EXECUTE in owned DB if it actually isolates this RPC; do not broaden privilege changes
+when inherited access prevents fault. Actual UI reload/Refresh must show real list503
+while members/me200; inspect false-empty and confirm full request/invite/occupancy/
+audit/ancillary state unchanged. Restore exact original function provenance/ACL/
+privilege immediately, recover applicant through existing Refresh and clean fixtures/
+runtime. Report actual failure before any app edit. Preserve current screen/design,
+all accepted role/decline/approval/sender evidence; no new tests/native/provider scope.
+This later verification stays outside fixed128/129/documentation batch.
+
+
 ## Next batch fixed to reviewed Home approval and host reminder email
 
 PR128 is mergedb412b1b58 after exactd34ca7e341 CI35592633526. PR129 originalc3f1bd038
