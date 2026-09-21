@@ -12,8 +12,8 @@ const notifyPrefs = require('../services/scheduling/schedulingNotifyPrefs');
 
 const MIN = 60 * 1000;
 const DEFAULT_REMINDER_MINUTES = [1440, 60];
-const SCAN_AHEAD_MIN = 7 * 24 * 60 + 15; // scan confirmed bookings starting within the next 7 days
-const MAX_OFFSET_MIN = 7 * 24 * 60; // honor configured offsets up to 7 days
+const MAX_OFFSET_MIN = 30 * 24 * 60; // matches the existing booking-page API limit
+const SCAN_AHEAD_MIN = MAX_OFFSET_MIN + 15;
 // How far PAST an offset a late cron run may still deliver. The old band was exactly one cron
 // cadence wide (15 min), so any missed/late run (deploy, downtime) skipped that offset forever.
 const CATCHUP_MIN = 120;
@@ -59,7 +59,7 @@ async function completePastBookings(nowMs) {
 async function runBookingReminders() {
   const now = Date.now();
   await completePastBookings(now);
-  const fromIso = new Date(now + MIN).toISOString();
+  const fromIso = new Date(now - CATCHUP_MIN * MIN).toISOString();
   const toIso = new Date(now + SCAN_AHEAD_MIN * MIN).toISOString();
 
   const { data: bookings, error } = await supabaseAdmin
@@ -82,7 +82,11 @@ async function runBookingReminders() {
 
   for (const booking of bookings) {
     if (booking.page_id && !pageCache.has(booking.page_id)) {
-      const { data: page } = await supabaseAdmin.from('BookingPage').select('*').eq('id', booking.page_id).maybeSingle();
+      const { data: page, error: pageError } = await supabaseAdmin.from('BookingPage').select('*').eq('id', booking.page_id).maybeSingle();
+      if (pageError) {
+        logger.error('[bookingReminders] page lookup failed', { bookingId: booking.id, error: pageError.message });
+        continue;
+      }
       pageCache.set(booking.page_id, page || null);
     }
     const page = booking.page_id ? pageCache.get(booking.page_id) : null;
@@ -100,13 +104,15 @@ async function runBookingReminders() {
         .filter((lt) => lt && lt.enabled !== false && Number.isFinite(Number(lt.minutes)))
         .map((lt) => Number(lt.minutes))
       : DEFAULT_REMINDER_MINUTES;
-    const offsets = (page && Array.isArray(page.reminder_minutes) && page.reminder_minutes.length
+    const offsets = (page && Array.isArray(page.reminder_minutes)
       ? page.reminder_minutes
       : prefOffsets
-    ).filter((m) => m > 0 && m <= MAX_OFFSET_MIN);
+    ).filter((m) => Number.isInteger(m) && m >= 0 && m <= MAX_OFFSET_MIN);
 
     const minutesUntil = (Date.parse(booking.start_at) - now) / MIN;
     for (const offset of offsets) {
+      // At-start reminders wait until the start. Other lead times stay upcoming-only.
+      if (offset === 0 ? minutesUntil > 0 : minutesUntil <= 0) continue;
       // Due once the offset instant is at most one cron cadence ahead; a CATCHUP band behind
       // covers late/missed runs so the reminder arrives late instead of never. Runs overlap
       // by design — the UNIQUE(booking_id, kind) log dedupes.
@@ -118,7 +124,8 @@ async function runBookingReminders() {
 
       try {
         if (booking.event_type_id && !etCache.has(booking.event_type_id)) {
-          const { data: et } = await supabaseAdmin.from('EventType').select('*').eq('id', booking.event_type_id).maybeSingle();
+          const { data: et, error: eventTypeError } = await supabaseAdmin.from('EventType').select('*').eq('id', booking.event_type_id).maybeSingle();
+          if (eventTypeError) throw eventTypeError;
           etCache.set(booking.event_type_id, et || null);
         }
         await notify.sendBookingReminder({

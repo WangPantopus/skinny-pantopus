@@ -209,7 +209,7 @@ async function listActiveDevices(userId) {
     .order('last_seen_at', { ascending: false });
   if (error) {
     logger.warn('auth.device.list_failed', { userId, error: error.message });
-    return [];
+    throw new Error('Unable to load active devices', { cause: error });
   }
   return data || [];
 }

@@ -9,9 +9,10 @@ interface NotificationRowProps {
   isSelected: boolean;
   onClick: (notif: Notification) => void;
   onDelete: (id: string) => void;
+  deleting?: boolean;
 }
 
-function NotificationRow({ notif, isSelected, onClick, onDelete }: NotificationRowProps) {
+function NotificationRow({ notif, isSelected, onClick, onDelete, deleting = false }: NotificationRowProps) {
   return (
     <div
       role="button"
@@ -49,6 +50,8 @@ function NotificationRow({ notif, isSelected, onClick, onDelete }: NotificationR
 
       {/* Delete on hover */}
       <button
+        disabled={deleting}
+        onKeyDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
           onDelete(notif.id);

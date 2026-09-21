@@ -156,7 +156,7 @@ export default function PostDetailPage() {
   }, [post, saveMutation]);
 
   const handleAddComment = async ({ text, parentId, files = [] }: { text: string; parentId?: string; files?: File[] }) => {
-    if (!postId) return;
+    if (!postId) return false;
     setCommentPosting(true);
     try {
       const res = await api.posts.addComment(postId, {
@@ -178,8 +178,10 @@ export default function PostDetailPage() {
       setComments((prev) => [...prev, nextComment]);
       setPost((p: Post | null) => (p ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p));
       showToast(uploadFailed ? 'Comment posted, but image upload failed' : 'Comment posted');
+      return true;
     } catch {
       showToast('Failed to add comment');
+      return false;
     } finally {
       setCommentPosting(false);
     }
@@ -255,8 +257,9 @@ export default function PostDetailPage() {
     try {
       await api.posts.reportPost(post.id, { reason: reason as 'spam' | 'harassment' | 'inappropriate' | 'misinformation' | 'other', details });
       showToast("Post reported — we'll review it");
-    } catch {
+    } catch (err) {
       showToast('Failed to report post');
+      throw err;
     }
   };
 

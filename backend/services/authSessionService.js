@@ -361,7 +361,7 @@ async function listActiveSessions(userId) {
     .order('issued_at', { ascending: false });
   if (error) {
     logger.warn('auth.session.list_failed', { userId, error: error.message });
-    return [];
+    throw new Error('Unable to load active sessions', { cause: error });
   }
   return data || [];
 }
@@ -652,7 +652,7 @@ async function listSecurityEvents(userId, limit = 20) {
     .limit(n);
   if (error) {
     logger.warn('auth.event.list_failed', { userId, error: error.message });
-    return [];
+    throw new Error('Unable to load security activity', { cause: error });
   }
   return (data || []).slice(0, n);
 }

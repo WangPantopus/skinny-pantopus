@@ -149,7 +149,7 @@ export default function FeedPage() {
   }, [showComposer, showCompose]);
 
   useEffect(() => {
-    if (searchParams?.get('compose') !== '1') return;
+    if (searchParams?.get('compose') !== '1' || !feed.user) return;
 
     if (showComposer) {
       setShowCompose(true);
@@ -157,8 +157,11 @@ export default function FeedPage() {
       showToast(feed.eligibilityReason || 'Posting is unavailable on the current Place surface.');
     }
 
-    router.replace(pathname, { scroll: false });
-  }, [feed.eligibilityReason, pathname, router, searchParams, showComposer, showToast]);
+    const remainingParams = new URLSearchParams(searchParams.toString());
+    remainingParams.delete('compose');
+    const query = remainingParams.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [feed.eligibilityReason, feed.user, pathname, router, searchParams, showComposer, showToast]);
 
   useEffect(() => {
     const handlePostCreated = () => {
@@ -559,8 +562,9 @@ export default function FeedPage() {
             <div className="p-4">
               <PostComposer
                 onPost={async (data) => {
-                  await feed.handleCreatePost(data);
-                  setShowCompose(false);
+                  const saved = await feed.handleCreatePost(data);
+                  if (saved) setShowCompose(false);
+                  return saved;
                 }}
                 isPosting={feed.isPosting}
                 user={feed.user}

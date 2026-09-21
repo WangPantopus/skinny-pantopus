@@ -328,8 +328,10 @@ export function useFeedData({
 
       prependPostToCache(newPost);
       showToast('Posted!');
+      return true;
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Failed to post');
+      return false;
     } finally {
       setIsPosting(false);
     }
@@ -423,8 +425,9 @@ export function useFeedData({
     try {
       await api.posts.reportPost(postId, { reason, details });
       showToast("Post reported — we'll review it");
-    } catch {
+    } catch (err) {
       showToast('Failed to report post');
+      throw err;
     }
   }, [showToast]);
 

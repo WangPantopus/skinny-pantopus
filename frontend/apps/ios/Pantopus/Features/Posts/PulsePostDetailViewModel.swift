@@ -554,7 +554,7 @@ public final class PulsePostDetailViewModel {
             reactionCount: comment.likeCount ?? 0,
             userReacted: comment.userHasLiked ?? false,
             indentLevel: indent,
-            authorUserId: comment.author?.id,
+            authorUserId: comment.author?.id.isEmpty == false ? comment.author?.id : nil,
             attachmentURLs: attachments,
             isOwn: currentUserId != nil && comment.userId == currentUserId
         )
