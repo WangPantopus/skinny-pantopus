@@ -4,6 +4,22 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 04:19 UTC — checked feed reads and unmute grant
+
+PR94 exact1fb5a58adc passed CI35560095912 and merged
+b463ee3850e089b523426317b90d9bb246f82c89 after source hash, real UI failure/retry,
+persistence, concurrent repeat and cleanup review. Live03 bd13b1ec captured at7df79730e;
+writer released. Paid24c519653 remains unchanged while combined native CI runs.
+
+Stream3 sole writer on a separate branch: existing posts.js DELETE mute handler and
+feedService.getMuteAndHideFilters checked reads, plus existing useFeedData.ts and
+feed/page.tsx error/retry. Reproduced DELETE200 with row retained under denial,
+GET/feed200 exposing persisted hidden post under filter-read denial, and cold feed500
+rendering false empty. Preserve all five filters, access policies, current-owner rows,
+cache ownership and existing visual treatment/ErrorState. Verify real denied reads,
+retry, feasible session retirement and exact cleanup. No new files/tests/schema.
+Persona mute enum extension remains read-only proposal, separate from this grant.
+
 ## September21,04:10UTC — bounded Pulse hide persistence grant
 
 Stream3 sole writer existing backend/routes/posts.js /hide/:id handler only, after

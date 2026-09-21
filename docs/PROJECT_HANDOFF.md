@@ -7,6 +7,16 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## Latest coordination — September 21, 04:19 UTC
+
+PR94 Hide persistence error repair is merged as b463ee3850e089b523426317b90d9bb246f82c89
+from exact1fb5a58adc after CI35560095912 passed and real UI/SQL/source/cleanup review.
+Paid24c519653 stays unchanged for CI35560003741; web/backend/schema/privacy checks
+passed, native jobs remain running. Next smaller Stream3 filter-read/unmute failure
+scope is assigned in live README. Persona mute identity/schema changes remain a
+proposal. Root runtimes remain stopped; Stream3 retains its owned runtime/fixtures.
+PR34/47 remain drafts and broader acceptance limits remain open.
+
 ## Current checkpoint — September 21, 03:57 UTC
 
 Latest04:12UTC: paid **24c5196537c06de9b03f45fa8b6b78357247cb82** is clean/pushed,
