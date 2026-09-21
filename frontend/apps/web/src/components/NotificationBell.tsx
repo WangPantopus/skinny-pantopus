@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Megaphone } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { useBadges } from '@/contexts/BadgeContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { useNotificationTap } from '@/hooks/useNotificationTap';
+import { toast } from '@/components/ui/toast-store';
+import { queryKeys } from '@/lib/query-keys';
 import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import type { Notification } from '@pantopus/types';
@@ -31,6 +34,7 @@ export default function NotificationBell({
   mode?: NotificationBellMode;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const socket = useSocket();
   const [open, setOpen] = useState(false);
   const tapNotification = useNotificationTap(open);
@@ -40,6 +44,9 @@ export default function NotificationBell({
   const [loadError, setLoadError] = useState(false);
   const readRequest = useRef(0);
   const loadedScope = useRef('');
+  const actionScope = useRef(0);
+  const pendingActions = useRef(new Set<string>());
+  const [pendingKeys, setPendingKeys] = useState<string[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   // Legacy in-dropdown sub-filter for the all-zones bell only.
   const [contextFilter, setContextFilter] = useState<'all' | 'personal' | 'business'>('all');
@@ -131,7 +138,9 @@ export default function NotificationBell({
   // Closing, changing scope or leaving the view retires its pending reads.
   // QueryProvider already remounts account-local state on session changes.
   useEffect(() => {
-    const retire = () => { readRequest.current++; };
+    const retire = () => { readRequest.current++; actionScope.current++; };
+    pendingActions.current.clear();
+    setPendingKeys([]);
     if (open) void loadNotifications();
     return retire;
   }, [open, loadNotifications]);
@@ -175,19 +184,51 @@ export default function NotificationBell({
       if (path) { setOpen(false); router.push(path); }
     });
 
-  const handleMarkAllRead = async () => {
+  const runAction = async (key: string, operation: () => Promise<unknown>, apply: () => void | Promise<void>, message: string) => {
+    if (pendingActions.current.has(key)) return;
+    const scope = actionScope.current;
+    const token = api.getAuthToken();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const sameAccount = () => token === api.getAuthToken()
+      && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => scope === actionScope.current && sameAccount();
+    pendingActions.current.add(key);
+    setPendingKeys([...pendingActions.current]);
     try {
-      await api.notifications.markAllAsRead(readAllScope());
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    } catch {}
+      await operation();
+      if (sameAccount()) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
+      }
+      if (current()) {
+        // Reads started before the committed action must not restore its rows.
+        readRequest.current++;
+        setLoading(false);
+        await apply();
+      }
+    } catch {
+      if (sameAccount()) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.notifications(), refetchType: 'none' });
+      }
+      if (current()) toast.error(message);
+    } finally {
+      if (current()) {
+        pendingActions.current.delete(key);
+        setPendingKeys([...pendingActions.current]);
+      }
+    }
   };
 
-  const handleDelete = async (e: React.MouseEvent, notifId: string) => {
+  const handleMarkAllRead = () => runAction('read-all',
+    () => api.notifications.markAllAsRead(readAllScope()),
+    // Fetch authoritative flags, including notifications arriving while pending.
+    async () => { await loadNotifications(); },
+    'Could not confirm marking notifications as read. Please try again.');
+
+  const handleDelete = (e: React.MouseEvent, notifId: string) => {
     e.stopPropagation();
-    try {
-      await api.notifications.deleteNotification(notifId);
-      setNotifications((prev) => prev.filter((n) => n.id !== notifId));
-    } catch {}
+    void runAction(notifId, () => api.notifications.deleteNotification(notifId),
+      () => { setNotifications(prev => prev.filter(n => n.id !== notifId)); },
+      'Could not confirm notification removal. Please try again.');
   };
 
   return (
@@ -235,6 +276,7 @@ export default function NotificationBell({
               {unreadCount > 0 && (
                 <button
                   onClick={handleMarkAllRead}
+                  disabled={loading || pendingKeys.includes('read-all')}
                   className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                 >
                   Mark all read
@@ -325,6 +367,8 @@ export default function NotificationBell({
                     {/* Delete on hover */}
                     <button
                       onClick={(e) => handleDelete(e, notif.id)}
+                      disabled={pendingKeys.includes(notif.id)}
+                      onKeyDown={(e) => e.stopPropagation()}
                       className="opacity-0 group-hover:opacity-100 text-app-muted hover:text-red-500 p-1 flex-shrink-0 transition"
                       title="Remove"
                     >

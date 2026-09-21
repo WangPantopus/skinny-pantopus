@@ -15,6 +15,7 @@ import { useNotificationTap } from '@/hooks/useNotificationTap';
 import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
 import type { Notification } from '@pantopus/types';
 import NotificationRow from './NotificationRow';
+import { toast } from '@/components/ui/toast-store';
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', {
@@ -63,6 +64,9 @@ export default function NotificationsPage() {
   const initialZone: ZoneTab = hasExplicitZone ? (requestedContext as ZoneTab) : 'personal';
   const [zone, setZone] = useState<ZoneTab>(initialZone);
   const [selectedNotif, setSelectedNotif] = useState<Notification | null>(null);
+  const actionScope = useRef(0);
+  const pendingActions = useRef(new Set<string>());
+  const [pendingKeys, setPendingKeys] = useState<string[]>([]);
 
   // Auth guard
   useEffect(() => {
@@ -91,6 +95,13 @@ export default function NotificationsPage() {
   // `infinite` segment avoids stale cache from an old prefetchQuery that
   // stored a flat API payload.
   const notifKey = useMemo(() => [...queryKeys.notifications(), 'infinite', filter, useScopedZones ? zone : 'all'] as const, [filter, useScopedZones, zone]);
+
+  useEffect(() => {
+    const retire = () => { actionScope.current++; };
+    pendingActions.current.clear();
+    setPendingKeys([]);
+    return retire;
+  }, [notifKey]);
 
   // ── Notifications list: useInfiniteQuery (30 per page) ──────
   const notifQuery = useInfiniteQuery<NotificationsPage, Error, InfiniteData<NotificationsPage>, typeof notifKey, NotificationPageParam>({
@@ -293,24 +304,51 @@ export default function NotificationsPage() {
       else setSelectedNotif(notif);
     }), [router, mutateNotifications, tapNotification]);
 
-  const handleMarkAllRead = async () => {
+  const runAction = useCallback(async (key: string, operation: () => Promise<unknown>, apply: () => void | Promise<void>, message: string) => {
+    if (pendingActions.current.has(key)) return;
+    const scope = actionScope.current;
+    const token = getAuthToken();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const sameAccount = () => token === getAuthToken()
+      && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => scope === actionScope.current && sameAccount();
+    pendingActions.current.add(key);
+    setPendingKeys([...pendingActions.current]);
     try {
-      const readScope: api.notifications.NotificationReadScope = !useScopedZones ? { context: 'all' } : zone === 'audience' ? { context: 'audience' } : { contexts: ['personal', 'platform'] };
-      await api.notifications.markAllAsRead(readScope);
-      mutateNotifications((n) => ({ ...n, is_read: true }));
-    } catch {}
-  };
+      if (!current()) return;
+      await operation();
+      if (sameAccount()) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
+      }
+      if (!current()) return;
+      await queryClient.cancelQueries({ queryKey: notifKey });
+      if (current()) await apply();
+    } catch {
+      if (sameAccount()) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.notifications(), refetchType: 'none' });
+      }
+      if (current()) toast.error(message);
+    } finally {
+      if (current()) {
+        pendingActions.current.delete(key);
+        setPendingKeys([...pendingActions.current]);
+      }
+    }
+  }, [queryClient, notifKey]);
 
-  const handleDelete = useCallback(
-    async (notifId: string) => {
-      try {
-        await api.notifications.deleteNotification(notifId);
-        removeNotification((n) => n.id === notifId);
-        setSelectedNotif((prev) => (prev?.id === notifId ? null : prev));
-      } catch {}
-    },
-    [removeNotification]
-  );
+  const handleMarkAllRead = () => runAction('read-all', async () => {
+    const readScope: api.notifications.NotificationReadScope = !useScopedZones ? { context: 'all' } : zone === 'audience' ? { context: 'audience' } : { contexts: ['personal', 'platform'] };
+    return api.notifications.markAllAsRead(readScope);
+  }, () => undefined,
+  'Could not confirm marking notifications as read. Please try again.');
+
+  const handleDelete = useCallback((notifId: string) => runAction(notifId,
+    () => api.notifications.deleteNotification(notifId),
+    () => {
+      removeNotification(n => n.id === notifId);
+      setSelectedNotif(prev => prev?.id === notifId ? null : prev);
+    }, 'Could not confirm notification removal. Please try again.'),
+  [runAction, removeNotification]);
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.is_read).length, [notifications]);
 
@@ -378,7 +416,7 @@ export default function NotificationsPage() {
         </div>
         <div className="flex items-center gap-2">
           {unreadCount > 0 && (
-            <button onClick={handleMarkAllRead} className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition">
+            <button onClick={handleMarkAllRead} disabled={loading || pendingKeys.includes('read-all')} className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition">
               Mark all read
             </button>
           )}
@@ -439,7 +477,7 @@ export default function NotificationsPage() {
 
           <div className="mt-4 pt-3 border-t border-app-border-subtle flex items-center gap-3">
             <span className="text-xs text-app-text-muted capitalize">Type: {selectedNotif.type?.replace(/_/g, ' ')}</span>
-            <button onClick={() => handleDelete(selectedNotif.id)} className="text-xs text-red-500 hover:text-red-700 font-medium ml-auto">
+            <button onClick={() => handleDelete(selectedNotif.id)} disabled={pendingKeys.includes(selectedNotif.id)} className="text-xs text-red-500 hover:text-red-700 font-medium ml-auto">
               Delete
             </button>
           </div>
@@ -496,7 +534,7 @@ export default function NotificationsPage() {
                       <h3 className="text-xs font-semibold text-app-text-muted uppercase tracking-wider mb-2 px-1 pt-4 first:pt-0">{item.label}</h3>
                     ) : (
                       <div className={`bg-app-surface border-l border-r border-app-border ${item.isFirst ? 'rounded-t-xl border-t' : ''} ${item.isLast ? 'rounded-b-xl border-b mb-4' : 'border-b border-b-app-border-subtle'} overflow-hidden`}>
-                        <NotificationRow notif={item.notif} isSelected={selectedNotif?.id === item.notif.id} onClick={handleNotificationClick} onDelete={handleDelete} />
+                        <NotificationRow notif={item.notif} isSelected={selectedNotif?.id === item.notif.id} onClick={handleNotificationClick} onDelete={handleDelete} deleting={pendingKeys.includes(item.notif.id)} />
                       </div>
                     )}
                   </div>
