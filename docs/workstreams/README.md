@@ -4,6 +4,26 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21,02:38UTC — current ownership and runtime
+
+Stream1 refund-session-r2 completed on unchanged6d40: intact old refund200 after
+new login, owner receipt recovery, actual Stripe TEST/SQL accepted within live01 limits.
+Owned18132/18133/64561–67 now released; own rows0/customer deleted/cache retained,
+both owned Chrome tabs closed. No native reservation. Stream3 runtime remains active.
+
+N04 visibility grant: Stream3 owns only posts.js POST_VISIBILITY_SELECT existing
+archived_at/post_metadata fields after archived child reads/actions bypassed existing
+canViewPost checks. PR84 source and staleUI403/draft-retention,11-caller archive/draft
+matrix, owner reads, published recovery and exact cleanup reviewed. No new schema or
+policy/atomic-concurrency claim; strict updated-head CI required before merge.
+
+N01/N02 next bounded grant: Stream3 sole writer existing NotificationBell.tsx and
+app/notifications/page.tsx read/error/retry/lifetime only, after actual SELECT500
+showed false empty on cold page/bell and silently retained warm rows. Compare existing,
+archived/open implementations; preserve known same-owner rows and styles. Verify
+cold/warm failure, retry, genuine empty, session retirement and cleanup. No routes,
+BadgeContext, sockets, shared SDK, provider changes or new tests. Separate milestone.
+
 ## September21 current bounded grants and runtime update
 
 Root resumes P09 held-refund session attempt only after fresh Chrome control works.

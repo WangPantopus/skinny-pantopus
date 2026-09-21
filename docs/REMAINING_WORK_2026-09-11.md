@@ -16,6 +16,11 @@ N04 personal blocking/direct messages (Stream 3). Discovery closes no rows.
 The current handoff supersedes historical PR state below; source-specific paid
 candidate evidence is linked there and does not establish master acceptance.
 
+September21 P09 now additionally verifies an intact successful refund response after
+an actual browser account switch, followed by same-owner saved receipt recovery,
+with actual Stripe TEST/SQL and exact cleanup. This is a bounded web acceptance;
+no row-count change. See [Stream1 evidence and limits](workstreams/01-gigs-payments.md).
+
 September20 Stream1 extends existing P02/P03/P08/P09 evidence with real Stripe TEST
 browser tips: captured-original recovery, decline/retry,3DS failure/retry, lost
 committed reply/reload, zero-charge cancellation. Reproduced absent-transfer receipt

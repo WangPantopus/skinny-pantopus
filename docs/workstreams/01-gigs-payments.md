@@ -1,5 +1,44 @@
 # Stream 1 — Gigs and payments
 
+## September21,02:38UTC — intact refund reply after account switch verified
+
+Paid branch remains clean/pushed at **6d40d8b2a1b60675f8cf1ff182abd48720b3fc15**.
+No application change or new tests: reused current green
+[CI35551123265](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35551123265).
+Fresh owned Chrome journey accepted1250c, authorized actual Stripe TEST card, worker
+Start Work/completion, owner capture, then500c partial and750c remaining refunds.
+Both provider refunds succeeded. During the second request, SQL/provider committed
+02:29:33.293; another account completed profile200 at02:29:43.310 and visibly loaded
+02:29:43.482; original200 released02:29:44.381 and finished02:29:44.383 with socket
+intact/destroyedfalse/writableFinishedtrue, within the SDK30s deadline. New account
+remained intact; original tab retired to login without owner refund data. Original
+payer returned02:35:52 to both saved receipts, Refunded1250c/Net0/no further refund
+action, without resubmitting. Exactly1intent/2refund calls/2successful SQL requests;
+no refund requests by the other account. First500c hold exceeded30s and disconnected:
+retained as recovery-only evidence, not intact-delivery proof.
+
+Private evidence `/private/tmp/pantopus-stream1-refund-session-r2`;19 files mirrored
+and hash-verified at owner's `.pantopus-recovery/audits/20260921-stream1-refund-session-r2`.
+Full77SQL, actual app UI/routes/SDK/Stripe TEST; local auth/ancillary transport synthetic.
+Expected fake-Connect lookup errors remain outside payout scope; stub assertions0.
+One test customer deleted, SQL aggregate0, no extra cleanup refund needed. Owned
+API18132/Next18133/Supabase64561–67 stopped, both owned Chrome tabs closed, own cache
+preserved privately/generated tsconfig restored. No peer resources touched.
+Cumulative session13 Stripe TEST originals:6 captures fully refunded7250c,
+7 unpaid cancelled intents,6 customers deleted. Provider history retained.
+This supersedes earlier P09 browser-control limitation for this bounded scenario only.
+Native/live/hosted/Connect and broader acceptance remain open; PR34/47 remain draft.
+
+Coordinator: PR82 strict914e68764 passed CI35553548674 and merged01e842aef;
+PR83 exactbf595fa80 passed CI35554056362 and merged
+**0fb600391ea6bd88c8f39e9f72bfa6b0b059f765**. Report two-handler source hashes,
+real fullpage/feed failure/retry/SQL and cleanup reviewed; no new tests/design changes.
+PR84 archived/draft visibility two-field selector repair source/evidence reviewed,
+retargeted master and updating for required current-head CI. Keep documentation PR79
+draft during feature integration. Frozen03 2f9ae27c captured at ea2781251; writer released.
+Next: finish PR84 strict gate, then appropriate paid/master integration; reuse unchanged
+accepted payment evidence and preserve native/provider/policy limits.
+
 ## Current checkpoint — September 21, 2026, 00:21 UTC
 
 Worktree `/private/tmp/pantopus-paid-gig-integration`; branch
