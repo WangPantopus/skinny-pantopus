@@ -36,26 +36,23 @@ const logger = require('./logger');
  */
 async function getRelationshipStatus(userA, userB) {
   if (!userA || !userB || userA === userB) return 'none';
-  try {
-    const { data } = await supabaseAdmin
-      .from('Relationship')
-      .select('id, requester_id, addressee_id, status, blocked_by')
-      .or(
-        `and(requester_id.eq.${userA},addressee_id.eq.${userB}),and(requester_id.eq.${userB},addressee_id.eq.${userA})`
-      )
-      .single();
+  const { data, error } = await supabaseAdmin
+    .from('Relationship')
+    .select('id, requester_id, addressee_id, status, blocked_by')
+    .or(
+      `and(requester_id.eq.${userA},addressee_id.eq.${userB}),and(requester_id.eq.${userB},addressee_id.eq.${userA})`
+    )
+    .maybeSingle();
 
-    if (!data) return 'none';
+  if (error) throw error;
+  if (!data) return 'none';
 
-    if (data.status === 'blocked') return 'blocked';
-    if (data.status === 'accepted') return 'connected';
-    if (data.status === 'pending') {
-      return data.requester_id === userA ? 'pending_sent' : 'pending_received';
-    }
-    return 'none';
-  } catch {
-    return 'none';
+  if (data.status === 'blocked') return 'blocked';
+  if (data.status === 'accepted') return 'connected';
+  if (data.status === 'pending') {
+    return data.requester_id === userA ? 'pending_sent' : 'pending_received';
   }
+  return 'none';
 }
 
 /**
@@ -400,7 +397,7 @@ async function isScopedBlocked(viewerId, targetUserId, scope = 'full') {
     : [scope, 'full']; // specific scope + full always applies
 
   // Check both directions of UserProfileBlock
-  const { data: blocks } = await supabaseAdmin
+  const { data: blocks, error } = await supabaseAdmin
     .from('UserProfileBlock')
     .select('id')
     .or(
@@ -409,6 +406,7 @@ async function isScopedBlocked(viewerId, targetUserId, scope = 'full') {
     .in('block_scope', scopeFilter)
     .limit(1);
 
+  if (error) throw error;
   return blocks && blocks.length > 0;
 }
 

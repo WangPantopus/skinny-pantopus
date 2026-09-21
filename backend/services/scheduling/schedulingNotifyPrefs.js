@@ -35,6 +35,7 @@ async function getPrefs(userId) {
   if (error) throw new Error('Unable to load notification preferences. Please try again.', { cause: error });
   const p = (data && data.prefs) || {};
   return {
+    ...p,
     notify_me: { ...DEFAULT_NOTIFY_ME, ...(p.notify_me || {}) },
     notify_attendees: { ...DEFAULTS.notify_attendees, ...(p.notify_attendees || {}) },
     reminder_lead_times: Array.isArray(p.reminder_lead_times) ? p.reminder_lead_times : DEFAULTS.reminder_lead_times,
