@@ -2677,3 +2677,24 @@ signed out, no session resurrection/newlogin/cookie manipulation. No source edit
 newtests. Baseline artifacts logout-return-before/after-logout/final and UI before/
 loggedout/login-required/login-failure mirrored, 636 hashes; MANIFEST
 **c3634539de03ea53b554aff9e5f768e8eb214feceec371a4f45dca2e6b86f15d**. Coordinator review before repair/retry.
+
+
+Postlogout source attribution: captured first3seconds include60 each401 homes/
+businesses/professional/seats and30 featureflag401 alongside29refresh400+2refresh429.
+ProfileToggle unconditional mount loads those four endpoints; QueryProvider keyed
+retirement remounts on every clear; SDK web401 unconditional canRefresh and invalid
+refresh clear emits another marker. Singleflight covers only overlap, not successive
+remount waves. Strong source/sequence feedback-loop match, not exact tab attribution:
+existing HTTP logs lack Origin/Referer/tabID. Current inventory only retained tab4
+reset-password, query omitted and tab untouched; source has no automatic API call.
+Historical tab state unknowable from these receipts. Root18132 lead not independently
+attributed. Global30/minute write limiter runs before user/auth routes, consistent
+with logout+29refresh then429s/login rejection. Do not raise/bypass limiter.
+
+Proposed smallest existing SDK401 gate: automatic web refresh only with active
+session signal (including stale-access flag), otherwise reject without refresh or
+repeatedclear; preserve explicit recovery/mobile/generation guards. No edit or
+retry executed. PR82 client/provider bytes identical; historical retirement retained;
+openPR metadata47/46/34 no dedicatedauthfix. Detailed source hashes/sequence/limits
+logout-burst-source-attribution.json; durable637 MANIFEST **edbf0d6a92976197bbcfd117b6447187555a08e7907669b056b7a0dc45feee9a**.
+Coordinator review pending; original failedreturn remains unverified.
