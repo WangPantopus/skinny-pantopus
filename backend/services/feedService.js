@@ -286,11 +286,11 @@ async function getMuteAndHideFilters(userId) {
   }
 
   const [
-    { data: mutes },
-    { data: hides },
-    { data: blocks },
-    { data: personaBlocks },
-    { data: feedPrefs },
+    { data: mutes, error: mutesError },
+    { data: hides, error: hidesError },
+    { data: blocks, error: blocksError },
+    { data: personaBlocks, error: personaBlocksError },
+    { data: feedPrefs, error: feedPrefsError },
   ] = await Promise.all([
     supabaseAdmin.from('PostMute').select('muted_entity_id, muted_entity_type, surface').eq('user_id', userId),
     supabaseAdmin.from('PostHide').select('post_id').eq('user_id', userId),
@@ -301,6 +301,9 @@ async function getMuteAndHideFilters(userId) {
     supabaseAdmin.from('PersonaBlock').select('persona_id').eq('blocked_user_id', userId),
     supabaseAdmin.from('UserFeedPreference').select('*').eq('user_id', userId).maybeSingle(),
   ]);
+
+  const filterError = mutesError || hidesError || blocksError || personaBlocksError || feedPrefsError;
+  if (filterError) throw new Error(`Failed to load feed filters: ${filterError.message}`);
 
   const blockedUserIds = new Set();
   if (blocks) {

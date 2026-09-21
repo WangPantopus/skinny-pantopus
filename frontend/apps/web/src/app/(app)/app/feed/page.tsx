@@ -18,6 +18,7 @@ import {
 } from '@/components/feed';
 import type { SportsStarter } from '@/components/feed/EmptyFeed';
 import ReportModal from '@/components/ui/ReportModal';
+import ErrorState from '@/components/ui/ErrorState';
 import InquiryChatDrawer from '@/components/discover/InquiryChatDrawer';
 import { useAreaPicker } from '@/hooks/useAreaPicker';
 import { useFeedPreferences } from '@/hooks/useFeedPreferences';
@@ -427,13 +428,21 @@ export default function FeedPage() {
               />
             )}
 
+            {feed.error && (
+              <div role="alert" aria-busy={feed.retrying}>
+                <ErrorState
+                  message="We couldn't load your feed. Please try again."
+                  onRetry={feed.retryFeed}
+                />
+              </div>
+            )}
             {feed.loading ? (
               <div className="space-y-4">
                 <PostSkeleton />
                 <PostSkeleton />
                 <PostSkeleton />
               </div>
-            ) : feed.posts.length === 0 ? (
+            ) : feed.error && feed.posts.length === 0 ? null : feed.posts.length === 0 ? (
               <>
                 {feed.surface === 'place' && (
                   <SparseFeedSummary
@@ -525,7 +534,7 @@ export default function FeedPage() {
                     </div>
                   )}
 
-                  {!feed.hasMore && feed.posts.length > 0 && (
+                  {!feed.error && !feed.hasMore && feed.posts.length > 0 && (
                     <div className="text-center py-6">
                       <span className="text-xs text-app-muted">You&apos;re all caught up</span>
                     </div>
