@@ -17,7 +17,7 @@ import { clearPendingPlaces } from '@/components/place/pendingPlace';
  * handled by the shared client.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -74,8 +74,21 @@ export default function SecuritySettingsPage() {
   const [hasPassword, setHasPassword] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [pendingStepUp, setPendingStepUp] = useState<PendingStepUp | null>(null);
+  const pendingConfirmation = useRef<PendingStepUp | null>(null);
+  const scope = useRef(0);
+  const request = useRef(0);
+  const captureScope = useCallback((allowClearedToken = false) => {
+    const generation = scope.current;
+    const token = getAuthToken();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    return () => generation === scope.current
+      && (token === getAuthToken() || (allowClearedToken && getAuthToken() === null))
+      && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+  }, []);
 
   const load = useCallback(async () => {
+    const current = captureScope();
+    const revision = ++request.current;
     setLoadError('');
     try {
       if (!getAuthToken()) {
@@ -87,57 +100,91 @@ export default function SecuritySettingsPage() {
         authDevices.getSecurityPrefs(),
         api.auth.getAuthMethods(),
       ]);
+      if (!current() || revision !== request.current) return;
 
       if (devicesRes.status === 'fulfilled') {
         setDevices(devicesRes.value.devices);
         setSessions(devicesRes.value.sessions);
         setEvents(devicesRes.value.events);
+        setEventsExpanded(false);
       } else {
         setLoadError(errorMessage(devicesRes.reason, 'Could not load your devices.'));
       }
       if (prefsRes.status === 'fulfilled') {
         setPrefs(prefsRes.value);
         setDraftPrefs(prefsRes.value);
+      } else {
+        setLoadError((previous) => previous || 'Could not load security preferences. Please try again.');
       }
       if (methodsRes.status === 'fulfilled') {
         setHasPassword(Boolean(methodsRes.value?.hasPassword));
+      } else {
+        setLoadError((previous) => previous || 'Could not load account confirmation methods. Please try again.');
       }
     } finally {
-      setLoading(false);
+      if (current() && revision === request.current) setLoading(false);
     }
-  }, [router]);
+  }, [router, captureScope]);
 
   useEffect(() => {
-    void load();
+    const retire = () => {
+      scope.current += 1;
+      request.current += 1;
+      pendingConfirmation.current?.resolve(null);
+      pendingConfirmation.current = null;
+    };
+    const changed = () => {
+      retire();
+      setDevices([]); setSessions([]); setEvents([]);
+      setPrefs(null); setDraftPrefs(null); setHasPassword(null);
+      setPendingStepUp(null); setBusy(null); setEventsExpanded(false);
+      setLoading(true);
+      void load();
+    };
+    const storage = (event: StorageEvent) => {
+      if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed();
+    };
+    const unsubscribe = api.onTokenChange(changed);
+    window.addEventListener('storage', storage);
+    changed();
+    return () => { retire(); unsubscribe(); window.removeEventListener('storage', storage); };
   }, [load]);
 
   // ---------- step-up plumbing ----------
   const requestStepUp = useCallback(
     (request: StepUpRequest) =>
       new Promise<string | null>((resolve) => {
-        setPendingStepUp({ request, resolve });
+        pendingConfirmation.current?.resolve(null);
+        pendingConfirmation.current = { request, resolve };
+        setPendingStepUp(pendingConfirmation.current);
       }),
     [],
   );
 
   const resolveStepUp = useCallback(
     (token: string | null) => {
-      pendingStepUp?.resolve(token);
+      pendingConfirmation.current?.resolve(token);
+      pendingConfirmation.current = null;
       setPendingStepUp(null);
     },
-    [pendingStepUp],
+    [],
   );
 
   /** Ask for step-up, then run `action(token)`. Returns true on success. */
   const runWithStepUp = useCallback(
-    async (key: string, request: StepUpRequest, action: (token: string) => Promise<void>): Promise<boolean> => {
+    async (key: string, request: StepUpRequest, action: (token: string, current: () => boolean) => Promise<void>): Promise<boolean> => {
+      const current = captureScope();
+      // Successful revoke-all clears the current cookies itself. Only that
+      // response may finish with no token; an account/mount change still retires it.
+      const completed = captureScope(key === 'revoke-all');
       const token = await requestStepUp(request);
-      if (!token) return false;
+      if (!token || !current()) return false;
       setBusy(key);
       try {
-        await action(token);
-        return true;
+        await action(token, current);
+        return completed();
       } catch (err: unknown) {
+        if (!current()) return false;
         if (authDevices.isStepUpRequired(err)) {
           toast.error('Your confirmation expired. Please try again.');
         } else {
@@ -145,10 +192,10 @@ export default function SecuritySettingsPage() {
         }
         return false;
       } finally {
-        setBusy(null);
+        if (completed()) setBusy(null);
       }
     },
-    [requestStepUp],
+    [requestStepUp, captureScope],
   );
 
   // ---------- actions ----------
@@ -190,8 +237,9 @@ export default function SecuritySettingsPage() {
         confirmLabel: 'Sign out others',
         destructive: true,
       },
-      async (token) => {
+      async (token, current) => {
         const res = await authDevices.revokeOtherSessions(token);
+        if (!current()) return;
         toast.success(
           typeof res?.revoked === 'number'
             ? `Signed out of ${res.revoked} other session${res.revoked === 1 ? '' : 's'}`
@@ -218,12 +266,8 @@ export default function SecuritySettingsPage() {
       },
     );
     if (!ok) return;
-    // Server-side everything is dead now; clear our cookies + local state and leave.
-    try {
-      await api.auth.logout();
-    } catch {
-      /* cookies are already invalid server-side */
-    }
+    // revoke-all already revokes the sessions and clears the same four cookies
+    // as logout. Retire local state synchronously before another login can occur.
     clearPendingPlaces();
     clearAuthToken();
     toast.success('Signed out everywhere');
@@ -245,8 +289,9 @@ export default function SecuritySettingsPage() {
         description: 'Confirm your password to change how your account handles new devices and reinstalls.',
         confirmLabel: 'Save preferences',
       },
-      async (token) => {
+      async (token, current) => {
         const saved = await authDevices.updateSecurityPrefs(next, token);
+        if (!current()) return;
         setPrefs(saved);
         setDraftPrefs(saved);
       },
@@ -255,15 +300,19 @@ export default function SecuritySettingsPage() {
   };
 
   const handleShowMoreEvents = async () => {
+    const current = captureScope();
+    const revision = ++request.current;
     setBusy('events');
     try {
       const res = await authDevices.getSecurityEvents(50);
+      if (!current() || revision !== request.current) return;
       setEvents(res.events);
       setEventsExpanded(true);
     } catch (err: unknown) {
+      if (!current() || revision !== request.current) return;
       toast.error(errorMessage(err, 'Could not load security activity'));
     } finally {
-      setBusy(null);
+      if (current()) setBusy(null);
     }
   };
 
@@ -317,7 +366,7 @@ export default function SecuritySettingsPage() {
           <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
             <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-amber-900">Could not load your devices</p>
+              <p className="text-sm font-medium text-amber-900">Could not load all security information</p>
               <p className="text-sm text-amber-800">{loadError}</p>
             </div>
             <button
@@ -435,7 +484,7 @@ export default function SecuritySettingsPage() {
             </h2>
             <p className="text-sm text-app-secondary mb-4">Sign-ins, sign-outs, password changes and anything we blocked.</p>
             {visibleEvents.length === 0 ? (
-              <p className="text-sm text-app-secondary py-4 text-center">No security activity recorded yet.</p>
+              <p className="text-sm text-app-secondary py-4 text-center">{loadError ? 'Security activity is unavailable. Please retry.' : 'No security activity recorded yet.'}</p>
             ) : (
               <ul className="divide-y divide-app-border-subtle" data-testid="event-list">
                 {visibleEvents.map((ev) => {
