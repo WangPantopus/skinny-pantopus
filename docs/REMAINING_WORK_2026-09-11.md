@@ -91,6 +91,41 @@ was repaired after actual pre-hydration native GET leakage with synthetic data.
 All four forms pass disabled/delayed JavaScript checks. This is a bounded
 subjourney; the authentication change itself closes no additional acceptance row.
 
+## September 21, 06:19 UTC — persona repair integrated on master
+
+PR99 exact1d8357330 passed [CI35567483902](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35567483902)
+with8 applicable checks passed/3 path skips. After reviewed source/evidence and CLEAN
+mergeability, coordinator merged **dd24f0029c58dd38e201a9fe6b349eda317361d7** at06:19:04Z.
+No protection override or whole-row closure. Reserved enum13000 replay passes; hosted
+activation/native/intact-account-switch limits remain open. Coordination includes this
+master; documentationPR100 still changes only five existing live documents.
+
+Paid **dd0ee04b5** stays fixed for fullCI35567323534; web/backend/schema/identity passed,
+native jobs pending. PR34/47 remain draft and PR46 separate. Adopt new master into paid
+after its current gate completes; preserve exact evidence and do not repeat unchanged
+journeys. Root runtime/fixture cleanup remains complete; peer resources retained.
+Q&A mirror38files includes final persona source review/CI. Finish current gates and
+publish final shared disposition before another application scope.
+
+## September 21, 06:15 UTC — bounded persona evidence reviewed
+
+PR99/1d8357330 repairs reproduced persona mute identity, own-post control and stale
+client/server filter cache failures. Coordinator reviewed real UI/HTTP/SQL evidence,
+exact cleanup and source hashes; all387durable files verified. CI35567483902 and
+integration pending. Native/hosted/intact-account-switch boundaries remain open;
+unmute is HTTP plus UI reload. Paiddd0ee04b5 exact35567323534 still runs after web/
+backend/identity pass. Finish both gates and docs; no acceptance row closes here.
+
+## September 21, 06:10 UTC — publication disposition
+
+Paiddd0ee04b5 publishes verified Q&A actions6a with master027afc13a; application bytes
+unchanged from the verified source. Priorc426 fullCI35564679691 passed15/oneSeeder skip;
+new exact-head automatic scheduling pending. PR34/47 remain draft. Persona mute stays
+in Stream3's separate bounded grant until frozen source/evidence review. Root fixtures,
+privileges and runtimes are cleaned; no new unit tests or duplicate accepted journeys.
+No acceptance row closes here; existing native/provider/policy and vote-count atomicity
+limits remain. See live01/03 for source-bound evidence and next actions.
+
 ## 1. Home identity and current access — active work
 
 - [x] H01 **Implemented and locally verified:** Detail/property-detail current authority and held-result retirement pass real SDK/HTTP/SQL acceptance. See [the bounded repair](home-detail-authority-2026-09-11.md); final-head CI remains G05. H02/H06 are also locally verified; H03/H04 projections are now locally verified; H05 native identity is now locally verified; H07/H08 remain partial.

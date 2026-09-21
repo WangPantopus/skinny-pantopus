@@ -4,24 +4,93 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
-## September 21, 05:19 UTC — exact-source CI reconciliation
+## September 21, 06:19 UTC — persona repair integrated on master
 
-Paid published42d remains on full gate35562351562; local795ad998d payment-read
-candidate is clean and verified, awaiting the integration batch push. Delayed
-automatic paid35562395559 duplicated that exact head and was canceled as redundant,
-not passed. All78 files in the three latest Stream1 identity/QA/payment mirrors
-were rechecked; current PaymentSection matches its accepted candidate hash.
+PR99 exact1d8357330 passed [CI35567483902](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35567483902)
+with8 applicable checks passed/3 path skips. After reviewed source/evidence and CLEAN
+mergeability, coordinator merged **dd24f0029c58dd38e201a9fe6b349eda317361d7** at06:19:04Z.
+No protection override or whole-row closure. Reserved enum13000 replay passes; hosted
+activation/native/intact-account-switch limits remain open. Coordination includes this
+master; documentationPR100 still changes only five existing live documents.
 
-Map PR97 is retargeted to master at unchanged4c6f11771, combining the three-file
-read-error/order repair and popup destination while preserving separate commits and
-real UI/SQL evidence. Automatic96/d10e35562256054 and original97/4c6f35562565822
-passed their changed surfaces. Redundant manual96/35562211102 was canceled, not passed;
-combined final-tree97/35562416370 remains the full gate. Native/workflow bytes are
-identical between96 and97. No merge claim yet. Stream3 latest03 hash5c13c460 captured.
-Documentation98 exactbb37437b8 automatic35563086879 passed; it remains draft until
-this batch disposition is published. Automatic CI may appear several minutes late;
-do not dispatch a duplicate after a short absence. Root runtimes remain stopped;
-peer runtime/fixtures preserved. PR34/47 stay draft and PR46/user work untouched.
+Paid **dd0ee04b5** stays fixed for fullCI35567323534; web/backend/schema/identity passed,
+native jobs pending. PR34/47 remain draft and PR46 separate. Adopt new master into paid
+after its current gate completes; preserve exact evidence and do not repeat unchanged
+journeys. Root runtime/fixture cleanup remains complete; peer resources retained.
+Q&A mirror38files includes final persona source review/CI. Finish current gates and
+publish final shared disposition before another application scope.
+
+## September 21, 06:15 UTC — persona handoff captured, gates pending
+
+Stream3PR99 frozen1d8357330 reviewed:6changed/3session source hashes and387durable
+artifacts verified; live03c09d8f4a captured. ExactCI35567483902 still running, no merge
+or next grant. Temporary persona/posts/mutes cleaned; original fixtures/owned runtime
+18130/18131/64531–37 and handofftab7 retained. Rootdd0ee04b5 fixed under35567323534;
+root runtime remains released. Finish gates and documentation-only publication;
+no duplicated journeys, shared writer conflict, native build or broader row closure.
+
+## September 21, 06:10 UTC — paid milestone published separately
+
+Paiddd0ee04b5 publishes verified Q&A actions with master027afc13a; app bytes match6a.
+Priorc426 fullCI35564679691 passed15/oneSeeder skip; new automatic scheduling pending.
+No root runtime/native reservation; exact cleanup remains recorded in live01.
+Stream3 continues only its existing persona grant, final cleanup/commit/handoff;
+its uncommitted source is excluded from paid. Its completed race and regression
+receipts are reused, not rerun solely because the prior task ended. Coordinator will
+review the frozen source, migration13000 and durable evidence before integration.
+
+## September 21, 05:57 UTC — Stream1 runtime released
+
+Local6a0858690 Q&A action repair is verified within live01 limits. Exact f9200340
+rows0, three privileges restored; API18132/web18133/Supabase64561–67 stopped, phase
+IAB tabs17–20 closed, cache preserved. No provider writes or native reservation.
+Publishedc426 stays fixed for CI35564679691. Stream3 persona grant and owned runtime
+remain active; root has no shared writer conflict. Map97/96 integration is complete.
+
+## September 21, 05:41 UTC — Q&A mutation verification reservation
+
+Root reserves18132/18133/64561–67, reusing cleaned owned wallet-read-r1/full77 schema,
+private gig-qa-mutation-r1/f9200340. Existing QASection vote/pin/delete → SDK → gigs
+routes → SQL; source catch blocks silently discard failures, not yet runtime proof.
+Verify actual denial/retry before any in-place repair. Reuse recent question creation,
+identity and read-recovery evidence; synthetic saved question reader fixture, no provider
+writes/native build/newtests. Publishedc426 stays fixed for CI35564679691. Stream3
+persona grant remains separate; no shared application file or runtime conflict.
+
+## September 21, 05:39 UTC — persona feed-mute repair grant
+
+Map97/96 integrated027afc13a after exact9b CI35564770177; prior4c6f full native CI
+passed and all3map hashes match paidc426. Live03c31f1ba2 captured before master merge.
+Paidc426 remains fixed for automatic35564679691; no new Stream1 application scope.
+
+Stream3 sole writer, new branch from current master: existing posts.js mute route,
+feedService filter sets, SDK posts.ts target union, PostCard and existing hook/page
+wiring for the reproduced persona mute that vanishes locally but returns on reload.
+Use canonical public persona type/id and match only persona identity_context_id;
+never expose the private actor or broaden mute to the owner's other profiles.
+Preserve user/business/topic rows, current own-post policy, notification-only membership
+mute, visibility and presentation. Compare existing/archive/open implementations and
+report any additional required caller before editing beyond these existing paths.
+
+One forward enum migration reserved **20260916013000_persona_feed_mute.sql**: after
+master's12000 and before the paid branch's20100..22100, matching the existing allocation
+scheme. No tracked branch has this version. Existing enum lacks persona, and applied
+baseline cannot be changed; extend that type only. No new table/index/service or unit
+tests, no applied migration rewrite. Verify retained rows and actual UI/API/SQL mute,
+reload, unmute, denial/retry, repeat/concurrent behavior and public-persona isolation
+with exact cleanup. Native compatibility is a separate recorded boundary; no local
+native build grant. Own18130/18131/64531–37 only; root/peer resources preserved.
+
+## September 21, 05:28 UTC — published candidate, source frozen
+
+Paidc426f4729 clean/pushed; prior42d fullCI35562351562 green, currentautomaticpending.
+MapPR97 updated9b contains onlydocs beyond full-green4c6f35562416370; currentgate/merge
+pending. Docs98 merged63a27fd24 after exact60da CI35564213230. Stream3 latest03
+d28fd087/364-file manifest791cbe2b captured. No further app grant until batch closes.
+Root18132/18133/64561–67 stopped, tabsclosed/rows0/grantsrestored/cachepreserved;
+peer runtime/fixtures retained, no native reservation. RedundantCI35562211102 and
+35562395559 are canceled, not passed; allow delayed automatic scheduling before
+another manual dispatch. Source/evidence details remain in live01 and03.
 
 ## September 21, 05:00 UTC — root runtime released; batch frozen
 

@@ -7,24 +7,61 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
-## September 21, 05:19 UTC — exact-source CI reconciliation
+## September 21, 06:19 UTC — persona repair integrated on master
 
-Paid published42d remains on full gate35562351562; local795ad998d payment-read
-candidate is clean and verified, awaiting the integration batch push. Delayed
-automatic paid35562395559 duplicated that exact head and was canceled as redundant,
-not passed. All78 files in the three latest Stream1 identity/QA/payment mirrors
-were rechecked; current PaymentSection matches its accepted candidate hash.
+PR99 exact1d8357330 passed [CI35567483902](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35567483902)
+with8 applicable checks passed/3 path skips. After reviewed source/evidence and CLEAN
+mergeability, coordinator merged **dd24f0029c58dd38e201a9fe6b349eda317361d7** at06:19:04Z.
+No protection override or whole-row closure. Reserved enum13000 replay passes; hosted
+activation/native/intact-account-switch limits remain open. Coordination includes this
+master; documentationPR100 still changes only five existing live documents.
 
-Map PR97 is retargeted to master at unchanged4c6f11771, combining the three-file
-read-error/order repair and popup destination while preserving separate commits and
-real UI/SQL evidence. Automatic96/d10e35562256054 and original97/4c6f35562565822
-passed their changed surfaces. Redundant manual96/35562211102 was canceled, not passed;
-combined final-tree97/35562416370 remains the full gate. Native/workflow bytes are
-identical between96 and97. No merge claim yet. Stream3 latest03 hash5c13c460 captured.
-Documentation98 exactbb37437b8 automatic35563086879 passed; it remains draft until
-this batch disposition is published. Automatic CI may appear several minutes late;
-do not dispatch a duplicate after a short absence. Root runtimes remain stopped;
-peer runtime/fixtures preserved. PR34/47 stay draft and PR46/user work untouched.
+Paid **dd0ee04b5** stays fixed for fullCI35567323534; web/backend/schema/identity passed,
+native jobs pending. PR34/47 remain draft and PR46 separate. Adopt new master into paid
+after its current gate completes; preserve exact evidence and do not repeat unchanged
+journeys. Root runtime/fixture cleanup remains complete; peer resources retained.
+Q&A mirror38files includes final persona source review/CI. Finish current gates and
+publish final shared disposition before another application scope.
+
+## September 21, 06:15 UTC — peer review complete within bounded scope
+
+Paiddd0ee04b5 currentCI35567323534 has web/backend/identity checks passed; schema/native
+remain pending. Its Q&A source is verified;200of202 earlier financial/client/schema
+bindings remain identical and the two intentional changes have real UI/API/SQL proof.
+Stream3 personaPR99 frozen1d8357330 source/evidence reviewed, all387 durable hashes
+verified, live03c09d8f4a captured. No source blocker within its recorded scope, but
+exactCI35567483902 and integration remain pending. Exact temporary cleanup restores
+original retained fixtures; peer runtime stays reserved, root stopped. See live01/03.
+Publish this documentation-only batch; finish gates before new application scope.
+No broad row closure, native/provider claim, new unit test or design change.
+
+## September 21, 06:10 UTC — Q&A repair published; prior candidate fully green
+
+Paid **dd0ee04b5** publishes verified question-action repair6a0858690 and master027afc13a
+without further application changes. PR47 remains draft; new automatic CI scheduling
+pending. Priorc426 fullCI35564679691 passed15 checks/oneSeeder skip, including Android
+and all three iOS checks. Source, real UI/API/SQL evidence and exact cleanup are in
+[Stream1](workstreams/01-gigs-payments.md); durable mirrors now29payment/35Q&A files.
+No new unit tests or accepted journey repeats. Stream3's persona milestone remains
+separate pending frozen source, final cleanup and draft PR review; its interrupted
+work and already completed race evidence are being adopted. PR34 stays draft,
+PR46/user work untouched. Broader native/provider/policy and count-atomicity limits
+remain open. Finish current gates and publish this documentation-only batch.
+
+## September 21, 05:57 UTC — question actions verified
+
+Local paid **6a0858690** repairs silent question-action failures, a false-success delete,
+and unreachable existing pinned-question controls. Actual UI/API/SQL recovery and
+permissions pass; eight fixture table counts0, privileges restored, owned services/tabs
+closed. TypeScript/lint/syntax pass; no new unit tests or provider writes. The 34-file
+mirror, source comparison and precise limits are in [Stream1](workstreams/01-gigs-payments.md).
+
+Published **c426f4729** remains fixed for CI35564679691; all iOS passed, Android build
+pending. Map97/96 merged027afc13a after exact9b CI35564770177; source is already included
+in paid. Docs98 merged63a27fd24. Stream3 continues only its separate persona-mute grant
+and reserved13000 enum extension. PR34/47 remain draft; broader native/provider/policy
+and vote-count atomicity boundaries remain open. Publish the next reviewed batch after
+current CI, preserving accepted source-bound evidence and peer resources.
 
 ## September 21, 05:00 UTC — payment-details read recovery verified
 

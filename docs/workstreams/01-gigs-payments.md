@@ -1,23 +1,126 @@
 # Stream 1 — Gigs and payments
 
-## September 21, 05:19 UTC — exact-source CI reconciliation
+## September 21, 06:19 UTC — persona repair integrated on master
 
-Paid published42d remains on full gate35562351562; local795ad998d payment-read
-candidate is clean and verified, awaiting the integration batch push. Delayed
-automatic paid35562395559 duplicated that exact head and was canceled as redundant,
-not passed. All78 files in the three latest Stream1 identity/QA/payment mirrors
-were rechecked; current PaymentSection matches its accepted candidate hash.
+PR99 exact1d8357330 passed [CI35567483902](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35567483902)
+with8 applicable checks passed/3 path skips. After reviewed source/evidence and CLEAN
+mergeability, coordinator merged **dd24f0029c58dd38e201a9fe6b349eda317361d7** at06:19:04Z.
+No protection override or whole-row closure. Reserved enum13000 replay passes; hosted
+activation/native/intact-account-switch limits remain open. Coordination includes this
+master; documentationPR100 still changes only five existing live documents.
 
-Map PR97 is retargeted to master at unchanged4c6f11771, combining the three-file
-read-error/order repair and popup destination while preserving separate commits and
-real UI/SQL evidence. Automatic96/d10e35562256054 and original97/4c6f35562565822
-passed their changed surfaces. Redundant manual96/35562211102 was canceled, not passed;
-combined final-tree97/35562416370 remains the full gate. Native/workflow bytes are
-identical between96 and97. No merge claim yet. Stream3 latest03 hash5c13c460 captured.
-Documentation98 exactbb37437b8 automatic35563086879 passed; it remains draft until
-this batch disposition is published. Automatic CI may appear several minutes late;
-do not dispatch a duplicate after a short absence. Root runtimes remain stopped;
-peer runtime/fixtures preserved. PR34/47 stay draft and PR46/user work untouched.
+Paid **dd0ee04b5** stays fixed for fullCI35567323534; web/backend/schema/identity passed,
+native jobs pending. PR34/47 remain draft and PR46 separate. Adopt new master into paid
+after its current gate completes; preserve exact evidence and do not repeat unchanged
+journeys. Root runtime/fixture cleanup remains complete; peer resources retained.
+Q&A mirror38files includes final persona source review/CI. Finish current gates and
+publish final shared disposition before another application scope.
+
+## September 21, 06:15 UTC — final peer handoff adopted
+
+Paiddd0ee04b5 remains fixed for [automatic CI35567323534](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35567323534).
+Web/backend/identity checks pass; schema/native still running. Source-reuse receipt
+compares202 financial/client/schema paths with accepted795:200 unchanged, only the
+verified Q&A route/component differ. Q&A durable mirror36files; no blanket runtime
+retest. Priorc426 fullCI remains green and its final receipt is preserved.
+
+Reviewed frozen Stream3 **1d835733025cf85cae00f000f61c1c45d509b642**, [draft PR99](https://github.com/WangPantopus/skinny-pantopus/pull/99):
+five existing paths plus reserved additive enum13000. Verified all6 changed/3 session
+source hashes, actual browser/HTTP/SQL receipts, cache-race baseline/candidate and exact
+cleanup. Current actor isolation reuses replaced QueryClients/SDK session retirement;
+no new intact cross-account mute claim. Server earlier read may return its prior
+snapshot but cannot replace the newer cache. Recorded cached304 UI proof is not fresh
+200 ordering. No source blocker within this scope; own-persona/personal-post/privacy
+and existing notification mute policy remain intact. No coordinator UI rerun.
+
+Captured live03c09d8f4a; all387 durable hashes verified (manifest76973233).
+Temporary persona/posts and mute rows removed, original7IDsets/membership restored,
+8related tables0, grants restored/fault flags absent. Peer intentionally retains owned
+runtime/fixtures/cache/tab for continuation; root resources remain stopped/clean.
+Exact peerCI35567483902 pending; review is not integration or a whole-row closure.
+Finish gates before any next application scope. PR34/47 remain draft; PR46 separate.
+
+## September 21, 06:10 UTC — question actions published; prior full CI passed
+
+Paid **dd0ee04b59cf6f18d4f8fd0779a7ffa5622dc2f0** is clean/pushed in the required
+worktree/branch. It publishes verified6a0858690 and integrates master027afc13a;
+backend/frontend/schema/workflow bytes are identical to verified6a. PR47 remains
+draft with current scope and limits. Automatic CI scheduling is pending; no current
+head green claim. Prior exactc426 passed [full CI35564679691](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35564679691):
+15 checks passed, one Seeder skip, including Android and all three iOS checks.
+Payment-reader mirror29files and Q&A-action mirror35files are hash verified with
+final prior-CI and integration receipts. No accepted journey was repeated.
+
+All root fixtures, privileges, provider cleanup and released runtimes remain as
+recorded below. No new unit tests or design changes. Stream3's separate persona work
+is not in this head: its task was resumed from uncommitted source after cutoff; the
+existing completed server race/regression evidence is being adopted, then its owner
+will finish cleanup and a frozen commit/draft PR/live03 for coordinator review.
+QueryProvider already replaces the client and keyed children on session changes;
+no new intact cross-account mute acceptance is claimed. PR34 stays draft; PR46 and
+unrelated work remain separate. Finish exact CI and the documentation publication;
+review Stream3's final handoff before any further integration.
+
+## September 21, 05:57 UTC — question actions verified and cleaned
+
+Local paid **6a085869048c927ffb677905a247bcc93853ddf0** changes only existing
+`QASection.tsx` and `backend/routes/gigs.js`. Actual worker upvote and poster pin
+returned 500 without feedback; a denied question DELETE returned 200 while the row
+remained. After a successful pin, both poster Unpin and author Delete became unreachable.
+Six current/master/staging/place/archive variants had the same gaps. Reuse existing
+toasts, check the existing delete result, and restore existing authorized actions in
+the pinned header with the original card/control classes. No new file, schema,
+service, unit test, screen or navigation pattern.
+
+Real browser → SDK → route → PostgREST/full77 SQL verifies repeated vote/pin failures,
+keyboard recovery, vote/count1, pinned/unpinned state, delete failure with the card
+retained, Cancel sending no DELETE, and author deletion of a pinned answer with
+question/vote rows0. Poster Unpin and author Delete are present; unrelated viewer
+has neither, while direct handler boundaries retain403/404 (fixture auth401).
+A stale poster action after deletion returns404/error; reload settles genuine empty.
+TypeScript, scoped ESLint and backend syntax pass (two existing lint warnings).
+
+Evidence: `gig-qa-mutation-r1` / f9200340; 34 hash-verified files in owner's
+`.pantopus-recovery/audits/20260921-stream1-gig-qa-mutation-r1`. Baseline cleanup before
+candidate restart is retained separately. Final eight explicit table counts0, all
+three privileges restored, provider writes0, API/Next/Supabase stopped and four owned
+phase tabs closed; cache preserved. Old loopback fixture-session traffic was excluded;
+fresh phase-specific origins were used. No new authentication acceptance claim.
+
+Limits: synthetic auth/ancillary transport and saved question fixture; no new
+question creation, attachments, native/business/provider, lost reply, account-switch,
+simultaneous mutation or vote-count atomicity acceptance. Existing separate vote/count
+writes remain a source lead to verify, not a claim of transactional safety. Recent
+unchanged identity and question-read evidence remains reusable.
+
+Published paid **c426f4729** stays fixed for automatic CI35564679691 (all iOS passed;
+Android build still running). Push this local milestone with the next reviewed batch
+after that gate. Map97/96 merged027afc13a after exact9b CI35564770177; paid already
+contains identical map files. PR34/47 remain draft. Stream3's separately granted
+persona-mute work and reserved migration13000 remain isolated from this candidate.
+
+## September 21, 05:28 UTC — combined candidate published
+
+Paid **c426f4729e6ab0311c9908d71b278a8d09255d0d** is clean/pushed on the required
+paid worktree/branch. It includes verified PaymentSection795ad998d and reviewed map
+9b1fa0d43 (documentation master63a27fd24 plus unchanged4c6f map source). All202
+financial/client/schema path hashes and all3map hashes are preserved; combined
+TypeScript passes. No new unit tests, provider operations or runtime journeys repeated.
+
+Prior exact42d passed full CI35562351562:15passed/1Detect-changes skip, allthreeiOS
+and Android included. Identity/QA durable mirrors now28files each with final receipt;
+payment-read mirror28files includes integration/source bindings and map CI receipt.
+PR47 description/title reflect the full current scope and remain draft; PR34 stays
+draft, PR46/user work untouched. Currentc426 automatic CI has not appeared yet;
+prior green/source equivalence does not establish the new head's merge gate.
+
+Docs98 exact60da7f063 passed35564213230 and merged63a27fd24f96604f5addead710f7d4bb19614e23.
+Map4c6f full35562416370 passed15/1; updated9b only changes fourdocs and its automatic
+gate is pending. PR97 is the combined3file map review, not yet merged;96 remains
+separately evidenced. Redundant35562211102 and35562395559 are canceled, not passed.
+Stream3 latest03 d28fd087 captured; all364 durable hashes verified (manifest791cbe2b).
+Root fixtures/grants restored, runtimes/tabs stopped, peer resources preserved.
+Finish current CI and map/master integration before another feature scope.
 
 ## September 21, 05:00 UTC — payment-details read recovery verified
 
