@@ -1,5 +1,55 @@
 # Pantopus project handoff
 
+## September21, 10:33 UTC — isolated natural reminder timer accepted
+
+Coordinator verified all511 Stream3 durable hashes (manifest6eeeb6178), six source
+bindings unchanged on b409/current master,14 real local PostgREST requests and the
+original UTC10:33 callback at10:33:00.005. Exactly one job callback ran;49 other
+registrations were skipped. ReminderLog201, Notification201 and local SMTP acceptance
+at10:33:00.156 are confirmed. All retained full rows are unchanged with exactly one
+owned Booking/log/notice added. Exact new rows/mail removed, six tables restored,
+original12 Mailpit message IDs restored, child exited0/absent, retained API7996 and
+Next14742 untouched. No source change or duplicate CI run was needed.
+
+Acceptance is limited to the unchanged selected node-cron job under synthetic
+registration/query/transport isolation and a SQL-seeded booking, with real wall clock,
+local SQL and SMTP. No new UI, native, hosted, all-jobs startup, daily-agenda or pause-
+policy acceptance. Existing prior manual-worker evidence remains separately bounded.
+Stream3 may perform source-only reconciliation of the existing pause/resume delivery
+promise and consumers before proposing any runtime or policy change.
+
+Stream2's frozen decline baseline11 artifacts and live02 hash881e4e777 reviewed;
+README grants only existing caller lifetime repair after exact cleanup, reusing the
+role guard/ref. Full paid e970 CI passed. Keep paid head fixed while this peer repair
+is completed/reviewed, then integrate final master once. All streams remain incomplete.
+
+
+## September21 — paid full CI passed; next peer repair under review
+
+Published paid `e970ea26a16526c684ce2087fef0563f7bc26403` full
+[CI35586627926](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35586627926)
+completed SUCCESS:15 applicable jobs passed, including iOS/Android; Seeder skipped.
+No new runtime or broad acceptance follows from CI. PR34/47 stay draft;46 stays
+separate. The default-phase durable mirror now has38 verified artifacts with final
+CI and documentation122 publication receipt. Documentation122 merged
+`9ae572d748cadad856b5a2c8561e7bc3e7cc4624` after exact84915de34
+CI35588730986 passed;123's bounded role repair is included in master.
+
+Keep paid e970 fixed until the next reviewed peer batch is ready, then adopt final
+master once and run relevant combined checks. Root API/tabs remain closed, owned
+Next18133/Supabase64561–67 retained, no provider calls or native build reservation.
+Stream2 reproduced actual Requests Decline confirmation surviving departure to
+Settings: rejection POST200 changed exact pending request to rejected/resolved_by
+owner with one rejection audit, while full occupancy/invite rows stayed identical.
+Current Cancel produced no rejection and unchanged full snapshots. Actual route/
+service/SQL; synthetic identity and two intercepted notification methods, no delivery
+acceptance. Its exact repair/cleanup review is separate from123's completed scope.
+Stream3 has adopted its one isolated timer child and exact temporary booking;
+registration/import inspection reports one selected/49 skipped jobs and no requests,
+sockets or violations on import. Natural callback/SQL/local SMTP/cleanup evidence
+is still pending, so no scheduler closure. All three streams remain incomplete.
+
+
 ## September21, 10:25 UTC — member confirmation repair integrated
 
 PR123 merged as `55856362bd736355616da740ff2fda8b8a5fd01c` after exact
