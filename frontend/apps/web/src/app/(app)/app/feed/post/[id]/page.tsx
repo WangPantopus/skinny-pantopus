@@ -257,8 +257,9 @@ export default function PostDetailPage() {
     try {
       await api.posts.reportPost(post.id, { reason: reason as 'spam' | 'harassment' | 'inappropriate' | 'misinformation' | 'other', details });
       showToast("Post reported — we'll review it");
-    } catch {
+    } catch (err) {
       showToast('Failed to report post');
+      throw err;
     }
   };
 
