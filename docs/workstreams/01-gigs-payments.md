@@ -1,5 +1,148 @@
 # Stream 1 — Gigs and payments
 
+## September 21, 09:12 UTC — privacy batch integrated
+
+All five bounded Home/professional repairs are merged into master
+`27cd8b112064997927acc21c92c5eae0b56d8fcc`, using normal protected merges:
+
+- PR114: reviewed source `59b67ee84`, merged `e1a757d139b32358d1492ebe694f5fb000838cd9` after exact `59b67ee84` [CI35577190208](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35577190208).
+- PR115: reviewed source `e47eb37de`, merged `e6e3ae6aff9950eb25c04dc8f580c2fb23a0f904` after exact `1ace297d7` [CI35580566121](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35580566121).
+- PR116: reviewed source `99e0cba3a`, merged `be2163744066c4989fa0d60d24ea2fcb7c9a985f` after exact `a5823ba87` [CI35580856148](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35580856148).
+- PR117: reviewed source `e729a516a`, merged `8368959a4eff3675d9705872eae686ef8fd10301` after exact `22cb3cbfd` [CI35581223453](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35581223453).
+- PR118: reviewed source `1ad1a0693`, merged `27cd8b112064997927acc21c92c5eae0b56d8fcc` after exact `6a0f05bcb` [CI35581547015](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35581547015).
+
+Each updated branch was compared with its accepted source before merging; only
+previously reviewed preceding fixes were added. All five target file hashes remain
+identical to the accepted candidates. Original UI or explicitly HTTP/SQL-only
+acceptance, controlled-failure timing, excluded driver attempts and exact cleanup
+remain bounded as recorded in live02/03. No broad row, native/provider/session or
+concurrent partial-write acceptance is inferred from CI or integration.
+
+Paid `codex/paid-gig-integration` remains clean/pushed at
+`2ea9d93ca6bd322ffeecdc411a289f10c7e7e17f`. Full
+[CI35576926687](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35576926687)
+passed all 15 applicable jobs, including iOS and Android; Seeder skipped. The
+existing vote-phase mirror has42 verified artifacts, including final paid CI,
+all five guarded integrations and prior saved-card source reconciliation. Eighteen
+file/section bindings retain the accepted September9 native saved-card source;
+relevant service/routes and migration are unchanged. Preserve the earlier actual
+Stripe TEST/native evidence and cleanup; no actors, setups or cleanup were replayed.
+This source comparison does not certify changed runtime/configuration/dependencies.
+
+Frozen live02/03 final receipts were captured in coordination75c7006b0. Their
+feature branches remain frozen. Publish this five-document PR113 separately,
+then adopt final master once into paid and run relevant combined checks/current CI.
+Keep PR34/47 draft; unrelated PR46 remains untouched. Release only the next README
+verification scopes: existing Home Members role action and scheduling Resume
+persistence. Source leads require actual failure before an exact repair grant;
+no new unit tests, native build, replacement screen or speculative refactor.
+
+All three streams remain incomplete. Root API/tabs are closed; owned Next18133
+and Supabase64561–67 remain reserved. Stream2 released its runtime; Stream3 retains
+only its owned18130/18131/64531–37 resources. No heavy native slot is reserved.
+Fixture/provider/grant cleanup limits are unchanged. The cancellation/no-show fee
+policy question remains unanswered; no policy or fee execution is invented.
+
+## September 21 pending integration batch — privacy follow-ups reviewed
+
+PR117 e729a516a (stacked115) changes only the existing professional block guard's
+position. All481 durable hashes and3 source bindings match;10 housemate cases and20
+affected HTTP/SQL controls pass, all exact fixture rows/sessions/grants restored.
+No public-screen/native acceptance. OriginalCI35579542422 passed at exacte729.
+PR118 1ad1a0693 (stacked116) checks the existing HomePrivacy PATCH read error before
+merge/upsert. All11 durable hashes and route bytes match; all13 actualHTTP/SQL cases
+reviewed and every rejected request preserves full before/after SQL rows. Controlled
+read-recovery timing is explicit; genuine absence retains defaults. Cleanup/auth/
+privacy/storage counts0, SELECT/INSERT restored, own runtime released. No UI/native/
+concurrent partial-write acceptance. OriginalCI35579547138 passed at exact1ad1.
+
+Capture frozen live02 db729875 and03 1ddfb536; preserve114/115/116 accepted evidence.
+Paid2ea9 fullCI35576926687 has all iOS and Android instrumented jobs passed; only
+Android lint/test/assemble remains running, no failure observed. Keep source fixed.
+After its final gate, integrate114→115→116→117→118 with exact updated-head checks,
+then separate doc113. Hold new application scopes while this batch catches up;
+independent inventory/source reconciliation may continue without repeating baselines.
+
+
+## September 21, 08:38 UTC — saved-method reads verified; next batch reviewed
+
+Paid source remains clean/pushed2ea9d93ca; CI35576926687 application/web/schema and
+Android instrumented jobs passed, iOS bundles built. Android assembly/lint and the
+three iOS test jobs remain pending; no new-head full success claim. No app change
+or new unit test in this milestone. Existing PaymentMethodList→SDK→pays GET/methods
+→PaymentMethod SQL displays exact Visa4242 Default/12-30 before Mastercard4444/06-31.
+Actual SELECT denial and repeated keyboard retry return500 with the existing error;
+restore SELECT/Return recovers both cards. Full SQL rows unchanged. Actual UI logout/
+other-login shows genuine empty list, no previous cards; HTTP owner2/other0/query
+spoof0/anonymous401. Ordinary account switch only, no held-response race claim.
+
+Synthetic saved-card rows/sign-in/ancillary wallet; existing Stripe TEST publishable
+configuration, no provider writes or card add/delete/default/charge acceptance.
+Initial ancillary response shape, missing publishable-key gate and stale tab script
+failure were excluded and corrected in the private runtime only. Fresh IAB26 works;
+25/26closed. API18132 stopped; User/authUser/PaymentMethod/Notification counts all0,
+SELECT restored and rows compared unchanged. Owned Next nowPID47970/session18138
+retains18133/.next-dev with TEST key, owned79-schema Supabase64561–67 retained.
+No cache deletion/peer resources/native build. Durable payment-method-read-r1 mirror
+has14 verified files/five source bindings; credentials and operator logs excluded.
+
+Next peer batch reviewed:114 professional loader59b67ee84 exactCI35577190208 passes;
+115 professional optional-auth e47eb37de exactCI35577904476 passes,20HTTP/SQL cases;
+116 Home privacy service99e0cba3a exactCI35578111441 passes, actual Place error/retry
+and saved true/false/genuine absence. All471 Stream3 hashes/four latest source bindings
+and14 Home hashes/service binding reviewed, exact cleanup and excluded driver attempts
+retained. Capture frozen02 bf9c9c5b and03 6927f40b; do not conflate HTTP-only115 with UI.
+Hold114→115→116 and doc113 merges until paid fullCI completes. All streams remain open.
+
+
+## Current runtime verification — saved payment-method reads
+
+Root reuses owned18132/18133/64561–67 on fixed2ea9 source for
+`/private/tmp/pantopus-stream1-payment-method-read-r1`, unique f9200380 fixtures.
+Existing Payments & Payouts → PaymentMethodList → SDK getPaymentMethods → pays.js
+GET/methods → PaymentMethod SQL. Verify display/default/order, real SELECT failure
+and retry, genuine absence and current-account isolation. Two synthetic saved-card
+records; synthetic fixture sign-in/ancillary shell, no Stripe writes or card mutation
+acceptance. API18132 was free; Next70394 and owned79-schema SQL64562 retained.
+No application edit before failure, no new unit tests/native build; restore SELECT,
+remove exact records/users and close only owned API/tab after the bounded check.
+
+
+## September 21, 08:15 UTC — final master adopted and paid head published
+
+`codex/paid-gig-integration` is clean/pushed at
+**2ea9d93ca6bd322ffeecdc411a289f10c7e7e17f**, including final master
+**721d46e6d2ad6bfc1e67ea70b375d7b2d129d9f0**. PR106 published only the five
+coordination documents after exact ceb5a5ba1 CI35576403371 passed. PR110,111,112
+were integrated after their exact updated-head gates; merge SHAs/source limits are
+recorded below and in integration-batch-pr-state.json. PR34/47 remain draft;46 is
+separate and untouched. New full [CI35576926687](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35576926687)
+is pending for2ea9; prior b756 fullCI passed15 jobs/one skip, including all native.
+Keep2ea9 fixed while its full gate runs; do not claim new-head CI success yet.
+
+The merge changes eight reviewed Home/social files and five published documents.
+All eight application hashes match accepted feature heads; payment/vote/completion
+implementation is unchanged. Combined existing regressions pass334 tests across
+six suites, TypeScript exit0 and whitespace checks pass. No new unit tests or
+application repairs in this integration. Reuse the source-bound actual UI/API/SQL/
+provider evidence; combined tests do not expand end-to-end or device acceptance.
+
+Durable vote-phase mirror now contains39 verified files, including all final batch
+PR states, eight source bindings, combined checks, prior fullCI and updated PR47
+body. Existing completion-proof mirrors remain11 and14 files. All prior fixture,
+storage/grant and provider cleanup limits remain unchanged; root API/tabs stopped,
+owned Next18133 and79-schema Supabase64561–67 retained. No native slot reserved.
+
+Both existing peer tasks were released under the published README grants. Stream2
+has adopted721d46e6 on `codex/home-privacy-read-verification` and is reacquiring only
+its owned runtime after listener checks for actual D06 privacy verification. Stream3
+continues the existing professional self-editor load-error repair after its actual
+500-to-create baseline and seven-ref comparison. No duplicate task or automation.
+Next: complete2ea9 CI, review bounded peer handoffs, and continue the remaining
+payment acceptance gaps without repeating accepted journeys. All three streams and
+the app remain incomplete; fee policy, provider and installed-device limits stay open.
+
+
 ## September 21 integration checkpoint
 
 All three streams remain incomplete. The current bounded Home/social repairs are
