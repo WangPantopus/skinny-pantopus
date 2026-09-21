@@ -1,15 +1,14 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated September21 07:03UTC. **Stream incomplete; ongoing verification.**
+Updated September21 07:14UTC. **Stream incomplete; ongoing verification.**
 Sole live status is this neutral coordination file. No new unit tests written.
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
-`codex/stream3-scheduling-pref-retention`, local/pushed **7e1651d35ee276676af9454d75a0ed0abf67dff6**,
-tracked clean plus owned .next-stream3. [Draft PR103](https://github.com/WangPantopus/skinny-pantopus/pull/103)
-from master0f6e55e; automatic [CI35571103116](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35571103116)
-queued exact7e165. PR101 merged944489d after exacta5b CIgreen; PR99 mergeddd24 after
-exact1d835 CIgreen. Home owns heavy native slot. Stream3 retains exclusive18130/18131/
-64531–37; current backendPID87353 (restarted for prefs helper), NextPID14742.
-No provider activation or broad row completion claim. Prior refs/evidence preserved.
+`codex/stream3-beacon-directory-check`, local/pushed **f43b9664a319935a4e03553fa14a568e033fb2d4**,
+tracked clean plus owned .next-stream3. [Draft PR105](https://github.com/WangPantopus/skinny-pantopus/pull/105)
+from master944489d; automatic [CI35571949622](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35571949622)
+running exactf43. PR103 exact7e165 CI35571103116SUCCESS, review/integrationpending;
+PR101 merged944489d and PR99 mergeddd24 after exact-headCI/review. Prior refs preserved.
+Owned18130/PID4033 and18131/PID14742, Supabase64531–37 retained; no new native build.
 
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
@@ -25,6 +24,40 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## N03 Beacon/profile search errors — PR105 handoff
+
+Actual Bob directory searchstream3 returned original publicBeacon. PublicPersonaSELECT
+failure then newstream3-localquery returnedHTTP200/empty and false No public Beacons
+matched. Five current/master/paid/staging/Beacon searchTableFields helpers identical:
+Promise.allSettled rejections/queryerrors ignored. Coordinator granted only existing
+identitySearch.js helper; replace two continues with throws, reusing route500 and existing
+UIerror/Retrysearch. No UI/design/schema/service/newfile/tests or ranking/privacy change.
+
+Actual candidate web→realGoTrue→HTTP→PostgREST/SQL: deniedPublicPersonaSELECT now500,
+explicit unavailable/Retrysearch; restoregrant+Enterretry gives originalpublicBeacon.
+Genuineabsentquery200 remainsNoMatches. One field's synthetic403 with otherqueriesreal
+causeserror; Enterretry200 recovers. Earlier one-shot503 ended200 and is excluded from
+error-state proof (transient recovery, not persistent field failure acceptance).
+Unchanged following-list actual PersonaMembershipSELECTdenial shows expliciterror;
+restore+Enterretry returnsoriginalBeacon, so no followingrepair. Prior follow/unfollow/
+privateidentity/link evidence reused within source limits, not repeatedwholesale.
+
+Affected scopes realauthenticatedHTTP: public200/onepersona, local200/oneLocalProfile,
+combined200/both, genuineempty200; LocalProfileSELECTdenial local500+combined500,
+restoreretrylocal200, shortquery400. Localprofile scope is HTTP-only, not new UIacceptance.
+Existing identitySearch10/10, syntax/diffcheckpass. No newunit tests. Native/hostedprovider,
+broader access-change/stale-session and other helper privacy-read errors remainoutside
+this bounded repair. No wholeN03/A05 closure.
+
+Cleanup: no applicationfixture rowscreated/modified; PublicPersona/PersonaMembership/
+LocalProfile SELECTrestored, singlefieldfaultconsumed, auxiliaryauthsessionlogout200,
+tab11closed. Originalprofiles/posts/membership retained; authaudit/sessioneffectsretained.
+Private beacon-directory-final-evidence.json binds4sourcehashes, comparison/baseline/
+actualUI/HTTP/fault/checks/cleanup limits. Durable429files hashverified; MANIFEST
+**2f963c5541e66437d00b8bd1c569492f77e790a9eb025dda820e84b1df952551**
+in existing accounts-social-r3 mirror. ExactheadCI35571949622running; coordinator review
+and integrationpending. Do not alter frozenPR103/101 refs or repeat acceptedjourneys.
 
 ## Scheduling channel preference retention — PR103 handoff
 
