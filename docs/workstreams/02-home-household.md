@@ -2,6 +2,19 @@
 
 Updated September 20, 2026. Owner: Home stream.
 
+## September 21 D07 Send invitation — reviewable repair for next batch
+
+**Published, required CI running; stream incomplete.** Clean/pushed `codex/home-request-invite-verification` at **dc130eab9301f33ac38de7ba9ecd0b333680c5f8**, [draft PR128](https://github.com/WangPantopus/skinny-pantopus/pull/128), merged125bc2base. [Exact CI35592119547](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35592119547) running; no green claim. This belongs to next batch, does not extend127/paid publication.
+
+- Sole existing handleApproveAccessRequest in members/page.tsx13additions/4deletions. Reuse pageConfirmation ownership and generation/token/origin/session beforePOST, success/error/finally. Existing retire/busyclear already present. Source outside handler byte-identical tobc2; role/decline/sharedstore/controls/copy/navigation/backend/schema untouched. No new application files or unit tests.
+- Accepted baseline12/source13/77bindings reused without repetition. Actual IAB17→SDK→production homeInvitationService/transaction/PostgREST/SQL: normal approval200 creates one exact targeted pending invite and approves request, Requests0. A second synthetic applicant's real request/list200 permits independent remaining check while preserving first invite. Pending confirmation→BrowserForward /edit closes dialog/no additionalPOST; complete request/invite/occupancy/audit snapshots and Notification/capability/commandcounts identical. Fresh BrowserBack caller usable; exact temporary members.manage deny after confirmation opened returns403/current readable error/enabled Invite, same fullrows/counts. Restoreoverride/freshconfirmation→200, second targetedpendinginvite. Fullreload No pending requests. Approvalstatuses200/403/200;two creation200s. Full occupancy remained identical throughout; no membership/recipientacceptance claim.
+- Dynamic email/notification modules intercepted for process lifetime: six safe method records for2requestnotifications+2email+2invite-notifications,0realproviders/blockedunexpectedattempts. Notification/capability/sender+decisioncounts0. No rawtokens/emailbody in evidence. Toast Invitation sent is not deliveryproof. Localfixtureledger55/syntheticidentity/transport; no hosted/native/session/otherdialog/delayedapprovalcompletion acceptance.
+- TypeScriptexit0; scopedlintexit0/0errors15existingwarnings; diffclean. Before UI, second fixture username exceeded30character SQL limit and server did notlisten; exact partialfixtures cleaned/reseeded with shorter username. This private setup error is excluded from application evidence; no apprepair for it. Existing role/decline and invitation/SQL regression evidence reused because unchanged.
+- Cleanup12basecounts0, both extraapplicantUser/auth0, exactrequest/invite/occupancy/audit/Notification/capability/sender+decisioncommands/override0; temporaryoverride removed/noDBgrantschanged. Tab17/API/Nextclosed,5owncontainersstopped/preserved, allreservedIPv4/6portsfree. Temporarylintsymlinkremoved; no peer/native/cachechanges.
+- Durable owner `.pantopus-recovery/audits/20260921-stream2-request-invite-candidate-r1/`,15files+flatmanifest: exactpage/privatefixture/actualHTTP/fullSQL/UI/departure/denial/validation/cleanup. Baseline12/source13 remain separate frozen evidence. Credentials/rawoperatorlogs excluded.
+
+**Candidate handoff frozen for coordinator capture/review and next-batch integration.** No broad D07 closure or further application/runtime work.
+
 ## September 21 D07 Send invitation — actual baseline frozen
 
 Adopted merged125 master **bc2bec5adb7aab01f1fd098be7cd9df202739864** on separate `codex/home-request-invite-verification`, preserved125refs, clean/no appedit. Eleven relevant current source bytes match the accepted13file/77binding source bundle. Coordinator runtime-only grant followed; current batch125/126/rootremoval is not expanded.

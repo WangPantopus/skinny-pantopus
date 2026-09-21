@@ -1,5 +1,108 @@
 # Pantopus project handoff
 
+## Next batch fixed to reviewed Home approval and host reminder email
+
+PR128 is mergedb412b1b58 after exactd34ca7e341 CI35592633526. PR129 originalc3f1bd038
+passedCI35592896635; updated03a2dac07f1f17df9222c0a9fc1e0f5b1984b6ac adopts only
+accepted128 Home source plus five documents. Service source is identical; updated
+CI35593202158 must pass before merge. Coordinator verified602 Stream3 durable hashes,
+15 delivery/failure/retry cases, full retained-row equality and exact cleanup. Keep
+this batch limited to128/129 and its documentation publication; no later findings.
+
+Paid1aecd remains fixed while fullCI35592232217 finishes native jobs. Backend privacy/
+Jest and canonical Following contract passed; isolated Following setup failed pulling
+pinned PostgREST from Docker Hub due connection reset. Single-job rerun was rejected
+while the workflow remains active. Retry only the failed job after completion; retain
+failure provenance and do not change product code for this infrastructure failure.
+After the paid gate is resolved, adopt final reviewed master once and run the affected
+combined checks before one new paid publication. PR34/47 drafts,46 separate.
+
+Home runtime remains released. Stream3 children/tabs closed, API18130/Next18131/DB/
+auth session retained. Root API/tab closed, Next18133/DB retained. No native local
+build reserved; no shared caches/devices/databases were cleaned or reset. All streams
+remain incomplete; no new unit tests or expanded provider/native acceptance.
+
+
+## September21 — Home approval merged; host email candidate reviewed
+
+PR128 merged `b412b1b589bd9fa1755887e7c6afe26112c7c55e` after updated d34ca7e341
+CI35592633526 passed. Source and full-state UI/SQL evidence were independently reviewed.
+PR129 original `c3f1bd03868d916530e0477c318e3f5ddd43c91a` passed CI35592896635.
+Coordinator verified601 durable hashes and exact service source;29 added lines only
+in existing sendBookingReminder. Fifteen manual-worker cases cover actual UI opt-in,
+off/absent/paused negatives, real User SELECT403, synthetic missing contact/SMTP
+rejections, restored retries and completed-attempt dedupe. Partial-recipient failure
+measured host2/invitee1 after retry; no exactly-once or lost-acknowledgement claim.
+All retained full rows independently match, exact8 bookings/logs/preference/14mails
+cleaned, six tables/original12mailIDs and SELECT restored. Private children/tabs
+closed, owned API/Next/DB/auth session retained.26 existing checks pass; no new tests.
+Guarded129 master adoption is underway; updated-head CI required before integration.
+
+Paid1aecd fullCI35592232217 has a backend infrastructure failure: Docker Hub reset
+its auth connection while pulling pinned PostgREST, before isolated Following tests
+could start. Backend privacy/Jest and separate canonical schema/Following contract
+passed. Native jobs remain active; GitHub rejected an attempted single-job rerun while
+run active. Retry that failed job after completion; no application repair is justified
+by this image-pull failure. Preserve failed attempt and distinguish prior e970 green
+from current pending/failed gate. PR34/47 remain drafts,46 separate. Keep paid head
+fixed until full CI is resolved; do not cancel native jobs to publish another batch.
+
+
+## Next-batch review — Home approval and host reminder email
+
+PR128 original dc130eab9301f33ac38de7ba9ecd0b333680c5f8 passed exact CI35592119547.
+Coordinator verified source13/baseline12/candidate15 hashes, candidate page bytes and
+independent full request/invite/occupancy/audit/count equality across departure and
+403 denial. Actual approval sequence200/403/200 ends with two targeted pending
+invitations and approved requests, full occupancy unchanged; UI reload has no pending
+requests. Six transports suppressed, no actual delivery/member/session/native claim.
+Exact cleanup/runtime release reviewed. Frozen live02 hashd3c8ee7fbd53839bf0c51d97cf2e1043303f3240965eee99c7f9b12880751939
+is retained for later documentation capture. Guarded master adoption produced
+`d34ca7e341df4d276772f14f4785d94d78f0a42c`; five documents and accepted PR126 pause guards
+were adopted, candidate Home source identical and pause source matches efaea.
+Initial docs-only assertion failed because original128 predates126; corrected source
+comparison confirms only those reviewed changes. Updated-head CI remains pending.
+
+Stream3 baseline/proposal568 durable hashes verified. Actual persisted/reloaded host
+Emailon with Pushfalse produced no host email from unchanged worker; invitee mail
+succeeded. Exact six-table/mail restoration reviewed. Live README grants a sole
+sendBookingReminder in-place repair using strict opt-in/pause, checked exact host
+contact and existing template/transport. Guest-controlled invitee suppression is not
+host opt-out. Partial-recipient failure may repeat host mail on retry; record that
+at-least-once limit without adding a ledger or claiming exactly-once SMTP. Runtime
+failure/retry/negative cases and exact cleanup assigned; no new unit tests or provider/
+native/timer replay. Later batch stays separate from paid1aecd fullCI still running.
+
+
+## September21 — repair batch published; full CI pending
+
+Paid branch `codex/paid-gig-integration` is clean and pushed at
+`1aecd9dbfc2536035e81add71becc6ca878f5a18`. Documentation PR127 passed all required
+gates in CI35591607204 and merged `8e8722b4f3010e5311983b2ccb9c8e8e21ec0859`.
+Final adoption changed only five documents; all three application sources still match
+the accepted e167 removal, e786 Home decline and efaea scheduling pause candidates.
+Combined TypeScript/scoped lint (19 existing warnings),26 existing scheduling checks
+and whitespace results are reused without repeating unchanged journeys. Financial
+backend/native source remains unchanged; no new unit tests or provider operations.
+
+Exact-head full [CI35592232217](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35592232217)
+is running at this checkpoint. Prior e970 full CI passed; it is not current-head CI.
+PR47 body now records the current batch and bounded removal evidence; PR34/47 stay
+drafts and PR46 stays separate. Removal verification establishes dialog retirement
+after destination commit and retryable real RPC denial, not successful provider
+detach, instantaneous route-transition closure or new native/session acceptance.
+Exact root fixture cleanup/grant restoration remains verified; API/tab closed, owned
+Next18133/Supabase64561–67 retained, no heavy native build. Durable removal audit now
+34 files, all manifest hashes verified; final publication/source/CI receipts included.
+
+All three streams remain incomplete. Home approval PR128 is a separate next-batch
+draft pending review/CI. Stream3 reproduced missing host reminder email despite actual
+saved/reloaded Email on, with exact cleanup, and is resolving existing lookup,
+suppression and partial-recipient retry contracts before any application repair.
+Next: evaluate exact paid CI, then review the next bounded peer batch. Do not expand
+or replay this completed application publication to include those later findings.
+
+
 ## September21, 10:57 UTC — reviewed repair batch integrated locally
 
 PR125 merged `bc2bec5adb7aab01f1fd098be7cd9df202739864` after exact
