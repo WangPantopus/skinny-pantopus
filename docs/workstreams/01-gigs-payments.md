@@ -28,15 +28,40 @@ Two focused application repairs this session:
   after assignment changes. A fresh Stripe checkout automatically showed ACCEPTED;
   reopening automatically showed REJECTED. Scoped ESLint passed. No layout change.
 
-## Active next P09 verification
+## September21,01:33UTC — checkout cancellation refresh repair
 
-Source8825 remains unchanged/green. Isolated refund-session project
-`/private/tmp/pantopus-stream1-refund-session-r1`, f9200250, reserves18132/18133 and
-64561–64567 for actual browser/Stripe TEST refund response ownership across logout
-and another login. Synthetic local identity/ancillary transport; full77SQL. Setup
-is active, no outcome/cleanup claim yet. Prior completed phases below stay accepted.
-Stream3 owns the sole native slot0AE16FA0-E244-414F-86C8-24893BDFD979 for a new
-capability-first N04/N03 screen check; no Stream1 native build concurrently.
+Current clean/pushed paid head **6d40d8b2a1b60675f8cf1ff182abd48720b3fc15**.
+Changed only existing `frontend/apps/web/src/app/(app)/app/gigs/[id]/page.tsx`:
+reuse offersRefreshKey in handleRefresh after local mutations. Actual baseline
+Cancel correctly cancelled Stripe and restored SQL bid pending, but Offers retained
+AUTHORIZING/Resume payment until manual Refresh. Existing checkout onAccepted→
+PaymentSection onChanged→page handleRefresh reloaded only Gig, whose open status
+was unchanged. No new files, schema, UI design or tests. Candidate actual second
+checkout/reload recovered AUTHORIZING; Cancel payment setup automatically restored
+PENDING/Accept/Counter/Reject without Refresh. Both Stripe TEST intents cancelled,
+zero charge, two SQL canceled acceptances/pending bids, no app errors. Scoped
+ESLint exit0/five existing warnings; exact-head
+[CI35551123265](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35551123265)
+running. Prior8825 greenCI remains prior-source evidence.
+
+Original held-refund/new-login P09 scenario remains **unverified**: Chrome extension
+navigation/control timed out; native Chrome control briefly worked then AX/screenshot
+became unavailable. In-app browser worked for app controls but its Stripe card frame
+was blank. No capture/refund/account-switch outcome claimed. Initial private web
+launcher omitted test publishable key; fixed launcher and resumed same intent,
+not an app defect. Existing paid/refund proofs remain accepted within recorded scope.
+
+Private evidence `/private/tmp/pantopus-stream1-refund-session-r1`,14 source-bound
+files mirrored/hash-verified at owner's `.pantopus-recovery/audits/20260921-stream1-refund-session-r1`.
+Full77migrations; synthetic local auth/ancillary transport, actual Stripe SDK/routes/
+SQL. Owned SQL aggregate0, one test customer deleted; API/Next/owned Supabase stopped,
+Next caches preserved privately and generated tsconfig restored. IAB tab closed;
+Chrome owned tab closure unconfirmed because control unavailable. No shared cleanup.
+Cumulative session:12 Stripe TEST originals,5 captures fully refunded6000c,
+7 unpaid cancelled intents,5 customers deleted. Next: finish requiredCI, resume
+held-refund session UI only when usable checkout control returns; retain broader
+native/hosted/Connect and policy boundaries. Stream3 native slot released after
+capability-only failure; no build/install or native acceptance.
 
 ## Coordinator integration gate
 

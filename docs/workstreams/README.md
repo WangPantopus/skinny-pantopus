@@ -4,6 +4,22 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21 current bounded grants and runtime update
+
+Stream3 released the sole native slot after owned0AE boot but unavailable Simulator/
+DeviceHub UI control; exact simulator stopped, no build/install/source edit. New
+bounded N05 grant: existing web scheduling `hub/notificationPrefs.ts` and
+`NotificationPrefsForm.tsx` only, after actual Reminder sent push save returned200
+but reverted and worker still notified. Reuse canonical notify_me host keys,
+serial/owner-bound writes and confirmed rollback; preserve visuals. Email, attendee,
+pause and daily agenda policy gaps remain unresolved. Separate milestone after80.
+Root refund-session phase stopped/cleaned0 after browser checkout control failure;
+its original account-switch scope is unverified. Actual cancellation exposed stale
+Offers; existing page refresh callback repaired at6d40d8b2a and verified UI/API/Stripe/
+SQL. Two unpaid intents cancelled/customer deleted. Paid CI35551123265 runs.
+Test launcher publishable key omission corrected privately. PR70 strict-head CI runs;
+keep further documentation merges frozen until feature integration.
+
 ## Active sessions and runtime ownership — September 20, 2026
 
 This table supersedes historical session/runtime rows below. No work is dispatched
