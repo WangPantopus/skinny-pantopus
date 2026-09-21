@@ -16,7 +16,7 @@ import LinkPreviewCard from './LinkPreviewCard';
 import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
 import { buildCanonicalShareUrlForPost } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
-import type { Post } from '@pantopus/types';
+import type { AudienceProfile, Post } from '@pantopus/types';
 
 // ─── Lucide icon lookup (platform-specific JSX — data from shared config) ──
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -53,7 +53,7 @@ interface PostCardProps {
   onSave?: (postId: string) => void;
   onDelete?: (postId: string) => void;
   onHide?: (postId: string) => void;
-  onMute?: (userId: string) => void;
+  onMute?: (target: Parameters<typeof api.posts.muteEntity>[0]) => void;
   onNotHelpful?: (postId: string) => void;
   onSolved?: (postId: string) => void;
   currentUserId?: string;
@@ -86,6 +86,13 @@ function PostCard({
   const authorUserId = post.author_user_id || post.user_id;
   const isOwn = authorUserId === currentUserId;
   const publicAuthor = post.author || null;
+  const isOwnPersona = publicAuthor?.type === 'persona'
+    && (publicAuthor as AudienceProfile).viewer?.isOwner === true;
+  const muteTarget = isOwnPersona ? null : publicAuthor?.type === 'persona' && publicAuthor.id
+    ? { entityType: 'persona' as const, entityId: publicAuthor.id }
+    : post.identity_context_type === 'persona'
+      ? null
+      : authorUserId ? { entityType: 'user' as const, entityId: authorUserId } : null;
 
   // P0.4 audit follow-up: prefer the typed author shape (handle / displayName
   // / avatarUrl). The legacy post.creator slot still ships from the backend
@@ -236,12 +243,12 @@ function PostCard({
                   Hide Post
                 </button>
               )}
-              {!isOwn && onMute && authorUserId && (
+              {!isOwn && onMute && muteTarget && (
                 <button
-                  onClick={async () => { const yes = await confirmStore.open({ title: 'Mute this user?', description: 'Their posts will be hidden from your Pulse.', confirmLabel: 'Mute', variant: 'destructive' }); if (yes) { onMute(authorUserId); setMenuOpen(false); } }}
+                  onClick={async () => { const yes = await confirmStore.open({ title: muteTarget.entityType === 'persona' ? 'Mute this profile?' : 'Mute this user?', description: 'Their posts will be hidden from your Pulse.', confirmLabel: 'Mute', variant: 'destructive' }); if (yes) { onMute(muteTarget); setMenuOpen(false); } }}
                   className="w-full text-left px-3 py-2 text-xs text-app-muted hover-bg-app"
                 >
-                  Mute User
+                  {muteTarget.entityType === 'persona' ? 'Mute Profile' : 'Mute User'}
                 </button>
               )}
             </div>
