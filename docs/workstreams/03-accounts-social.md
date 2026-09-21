@@ -1,12 +1,12 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T04:46:20.184756+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T04:50:29.950452+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-feed-map-errors`, local/pushed HEAD **d10e39b5e05d6ce85d27b40e010b3902b29300ba**.
-Application tree clean; only owned untracked `.next-stream3/` remains. Current map
-milestone frozen for coordinator review; next popup repair belongs on a new branch.
+branch `codex/stream3-map-post-destination`, local/pushed HEAD **4c6f117712428452f041e997d76e007e0dbfb62a**.
+Application tree clean; only owned untracked `.next-stream3/` remains. Both current map
+milestones frozen for coordinator review; no additional feature scope until integration.
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -21,6 +21,35 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## Current N03/A05 map popup destination milestone
+
+[Draft PR97](https://github.com/WangPantopus/skinny-pantopus/pull/97), exact
+**4c6f117712428452f041e997d76e007e0dbfb62a**, stacked on frozenPR96d10e.
+Only existing DiscoverMap PostPinPopup href changes /app/posts/:id to canonical
+/app/feed/post/:id. Six existing/master/paid/staging/Beacon/archive variants used
+obsolete route. Reused existing full-post screen, SDK getPost/getComments, existing
+posts GET/:id visibility checks/serialization; no new route/files/SDK/schema/tests.
+
+Baseline actual popup opens Next404. Candidate actual Evan popup Enter opens saved
+post title/content and canonical AuthBob profile. Browser focus command timed out
+after navigation, but subsequentAX/DOM confirms destination; GETpost/comments200 at
+04:48:02 and SQL1PostView. This is actual localGoTrue/HTTP/PostgREST/SQL, no auth or
+persistence mocks. Fixture SQL-seeded publiclocal post at synthetic PDX defaultcenter;
+post creation not retested. Stale popup mouseclick after exactSQLdeletion opens same
+canonicalroute with bothGET404 at04:48:53 and existing Post not found, no stalecontent.
+
+Exact fixtureec1f7bea-6314-4364-abd1-a1d066cb40fa and ten related counts0; original6
+PostIDs preserved. No grant/fault changes in this milestone. Types0/ESLint0/diff0,
+no newtests. CI dispatched because no automaticPR checks appeared; integration and
+retargeting coordinator-owned. Native/provider and broader fullpost lifetime/error
+acceptance remain open; no policy change or N/A rowclosure. Runtime retained on same
+owned ports; browserEvan at missingpost. No additional feature scope before integration.
+
+Private map-post-destination comparison/fixture/candidate/cleanup/types/lint/pr and
+HTTP log; durable361files manifest **89693bdcf8a48bda6e394813b6a4ccc5d7f7e0c49c651dd646faa43e6b629db9**.
+PR96 exactd10e manualCI35562211102 currently inprogress (backend/privacy/identityE2E
+passed; other jobs pending). Do not treat source/localUI/CI/integration as interchangeable.
 
 ## Current N03/A05 map failure and response ordering milestone
 
