@@ -1,14 +1,15 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated September21 06:56UTC. **Stream incomplete; ongoing verification.**
+Updated September21 07:03UTC. **Stream incomplete; ongoing verification.**
 Sole live status is this neutral coordination file. No new unit tests written.
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
-`codex/stream3-booking-lifecycle`, local/pushed **a5b369ed854b11e0d28d409ada5171b56d748efa**,
-tracked clean plus owned .next-stream3. [Draft PR101](https://github.com/WangPantopus/skinny-pantopus/pull/101)
-from master0f6e55e; automatic [CI35570564542](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35570564542)
-running exacta5b. PR99 is mergeddd24 with exact1d835 CIgreen (final disposition below).
-All-stream resume adopted merged master and prior evidence; no repeated persona tests.
-Home owns heavy native slot; Stream3 continues exclusive18130/18131/64531–37.
+`codex/stream3-scheduling-pref-retention`, local/pushed **7e1651d35ee276676af9454d75a0ed0abf67dff6**,
+tracked clean plus owned .next-stream3. [Draft PR103](https://github.com/WangPantopus/skinny-pantopus/pull/103)
+from master0f6e55e; automatic [CI35571103116](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35571103116)
+queued exact7e165. PR101 merged944489d after exacta5b CIgreen; PR99 mergeddd24 after
+exact1d835 CIgreen. Home owns heavy native slot. Stream3 retains exclusive18130/18131/
+64531–37; current backendPID87353 (restarted for prefs helper), NextPID14742.
+No provider activation or broad row completion claim. Prior refs/evidence preserved.
 
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
@@ -24,6 +25,46 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## Scheduling channel preference retention — PR103 handoff
+
+Granted getPrefs-only in existing schedulingNotifyPrefs.js. Actual A4 host Reminder
+sent—Email on →PUT200 at06:57:44.741→SQL scheduling.host.reminder_sent.email=true,
+but actual reload off. Existing helper returned only three canonical fields, dropping
+stored scheduling choices. Five current/master/paid/staging/Beacon comparisons confirmed
+same omission. One-line spread preserves own stored keys before existing canonical
+normalization; no new file/UI/schema/worker/channel-delivery policy or unit tests.
+
+Actual candidate browser on real BobGoTrue/Next18131/app18130/PostgREST64531/SQL64532:
+reload existingtrue shows on; saveCancellationEmailoff preservesReminderEmailtrue.
+Actual UPDATE denial500 leavesSQLtrue, existing UI rolls back and repeated failure
+shows explicit Unable to save notification preferences error. Restoregrant, Enterretry
+savesfalse; reloadshows reminderfalse/cancellationfalse. Direct authenticated GET matches;
+separate real EvanGET200 has no Bob scheduling data. Canonical defaults remain. No new
+intact-held-response crossaccount UI claim; unchanged queue/lifetime source evidence reused.
+Existing scheduling26/26 and syntax/diffcheckpass; no newtests.
+
+Cleanup: originalBob snapshot was empty (no preference row), not an existingrow.
+Removed exact UIcreated61338118-5cb8-4c59-8819-30b3a1fb2e97; Bobrowcount0 restored,
+UPDATEgrantrestored, auxiliaryHTTPsessionsloggedout, tab10closed. First cleanup parser
+assumed a row and failed before anywrite; corrected absence restoration is final proof.
+Original booking/page/otherfixtures unchanged; no worker/provider/mail executed here.
+
+Private scheduling-channel-final-evidence.json binds4sourcehashes plus comparison,
+baseline/savedSQL/HTTPcandidate/denial/retry/cleanup/checks. Durable419files hashverified,
+manifest **7d966c8b3261da236ed1e8196fc6810ace890192e01f708eac5537f3b3cd295a**
+in existing accounts-social-r3 mirror. CurrentPR103CI35571103116queued; review and
+integration pending. Persistence/readback only: hostemail/attendee/dailyagenda/pause
+actual delivery and policy remain open; no native/hosted acceptance or N05 closure.
+
+## PR101 final CI/integration disposition
+
+Independently verified exacta5b CI35570564542SUCCESS6jobs/5pathskips and remotePR101
+MERGED as **944489d5449286d2b362cd96334bcd771636f0fc** at2026-09-21T06:59:55Z.
+Passed detection/safeguards/backend/Docker/schema/aggregate; web/identity/native/Seeder
+skipped. Coordinator reviewed and merged; author did not self-merge. Earlier pending
+wording below is historical. No repeat of accepted race journeys; actual UI/localSMTP
+and after-final-read/provider/rearming limits remain unchanged. Frozena5bref preserved.
 
 ## N05 cancellation/reschedule stale reminder — PR101 review handoff
 
