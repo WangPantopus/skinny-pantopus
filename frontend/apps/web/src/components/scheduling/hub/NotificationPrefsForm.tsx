@@ -5,7 +5,7 @@
 // reminder lead-time chips. Backed by GET/PUT /notification-preferences, whose
 // shape is flexible: unknown keys are round-tripped untouched.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { BellOff, Check, Lock } from "lucide-react";
 import * as api from "@pantopus/api";
@@ -25,14 +25,11 @@ import { toast } from "@/components/ui/toast-store";
 import { Overline } from "./ui";
 import { reminderLabel } from "./format";
 import {
-  DEFAULT_REMINDERS,
   NOTIFY_ATTENDEES,
   NOTIFY_ME,
   REMINDER_PRESETS,
   readChannels,
-  readReminders,
   writeChannels,
-  writeReminders,
   type Channels,
   type Group,
   type Prefs,
@@ -287,23 +284,45 @@ function PushOffNotice() {
 }
 
 export default function NotificationPrefsForm() {
-  const owner: SchedulingOwnerRef = useSchedulingOwner();
+  const owner = useSchedulingOwner();
+  return <NotificationPrefsFormForOwner key={JSON.stringify(owner)} owner={owner} />;
+}
+
+function NotificationPrefsFormForOwner({ owner }: { owner: SchedulingOwnerRef }) {
   const pillar = pillarForOwner(owner.ownerType);
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState<"notifications" | "reminders" | null>(null);
+  const [reminders, setReminders] = useState<number[]>([]);
+  const generation = useRef(0);
+  const confirmedReminders = useRef<number[]>([]);
+  const reminderVersion = useRef(0);
+  const reminderQueue = useRef<{ minutes: number[]; version: number } | null>(null);
+  const reminderSaving = useRef<number | null>(null);
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // paused: scheduling notifications muted by host; pushOff: OS-level push denied
   const [paused, setPaused] = useState(false);
   const [pushOff, setPushOff] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
+    const current = ++generation.current;
     setLoading(true);
     setError(null);
+    setPrefs(null);
+    setReminders([]);
+    setSaved(null);
+    reminderQueue.current = null;
+    confirmedReminders.current = [];
     try {
-      const { prefs: loaded } =
-        await api.scheduling.getNotificationPreferences(owner);
+      const [{ prefs: loaded }, { page }] = await Promise.all([
+        api.scheduling.getNotificationPreferences(owner),
+        api.scheduling.getBookingPage(owner),
+      ]);
+      if (current !== generation.current) return;
+      confirmedReminders.current = page.reminder_minutes;
+      setReminders(page.reminder_minutes);
       const raw = (loaded ?? {}) as Prefs;
       setPrefs(raw);
       // Read paused + push_off flags if the API surfaces them (keys round-tripped)
@@ -312,32 +331,51 @@ export default function NotificationPrefsForm() {
         : {}) as Record<string, unknown>;
       setPaused(sched.paused === true);
       setPushOff(sched.push_off === true);
-    } catch (err) {
-      setError(decodeError(err).message);
+    } catch {
+      if (current === generation.current) setError("Couldn't load notification settings. Please try again.");
     } finally {
-      setLoading(false);
+      if (current === generation.current) setLoading(false);
     }
   }, [owner]);
 
   useEffect(() => {
     void load();
+    return () => {
+      generation.current += 1;
+      reminderQueue.current = null;
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (savedTimer.current) clearTimeout(savedTimer.current);
+    };
   }, [load]);
+
+  const showSaved = (kind: "notifications" | "reminders") => {
+    setSaved(kind);
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    const current = generation.current;
+    savedTimer.current = setTimeout(() => {
+      if (current === generation.current) setSaved(null);
+    }, 2000);
+  };
 
   const persist = useCallback(
     (next: Prefs) => {
+      const current = generation.current;
       setPrefs(next);
+      setSaved(null);
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(async () => {
+        if (current !== generation.current) return;
         try {
           const { prefs: updated } =
             await api.scheduling.updateNotificationPreferences(
               next as NotificationPreferences,
               owner,
             );
+          if (current !== generation.current) return;
           setPrefs((updated ?? next) as Prefs);
-          setSaved(true);
-          setTimeout(() => setSaved(false), 2000);
+          showSaved("notifications");
         } catch (err) {
+          if (current !== generation.current) return;
           toast.error(
             decodeError(err).message || "Couldn’t save notifications",
           );
@@ -347,10 +385,45 @@ export default function NotificationPrefsForm() {
     [owner],
   );
 
-  const reminders = useMemo(
-    () => (prefs ? readReminders(prefs) : DEFAULT_REMINDERS),
-    [prefs],
-  );
+  const persistReminders = async (minutes: number[]) => {
+    if (minutes.length > 5 || minutes.some((m) => !Number.isInteger(m) || m < 0 || m > 43200)) {
+      toast.error("Choose up to 5 reminder times, each within 30 days.");
+      return;
+    }
+    const current = generation.current;
+    const version = ++reminderVersion.current;
+    setReminders(minutes);
+    setSaved(null);
+    reminderQueue.current = { minutes, version };
+    if (reminderSaving.current === current) return;
+    reminderSaving.current = current;
+    try {
+      // Serialize this owner's writes; a slower earlier reply cannot overwrite a later choice.
+      while (current === generation.current && reminderQueue.current) {
+        const next = reminderQueue.current;
+        reminderQueue.current = null;
+        try {
+          const { page } = await api.scheduling.updateBookingPage(
+            { reminder_minutes: next.minutes }, owner,
+          );
+          if (current !== generation.current) return;
+          confirmedReminders.current = page.reminder_minutes;
+          if (next.version === reminderVersion.current) {
+            setReminders(page.reminder_minutes);
+            showSaved("reminders");
+          }
+        } catch {
+          if (current !== generation.current) return;
+          if (next.version === reminderVersion.current) {
+            setReminders(confirmedReminders.current);
+            toast.error("Couldn't save reminders. Please try again.");
+          }
+        }
+      }
+    } finally {
+      if (reminderSaving.current === current) reminderSaving.current = null;
+    }
+  };
 
   if (loading) {
     return (
@@ -382,7 +455,7 @@ export default function NotificationPrefsForm() {
               strokeWidth={3}
               aria-hidden
             />
-            Changes saved
+            {saved === "reminders" ? "Reminder times saved" : "Notification changes saved"}
           </span>
         )}
       </div>
@@ -422,16 +495,12 @@ export default function NotificationPrefsForm() {
                 <button
                   key={m}
                   type="button"
+                  aria-pressed={active}
                   disabled={paused}
                   onClick={() =>
                     !paused &&
-                    persist(
-                      writeReminders(
-                        prefs,
-                        active
-                          ? reminders.filter((x) => x !== m)
-                          : [...reminders, m],
-                      ),
+                    void persistReminders(
+                      active ? reminders.filter((x) => x !== m) : [...reminders, m],
                     )
                   }
                   className={clsx(
