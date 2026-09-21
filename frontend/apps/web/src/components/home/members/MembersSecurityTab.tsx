@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '@pantopus/api';
 import { getInitials } from '@pantopus/ui-utils';
 import type { GuestPass, AuditEntry } from '@pantopus/api';
@@ -12,6 +12,8 @@ import { useHomePermissions } from '../useHomePermissions';
 import LockdownPanel from './LockdownPanel';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import Image from 'next/image';
+import ErrorState from '@/components/ui/ErrorState';
+import { failureMessage } from '../share/shareFailure';
 
 // ---- Role config (shared with MembersPanel) ----
 
@@ -88,6 +90,7 @@ export default function MembersSecurityTab({
 }) {
   const { access } = useHomePermissions();
   const isOwner = access?.isOwner === true;
+  const canManageMembers = can('members.manage');
 
   // Detail panel
   const [detailMember, setDetailMember] = useState<HomeMember | null>(null);
@@ -105,6 +108,20 @@ export default function MembersSecurityTab({
   const [auditOffset, setAuditOffset] = useState(0);
   const [auditHasMore, setAuditHasMore] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
+  const [auditError, setAuditError] = useState('');
+  const [auditRetry, setAuditRetry] = useState({ offset: 0, append: false });
+  const auditGeneration = useRef(0);
+
+  useEffect(() => {
+    auditGeneration.current++;
+    setAuditEntries([]);
+    setAuditError('');
+    setAuditLoading(false);
+    setAuditOffset(0);
+    setAuditHasMore(false);
+    setShowAudit(false);
+    return () => { auditGeneration.current++; };
+  }, [homeId, canManageMembers]);
 
   // Lockdown
   const [lockdownEnabled, setLockdownEnabled] = useState(false);
@@ -143,9 +160,13 @@ export default function MembersSecurityTab({
 
   // Load audit log
   const loadAudit = useCallback(async (offset: number, append: boolean) => {
+    if (!canManageMembers) return;
+    const revision = ++auditGeneration.current;
     setAuditLoading(true);
+    setAuditError('');
     try {
       const res = await api.homeIam.getAuditLog(homeId, { limit: 20, offset });
+      if (revision !== auditGeneration.current) return;
       const entries = res.entries || [];
       if (append) {
         setAuditEntries((prev) => [...prev, ...entries]);
@@ -154,11 +175,22 @@ export default function MembersSecurityTab({
       }
       setAuditHasMore(entries.length >= 20);
       setAuditOffset(offset + entries.length);
-    } catch {
-      if (!append) setAuditEntries([]);
+    } catch (error: unknown) {
+      if (revision !== auditGeneration.current) return;
+      const status = (error as { status?: number; statusCode?: number })?.statusCode
+        ?? (error as { status?: number })?.status;
+      if (status === 401 || status === 403) {
+        setAuditEntries([]);
+        setAuditHasMore(false);
+        setAuditOffset(0);
+      }
+      setAuditRetry({ offset: status === 401 || status === 403 ? 0 : offset,
+        append: status === 401 || status === 403 ? false : append });
+      setAuditError(failureMessage(error, 'The audit log could not be loaded. Please try again.'));
+    } finally {
+      if (revision === auditGeneration.current) setAuditLoading(false);
     }
-    setAuditLoading(false);
-  }, [homeId]);
+  }, [homeId, canManageMembers]);
 
   const handleShowAudit = () => {
     if (!showAudit) {
@@ -166,6 +198,8 @@ export default function MembersSecurityTab({
       setAuditOffset(0);
       loadAudit(0, false);
     } else {
+      auditGeneration.current++;
+      setAuditLoading(false);
       setShowAudit(false);
     }
   };
@@ -360,7 +394,7 @@ export default function MembersSecurityTab({
       </div>
 
       {/* ===== Section 3: Audit Log ===== */}
-      {can('members.manage') && (
+      {canManageMembers && (
         <div>
           <button
             onClick={handleShowAudit}
@@ -390,14 +424,17 @@ export default function MembersSecurityTab({
               </div>
 
               {/* Entries */}
+              {auditError && (
+                <ErrorState message={auditError} onRetry={() => loadAudit(auditRetry.offset, auditRetry.append)} />
+              )}
               <div className="bg-app-surface rounded-xl border border-app-border divide-y divide-app-border-subtle">
                 {auditLoading && auditEntries.length === 0 ? (
                   <div className="px-5 py-8 text-center text-sm text-app-text-muted">Loading audit log...</div>
-                ) : filteredAudit.length === 0 ? (
+                ) : filteredAudit.length === 0 ? (!auditError && (
                   <div className="px-5 py-8 text-center text-sm text-app-text-muted">
                     No events matching this filter
                   </div>
-                ) : (
+                )) : (
                   filteredAudit.map((entry) => (
                     <AuditRow key={entry.id} entry={entry} />
                   ))
@@ -405,7 +442,7 @@ export default function MembersSecurityTab({
               </div>
 
               {/* Load More */}
-              {auditHasMore && (
+              {auditHasMore && !auditError && (
                 <div className="text-center">
                   <button
                     onClick={() => loadAudit(auditOffset, true)}
