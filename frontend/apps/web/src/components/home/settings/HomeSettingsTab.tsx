@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '@pantopus/api';
 import type { HomeMember } from '@pantopus/types';
 import TransferAdminWizard from './TransferAdminWizard';
+import ErrorState from '@/components/ui/ErrorState';
+import { failureMessage } from '../share/shareFailure';
 
 // ---- Constants ----
 
@@ -70,6 +72,8 @@ export default function HomeSettingsTab({
 
   // Loading
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const loadGeneration = useRef(0);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
@@ -105,9 +109,12 @@ export default function HomeSettingsTab({
 
   // Load settings
   const loadSettings = useCallback(async () => {
+    const revision = ++loadGeneration.current;
     setLoading(true);
+    setLoadError('');
     try {
       const res = await api.homeProfile.getHomeSettings(homeId);
+      if (revision !== loadGeneration.current) return;
       const h = (res as Record<string, any>).home || {};
       const prefs = (res as Record<string, any>).preferences || {};
 
@@ -132,18 +139,22 @@ export default function HomeSettingsTab({
         setNotifDelivery(prefs.notifications.delivery !== false);
         setNotifGuestPass(prefs.notifications.guest_pass !== false);
       }
-    } catch {
-      // Fallback to home data
-      setHomeName(home?.name || '');
-      setHomeType(home?.home_type || 'house');
+    } catch (error: unknown) {
+      if (revision !== loadGeneration.current) return;
+      setLoadError(failureMessage(error, 'Home settings could not be loaded. Please try again.'));
+    } finally {
+      if (revision === loadGeneration.current) setLoading(false);
     }
-    setLoading(false);
   }, [homeId, home]);
 
-  useEffect(() => { loadSettings(); }, [loadSettings]);
+  useEffect(() => {
+    void loadSettings();
+    return () => { loadGeneration.current++; };
+  }, [loadSettings, canEdit]);
 
   // Save all settings
   const handleSave = async () => {
+    if (loading || loadError || saving || !canEdit) return;
     setSaving(true);
     setSaveMsg('');
     try {
@@ -197,6 +208,10 @@ export default function HomeSettingsTab({
 
   if (loading) {
     return <div className="text-center py-12 text-app-text-muted text-sm">Loading settings...</div>;
+  }
+
+  if (loadError) {
+    return <ErrorState message={loadError} onRetry={loadSettings} />;
   }
 
   const address = [home?.address, home?.address_line1, home?.address2].filter(Boolean).join(' ');
