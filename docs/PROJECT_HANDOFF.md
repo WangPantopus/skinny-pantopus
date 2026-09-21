@@ -1,5 +1,31 @@
 # Pantopus project handoff
 
+## September21 — logout-return repair reviewed; next CI gate pending
+
+PR136 original d6fba68d3cf1154211849a1b659a7e48d03012a6 passedCI35599880117.
+Coordinator updated only five docs to current master893c1dc29; SDK bytes unchanged at
+updated `0d5ee43037e4e735d6313f84c2c5c896e8cc2f17`, CI35600453583 pending.
+Sole existing client.ts automaticweb401 gate now uses existing hasActiveSession;
+mobile/explicitrefresh/stale-sessionflag/generation/privacy retirement unchanged.
+
+Coordinator verified653 candidate artifacts, actual UIlogout/protecteddestination/
+login and independent complete own-session comparisons: only14312967 retired, new
+507ef9ec only addition; other own app/GoTrue metadata and fullprefs[] unchanged.
+Nine trailing privateGET401, zero refreshPOST/429; real login200/localGoTrue password
+200, exact originalquery return, identity-bound prefsGET304. Brief emptyaccount/default
+settings shell before login is not zero-frame retirement proof. Tab27closed/descriptor
+consumed, natural old/new session records and API73610/Next/DB retained.
+Existing57 auth tests passed, webtypegate0, SDKlint0errors/33warnings. StandaloneSDK
+35type diagnostics remain failing; isolated old/candidate59 normalizeddiagnostics are
+identical (copy adds resolutionerrors), not a green standaloneSDK claim. No new tests.
+Frozenlive03 aa065b5 captured950d299d5; rootreviewreceipt in later-review.json.
+
+Next one-shot pre-forward logout503 baseline is separately granted in liveREADME;
+no additional appfix accepted yet. Home atomiccandidate progress is peer-reported,
+awaiting final source/evidence/cleanup review. Keep136 and paid48702 fixed until gates
+resolve; combine only reviewed complete milestones. Docs135 merged893c1dc29 after
+exactCI35599630531 success. Rootr2 durablemirror now16 artifacts with later review.
+
 ## September21 — paid48702 full CI passed
 
 Exact published `48702bc9d6ef89d30361962b2acf49090e2ad83e` completed

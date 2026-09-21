@@ -1,5 +1,23 @@
 # Three-stream coordination
 
+## Later-batch pre-forward local logout failure baseline grant
+
+Coordinator verified654 hashes and existing five-file source/contract comparison.
+PR82 after-revocation failure and136 successful logout do not cover this boundary.
+Stream3 may extend only existing private pre-Express one-shot hook for exact owned
+POST/api/users/logout, port18130/loopback/aliasOrigin/cookie transport/exactSettings
+Referer with short expiry/atomicconsume. No forwarding/SetCookie; record safe match
+booleans/time/path/status only. Preflight exact Bob/current507ef9ec session; otherwise
+stop. Preserve original hook hash/env/argv/cwd and auth-source bytes, restart only own
+API to load instrumentation; do not use restart to bypass rate limits. Next/DB retained.
+One actual existing Settingslogout, observe UI/error/navigation and full own session/
+prefs metadata; do not force an expected outcome. Record any automatic auth activity
+and stop if unexpected; no manual retry/login/logout or application repair yet.
+Restore exact original hook/remove descriptors/restart only ownAPI sameconfiguration,
+verify restoredprocess provenance, close newtab, preserve actualsession state. No
+cookie/JWT/clock/device/grant mutation, newtests/native/hosted/realoffline/lost-commit
+claim. Separate later baseline; PR136 source/evidence and current integration stayfixed.
+
 ## Later-batch SDK signed-out refresh repair and scoped rollback fault
 
 Stream3 sole writer: existing frontend/packages/api/src/client.ts response401 gate.
