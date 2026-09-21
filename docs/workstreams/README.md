@@ -4,6 +4,15 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 04:33 UTC — gig Q&A read verification reservation
+
+Root reserves18132/18133/64561–67 for gig-qa-read-r1/f9200320, isolated retained
+wallet-read-r1 full77 schema. Existing QASection read error/retry/lifetime only after
+real failure reproduction. Reuse just-accepted question/answer creation and identity
+navigation; synthetic saved question reader fixture, no provider/native writes/newtests.
+Local7ad896338 retained; published24c fixed until current native CI completes.
+Stream3 map reservation remains separate, no shared files or runtime overlap.
+
 ## September 21, 04:31 UTC — posts-only map error grant
 
 Stream3 sole writer existing posts.js posts-only map error handling and existing
