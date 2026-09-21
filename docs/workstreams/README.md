@@ -4,6 +4,17 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21,03:20UTC — bounded marketplace report grant
+
+Stream3 sole writer existing useListingDetail.handleReport catch/rethrow and shared
+ReportModal entity-specific listing reason data only. Actual Safety concern UI sent
+POST400 because canonical listing Joi/SQL does not accept it; Other/details under
+ListingReport INSERTdenial returned500 and lostdraft. Reuse supported listing choices
+and existing rejection contract; preserve valid choices, other entities and layout.
+Verify all offered reasons UI/API/SQL, invalidboundary, error/draft/retry and exact
+ownedlisting/reportcleanup. No backend/schema/newtests; sharedmodal writer belongs
+only toStream3 for this bounded repair. Sellerprofile lead remains unverified/separate.
+
 ## September21,03:08UTC — root wallet runtime released
 
 Pending-balance phase completed within live01limits; paid03bf9bd1b/currentCI35556379254.
