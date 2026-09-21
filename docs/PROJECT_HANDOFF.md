@@ -9,6 +9,12 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 ## Current integration gate — September21,01:40UTC
 
+Subsequent gate: PR72 exactf2ea CI35551618913 passed and merged as
+**703e7050867d4747db958dfda8a20bf2224d1991** at01:42:45UTC. PR73 retargeted master
+and updated to **806d64635a54b0e7097b2a5d5a735f30852ac864**; accepted application
+bytes unchanged, only five docs/reused iOS fixture added. PR diff exactly five
+reviewed personal-post files. Current CI35551789461 running, no merge yet.
+
 PR70 exact21b93aa62 passed all15 applicable checks/one Seeder skip in CI35549733796;
 coordinator marked ready and merged as **358daaa17068ebbb6c9591b13bf0378cea7d02b1**.
 PR72 is retargeted to master and updated through GitHub as **f2ea16704**. Its diff

@@ -65,6 +65,12 @@ capability-only failure; no build/install or native acceptance.
 
 ## Coordinator integration gate — September21,01:40UTC
 
+Subsequent gate: PR72 exactf2ea CI35551618913 passed and merged as
+**703e7050867d4747db958dfda8a20bf2224d1991** at01:42:45UTC. PR73 retargeted master
+and updated to **806d64635a54b0e7097b2a5d5a735f30852ac864**; accepted application
+bytes unchanged, only five docs/reused iOS fixture added. PR diff exactly five
+reviewed personal-post files. Current CI35551789461 running, no merge yet.
+
 PR70 exact21b all15 applicable checks passed; merged **358daaa17**. Coordinator
 retargeted PR72 to master and GitHub-updated its branch to **f2ea16704**. Accepted
 backend/web/packages/SQL bytes unchanged fromcbfba3503; only five docs and reused
