@@ -1,5 +1,24 @@
 # Pantopus project handoff
 
+## September21 — reviewed Home approval and host email repairs merged
+
+PR128 merged `b412b1b589bd9fa1755887e7c6afe26112c7c55e` after exact updated
+CI35592633526 success. PR129 merged `747b45754b24accce096898508e2de3355ed86a3`
+after exact03a2dac07f1f17df9222c0a9fc1e0f5b1984b6ac CI35593202158 success.
+Both accepted sources remain identical to their tested candidates. Documentation
+capture44d335145 contains frozen Home approval live02 d3c8ee7f and Stream3 host email
+live03 3d5944ba including602-artifact receipt. Later Requests-list and session-origin
+source proposals remain outside this publication and cannot reopen this batch.
+
+Home UI/SQL departure/denial/retry and host email real UI/localSMTP15-case acceptance
+retain original runtime/synthetic/provider/native limits. Exact cleanup verified; no
+new unit tests. Source ownership/retained runtime remain as recorded. Paid1aecd still
+has native jobs running and the diagnosed isolated Following image-pull failure;
+GitHub deferred its requested job retry. Keep paid head fixed, retry failed backend
+job once allowed, then adopt the reviewed final master in a separate paid update.
+Publish this documentation-only batch now; all three streams remain incomplete.
+
+
 ## Next batch fixed to reviewed Home approval and host reminder email
 
 PR128 is mergedb412b1b58 after exactd34ca7e341 CI35592633526. PR129 originalc3f1bd038
