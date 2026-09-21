@@ -2,18 +2,60 @@
 
 Updated September21 — **Stream incomplete; ongoing verification.**
 Sole live status remains this neutral coordination file. No new unit tests written.
-Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
-`codex/stream3-relationship-read-verification`, local/pushed
-**36fbfe1626623868d70363ff0f13d86b4a025c7f**, tracked clean plus owned .next-stream3.
-[Draft PR111](https://github.com/WangPantopus/skinny-pantopus/pull/111) targets master;
-automatic [CI35574234363](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35574234363)
-completed SUCCESS exact36fb. Local implementation/verification and CI complete within
-the bounded legacy Relationship failure scope below; review/integration pending separately.
-Coordinator reports PR103 and PR105 merged after updated-head CI. Independently
-confirmed PR107 merged as **4e69c23b8e71e66a23c223523a345d3f1368f158** from55ef4c6ab;
-coordinator reports exact CI35573379836 success. Earlier pending entries are historical.
-Owned18130/PID48152,18131/PID14742,Supabase64531–37 retained. No local native build.
-All frozen feature refs and original fixtures preserved; no broad row-completion claim.
+Application `/private/tmp/pantopus-workstream-accounts-social`, branch
+`codex/stream3-professional-read-recovery`, pushed/local
+**59b67ee84bd4f06afa18d98d87bf23bea1d9eb88**, tracked clean plus owned .next-stream3.
+[Draft PR114](https://github.com/WangPantopus/skinny-pantopus/pull/114) targets released
+master721d46e6d; automatic [CI35577190208](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35577190208)
+is running exact59b. Bounded implementation/local verification complete; CI, coordinator
+review and integration pending separately. No whole N03/N04/A05 or Stream3 closure.
+Coordinator merged PR111 as4b6b8e21157839eb71252647222702240c7b79af after updated
+23b33833a exactCI35575532878 success; four relevant source bindings unchanged.
+Docs106 finalmaster721d and110/111/112 integration adopted only on this new branch.
+All prior frozen feature refs preserved. Owned18130/PID8432,18131/PID14742,
+Supabase64531–37 retained; no local native build or peer runtime mutation.
+
+## Professional self-editor load recovery — PR114 handoff
+
+Exact README sole-writer grant: existing web professional/page.tsx load/error/retry only.
+Actual prior saved-profile SELECT500 produced enabled create form; seven current/archive/
+open variants had identical page/helper bytes and released721d page hash also matches.
+Reuse page plus existing ErrorState. Add load error/retry before normal modes and a load
+request counter retired by cleanup/new request; confirmed absence still enters create.
+Current QueryProvider remounts component-local state on session generation change. No
+new application file, backend/schema/service/unit test/public-route edit or redesign.
+Normal view/edit/create forms and navigation unchanged.
+
+Actual authenticated Bob browser→SDK→HTTP→PostgREST/SQL: saved fixture headline displays;
+actual SELECT denial500 shows ErrorState/Try Again without creation controls; repeated
+keyboard retry stays error; restore SELECT and keyboard retry200 restores same headline.
+Full saved row compared unchanged. Exact fixture removal then fresh reload200 confirms
+absence and preserves original creation form. No create/update/verification submitted.
+Creation state itself was SQL seeded, not UI creation acceptance. Browser tab16closed.
+
+Scoped ESLint passes0errors/4existing warnings. Direct installed TypeScript compiler
+passes exit0/no output, diffcheck passes. Initial npx selected the wrong tsc package,
+failed, and is excluded as validation; corrected direct compiler is the accepted run.
+The pre-existing ts-nocheck remains, so no full static coverage claim for this page.
+No new unit tests or repeated broad suites. Request retirement/session isolation is
+source-reviewed here; intact held-response account-switch/native/offline acceptance
+remains unverified. Public-profile optional-auth defect remains separate HTTP-only.
+
+A local expired-session attempt redirected from stream3-auth.localhost to localhost
+/session/refresh and hit CORS. Ordinary real login on the configured isolated origin
+recovered and returned to /app/professional. No auth/config change; record this runtime
+boundary separately from the profile loader and do not claim expiry continuation success.
+
+Cleanup: exact candidate e3cd7ca0-7858-4f80-8c14-d68d327b5baf removed; original
+UserProfessionalProfile[] restored and SELECT restored. Original retained fixtures intact.
+Private professional-self-final-evidence.json binds5sourcehashes, released baseline,
+actualUI/SQL/HTTP log, row comparison, checks and limits. Durable **461 files** all hashes
+verified in existing accounts-social-r3 mirror; MANIFEST
+**2e1e18fb7dd7503dfcd12bd8c974bdbb8f9c9e9517d6cc47e5db393580f05d81**.
+Each older artifact retains its own revision/runtime; latest head is not a blanket rerun.
+Next: finish exact CI/review handoff; coordinator holds merges during paid full CI.
+No new public route/auth/shared repair without assignment. Continue independent coverage
+reconciliation against the original inventory; provider/native/session limits remain open.
 
 ## Legacy Relationship read failure — PR111 handoff
 

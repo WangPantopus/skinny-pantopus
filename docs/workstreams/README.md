@@ -1,5 +1,39 @@
 # Three-stream coordination
 
+## September 21 next bounded privacy repairs
+
+Stream2 is sole writer for existing `backend/services/homePrivacyService.js` read
+behavior and its stale fallback comments. Actual saved address_precision=true hid
+an owned fixture unit; HomePrivacy SELECT denial made real Place/intelligence200
+expose the unit and GETprivacy200 falsely report false while SQL remained true.
+Thirty source/ref comparisons and both production callers were reviewed. Propagate
+database/transport failures through their existing error paths; only successful
+absence retains existing defaults. No route, PATCH, schema, new file or UI change.
+Verify real Place error/retry without unit exposure, GET error, saved true/false and
+genuine absence, affected existing regressions and exact grant/fixture cleanup.
+Native fallback and PATCH ignored reads remain separate, unaccepted leads.
+
+Stream3 PR114 at59b67ee84 has reviewed scope, all461 durable hashes and5 source
+bindings verified, including unchanged-row/original-empty cleanup and restored SELECT.
+Actual self-editor failure/retry/absence evidence is accepted within its recorded
+local-runtime limits; held-response/session/native boundaries remain unverified.
+Its currentCI35577190208 and paid2ea9 fullCI remain required; do not merge yet.
+
+Stream3 next sole writer, separate branch with114 frozen: existing
+`backend/routes/professional.js` GET /:username optional viewer authentication only.
+Actual authenticated blocked viewer received public200 and accepted connection got
+private404 because viewerId was always null. Compare existing/archive/open route
+implementations before editing; reuse existing optionalAuth plus req.user identity
+and current canViewProfessionalProfile policy. No middleware/helper/global-auth/UI/
+schema/new file/unit test changes. Verify real bearer and cookie identities,
+owner/connection/blocked/anonymous controls and relationship read failure/retry;
+report any newly exposed helper-policy defect separately before changing that helper.
+No current public-screen caller was found: this milestone is HTTP/SQL-only, without
+inventing a screen or claiming UI acceptance. Exact temporary rows/session cleanup.
+Existing stream runtimes stay separately reserved; no native slot. Hold new merges
+until the current paid full gate completes and the next batch is reconciled.
+
+
 ## September 21 integration checkpoint
 
 All three streams remain incomplete. The current bounded Home/social repairs are
