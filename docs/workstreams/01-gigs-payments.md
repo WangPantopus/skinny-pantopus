@@ -1,5 +1,24 @@
 # Stream 1 — Gigs and payments
 
+## September 21, 05:19 UTC — exact-source CI reconciliation
+
+Paid published42d remains on full gate35562351562; local795ad998d payment-read
+candidate is clean and verified, awaiting the integration batch push. Delayed
+automatic paid35562395559 duplicated that exact head and was canceled as redundant,
+not passed. All78 files in the three latest Stream1 identity/QA/payment mirrors
+were rechecked; current PaymentSection matches its accepted candidate hash.
+
+Map PR97 is retargeted to master at unchanged4c6f11771, combining the three-file
+read-error/order repair and popup destination while preserving separate commits and
+real UI/SQL evidence. Automatic96/d10e35562256054 and original97/4c6f35562565822
+passed their changed surfaces. Redundant manual96/35562211102 was canceled, not passed;
+combined final-tree97/35562416370 remains the full gate. Native/workflow bytes are
+identical between96 and97. No merge claim yet. Stream3 latest03 hash5c13c460 captured.
+Documentation98 exactbb37437b8 automatic35563086879 passed; it remains draft until
+this batch disposition is published. Automatic CI may appear several minutes late;
+do not dispatch a duplicate after a short absence. Root runtimes remain stopped;
+peer runtime/fixtures preserved. PR34/47 stay draft and PR46/user work untouched.
+
 ## September 21, 05:00 UTC — payment-details read recovery verified
 
 Local paid **795ad998d** changes only existing PaymentSection.tsx. Actual worker UI

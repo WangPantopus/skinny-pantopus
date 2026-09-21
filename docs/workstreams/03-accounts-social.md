@@ -22,6 +22,22 @@ prerequisites merge; do not push later commits into PR70 or conflate another str
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
 
+## Latest coordinator CI and integration disposition
+
+Coordinator reports automatic PR96 exactd10e CI35562256054 passed changed surfaces;
+automatic PR97 exact4c6f CI35562565822 also passed. PR97 is now retargeted to master
+at unchanged4c6f117712428452f041e997d76e007e0dbfb62a and described as the combined
+three-file map failure/order plus popup-destination repair, preserving both commits
+and their separate evidence. Neither this report nor green CI establishes merge.
+
+Duplicate manual PR96 CI35562211102 was canceled as superseded/redundant, **not passed**.
+The final-tree combined map manual CI35562416370 remains the full-native gate;
+d10e→4c6f native/workflow bytes are unchanged. Delayed automatic runs can appear
+several minutes after PR creation; do not dispatch duplicate CI after a short absence.
+Source remains frozen, no new application grant. Existing runtimes/retained fixtures
+preserved. This disposition is coordinator-reported; earlier pending entries below
+are historical checkpoints. Final integration/current native completion remains open.
+
 ## Current whole-stream acceptance reconciliation
 
 Read-only reconciliation at 2026-09-21T04:53:25.682348+00:00 on4c6f11771. Existing
