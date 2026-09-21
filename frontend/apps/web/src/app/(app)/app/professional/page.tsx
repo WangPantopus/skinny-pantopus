@@ -1,11 +1,12 @@
 // @ts-nocheck
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import ErrorState from '@/components/ui/ErrorState';
 import type { UserProfile } from '@pantopus/types';
 
 const CATEGORY_OPTIONS: { value: string; label: string }[] = [
@@ -46,6 +47,8 @@ export default function ProfessionalPage() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadRequest = useRef(0);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<'view' | 'edit' | 'create'>('view');
 
@@ -60,9 +63,12 @@ export default function ProfessionalPage() {
   const [radiusKm, setRadiusKm] = useState('50');
 
   const loadProfile = useCallback(async () => {
+    const request = ++loadRequest.current;
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await api.professional.getMyProfile();
+      if (request !== loadRequest.current) return;
       if (!res.profile) {
         setProfile(null);
         setMode('create');
@@ -72,15 +78,16 @@ export default function ProfessionalPage() {
         setMode('view');
       }
     } catch {
-      setProfile(null);
-      setMode('create');
+      if (request !== loadRequest.current) return;
+      setLoadError('Unable to load your professional profile. Please try again.');
     } finally {
-      setLoading(false);
+      if (request === loadRequest.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     loadProfile();
+    return () => { loadRequest.current += 1; };
   }, [loadProfile]);
 
   const populateForm = (p: Record<string, any>) => {
@@ -164,6 +171,14 @@ export default function ProfessionalPage() {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mx-auto" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <ErrorState message={loadError} onRetry={loadProfile} />
       </div>
     );
   }
