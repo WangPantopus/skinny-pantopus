@@ -2159,12 +2159,14 @@ router.post('/hide/:id', verifyToken, async (req, res) => {
     const { id: postId } = req.params;
     const userId = req.user.id;
 
-    const { data: post } = await supabaseAdmin.from('Post').select('id').eq('id', postId).single();
+    const { data: post, error: postError } = await supabaseAdmin.from('Post').select('id').eq('id', postId).maybeSingle();
+    if (postError) throw postError;
     if (!post) return res.status(404).json({ error: 'Post not found' });
 
-    await supabaseAdmin
+    const { error: hideError } = await supabaseAdmin
       .from('PostHide')
       .upsert({ user_id: userId, post_id: postId }, { onConflict: 'user_id,post_id', ignoreDuplicates: true });
+    if (hideError) throw hideError;
 
     feedService.invalidateFilterCache(userId);
     res.json({ message: 'Post hidden' });
@@ -2212,12 +2214,13 @@ router.delete('/mute', verifyToken, async (req, res) => {
     const { entityType, entityId } = req.body || req.query;
     const userId = req.user.id;
 
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('PostMute')
       .delete()
       .eq('user_id', userId)
       .eq('muted_entity_type', entityType)
       .eq('muted_entity_id', entityId);
+    if (error) throw error;
 
     feedService.invalidateFilterCache(userId);
     res.json({ message: 'Unmuted successfully' });
