@@ -4,6 +4,18 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21,02:52UTC — runtime release and next notification grant
+
+Root wallet-read-r1 complete within live01 limits; paid75f372833 pushed/currentCI
+35555446600 running. Owned18132/18133/64561–67 released, rows0/grant restored/tabs
+closed/cache retained. No provider writes or native reservation.
+Stream3 sole writer next separate notification mutation feedback in existing
+NotificationBell.tsx and app/notifications/page.tsx only after actual Mark all read/
+Remove HTTP500 silently failed in both UIs. Reuse existing toast/owner/query guards;
+verify pending/retry/duplicate/delayed behavior with exact disposable rows and preserve
+retained records/readflags. No backend/socket/provider/SDK/newtests; preserve unknown
+committed-write semantics. PR85 read milestone stays frozen/coordinator-owned.
+
 ## September21,02:38UTC — current ownership and runtime
 
 Latest02:44UTC: root reserves18132/18133/64561–67 again for isolated

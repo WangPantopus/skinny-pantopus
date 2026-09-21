@@ -7,6 +7,40 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## September21,02:52UTC — wallet history failure/retry repaired
+
+Clean/pushed paid head **75f372833c4383dad9192a6620656863b8e0c314**, includes reviewed
+masterc1c03a3c6 via cfb9b9d80. Existing WalletTransactionList.tsx alone changed:
+show existing loading/error/retry states for every query, including a new filter or
+page after earlier data. Actual baseline Refunds GET500 left20Adjustment rows under
+Refunds/Showing1-20of25 with no error/Retry. Existing component/source hashes identical
+across master, paid staging, web staging, place-design and initial archive; reuse
+in-place, no file/schema/backend/style change or new unit tests.
+
+Candidate real IAB UI→SDK→wallet route/service→PostgREST/full77SQL: failed filter
+shows error/retry; repeated500 stays retryable; restoredSELECT same query returns
+exact2Refunds. Withdrawals200 shows genuineempty. Page2 failure500 displays error;
+samequeryretry200 returns rows21–25/Nextdisabled. Coldreload500/retry200 restores
+page1. Actual Settingslogout/otherlogin wallet shows0/empty, no owner history. No
+intact delayed wallet/account response or arbitrary ordering claim. Scoped ESLint
+exit0/one existing warning. Required current
+[CI35555446600](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35555446600)
+running; prior combined35555007933 superseded/cancelled, not green.
+
+Private `/private/tmp/pantopus-stream1-wallet-read-r1`;12files mirrored/hash-verified
+at owner's `.pantopus-recovery/audits/20260921-stream1-wallet-read-r1`.
+Synthetic local identities and25history records through existingwallet_creditRPC;
+real reads/UI, no earned-release/withdrawal/Connect/provider acceptance. Provider
+creates/customers/refunds0. Original table SELECT restored; SQL aggregate including
+Wallet/WalletTransaction0. API/Next/ownedSupabase stopped; Chrome+IABownedtabs closed;
+owncache preserved privately/tsconfig restored. Initial Chrome remained prehydration
+disabled during bounded attempt; IAB worked, no login repair or Chrome claim.
+
+Coordinator PR85 notification read/error scope reviewed against actual cold/warm/
+partial/ordering evidence, currentCI pending. Frozen03 d93562fd captured at e20229545;
+writerreleased for separate granted mutation feedback. Next: current paidCI, PR85
+strict gate and existing P08/P09/provider/native limits; no broad backlog row closed.
+
 ## September21,02:38UTC — intact refund reply after account switch verified
 
 Latest02:44UTC: PR84 strictf19349e38 passed CI35554806445 and merged
