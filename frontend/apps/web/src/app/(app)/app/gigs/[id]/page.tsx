@@ -83,6 +83,11 @@ const MiniMap = dynamic(
 /** Common shape for poster/creator nested objects from backend variants. */
 interface GigActorSummary {
   [key: string]: unknown;
+  displayName?: string | null;
+  handle?: string | null;
+  href?: string | null;
+  avatarUrl?: string | null;
+  locality?: { city?: string | null; state?: string | null } | null;
   id?: string;
   account_type?: string;
   username?: string;
@@ -259,32 +264,18 @@ export default function GigDetailsPage() {
     !poster;
   const posterDisplayName = isAnonymousPoster
     ? 'Anonymous'
-    : poster?.name ||
-      (poster?.firstName && poster?.lastName ? `${poster.firstName} ${poster.lastName}` : null) ||
-      (poster?.first_name && poster?.last_name ? `${poster.first_name} ${poster.last_name}` : null) ||
-      poster?.username ||
-      'Anonymous';
+    : poster?.displayName || poster?.handle || 'Anonymous';
   const posterInitial = isAnonymousPoster
     ? '?'
-    : (
-        String(posterDisplayName || '').trim()[0] ||
-        String(poster?.username ?? '')?.[0] ||
-        String(poster?.name ?? '')?.[0] ||
-        '?'
-      ).toUpperCase();
+    : (posterDisplayName.trim()[0] || '?').toUpperCase();
   const gigCreatedAt = gig?.created_at || gig?.createdAt;
-  const posterUserId = poster?.id || gig?.user_id || gig?.poster_id || null;
-  const posterUsername = poster?.username || null;
-  const posterAvatarRaw =
-    poster?.profile_picture_url ||
-    poster?.avatar_url ||
-    poster?.profilePicture ||
-    gig?.poster_profile_picture_url ||
-    null;
-  const posterAvatar =
-    typeof posterAvatarRaw === 'string' && posterAvatarRaw.trim().length > 0
-      ? posterAvatarRaw.trim()
-      : null;
+  const posterUserId = poster?.id || null;
+  const posterUsername = !isAnonymousPoster && typeof poster?.handle === 'string' &&
+    poster.handle && !poster.handle.startsWith('/') && poster.href === `/${poster.handle}`
+    ? poster.handle
+    : null;
+  const posterAvatar = !isAnonymousPoster && typeof poster?.avatarUrl === 'string' &&
+    poster.avatarUrl.trim().length > 0 ? poster.avatarUrl.trim() : null;
 
   // Auto-open cancel modal if ?action=cancel
   useEffect(() => {
@@ -758,8 +749,8 @@ export default function GigDetailsPage() {
                       username={posterUsername}
                       displayName={posterDisplayName}
                       avatarUrl={posterAvatar}
-                      city={poster?.city}
-                      state={poster?.state}
+                      city={poster?.locality?.city}
+                      state={poster?.locality?.state}
                       textClassName="font-semibold text-app-text hover:underline"
                     />
                   )}

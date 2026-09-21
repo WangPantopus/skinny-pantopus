@@ -215,7 +215,14 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
         <div className="space-y-3">
 	          {otherQuestions.map((q) => {
 	            const asker = (q.asker || {}) as NonNullable<GigQuestion['asker']>;
-            const askerName = asker.name || [asker.first_name, asker.last_name].filter(Boolean).join(' ') || asker.username || 'Anonymous';
+            const askerName = asker.displayName || asker.handle || 'Anonymous';
+            const askerUsername = typeof asker.handle === 'string' && asker.handle &&
+              !asker.handle.startsWith('/') && asker.href === `/${asker.handle}` ? asker.handle : null;
+            const answerer = q.answerer;
+            const answererName = q.answerer_display_name || answerer?.displayName || answerer?.handle || 'Poster';
+            const answererUsername = !q.answerer_display_name && typeof answerer?.handle === 'string' &&
+              answerer.handle && !answerer.handle.startsWith('/') && answerer.href === `/${answerer.handle}`
+              ? answerer.handle : null;
             const isMyQuestion = currentUserId && String(asker.id) === String(currentUserId);
             const timeAgoStr = q.created_at ? timeAgo(q.created_at) : '';
 
@@ -237,14 +244,14 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
                     <p className="text-sm font-medium text-app-text">{q.question}</p>
                     {renderAttachments(q.question_attachments || [])}
                     <div className="flex items-center gap-2 mt-1 text-xs text-app-text-muted">
-                      {asker?.username ? (
+                      {askerUsername ? (
                         <UserIdentityLink
                           userId={asker?.id || null}
-                          username={asker.username}
+                          username={askerUsername}
                           displayName={askerName}
-                          avatarUrl={asker?.profile_picture_url || null}
-                          city={asker?.city || null}
-                          state={asker?.state || null}
+                          avatarUrl={asker.avatarUrl || null}
+                          city={asker.locality?.city || null}
+                          state={asker.locality?.state || null}
                           textClassName="text-xs text-app-text-secondary hover:underline"
                         />
                       ) : (
@@ -264,21 +271,21 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
                     {q.answer && (
                       <div className="mt-2 bg-green-50 rounded-md p-2.5 border-l-2 border-green-400">
                         <div className="text-xs text-green-700 font-medium mb-0.5">
-                          {q.answerer?.username ? (
+                          {answererUsername ? (
                             <>
                               <UserIdentityLink
                                 userId={q.answerer?.id || null}
-                                username={q.answerer.username}
-                                displayName={q.answerer_display_name || q.answerer?.name || q.answerer?.username || 'Poster'}
-                                avatarUrl={q.answerer?.profile_picture_url || null}
-                                city={q.answerer?.city || null}
-                                state={q.answerer?.state || null}
+                                username={answererUsername}
+                                displayName={answererName}
+                                avatarUrl={answerer?.avatarUrl || null}
+                                city={answerer?.locality?.city || null}
+                                state={answerer?.locality?.state || null}
                                 textClassName="text-xs text-green-700 hover:underline"
                               />{' '}
                               answered:
                             </>
                           ) : (
-                            `${q.answerer_display_name || q.answerer?.name || q.answerer?.username || 'Poster'} answered:`
+                            `${answererName} answered:`
                           )}
                         </div>
                         <p className="text-sm text-app-text-strong">{q.answer}</p>
