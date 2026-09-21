@@ -56,7 +56,7 @@ files mirrored/hash-verified at owner's `.pantopus-recovery/audits/20260921-stre
 Full77migrations; synthetic local auth/ancillary transport, actual Stripe SDK/routes/
 SQL. Owned SQL aggregate0, one test customer deleted; API/Next/owned Supabase stopped,
 Next caches preserved privately and generated tsconfig restored. IAB tab closed;
-Chrome owned tab closure unconfirmed because control unavailable. No shared cleanup.
+Chrome owned tab subsequently confirmed absent by fresh coordinator inventory; no shared cleanup.
 Cumulative session:12 Stripe TEST originals,5 captures fully refunded6000c,
 7 unpaid cancelled intents,5 customers deleted. RequiredCI passed. Next: resume
 held-refund session UI only when usable checkout control returns; retain broader

@@ -6,6 +6,17 @@ backlog, acceptance evidence, or verification-first instructions.
 
 ## September21 current bounded grants and runtime update
 
+N04 report retry grant: Stream3 owns only existing full postpage handleReport and
+useFeedData.handleReport after actual PostReport INSERT500 closed modal/lost details.
+Shared ReportModal already preserves draft on rejected promise; reuse that contract,
+check all callers, preserve toast/layout/backend. Verify fullpage/feed-card failure,
+retry/SQL and exact cleanup; separate milestone after82, no new tests. Older stack
+refs remain coordinator-owned. Refresh500 triage identified rejected localhost18131
+origin before auth, not auth-result500. Root Chrome/IAB inventory has no such tab;
+exact originating client remains unknown. No CORS broadening or shared cleanup.
+Root refund-session owned Chrome tab is now absent from fresh inventory; earlier
+closure-unconfirmed limit resolved for that tab only.
+
 New A02 bounded grant after real Security Refresh returned200/false empty activity
 under owned AuthSecurityEvent SELECT denial: Stream3 owns existing authSessionService
 listSecurityEvents/listActiveSessions, authDeviceService listDevices/listActiveDevices,
