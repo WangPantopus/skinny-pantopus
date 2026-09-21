@@ -1,17 +1,19 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T00:29:59.111864+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T03:12:01.381784+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/workstream-accounts-social`, local HEAD **e11123328**, application tree
-clean. Only untracked owned `.next-stream3/` remains. Preserve it while Next runs.
-Remote primary branch is **07827d2b0** after isolated reuse of the accepted iOS fixture correction; live runtime includes separate preference failure5e3a8b963 and canonical timingUI e11123328.
+branch `codex/stream3-notification-actions`, local/pushed HEAD **c5802b4a1849c758e0725f00d83790073e990685**.
+Application tree clean; only owned untracked `.next-stream3/` remains. Runtime source
+matches masterd2b833049 plus exactly the three notification action web files below.
+Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
+primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
 
 | Milestone | Branch / head | Review / current CI |
 | --- | --- | --- |
-| Beacon comment/privacy/drafts | codex/workstream-accounts-social / 07827d2b0 | [Draft PR70](https://github.com/WangPantopus/skinny-pantopus/pull/70), base master. Prior CI35546207895 failed all three iOS test jobs; iPhone16 log confirms four assertions from the expired September17 booking fixture. Reused accepted paid9ecf66fc7/9ae1edb3b as b30f4b330/07827d2b0, identical final fixture bytes. Fresh CI35547834908 pending; no app behavior change or new tests. Detached owned /private/tmp/pantopus-stream3-pr70-ci is clean; runtime checkout untouched. |
+| Beacon comment/privacy/drafts | codex/workstream-accounts-social / 21b93aa62 | [Draft PR70](https://github.com/WangPantopus/skinny-pantopus/pull/70), base master. Prior CI35546207895 failed all three iOS test jobs; iPhone16 log confirms four assertions from the expired September17 booking fixture. Reused accepted paid9ecf66fc7/9ae1edb3b as b30f4b330/07827d2b0, identical final fixture bytes. Exact078 CI35547834908 all applicable green. Strict branch protection required docs-only master e8b49c963 merge in isolated checkout→21b93aa62. Diff exactly5docs, backend/frontend/supabase bytes unchanged. Exact21b required CI35549733796 all15 applicable/aggregate green. Coordinator merged PR70 as358daaa17068ebbb6c9591b13bf0378cea7d02b1 at01:39:03Z; no UI rerun for docs. Detached owned /private/tmp/pantopus-stream3-pr70-ci is clean; runtime checkout untouched. |
 | Reminder receipt/destination | codex/stream3-booking-reminder-retry / cbfba3503 | [Draft PR72](https://github.com/WangPantopus/skinny-pantopus/pull/72), stacked on remote PR70 branch. Exact-head CI35547400223 CI OK/all applicable green; native/web skipped by paths. Two-file source reviewed by coordinator. |
 | Personal posting/draft recovery | codex/stream3-personal-post-recovery / 423176969 | [Draft PR73](https://github.com/WangPantopus/skinny-pantopus/pull/73), stacked on PR72 branch. Exact-head CI35547412275 CI OK/all applicable green, including web/identity E2E; native skipped. Five-file source reviewed by coordinator. |
 
@@ -19,6 +21,193 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## Coordinator integration progress (read-only reconciliation)
+
+PR70 merged358daaa; PR72 currentf2ea16704 merged703e7050867d4747db958dfda8a20bf2224d1991;
+PR73 current806d64635 mergedae85bad599f87933ac00e3f76ca23ac5cb6daa53; PR75 current5edcaad6c
+mergedcc560bce6c61d915d8a3c503a55b8c167270a43e; PR77 currentcc252a474 mergedb49dd59224d38c060d726a11bc45148f36404fcf.
+Coordinator checked each strict update changed only docs/accepted clock fixture before
+required CI. Accepted application bytes/evidence unchanged. Coordinator merged
+PR80 ase92aeab69044ea3eeccbd6e2c4ebe096e26cb0cb and PR81 as6f4703065055f42a9def558e0e72c1e09024a03a.
+PR82 strict914e68764 passed CI35553548674 and merged **01e842aef4b8877773712a17f1c5a545fc7f5081**
+at02:20:58Z. All reviewed stack70/72/73/75/77/80/81/82 integrated. Author did not merge
+or mutate coordinator-owned refs. Historical sections retain original source/limits.
+
+## N04 post report retry — PR83, current milestone
+
+[Draft PR83](https://github.com/WangPantopus/skinny-pantopus/pull/83), branch
+codex/stream3-post-report-retry, headbf595fa80, base master01e842aef. Exactly two existing
+handlers: useFeedData.handleReport and full feed/post/[id]/page.tsx handleReport now
+rethrow after the existing error toast. Existing ReportModal already retains reason
+and details on rejection; all feed-handler callers await it through this modal.
+No shared modal/backend/schema/layout/new test change. Existing master, paid/Beacon
+branch variants and modal were compared; no replacement was needed.
+
+Baselineafe8: actual Bob full post Report and Nearby→Pulse→Beacons→card menu Report
+both received500 under isolated PostReport INSERT denial, showed error then closed
+modal and lost details. Candidate both actual browser entry points retain Other
+and exact details on500; restoring INSERT and submitting the same form returns200,
+closes with success, and persists exactly one report per UI journey. Real local
+GoTrue cookies/HTTP/Express/PostgREST/PostgreSQL, no mocked identity/persistence.
+Additional separate authenticated HTTP: visibleGET200, invalid reason400,1001char
+input400, unauthenticated401, SQL-controlled inaccessible403, missing404; zero extra
+reports. First fixture setup used an invalid audience enum and failed atomically;
+finally restored, then rerun with canonical nearby audience and private visibility.
+These are controlled access checks, not actual moderation-state lifecycle evidence.
+
+Exact reportsa2032035-9d26-497c-a5ef-0fe662cb910c and8eba4713-8fd4-4beb-8a2d-966e645bae59
+removed, target Bob/Post report count0. Post visibility/audience/distribution restored;
+PostReport INSERT restored; both auxiliary HTTP sessions logout200. Current browser
+and earlier fixtures remain. Local typecheck gate/focused ESLint pass. No new unit
+tests. PR83 exactbf595 CI35554056362 all applicable/aggregate green. Coordinator merged PR83 as0fb600391ea6bd88c8f39e9f72bfa6b0b059f765.
+
+Evidence post-report-baseline-results.json, post-report-candidate-results.json,
+post-report-boundaries.json and setup-failed snapshot, post-report-types.log/lint.log.
+Candidate SHA b53034572475e53547c01aab15e8db7eb1e7c2c97d4f9602d2741a9855b01c02.
+Durable private mirror now243files; MANIFEST SHA
+2c321c806b41ff73db8ac32fb90a8b357626654fdb9a957fe73dfa9264dc320e.
+Artifact-specific source/config remains authoritative, not blanket rerun evidence.
+Installed native, provider/moderator processing, report idempotency/concurrency,
+account-switch/departure and whole N04 remain unverified.
+
+A02 evidence qualification: repeated refresh500 in private operator logs corresponds
+to rejected Origin http://localhost:18131 before auth/cookie parsing. Owned IAB uses
+stream3-auth.localhost:18131; coordinator Chrome/IAB inventories have no localhost18131
+tab. Exact originating client unknown. Coordinator requested no further unrelated
+investigation/CORS broadening. Do not classify these as authenticated refresh failures
+or claim all auth error handling verified.
+
+## N03/N04 Beacon publication access — PR84
+
+[Draft PR84](https://github.com/WangPantopus/skinny-pantopus/pull/84), c89949f62,
+branch codex/stream3-post-visibility-fields, basePR83. Coordinator granted exactly
+existing posts.js POST_VISIBILITY_SELECT additions archived_at/post_metadata. Shared
+helper omitted the fields its existing canViewPost policy needs. Current/master/paid/
+Beacon selector+helper variants identical, SHA f3434e6897e6bb48bd42026272765f19249900c1779a1a797a16d54b2c26cb24.
+No replacement/schema/newtest; no phantom Post.status column added.
+
+Actual baselinebf595: owner Dana HTTParchive200; follower postGET403 and real reload
+Post not found, but standalonecomments200 exposed7/8 and likes200. Bob already-open
+actual UI Send persisted1comment201 and1ownerNotification after archive. Exact both
+removed, original7comments restored via ownerunarchive200. Candidate actual staleUI
+Send403 retains draft, no persistedcomment/notice. Archived and SQL-controlled draft
+matrices each cover11 follower reads/actions, all403; owner detail/comments/likes200,
+seven effect-table counts plus Notification unchanged. Published restoration gives
+reads200; retainedUIcomment first hits existing20/min content limiter429, draft still
+retained, natural expiry retry201 yields1comment/1notice. No limiter override.
+Baseline/candidate exact newcomments/notices removed, original7comments/published
+metadata restored; auxiliary owner/fan sessions local logout200. Owner archive/
+unarchive naturally updates updated_at; not rewound. Existing31cases/3suites pass.
+Coordinator updated PR84 to strictf19349e38, unchanged accepted app bytes; CI35554806445 green and mergedc1c03a3c62944c0a07570db285f945a338c9f1c5. Personal policy unchanged/source+existingtests;
+no new personal/native/provider/socket or atomic archive-versus-write race acceptance.
+
+Detailed archive-visibility-results.json SHA
+aaceb9644a6e5f8d04e7453bd194de4726e0b8964a7eec5e181f81d11c4a907f,
+phase snapshots and candidate-matrix. Private mirror258files, MANIFEST
+4c758ece1dc28343d3e0d74eb40c8e1b0127950d97a7a67dc492aeef669e217e.
+Backend now PID8033/session61160 on18130; old log preserved from durable snapshot as
+real-auth-backend-before-archive.log, current log begins candidate restart.18131 unchanged.
+
+## N01/N02 notification read recovery — PR85
+
+[Draft PR85](https://github.com/WangPantopus/skinny-pantopus/pull/85), headed5b4a8bb,
+branch codex/stream3-notification-read-errors, base masterc1c03a3c6. Exactly two granted
+existing web files NotificationBell.tsx and app/notifications/page.tsx. No backend,
+BadgeContext/socket/SDK/provider/schema/newtest change. Master/paid identical before;
+older Beacon differs only accepted guardedtap/route code. Existing QueryProvider
+already remounts account-local state on session change; reuse it. Bell now rejects
+outdated filter/closed/unmounted reads and token/marker changes; fullpage consumes
+query cancellation and checks session. Existing lists use explicit error/Retry,
+keep successful/known same-owner slice rows, and suppress false confirmed-empty.
+
+Actual c899 baseline Bob bell11saved/7unread. Isolated Notification SELECT denial:
+warmfullpage silently keeps cache; coldfullpage after HTTP500 says All caught up/No
+notifications yet, bell likewise. Candidate real coldSQL500 both expliciterror/Retry;
+known11warmbell/fullpage rows retained with error. Restored SELECT + actual Retry
+recovers; unread filter failure truthful. ScopedPersonal fullpage repeated platform503
+transport fault after real SQL keeps7personalrows+error; Retry recovers5unread. Failed
+personal503+successful platform200empty gives incomplete/Retry, not empty. One-shot
+initialfault was superseded by overlappinginitialreads and is not partialstate proof.
+
+Warm ordering: old Personal500 held02:44:49.897, newer Business200empty UI50.358,
+oldrelease59.898/finish59.900 destroyed/socketfalse; after02:45:09.612 stillconfirmed
+Businessempty/noolderror orrows. Actual cross-tab Boblogout/Evanlogin whileoldBob
+Personal200held02:45:27.797: newEvanUI48.176 beforeoldrelease52.798. Pendingtabretired
+tologin, Evanbell/maininbox2ownrows. Oldresponse destroyed/sockettrue/no finish:
+**retirement/disconnection only, not intact cross-account delivery evidence**.
+Actual EvanAudience GET200empty at02:47:14 usesexisting Allcaughtup/Nonotifications.
+
+All13original Bob/Evan notification IDs/context/readflags unchanged before/after.
+No notification mutations; SELECTrestored, privatefaultflagabsent. Bobbrowserloggedout,
+newEvanbrowseractive; authaudit/sessioneffectsretained. Earlierfixturesremain. Split
+bellcohortoff; fullpagepersonal/platformpartial actual, bellall/legacyfiltersactual;
+splitbell behavior only existingregressions, not installedacceptance. No providerpush,
+native/physical, allmutationfailures, pagination-scale or frozen-tab delivery closure.
+Typecheckgate0; focusedlint0errors/twopre-existingunusedwarnings.16existingcases/2suites
+pass; no newtests. PR85 exacted5 requiredCI passed; coordinator merged **d2b83304922b28ff1f12ceaab70d284b1bec3682**. Initialtypenarrowingerror fixedbefore
+commit; cleanup-refwarningremoved. Notifications/unreadcounteroutages remain distinct.
+
+Evidence notification-read-baseline.json, notification-read-candidate.json,
+notification-response-faults.jsonl, notification-records-before/after.json,
+notification-read-types-final.log/lint-final.log/existing-regressions.log. Candidate
+SHA8c83abe7d01b2251a09d815c7bebd1a1dce96e328482d8c2f35caa45509ec9e3.
+Durable private268file MANIFEST30d163bb66f40b4c2cb8d59a5f1fc76692feeba5547a550e7576f2fb50676e87.
+Owned18130 currentlauncher session91329 (private response-fault instrumentation only),
+web18131 unchanged. No otherstreamruntime/cache/provider changed.
+
+## N01/N02 notification actions and keyboard removal — PR86
+
+[Draft PR86](https://github.com/WangPantopus/skinny-pantopus/pull/86), c5802b4a1,
+branch codex/stream3-notification-actions, base masterd2b833049. Sole granted existing
+NotificationBell.tsx, app/notifications/page.tsx, and narrowly added NotificationRow.tsx
+keyboard/pending prop. Compare current/master/paid/Beacon: handlers all silent catch;
+row identical hashfcf3d21253c71fc3014237d894ea0dbb48f35151d390980f891d72153d1381d8.
+Existing selecteddetail and row Remove callers audited; sole NotificationRow caller
+updated. No new files/tests/layout/backend/SDK/socket/schema/provider edit.
+
+Actualed5baseline: Evan fullpage+bell MarkAll/Remove each500 under Notification
+UPDATE/DELETE denial, no feedback. A SQL-created disposable notification Remove Enter
+DELETE200 then unintended PATCHread500 and navigationSecurity. Candidate error toasts
+truthfully say could notconfirm/tryagain; pending guards prevent duplicates; child
+Remove Enter/Space stop propagation, ordinaryrowkeys remain. Successful same-account
+commands invalidate existing notification cache family; reads started before committed
+mutation retire. Markall uses authoritative rows instead of marking newly arrived
+rows optimistically. Owner/view marker guards suppress obsolete completions/toasts.
+
+ActualUIcandidate: scoped Audience(fullpage) and Business(bell) failure+retry succeed;
+real UPDATE/DELETE grants restored.4keyboardremovals (Enter/Space eachsurface) exactly
+DELETE200, no parentPATCH/navigation; ordinaryrowEnter/Space stillopenSecurity both
+surfaces. Lostcommitted readall200→503 leaves uncertaintoast/knownunread, SQLflags true;
+retry200 refreshes. Lostcommitted DELETE200→503 leaves knownrow/toast, SQL0; retry200
+removes idempotently. No rollbackclaim. Disposables reused by exactID between phases,
+recorded ledger; source createdrecords in SQL, UI/API mutations real, no deliveryclaim.
+
+An initial candidate canceled an in-flight initial list on mutation start; rapid
+MarkAll interrupted loading. Repaired by allowing initial reads and disabling initial
+MarkAll, retaining success-time retirement. Another actual candidate failure: DeleteA
+held10s, switch Read, oldresponsefinishes, returncachedAll<30s resurrectsdeletedA.
+Existing cache invalidation fixes it. Finalhold03:05:59.804, Read00.376, intactrelease
+03:06:09.806/finish09.808; returnAll19.909 showsAabsent. Doubleclick exactly1DELETE,
+pendingRemove disabled. Cached-filter failure/repair evidence retained, not erased.
+
+Accountswitch mutation: oldEvanDeleteheld03:08:15.569, Bobvisible27.509, oldrelease40.572
+destroyed/sockettrue/nofinish. Pendingtabretiredtologin; nointactcrossaccountdelivery
+claim. No socket/provider/newnotificationarrival matrix closure. All4disposable IDs
+retired; finalSQLdeleted onlyremainingDbdcbad0a..., other3alreadygone. Original13Bob/Evan
+notification IDs/context/readflags compareidentical; grantsSELECT/UPDATE/DELETE restored,
+allnotificationfaultflagsabsent. Evanloggedout/currentBobleftactive; audit/sessionrows
+and earlier acceptancefixtures retained. No broadcleanup claim.
+
+Typecheckgate0; focusedlint0errors/twopre-existingwarnings;16existingcases pass onfinal
+source. No newtests. RequiredCI/coordinatorintegrationpending. Source-bound private
+notification-mutation-candidate.json SHA
+d323a40aff2b9b5fd75b0d504e85adb1f0ec1d747ee20692893938f0bc953f46;
+linked baseline/keyboard/fixture/transport/check artifacts. Durable280file MANIFEST
+**a0d847a7a2d68b4a3fd00dc01572d90ce16e78193d7d4f175bf416e5c961c864**.
+Ownedbackend18130 currentlauncher session71561;18131 unchanged. Private responsefault
+instrumentation logs are not application edits. Next independent A05 marketplace
+reachable-action verification from existing catalog/screens; route payment/Home toowners.
 
 ## PR75 — preference database failures, ready for review / CI
 
@@ -61,7 +250,7 @@ five/43200 limits. Existing design/channel/pause policy stays. Scope async respo
 and pending timers to originating owner/mount; serialize auto-saved reminder edits.
 Committed/pushed **e11123328** on codex/stream3-reminder-timing-ui in
 [Draft PR77](https://github.com/WangPantopus/skinny-pantopus/pull/77), base PR75branch.
-Coordinator reviewed source. CI35549296796 running; local finaltypes/lint pass,
+Coordinator reviewed source. Exact-head CI35549296796 all applicable green; local finaltypes/lint pass,
 no new helper/test/schema. ActualH1[0]save/reload,[]→WorkflowNoReminders→A4none;
 rapidA4edits under2200msfirstreplyhold persist latest15/30/60; reloadmatches.
 Five-choicecap and31days rejected;30days43200 saved. Readfailure500 across all3
@@ -79,6 +268,160 @@ Bobpage1440/60 unchanged; all faultflags consumed. Otheroriginalfixtures retaine
 Evidence reminder-alignment-ui-results.json, page-response-faults.jsonl,
 reminder-alignment-types-final.log/lint-final.log, bound to committed3file hashes.
 Prior PR75 failure repair remains separate at5e3a8b963; all existing PR refs intact.
+
+## PR80 — reminder worker settings/delivery repair, review / CI
+
+Actual H1 saved Bob[] through realUI/API/SQL. With one existing booking timestamp
+controlled to+60min, real-clock manual worker emitted a hostnotice and SMTPemail,
+shown in localMailpit receipt dZecpRLTpxrcGCngB5PCbX. User selectedNoReminders.
+UI[0], start1minpast/endfuture:0zero logs/notices. UI[43200], start30daysahead:
+0long logs/notices. Worker source ignores[]/0 and caps scan/offset7days despite
+canonical route/native30day acceptance. Each booking timestamp restoredfinally;
+Bob1440/60 restoredthroughUI. Exact new60m notice/log deleted so candidate[] cannot
+pass using baseline dedupe; SMTPreceipt retained private. Coordinator now grants existing bookingReminders.js and bookingNotifyService.js
+formatLead only: explicit[]; integer0..43200/30day scan; recentlystarted zero only,
+no early-zero send; existing120mincatchup/completion/dedupe/release; checkedpage/eventtype
+read errors. Committed/pushed **6e422bd91** on codex/stream3-reminder-worker-times in
+[Draft PR80](https://github.com/WangPantopus/skinny-pantopus/pull/80), basePR77branch;
+Exact-head CI35550052378 all applicable green. Candidate actualH1[]→no notices/logs with earlier60m dedupe
+removed; zeroearly→none; duezero2concurrentrealworker calls→1log/1host/1SMTP then
+repeatunchanged;30days→1/1/1 thenrepeatunchanged. Page/EventType readfailures leave
+no newnotice/log; restoredreads allowretry. SMTPfailure→host1/log0; restoredSMTP
+retry→hoststable/log1/email1; repeatunchanged. Existing26schedulingregressions pass.
+
+Exact newcandidate3logs/3notices deleted; Bob1440/60 restoredviaUI, all controlled
+bookingtimes restoredfinally and allgrants restored. SMTPhealthy; its controlled
+restart cleared earlierinmemory receipts (recorded taskUI/private evidence);
+latestretrymail nwcabv5XDV27ai4hDogox4 remains. Originalfixtures retained.
+Sourcehash-bound reminder-worker-candidate-results.json and eight linked realworker
+results include precise boundaries. PR72 destinations reused with unchangedbytes.
+No naturalcron/exactstartguarantee, installednative, providerrelease, lostSMTPack,
+or concurrentcancellation/reschedule/settingschange acceptance. N05 staysopen.
+Granted existing worker plus existing formatLead zero-label;
+no cron/provider/schema/newservice change. Evidence reminder-worker-{empty,zero,long}-baseline.json,
+corresponding private logs and reminder-worker-baseline-cleanup.json. ControlledSQL
+timestamps/manual invocation are distinct from natural schedule/cron/providerrelease.
+
+## PR81 — canonical host push choices / response lifetime
+
+Coordinator assigned two existing web files, hub/notificationPrefs.ts and
+NotificationPrefsForm.tsx. Actual Bob Reminder sent/P off→PUT200 and success toast,
+then immediate/reload reset on. SQL nested scheduling.host.reminder_sent.push=false
+but canonical notify_me.reminder=true. Real manual worker created1hostnotice/1log
+and actual dropdown displayed it. Same helper blob in master/paid/Beacon branches;
+reuse native notify_me contract, no replacement service/schema needed.
+
+Committed/pushed **dd80580e4**, codex/stream3-host-notification-choices,
+[Draft PR81](https://github.com/WangPantopus/skinny-pantopus/pull/81), base PR80branch.
+Exact-head CI35551218783 all applicable green. Map five supported host push rows to canonical notify_me
+(reminder_sent→reminder), serialize saves, latest-response guards, confirmed rollback,
+retire queue/timers on owner/mount departure; explicit accessible names, same layout.
+Actual off save/reload persists; worker hostnotice delta0, attendeeSMTP/log delta1
+under unchanged transactional policy. UPDATE500 rolls back; restore/retry200.
+Rapid changes with8000ms earlier reply held persist latest choices/reload; committed
+reply replaced503 rolls back and retry200 converges. Leave with15000ms held first
+write retires queued second edit. **New login before server release established (not late response delivery)**: Bob PUT held
+01:29:27.913Z; logout20001:29:41.254Z; Evan login20001:29:53.325Z; Evan screen01:30:02.532Z
+has own defaults before old release01:30:12.913Z; after01:30:20.813Z remainsEvan defaults.
+The45s hold exceeds SDK30s timeout, so late successful client delivery is unproven.
+Bounded25s repeat: Evan UI01:37:28.091Z before release31.545Z, but response/socket
+destroyed=true, no finish event. Navigation/session retirement disconnects the old
+request. After55.558Z Evan remainsunchanged; NO intact late-response delivery claim.
+Evidence channel-overlap-transport-results.json. New exact emptyEvanpage66629ef2-03c3-44c5-bd8f-f2e677c05514
+and new Bobpreference row cleaned; no app change or broad rerun.
+Bob queued cancellation never saved. Reschedule/no-show also actualsave/reload/SQL.
+Type gate/focusedlint passed, no new unit tests. Source hashes in private
+channel-candidate-results.json; baseline channel-baseline-results.json, linked worker
+records and prefs-response-faults.jsonl. Real localGoTrue/HTTP/PostgREST/SQL; manualworker
+with restored onebooking timestamp/localSMTP, no cron/installed/physicalpush claim.
+
+Cleanup: baseline newhostnotice/log removed; candidate1log removed. Exact newly
+created Bob/Evan preference rows removed, both0. Auto-created empty EvanBookingPage
+604f23a8-c77a-4037-a1ec-e9275e887cdc removed after verifying0bookings/eventtypes. Bobpage
+1440/60 and originalfixtures retained; grants restored, faultflags consumed.
+Host email, attendee toggles, dailyagenda8am and pause remain separate unresolved
+policy/wiring rows; no inventedpolicy. Non-reminder rows have UI/API/SQL evidence,
+not full lifecycle delivery. Home/business switches, true offline/reconnect and
+same-user multitab writes remain unverified. Stream and N05 remain incomplete.
+
+## PR82 — Security records, refresh and session cleanup
+
+Coordinator assigned existing authDeviceService.js list helpers, authSessionService.js
+listActiveSessions/listSecurityEvents, and web settings/security/page.tsx loader and
+lifetime behavior. Baseline dd805: actual Security Refresh during denied
+AuthSecurityEvent SELECT returned GET devices200 and “No security activity recorded
+yet,” despite previously visible history. Restored grant/Refresh recovered the events.
+The same list helpers returned [] for device/session read failures. Native/current
+master/paid implementations and all helper callers were inspected before editing.
+
+Draft [PR82](https://github.com/WangPantopus/skinny-pantopus/pull/82), branch
+codex/stream3-security-read-errors, current review head **afe8d2f4cab1c9cbda5558f5d067451fb4a69213**,
+application source **57e495460e9aaacb6c50c062ef7dfee7b3f05632**,
+stacked on PR81. Three application files plus one existing assertion file. Checked reads reuse route500 handling;
+warm known rows remain usable with existing retry banner, cold failure is unavailable.
+Loader ordering and session/mount guards retire old results and pending confirmations.
+Successful refresh resets expanded history to the existing collapsed/Show more state:
+baseline39→Refresh20/noShowMore; candidate ShowMore40, failedRefresh preserves40,
+restoredRetry10+ShowMore→40. No layout redesign, new service/schema/provider or unit test.
+
+Actual local GoTrue/CUA/HTTP/PostgREST/PostgreSQL verification: cancel/wrong password
+leave auxiliary Evan session200 and Bob200; valid “sign out others” yields Evan401,
+Bob200 and current browser still signed in. Registry revoked, GoTrue session removed.
+Three individual table SELECT failures now return devices500; standalone events500;
+all restored and recovered200. AuthDevice failure during revocation now reports500
+AFTER earlier GoTrue/session revocation committed; restored UI retry succeeds with0
+additional sessions. This is explicit partial failure, not atomic revocation.
+
+Initial202a candidate global sign-out regression was caught by actual UI: endpoint200
+revoked Bob, but strict token comparison after expected cookie removal left private UI
+busy. Final57e permits token absence only for successful revoke-all with unchanged
+captured marker/mount. Existing endpoint clears the same four cookies as logout;
+removed redundant second logout and retained synchronous local cleanup/token-change
+broadcast. Actual final Bob global action exits private UI to login01:58:18.275Z;
+Bob auxiliary401, Evan200. Local Mailpit received the security email. No physical push.
+
+Evidence ordering limits: old devices500 was held15s, released01:49:53.963/finished.964;
+a newer refresh began51.159 but its200 finished54.021. This proves old failure after a
+newer request began, not after newer success. Pending unsubmitted global confirmation
+retired on Evan→Bob without POST revoke-all. A separate held global response from Evan
+at02:02:02.000 preceded Bob login/UI03.835 and release27.002; response/socket were
+destroyed, no finish. Bob actual authenticated reload56.636 succeeded. This proves
+session retirement/disconnection; **no intact old-account response delivery claim**.
+An earlier held attempt logged in only after release and is not overlap evidence.
+
+Private security-read-baseline-results.json, security-read-candidate-results.json,
+security-read-http-results.json, security-response-faults.jsonl, security-global-results.json
+and global-response-faults.jsonl bind source, exact sequence and boundaries. Existing
+2auth suites/100 tests passed before the client-only follow-up; backend bytes unchanged.
+Final web type gate/lint pass. Initial CI35552276595 failed an old exact banner-text
+assertion. Coordinator granted only the two existing assertion updates (banner wording and
+absence of redundant logout; retained local-clear/navigation checks). Committed
+afe8d2f4c, application bytes unchanged. All11 existing page cases pass; no new tests.
+Current required CI35553113322 runs at afe8d2f4c. Earlier202a/57e CI failures are retained
+as obsolete-assertion failures, not current application acceptance.
+
+Cleanup: all AuthDevice/AuthSession/AuthSecurityEvent SELECT grants restored; extra
+probe sessions revoked/GoTrue0, audit rows retained. Deliberate global/revoke-others
+operations revoked earlier isolated-account sessions; no session resurrection. Current
+Bob browser remains for continuing work. No device keys, resume grants, physical/native,
+provider activation or hosted persistence acceptance. PR82 not integration-ready until
+required final CI is green. Coordinator owns all older stack refs; do not push into them.
+
+## Installed iOS capability attempt — slot released
+
+Coordinator granted sole heavy-native slot and existing owned simulator
+0AE16FA0-E244-414F-86C8-24893BDFD979 (Pantopus Stream3 Social R2, iPhone17/iOS26.5).
+Boot succeeded. CUA rejected Simulator/name and discovered bundle ID. Xcode27
+installation has DeviceHub.app instead of the former Simulator path; exact path
+and discovered running com.apple.dt.Devices both timed out in CUA. No build or
+install began because actual screen control could not be established. Owned
+simulator shutdown succeeded; final booted inventory empty. Native slot released.
+No other simulator, physical phone, service reset, provider or source change.
+Private native-capability-results.json, native-owned-boot/shutdown.log and
+native-after-release.json bind this capability attempt to6e422bd91. Installed iOS
+N03/N04 and lifetime acceptance remain open; prior evidence is not promoted.
+Continue independent browser verification of existing notification preferences;
+channel/pause source leads remain unverified until actual UI/API/SQL reproduction.
 
 ## Current safety milestone — merged, broader verification continues
 
@@ -260,18 +603,22 @@ physicalAndroid prevent new installed acceptance; current native CI is not scree
 
 Primary private /private/tmp/pantopus-stream3-20260920-r1; durable private mirror
 /Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/
-contains **153 files**, MANIFEST SHA256 **fadb56f5412df7ed0ad857bac92b0fef52efb95a3dbeccd920aa81afe609952c**. Coordinator checked fourcandidate
+contains **234 files**, MANIFEST SHA256 **1140457cf2cec8a2497eb9c7f3995897b455d05737f6fc266ca20f992cd8348e**. Coordinator checked fourcandidate
 hash bindings. Individual artifacts retain actual source/configuration, not a blanket
 HEAD rerun. Credentials/tokens/operatorlogs stay private, outside Git/chat.
 
 A01 partial recovery: realforgotUI→HTTP200→SMTPreceipt→actualemaillink opens resetform
 and preserves original /@destination; SMTPoutage503 and restore/retry delivery pass.
 Password entry/submission not performed (computer-use credential-change handoff boundary),
-so full recovery unverified. ExternalOAuth/provider/native unavailable in currentsetup.
+so full recovery unverified. ExternalOAuth/provider/native unavailable in currentsetup. Actual Google UI initiates
+GET200 but IAB blocks exact local authorization URL (ERR_BLOCKED_BY_CLIENT); real
+GoTrue HTTP400 says provider disabled. Local Google/Apple enabled=false; Apple UI
+not exercised, no provider activation. Private oauth-local-boundary.json records
+source/config and actual UI vs HTTP boundary; successful/cancelled OAuth remainsopen.
 
 ## Whole-stream continuation and exact next action
 
-Finish current-head CI/review for70→72→73; coordinator alone merges/retargets. No new
+PR70 merged by coordinator; coordinator exclusively retargets72 and later stack; coordinator alone merges/retargets. No new
 application scope before bounded handoffs known, per active coordinator. Then resume
 existing N01–N05/A01–A05 coverage mapping in historical section below; no row is closed
 by these milestones. N03 restrictedpost oldlink403 afterunfollow/refollowrestore and
