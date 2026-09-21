@@ -1,12 +1,12 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T04:13:22.948492+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T04:50:29.950452+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-pulse-hide-errors`, local/pushed HEAD **1fb5a58adc576cddd4219e4921a3c1ad5c22b01c**.
-Application tree clean; only owned untracked `.next-stream3/` remains. Runtime source
-matches mastere8ece6ebc plus the single posts.js hide handler below.
+branch `codex/stream3-map-post-destination`, local/pushed HEAD **4c6f117712428452f041e997d76e007e0dbfb62a**.
+Application tree clean; only owned untracked `.next-stream3/` remains. Both current map
+milestones frozen for coordinator review; no additional feature scope until integration.
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -21,6 +21,168 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## Latest coordinator CI and integration disposition
+
+Coordinator reports automatic PR96 exactd10e CI35562256054 passed changed surfaces;
+automatic PR97 exact4c6f CI35562565822 also passed. PR97 is now retargeted to master
+at unchanged4c6f117712428452f041e997d76e007e0dbfb62a and described as the combined
+three-file map failure/order plus popup-destination repair, preserving both commits
+and their separate evidence. Neither this report nor green CI establishes merge.
+
+Duplicate manual PR96 CI35562211102 was canceled as superseded/redundant, **not passed**.
+The final-tree combined map manual CI35562416370 remains the full-native gate;
+d10e→4c6f native/workflow bytes are unchanged. Delayed automatic runs can appear
+several minutes after PR creation; do not dispatch duplicate CI after a short absence.
+Source remains frozen, no new application grant. Existing runtimes/retained fixtures
+preserved. This disposition is coordinator-reported; earlier pending entries below
+are historical checkpoints. Final integration/current native completion remains open.
+
+## Current whole-stream acceptance reconciliation
+
+Read-only reconciliation at 2026-09-21T04:53:25.682348+00:00 on4c6f11771. Existing
+[screen catalog](../screen-parity-inventory.md), [mobile wiring](../mobile-wiring-audit.md)
+and [notification inventory](../notification-template-inventory.md) remain discovery
+sources; REAL_VIEW/rendered controls and May audit wording do not establish current
+end-to-end success. No additional application edits during coordinator integration.
+
+| Existing row | Current bounded evidence to reuse | Required acceptance still open |
+| --- | --- | --- |
+| N01 | Actual web saved-notification list/bell reads, mutations, keyboard removal, post/booking/listing destinations and preferences (PR75/81/85/86/91); exact UI/API/SQL evidence above. | Provider-delivered foreground/background/cold-start, denied permission, token lifecycle, login continuation and all destinations under current authority. Saved records alone do not establish push delivery. |
+| N02 | Historical Android emulator FCM and owner-confirmed physical iPhone Beacon preferences retain their original source/device limits. | Physical Android unavailable; current installed iOS/Android interaction capability unavailable. CI simulator/emulator tests are not installed-screen or physical-device evidence. |
+| N03 | Real local follow/unfollow/retry; fan identity/privacy, restricted oldlinks, posting/draft recovery, comments/replies, hide/filter failures and web maps under current milestones. | Persona feed mute is reproduced ineffective and remains an ungranted schema/SDK proposal; release-cohort eligibility, broader access transitions, native discovery/posting/reply and remaining map layers unverified. Notification-only membership mute remains distinct. |
+| N04 | Existing safety/report entry repairs, realGoTrue session retirement, persisted block/messaging denials and unavailable checks; distinct UserBlock/UserProfileBlock/PersonaBlock/Relationship scopes retained. | Remaining installed entry points, moderation processing, broad socket/provider side effects, full offline/reconnect/concurrent/lost-reply/session matrix across all scopes. Existing bounded evidence does not close whole row. |
+| N05 | Actual booking UI/API/SQL, manual existing worker/local SMTP delivery, saved notices and owner/invitee destination boundaries, canonical timing/host choices. | Natural cron/timing, lost SMTP acknowledgement, partial delivery/concurrent cancellation or reschedule, individual invitee destination, remaining host-email/attendee/dailyagenda/pause contracts and native/provider delivery. Home calendar belongs to Stream2. |
+| A01 | LocalGoTrue real login and recovery-email delivery/return-form evidence; isolated accounts provisioned for testing, no new public-signup acceptance claimed. Disabled Google/provider boundary recorded. | Complete signup/email verification remains open. Password-reset final credential change needs user takeover; Apple/Google success/cancel cannot run while providers disabled. No provider activation or native claim. |
+| A02 | RealGoTrue account changes/cookie refresh, protected-data retirement, security records/global sign-out and two account deletions with exact block cleanup. | Broader native/other-browser expiry/revocation, unavailable storage/frozen-tab and provider-session combinations. Historical controlled proofs retain precise transport limits. |
+| A03 | Existing shared upload/document evidence and implemented file picker remain reusable under their original versions. | Hosted Storage permissions/quotas/media lifecycle and native chooser capabilities unavailable/unassigned; no shared storage edits. |
+| A04 | Existing provider report plus local OAuth capability check. | Activated Smarty/geographic/provider acceptance and paid activation bundle unavailable; address ownership remains coordinated with Stream2. |
+| A05 | Recent actual Marketplace reporting, seller identity, Q&A, notification return, message/card destinations; map popup post destination now PR97. Existing catalog reused. | Remaining search/subscription/booking/identity and adjacent reachable actions; Home/mail/payment findings routed to owners. No claim that every catalog action works. |
+
+Private exact-byte reconciliation has24 artifact/file bindings:16 unchanged,8 different.
+Three marketplace-message baseline bindings intentionally predate repairedPR93; baseline
+is not candidate acceptance. Marketplace blockService/chats/modal match accepted hashes;
+useListingDetail delta changes only success destination, leaving denied/error paths intact.
+Other changed files keep scoped earlier/later milestone evidence, not blanket retests.
+Private current-evidence-source-bindings/current-coverage-reconciliation record details;
+durable363files manifest **b0b1b7984397c8622e1da9d82a959b727f7294a6276365a406910de0996b197d**. No new runtime acceptance is implied.
+
+## Current N03/A05 map popup destination milestone
+
+[Draft PR97](https://github.com/WangPantopus/skinny-pantopus/pull/97), exact
+**4c6f117712428452f041e997d76e007e0dbfb62a**, stacked on frozenPR96d10e.
+Only existing DiscoverMap PostPinPopup href changes /app/posts/:id to canonical
+/app/feed/post/:id. Six existing/master/paid/staging/Beacon/archive variants used
+obsolete route. Reused existing full-post screen, SDK getPost/getComments, existing
+posts GET/:id visibility checks/serialization; no new route/files/SDK/schema/tests.
+
+Baseline actual popup opens Next404. Candidate actual Evan popup Enter opens saved
+post title/content and canonical AuthBob profile. Browser focus command timed out
+after navigation, but subsequentAX/DOM confirms destination; GETpost/comments200 at
+04:48:02 and SQL1PostView. This is actual localGoTrue/HTTP/PostgREST/SQL, no auth or
+persistence mocks. Fixture SQL-seeded publiclocal post at synthetic PDX defaultcenter;
+post creation not retested. Stale popup mouseclick after exactSQLdeletion opens same
+canonicalroute with bothGET404 at04:48:53 and existing Post not found, no stalecontent.
+
+Exact fixtureec1f7bea-6314-4364-abd1-a1d066cb40fa and ten related counts0; original6
+PostIDs preserved. No grant/fault changes in this milestone. Types0/ESLint0/diff0,
+no newtests. CI dispatched because no automaticPR checks appeared; integration and
+retargeting coordinator-owned. Native/provider and broader fullpost lifetime/error
+acceptance remain open; no policy change or N/A rowclosure. Runtime retained on same
+owned ports; browserEvan at missingpost. No additional feature scope before integration.
+
+Private map-post-destination comparison/fixture/candidate/cleanup/types/lint/pr and
+HTTP log; durable361files manifest **89693bdcf8a48bda6e394813b6a4ccc5d7f7e0c49c651dd646faa43e6b629db9**.
+PR96 exactd10e manualCI35562211102 currently inprogress (backend/privacy/identityE2E
+passed; other jobs pending). Do not treat source/localUI/CI/integration as interchangeable.
+
+## Current N03/A05 map failure and response ordering milestone
+
+[Draft PR96](https://github.com/WangPantopus/skinny-pantopus/pull/96), app7cebdd5d8,
+review **d10e39b5e05d6ce85d27b40e010b3902b29300ba** after docs-only master merge.
+Prior PR95 exact378c9ee passedCI35561104880 and coordinator merged4e58b0bc;
+its four accepted source hashes/evidence are reused, not a blanket rerun.
+
+Granted existing posts.js posts-only map catch, FeedMap and DiscoverMap posts feedback.
+Baseline FeedMap Search this area under PostSELECT denial returned200/0 in view;
+DiscoverMap actual ShowPosts returned500/blank without feedback. Intact old Askempty200
+also replaced newer Updates1. Six-reference current/archive/open comparison confirms
+reuse in place. Posts-only errors now reach existing500, both callers expose retry,
+FeedMap retains known pins and retires old callbacks by request generation/token/unmount.
+DiscoverMap uses existing abort flag, including turning posts off. No new files/tests/
+SDK/schema/policy change; mixed-layer legacy partial success deliberately remains open.
+
+Actual IAB Evan→local GoTrue/Next18131→full app18130→PostgREST/SQL64532: FeedMap warm
+and cold500, repeated error and keyboard retry200; known1 pin retained and cold state
+Unavailable. Intact old Ask200 release04:35:21.339 leaves newer Updates1. DiscoverMap
+cold50004:42:59/repeated50004:43:02 show error/retry, restored Enter20004:43:13 restores
+marker. Turning posts off during8s hold leaves layer off/no pins/error after intact
+cached304 finish04:43:45.648. This is disabled-layer proof, not reverse-order200 proof
+for DiscoverMap. No mocked authentication/persistence; SQL-seeded public post at synthetic
+NYC then PDX default-map coordinates; SELECT fault and response delay are controlled.
+
+Exact post45a9939c-5852-45e9-9d37-ddae11ca4f07 removed; Post/File/Comment/Hide/Like/
+NotHelpful/Report/Save/Share/View counts0. Original six Post IDs preserved; SELECT
+restoredtrue, responseflag consumed. Original fixtures/authaudit retained. Owned backend
+session44858/Next60362 remain active; Evan browser at deleted popup404. Types0/lint0,
+backend syntax/diff0; no newtests. Required CI pending; integration coordinator-owned.
+Native/provider, broader map session transitions, DiscoverMap warm-failure/reordering
+and mixed partial reporting remain unverified. No N/A row closure.
+
+Private pulse-map-candidate/source-comparison/baseline/boundaries/fixture/types/lint/pr,
+map-response-faults and real-auth-http artifacts; durable 354 files manifest
+**52f815c85d345303a845dc112788b6702eca882dd35b8262affbab3bb7b82656**. Artifact-specific source/config remains authoritative.
+
+Next separate assigned repair: actual DiscoverMap popup View Post used /app/posts/:id
+and Next404. Confirm existing full-post route/API, compare references, then href only
+and actual authorized/missing navigation. No new routes/identity/schema/persona scope.
+Persona feed-mute extension still proposal-only; never repurpose notification mute.
+
+## Current N03/A05 filter read and unmute failure milestone
+
+[Draft PR95](https://github.com/WangPantopus/skinny-pantopus/pull/95), appff1917e15,
+review **436a93c190b02cc740836759f37f75e807b472e0** includes masterb463ee385 after
+PR94 exact1fb passedCI35560095912/coordinator merge. Granted existing posts.js DELETE
+mute, feedService.getMuteAndHideFilters, useFeedData.ts and feed/page.tsx only. All
+five filter reads checked before cache write; existing error responses/retry/ErrorState
+reused. Known current-owner rows retained, falseempty/caughtup suppressed onerror,
+automatic pagination pauses onerror. No policies/schema/newfiles/tests/design change.
+
+Baseline real HTTPunmute DELETE denial returned200 but leftsame savedrow. ActualBob
+feed under persistedhide+PostHideSELECT denial/coldservercache returned200 and exposed
+hiddenpost. Independent PostSELECT denial GET500 x3 rendered Nothing here yet/noRetry.
+Candidate realGoTrue/fullHTTP/PostgREST/SQL: each PostHide/PostMute/Relationship/
+PersonaBlock/UserFeedPreference SELECTdenial gives list500/sports500; each restored
+sameactor read200 respects savedhide. Unmute DELETEdenial500 retains1, restoredretry200
+removesrow. Map service fails closed, but existing map-layer catch returns200empty;
+APIlead only, separate scope/actualmapUI stillpending.
+
+Actual browser cold500 shows ErrorState/TryAgain; failedretry remains error. Restored
+SQL keyboardretry200 shows genuineempty with persistedhide. Exacthide cleanup and
+ownedcache restart restore originalpost. Warm surface-switch/revisit500 retainsknown
+post pluserror, restoredEnterretry200 clearserror/keepspost. Extra private injected503
+then held realBob feed200 started04:24:40.078 (recorded postID2824...), logout200
+04:24:48.792, Evanlogin20004:24:55.620. Oldrelease04:25:00.080 was destroyed/socketDestroyed
+true, so **disconnected-response evidence only**, not intactcrossaccount delivery.
+Evanfreshfeed20004:25:01.669 genuineempty/noBobrows. Existing QueryProvider generation
+remount/cacheclear and API session guards unchanged; source-bound prior evidence reused.
+
+Exact candidatehide1e1de420 and temporarymute removed; PostHide0/PostMute0. All six
+SELECT privileges and PostMuteDELETE restored, extraresponseflag consumed, existing
+post/membership/block retained. Authaudit/sessioneffects retained; Evanbrowseractive.
+Owned backend current session31915; frontend unchanged. Matrix+UI persistence real;
+only extra503/20s responsehold synthetic, not auth/database. Types0, lint0errors/3existing
+warnings, syntax/diff0; existing feedService/postMute2suites24pass, no newtests.
+RequiredCIpending/coordinatorintegrationseparate. PaginationfailureUI/intactdelayed
+ordering/native/provider/mapUI/personaextension remainopen; noN/Arowclosure.
+
+Private pulse-filter-matrix/candidate/read-baseline/types/lint/existingregression files,
+pulse-mute-delete-baseline and feed-response-faults plus browserhistory. Durable344files
+manifest **b77d30b23aa316790918ec06c219c336a8d26f1e280bde545373689b71e96598**.
+Next afterfreeze: inspect actual existing map failure journey. Persona extension remains
+read-only proposal: existing PostMute enum lacks persona; additive enum/SDK/API/filter/
+caller extension could preserve public identity and legacy scopes, but not assigned.
+No reuse of notifications-only membership mute or private author restoration.
 
 ## Current N03/A05 Pulse hide persistence milestone
 
@@ -841,7 +1003,7 @@ retained; exact IDs in evidence. No new unit tests.
 
 ## Runtime, retained fixtures and evidence
 
-Owned HTTP18130 (current launcher session34592), Next18131 (60362); real app.js,
+Owned HTTP18130 (current launcher session44858), Next18131 (60362); real app.js,
 GoTrue/Kong64531/PostgREST/SQL64532 project pantopus-stream3-block-r1, private
 workdir /private/tmp/pantopus-stream3-auth-r3. Host stream3-auth.localhost isolates
 cookies from other streams. SMTP sink pantopus-stream3-mail-r3 binds127.0.0.1:64535
