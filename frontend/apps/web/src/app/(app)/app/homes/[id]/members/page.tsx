@@ -60,6 +60,7 @@ function MembersContent() {
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
   const [membersError, setMembersError] = useState('');
   const generation = useRef(0);
+  const roleConfirmation = useRef<ReturnType<typeof confirmStore.getSnapshot>>(null);
 
   const tabFromUrl = searchParams.get('tab');
   const accessRequesterParam = searchParams.get('access_requester');
@@ -68,6 +69,9 @@ function MembersContent() {
 
   const retire = useCallback(() => {
     generation.current++;
+    const dialog = roleConfirmation.current;
+    roleConfirmation.current = null;
+    if (dialog && confirmStore.getSnapshot() === dialog) confirmStore.close(false);
     setMembers([]); setMyAccess(null); setAuditLog([]); setAccessRequests([]); setMembersError('');
   }, []);
   const fetchData = useCallback(async () => {
@@ -131,18 +135,27 @@ function MembersContent() {
     const currentIdx = assignable.indexOf(member.role);
     const nextRole = assignable[(currentIdx + 1) % assignable.length];
     const roleLabel = ROLE_META[nextRole]?.label || nextRole;
-    const yes = await confirmStore.open({
+    const revision = generation.current, token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => generation.current === revision && api.getAuthToken() === token && api.getApiBaseUrl() === origin
+      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker && document.visibilityState !== 'hidden';
+    const confirmation = confirmStore.open({
       title: 'Change Role',
       description: `Change ${member.display_name || member.email} to ${roleLabel}?`,
       confirmLabel: `Set as ${roleLabel}`,
       variant: 'primary',
     });
-    if (!yes) return;
+    const dialog = confirmStore.getSnapshot();
+    roleConfirmation.current = dialog;
+    const yes = await confirmation;
+    if (roleConfirmation.current === dialog) roleConfirmation.current = null;
+    if (!yes || !current()) return;
     try {
       await api.homeIam.updateMemberRole(homeId!, member.user_id || member.id, { role_base: nextRole });
+      if (!current()) return;
       toast.success(`Role changed to ${roleLabel}`);
       await fetchData();
-    } catch (err: any) { toast.error(err?.message || 'Failed to update role'); }
+    } catch (err: any) { if (current()) toast.error(err?.message || 'Failed to update role'); }
   }, [homeId, canManage, fetchData]);
 
   const handleRemove = useCallback((member: any) => {
