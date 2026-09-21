@@ -4,6 +4,17 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21,03:25UTC — canonical marketplace seller grant
+
+Stream3 sole writer existing SellerSection.tsx canonical displayName/handle/avatarUrl/
+href reads, and optional href only in existing types/listing.ts ListingUserSummary.
+Actual detail displayedUser/disabledprofile while canonical API displayName/handle/
+href and direct publicprofile worked. Preserve otherconsumers' optionallegacyfields,
+safe absent/redactedidentity fallback, existingstyles and canonical publicrelative
+navigation. No backend/privateUserfield restoration/schema/newfiles/tests. Verify
+real detail→publicprofile and unavailable/redacted cases with exactfixturecleanup.
+Separate from PR88 report repair; source comparison supplied. Root has no typeconflict.
+
 ## September21,03:20UTC — bounded marketplace report grant
 
 Stream3 sole writer existing useListingDetail.handleReport catch/rethrow and shared

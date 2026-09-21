@@ -9,6 +9,12 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 ## Current checkpoint — September21,03:08UTC
 
+Latest03:25UTC: PR88 marketplace report956dab1d1 reviewed (2sourcehashes, actual7
+UIreasons→SQL, error/draft/retry, invalidHTTPboundaries and exact8tablecleanup0).
+CI35557360294 pending. Frozen03 ab18fb6e captured at6ffb331c7/writerreleased for
+separate canonical seller card grant. Rootpaid03bf9 CI35556379254 Androidemulator
+passed; Androidquality and three iOSsimulators remain, no failures so far.
+
 Latest03:21UTC: documentation-onlyPR79 exactda0ff5f46 passed CI35556990529 and
 merged **bc06d6b3956ba4a0497d37c07d6ecbff96820d82**. Current5doc checkpoint published;
 paid03bf9 stays separate with CI35556379254 nativejobs pending and allother checks
