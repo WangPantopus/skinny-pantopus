@@ -212,8 +212,9 @@ export function useListingDetail() {
     try {
       await api.listings.reportListing(listingId, { reason: reason as ReportReason, details });
       toast.success('Report submitted. Thank you.');
-    } catch {
+    } catch (err) {
       toast.error('Failed to submit report.');
+      throw err;
     }
   };
 
