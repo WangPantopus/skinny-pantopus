@@ -91,7 +91,7 @@ was repaired after actual pre-hydration native GET leakage with synthetic data.
 All four forms pass disabled/delayed JavaScript checks. This is a bounded
 subjourney; the authentication change itself closes no additional acceptance row.
 
-## September 21, 06:17 UTC — bounded persona evidence reviewed
+## September 21, 06:15 UTC — bounded persona evidence reviewed
 
 PR99/1d8357330 repairs reproduced persona mute identity, own-post control and stale
 client/server filter cache failures. Coordinator reviewed real UI/HTTP/SQL evidence,

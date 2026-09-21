@@ -7,7 +7,7 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
-## September 21, 06:17 UTC — peer review complete within bounded scope
+## September 21, 06:15 UTC — peer review complete within bounded scope
 
 Paiddd0ee04b5 currentCI35567323534 has web/backend/identity checks passed; schema/native
 remain pending. Its Q&A source is verified;200of202 earlier financial/client/schema

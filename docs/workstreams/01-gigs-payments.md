@@ -1,6 +1,6 @@
 # Stream 1 — Gigs and payments
 
-## September 21, 06:17 UTC — final peer handoff adopted
+## September 21, 06:15 UTC — final peer handoff adopted
 
 Paiddd0ee04b5 remains fixed for [automatic CI35567323534](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35567323534).
 Web/backend/identity checks pass; schema/native still running. Source-reuse receipt
