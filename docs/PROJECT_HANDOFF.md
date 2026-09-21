@@ -11,8 +11,9 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 Master e8b49c963 includes documentation PR78. PR70 at07827d2b0 and PR77 ate11123328
 passed their applicable checks. Strict branch protection requires PR70 to include
-current master (its missing diff is docs-only), so its author will update the
-isolated checkout once and run required CI. Hold further documentation merges
+current master. Its author merged the five documentation files in the isolated
+checkout and pushed **21b93aa62**; coordinator independently verified zero
+backend/frontend/supabase diff. Required CI is running on that updated head. Hold further documentation merges
 until70→72→73→75→77 integrate, preserving the live runtime and accepted UI proof.
 The separate worker repair now has a bounded grant after actual[]/0/43200 failures;
 it remains unverified until repaired and rerun. See live README and Stream3 status.
