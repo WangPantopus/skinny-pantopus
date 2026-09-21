@@ -237,6 +237,7 @@ export default function DiscoverMap({
   const [loadingBiz, setLoadingBiz] = useState(false);
   const [loadingGigs, setLoadingGigs] = useState(false);
   const [loadingPosts, setLoadingPosts] = useState(false);
+  const [postsError, setPostsError] = useState(false);
   const [nearestActivity, setNearestActivity] = useState<NearestActivityCenter | null>(null);
 
   const abortBiz = useRef<AbortController | null>(null);
@@ -305,9 +306,12 @@ export default function DiscoverMap({
         const res = await api.posts.getMapMarkers({
           south: b.south, west: b.west, north: b.north, east: b.east, layers: 'posts', limit: 200,
         });
-        if (!ctrl.signal.aborted) setPostPins(res.markers);
+        if (!ctrl.signal.aborted) {
+          setPostPins(res.markers);
+          setPostsError(false);
+        }
       } catch {
-        // Silently handle
+        if (!ctrl.signal.aborted) setPostsError(true);
       } finally {
         if (!ctrl.signal.aborted) setLoadingPosts(false);
       }
@@ -359,7 +363,12 @@ export default function DiscoverMap({
   useEffect(() => {
     if (!layers.has('businesses')) setBizMarkers([]);
     if (!layers.has('gigs')) setGigPins([]);
-    if (!layers.has('posts')) setPostPins([]);
+    if (!layers.has('posts')) {
+      abortPosts.current?.abort();
+      setPostPins([]);
+      setPostsError(false);
+      setLoadingPosts(false);
+    }
   }, [layers]);
 
   // ── Clustered data ─────────────────────────────────────────
@@ -519,11 +528,23 @@ export default function DiscoverMap({
       {/* Top progress bar — replaces the old spinner overlay */}
       <MapProgressBar visible={isLoading} />
 
+      {layers.has('posts') && postsError && !loadingPosts && (
+        <div role="alert" className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] bg-surface/95 backdrop-blur-sm border border-app text-app-muted text-xs font-medium px-4 py-2 rounded-full shadow-md flex items-center gap-2">
+          <span>Couldn&apos;t load posts.</span>
+          <button
+            onClick={() => bounds && fetchPosts(bounds)}
+            className="font-bold text-primary-600 dark:text-primary-300"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
       {/* Zoom gate overlay */}
       <ZoomGateOverlay visible={belowZoomGate} contentLabel="businesses" />
 
       {/* Nearest activity prompt (when all layers are empty) */}
-      {!isLoading && !belowZoomGate && allEmpty && bounds && (
+      {!postsError && !isLoading && !belowZoomGate && allEmpty && bounds && (
         <NearestActivityPrompt
           viewCenter={viewCenter}
           nearest={nearestActivity}
