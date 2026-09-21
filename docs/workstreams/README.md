@@ -1,5 +1,18 @@
 # Three-stream coordination
 
+## Integration sequencing update — independently verified web fixes
+
+Coordinator may integrate PR120 then PR121 while the existing paid a795 native
+run finishes. Both bounded web changes have reviewed actual UI/SQL evidence and
+passing exact original-head CI; they touch separate notification/member components
+and no paid/native contracts. This supersedes the earlier blanket peer-merge hold.
+Require each peer's current-master source comparison and exact updated-head gate.
+Keep published paid a795 fixed: do not push the local d1da default-card repair until
+its current fullCI35582693975 completes and final master is adopted. This permits
+independent integration without cancelling that native run or weakening any merge
+gate. Publish doc119 after the peer batch; do not merge unfinished broader scopes.
+
+
 ## Home standalone role-cycle repair grant — September21, 09:23 UTC
 
 Stream2 is sole writer only for existing
