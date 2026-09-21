@@ -1,5 +1,28 @@
 # Pantopus project handoff
 
+## September21, 11:40 UTC — natural session continuation accepted
+
+Coordinator verified616 Stream3 durable hashes and actual browser recovery from the
+protected settings URL after recorded login10:40:13.684 plus3600s without intervening
+renewal. Browser showed same-origin session/refresh, then returned to exact original
+query and Bob identity. Backend POST refresh200 at11:40:41.755 and independent local
+GoTrue refresh_token200 at11:40:41 match expected registry update11:40:41.744.
+Actor-bound preferencesGET200 at11:40:45.081 and reload retained exact destination;
+only one refreshPOST. Full preferencesabsence0 independently unchanged; all73 actor
+registry IDs preserved and other session metadata identical, only expected session
+refresh/seen timestamps changed. Tab24 closed, metadata flag consumed; rotated session
+retained, no auth DB restoration claim. No cookie/JWT/clock/manualrefresh/relogin
+manipulation, new app change/test or provider/native/hosted acceptance. Natural expiry
+is timing-based, not direct cookie-store inspection; one personal destination only.
+
+Owned Next hostname correction is local runtime configuration. Restart auto-adjusted
+tracked tsconfig include/order; peer restored exact HEAD and verified trackedclean,
+retaining only owned .next-stream3. No intended source change. API7996, Next42165/
+42493 and ownedDB/authsession retained. PR131 updated45c3 CI35595309234 still waits
+productionbuild; paid1aecd waits remaining iOS matrix plus infrastructure retry.
+Preserve pending/failed gates; do not claim fullstream or currentpaid CI completion.
+
+
 ## September21 — Requests error/retry candidate reviewed
 
 PR131 original `7d70f45f39b8602dde592c98cb45164d576e6e96` passed exactCI35594780550.

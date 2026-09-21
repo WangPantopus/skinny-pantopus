@@ -2514,3 +2514,33 @@ Before snapshot records originalprefsabsence0 and actor-only whitelisted app/GoT
 session metadata, no token/hash/cookie fields. No navigation or session mutation yet.
 Next exactaction: recheck no renewal, capture receipt offsets, open protectedsettings
 with harmlessquery on correctedalias; never manuallyenter refresh or relogin.
+
+
+## A02 natural local session recovery — verified bounded11:41UTC
+
+Granted actual UI continuation passed after natural access-cookie window: lastlogin
+10:40:13.684+3600s source lifetime, no intervening renewal, navigation after11:40:20.
+No cookie removal/manualrefreshentry/clock/JWT/authDBmanipulation. Timing-based
+naturalexpiry, not directcookie-store inspection. Actual tab24 first displayed same-
+origin /session/refresh and Restoring your session; automatically returned to original
+settings URL with stream3_natural_refresh=1 and Auth Bob identity. APIrefreshPOST200
+11:40:41.755; independent localGoTruePOST/token grant_type refresh_token200 at11:40:41.
+Actor sessionfdbea9cf-e8b0-4c4c-a666-09b88887a880 last_refresh_at11:40:41.744,
+issued10:40:13.676/unrevoked. Other actor appsession metadata unchanged.
+
+PreferencesGET20011:40:45.081 exactBob actor; fullSQLprefs originalabsence0 unchanged.
+One actualreload stays same destination/query/account; only one refreshPOST total,
+no recoveryloop. Tab24closed, zero-delay metadataflag consumed, naturalbrowser/session
+rotation/authregistry timestamps retained; no authDBrestore/logout/revocation claim.
+No credentials/tokens/cookies/hashes/rawGoTrue logs exported. Existing API7996 auth
+source bytes unchanged0d6→c3f; corrected Next42165/42493 currentc3f. No source edit/
+CI/newtests/native/hosted/OAuth/otherdestination or crossaccount acceptance.
+
+Safe session-natural-before/after/start/UI/final metadata/operator mirrored, 616
+hashesverified, MANIFEST **bd26e7cfbaa7640f166d00bb8d50ebd21cef9440e3791dc809985995b6a0ad76**. Existing fullstream limits remain;
+coordinator review/next bounded assignment. Localhostname correction remains configonly.
+
+Postcheck found Next automatic tsconfig generated-types include/reordering from
+ownedrestart. Prior trackedclean confirmed; restored exact HEAD bytes, sourceclean
+again except owneduntracked .next-stream3. No intended application/config edit.
+Private session-natural-generated-config-cleanup.json records before/restored hashes.
