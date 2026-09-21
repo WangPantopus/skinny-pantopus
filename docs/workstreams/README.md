@@ -4,6 +4,15 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21,04:08UTC — root bidder runtime released
+
+Existing OffersPanel canonical identity repaired locally ata3ff82a01 and actual
+profile/fallback/Refresh/keyboard journey verified; live01 evidence/limits apply.
+Owned18132/18133/64561–67 released, rows0/identityrestored/cachepreserved/tabclosed;
+provider writes0, no native reservation. PR93 source and evidence reviewed/current
+CI pending; no additional root app edits before the combined gate. Stream3 existing
+runtime and bounded verification remain separate; request grant before new repairs.
+
 ## September21,04:01UTC — bidder identity verification and message destination grant
 
 Documentation PR87 exactc3e116a91 passed CI35559237804 and merged9f14a638a529dd272817b08c797fd11e79047ae6.
