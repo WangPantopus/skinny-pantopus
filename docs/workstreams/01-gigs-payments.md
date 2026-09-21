@@ -1,5 +1,26 @@
 # Stream 1 — Gigs and payments
 
+## September21 — scheduling Resume handoff reviewed
+
+PR120 is frozen at `03279bd78b2c9691bcfb5fc76305a1b38834a78f`, based on released
+master0d6a. Only existing NotificationPrefsForm changes: reuse readGroup, derive
+paused from current preferences and send paused:false through the existing serialized
+save/rollback path. Five committed source hashes and all493 durable artifacts match
+MANIFEST01c10c465. Actual UI twice receives UPDATE-denied500 and restores the paused
+banner/disabled controls with unchanged JSON; restored grant plus keyboard retry200
+persists false and survives reload while preserving nested/unrelated preferences.
+Exact temporary row removed, original absence0, UPDATE restored and tab18 closed.
+TypeScript/scoped ESLint/whitespace pass; no new unit tests or application files.
+
+Capture live03 SHA256 `248883e05d7c8851015c8e560b4fb8f4b65d38faf1247891ace3f1c7b1ed99ab`. Existing reminder/read/save evidence is reused;
+worker pause/delivery policy, providers, installed native and newly held session/
+departure responses remain unverified. Original CI35583298837 is still pending;
+hold120 integration behind paid a795 fullCI35582693975 and exact updated-head checks.
+Paid application/web/backend/schema gates passed, native jobs still running with
+no observed failure. No new root source/runtime/provider changes. Stream2 continues
+its separately granted existing role-cycle repair; its in-progress live02 is not
+included in this capture. Documentation-only119 remains unmerged despite green CI.
+
 ## September21, 09:21 UTC — paid integration published; next tasks active
 
 `codex/paid-gig-integration` is clean/pushed at
