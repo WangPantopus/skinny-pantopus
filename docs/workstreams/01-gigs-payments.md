@@ -1,5 +1,28 @@
 # Stream 1 — Gigs and payments
 
+## September21, 10:25 UTC — member confirmation repair integrated
+
+PR123 merged as `55856362bd736355616da740ff2fda8b8a5fd01c` after exact
+`178b4a17854b56de6b1ace25b58d26d4ea8289e3` CI35588215044 passed. Sole app
+change is the existing standalone Members role caller (+16/-3); accepted source
+bytes match. Coordinator verified18 candidate artifact hashes, four real role POSTs
+(200/403/200/200), full occupancy/audit equality on departure and denial, and intact
+6,003ms delayed response after departure. Existing15-file baseline/121 regressions
+are reused. Pending confirmation closes/noPOST; submitted writes still commit and
+are not canceled. Late-response evidence proves no stale list refresh; toast absence
+is an observation, not a continuous timeline. Session/other-dialog/native/hosted
+limits remain open. All exact fixture counts0, owned runtime stopped/preserved and
+ports released. Frozen live02 SHA25630274412dd7937e92439bfb7a92d2dea7eb8865e12f6d1e99992e8d84a45d429
+captured in coordination005d3e645.
+
+Paid e970 remains fixed under fullCI35586627926; web/backend/schema and Android
+instrumented checks pass, Android assembly and iOS device jobs remain pending.
+No paid merge/adoption or repeated local journey yet. Documentation122 is updated
+to publish123 separately with required new-head CI. Stream3's isolated scheduler
+check continues under its existing grant; no runtime/acceptance expansion.
+All streams remain incomplete and PR34/47 remain draft;46 stays separate.
+
+
 ## September21 — paid default repair published; next scopes assigned
 
 Paid branch `codex/paid-gig-integration` is clean/pushed at

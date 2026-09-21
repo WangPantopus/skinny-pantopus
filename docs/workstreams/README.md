@@ -1,5 +1,20 @@
 # Three-stream coordination
 
+## Next Home source-only reconciliation after PR123
+
+PR123's existing role-confirmation repair is merged55856362b after exact178b4a1
+CI35588215044 and coordinator evidence review. Stream2 may adopt that master on a
+separate follow-up branch, preserve prior feature refs and keep runtime released.
+Map the existing standalone Requests decline confirmation, its actual SDK/route/
+service/SQL and current/archive/open implementations. Identify whether accepted
+request fixtures/callers can verify lifetime without the earlier ancillary queue
+stub. Reuse role and invitation acceptance; do not repeat successful journeys.
+Report exact scope and an actual-UI/local-SQL fixture proposal before runtime use
+or application edits. No shared store/global dialog, new request implementation,
+provider sends, schema/UI/new file/unit test/native work. Source similarity alone
+is not a reproduced decline defect. Preserve the existing original backlog limits.
+
+
 ## September21 — confirmation repair and isolated scheduler verification
 
 Paid head e970ea26a is published and fixed under CI35586627926. It contains the
