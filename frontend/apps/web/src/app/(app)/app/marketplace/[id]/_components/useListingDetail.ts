@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
@@ -33,6 +33,17 @@ export function useListingDetail() {
   // Q&A state
   const [questions, setQuestions] = useState<ListingQuestion[]>([]);
   const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [questionsError, setQuestionsError] = useState<string | null>(null);
+  const questionRequest = useRef(0);
+  const questionScope = useRef(listingId);
+  questionScope.current = listingId;
+
+  useEffect(() => {
+    const requests = questionRequest;
+    setQuestions([]);
+    setQuestionsError(null);
+    return () => { requests.current++; };
+  }, [listingId]);
 
   // Refresh state
   const [refreshing, setRefreshing] = useState(false);
@@ -56,14 +67,22 @@ export function useListingDetail() {
 
   const fetchQuestions = useCallback(async () => {
     if (!listingId) return;
+    const request = ++questionRequest.current;
+    const token = getAuthToken();
+    const session = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const isCurrent = () => request === questionRequest.current
+      && listingId === questionScope.current
+      && token === getAuthToken()
+      && session === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
     setQuestionsLoading(true);
+    setQuestionsError(null);
     try {
       const result = await api.listings.getListingQuestions(listingId);
-      setQuestions(result?.questions || []);
+      if (isCurrent()) setQuestions(result?.questions || []);
     } catch {
-      setQuestions([]);
+      if (isCurrent()) setQuestionsError('Could not load questions. Please try again.');
     } finally {
-      setQuestionsLoading(false);
+      if (isCurrent()) setQuestionsLoading(false);
     }
   }, [listingId]);
 
@@ -281,6 +300,8 @@ export function useListingDetail() {
     isOwner,
     questions,
     questionsLoading,
+    questionsError,
+    retryQuestions: fetchQuestions,
     refreshing,
     canRefresh: !!canRefresh,
 
