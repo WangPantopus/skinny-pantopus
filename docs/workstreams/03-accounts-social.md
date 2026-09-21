@@ -2544,3 +2544,157 @@ Postcheck found Next automatic tsconfig generated-types include/reordering from
 ownedrestart. Prior trackedclean confirmed; restored exact HEAD bytes, sourceclean
 again except owneduntracked .next-stream3. No intended application/config edit.
 Private session-natural-generated-config-cleanup.json records before/restored hashes.
+
+
+After frozen natural result capture182fbeaf1: next A02 source-only proposal maps
+existing transient refresh UI/SDK and AuthDevice read503. Conditional existing
+session device association only (not yet queried), propose ownedDB AuthDeviceSELECT
+denial→manualrefreshpage503/Tryagain→restore/read200/currentBobdestination. Explicit
+manualentry/databasefault, not another naturalexpiry run. BlanketAuthSessiondenial
+may take legacyfallback and is not proposed. No binding/cookie/JWT/clockmutation;
+if noexistingdeviceassociation, stop/review alternative. Exactgrant/prefs/tabcleanup,
+GoTrue safe metadata/rotation boundaries in session-transient-retry-source-proposal.json.
+No runtimegrant/execution/appchanges yet.617durablehashesverified, MANIFEST
+**56bde763ec34c613feb7f2a98292fe7b490420bc633c24ed3dc4eabdb7950f43**. Prior616 acceptance/source/session evidence unchanged.
+
+
+Granted read-only association preflight: existing exact Bob unrevoked session from
+natural recovery has device association **false**. Query returned boolean
+only; no deviceID/credential export, no binding/session/cookie/grant mutation.
+Structured session-transient-device-association.json records provenance. Later
+proposal now618hashesverified, MANIFEST **b82fa1d1973cf9f0447a9ee2b96093babd61e043c2c150525e790feb8b34b5c4**. Runtime/faultmanualrefresh
+still ungranted/unexecuted; accepted616 natural evidence remains unchanged.
+
+Association is absent: AuthDevice-denial proposal stopped without runtime execution
+or manufactured binding. One coordinator message incorrectly said PRESENT before
+reading tool output; immediately corrected. Structured evidence/live03 boolean were
+always false. Existing session and natural acceptance preserved.
+
+
+Alternative transient recovery source-only proposal: reuse private http-probe
+pre-Express request emit interception (existing refreshhold is post-GoTrue and
+inappropriate). Proposed one-shot exactPOST/refresh+ownedport/loopback+Origin+
+cookie-transport+unique fullReferer marker match, short-expiry descriptor consumed
+before synthetic503, no forward/noSetCookie/no logout. Nonmatchingrequests untouched.
+Actual manualrefreshpage transientUI→keyboardTryagain forwards normally→realGoTrue
+200/currentBobdestination; no naturalexpiry rerun. Observe safeinterception/noGoTrue
+firstattempt/no registryrotation and exactactor/prefs onretry. No token/header/body
+values logged. Existing private hook extension needs separately granted ownedAPI
+restart/exactenv/source binding; cleanup marker+hookrestore/ownrestart, retainNext/DB/
+rotatedsession, closetab. No binding/grant/cookie/appmutation executed. Detailed
+session-transient-transport-proposal.json mirrored;619hashesverified, MANIFEST
+**81eb4927744b732a680891d1fe8959fec8985bb3c49412d16f9d57b4e0efe3bc**. AuthDevice-denial proposal remains stopped (associationfalse).
+
+
+## A02 synthetic transient refresh retry — bounded verification complete
+
+Actual existing web refresh page manually entered with unique relative settings
+destination. One-shot pre-Express private hook returned503 at11:50:30.610UTC;
+all exact request match booleans true, no forwarding/Set-Cookie. Actual UI showed
+Couldn’t restore your session, session retained, Try again. Keyboard retry reached
+real backend20011:50:49.349 and local GoTrue POST/token refresh_token20011:50:49.
+Returned original settings URL/query and Auth Bob identity. Preferences GET304
+identity-bound to Bob (cache revalidation, not fresh200); full SQLprefs remained
+original absence0. An observer initially expected200; accepted observed304 without
+repeating refresh/UI. No login/logout HTTP receipt in this interval.
+
+Failure snapshot full actor prefs/app-session/GoTrue-session metadata and safe
+GoTrue receipts equal before. Retry retained all73 own appsession IDs; only
+fdbea9cf-e8b0-4c4c-a666-09b88887a880 changed in own app and GoTrue metadata.
+Exactly one new successful GoTrue refresh. Other own session metadata unchanged;
+other-account metadata not inspected. Successful ordinary rotation retained.
+No DB fixtures/grants/binding/cookies/clock/JWT changed; no authDBrestore claim.
+
+Cleanup: original private hook exactSHA d7c8b95318bab69c34050b6924df8ed9f7a5b44be79d0a3f39e8b35cd9768a5d
+restored; consumed descriptor and metadataflag absent. Fault API63469 stopped.
+Restored API73610/exec69695 listens127.0.0.1:18130, original backendcwd and exact
+original captured argv/environment verified in memory without secret export.
+Next42165/42493 unchanged; owned Supabase retained, testtab25 closed. Local source
+c3f1bd03868d916530e0477c318e3f5ddd43c91a; trackedclean, owned.next-stream3 only.
+No application edit/newtests/CI in this runtime-only scope; PR129 merge separately
+confirmed747b45754b24accce096898508e2de3355ed86a3. No new implementation acceptance.
+
+Manual entry/synthetic pre-forward failure is not natural expiry, real provider
+outage, database failure, native/hosted/OAuth/cross-account/session-matrix coverage.
+AuthDevice proposal remains stopped: existing device associationfalse. Prior
+natural616 evidence remains reusable within original limits; no journey rerun.
+
+Durable evidence: /Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/
+transient-before/after-failure/after-retry/final, intercept, runtime-change, navigation
+and actual UI failure/success snapshots. Private launch environment/raw operator
+logs excluded. 628 artifact hashes verified; MANIFEST **18bb02a8179b131c5dbfe4ce05199ca5bdf7a9c83e00ee6098e234672b52ed72**.
+Coordinator review pending; full stream remains incomplete, next bounded assignment.
+
+
+## Next A01–A02 source reconciliation — runtime review pending
+
+Accepted628 transient result frozen by coordinator6a3c7c692. Adopted current
+masterde0ac6ef3c051485b5800a288194ee563396a12a on codex/stream3-session-return-reconciliation; old
+codex/stream3-scheduling-channel-contract/c3f ref preserved. No tracked edits;
+owned.next-stream3 retained. Nine existing auth screen/caller/route/service bindings
+are byte-identical to c3f; only intervening Home page/docs differ. API73610 still
+loadedc3f/Next42165+42493 retained; no blanket new-master runtime evidence claim.
+
+PR82 already covers actual revoke-others/global/partial failure and account retirement.
+Natural/transient refresh accepted separately; do not replay. Proposed remaining
+ordinary profile Settings logout→unauthenticated protected settings link with query→
+login redirectTo→real Bob login→exact authorized destination and prefs. Existing
+profile/settings handleLogout calls API auth.logout→users local route→GoTrue local
+signout/authDeviceService.logoutLocal→AuthSession revoke; middleware and login
+preserve safe path/query. Source mapping and nine hashes in
+session-logout-return-source-proposal.json. No concrete failure claimed from source.
+
+Runtime proposal deliberately retires only retained Bob fdbea9cf session after safe
+identity preflight; no others/global/device association. Compare all own session
+metadata/preferences; prove old local GoTrue removal/registry revoke, exact current
+identity on newly created login session, no unauthenticated private content. Retain
+natural revoked/audit/newlogin records; no resurrection/DBreset. Close new tabs only.
+No logout/revocation executed, no app edits/newtests/CI or native/provider expansion.
+Negative destination authorization/remote revocation/offline logout remain separate.
+Durable629 artifacts, MANIFEST **c8d396cde23983b70d932029029ce60c323dac722df763842a5c8ac5332218d0**. Coordinator scoped review
+required before runtime. Full stream remains incomplete.
+
+
+## Granted local logout/return baseline — actual failure, review required
+
+Preflight UI Auth Bob and uninterrupted successful login/refresh history to fdbea9cf;
+exact current registry unrevoked. Actual profile Settings keyboard Log Out returned
+POSTlogout20012:19:21.183UTC, current registry revoked and exact GoTrue session
+removed. All other own app/GoTrue metadata equal, full prefs[] unchanged. UI login
+then direct protected scheduling-settings?stream3_logout_return=1 redirected to
+login with exact encoded path/query; no private settings content in observed UI.
+
+Unexpected automatic refresh burst immediately after logout: {"('/api/users/profile', 304)": 4, "('/api/users/logout', 200)": 1, "('/api/users/refresh', 400)": 29, "('/api/users/refresh', 429)": 2, "('/api/users/login', 429)": 1}.
+Actual Bob sign-in submitted once12:20:01.521 returned429 with visible Too many
+requests. Please try again shortly. No new GoTrue token receipt or login session.
+Postfailure metadata exactly equals postlogout snapshot. Destination return NOT
+verified. Source matches general one-minute limiter text; root cause/attribution of
+refreshburst unresolved, do not claim repaired or bypass limiter. No retry performed.
+
+Tab26closed; unused zero-delay preference observation descriptor removed. Runtime
+API73610/Next42165+42493/DB retained. Old session naturally revoked; browser now
+signed out, no session resurrection/newlogin/cookie manipulation. No source edit or
+newtests. Baseline artifacts logout-return-before/after-logout/final and UI before/
+loggedout/login-required/login-failure mirrored, 636 hashes; MANIFEST
+**c3634539de03ea53b554aff9e5f768e8eb214feceec371a4f45dca2e6b86f15d**. Coordinator review before repair/retry.
+
+
+Postlogout source attribution: captured first3seconds include60 each401 homes/
+businesses/professional/seats and30 featureflag401 alongside29refresh400+2refresh429.
+ProfileToggle unconditional mount loads those four endpoints; QueryProvider keyed
+retirement remounts on every clear; SDK web401 unconditional canRefresh and invalid
+refresh clear emits another marker. Singleflight covers only overlap, not successive
+remount waves. Strong source/sequence feedback-loop match, not exact tab attribution:
+existing HTTP logs lack Origin/Referer/tabID. Current inventory only retained tab4
+reset-password, query omitted and tab untouched; source has no automatic API call.
+Historical tab state unknowable from these receipts. Root18132 lead not independently
+attributed. Global30/minute write limiter runs before user/auth routes, consistent
+with logout+29refresh then429s/login rejection. Do not raise/bypass limiter.
+
+Proposed smallest existing SDK401 gate: automatic web refresh only with active
+session signal (including stale-access flag), otherwise reject without refresh or
+repeatedclear; preserve explicit recovery/mobile/generation guards. No edit or
+retry executed. PR82 client/provider bytes identical; historical retirement retained;
+openPR metadata47/46/34 no dedicatedauthfix. Detailed source hashes/sequence/limits
+logout-burst-source-attribution.json; durable637 MANIFEST **edbf0d6a92976197bbcfd117b6447187555a08e7907669b056b7a0dc45feee9a**.
+Coordinator review pending; original failedreturn remains unverified.
