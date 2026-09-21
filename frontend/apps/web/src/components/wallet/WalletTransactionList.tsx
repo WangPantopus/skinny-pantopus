@@ -36,7 +36,7 @@ const FILTER_OPTIONS = [
   { value: 'refund', label: 'Refunds' },
 ];
 
-export default function WalletTransactionList() {
+export default function WalletTransactionList({ refreshKey = 0 }: { refreshKey?: number }) {
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -66,7 +66,7 @@ export default function WalletTransactionList() {
 
   useEffect(() => {
     loadTransactions();
-  }, [loadTransactions]);
+  }, [loadTransactions, refreshKey]);
 
   const handleFilterChange = (newFilter: string) => {
     setFilter(newFilter);
