@@ -267,9 +267,8 @@ async function canMessageUser(senderId, recipientId) {
 async function canViewProfessionalProfile(viewerId, profile) {
   if (viewerId === profile.user_id) return true;
   if (!profile.is_active) return false;
+  if (await isBlocked(viewerId, profile.user_id)) return false;
   if (profile.is_public) {
-    // Block check
-    if (await isBlocked(viewerId, profile.user_id)) return false;
     return true;
   }
   // Private profiles: connections and home-mates only
