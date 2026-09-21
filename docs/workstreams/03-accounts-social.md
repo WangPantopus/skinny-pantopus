@@ -22,6 +22,35 @@ prerequisites merge; do not push later commits into PR70 or conflate another str
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
 
+## Current whole-stream acceptance reconciliation
+
+Read-only reconciliation at 2026-09-21T04:53:25.682348+00:00 on4c6f11771. Existing
+[screen catalog](../screen-parity-inventory.md), [mobile wiring](../mobile-wiring-audit.md)
+and [notification inventory](../notification-template-inventory.md) remain discovery
+sources; REAL_VIEW/rendered controls and May audit wording do not establish current
+end-to-end success. No additional application edits during coordinator integration.
+
+| Existing row | Current bounded evidence to reuse | Required acceptance still open |
+| --- | --- | --- |
+| N01 | Actual web saved-notification list/bell reads, mutations, keyboard removal, post/booking/listing destinations and preferences (PR75/81/85/86/91); exact UI/API/SQL evidence above. | Provider-delivered foreground/background/cold-start, denied permission, token lifecycle, login continuation and all destinations under current authority. Saved records alone do not establish push delivery. |
+| N02 | Historical Android emulator FCM and owner-confirmed physical iPhone Beacon preferences retain their original source/device limits. | Physical Android unavailable; current installed iOS/Android interaction capability unavailable. CI simulator/emulator tests are not installed-screen or physical-device evidence. |
+| N03 | Real local follow/unfollow/retry; fan identity/privacy, restricted oldlinks, posting/draft recovery, comments/replies, hide/filter failures and web maps under current milestones. | Persona feed mute is reproduced ineffective and remains an ungranted schema/SDK proposal; release-cohort eligibility, broader access transitions, native discovery/posting/reply and remaining map layers unverified. Notification-only membership mute remains distinct. |
+| N04 | Existing safety/report entry repairs, realGoTrue session retirement, persisted block/messaging denials and unavailable checks; distinct UserBlock/UserProfileBlock/PersonaBlock/Relationship scopes retained. | Remaining installed entry points, moderation processing, broad socket/provider side effects, full offline/reconnect/concurrent/lost-reply/session matrix across all scopes. Existing bounded evidence does not close whole row. |
+| N05 | Actual booking UI/API/SQL, manual existing worker/local SMTP delivery, saved notices and owner/invitee destination boundaries, canonical timing/host choices. | Natural cron/timing, lost SMTP acknowledgement, partial delivery/concurrent cancellation or reschedule, individual invitee destination, remaining host-email/attendee/dailyagenda/pause contracts and native/provider delivery. Home calendar belongs to Stream2. |
+| A01 | LocalGoTrue real login and recovery-email delivery/return-form evidence; isolated accounts provisioned for testing, no new public-signup acceptance claimed. Disabled Google/provider boundary recorded. | Complete signup/email verification remains open. Password-reset final credential change needs user takeover; Apple/Google success/cancel cannot run while providers disabled. No provider activation or native claim. |
+| A02 | RealGoTrue account changes/cookie refresh, protected-data retirement, security records/global sign-out and two account deletions with exact block cleanup. | Broader native/other-browser expiry/revocation, unavailable storage/frozen-tab and provider-session combinations. Historical controlled proofs retain precise transport limits. |
+| A03 | Existing shared upload/document evidence and implemented file picker remain reusable under their original versions. | Hosted Storage permissions/quotas/media lifecycle and native chooser capabilities unavailable/unassigned; no shared storage edits. |
+| A04 | Existing provider report plus local OAuth capability check. | Activated Smarty/geographic/provider acceptance and paid activation bundle unavailable; address ownership remains coordinated with Stream2. |
+| A05 | Recent actual Marketplace reporting, seller identity, Q&A, notification return, message/card destinations; map popup post destination now PR97. Existing catalog reused. | Remaining search/subscription/booking/identity and adjacent reachable actions; Home/mail/payment findings routed to owners. No claim that every catalog action works. |
+
+Private exact-byte reconciliation has24 artifact/file bindings:16 unchanged,8 different.
+Three marketplace-message baseline bindings intentionally predate repairedPR93; baseline
+is not candidate acceptance. Marketplace blockService/chats/modal match accepted hashes;
+useListingDetail delta changes only success destination, leaving denied/error paths intact.
+Other changed files keep scoped earlier/later milestone evidence, not blanket retests.
+Private current-evidence-source-bindings/current-coverage-reconciliation record details;
+durable363files manifest **b0b1b7984397c8622e1da9d82a959b727f7294a6276365a406910de0996b197d**. No new runtime acceptance is implied.
+
 ## Current N03/A05 map popup destination milestone
 
 [Draft PR97](https://github.com/WangPantopus/skinny-pantopus/pull/97), exact
@@ -958,7 +987,7 @@ retained; exact IDs in evidence. No new unit tests.
 
 ## Runtime, retained fixtures and evidence
 
-Owned HTTP18130 (current launcher session34592), Next18131 (60362); real app.js,
+Owned HTTP18130 (current launcher session44858), Next18131 (60362); real app.js,
 GoTrue/Kong64531/PostgREST/SQL64532 project pantopus-stream3-block-r1, private
 workdir /private/tmp/pantopus-stream3-auth-r3. Host stream3-auth.localhost isolates
 cookies from other streams. SMTP sink pantopus-stream3-mail-r3 binds127.0.0.1:64535
