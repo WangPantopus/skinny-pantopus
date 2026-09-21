@@ -31,8 +31,6 @@ router.use((req, _res, next) => {
   return next();
 });
 
-router.use(verifyToken, requireFeatureFlag('audience_profile'));
-
 async function loadOwnedPersona(req, res) {
   const { data: persona } = await supabaseAdmin
     .from('PublicPersona')
@@ -72,7 +70,7 @@ const blockSchema = Joi.object({
 });
 
 // POST /api/personas/:id/fans/:membershipId/block
-router.post('/fans/:membershipId/block', validate(blockSchema), async (req, res) => {
+router.post('/fans/:membershipId/block', verifyToken, requireFeatureFlag('audience_profile'), validate(blockSchema), async (req, res) => {
   const persona = await loadOwnedPersona(req, res);
   if (!persona) return;
 
@@ -113,7 +111,7 @@ router.post('/fans/:membershipId/block', validate(blockSchema), async (req, res)
 // DELETE /api/personas/:id/fans/:membershipId/block
 // Owner-removable sources only; chargeback / platform_safety throw
 // out of the service (returned as 400).
-router.delete('/fans/:membershipId/block', async (req, res) => {
+router.delete('/fans/:membershipId/block', verifyToken, requireFeatureFlag('audience_profile'), async (req, res) => {
   const persona = await loadOwnedPersona(req, res);
   if (!persona) return;
 
@@ -140,7 +138,7 @@ router.delete('/fans/:membershipId/block', async (req, res) => {
 // personal_block_propagation row must look identical to a creator-made
 // block on every creator-facing surface. canUnblock tells the UI
 // whether to render an unblock button without revealing why.
-router.get('/blocks', async (req, res) => {
+router.get('/blocks', verifyToken, requireFeatureFlag('audience_profile'), async (req, res) => {
   const persona = await loadOwnedPersona(req, res);
   if (!persona) return;
 

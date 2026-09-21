@@ -336,8 +336,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       appDispatch({ type: 'SET_FEED_COMPOSER_OPEN', value: false });
       notifyFeedPostCreated();
       toast.success('Posted!');
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to post.');
+      return false;
     } finally {
       appDispatch({ type: 'SET_FEED_POSTING', value: false });
     }

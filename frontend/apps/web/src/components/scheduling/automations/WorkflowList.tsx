@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Bell, CloudOff, Lock, Plus, Workflow as WorkflowIcon } from "lucide-react";
 import * as api from "@pantopus/api";
-import type { EventType, Workflow } from "@pantopus/types";
+import type { EventType, Workflow, SchedulingOwnerRef } from "@pantopus/types";
 import { useSchedulingOwner } from "@/components/scheduling/SchedulingOwnerProvider";
 import {
   pillarForOwner,
@@ -35,13 +35,17 @@ import {
   triggerMeta,
   triggerSummary,
 } from "./workflowMeta";
-import { readReminders, summarizeReminders } from "./reminders";
+import { summarizeReminders } from "./reminders";
 
 type Scope = "global" | "event_type";
 
 export default function WorkflowList() {
-  const router = useRouter();
   const owner = useSchedulingOwner();
+  return <WorkflowListForOwner key={JSON.stringify(owner)} owner={owner} />;
+}
+
+function WorkflowListForOwner({ owner }: { owner: SchedulingOwnerRef }) {
+  const router = useRouter();
   const pillar = pillarForOwner(owner.ownerType);
 
   const [phase, setPhase] = useState<"loading" | "error" | "ready">("loading");
@@ -82,21 +86,25 @@ export default function WorkflowList() {
         setEventTypeId((cur) => cur || list[0]?.id || "");
       })
       .catch(() => undefined);
-    api.scheduling
-      .getNotificationPreferences(owner)
-      .then((res) =>
-        setReminderSummary(
-          summarizeReminders(
-            readReminders((res.prefs ?? {}) as Record<string, unknown>),
-          ),
-        ),
-      )
-      .catch(() => undefined);
+
   }, [owner]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    setReminderSummary(null);
+    api.scheduling.getBookingPage(owner)
+      .then(({ page }) => {
+        if (active) setReminderSummary(summarizeReminders(page.reminder_minutes));
+      })
+      .catch(() => {
+        if (active) setReminderSummary("Reminders unavailable. Open to retry.");
+      });
+    return () => { active = false; };
+  }, [owner]);
 
   const eventTypeName = useCallback(
     (id: string | null) =>

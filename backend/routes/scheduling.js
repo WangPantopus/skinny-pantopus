@@ -1071,18 +1071,21 @@ router.get('/notification-preferences', asyncHandler(async (req, res) => {
 }));
 
 router.put('/notification-preferences', validate(Joi.object({ prefs: Joi.object().unknown(true).required() })), asyncHandler(async (req, res) => {
-  const { data: existing } = await supabaseAdmin
+  const { data: existing, error: readError } = await supabaseAdmin
     .from('SchedulingNotificationPreference')
     .select('id')
     .eq('user_id', req.user.id)
     .maybeSingle();
+  if (readError) throw new Error('Unable to load notification preferences. Please try again.', { cause: readError });
   if (existing) {
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('SchedulingNotificationPreference')
       .update({ prefs: req.body.prefs, updated_at: new Date().toISOString() })
       .eq('user_id', req.user.id);
+    if (error) throw new Error('Unable to save notification preferences. Please try again.', { cause: error });
   } else {
-    await supabaseAdmin.from('SchedulingNotificationPreference').insert({ user_id: req.user.id, prefs: req.body.prefs });
+    const { error } = await supabaseAdmin.from('SchedulingNotificationPreference').insert({ user_id: req.user.id, prefs: req.body.prefs });
+    if (error) throw new Error('Unable to save notification preferences. Please try again.', { cause: error });
   }
   res.json({ prefs: await schedulingNotifyPrefs.getPrefs(req.user.id) });
 }));

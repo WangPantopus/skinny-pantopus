@@ -219,19 +219,20 @@ async function getOwnedPersona(personaId, ownerUserId) {
   return { persona };
 }
 
-function serializePersonaFollowForOwner(follow, localProfile) {
-  if (!follow) return null;
+function serializePersonaFollowForOwner(follow, membership) {
+  if (!follow || !membership) return null;
+  const fan = serializeFanForCreator(membership);
   return {
     id: follow.id,
     status: follow.status,
     relationshipType: follow.relationship_type || 'follower',
     notificationLevel: follow.notification_level || 'none',
     publicVisibility: follow.public_visibility || 'private',
-    source: follow.source || null,
-    approvedAt: follow.approved_at || null,
-    createdAt: follow.created_at || null,
-    updatedAt: follow.updated_at || null,
-    follower: serializeLocalProfileForViewer(localProfile),
+    follower: {
+      handle: fan.fanHandle || '',
+      displayName: fan.fanDisplayName || 'Follower',
+      avatarUrl: fan.fanAvatarUrl || null,
+    },
   };
 }
 
@@ -900,10 +901,18 @@ router.get('/:id/followers', verifyToken, async (req, res) => {
       .select('status')
       .eq('persona_id', persona.id);
 
-    const serialized = await Promise.all((follows || []).map(async (follow) => {
-      const localProfile = await ensureLocalProfile(follow.follower_user_id);
-      return serializePersonaFollowForOwner(follow, localProfile);
-    }));
+    const membershipIds = (follows || []).map((follow) => follow.id);
+    const { data: memberships, error: membershipError } = membershipIds.length
+      ? await supabaseAdmin.from('PersonaMembership')
+        .select('id, fan_handle, fan_display_name, fan_avatar_url, joined_at, status')
+        .in('id', membershipIds)
+        .eq('persona_id', persona.id)
+      : { data: [], error: null };
+    if (membershipError) return res.status(500).json({ error: 'Failed to load Beacon followers' });
+    const byId = new Map((memberships || []).map((membership) => [membership.id, membership]));
+    const serialized = (follows || []).map((follow) =>
+      serializePersonaFollowForOwner(follow, byId.get(follow.id)));
+
 
     res.json({
       followers: serialized.filter(Boolean),
@@ -975,8 +984,7 @@ router.patch('/:id/followers/:followId', verifyToken, validate(ownerFollowerUpda
     }
 
     const updated = projectMembershipAsLegacyFollow(updatedMembership);
-    const localProfile = await ensureLocalProfile(updatedMembership.user_id);
-    res.json({ follower: serializePersonaFollowForOwner(updated, localProfile) });
+    res.json({ follower: serializePersonaFollowForOwner(updated, updatedMembership) });
   } catch (err) {
     logger.error('personas.followers.update_error', { error: err.message, personaId: req.params.id, followId: req.params.followId, userId: req.user?.id });
     res.status(500).json({ error: 'Failed to update follower' });
@@ -1669,7 +1677,19 @@ router.delete('/:id/follow', verifyToken, personaFollowLimiter, async (req, res)
     const persona = await getPersonaById(req.params.id);
     if (!persona) return res.status(404).json({ error: 'Beacon not found' });
 
-    const existingMembership = await getPersonaMembershipForUser(persona.id, req.user.id);
+    const { data: existingMembership, error: membershipError } = await supabaseAdmin
+      .from('PersonaMembership')
+      .select('*, tier:PersonaTier!tier_id(id, rank, name, status)')
+      .eq('persona_id', persona.id)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (membershipError) {
+      logger.error('personas.unfollow.read_error', {
+        error: membershipError.message, personaId: persona.id, userId: req.user.id,
+      });
+      return res.status(500).json({ error: 'Failed to unfollow Beacon' });
+    }
+    if (!existingMembership) return res.json({ message: 'Beacon unfollowed' });
     if (isPaidPersonaMembership(existingMembership)) {
       return paidMembershipConflict(res);
     }
@@ -1678,7 +1698,7 @@ router.delete('/:id/follow', verifyToken, personaFollowLimiter, async (req, res)
     const { error: deleteError } = await supabaseAdmin
       .from('PersonaMembership')
       .delete()
-      .eq('id', existingMembership?.id || '__missing__');
+      .eq('id', existingMembership.id);
 
     if (deleteError) {
       logger.error('personas.unfollow.delete_error', {

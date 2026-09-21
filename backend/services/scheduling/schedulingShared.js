@@ -86,6 +86,7 @@ async function assertCanManageOwner(ownerType, ownerId, userId, level = 'edit') 
   if (!ok) {
     const err = new Error('You do not have permission to manage scheduling for this owner.');
     err.statusCode = 403;
+    err.status = 403;
     throw err;
   }
 }

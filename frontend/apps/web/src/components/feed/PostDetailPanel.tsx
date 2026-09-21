@@ -158,7 +158,7 @@ export default function PostDetailPanel({
   }, [lightboxIndex]);
 
   const handleAddComment = async ({ text, parentId, files = [] }: { text: string; parentId?: string; files?: File[] }) => {
-    if (!postId) return;
+    if (!postId) return false;
     setCommentPosting(true);
     try {
       const res = await api.posts.addComment(postId, {
@@ -183,9 +183,11 @@ export default function PostDetailPanel({
       setPost((prev) => prev ? { ...prev, comment_count: nextCommentCount } : prev);
       onPostChange?.(postId, { comment_count: nextCommentCount });
       showToast(uploadFailed ? 'Comment posted, but image upload failed' : 'Comment posted');
+      return true;
     } catch (err) {
       console.warn('Failed to add comment', err);
       showToast('Failed to add comment');
+      return false;
     } finally {
       setCommentPosting(false);
     }
@@ -401,7 +403,13 @@ export default function PostDetailPanel({
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  {creatorHandle ? (
+                  {publicAuthor?.type === 'persona' ? (
+                  publicAuthor.href ? (
+                    <a href={publicAuthor.href} className="text-sm font-semibold text-app hover:underline">
+                      {creatorName}
+                    </a>
+                  ) : <span className="text-sm font-semibold text-app">{creatorName}</span>
+                ) : creatorHandle ? (
                     <UserIdentityLink
                       userId={post.creator?.id || post.user_id}
                       username={creatorHandle}

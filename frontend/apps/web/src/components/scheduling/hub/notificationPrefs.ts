@@ -76,6 +76,16 @@ export const NOTIFY_ATTENDEES: RowDef[] = [
 export const REMINDER_PRESETS = [10080, 1440, 120, 60, 30, 15]; // 1 week → 15 min
 export const DEFAULT_REMINDERS = [1440, 60];
 
+// These existing host controls gate in-app/push delivery through notify_me.
+// Email, attendee and daily-agenda policies are separate from this contract.
+const HOST_PUSH_KEYS: Record<string, string> = {
+  new_booking: "new_booking",
+  cancellation: "cancellation",
+  reschedule: "reschedule",
+  reminder_sent: "reminder",
+  no_show: "no_show",
+};
+
 export function readGroup(prefs: Prefs): Record<string, unknown> {
   const v = prefs.scheduling;
   return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
@@ -87,6 +97,10 @@ export function readChannels(
   key: string,
   def: Channels,
 ): Channels {
+  const hostKey = group === "host" ? HOST_PUSH_KEYS[key] : undefined;
+  const notifyMe = prefs.notify_me as Record<string, unknown> | undefined;
+  const push = hostKey && typeof notifyMe?.[hostKey] === "boolean"
+    ? notifyMe[hostKey] as boolean : undefined;
   const sched = readGroup(prefs);
   const g = sched[group];
   const entry =
@@ -96,11 +110,11 @@ export function readChannels(
   if (entry && typeof entry === "object") {
     const e = entry as Record<string, unknown>;
     return {
-      push: typeof e.push === "boolean" ? e.push : def.push,
+      push: push ?? (typeof e.push === "boolean" ? e.push : def.push),
       email: typeof e.email === "boolean" ? e.email : def.email,
     };
   }
-  return { ...def };
+  return { ...def, push: push ?? def.push };
 }
 
 export function writeChannels(
@@ -109,12 +123,19 @@ export function writeChannels(
   key: string,
   channels: Channels,
 ): Prefs {
+  const hostKey = group === "host" ? HOST_PUSH_KEYS[key] : undefined;
   const sched = readGroup(prefs);
   const g = (
     sched[group] && typeof sched[group] === "object" ? sched[group] : {}
   ) as Record<string, unknown>;
   return {
     ...prefs,
+    ...(hostKey ? {
+      notify_me: {
+        ...(prefs.notify_me as Record<string, unknown> | undefined),
+        [hostKey]: channels.push,
+      },
+    } : {}),
     scheduling: { ...sched, [group]: { ...g, [key]: channels } },
   };
 }

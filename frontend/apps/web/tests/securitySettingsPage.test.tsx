@@ -235,8 +235,8 @@ describe('Security settings page', () => {
     await completeStepUp();
 
     await waitFor(() => expect(apiMock.authDevices.revokeAllSessions).toHaveBeenCalledWith('stepup.token'));
-    await waitFor(() => expect(apiMock.auth.logout).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.clearAuthToken).toHaveBeenCalled());
+    expect(apiMock.auth.logout).not.toHaveBeenCalled();
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/login'));
   });
 
@@ -298,7 +298,7 @@ describe('Security settings page', () => {
     apiMock.authDevices.getDevices.mockRejectedValueOnce({ statusCode: 404, message: 'Not found' });
     loadPage();
 
-    expect(await screen.findByText('Could not load your devices')).toBeInTheDocument();
+    expect(await screen.findByText('Could not load all security information')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Sign out of all other devices/ })).toBeEnabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
