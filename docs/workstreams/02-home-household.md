@@ -2,6 +2,28 @@
 
 Updated September 20, 2026. Owner: Home stream.
 
+## September 21 D07 audit milestone — reviewable handoff
+
+**Current: candidate published, required CI running; stream incomplete and continuing.** `codex/workstream-home` / `50289db7e0ca44f3effb575f717fa479e599f4c5`, [draft PR102](https://github.com/WangPantopus/skinny-pantopus/pull/102). Sole changed application path: `frontend/apps/web/src/components/home/members/MembersSecurityTab.tsx` (46 additions/9 deletions). [Exact-head CI35570755239](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35570755239) in progress; no current green claim.
+
+- Baseline actual UI→SDK→homeIam/current permission helper→PostgREST/SQL rendered20of23 owned audit records. Denying table SELECT made the route500; UI cleared known records and claimed no matching events, retaining stale Load More without error/retry. Six current/master/paid/staging/place/archive source comparisons have the same silent catch.
+- Existing component now reuses ErrorState/failureMessage for explicit retry, retains known rows on transient failure, retries the failed pagination offset, and clears history on401/403. Requests are retired across close/Home/current-management-access/unmount/newer read. No new application file/schema/backend/design/unit tests; role controls unchanged.
+- Actual browser checks: cold/repeated SQL denial500; Enter retry200→20rows; second-page failure retains20, retry yields23/no duplicate/no extra Load More; unchanged Membership/Secret Reveals filters; genuinely empty200 has no error. Owned members.manage deny→real403 clears all history; restoration/retry recovers20. Held actual offset20 success200/3rows delivered on a live socket after close/reopen→newer offset0 denial403 cannot restore old data. Same-URL hold attempt serialized and is excluded from out-of-order proof.
+- Web typecheck0 errors, scoped ESLint0 errors/8 warnings, diffcheck clean. Required CI runs existing regression/build gates. Accepted PR60 contracts and unaffected Home journeys are reused, not rerun.
+- Limits: synthetic sign-in, unrelated dashboard aggregate and seeded audit records; actual route/permission/PostgREST/SQL. Controlled response delay. Native/hosted/account-switch and wider D07 role-control boundaries are not accepted by this check.
+- Exact cleanup all12 row/object counts0; HomeAuditLog SELECT restored, exact members.manage override removed, private bucket removed. API18142 stopped; Next18141 and owned5containers retained for the next granted Home slice, no active fault, no native slot. Peer resources unchanged.
+- Durable evidence: owner `.pantopus-recovery/audits/20260921-stream2-home-audit-r1/` contains14 files plus manifest, source hashes, baseline/candidate/HTTP receipts, transport bound, validation and exact cleanup. No credentials/raw device tokens archived in Git/chat.
+
+**Author handoff ready for coordinator review/publication;** next independent work is existing member-role/permissions source and runtime verification while this commit remains fixed for CI. No merge/backlog closure by Stream2.
+
+## September 21 resumed verification — D07 Members and Security
+
+**Current state: verification; stream incomplete.** Required worktree is clean on `codex/workstream-home`, fast-forwarded from3dc226983 to master0f6e55e01 after independently checking PR60 merged, later master source and open PRs. PR60 Home source is unchanged; accepted browser/SQL/Storage evidence is reused. Latest live handoff/backlog/README and all3stream status reconciled; historical statuses below are source-bound snapshots.
+
+Coordinator grants existing18141/18142/64550–59 and D05/D07 fallback. Native capability inventory showed no booted iOS devices; CUA lists Simulator but rejects its app binding with Invalid app, unchanged from the recorded unavailable control. No build/boot/install/system reset attempted; sole heavy native slot released and coordinator acknowledged. Native M02/Emergency remains unverified.
+
+Next bounded journey: existing dashboard MembersSecurityTab audit-log read/error/retry and member-role controls, real homeIam routes and canonical permissions/SQL. Source lead: audit loader catches errors as empty entries with no retry; verify actual browser before repair. Reuse existing guest fixture and real permissions/PostgREST adapter; synthetic sign-in/dashboard scaffold remains labelled. No application edits yet, no new unit tests, no shared-file/schema grant requested. Product QR/shutoff decisions remain untouched. Continue further unresolved Home slices after each reviewable milestone.
+
 ## September 20 integration handoff — master safety changes
 
 **Current state: merged by coordinator; combined-head CI green.** This snapshot supersedes the earlier current-state paragraphs below. Branch `codex/workstream-home` is clean and pushed at **`3dc226983260311a4e4e123d89c4e7fc6a55f38c`**, merging fresh master `2d6ff2069` into accepted Home candidate `66f834cc7`. [PR60](https://github.com/WangPantopus/skinny-pantopus/pull/60) was merged by the coordinator as `ebeea43d50f1ef35c32d2b3de7add9f958f4119d` at23:07:05UTC on September20; freshly verified through GitHub. Stream2 did not independently merge.
