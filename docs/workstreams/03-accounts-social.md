@@ -3,17 +3,52 @@
 Updated September21 — **Stream incomplete; ongoing verification.**
 Sole live status remains this neutral coordination file. No new unit tests written.
 Application `/private/tmp/pantopus-workstream-accounts-social`, branch
-`codex/stream3-professional-viewer-auth`, pushed/local
-**e47eb37de098f076b307d109ee20953b45b51307**, tracked clean plus owned .next-stream3.
-[Draft PR115](https://github.com/WangPantopus/skinny-pantopus/pull/115) targets released
-master721d46e6d; automatic [CI35577904476](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35577904476)
-completed SUCCESS exacte47. Bounded implementation/HTTP-SQL verification and CI complete;
-coordinator review/integration pending separately. No current public-screen caller or UI acceptance.
-PR114 remains frozen59b67ee84; exactCI35577190208 independently SUCCESS, final receipt
-professional-self-ci-latest.json. Coordinator captured prior live03 in21f42c142 and
-verified461files/5sourcebindings. PR114 review passed; merge held during paid fullCI.
-PR111 already integrated4b6b8e211; all prior frozen refs preserved. Owned18130/PID30349,
-18131/PID14742,Supabase64531–37 retained. No native build/peer mutation/whole-row closure.
+`codex/stream3-professional-housemate-verification`, local/pushed
+**e729a516a87fb4e406b93462a86ff5b57d6a25d0**, tracked clean plus owned .next-stream3.
+[Draft PR117](https://github.com/WangPantopus/skinny-pantopus/pull/117) stacks on frozen
+PR115/e47. Automatic [CI35579542422](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35579542422)
+queued exacte729. Bounded implementation/local HTTP-SQL verification complete;
+CI/review/integration separate and pending. PR114 exact59b and PR115 exacte47 CI green;
+refs frozen. No current public screen caller/native acceptance/whole-stream closure.
+Coordinator captured prior6927 live03 in d4ce6c85a; current helper grant is in README.
+Owned18130/PID68284,18131/PID14742,Supabase64531–37 retained, no native build/peer mutation.
+
+## Private professional blocked-housemate repair — PR117 handoff
+
+Granted only canViewProfessionalProfile after actual private active housemate200 under
+either-direction blocked Relationship. Seven current/master/paid/staging/place/Beacon/
+originalfc99 helper variants identical. Existing getProfileVisibility checks block before
+shared-home access. Move existing professional block guard after self/inactive guards
+and before public/private branches:1added/2removed lines, other helpers/scopes unchanged.
+No new file/service/schema/middleware/UI/unit tests or presentation change. PR117 stacks
+on115 because its actual viewer identity wiring is required; do not merge ahead of115.
+
+Actual local GoTrue HTTP→PostgREST/SQL **10housemate cases pass**: legitimate active
+private housemates200; both block directions403/error-only; blocked inactive/ended403;
+Relationship SELECT denial500, restored retry403; unblock restores200; unblocked inactive
+and ended occupancy403. Twenty focused affected owner/public/private/bearer/cookie controls
+also pass after the guard relocation. Existing115 evidence retained separately; no broad
+suite repeats. Existing2suites37tests, syntax/diffcheckpass. No new unit tests.
+
+HTTP/SQL-only; temporary Home/occupancy/profile/relationship states SQL seeded, no screen
+invented or native/provider/home-UI acceptance. Candidate artifact records precommit e47
+plus working-tree helper; final3sourcehashes bind exacte729. Other helpers, shareHome query
+failure semantics, session lifetime and safety-scope policy were not expanded.
+
+Cleanup: candidate5exacttemporary rows removed, original Home/HomeOccupancy/
+UserProfessionalProfile/Relationship counts0 restored, RelationshipSELECT restored,
+auxlogout200. Affected20control phase2exactrows removed/originalprofile/relationship0,
+6auxlogout200. ExactIDs/results in professional-housemate-candidate-results.json and
+professional-housemate-affected-controls.json; earlier baseline separatelycleaned.
+No original retained fixture or peer resource mutated. Owned runtime stays reserved.
+
+Private professional-housemate-final-evidence.json binds3sourcehashes,7refcomparison,
+baseline,10+20actualcases,checks/cleanup/limits. Durable **481files** hashverified;
+MANIFEST **7393d99b7f073b66c75a9e54893a3ce0e0fa69ea4a799f278234a94770357ec9**
+in existing accounts-social-r3 mirror. Earlier artifacts retain actualsource/runtime;
+latest head is not blanket rerun. Coordinator owns review and eventual integration,
+currently held behind paid fullCI. Next: exact117CI/handoff; preserve114/115 refs.
+Broad N01–N05/A01–A05 native/provider/session/delivery limits remain open below.
 
 ## Professional public viewer identity — PR115 handoff
 
@@ -1939,3 +1974,24 @@ professional-auth-ci-latest.json; durable mirror now471files, all hashes verifie
 MANIFEST **a653476145474080a0f32bc48382d48ecc2fce31c79b163a4ea0cb3114d3afaa**. Source remains frozen;
 no repeated runtime journeys, new fixture or policy expansion. PR114 exact59bCI also
 passed. Coordinator owns review/integration; no broader/native/UI acceptance implied.
+
+## Private professional blocked-housemate baseline — verification only
+
+Coordinator granted actual HTTP/SQL verification, no helper edit. Separate branch
+at e47 preserves114/115 refs. Read live canViewProfessionalProfile/shareHome and
+Home/HomeOccupancy schema plus installed triggers before narrow fixture creation.
+Actual private active-housemate read200 with no relationship; both viewer→owner
+and owner→viewer blocked Relationship still200/profile returned. Mark viewer occupancy
+inactive or ended yields403. Existing helper tests connection then shareHome without
+private-branch block check. General getProfileVisibility already checks Relationship
+blocking before shareHome. Proposed move existing professional block guard above
+public/private split after self/inactive guards; assignment pending, no app edits.
+
+Exact5temporary IDs and5responses in professional-housemate-baseline.json; cleaned
+Home,HomeOccupancy,UserProfessionalProfile,Relationship back to original counts0,
+auxiliarylogout200. No provider/UI/native claims, no borrowed Home runtime or policy
+change. Existing115 owner/anonymous/public/connection evidence reused, not repeated.
+Mirror now473files/hashverified; MANIFEST **1bd399a723dcd9af9c7ae063a05c3bcfe87111db455d740b753a52e86a45c214**.
+Next: coordinator helper-scope review and existing/archive/open comparison before
+any repair. Prior471 PR115 evidence remains source-applicable; current milestone
+does not close N04/N03 or broad housemate authorization.

@@ -1,5 +1,26 @@
 # Stream 1 — Gigs and payments
 
+## September 21 pending integration batch — privacy follow-ups reviewed
+
+PR117 e729a516a (stacked115) changes only the existing professional block guard's
+position. All481 durable hashes and3 source bindings match;10 housemate cases and20
+affected HTTP/SQL controls pass, all exact fixture rows/sessions/grants restored.
+No public-screen/native acceptance. OriginalCI35579542422 is still required.
+PR118 1ad1a0693 (stacked116) checks the existing HomePrivacy PATCH read error before
+merge/upsert. All11 durable hashes and route bytes match; all13 actualHTTP/SQL cases
+reviewed and every rejected request preserves full before/after SQL rows. Controlled
+read-recovery timing is explicit; genuine absence retains defaults. Cleanup/auth/
+privacy/storage counts0, SELECT/INSERT restored, own runtime released. No UI/native/
+concurrent partial-write acceptance. OriginalCI35579547138 is still required.
+
+Capture frozen live02 db729875 and03 1ddfb536; preserve114/115/116 accepted evidence.
+Paid2ea9 fullCI35576926687 has all iOS and Android instrumented jobs passed; only
+Android lint/test/assemble remains running, no failure observed. Keep source fixed.
+After its final gate, integrate114→115→116→117→118 with exact updated-head checks,
+then separate doc113. Hold new application scopes while this batch catches up;
+independent inventory/source reconciliation may continue without repeating baselines.
+
+
 ## September 21, 08:38 UTC — saved-method reads verified; next batch reviewed
 
 Paid source remains clean/pushed2ea9d93ca; CI35576926687 application/web/schema and
