@@ -7,6 +7,51 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## September 21, 07:26 UTC — paid publication and Home integrations
+
+Paid **b75637fd82f4554ffbd51fb85a3115cf97aa9d17** is pushed to draft47, including
+verified atomic vote e2b03de6b and reviewed master f273712ec. Prior3025 full
+CI35570109862 passed15/oneSeeder skip, all iOS/Android included. New automatic
+**CI35572520685** is running; keep this head fixed. Combined TypeScript passes,
+all3vote and2integrated peer source bindings match. PR47 description updated;
+32durable vote-phase files include final prior CI, integration and published body.
+No new root runtime fixtures/provider writes; existing Next/79schema runtime retained.
+
+Home audit PR102 merged **f273712ec4b31e08cbcb10be05661f7e7a463ba4** at07:19:35Z
+on exact3de541d72 CI35571953892. Member PR104 merged
+**0cca2d4e2d6f902dc19677e96dee4443dd31b72f** at07:23:53Z on exactd304f08df
+CI35572440658. Both updated heads changed only reviewed booking worker relative
+to their accepted candidates; component bytes/evidence unchanged. No overrides.
+PR103 updated to **7a9bea32d373cac5e849a1a5ce2123eac2a46f2f**, only reviewed worker
+and two Home components added; pending current-head gate. Then105→107→108 integrate
+in sequence after exact source/evidence and up-to-date CI. Docs-only draft106 remains
+held behind this feature batch. Paid34/47 remain draft; unrelated46 untouched.
+
+PR107 frozen7e91907a on105: checked UserProfileBlock error in isScopedBlocked;
+all440durable hashes/4source bindings reviewed, actual UI and10REST routes fail
+without exposing blocked data and recover after restored query access. Scope/direction,
+self/anonymous controls retained; no new policy. OriginalCI35572584966 passes.
+Live03 c9b9022f captured871ec4885. Legacy Relationship blocked-read error is a separately
+granted runtime verification, no global helper edit yet; exact fixture cleanup required.
+
+PR108 frozen39ced0c27 on member branch: existing settings error/retry hides Save
+until known values arrive. Actual503/repeated retry, saved24h/text/false preferences,
+genuine absent-row defaults,403/departure/current reload proof reviewed. Component
+bytes and15durable hashes match. First coordinator manifest parser expected another
+bundle format and failed; corrected flat-map validation passes before acceptance.
+Live02 c3eaa722 captured1916b8f6f; peer may update. OriginalCI35572724323 pending.
+No same-mounted Home/account reversed-response or successful-save claim.
+
+New Stream2 sole-writer grant: existing SDK homes.ts updateHome PUT→PATCH plus
+canonical name input and existing HomeSettingsTab name payload. Actual UI Save404;
+canonical PATCH already accepts name/home_type with home.edit/location guards.
+Five callers enumerated including two paid location fallbacks; preserve their existing
+provenance and authorization and verify affected route payloads. No backend/schema/
+migration/newtests. Legacy nickname public_info lead needs actual failure before any
+extra caller edit; optional clearing/lifetime remain separate. Stream3 notified of
+SDK ownership. Pending product question asks cancellation/no-show payer, recipient,
+amount and trigger; no answer or fee execution inferred. Other work continues.
+
 ## September 21, 07:19 UTC — search handoff and historical-tip boundary
 
 PR105 frozen **f43b9664a319935a4e03553fa14a568e033fb2d4** has exactCI35571949622
