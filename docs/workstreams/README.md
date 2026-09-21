@@ -4,6 +4,73 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21,03:57UTC — Stream1 runtime released; integration batch closing
+
+Paid2a05e797e includes verified wallet history-refresh repair02706ba39 and reviewed
+masteref7382ea1 through PR91; combinedCI35559173441 pending. Owned18132/18133/64561–67
+released, wallet-release-r1/f9200290 rows0/grantrestored/tabsclosed/cachepreserved;
+two test captures refunded/customerdeleted. No native reservation.
+Stream3 no-code message entry evidence captured; resolver PR91 merged. Next concrete
+message destination findings remain read-only during documentation PR87 publication.
+Root owns shared status/publication; Stream3 retains its existing runtime/fixtures.
+
+## September21,03:43UTC — marketplace notification destination grant
+
+Stream3 sole writer existing web lib/notificationRoutes.ts for supported listing,
+listings and marketplace links to existing /app/marketplace/:id. Actual question
+notification opened public preview lacking Q&A; native handoff was blocked and is
+not to be retried/bypassed. Compare existing/archive/open source, preserve URL validation,
+query/fragment, other domains/entities and authorization. Verify actual notification
+click to authorized detail/reply and missing/deleted destination; reuse question CRUD.
+No public share/native/backend/provider changes or new files/tests. PR90 frozen at
+fdb37a904 remains coordinator-owned; separate branch. Root wallet-return verification
+uses existing resolver without editing it, so no shared writer conflict.
+
+## September21,03:40UTC — Stream1 wallet release and notification return
+
+Root reserves owned18132/18133/64561–67, reusing cleaned wallet-read-r1 Supabase/full77
+schema. Private wallet-release-r1/f9200290 on paid03bf9; fresh actual Stripe TEST
+payment followed by existing settlement worker, wallet and notification UI/API/SQL.
+Synthetic local identity/ancillary transport and controlled cooling-clock advancement;
+no live funds/Connect bank payout/native claim. Reuse accepted authorization/worker
+concurrency evidence where unchanged. No application edit/new tests without failure.
+Stream3 runtime and Q&A ownership remain separate; no native build reservation.
+
+## September21,03:35UTC — bounded marketplace Q&A read grant
+
+Stream3 is sole writer of the existing marketplace detail useListingDetail.ts questions
+loader, page.tsx prop wiring and QASection.tsx read error/retry and canonical safe asker
+identity/href. Actual question creation persisted, but ListingQuestion SELECT denial
+returned500 and displayed Questions(0)/No questions without retry; canonical safe asker
+identity was also ignored. Reuse accepted question creation/save evidence. Preserve
+forms, actions, styling and prior report fixes. No new files/tests/backend/schema/type
+or unproven mutation changes. Compare existing/archive/open branches; verify cold/warm
+failure, retry, genuine empty, persisted question/public navigation and feasible request
+retirement. Restore exact SQL privileges and clean owned question/notification fixtures.
+PR89 remains coordinator-owned/frozen at216e533af; use a separate branch for Q&A.
+
+## September21,03:25UTC — canonical marketplace seller grant
+
+Stream3 sole writer existing SellerSection.tsx canonical displayName/handle/avatarUrl/
+href reads, and optional href only in existing types/listing.ts ListingUserSummary.
+Actual detail displayedUser/disabledprofile while canonical API displayName/handle/
+href and direct publicprofile worked. Preserve otherconsumers' optionallegacyfields,
+safe absent/redactedidentity fallback, existingstyles and canonical publicrelative
+navigation. No backend/privateUserfield restoration/schema/newfiles/tests. Verify
+real detail→publicprofile and unavailable/redacted cases with exactfixturecleanup.
+Separate from PR88 report repair; source comparison supplied. Root has no typeconflict.
+
+## September21,03:20UTC — bounded marketplace report grant
+
+Stream3 sole writer existing useListingDetail.handleReport catch/rethrow and shared
+ReportModal entity-specific listing reason data only. Actual Safety concern UI sent
+POST400 because canonical listing Joi/SQL does not accept it; Other/details under
+ListingReport INSERTdenial returned500 and lostdraft. Reuse supported listing choices
+and existing rejection contract; preserve valid choices, other entities and layout.
+Verify all offered reasons UI/API/SQL, invalidboundary, error/draft/retry and exact
+ownedlisting/reportcleanup. No backend/schema/newtests; sharedmodal writer belongs
+only toStream3 for this bounded repair. Sellerprofile lead remains unverified/separate.
+
 ## September21,03:08UTC — root wallet runtime released
 
 Pending-balance phase completed within live01limits; paid03bf9bd1b/currentCI35556379254.

@@ -7,7 +7,52 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## Current checkpoint — September 21, 03:57 UTC
+
+Paid **2a05e797e** is clean/pushed, including reviewed masteref7382ea1 through PR91.
+Actual Stripe TEST capture→wallet release→notification return found and repaired
+stale history after the balance refreshed. Two real captures, exact1063c/638c credits,
+concurrent/repeated worker uniqueness, same-filter failure/retry and payer return
+are verified within [Stream1's recorded limits](workstreams/01-gigs-payments.md).
+Only two existing wallet files changed; no new unit tests or design changes.
+Fixtures and owned runtimes are cleaned; both test captures refunded. Current combined
+CI35559173441 is pending; earlier03bf9 full CI35556379254 passed. PR34/47 remain draft.
+Coordinator PR87 publishes this documentation batch separately; PR88/89/90/91 were
+reviewed and merged only after their current-head CI gates. Stream3's next proven
+message-destination defects remain unedited pending the next bounded grant.
+
 ## Current checkpoint — September21,03:08UTC
+
+Latest03:46UTC: paid **03bf9bd1b4a3504b8a71eb1f835c1bc3a3e59169** completed
+[CI35556379254](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35556379254)
+**SUCCESS:15 applicable checks passed/one Seeder skip**, including Android quality,
+emulator and all three iOS simulators. Final CI receipt expands pending-wallet durable
+manifest to15 verified files. No new unit tests. PR34/47 remain draft for open scopes.
+PR90 exactfdb37a904 passed CI35558194245 and merged
+**fd04ae43cc7b8ebe5b93e6bbd8a7aa753982ea83** after three source hashes and real Q&A
+failure/retry/order/navigation/cleanup review. Destination repair is separate/liveREADME.
+Root now runs owned wallet-release-r1/f9200290 on unchanged03bf9: actual Stripe TEST
+1250c UI authorization/start/completion/capture succeeded; next verify worker wallet
+release and both notification returns. No release acceptance yet; fixture remains active.
+
+Latest03:37UTC: PR88 passed CI35557360294 and merged cc28ddd3e78eccd24dd7615f4bfe7cbbc938feb4.
+PR89 canonical seller identity at216e533af passed CI35557699093 and merged
+ a1261027024cad7171348813e9dc750b8cf07b58. Both existing source hashes and unchanged
+integration app diff were verified; actual public navigation and unavailable href
+fallback evidence reused. Separate Q&A read grant is in live README. Paid03bf9
+CI35556379254 has all three iOS simulators and Android emulator passed; Android
+lint/test/assemble remains running. Root runtime remains stopped; no duplicate tests.
+
+Latest03:25UTC: PR88 marketplace report956dab1d1 reviewed (2sourcehashes, actual7
+UIreasons→SQL, error/draft/retry, invalidHTTPboundaries and exact8tablecleanup0).
+CI35557360294 pending. Frozen03 ab18fb6e captured at6ffb331c7/writerreleased for
+separate canonical seller card grant. Rootpaid03bf9 CI35556379254 Androidemulator
+passed; Androidquality and three iOSsimulators remain, no failures so far.
+
+Latest03:21UTC: documentation-onlyPR79 exactda0ff5f46 passed CI35556990529 and
+merged **bc06d6b3956ba4a0497d37c07d6ecbff96820d82**. Current5doc checkpoint published;
+paid03bf9 stays separate with CI35556379254 nativejobs pending and allother checks
+passed. New marketplace report grant is liveREADME; no unreviewed feature merged.
 
 Latest03:16UTC: PR86 exactc5802b4a1 passed CI35556598901 and merged
 **3277477fc73e8588c0975fafa7f5a417c3b0e9af**. Coordinator verified3sourcehashes,
