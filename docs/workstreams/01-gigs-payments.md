@@ -101,8 +101,10 @@ draft PR72 atcbfba3503 and PR73 at423176969. Coordinator source and exact-source
 evidence review found no issue within those bounded scopes; CI/dependency merges
 remain required. The separate PR75 at5e3a8b963 repairs swallowed preference
 database errors; coordinator reviewed actual UI/API recovery and worker refusal
-with source hashes. Its required CI/dependencies remain open. Stream3 owns the next
-three existing web timing callers to reuse BookingPage; no new storage or design.
+with source hashes. Its exact-head CI passed; dependency integration remains.
+PR77 e11123328 publishes the three existing web timing callers using BookingPage;
+source-bound UI/SQL evidence reviewed, CI pending. Empty/zero delivery is still
+open and no native/provider acceptance is implied. No new storage or design.
 Live README contains exact shared-file/runtime grants.
 
 Documentation PR68 merged as4f951d29c and PR71 ascefdadd3e after all applicable checks passed.
