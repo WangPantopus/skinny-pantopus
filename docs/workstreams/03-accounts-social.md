@@ -4,14 +4,14 @@ Updated 2026-09-21T00:29:59.111864+00:00. **Stream incomplete; bounded milestone
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/workstream-accounts-social`, local HEAD **e11123328**, application tree
+branch `codex/workstream-accounts-social`, local HEAD **6e422bd91**, application tree
 clean. Only untracked owned `.next-stream3/` remains. Preserve it while Next runs.
-Remote primary branch is **07827d2b0** after isolated reuse of the accepted iOS fixture correction; live runtime includes separate preference failure5e3a8b963 and canonical timingUI e11123328.
+Remote primary branch is **21b93aa62** after isolated reuse of the accepted iOS fixture correction; live runtime includes separate preference failure5e3a8b963 and canonical timingUI e11123328.
 Coordinator requested explicit commit pushes for the later independent milestones:
 
 | Milestone | Branch / head | Review / current CI |
 | --- | --- | --- |
-| Beacon comment/privacy/drafts | codex/workstream-accounts-social / 07827d2b0 | [Draft PR70](https://github.com/WangPantopus/skinny-pantopus/pull/70), base master. Prior CI35546207895 failed all three iOS test jobs; iPhone16 log confirms four assertions from the expired September17 booking fixture. Reused accepted paid9ecf66fc7/9ae1edb3b as b30f4b330/07827d2b0, identical final fixture bytes. Fresh CI35547834908 pending; no app behavior change or new tests. Detached owned /private/tmp/pantopus-stream3-pr70-ci is clean; runtime checkout untouched. |
+| Beacon comment/privacy/drafts | codex/workstream-accounts-social / 21b93aa62 | [Draft PR70](https://github.com/WangPantopus/skinny-pantopus/pull/70), base master. Prior CI35546207895 failed all three iOS test jobs; iPhone16 log confirms four assertions from the expired September17 booking fixture. Reused accepted paid9ecf66fc7/9ae1edb3b as b30f4b330/07827d2b0, identical final fixture bytes. Exact078 CI35547834908 all applicable green. Strict branch protection required docs-only master e8b49c963 merge in isolated checkout→21b93aa62. Diff exactly5docs, backend/frontend/supabase bytes unchanged. Fresh required CI35549733796 running; no UI rerun for docs. Detached owned /private/tmp/pantopus-stream3-pr70-ci is clean; runtime checkout untouched. |
 | Reminder receipt/destination | codex/stream3-booking-reminder-retry / cbfba3503 | [Draft PR72](https://github.com/WangPantopus/skinny-pantopus/pull/72), stacked on remote PR70 branch. Exact-head CI35547400223 CI OK/all applicable green; native/web skipped by paths. Two-file source reviewed by coordinator. |
 | Personal posting/draft recovery | codex/stream3-personal-post-recovery / 423176969 | [Draft PR73](https://github.com/WangPantopus/skinny-pantopus/pull/73), stacked on PR72 branch. Exact-head CI35547412275 CI OK/all applicable green, including web/identity E2E; native skipped. Five-file source reviewed by coordinator. |
 
@@ -61,7 +61,7 @@ five/43200 limits. Existing design/channel/pause policy stays. Scope async respo
 and pending timers to originating owner/mount; serialize auto-saved reminder edits.
 Committed/pushed **e11123328** on codex/stream3-reminder-timing-ui in
 [Draft PR77](https://github.com/WangPantopus/skinny-pantopus/pull/77), base PR75branch.
-Coordinator reviewed source. CI35549296796 running; local finaltypes/lint pass,
+Coordinator reviewed source. Exact-head CI35549296796 all applicable green; local finaltypes/lint pass,
 no new helper/test/schema. ActualH1[0]save/reload,[]→WorkflowNoReminders→A4none;
 rapidA4edits under2200msfirstreplyhold persist latest15/30/60; reloadmatches.
 Five-choicecap and31days rejected;30days43200 saved. Readfailure500 across all3
@@ -79,6 +79,39 @@ Bobpage1440/60 unchanged; all faultflags consumed. Otheroriginalfixtures retaine
 Evidence reminder-alignment-ui-results.json, page-response-faults.jsonl,
 reminder-alignment-types-final.log/lint-final.log, bound to committed3file hashes.
 Prior PR75 failure repair remains separate at5e3a8b963; all existing PR refs intact.
+
+## PR80 — reminder worker settings/delivery repair, review / CI
+
+Actual H1 saved Bob[] through realUI/API/SQL. With one existing booking timestamp
+controlled to+60min, real-clock manual worker emitted a hostnotice and SMTPemail,
+shown in localMailpit receipt dZecpRLTpxrcGCngB5PCbX. User selectedNoReminders.
+UI[0], start1minpast/endfuture:0zero logs/notices. UI[43200], start30daysahead:
+0long logs/notices. Worker source ignores[]/0 and caps scan/offset7days despite
+canonical route/native30day acceptance. Each booking timestamp restoredfinally;
+Bob1440/60 restoredthroughUI. Exact new60m notice/log deleted so candidate[] cannot
+pass using baseline dedupe; SMTPreceipt retained private. Coordinator now grants existing bookingReminders.js and bookingNotifyService.js
+formatLead only: explicit[]; integer0..43200/30day scan; recentlystarted zero only,
+no early-zero send; existing120mincatchup/completion/dedupe/release; checkedpage/eventtype
+read errors. Committed/pushed **6e422bd91** on codex/stream3-reminder-worker-times in
+[Draft PR80](https://github.com/WangPantopus/skinny-pantopus/pull/80), basePR77branch;
+CI35550052378 running. Candidate actualH1[]→no notices/logs with earlier60m dedupe
+removed; zeroearly→none; duezero2concurrentrealworker calls→1log/1host/1SMTP then
+repeatunchanged;30days→1/1/1 thenrepeatunchanged. Page/EventType readfailures leave
+no newnotice/log; restoredreads allowretry. SMTPfailure→host1/log0; restoredSMTP
+retry→hoststable/log1/email1; repeatunchanged. Existing26schedulingregressions pass.
+
+Exact newcandidate3logs/3notices deleted; Bob1440/60 restoredviaUI, all controlled
+bookingtimes restoredfinally and allgrants restored. SMTPhealthy; its controlled
+restart cleared earlierinmemory receipts (recorded taskUI/private evidence);
+latestretrymail nwcabv5XDV27ai4hDogox4 remains. Originalfixtures retained.
+Sourcehash-bound reminder-worker-candidate-results.json and eight linked realworker
+results include precise boundaries. PR72 destinations reused with unchangedbytes.
+No naturalcron/exactstartguarantee, installednative, providerrelease, lostSMTPack,
+or concurrentcancellation/reschedule/settingschange acceptance. N05 staysopen.
+Granted existing worker plus existing formatLead zero-label;
+no cron/provider/schema/newservice change. Evidence reminder-worker-{empty,zero,long}-baseline.json,
+corresponding private logs and reminder-worker-baseline-cleanup.json. ControlledSQL
+timestamps/manual invocation are distinct from natural schedule/cron/providerrelease.
 
 ## Current safety milestone — merged, broader verification continues
 
@@ -260,7 +293,7 @@ physicalAndroid prevent new installed acceptance; current native CI is not scree
 
 Primary private /private/tmp/pantopus-stream3-20260920-r1; durable private mirror
 /Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/
-contains **153 files**, MANIFEST SHA256 **fadb56f5412df7ed0ad857bac92b0fef52efb95a3dbeccd920aa81afe609952c**. Coordinator checked fourcandidate
+contains **182 files**, MANIFEST SHA256 **920efefeb153da95386ba82d6b4b4dd91064e2e178fb6c8ba0daac56fed55367**. Coordinator checked fourcandidate
 hash bindings. Individual artifacts retain actual source/configuration, not a blanket
 HEAD rerun. Credentials/tokens/operatorlogs stay private, outside Git/chat.
 

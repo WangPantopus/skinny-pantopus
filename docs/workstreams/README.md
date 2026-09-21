@@ -350,3 +350,18 @@ of treating unavailable data as absence; label zero as now. No cron/schema/newse
 provider/new tests. Verify actual worker/SQL/localSMTP/no duplicate receipts and
 restore exact original settings/timestamps/new rows; manual cadence is not scheduler
 or external delivery acceptance. Keep this separate from PR77 timing UI.
+
+Stream1 reserves18132/18133 and isolated64561–64567 for
+`pantopus-stream1-refund-session-r1`, source8825, owned f9200250 fixtures. Verify
+retained/refund response ownership across logout/login using existing UI/API/SQL
+and Stripe TEST, synthetic local identity/ancillary transport. No live funds or
+native build. Preserve peer18130/18131/64531/64532/SMTP and shared caches. Release
+only owned resources after exact cleanup. Current docs remain unmerged per gate.
+
+Current sole heavy-native slot: Stream3 may use exact owned simulator
+0AE16FA0-E244-414F-86C8-24893BDFD979 for bounded N04/N03 existing screens. A new
+read-only capability check found simctl available, no booted devices. Verify CUA
+control first; only if usable build/install existing current app for18130 using
+private owned derived output. No other simulator/device/cache/system-service
+changes or native source edits. Release after the bounded result. Stream1 browser
+refund-session verification does not use the native slot.

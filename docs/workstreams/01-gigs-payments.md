@@ -28,6 +28,16 @@ Two focused application repairs this session:
   after assignment changes. A fresh Stripe checkout automatically showed ACCEPTED;
   reopening automatically showed REJECTED. Scoped ESLint passed. No layout change.
 
+## Active next P09 verification
+
+Source8825 remains unchanged/green. Isolated refund-session project
+`/private/tmp/pantopus-stream1-refund-session-r1`, f9200250, reserves18132/18133 and
+64561–64567 for actual browser/Stripe TEST refund response ownership across logout
+and another login. Synthetic local identity/ancillary transport; full77SQL. Setup
+is active, no outcome/cleanup claim yet. Prior completed phases below stay accepted.
+Stream3 owns the sole native slot0AE16FA0-E244-414F-86C8-24893BDFD979 for a new
+capability-first N04/N03 screen check; no Stream1 native build concurrently.
+
 ## Coordinator integration gate
 
 PR70 and77 exact source-head checks passed. PR70 is behind docs-only mastere8b49c963;
@@ -37,9 +47,10 @@ only five documentation files changed and zero backend/frontend/supabase diff. F
 feature70→72→73→75→77 integrate; new status remains draft to avoid needless native
 CI invalidation. Stream1 source8825/greenCI/cleanup is unchanged.
 
-Stream3 now has the exact existing worker/formatLead grant for actual[] false-send,
-zero and43200 omitted-delivery defects, with controlled timestamp and localSMTP
-limits. No worker acceptance or broad N05 closure is claimed before candidate proof.
+Stream3 PR80 at6e422bd91 now has reviewed source and source-bound actual worker/SQL/
+localSMTP proof for[] suppression, zero/43200 delivery, concurrency and query/SMTP
+retry. Exact newrows/times/settings restored; requiredCI/dependency merge and natural
+cron/native/provider/lostSMTPack boundaries remain. No broad N05 closure.
 
 ## Newly verified combined and provider journeys
 

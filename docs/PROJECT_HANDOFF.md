@@ -15,8 +15,11 @@ current master. Its author merged the five documentation files in the isolated
 checkout and pushed **21b93aa62**; coordinator independently verified zero
 backend/frontend/supabase diff. Required CI is running on that updated head. Hold further documentation merges
 until70→72→73→75→77 integrate, preserving the live runtime and accepted UI proof.
-The separate worker repair now has a bounded grant after actual[]/0/43200 failures;
-it remains unverified until repaired and rerun. See live README and Stream3 status.
+The separate worker repair is PR80 at6e422bd91, with reviewed actual worker/SQL/
+localSMTP candidate proof and exact cleanup, pending required CI/dependencies.
+Stream1 has begun isolated P09 refund-session verification on unchanged8825;
+18132/18133 and64561–67 are active/reserved, no new acceptance yet. Stream3 has the
+sole owned simulator slot for a capability-first N04/N03 installed-screen attempt. See live README and Stream3 status.
 
 ## Latest integration — September21,00:21UTC
 
