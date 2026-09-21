@@ -283,3 +283,26 @@ changes. Neither paid PR is the vehicle for publishing the shared instructions.
 This setup creates no recurring background automation. Status files distinguish
 completed discovery from running verification; agent work is dispatched in bounded
 milestones. The first milestones are assigned in the three linked status files.
+
+Stream1 released18132/18133 and64561–64567 after isolated
+`pantopus-stream1-offers-race-r1`: held real offers GET across existing free-bid
+acceptance ended accepted with11 entity counts0. Identical reads serialized in this
+browser; no reversed-response or new app-repair claim. No Stripe transaction/native build.
+
+September21 bounded Stream3 grants after actual UI/API failures:
+- N05 `backend/services/scheduling/bookingNotifyService.js` remains sole-writer:
+  SMTP outage/retry duplicated host notices and reminder host link404. Existing
+  notification idempotency/readback and canonical destinations only. Existing
+  `backend/services/scheduling/schedulingShared.js` authorization-error construction
+  may also carry status403 alongside statusCode403 for the actual mounted handler;
+  no global error-handler change. Verify owner200, otheractor403/no data.
+- N03 sole writer for existing `backend/utils/identityProfiles.js` ensureLocalProfile
+  persisted canonical columns/checked error/concurrent duplicate reread; existing
+  `frontend/apps/web/src/components/feed/PostComposer.tsx`,
+  `frontend/apps/web/src/hooks/useFeedData.ts`, `frontend/apps/web/src/app/(app)/app/feed/page.tsx`
+  and `frontend/apps/web/src/components/AppShell.tsx` global composer submission callback: propagate failure
+  and preserve draft, reset only on success.
+  Same feed page may consume only compose query parameter, retaining surface and
+  other parameters after reproduced modal Connections→Place diversion. Preserve
+  read-only legacy profile behavior, current UI and all unrelated session code.
+  Separate PR from70 and N05; no new schema/profile system/files/tests.

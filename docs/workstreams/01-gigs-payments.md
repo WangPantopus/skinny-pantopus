@@ -1,6 +1,6 @@
 # Stream 1 — Gigs and payments
 
-## Current checkpoint — September 20, 2026, 23:54 UTC
+## Current checkpoint — September 21, 2026, 00:11 UTC
 
 Worktree `/private/tmp/pantopus-paid-gig-integration`; branch
 `codex/paid-gig-integration`; clean and pushed at **8825c192866498a6ab065a5d53f007b0abd637a7**.
@@ -55,6 +55,12 @@ installed-native acceptance is implied.
   No refund repair was needed. Worker Connect lookup's synthetic-account failures
   are fixture boundaries, not payout acceptance.
 
+- **Delayed offers read on8825c1928:** held a real pending offers response across
+  existing free-bid UI acceptance; SQL committed assigned/accepted, released reply
+  followed by a fresh real read ended ACCEPTED/no PENDING. Identical browser reads
+  serialized, so this does not prove reversed-response ordering. No demonstrated
+  defect and no speculative application change. Zero Stripe transactions.
+
 Earlier actual tip decline/retry, failed/successful3DS, lost-response recovery,
 zero-charge cancellation and ordinary paid capture evidence remains accepted within
 its recorded source/runtime limits. It was not repeated solely for coverage.
@@ -67,12 +73,13 @@ Private durable evidence under the owner's `.pantopus-recovery/audits/`:
 - `20260920-stream1-session-integration-r1`:7 files hash verified; combined account switch.
 - `20260920-stream1-stop-stripe-r1`:18 files hash verified; stop receipts and Offers repair.
 - `20260920-stream1-refund-stripe-r1`:13 files hash verified; partial/full refund proof.
+- `20260920-stream1-offers-race-r1`:13 files hash verified; delayed read and11 zero counts.
 Each has EVIDENCE.md, source/state/provider details and cleanup. Credentials, caches
 and operator logs stay private and outside Git/chat. CUA observations are in active
 task `01a0c0d1-0703-70c3-b842-6d01bc8ca48b`.
 
 Cleanup: exact owned rows zero in every phase; stop project13 entity counts and
-refund project18 counts all zero. Own browser tabs, API18132/web18133 and isolated
+refund project18 counts and offers project11 counts all zero. Own browser tabs, API18132/web18133 and isolated
 API64561/SQL64562 projects stopped. Generated tsconfig restored; own Next caches
 preserved privately. An earlier native Chrome window's closure is unconfirmed; its
 retired fixture cannot authorize and the backend is stopped. Peer/retained resources
@@ -82,10 +89,12 @@ failures still prevent installed tip acceptance.
 Coordinator merged reviewed PR65/66/67/69 as61080b399/2d12b85a7/d69482d3f/5eab68ab7
 only after their current checks and bounded UI/API evidence passed. PR70 comment
 privacy/draft/native mapping is separately reviewed with native CI pending. Stream3's
-next real-SMTP reminder repair owns only the granted existing service. Live README
+real-SMTP reminder repair and personal composer repair have bounded existing-file grants. Live README
 contains exact shared-file/runtime grants; later dirty Stream3 status is author-owned.
 
-Next: finish current paid CI, publish this documentation-only checkpoint, then
+Documentation PR68 merged as4f951d29c after all applicable checks passed.
+
+Next: finish current paid CI, publish this follow-up documentation checkpoint, then
 continue existing provider/native/backlog acceptance. Historical transfer/reversal,
 disputes, disabled storage and native journeys remain open. Fee payer/recipient/timing
 still needs the pending product decision. No broad inventory row is closed.
