@@ -58,14 +58,7 @@ export default function WalletTransactionList() {
       setTransactions(result.transactions);
       setTotal(result.total);
     } catch (err: any) {
-      // Only show error if no existing data. Use functional updater
-      // to read current state without stale closure.
-      setTransactions((prev) => {
-        if (prev.length === 0) {
-          setError(err?.message || 'Failed to load transactions');
-        }
-        return prev;
-      });
+      setError(err?.message || 'Failed to load transactions');
     } finally {
       setLoading(false);
     }
@@ -80,7 +73,7 @@ export default function WalletTransactionList() {
     setOffset(0);
   };
 
-  if (error && transactions.length === 0) {
+  if (error) {
     return (
       <button
         onClick={loadTransactions}
@@ -92,7 +85,7 @@ export default function WalletTransactionList() {
     );
   }
 
-  if (loading && transactions.length === 0) {
+  if (loading) {
     return (
       <div className="bg-app-surface rounded-xl border border-app-border p-6 text-center text-app-text-secondary text-sm">
         Loading transactions...
