@@ -7,6 +7,38 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## September 21, 04:30 UTC — gig poster and Q&A identities verified
+
+Local paid commit **7ad896338** repairs three existing files: gig detail page.tsx,
+gig-detail/QASection.tsx and optional canonical href/locality fields in types/gig.ts.
+Actual worker question and poster answer persisted, but the screen displayed
+Anonymous/Anonymous/Poster while the API supplied canonical public identities.
+Current/master/staging/place/archive comparison showed the same legacy field reads;
+repair in place, no new file/backend/schema/private field restoration/design/tests.
+
+Real IAB UI→SDK→routes→PostgREST/full77 SQL verifies correct poster mouse link,
+question-author Enter and answer attribution Enter to the corresponding public
+profiles. Persisted empty owner handle retains poster/answer names without links;
+restored owner plus empty worker handle retains asker name without link. All original
+handles restored and links recovered. TypeScript passes; ESLint0errors/7 existing
+warnings. Initial npx compiler dispatch/private inspector syntax failures were tooling
+attempts, corrected before final checks or SQL mutation. No new unit tests.
+
+Private gig-identity-r1/f9200310 has26 mirrored/hash-verified files in owner's
+`.pantopus-recovery/audits/20260921-stream1-gig-identity-r1`. Seven explicit table
+counts0; ownedAPI/Next/Supabase stopped and both IABtabs closed, cache preserved.
+Provider writes0. Synthetic local auth/ancillary transport; no native/business-seat/
+remote-avatar/full-redaction or anonymous-policy end-to-end claim. Existing business
+answer display override stays unlinked rather than linking a different actor. Q&A
+read/error/order/mutation retries remain separate unverified leads.
+
+Published paid **24c519653** remains unchanged for CI35560003741: Androidemulator
+passed, Androidquality and three iOS simulator jobs remain running. Local7ad896338
+will be pushed only after that gate finishes, preserving exact-head CI evidence.
+PR34/47 remain drafts. DocsPR92 exactddaa679f5 passed CI35560752881 and merged
+b67b32d0f3263926b9c41d65f8dbca6df7a40bae. Stream3 PR95 source/evidence reviewed,
+current-master update/CI pending; map and persona proposals remain separate.
+
 ## Latest coordination — September 21, 04:19 UTC
 
 PR94 Hide persistence error repair is merged as b463ee3850e089b523426317b90d9bb246f82c89

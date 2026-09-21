@@ -4,12 +4,26 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 04:30 UTC — root runtime released
+
+Local paid7ad896338 canonical poster/Q&A identity journey verified; live01 contains
+source,26-file evidence, no-code-provider limits and cleanup. API18132/web18133/
+Supabase64561–67 stopped; exactf9200310 rows0/identitiesrestored/twoIABtabsclosed/cache
+preserved, no native reservation. Published24c retained until its currentCI finishes.
+DocsPR92 merged b67b32d0 after exactddaa CI35560752881; PR95 four source hashes and
+bounded actual failure/retry/cleanup reviewed, updated-master CI pending. Live03
+1d0b647e captured atc7cc2c8c0/writerreleased; map read-only, persona schema ungranted.
+
 ## September 21, 04:22 UTC — gig identity baseline reservation
 
 Root reserves owned API18132/web18133/Supabase64561–67, reusing clean isolated
 wallet-read-r1 full77 schema for gig-identity-r1/f9200310. Verify existing poster/Q&A
-identity contracts and real UI before repair; paid24c source remains unchanged during
-current CI. No provider writes intended, no native reservation or peer runtime use.
+identity contracts and real UI before repair. Actual saved question/answer and canonical
+API identities reproduced poster/asker/answerer false anonymous labels. Root now owns
+local in-place page.tsx, QASection.tsx and optional canonical href/locality fields in
+existing types/gig.ts. Published paid24c remains fixed until current CI completes;
+prepare/verify locally without cancelling that gate. No shared UserIdentityLink,
+backend/schema/new files/tests/design changes. No provider writes or native reservation.
 
 ## September 21, 04:19 UTC — checked feed reads and unmute grant
 
