@@ -1,5 +1,83 @@
 # Pantopus project handoff
 
+## Next independent verification while paid CI finishes
+
+The migration filename repair is localeb6d612beb96377c37ea546190e0d85f78529d7d:
+22 exact SQL renames and existing gig-tip contract references only. All58 master
+SQL files unchanged, actual-base guard passes,67 wrappers verify,72 existing
+infrastructure checks pass; no new tests. Preserved local ledger digest unchanged.
+Six artifacts in owner audit20260921-stream1-migration-order-r3. Publish once old
+CI35603240733 finishes so its running native checks are not cancelled; fresh replay
+and exact repaired-head CI remain required. No new schema scope in this batch.
+
+Stream2 may now run its previously reviewed10-artifact Home save-lifetime baseline
+on finalmasterf4b277861 after rebinding original Settings/SDK/backend/RPC bytes.
+Reserve only its owned prior ports18141/18142/64550–59 and stopped five-container
+stack; no native build. Preserve originald225 branch and accepted evidence, use
+an independent follow-up branch in its own application worktree. Existing exact
+owned fixture and private transport isolation only: hold one real settings200
+on the original socket after actual SQL commitA; Share→Settings loads committedA,
+enter unsavedB, release oldreply, observe currentdraft and full savedstate/oneaudit.
+Record UI/SDK/realAPI/SQL and socket delivery; do not manufacture success or mutate
+ledger/schema/provider/session. No app repair is assigned until failure is observed.
+Stop/restore exact instrumentation and owned fixtures; preserve approvedmigration56,
+other data and all peer resources. No duplicate atomicity/normal/error journey or
+new unit test. Existing source-only proposal remains the scope and evidence map.
+
+Stream3 next bounded work remains source-only: select the existing logout lost-
+committed-response boundary, bind accepted82/136/138 evidence to current source,
+compare UI handler/SDK/session retirement/API/GoTrue calls and distinguish lost
+response after retirement from acceptedpre-forward503. Report a precise existing-
+implementation gap or bounded real-response isolation proposal before runtime or
+code changes. No additional login/logout/refresh/provider/native action. Preserve
+current browser signed-out state, own source/evidence and retained runtime.
+
+## September 21 — migration ordering repair; native reservation released
+
+Current paid head99baa92b6 is clean/pushed, but CI35603240733 failed the migration
+history guard; fresh database replay was consequently skipped. Master now contains
+Home20260921010000, ahead of all22 still-unmerged paid migrations16020100–16022200.
+This is reproduced integration ordering failure, not a proven SQL execution defect.
+Existing runbook and prior3657af97d prescribe renaming unmerged files after master.
+Stream1 is sole writer for these22 filenames and their existing gig-tip contract
+references: reserve20260921020100–20260921022200 in unchanged dependency order.
+216 Git branch refs checked without destination collision. Preserve every SQL byte,
+all master migrations and every retained database/ledger. No include-all, ledger
+repair, schema mutation, hosted rollout, guard weakening or new unit test. Required
+checks: exact22 byte bindings/master immutability, actual-base policy, existing
+infrastructure contracts and fresh schema replay in required CI. Original failed CI
+remains failed; do not replay unchanged UI journeys for a filename-only repair.
+
+Native readiness ended without acceptance: installed iOS candidate hashes match
+prior evidence, but Simulator.app is missing and registered bundle attachment fails.
+Android owned AVD starts, but supported window listing/control is unavailable. Both
+owned devices are now stopped and ports5568/5569 free; no app input, build/install,
+fixture/provider or cache change. Native tips remain unverified. Three safe readiness
+artifacts are preserved in owner audit20260921-stream1-native-tip-readiness-r3.
+Stream2 remains stopped with its approved local migration retained; Stream3 restored
+API/Next/DB retained, later proposals source-only. PR34/47 stay draft,46 separate.
+
+## September 21 — reviewed batch pushed at99baa92b6
+
+Paid branch `codex/paid-gig-integration` is clean/pushed at
+`99baa92b6e776d5a1fb95aa7355e8be9f6277c17`, including final documentation master
+`f4b27786172d7b2cae641b4c94f9e77aa75928c1`. Documentation139 passedCI35602856156.
+Final adoption changed only five documents; all seven application source bindings
+remain identical to checked local1f1c353c, so local checks were reused. Exact published
+CI35603240733 is queued/running, not yet accepted. Prior48702 fullCI remains green.
+PR47 body is current; PR34/47 remain drafts,46 separate. Root durable review now26
+verified artifacts with final publication and PR-body receipts. No additional code
+or unit tests were added for publication.
+
+Next Stream1 boundary is P03 installed native tips. Read-only readiness checks found
+owned simulator C2BCF36A-F300-48C1-9BA7-876CA9F61E55 available/shutdown and no booted
+devices; installed Pantopus/debug-dylib hashes match the prior a65411758 candidate.
+Relevant ContentDetail, core auth/payment/environment source remains unchanged; other
+native areas differ, so any reuse is candidate-specific rather than full current build
+acceptance. Previous Simulator GUI and Android control failures remain unresolved
+until actual supported UI access is demonstrated. No native tip request/provider call
+or new build has run. Source/config/runtime evidence will remain separate from currentCI.
+
 ## September 21 — reviewed application batch ready for final publication
 
 The application batch is merged through master
