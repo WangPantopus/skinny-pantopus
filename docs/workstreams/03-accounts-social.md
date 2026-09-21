@@ -2858,3 +2858,69 @@ No local sourceadoption, UI/API/check replay or new scope. Localoriginal28705842
 branch and old136ref preserved. Durable676 manifest remains
 bcd878a527a399fb842ffe0e80d75f5a79fea752430371b0cb539eca36022349.
 Coordinator finaldocumentation/publication owns next integration step.
+
+
+## Source-only next boundary — lost committed local logout reply
+
+Current originmasterf4b27786172d7b2cae641b4c94f9e77aa75928c1 fetched only, not adopted; local287058421
+fixed. Eight relevantpage/SDK/middleware/Nextproxy/backendservice bindings exactcurrent
+master. PR82 partialfailure AFTERretirement and destroyed globalreply duringaccount
+switch do not verify sameaccountlocalresponse-loss retry. PR136 successfuldelivered
+logout andPR138 preforward503 likewise insufficient. Boundaryunverified; no observed
+newdefect/runtimeclaim. Detailedlogout-lost-response-source-proposal.json mapsordering:
+queuedclearCookieheaders→resolveproof→GoTruelocalrevoke→best-effortregistry/audit→
+originalres.json; SDK onlyretireslocally afterreceivedsuccess, UIcatchsafeerror.
+HTTP200alone cannot prove revocation (helper/safeHook can swallowfailures).
+
+Propose separately granted newordinaryBoblogin (currentlysignedout), exactownsession
+snapshot; private one-shot exactlogout response-end hold ORIGINAL200 beforeheaders
+sent, verify SQLcurrentretired/GoTrueabsent andothermetadata/prefs unchanged while
+socketpending, then destroyonlyoriginalsocket beforeheaders/bodydelivery. No
+synthetic200/503, no cookie/tokenvalues. Record actualNextproxy/browser failure and
+automaticauth; stale sessionflag may triggerrecovery, so no no-refreshassumption.
+Optional separatelygranted samebuttonretry onlyifexistingcontrolremains; no relogin
+or workaround ifnot. Non200/headerssent/deadline/failedcommitproof: stop and release
+originaluntouched response wherepossible, record actualvariant. Preserve natural
+records; exacthook/env/ownedAPIrestore+closetab/descriptor cleanup. No appedit/tests/
+login/logout/refresh/provider/native/runtimeaction in this source-onlyassignment.
+Existingimplementation/privatehook suffices; no replacement/schema or duplicate
+backlog. Durable677 verifiedhashes MANIFEST **06df0aa18798993509bd9a092fa3596be0961bae2399f01eb54e044abc7f42d4**. Coordinator
+runtimereviewrequired; source/runtime/signedoutstate preserved.
+
+
+## Lost committed local logout reply — bounded original-response result
+
+Initial prematuregrant withdrawn before anyruntimeaction: onlyREADME/source/ps/Git
+reads occurred. Corrected written grant used aftereightmasterbindings confirmed;
+paidnext.config onlyunrelatedstatusprivacyheaders differs. Local287058421fixed,
+no adoption/appedit/test/provider/native action. One actualBoblogin established
+5d64b918-f785-4075-b742-67a0128f42f3; allotherownmetadata/prefs unchanged.
+
+Original actual Settingslogout200 held13:30:00.004UTC atresponseend withallrequest
+matchbooleans true, headersSentfalse,4queuedclearCookieheaders (no valuesrecorded).
+LiveSQLproof whilepending: exactcurrentregistryrevoked/GoTrueabsent, allotherown
+app/GoTrue rows andprefs[] equalbefore. Only afterproof, originalsocketdestroyed
+13:30:00.153 after149ms (under8secdeadline). Close13:30:00.154 hadheadersSentfalse,
+destroyed/socketDestroyedtrue,writableEnded/Finishedfalse; no finish event/original
+response delivery. Originalstatus200 comesfromheldresponse, not deliveredHTTPlog.
+No manufacturedstatus/body/session/cookie.
+
+FirstUI capture stillSettings/AuthBob; subsequent actualUI login preserving
+redirectTo=/app/profile/settings. OneautomaticrefreshPOST401 at13:30:04.836;
+no GoTruetokencall/newlogin/429. Full finalownmetadata/prefs exactlycommitproof;
+onlysetupsession wasretired, no resurrection. No currentLogoutcontrol remained,
+so conditionalmanualretry NOTperformed; no relogin/workaround. Actualbrowser
+endedsignedout; intermediateerror/toast and exactNext/browserlogoutstatus not
+captured (filteredbrowserlogs empty, retainedNextlog no matchingstatus). Do not
+claim a particular502/status or zero-frame privateUI; cachedSettings initially
+visible is not serverauthorization. OriginalAPI→Nextresponse-loss boundary proven,
+physicaloffline/native/hosted/providerfailure notverified. No repairneeded established
+for observed automaticrecovery; conditionalretry remainsunexercised.
+
+Cleanup: originalprivatehook exactSHAd7c8b95318bab69c34050b6924df8ed9f7a5b44be79d0a3f39e8b35cd9768a5d
+restored; faultAPI48055 stopped, restoredAPI48548/exec80449 original
+env/argv/cwd exactinmemory; descriptor/decisionabsent, tab30closed. Next42165/42493
++DBretained, naturalrevoked/auditrecords andsignedoutstatepreserved. No rawenv/log/
+token/cookie export. Safe logout-loss-* snapshots/observer/transport/UI/cleanup
+mirrored, 691 verifiedhashes MANIFEST **d49d23a7d72e93b75e6f7f2379e8a8d3a0d83d763ed874ca0eecc818b421120f**. No newCI/source
+change; coordinatorreviewpending within above limits.
