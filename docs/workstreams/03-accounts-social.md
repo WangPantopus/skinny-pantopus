@@ -7,8 +7,8 @@ Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
 **36fbfe1626623868d70363ff0f13d86b4a025c7f**, tracked clean plus owned .next-stream3.
 [Draft PR111](https://github.com/WangPantopus/skinny-pantopus/pull/111) targets master;
 automatic [CI35574234363](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35574234363)
-is running exact36fb. Local implementation/verification complete within the bounded
-legacy Relationship failure scope below; CI/review/integration pending separately.
+completed SUCCESS exact36fb. Local implementation/verification and CI complete within
+the bounded legacy Relationship failure scope below; review/integration pending separately.
 Coordinator reports PR103 and PR105 merged after updated-head CI. Independently
 confirmed PR107 merged as **4e69c23b8e71e66a23c223523a345d3f1368f158** from55ef4c6ab;
 coordinator reports exact CI35573379836 success. Earlier pending entries are historical.
@@ -63,6 +63,40 @@ and a fresh route grant before repair. Broader notification/provider/native/sess
 reminder delivery limits in the whole-stream table remain open. Stream2 owns homes.ts
 and HomeSettingsTab save contract; leave untouched. Root completion upload runtime
 18132/18133/64561–67 and f9200360 fixtures are separate and untouched.
+
+## Post-PR111 runtime-only professional findings
+
+Coordinator captured prior live03 SHA9a4e4ece in05fa6f0b9 and released status writer.
+PR111 exact36fb automaticCI35574234363 independently confirmed SUCCESS; private
+relationship-read-ci-final.json records exact head/jobs. No new source change.
+
+Granted isolated runtime-only follow-up reproduced existing self-editor failure:
+actual Bob web /app/professional displays SQL-seeded active profile headline;
+UserProfessionalProfile SELECT denial yields backend500 but UI switches to enabled
+Enable Professional Mode/create form, with no load error or retry. Restore SELECT
+and reload returns the same saved headline. No create/update/verification clicked.
+Proposed existing-page load-only error/retry repair awaits coordinator assignment;
+no new application edits. Backend /profile/me already propagates query error; current
+iOS/Android source handles500 as error. Old catalog missing-native-enable/disable
+claims are stale against current source; no rebuilding or new native acceptance.
+
+Separate HTTP-only /api/professional/:username baseline: real authenticated Bob with
+saved blocked Relationship still receives Dana public profile200; accepted relationship
+with private profile incorrectly gets404. Anonymous public200/private404 controls.
+Existing viewerId always null bypasses canViewProfessionalProfile. Web and iOS public
+endpoint definitions found, no current public-screen caller found. Do not invent a
+screen or claim UI coverage. Future route repair requires separate scoped grant.
+
+Cleanup: Dana profile3e7c651d-85bb-4ae5-a6e1-9bb0c994514a and relation
+dbb2ea03-9ec6-404c-ba56-0c0ac193378d removed; Bob self profile
+e3cd7ca0-7858-4f80-8c14-d68d327b5baf removed. Both tables restored to original[];
+UserProfessionalProfile SELECT restored, auxiliary session logout200, tab15closed.
+Original retained fixtures untouched. Private professional-auth-baseline.json and
+professional-self-baseline.json distinguish HTTP/UI/SQL-seeded boundaries.
+Durable mirror now **453 files**, hashes verified; MANIFEST
+**01efc9daef3b4b90cb94109517d811a1c7899ae399f6359f7b19db77b0c53e5d**.
+Previous448 manifest remains the coordinator-reviewed PR111 evidence snapshot;
+new files add finalCI and next baseline findings, not changed implementation.
 
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
