@@ -1,5 +1,23 @@
 # Pantopus project handoff
 
+## September21 — Requests repair merged; paid infrastructure retry active
+
+PR131 merged `a165506795b7d4919a1ec596d0cd5322de0c2388` after exact
+45c3be38b4a8c67b33dbe6a2fdfcbe8bf7a4b6ec CI35595309234 success. Candidate page
+bytes and actual UI/SQL recovery evidence reviewed, no new unit tests. Current batch
+is fixed to131 and accepted localhostname/natural-session documentation. Later Audit
+or synthetic transient-refresh proposals remain separate; no additional app scope.
+Natural616 result captured in182fbeaf1/live03 267283081ef72d96fb89fae2896ed48ccee3034a3befef2fdd37b3683a432b08.
+
+Paid1aecd initial fullCI completed with all native checks passed, backend isolated
+Following setup failure and dependent aggregate failure only. GitHub accepted retry
+of exact backend job106308999994 on unchanged source; attempt2 ofCI35592232217 is
+running, preserving native passes. Do not infer current fullCI success until retry/
+aggregate finish. Prior rejected retry attempts remain documented. Keep paid head
+fixed until this gate resolves and final documentation master is reviewed, then adopt
+once and run affected combined checks. PR34/47 stay drafts,46 separate.
+
+
 ## September21, 11:40 UTC — natural session continuation accepted
 
 Coordinator verified616 Stream3 durable hashes and actual browser recovery from the
