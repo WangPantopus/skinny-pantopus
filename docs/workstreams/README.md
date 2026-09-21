@@ -1,5 +1,35 @@
 # Three-stream coordination
 
+## September 21 confirmed privacy follow-ups — exact repair grants
+
+Stream3 is sole writer only for `canViewProfessionalProfile` in existing
+`backend/utils/visibilityPolicy.js`. Actual active private housemates returned200
+with either-direction blocked Relationship; inactive/ended occupancy controls403.
+Five temporary rows cleaned and four original table counts0, auxiliary logout200;
+473 durable hashes verified. Existing getProfileVisibility already puts blocking
+before shared-home visibility; compared helper variants retain the defective public-
+only guard. Move the existing block check after owner/inactive guards and before
+public/private branches. Preserve all other helper/safety scopes, connection/home
+policy, middleware, schemas and presentation. Verify both block directions refuse
+profile data, legitimate unblocked housemates still work, read-failure/retry and
+existing owner/public/private controls, exact rows/grants/session cleanup. HTTP/SQL-
+only; no new screen/native acceptance or unit tests.114/115 remain separate/frozen.
+
+Stream2 is sole writer only for existing `backend/routes/homePrivacy.js` PATCH's
+read-error check and stale fallback comments. Actual persistent SELECT denial
+prevented writing (negative control). A real failed PostgREST SELECT403 followed by
+restoring the original privilege before the route consumed that failure let the
+unchanged PATCH200 reset three unrelated saved true settings to defaults. Controlled
+recovery timing, real database replies/SQL persistence, synthetic identity; API-only.
+Capture/throw the read error before merging/upsert; successful absence keeps defaults,
+existing permissions/validation/error envelope remain. No service/schema/UI/new file/
+unit tests. Verify repeated recovered-read failure causes no write, retry preserves
+unrelated settings, true/false partial write, absence, validation/denial controls and
+exact cleanup. This does not close concurrent partial-write or native UI boundaries.
+116 stays frozen on its own branch. Both scopes use existing separate owned runtimes;
+no native build or shared-file overlap. Paid2ea9 stays fixed while nativeCI completes.
+
+
 ## Next verification window while the paid integration gate runs
 
 Root saved-method read verification passed without an application repair; detailed
