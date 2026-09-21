@@ -1,5 +1,17 @@
 # Stream 2 — Home and household
 
+## September 21 D05 atomic-save CI and next source-only proposal
+
+Coordinator captured frozen candidate status64fabc in65a62c64e. Original PR137 **d225ff1e86e68ba6ff9e14c4ec43587760d0c65d** passed [CI35600568312](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35600568312), including fresh database replay/lint, backend and web gates. Coordinator updated PR137 to **bba09eefda263c1d8cdf8fc4c785fa18acfa67fe** with only five documentation files and reviewed SDK136 client change. Independently fetched and confirmed all four Home candidate paths unchanged; [updated CI35601168238](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35601168238) remains in progress. Original local branch/source/evidence and owned migration ledger56 remain fixed; no independent merge, CI rerun or application push.
+
+Candidate durable bundle now has **36 files plus manifest**: original34 unchanged, with rollout-order.md and settings-atomic-pr-current.md added. PR body also records required rollout **migration, updated backend, then web caller**. Old backend ignores profile fields while saving other settings, so new web must not precede backend capability. No hosted rollout. All36 hashes reverified; historical frozen candidate section below retains its publication-time CI/count wording.
+
+Completed next **source-only** reconciliation in owner `.pantopus-recovery/audits/20260921-stream2-settings-save-lifetime-source-r1/`:10 files plus flat manifest,8paths×7refs=56bindings/50present6historicalmissing. Compares current137/master/paid/staging/design/archive/accepted112, including existing Settings caller, conditional dashboard mount, useHomeData refresh, SDK/route/RPC and reusable CreateGuestPass/MemberDetail generation guards. All10 hashes verified. Existing settings read generation guards do not guard the awaited save continuation; it unconditionally schedules feedback and onHomeUpdate. Parent refresh clears ready state and unmounts panels. An old save response after leaving/reopening Settings may therefore retire a newer unsaved draft. **This is not a reproduced failure or accepted repair.**
+
+Proposed bounded later runtime: after137 integration/final-master rebinding and coordinator assignment, hold only a real successful settings200 response after SQL commit on its original socket; navigate Share→Settings, load committed draftA, enter unsaved draftB, release oldreply, inspect B and extra reads while complete saved state remainsA/oneaudit. Use existing owned fixture/runtime, exact settingsPATCH allowlist and provider blocks; record delivery/socket status rather than fabricate success. Reuse accepted108/112/137 and mutation guards; no duplicate normal/error/atomic journeys, new helper/file/schema/unit test or design changes. If actualfailure is reproduced, propose in-place caller guard/timer cleanup. Late errors/session/Home transitions/concurrency/unknown commit remain separate.
+
+Coordinator fixed next integration batch to136,137 and assigned Stream3 logout repair. This proposal stays outside that batch; **no new runtime or application edits until assigned**. Current application worktree remains clean at originald225; tab/API/Next closed, five owned containers stopped/preserved, fixture counts zero, migration retained. No new cleanup or peer resource changes. Coordinator owns shared handoff/backlog/merge/rollout disposition.
+
 Updated September 20, 2026. Owner: Home stream.
 
 ## September 21 D05 atomic Settings — reviewable repair
