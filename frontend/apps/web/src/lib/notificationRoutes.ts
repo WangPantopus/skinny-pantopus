@@ -1,5 +1,5 @@
 type NotificationTarget = { type?: string; metadata?: Record<string, unknown> | null };
-const taskId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function resolveWebNotificationPath(link: string | null | undefined, notification?: NotificationTarget): string | null {
   // The old dashboard link remains usable by older clients. Current clients
@@ -7,7 +7,7 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
   if (notification?.type === 'task_assigned' || notification?.type === 'task_completed') {
     const home = notification.metadata?.home_id;
     const task = notification.metadata?.task_id;
-    if (typeof home === 'string' && taskId.test(home) && typeof task === 'string' && taskId.test(task)) {
+    if (typeof home === 'string' && uuid.test(home) && typeof task === 'string' && uuid.test(task)) {
       return `/app/homes/${home.toLowerCase()}/tasks/${task.toLowerCase()}`;
     }
   }
@@ -23,6 +23,12 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
   if (postMatch) {
     const suffix = path.slice(postMatch[0].length);
     return `/app/feed/post/${postMatch[1]}${suffix}`;
+  }
+
+  const listingMatch = path.match(/^\/(?:listings?|marketplace)\/([^/?#]+)/i);
+  if (listingMatch && uuid.test(listingMatch[1])) {
+    const suffix = path.slice(listingMatch[0].length);
+    return `/app/marketplace/${listingMatch[1]}${suffix}`;
   }
 
   if (path.startsWith('/homes/')) return `/app${path}`;

@@ -10,28 +10,31 @@ interface SellerSectionProps {
 
 export default function SellerSection({ listing }: SellerSectionProps) {
   const creator: Partial<ListingUserSummary> = listing.creator || {};
-  const publicProfileHref = creator.username ? `/${creator.username}` : null;
+  const displayName = creator.displayName || creator.handle || 'User';
+  const publicProfileHref = creator.href?.startsWith('/') && !creator.href.startsWith('//')
+    ? creator.href
+    : null;
 
   return (
     <div className="bg-app-surface rounded-xl border border-app-border p-6 mb-6">
       <h2 className="text-lg font-semibold text-app-text mb-3">Seller</h2>
       <div className="flex items-center gap-3">
-        {creator.profile_picture_url ? (
-          <Image src={creator.profile_picture_url} alt="" width={48} height={48} sizes="48px" quality={75} className="rounded-full object-cover" />
+        {creator.avatarUrl ? (
+          <Image src={creator.avatarUrl} alt="" width={48} height={48} sizes="48px" quality={75} className="rounded-full object-cover" />
         ) : (
           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
-            {(creator.name || creator.username || '?').charAt(0).toUpperCase()}
+            {(creator.displayName || creator.handle || '?').charAt(0).toUpperCase()}
           </div>
         )}
         <div className="flex-1 min-w-0">
           {publicProfileHref ? (
             <Link href={publicProfileHref} className="font-semibold text-app-text">
-              {creator.name || creator.username || 'User'}
+              {displayName}
             </Link>
           ) : (
-            <p className="font-semibold text-app-text">{creator.name || creator.username || 'User'}</p>
+            <p className="font-semibold text-app-text">{displayName}</p>
           )}
-          {creator.username && <p className="text-sm text-app-text-secondary">@{creator.username}</p>}
+          {creator.handle && <p className="text-sm text-app-text-secondary">@{creator.handle}</p>}
         </div>
         {publicProfileHref ? (
           <Link
