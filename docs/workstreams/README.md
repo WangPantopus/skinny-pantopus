@@ -1,5 +1,73 @@
 # Three-stream coordination
 
+## Current paid head fixed; one A02 browser reconnect retry
+
+Paid53e738cfc is published, CI35607497359 safeguards/freshschema replay pass; fullCI
+pending. No further paid/master adoption until that run completes; ongoing peer
+work remains separate. Detailed current state/cleanup is in [Stream1](01-gigs-payments.md).
+
+A02 first browser creation timed out beforeauth;697 artifacts/fullEvanstate equality/
+authHTTP[] reviewed. One clean retry within the existing exactEvan/two-browser grant
+is assigned: reread supportedCUA docs afterreset, rebind current namedChrome surface
+(currentinventory2), confirm no ownedtargettab was created, and recheckEvan0. Reuse
+an existing confirmedownedtargettab if present; do not blindlyduplicate. One bounded
+Chrome target-tab creation attempt may precede newIABtab/login. On timeout or lost
+surface, inspect only ownedtargettabs/cleanup and stop, no alternateprofile/browser,
+extensioninstallation, cookieedit or authattempt. If successful, continue original
+distinct-current-session/Astepup/Bretirement/fullstate/cleanup scope without asking
+again. No applicationfailure claim from capability errors; no third blind retry.
+
+## Stream3 A02 two-browser remote sign-out assignment
+
+Coordinator verified695 artifacts (MANIFESTc772d3d0) and all12 remote-action source
+bindings against masterc689c617. This is source-bound peer acceptance, not a claim
+that every paid application file matches master. Known owned local AuthEvan
+ d3671605-b8cc-4e92-8c82-99aa5041ff48 exists/confirmed, with zero unrevokedapp/GoTrue
+sessions/devices/resumegrants at preflight. Bob/Dana retainedsessions are excluded.
+
+Assign one visible secondary-browser journey using existing IAB1 and Chrome4, both
+on http://stream3-auth.localhost:18131, existingAPI18130/Next/DB. Immediately recheck
+Evanzero and full baseline; stop on drift. Create only two newownedtabs; no profile,
+account, env, APIrestart or cookie/storage edit. One ordinary UIlogin perbrowser.
+After BOTHlogins, verify each browser's current actor/session through its real
+requests: distinct storedcontexts cannot be inferred from two loginrecords alone.
+If either context changes the other's current session, stop before revocation and
+report limitation. No retainedtabs (including oldtab4) or otherstores touched.
+
+ClientA existingSecurity passwordstepup→signoutothers; clientB stays visible on
+existingpersonalSettings. Capture actual Aretained/Brevoked, fullotherownmetadata/
+preferences unchanged and temporaryGoTruestepup session removed. Account for that
+transientsession; do not claim onlytwo GoTruecreations. Observe B's nextrealread/poll
+or existingrevokeevent, privateUIretirement/safe logincontinuation. If no request
+occurs, one existing visible read-only Settingscontrol may trigger it; no workaround
+login, fabricatedAPIrequest or alteredtimer. Claim socketdelivery only with actual
+connection/event evidence. Stop on unexpected other-session change. No duplicate
+cancel/wrongpassword/local-logout or global/offline/native/hosted provider matrix.
+
+After proof, ordinary local logout of only newlycreated remainingA is assigned;
+if baseline aborts, normal cleanup of only identifiednewfixture sessions is allowed.
+Retain natural revocations/audits; close only newtabs. Existing private snapshot
+observer may be scoped to knownEvan/newsessionIDs; no APIhook/responsefault/sessionDB
+mutation. Preserve runtime and otherfixtures. No appedit/newunit test assigned.
+
+## Stream3 A02 open-secondary-browser preflight
+
+Reviewed692-artifact source proposal (MANIFESTb5d2ea6b); accepted82 auxiliaryHTTP401
+and later local-logout flows do not prove remote open-browser retirement. Stream3
+may narrowly rebind existing Security UI/SDK/revoke-others route/step-up/services/
+verifyToken contracts to currentmaster. Reuse unchanged auth client evidence; do
+not repeat accepted broad searches or journeys. No application writer grant yet.
+
+Read-only preflight may inspect only known owned synthetic fixture accounts for
+zero active app/GoTrue sessions and supported independent browser contexts. Do not
+revoke retainedBob/peer sessions, create accounts, log in, change cookies/storage,
+or restart runtime. Two tabs in one context do not prove isolation. Existing IAB
+and a distinct supported browser may be evaluated for separate stores without app
+input; verify actual session IDs only in a later assigned journey. Report exact
+candidate fixture/account scope, browser/host/cookie/socket configuration and
+remote-action source bindings. If unavailable, report the concrete limitation;
+no workaround or new runtime scope. Keep current signedout/runtime/evidence intact.
+
 ## Home lifetime timing limitation reviewed; one bounded follow-up assigned
 
 Coordinator verified35 baseline artifacts (manifest22fe382e), full held/before-release/
