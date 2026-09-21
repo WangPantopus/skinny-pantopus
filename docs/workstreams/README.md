@@ -1,5 +1,19 @@
 # Three-stream coordination
 
+## Home next source-only task while PR125 integration finishes
+
+Keep125's application source/runtime frozen. Compare the remaining existing Requests
+Send invitation confirmation with the accepted role/decline lifetime implementation,
+its SDK/route/transaction and notification side effects. Map current/archive/open
+variants and reusable accepted invitation fixtures/evidence. Source-only reads are
+authorized while updated125 CI runs; no runtime or application change. Identify a
+bounded local UI/SQL proposal that blocks all external transports and preserves
+request/invite/membership state, without replaying accepted sender/recipient journeys.
+Report any policy distinction before expanding scope. After integration, adopt final
+master on a separate follow-up branch before runtime work. No global dialog/store,
+new invitation system/schema/UI/tests/native or provider sends.
+
+
 ## Stream3 host pause repair grant — actual UI/delivery failure
 
 Coordinator reviewed526 durable hashes, actual paused web banner/GET200 and cached

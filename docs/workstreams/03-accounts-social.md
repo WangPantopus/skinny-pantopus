@@ -2247,3 +2247,34 @@ raw runtime log remains private only. Durable 526files hashesverified; MANIFEST
 **d4139b811d92ce4f2e6ee36521ab2c3929815c117691d5d2a233fe6adfac4d5d**. Prior Resume and natural scheduler acceptance reused without rerun.
 Next coordinator review/exact repair assignment; native page-pause mismatch/dailyagenda
 and full-stream provider/session/native boundaries remain open.
+
+
+## Host pause gate repair — candidate verified/pushed September21 10:51UTC
+
+Exact README grant followed; only schedulingNotifyPrefs.js hostWants/hostWantsKey
+add strict scheduling?.paused===true false-return after successful getPrefs. Two
+added lines, existing recipient/default/read-error/page/offset/UI contracts preserved.
+Source **efaeaab5c4db7191dacd1a7da280bfbf7f35fa29**, branch
+codex/stream3-scheduling-pause-contract pushed; draft publication/automaticCI pending.
+No new tests, source baseline/49bindings and prior Resume/natural timing reused.
+
+Candidate actual paused web screen, SQL preferencea22a6f22-6e22-4f91-a595-822b756ca99d:
+manual unchanged worker plus existing notifyBookingEvent(confirmed) consumer produce
+zero host notices and two transactional localSMTP emails. Actual web Resume PUT200
+persists paused:false; fresh booking plus same two callers produce host reminder and
+confirmation notices, two more local emails. Candidate children load repaired source;
+retained API uses unchanged preference persistence. Confirmed fanout directly invoked;
+booking-confirmation transition UI/API itself was not exercised. No natural timer rerun,
+provider/device/native/emergency/dailyagenda/channel expansion. First fresh-booking
+insert violated existing overlap constraint (no row/delivery); nonoverlapping due slot
+used for successful case. Guard violations0 in both children, both exit0/absent.
+
+Exact2bookings0f9085c5-6fb8-432f-9d80-f78250a495da and
+c54a0168-5ee9-4f2c-872d-06ea0eed1082,2receipt rows,2hostnotices,1preference and4mail
+messages deleted; all exact IDs in scheduling-pause-candidate-cleanup.json. Six full
+table snapshots and original12mailIDs restored; preferenceabsence0, tab20closed,
+retained API/Next/DB unchanged. Ordinary browserauthsession retained, no grantschanged.
+26 existing schedulingLogic tests pass, node syntax/diffcheckpass. Runtime/import
+rawlogs remain private only; structured final receipt records checks and limitations.
+Durable 549files allhashverified, MANIFEST **b618852cdd9bc76a6db517a6f53720b849fdf70c3af0af76f585f5c924299c89**.
+Next required automaticCI/coordinator review; no selfmerge/whole-stream closure.
