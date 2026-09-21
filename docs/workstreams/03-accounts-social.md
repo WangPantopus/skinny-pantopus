@@ -1580,3 +1580,29 @@ before reusing those session claims. N05 SupportTrain's shared last_reminder_sen
 need assignment. Native chat block/report lifetime and account-deletion UserBlock
 FK are also unverified leads. Route Home/payment findings to owners. This file is
 the sole live Stream3 status; coordinator owns detailed shared-report publication.
+
+
+## Final persona-mute CI and integration disposition — September21 06:19UTC
+
+Independently verified GitHub PR99 **MERGED** at2026-09-21T06:19:04Z as
+**dd24f0029c58dd38e201a9fe6b349eda317361d7**, from exact
+**1d835733025cf85cae00f000f61c1c45d509b642**. Automatic
+[CI35567483902](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35567483902)
+completed **SUCCESS:8 applicable jobs passed/3 path skips**. Passed: detection,
+deployment/migration safeguards, backend privacy/Jest, web lint/typecheck/Jest,
+identity E2E, backend image, complete schema replay/lint and aggregate CI OK.
+Android, iOS and Seeder skipped; this supplies no new installed-native acceptance.
+Coordinator reviewed and merged; author did not self-merge or activate hosted migration.
+
+This supersedes the earlier pending-CI/review/integration wording for PR99 only.
+Application checkout stays frozen1d835, clean except owned .next-stream3; no source
+edit or repeated journey. The387-file private evidence manifest and exact cleanup
+remain unchanged. Recorded real UI/API/SQL, controlled transport, session source-review,
+unmute HTTP-only, one-active-persona, native/provider and broader row limits all remain.
+Owned runtime and original retained fixtures preserved as recorded above; no new scope.
+Whole Stream3/N03/N04/A05 are not closed by this integration.
+
+Coordinator captured prior live03c09d8f4a in documentationPR100. This append is the
+only Stream3 status change; coordinator owns publication. Paiddd0 fullCI35567323534
+was still running native jobs at coordinator handoff and remains a separate gate;
+no claim here about its completion or persona integration into that branch.

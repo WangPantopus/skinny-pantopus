@@ -7,6 +7,22 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## September 21, 06:19 UTC — persona repair integrated on master
+
+PR99 exact1d8357330 passed [CI35567483902](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35567483902)
+with8 applicable checks passed/3 path skips. After reviewed source/evidence and CLEAN
+mergeability, coordinator merged **dd24f0029c58dd38e201a9fe6b349eda317361d7** at06:19:04Z.
+No protection override or whole-row closure. Reserved enum13000 replay passes; hosted
+activation/native/intact-account-switch limits remain open. Coordination includes this
+master; documentationPR100 still changes only five existing live documents.
+
+Paid **dd0ee04b5** stays fixed for fullCI35567323534; web/backend/schema/identity passed,
+native jobs pending. PR34/47 remain draft and PR46 separate. Adopt new master into paid
+after its current gate completes; preserve exact evidence and do not repeat unchanged
+journeys. Root runtime/fixture cleanup remains complete; peer resources retained.
+Q&A mirror38files includes final persona source review/CI. Finish current gates and
+publish final shared disposition before another application scope.
+
 ## September 21, 06:15 UTC — peer review complete within bounded scope
 
 Paiddd0ee04b5 currentCI35567323534 has web/backend/identity checks passed; schema/native
