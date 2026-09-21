@@ -7,6 +7,16 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## Current integration gate — September21
+
+Master e8b49c963 includes documentation PR78. PR70 at07827d2b0 and PR77 ate11123328
+passed their applicable checks. Strict branch protection requires PR70 to include
+current master (its missing diff is docs-only), so its author will update the
+isolated checkout once and run required CI. Hold further documentation merges
+until70→72→73→75→77 integrate, preserving the live runtime and accepted UI proof.
+The separate worker repair now has a bounded grant after actual[]/0/43200 failures;
+it remains unverified until repaired and rerun. See live README and Stream3 status.
+
 ## Latest integration — September21,00:21UTC
 
 Paid branch **8825c1928** is clean/pushed. It includes reviewed master61080b399 and

@@ -325,3 +325,26 @@ save/reload, error/retry, rapid edits and owned owner transitions. No new storag
 helper/service/schema/test. Worker0/empty handling remains a separate verified
 requirement and needs its own exact-file grant. Existing PR70/72/73/75 refs remain
 separate; this is not approval to merge unfinished scopes.
+
+## Current integration batching — September21
+
+Master **e8b49c963** includes the final documentation batch through PR78. The
+repository requires `CI OK` with strict up-to-date branches. PR70 at07827d2b0
+passed every applicable check but was behind only on documentation. Stream3 owns
+a single merge of this master into its isolated PR70 checkout and normal push;
+reuse unchanged application UI evidence, then run required current-head CI.
+**Hold further documentation merges while70→72→73→75→77 integrate.** Publish live
+status/grants as unmerged documentation drafts meanwhile; do not invalidate another
+long native run with status-only master changes. Coordinator alone merges feature
+PRs after exact updated-head checks and bounded acceptance.
+
+New N05 worker grant: Stream3 sole writer in existing backend/jobs/bookingReminders.js
+and only formatLead in existing bookingNotifyService.js. Actual UI-saved[] sent a
+reminder,0 omitted due delivery,43200 omitted long-offset delivery under controlled
+owned booking timestamps. Honor explicit[], accepted integer0..43200 and30-day scan;
+include recently-started only for zero, never send zero early. Preserve120-minute
+catchup/completion/dedupe/retry-release. Check page/event-type read errors instead
+of treating unavailable data as absence; label zero as now. No cron/schema/newservice/
+provider/new tests. Verify actual worker/SQL/localSMTP/no duplicate receipts and
+restore exact original settings/timestamps/new rows; manual cadence is not scheduler
+or external delivery acceptance. Keep this separate from PR77 timing UI.

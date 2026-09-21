@@ -28,6 +28,18 @@ Two focused application repairs this session:
   after assignment changes. A fresh Stripe checkout automatically showed ACCEPTED;
   reopening automatically showed REJECTED. Scoped ESLint passed. No layout change.
 
+## Coordinator integration gate
+
+PR70 and77 exact source-head checks passed. PR70 is behind docs-only mastere8b49c963;
+confirmed branch protection requires up-to-date `CI OK`. Its isolated checkout will
+merge master once and rerun required CI. Further documentation merges are held while
+feature70→72→73→75→77 integrate; new status remains draft to avoid needless native
+CI invalidation. Stream1 source8825/greenCI/cleanup is unchanged.
+
+Stream3 now has the exact existing worker/formatLead grant for actual[] false-send,
+zero and43200 omitted-delivery defects, with controlled timestamp and localSMTP
+limits. No worker acceptance or broad N05 closure is claimed before candidate proof.
+
 ## Newly verified combined and provider journeys
 
 All use existing Chrome UI, SDK, routes/services and isolated PostgREST/PostgreSQL.
