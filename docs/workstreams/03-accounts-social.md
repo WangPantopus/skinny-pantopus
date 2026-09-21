@@ -1,12 +1,12 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T04:13:22.948492+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T04:27:33.897143+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-pulse-hide-errors`, local/pushed HEAD **1fb5a58adc576cddd4219e4921a3c1ad5c22b01c**.
+branch `codex/stream3-pulse-filter-errors`, local/pushed HEAD **436a93c190b02cc740836759f37f75e807b472e0**.
 Application tree clean; only owned untracked `.next-stream3/` remains. Runtime source
-matches mastere8ece6ebc plus the single posts.js hide handler below.
+matches masterb463ee385 plus four filter/unmute/read-feedback files below.
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -21,6 +21,52 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## Current N03/A05 filter read and unmute failure milestone
+
+[Draft PR95](https://github.com/WangPantopus/skinny-pantopus/pull/95), appff1917e15,
+review **436a93c190b02cc740836759f37f75e807b472e0** includes masterb463ee385 after
+PR94 exact1fb passedCI35560095912/coordinator merge. Granted existing posts.js DELETE
+mute, feedService.getMuteAndHideFilters, useFeedData.ts and feed/page.tsx only. All
+five filter reads checked before cache write; existing error responses/retry/ErrorState
+reused. Known current-owner rows retained, falseempty/caughtup suppressed onerror,
+automatic pagination pauses onerror. No policies/schema/newfiles/tests/design change.
+
+Baseline real HTTPunmute DELETE denial returned200 but leftsame savedrow. ActualBob
+feed under persistedhide+PostHideSELECT denial/coldservercache returned200 and exposed
+hiddenpost. Independent PostSELECT denial GET500 x3 rendered Nothing here yet/noRetry.
+Candidate realGoTrue/fullHTTP/PostgREST/SQL: each PostHide/PostMute/Relationship/
+PersonaBlock/UserFeedPreference SELECTdenial gives list500/sports500; each restored
+sameactor read200 respects savedhide. Unmute DELETEdenial500 retains1, restoredretry200
+removesrow. Map service fails closed, but existing map-layer catch returns200empty;
+APIlead only, separate scope/actualmapUI stillpending.
+
+Actual browser cold500 shows ErrorState/TryAgain; failedretry remains error. Restored
+SQL keyboardretry200 shows genuineempty with persistedhide. Exacthide cleanup and
+ownedcache restart restore originalpost. Warm surface-switch/revisit500 retainsknown
+post pluserror, restoredEnterretry200 clearserror/keepspost. Extra private injected503
+then held realBob feed200 started04:24:40.078 (recorded postID2824...), logout200
+04:24:48.792, Evanlogin20004:24:55.620. Oldrelease04:25:00.080 was destroyed/socketDestroyed
+true, so **disconnected-response evidence only**, not intactcrossaccount delivery.
+Evanfreshfeed20004:25:01.669 genuineempty/noBobrows. Existing QueryProvider generation
+remount/cacheclear and API session guards unchanged; source-bound prior evidence reused.
+
+Exact candidatehide1e1de420 and temporarymute removed; PostHide0/PostMute0. All six
+SELECT privileges and PostMuteDELETE restored, extraresponseflag consumed, existing
+post/membership/block retained. Authaudit/sessioneffects retained; Evanbrowseractive.
+Owned backend current session31915; frontend unchanged. Matrix+UI persistence real;
+only extra503/20s responsehold synthetic, not auth/database. Types0, lint0errors/3existing
+warnings, syntax/diff0; existing feedService/postMute2suites24pass, no newtests.
+RequiredCIpending/coordinatorintegrationseparate. PaginationfailureUI/intactdelayed
+ordering/native/provider/mapUI/personaextension remainopen; noN/Arowclosure.
+
+Private pulse-filter-matrix/candidate/read-baseline/types/lint/existingregression files,
+pulse-mute-delete-baseline and feed-response-faults plus browserhistory. Durable344files
+manifest **b77d30b23aa316790918ec06c219c336a8d26f1e280bde545373689b71e96598**.
+Next afterfreeze: inspect actual existing map failure journey. Persona extension remains
+read-only proposal: existing PostMute enum lacks persona; additive enum/SDK/API/filter/
+caller extension could preserve public identity and legacy scopes, but not assigned.
+No reuse of notifications-only membership mute or private author restoration.
 
 ## Current N03/A05 Pulse hide persistence milestone
 
