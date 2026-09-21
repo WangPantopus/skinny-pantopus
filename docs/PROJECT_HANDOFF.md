@@ -7,7 +7,7 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
-## Latest integration — September20,23:54UTC
+## Latest integration — September21,00:11UTC
 
 Paid branch **8825c1928** is clean/pushed. It includes reviewed master61080b399 and
 the one-line Offers status refresh repair proven with actual Stripe authorization
@@ -23,7 +23,9 @@ Coordinator merged PR65/66/67/69 after each current-head checks and bounded UI/A
 proof; master5eab68ab7 contains those reviewed scopes. PR70 comment privacy/draft
 retention is separately reviewed with native CI pending. Stream3 continues actual
 SMTP reminder verification under its existing service/runtime grant. Documentation
-PR68 publishes only handoff/backlog/ownership evidence, independently from paid drafts.
+PR68 merged4f951d29c. A subsequent held offers read ended correct without another
+app repair; browser serialization limits its ordering evidence. Stream3 reminder
+and personal composer repairs have separate bounded grants in the live README.
 
 ## Resumed coordination — September 20, 2026
 
