@@ -4,6 +4,30 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September 21, 05:39 UTC — persona feed-mute repair grant
+
+Map97/96 integrated027afc13a after exact9b CI35564770177; prior4c6f full native CI
+passed and all3map hashes match paidc426. Live03c31f1ba2 captured before master merge.
+Paidc426 remains fixed for automatic35564679691; no new Stream1 application scope.
+
+Stream3 sole writer, new branch from current master: existing posts.js mute route,
+feedService filter sets, SDK posts.ts target union, PostCard and existing hook/page
+wiring for the reproduced persona mute that vanishes locally but returns on reload.
+Use canonical public persona type/id and match only persona identity_context_id;
+never expose the private actor or broaden mute to the owner's other profiles.
+Preserve user/business/topic rows, current own-post policy, notification-only membership
+mute, visibility and presentation. Compare existing/archive/open implementations and
+report any additional required caller before editing beyond these existing paths.
+
+One forward enum migration reserved **20260916013000_persona_feed_mute.sql**: after
+master's12000 and before the paid branch's20100..22100, matching the existing allocation
+scheme. No tracked branch has this version. Existing enum lacks persona, and applied
+baseline cannot be changed; extend that type only. No new table/index/service or unit
+tests, no applied migration rewrite. Verify retained rows and actual UI/API/SQL mute,
+reload, unmute, denial/retry, repeat/concurrent behavior and public-persona isolation
+with exact cleanup. Native compatibility is a separate recorded boundary; no local
+native build grant. Own18130/18131/64531–37 only; root/peer resources preserved.
+
 ## September 21, 05:28 UTC — published candidate, source frozen
 
 Paidc426f4729 clean/pushed; prior42d fullCI35562351562 green, currentautomaticpending.
