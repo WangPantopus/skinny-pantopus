@@ -63,19 +63,20 @@ held-refund session UI only when usable checkout control returns; retain broader
 native/hosted/Connect and policy boundaries. Stream3 native slot released after
 capability-only failure; no build/install or native acceptance.
 
-## Coordinator integration gate
+## Coordinator integration gate — September21,01:40UTC
 
-PR70 and77 exact source-head checks passed. PR70 is behind docs-only mastere8b49c963;
-confirmed branch protection requires up-to-date `CI OK`. Its isolated checkout
-merged master as21b93aa62, now pushed with required CI running. Coordinator verified
-only five documentation files changed and zero backend/frontend/supabase diff. Further documentation merges are held while
-feature70→72→73→75→77 integrate; new status remains draft to avoid needless native
-CI invalidation. Stream1 source8825/greenCI/cleanup is unchanged.
+PR70 exact21b all15 applicable checks passed; merged **358daaa17**. Coordinator
+retargeted PR72 to master and GitHub-updated its branch to **f2ea16704**. Accepted
+backend/web/packages/SQL bytes unchanged fromcbfba3503; only five docs and reused
+iOS clock fixture added. PR diff is exactly two reviewed backend service files.
+Current CI35551618913 running; dependent73→75→77→80→81 remain drafts. Keep docs
+master frozen and require current-head CI at each integration. Paid6d40 separate.
 
-Stream3 PR80 at6e422bd91 now has reviewed source and source-bound actual worker/SQL/
-localSMTP proof for[] suppression, zero/43200 delivery, concurrency and query/SMTP
-retry. Exact newrows/times/settings restored; requiredCI/dependency merge and natural
-cron/native/provider/lostSMTPack boundaries remain. No broad N05 closure.
+PR81 dd805 exactCI passed; coordinator checked two source hashes, durable evidence
+and actual worker opt-out.25s overlap transport proves destroyed response/socket
+and unchanged new account before/after server release. No intact late client reply
+claim. Native capability failed, slot released without build/install. No broad
+N05/native/hosted/provider closure or peer-fixture cleanup claim.
 
 ## Newly verified combined and provider journeys
 

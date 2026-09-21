@@ -7,22 +7,24 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
-## Current integration gate — September21
+## Current integration gate — September21,01:40UTC
 
-Master e8b49c963 includes documentation PR78. PR70 at07827d2b0 and PR77 ate11123328
-passed their applicable checks. Strict branch protection requires PR70 to include
-current master. Its author merged the five documentation files in the isolated
-checkout and pushed **21b93aa62**; coordinator independently verified zero
-backend/frontend/supabase diff. Required CI is running on that updated head. Hold further documentation merges
-until70→72→73→75→77 integrate, preserving the live runtime and accepted UI proof.
-The separate worker repair is PR80 at6e422bd91, with reviewed actual worker/SQL/
-localSMTP candidate proof and exact cleanup, exact CI35550052378 passed; dependency integration remains.
-Stream1 refund-session attempt found a separate checkout-cancel Offers refresh defect,
-repaired and actual UI/API/Stripe/SQL verified at6d40d8b2a; current CI35551123265 runs.
-Owned fixtures0/runtime stopped, two new unpaid intents cancelled/customer deleted.
-Held refund/account-switch scenario remains unverified due browser checkout control.
-Stream3 native capability attempt failed UI attachment; exact simulator stopped and
-slot released with no build/install. See live statuses for precise evidence/limits.
+PR70 exact21b93aa62 passed all15 applicable checks/one Seeder skip in CI35549733796;
+coordinator marked ready and merged as **358daaa17068ebbb6c9591b13bf0378cea7d02b1**.
+PR72 is retargeted to master and updated through GitHub as **f2ea16704**. Its diff
+against master is exactly the accepted two backend service files. Update added only
+five docs and accepted existing iOS clock-fixture changes; backend/web/packages/SQL
+bytes unchanged from acceptedcbfba3503. Current CI35551618913 running. Keep docs
+master frozen until reviewed72→73→75→77→80→81 integrate with strict current CI.
+
+Stream1 current6d40d8b2a repairs reproduced checkout-cancel Offers refresh and passed
+actual UI/API/Stripe TEST/SQL verification; CI35551123265 running. Owned rows0 and
+services stopped. Held-refund/new-login remains unverified due checkout controls.
+Stream3 native slot released after capability-only UI failure; no build/install.
+PR81 dd805 source/hash/worker proof reviewed; exact CI35551218783 passed. Its25s
+account-switch rerun proves old request disconnected before release and new account
+unchanged, not delivery of old success to client. Remaining unsupported notification
+channel/pause and provider/native boundaries remain open; see live statuses.
 
 ## Latest integration — September21,00:21UTC
 
