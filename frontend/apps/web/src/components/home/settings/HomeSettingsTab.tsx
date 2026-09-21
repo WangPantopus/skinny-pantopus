@@ -160,6 +160,7 @@ export default function HomeSettingsTab({
     try {
       // Update home info
       await api.homes.updateHome(homeId, {
+        name: homeName.trim() || null,
         home_type: homeType,
       } as Record<string, any>);
 

@@ -3,7 +3,7 @@
 // Home management, attach/detach, occupancy
 // ============================================================
 
-import { get, post, put, del } from '../client';
+import { get, post, put, patch, del } from '../client';
 import type { 
   Home, 
   HomeOccupancy, 
@@ -169,6 +169,7 @@ export async function createHome(data: {
  * Update home details
  */
 export async function updateHome(homeId: string, data: Partial<{
+  name: string | null;
   unit_number: string;
   home_type: string;
   bedrooms: number;
@@ -176,7 +177,7 @@ export async function updateHome(homeId: string, data: Partial<{
   square_feet: number;
   public_info: Record<string, any>;
 }>): Promise<{ home: Home }> {
-  return put<{ home: Home }>(`/api/homes/${homeId}`, data);
+  return patch<{ home: Home }>(`/api/homes/${homeId}`, data);
 }
 
 /**
