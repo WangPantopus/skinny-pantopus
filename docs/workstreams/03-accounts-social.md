@@ -2,15 +2,55 @@
 
 Updated September21 — **Stream incomplete; ongoing verification.**
 Sole live status remains this neutral coordination file. No new unit tests written.
-Application `/private/tmp/pantopus-workstream-accounts-social`, branch
-`codex/stream3-scheduling-resume-verification`, local/pushed
-**03279bd78b2c9691bcfb5fc76305a1b38834a78f**, tracked clean plus owned .next-stream3.
-[Draft PR120](https://github.com/WangPantopus/skinny-pantopus/pull/120) targets released
-master0d6a; automatic [CI35583298837](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35583298837)
-completed SUCCESS exact03279. Bounded implementation/local UI-HTTP-SQL verification
-and coordinator review complete; integration remains pending separately. Earlier114–118/docs113 integrated;
-all original feature refs preserved. No whole-stream/native/provider closure.
-Owned18130/PID7996,18131/PID14742,Supabase64531–37 retained. No peer runtime mutation.
+Application `/private/tmp/pantopus-workstream-accounts-social`, separate branch
+`codex/stream3-scheduler-reconciliation` at released master
+**b409bc9190dd43bbdcee0cdba8f307ae959d2dc3**, tracked clean plus owned .next-stream3.
+Coordinator integrated PR120 as246407e8e, PR121e61cffed6 and docs119→b409 after exact
+gates. All earlier feature refs preserved. Current assignment source-only N05 scheduler/
+daily-agenda reconciliation, no new runtime or application edit. Retained API18130/PID7996
+was started before this source-only adoption; Next18131/PID14742 and Supabase64531–37
+remain reserved. No natural scheduler test yet, no native/provider/full-stream closure.
+
+## N05 scheduler/daily-agenda source reconciliation and isolation proposal
+
+Source-only README assignment followed. Seven current/master/paid/staging/place/Beacon/
+originalfc99 revisions map jobs/index.js, bookingReminders, schedulingNotifyPrefs,
+bookingNotifyService and web notificationPrefs. All register bookingReminders with
+real node-cron UTC3,18,33,48 * * * *; neither pg-boss nor Lambda exclusion set includes
+it. app.js starts jobs after listening unless CRON_ENABLED=false; test environment skips.
+Installed node-cron4.2.1. Retained local runtime CRON_ENABLED/PGBOSS_ENABLED=false,
+SMTP127.0.0.1:64535. No environment changed or jobs activated.
+
+Worker first globally completes past confirmed Bookings, then scans confirmed bookings.
+BookingPage.reminder_minutes precedes host reminder_lead_times; current <=8minute early
+allowance/120minutecatchup/up-to30day offset and booking/kind receipt remain. Host
+notify_me.reminder gates existing notification; invitee savednotification/email is separate.
+Accepted earlier manual-worker/SQL/localSMTP/offset/retry/cancellation evidence remains
+valid but does not establish natural registration execution or whole-app startup.
+
+Web daily_agenda row promises each morning8am in all7refs, with no backend daily-agenda
+keyword consumer found. Current iOS/Android explicitly label existing booking_request
+as Booking request after older misleading Daily agenda copy. This is a separate unresolved
+contract, not proof that an implementation is absent or authorization to build a digest.
+No native execution or worker pause/hostemail/attendee/daily-agenda delivery acceptance.
+
+Proposed natural-cadence check, **not started; coordinator approval pending**:
+private child loads unchanged jobs/index.js; allow only wrapped jobName bookingReminders
+through to real node-cron, record/skip other registrations. Fail-closed transport query
+isolation adds exact temporary Booking id to every Booking read/PATCH, including completion
+sweep. One future owned temporary booking uses existing read-only account/page/event;
+real wall clock waits for next original UTC tick, no manual invocation/time advance.
+Observe callback/ownedlog+notice/localSMTP, stop task after completion, verify original
+retained rows unchanged and no unexpected additions, clean exact new IDs. Isolation
+wrappers are synthetic boundaries: natural selected-job timing only, not unmodified
+all-jobs app startup or hosted provider delivery. Alternative emptyDB/PostgREST expansion
+would need new runtime assignment/replay; not acquired. Never enable all cron on retainedDB.
+
+Private scheduler-source-reconciliation.json contains exact revision/sourcehash map;
+mirror now495files, allhashverified, MANIFEST **c73d600dc87b9d4f140feaad01dda2422e0a2fb64a5799c5a087da3b81c1e2fb**.
+No app/harness/fixture/schema/provider mutation, no new tests or repeated acceptedjourney.
+Next: coordinator reviews contract/isolation before any runtime expansion; continue to
+preserve N01–N05/A01–A05 platform/provider/session limits below.
 
 ## Scheduling Resume persistence — PR120 handoff
 
