@@ -1,15 +1,14 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T06:15Z. **Stream incomplete; persona-mute milestone frozen for review.**
+Updated September21 06:56UTC. **Stream incomplete; ongoing verification.**
 Sole live status is this neutral coordination file. No new unit tests written.
-
-Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-persona-feed-mute`, local/pushed HEAD **1d835733025cf85cae00f000f61c1c45d509b642**.
-Application tree clean; only owned untracked `.next-stream3/` remains. Separate draft
-[PR99](https://github.com/WangPantopus/skinny-pantopus/pull/99), base master027afc13a.
-Automatic [CI35567483902](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35567483902)
-is running on exact1d835; no manual duplicate dispatched. No merge/hosted activation.
-Coordinator review and integration remain separate from local implementation/verification.
+Application worktree `/private/tmp/pantopus-workstream-accounts-social`, branch
+`codex/stream3-booking-lifecycle`, local/pushed **a5b369ed854b11e0d28d409ada5171b56d748efa**,
+tracked clean plus owned .next-stream3. [Draft PR101](https://github.com/WangPantopus/skinny-pantopus/pull/101)
+from master0f6e55e; automatic [CI35570564542](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35570564542)
+running exacta5b. PR99 is mergeddd24 with exact1d835 CIgreen (final disposition below).
+All-stream resume adopted merged master and prior evidence; no repeated persona tests.
+Home owns heavy native slot; Stream3 continues exclusive18130/18131/64531–37.
 
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
@@ -25,6 +24,53 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## N05 cancellation/reschedule stale reminder — PR101 review handoff
+
+Coordinator granted existing bookingReminders.js only after actual failure. Compare
+current/master/paid worker (samehash) and older staging/Beacon variants: none rechecks
+booking byID between scan and claim. Reuse existing worker/table/notifications;15-line
+in-place check, no schema/service/newfile/unit test/design change. Fresh read errors,
+missing/terminal booking or changed start/end/host skip claim; later scan handles current
+schedule. This does not atomically exclude cancellation after the final read/provider start.
+
+**Actual baseline:** isolated Bob GoTrue browser existing host BookingDetail→More→Cancel,
+Changed plans→Cancel persistedcancelled06:49:56.099. Real worker confirmed scan completed
+06:49:31.536 but its reply deliberately held until06:50:08. Reminder log0ad13372 and
+notice5fd60919 saved after cancellation, local SMTP reminder e5inJdnVoHHZjKzriyyT2m
+arrived06:50:08.274 after cancellationANhcidg9 at06:49:56.202. Actual Mailpit UI showedboth.
+Only real scan delivery delayed; no mocked row/auth. Temporary free bookingSQL-cloned,
+not creationUI acceptance; original retained booking untouched.
+
+**Candidate actual UI/API/SQL:** reset only temporary booking; keyboard host cancel
+commits06:52:29.358 while real scan held, release produces0reminder logs/notices/newmail.
+Reschedule screen selects09:00PDT available slot→Reschedule now→toast/time updated,
+SQLstart16:00Z at06:53:21.692; released oldscan produces0reminder logs/notices.
+Then temporary timestamp controlled due; actual BookingSELECT revoked after real scan
+before fresh read:0claims/notices, grant restoredfinally. Fresh retry produces1log/1notice/
+1SMTPQe6ugzjRXgGUbmJwFmrWyZ; repeat unchanged. Original baseline mail remains separately
+identified, never counted as candidate send. Host/notification-only settings unchanged.
+
+**Checks/limits:** existing schedulingLogic26/26, syntax/diffcheckpass; no new tests.
+Manual worker real clock/localSMTP64535+Mailpit64536, not natural cron or hostedprovider.
+No native/paidbooking/intact account-switch/provider-race acceptance. Existing receipt
+key booking/kind is not rearmed after a previously delivered reminder and later move;
+that policy/acceptance remains separate. Prior offset/0/empty/30day and destination
+proofs retain their unchanged-source limits. N05 and wholeStream remainopen.
+
+**Cleanup:** exacttemporaryeb013de4-a517-49f2-972c-45f744ba4e78 and its notices deleted;
+BookingAttendee/BookingReminderLog/BookingToken/Payment/Booking/Notification all0 forID.
+Original booking9c7f570c fullrowunchanged, BookingSELECTrestored; hold/releaseflagsremoved.
+Five newlocal test emails retained as private evidence; no externalrelay/provideractivation.
+Phase browser tabs8/9 closed; ownedruntime/originalfixtures retained. Otherstreamsuntouched.
+
+Private `booking-lifecycle-final-evidence.json` binds revision and6 source hashes,
+comparison/baseline/candidate/reschedule/readfailure/retry/cleanup artifacts and actual
+UI versus synthetic boundaries. Durable407files hashverified in existing
+`.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/`; manifest
+**92837977efcc7751f53e83a20f2707b05bd5db46a7be0f69aea5b42004927bfb**.
+Current exact-headCI35570564542pending; coordinator review/integration separate.
+Keepa5bfrozen while continuing read-only reconciliation for next bounded grant.
 
 ## Persona feed mute — final bounded handoff, September21 06:15UTC
 

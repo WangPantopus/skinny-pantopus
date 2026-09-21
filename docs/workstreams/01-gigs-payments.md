@@ -1,5 +1,26 @@
 # Stream 1 — Gigs and payments
 
+## September 21, 06:54 UTC — atomic question-vote repair reserved
+
+Root reproduced actual UI upvote200 with saved vote1/count0 when count UPDATE fails;
+UI keyboard removal200 with vote1/count0 when DELETE fails. Direct wrong-gig path
+also removed the question's vote200. Parallel real HTTP from two fixture actors
+returned200 twice but SQL held2votes/count1, without forced interleaving. Existing
+six current/master/staging/place/archive handlers are byte-identical and have no RPC.
+No existing question-vote transaction/trigger was found in canonical schema.
+
+Root sole writer: existing backend/routes/gigs.js upvote handler plus one forward
+**20260916022200_gig_question_vote_atomic.sql**, version collision absent across the
+compared refs. Reuse GigQuestion/GigQuestionUpvote and unique/FK contracts, lock the
+parent question scoped to gig, toggle and update exact count in one transaction.
+Keep public response shape and current authenticated toggle policy; no new table,
+service/UI/design/unit tests. Separate PostgREST writes cannot safely roll back or
+serialize this operation; applied baseline cannot be rewritten, requiring one new
+forward function migration. Service-role execution only, no anonymous/authenticated
+RPC grant. Verify real UI denial/retry, rollback, wrong-gig/missing question, parallel
+actors and same-actor toggles, relevant existing regressions and full schema replay.
+Fixture f9200350, own18132/18133/64561–67; baseline evidence retained before cleanup.
+
 ## September 21, 06:49 UTC — all streams resumed; integration candidate published
 
 User explicitly resumed all three existing tasks beyond single milestones. Paid
