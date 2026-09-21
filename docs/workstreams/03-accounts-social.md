@@ -2815,3 +2815,13 @@ gate alone doesnotverify handler; actualUI/HTTP/SQL is primary.
 
 ExactCI35601204534 queued at287058421; draftreview/integrationpending. Durable
 673 hashes; MANIFEST **6c40498319ab8d84d371dbf982c9d81b4eae7a2ac9533fa3cbc9dd3f80122272**. Fullstream remainsincomplete.
+
+
+Evidence correction: initial logout-feedback-ui-failure.txt saved a later AXdiff
+after toast removal, so alone didnot substantiate errorvisibility. Recovered original
+CUA function_call_output at12:41:56.394 from ownsession logline20980 into NEW
+logout-feedback-ui-failure-original-tool.txt: Settings URL/AuthBob and exacterror
+text at107, reusableLogout92 focused, Dismissnotification108. ProvenanceJSON records
+originalcall/timestamp/source/hash. Originaldiff preserved, no reconstruction or
+browser/relogin/logout replay. Durable675 verifiedhashes; MANIFEST
+**c6117ee2ec41d001556967f0b6b91ddf600d5afed7d1e9fefc7b1ee5b22a76cc**. PR138sourceunchanged; coordinatorreview.
