@@ -110,7 +110,7 @@ export interface PostComposerSubmitData {
 }
 
 interface PostComposerProps {
-  onPost: (data: PostComposerSubmitData) => Promise<void>;
+  onPost: (data: PostComposerSubmitData) => Promise<boolean | void>;
   isPosting?: boolean;
   user?: { name?: string; first_name?: string; username?: string; profile_picture_url?: string } | null;
   activeSurface?: FeedSurface;
@@ -475,7 +475,7 @@ export default function PostComposer({
 
     const shouldIncludeLocation = Boolean(f.location && showLocationControl(targetPostAs, targetAudience));
     const parsedTags = f.tags.split(',').map((t) => t.trim()).filter(Boolean);
-    await onPost({
+    const saved = await onPost({
       content: f.content.trim(),
       title: f.title.trim() || undefined,
       postType: targetPostType,
@@ -525,7 +525,7 @@ export default function PostComposer({
           }
         : {}),
     });
-    resetComposer();
+    if (saved !== false) resetComposer();
   };
 
   const globalIdentityChip = useMemo(() => {

@@ -328,8 +328,10 @@ export function useFeedData({
 
       prependPostToCache(newPost);
       showToast('Posted!');
+      return true;
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Failed to post');
+      return false;
     } finally {
       setIsPosting(false);
     }
