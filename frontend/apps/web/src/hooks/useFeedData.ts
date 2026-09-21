@@ -425,8 +425,9 @@ export function useFeedData({
     try {
       await api.posts.reportPost(postId, { reason, details });
       showToast("Post reported — we'll review it");
-    } catch {
+    } catch (err) {
       showToast('Failed to report post');
+      throw err;
     }
   }, [showToast]);
 
