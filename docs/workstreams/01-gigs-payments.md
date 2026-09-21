@@ -1,5 +1,43 @@
 # Stream 1 — Gigs and payments
 
+## September21,04:08UTC — canonical bidder identity verified
+
+Latest04:12UTC: paid **24c5196537c06de9b03f45fa8b6b78357247cb82** is clean/pushed,
+including bidder repaira3ff82a01 and reviewed mastere8ece6ebc through PR93. Current
+[combined CI35560003741](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35560003741)
+pending. Prior2a05 CI35559173441 is superseded (non-native checks passed, native
+unfinished), not green. Accepted Offers/wallet/backend/SQL/SDK hashes unchanged by
+integration; bidder durable mirror now15files including integration receipt. PR93
+exacte036af696 passed CI35559652324 and merged e8ece6ebc9a8f3696fd903831e5a98ea0fd6579a
+only after three source hashes, real retry/destination and cleanup review. Hold paid
+source stable until this gate; later Stream3 Hide/mute findings remain separate.
+Root fixtures/runtimes remain cleaned/stopped. PR34/47 remain draft.
+
+Local paid **a3ff82a01** adds one existing OffersPanel.tsx repair: read canonical
+public displayName/handle/avatarUrl/locality and enable the existing identity link
+only when its canonical href matches that handle. Actual baseline displayed Anonymous
+with no link while real GET bids returned Tip Worker R1/handle/href. All six compared
+current/master/staging/place/archive panel variants read legacy fields; current page
+uses this panel, not the differently designed V2. Reuse in place, no new file/schema/
+backend/style/newtests or UserIdentityLink change.
+
+Actual IAB ownerlogin→gig Offers→mouse and Enter navigation reached the correct
+worker publicprofile through existing SDK/routes/serializers/full77SQL. Persisted
+empty fixture handle produced hrefnull: safe name stayed, link absent. Exact identity
+restored, existing Refresh recovered link and keyboard navigation. Scoped lint0errors/
+7 existing warnings. No new provider operations; synthetic local auth and no native,
+business, actual remote avatar/fullredaction or every popover-action acceptance.
+Other poster/Q&A legacy readers remain separate observed/source leads, not repaired.
+
+Private bidder-identity-r1/f9200300:14 mirrored/hash-verified files under owner
+`.pantopus-recovery/audits/20260921-stream1-bidder-identity-r1`. Exact owned rows0,
+identityrestored/providerwrites0, API/Next/ownedSupabase stopped, one IABtabclosed,
+owncachepreserved/generatedtsconfigrestored. Stripe cumulative totals unchanged.
+Current combined2a05 CI35559173441 has web/backend/schema/webE2Epassed and nativejobs
+pending. Push a3ff after the imminent reviewed PR93 integration batch; then gate
+that new combined head. Do not label superseded/current native work as completed.
+PR34/47 remain draft. Coordinator PR93 source/evidence reviewed; exact e036 CI pending.
+
 ## September 21, 03:57 UTC — wallet release return repaired and verified
 
 Paid branch is clean and pushed at **2a05e797e853b81df71e122f57f014c2e15b40e5**.
@@ -21,7 +59,7 @@ actual SELECT500 showed existing error/retry, restored SELECT plus same Retry sh
 both exact credits. Payer notice returned to the exact second completed gig with
 owner controls. No bank payout or real48-hour waiting claim.
 
-Private wallet-release-r1/f9200290 evidence:35 mirrored/hash-verified files under
+Private wallet-release-r1/f9200290 evidence:36 mirrored/hash-verified files under
 owner `.pantopus-recovery/audits/20260921-stream1-wallet-release-r1`.
 Synthetic local identity/socket/push; actual payment/SQL and in-app notification
 returns. Existing unchanged relay/concurrency evidence reused; outbox transport
