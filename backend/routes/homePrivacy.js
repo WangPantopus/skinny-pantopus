@@ -23,7 +23,7 @@ const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const { checkHomePermission } = require('../utils/homePermissions');
 const logger = require('../utils/logger');
-// Toggle keys, defaults, and the resilient read live in the shared service
+// Toggle keys, defaults, and the checked read live in the shared service
 // so features that honor the toggles (placeIntelligenceService) and this
 // route can never drift apart.
 const { TOGGLE_KEYS, DEFAULTS, getHomePrivacy } = require('../services/homePrivacyService');
@@ -64,7 +64,7 @@ router.get('/:id/privacy', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    // Resilient read: a missing row or missing table resolves to defaults.
+    // Only a successfully read missing row resolves to defaults.
     const toggles = await getHomePrivacy(homeId);
     return res.json(serializeToggles(homeId, toggles));
   } catch (err) {
@@ -94,11 +94,13 @@ router.patch('/:id/privacy', verifyToken, validate(updatePrivacySchema), async (
       if (typeof req.body[key] === 'boolean') updates[key] = req.body[key];
     }
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: readError } = await supabaseAdmin
       .from('HomePrivacy')
       .select('*')
       .eq('home_id', homeId)
       .maybeSingle();
+
+    if (readError) throw readError;
 
     // DEFAULTS first, then any existing row, then this PATCH's keys win.
     const merged = {
