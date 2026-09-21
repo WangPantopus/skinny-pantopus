@@ -6,6 +6,12 @@ backlog, acceptance evidence, or verification-first instructions.
 
 ## September21,02:38UTC — current ownership and runtime
 
+Latest02:44UTC: root reserves18132/18133/64561–67 again for isolated
+wallet-read-r1/f9200270, full77SQL/sourcecfb9. Existing wallet page/components,
+wallet routes/service/RPC under Stream1 ownership; verify before any repair, no
+new tests/design change. Only synthetic history fixture, no withdrawal/provider writes.
+PR84 mergedc1c03a3c6; paid integrationcfb9 pushed/currentCI35555007933 running.
+
 Stream1 refund-session-r2 completed on unchanged6d40: intact old refund200 after
 new login, owner receipt recovery, actual Stripe TEST/SQL accepted within live01 limits.
 Owned18132/18133/64561–67 now released; own rows0/customer deleted/cache retained,

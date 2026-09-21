@@ -9,6 +9,16 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 ## September21,02:38UTC — intact refund reply after account switch verified
 
+Latest02:44UTC: PR84 strictf19349e38 passed CI35554806445 and merged
+**c1c03a3c62944c0a07570db285f945a338c9f1c5**. Paid master batch integrated cleanly and
+pushed **cfb9b9d804bdad7a3cdc75fdf165c64a0338397e**; payment routes/services/UI and
+shared API source unchanged, so accepted payment evidence is reused. Required
+[combined CI35555007933](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35555007933)
+is running; no completed-current-CI claim yet. Next bounded P08 wallet read/history
+verification reserves owned18132/18133/64561–67, private wallet-read-r1/f9200270,
+full77SQL and real wallet UI/routes/service. Seeded wallet history is synthetic and
+cannot establish earnings release/withdrawal. No new app code or tests yet.
+
 Paid branch remains clean/pushed at **6d40d8b2a1b60675f8cf1ff182abd48720b3fc15**.
 No application change or new tests: reused current green
 [CI35551123265](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35551123265).
