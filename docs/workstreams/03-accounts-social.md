@@ -2785,3 +2785,33 @@ excluded. Safe logout-failure-before/after/intercept/runtime-change/cleanup/UI
 artifacts mirrored, 662 hashes; MANIFEST **c511bc373dccac4d4c578277c4376f00ca945675986e28931e2244ec1004fc14**. Coordinator
 review/repairassignment pending; scopedproposal reuse existing handleLogout error
 feedback and return before localclear/navigation on rejection, preservingdesign.
+
+
+## PR138 — actionable profile Settings logout failure
+
+Adopted finalmaster2d66626c on separate codex/stream3-logout-failure-feedback; old
+136branch preserved. Only existinghandleLogout catch: existingtoast.error safe
+Could not confirm sign-out. Please try again. thenreturn beforelocalclear/navigation.
+Successfulpath/otherhandlers/design unchanged. Commit287058421aea780806c59142fa7796df971b3e98
+pushed draft https://github.com/WangPantopus/skinny-pantopus/pull/138 . No newfiles/tests.
+
+ActualUI Bob/current507ef9ec preflight; reviewedprivate exactone-shot50312:41:56.166
+allmatchtrue/noforward/noSetCookie. Settings/identity retained; error visible inAX
+and keyboard LogOut stillusable. Full own app/GoTrue metadata andprefs[] unchanged.
+Fault consumed; samebutton keyboardretry real200 retiresonly507ef9ec inregistry/
+GoTrue and reacheslogin. Allotherownmetadata/prefs unchanged; zero refresh/429;
+no loginreturn replay (accepted136 unchangedsuccessfulpath reused). Onefault only,
+no optionalduplicateattempt. Synthetic preforward failure, not offline/lostcommit;
+wording doesnotassert stillsignedin for all errors. Native/hosted remainsunverified.
+
+Cleanup: faultAPI6394 stopped, restoredAPI7948/exec60505 originalenv/argv/cwd exact
+in-memory verified, originalhookSHA d7c8b95318bab69c34050b6924df8ed9f7a5b44be79d0a3f39e8b35cd9768a5d
+restored; descriptorabsent/tab29closed. Next42165/42493+DB retained. Naturalrevoked/
+auditrecords retained; browser now signedout, no resurrection/newlogin. Baseline
+andcandidate ownmetadata/UI/HTTP/cleanup in logout-feedback-*; privateenv/rawlogs
+excluded. Existing57authchecks pass, webtypegate0errors, scopedlint0errors/one
+existingts-nocheckwarning, diffpass. Sourcepage retains existingts-nocheck, so type
+gate alone doesnotverify handler; actualUI/HTTP/SQL is primary.
+
+ExactCI35601204534 queued at287058421; draftreview/integrationpending. Durable
+673 hashes; MANIFEST **6c40498319ab8d84d371dbf982c9d81b4eae7a2ac9533fa3cbc9dd3f80122272**. Fullstream remainsincomplete.
