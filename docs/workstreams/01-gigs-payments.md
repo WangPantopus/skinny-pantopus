@@ -2,6 +2,12 @@
 
 ## September21,02:52UTC — wallet history failure/retry repaired
 
+Latest02:54UTC: PR85 exacted5b4a8bb passed CI35555390569 and merged
+**d2b83304922b28ff1f12ceaab70d284b1bec3682**. Coordinator verified both source hashes,
+13before/after notification rows identical, actual failure/retry/partial/ordering
+proof and its disconnected-only crossaccount limit. Paid75f372 remains separate/current
+CI35555446600 running; do not invalidate this gate for unrelated further social edits.
+
 Clean/pushed paid head **75f372833c4383dad9192a6620656863b8e0c314**, includes reviewed
 masterc1c03a3c6 via cfb9b9d80. Existing WalletTransactionList.tsx alone changed:
 show existing loading/error/retry states for every query, including a new filter or

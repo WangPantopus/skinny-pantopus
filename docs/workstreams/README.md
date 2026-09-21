@@ -6,6 +6,12 @@ backlog, acceptance evidence, or verification-first instructions.
 
 ## September21,02:52UTC — runtime release and next notification grant
 
+Extension02:54UTC: Stream3 also owns existing NotificationRow.tsx for reproduced
+nested Remove Enter bubbling into parent read/navigation, plus optional pending disabled
+prop. Verify Enter/Space only intended DELETE and preserve row activation, no style
+change. Exact disposable fixtures only; existing13records retained. PR85 reviewed/green
+and mergedd2b833049; mutation milestone remains separate.
+
 Root wallet-read-r1 complete within live01 limits; paid75f372833 pushed/currentCI
 35555446600 running. Owned18132/18133/64561–67 released, rows0/grant restored/tabs
 closed/cache retained. No provider writes or native reservation.
