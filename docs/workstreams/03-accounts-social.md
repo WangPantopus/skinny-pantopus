@@ -1,10 +1,10 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T00:29:59.111864+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T01:33:20.261710+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/workstream-accounts-social`, local HEAD **6e422bd91**, application tree
+branch `codex/workstream-accounts-social`, local HEAD **dd80580e4**, application tree
 clean. Only untracked owned `.next-stream3/` remains. Preserve it while Next runs.
 Remote primary branch is **21b93aa62** after isolated reuse of the accepted iOS fixture correction; live runtime includes separate preference failure5e3a8b963 and canonical timingUI e11123328.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -94,7 +94,7 @@ formatLead only: explicit[]; integer0..43200/30day scan; recentlystarted zero on
 no early-zero send; existing120mincatchup/completion/dedupe/release; checkedpage/eventtype
 read errors. Committed/pushed **6e422bd91** on codex/stream3-reminder-worker-times in
 [Draft PR80](https://github.com/WangPantopus/skinny-pantopus/pull/80), basePR77branch;
-CI35550052378 running. Candidate actualH1[]→no notices/logs with earlier60m dedupe
+Exact-head CI35550052378 all applicable green. Candidate actualH1[]→no notices/logs with earlier60m dedupe
 removed; zeroearly→none; duezero2concurrentrealworker calls→1log/1host/1SMTP then
 repeatunchanged;30days→1/1/1 thenrepeatunchanged. Page/EventType readfailures leave
 no newnotice/log; restoredreads allowretry. SMTPfailure→host1/log0; restoredSMTP
@@ -112,6 +112,58 @@ Granted existing worker plus existing formatLead zero-label;
 no cron/provider/schema/newservice change. Evidence reminder-worker-{empty,zero,long}-baseline.json,
 corresponding private logs and reminder-worker-baseline-cleanup.json. ControlledSQL
 timestamps/manual invocation are distinct from natural schedule/cron/providerrelease.
+
+## PR81 — canonical host push choices / response lifetime
+
+Coordinator assigned two existing web files, hub/notificationPrefs.ts and
+NotificationPrefsForm.tsx. Actual Bob Reminder sent/P off→PUT200 and success toast,
+then immediate/reload reset on. SQL nested scheduling.host.reminder_sent.push=false
+but canonical notify_me.reminder=true. Real manual worker created1hostnotice/1log
+and actual dropdown displayed it. Same helper blob in master/paid/Beacon branches;
+reuse native notify_me contract, no replacement service/schema needed.
+
+Committed/pushed **dd80580e4**, codex/stream3-host-notification-choices,
+[Draft PR81](https://github.com/WangPantopus/skinny-pantopus/pull/81), base PR80branch.
+CI35551218783 running. Map five supported host push rows to canonical notify_me
+(reminder_sent→reminder), serialize saves, latest-response guards, confirmed rollback,
+retire queue/timers on owner/mount departure; explicit accessible names, same layout.
+Actual off save/reload persists; worker hostnotice delta0, attendeeSMTP/log delta1
+under unchanged transactional policy. UPDATE500 rolls back; restore/retry200.
+Rapid changes with8000ms earlier reply held persist latest choices/reload; committed
+reply replaced503 rolls back and retry200 converges. Leave with15000ms held first
+write retires queued second edit. **New account overlap established**: Bob PUT held
+01:29:27.913Z; logout20001:29:41.254Z; Evan login20001:29:53.325Z; Evan screen01:30:02.532Z
+has own defaults before old release01:30:12.913Z; after01:30:20.813Z remainsEvan defaults.
+Bob queued cancellation never saved. Reschedule/no-show also actualsave/reload/SQL.
+Type gate/focusedlint passed, no new unit tests. Source hashes in private
+channel-candidate-results.json; baseline channel-baseline-results.json, linked worker
+records and prefs-response-faults.jsonl. Real localGoTrue/HTTP/PostgREST/SQL; manualworker
+with restored onebooking timestamp/localSMTP, no cron/installed/physicalpush claim.
+
+Cleanup: baseline newhostnotice/log removed; candidate1log removed. Exact newly
+created Bob/Evan preference rows removed, both0. Auto-created empty EvanBookingPage
+604f23a8-c77a-4037-a1ec-e9275e887cdc removed after verifying0bookings/eventtypes. Bobpage
+1440/60 and originalfixtures retained; grants restored, faultflags consumed.
+Host email, attendee toggles, dailyagenda8am and pause remain separate unresolved
+policy/wiring rows; no inventedpolicy. Non-reminder rows have UI/API/SQL evidence,
+not full lifecycle delivery. Home/business switches, true offline/reconnect and
+same-user multitab writes remain unverified. Stream and N05 remain incomplete.
+
+## Installed iOS capability attempt — slot released
+
+Coordinator granted sole heavy-native slot and existing owned simulator
+0AE16FA0-E244-414F-86C8-24893BDFD979 (Pantopus Stream3 Social R2, iPhone17/iOS26.5).
+Boot succeeded. CUA rejected Simulator/name and discovered bundle ID. Xcode27
+installation has DeviceHub.app instead of the former Simulator path; exact path
+and discovered running com.apple.dt.Devices both timed out in CUA. No build or
+install began because actual screen control could not be established. Owned
+simulator shutdown succeeded; final booted inventory empty. Native slot released.
+No other simulator, physical phone, service reset, provider or source change.
+Private native-capability-results.json, native-owned-boot/shutdown.log and
+native-after-release.json bind this capability attempt to6e422bd91. Installed iOS
+N03/N04 and lifetime acceptance remain open; prior evidence is not promoted.
+Continue independent browser verification of existing notification preferences;
+channel/pause source leads remain unverified until actual UI/API/SQL reproduction.
 
 ## Current safety milestone — merged, broader verification continues
 
