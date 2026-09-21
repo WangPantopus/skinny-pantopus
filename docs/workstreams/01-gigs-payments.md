@@ -1,23 +1,27 @@
 # Stream 1 — Gigs and payments
 
-## September 21, 05:19 UTC — exact-source CI reconciliation
+## September 21, 05:28 UTC — combined candidate published
 
-Paid published42d remains on full gate35562351562; local795ad998d payment-read
-candidate is clean and verified, awaiting the integration batch push. Delayed
-automatic paid35562395559 duplicated that exact head and was canceled as redundant,
-not passed. All78 files in the three latest Stream1 identity/QA/payment mirrors
-were rechecked; current PaymentSection matches its accepted candidate hash.
+Paid **c426f4729e6ab0311c9908d71b278a8d09255d0d** is clean/pushed on the required
+paid worktree/branch. It includes verified PaymentSection795ad998d and reviewed map
+9b1fa0d43 (documentation master63a27fd24 plus unchanged4c6f map source). All202
+financial/client/schema path hashes and all3map hashes are preserved; combined
+TypeScript passes. No new unit tests, provider operations or runtime journeys repeated.
 
-Map PR97 is retargeted to master at unchanged4c6f11771, combining the three-file
-read-error/order repair and popup destination while preserving separate commits and
-real UI/SQL evidence. Automatic96/d10e35562256054 and original97/4c6f35562565822
-passed their changed surfaces. Redundant manual96/35562211102 was canceled, not passed;
-combined final-tree97/35562416370 remains the full gate. Native/workflow bytes are
-identical between96 and97. No merge claim yet. Stream3 latest03 hash5c13c460 captured.
-Documentation98 exactbb37437b8 automatic35563086879 passed; it remains draft until
-this batch disposition is published. Automatic CI may appear several minutes late;
-do not dispatch a duplicate after a short absence. Root runtimes remain stopped;
-peer runtime/fixtures preserved. PR34/47 stay draft and PR46/user work untouched.
+Prior exact42d passed full CI35562351562:15passed/1Detect-changes skip, allthreeiOS
+and Android included. Identity/QA durable mirrors now28files each with final receipt;
+payment-read mirror28files includes integration/source bindings and map CI receipt.
+PR47 description/title reflect the full current scope and remain draft; PR34 stays
+draft, PR46/user work untouched. Currentc426 automatic CI has not appeared yet;
+prior green/source equivalence does not establish the new head's merge gate.
+
+Docs98 exact60da7f063 passed35564213230 and merged63a27fd24f96604f5addead710f7d4bb19614e23.
+Map4c6f full35562416370 passed15/1; updated9b only changes fourdocs and its automatic
+gate is pending. PR97 is the combined3file map review, not yet merged;96 remains
+separately evidenced. Redundant35562211102 and35562395559 are canceled, not passed.
+Stream3 latest03 d28fd087 captured; all364 durable hashes verified (manifest791cbe2b).
+Root fixtures/grants restored, runtimes/tabs stopped, peer resources preserved.
+Finish current CI and map/master integration before another feature scope.
 
 ## September 21, 05:00 UTC — payment-details read recovery verified
 

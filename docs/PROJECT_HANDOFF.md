@@ -7,24 +7,18 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
-## September 21, 05:19 UTC — exact-source CI reconciliation
+## September 21, 05:28 UTC — combined source published
 
-Paid published42d remains on full gate35562351562; local795ad998d payment-read
-candidate is clean and verified, awaiting the integration batch push. Delayed
-automatic paid35562395559 duplicated that exact head and was canceled as redundant,
-not passed. All78 files in the three latest Stream1 identity/QA/payment mirrors
-were rechecked; current PaymentSection matches its accepted candidate hash.
+Paid **c426f4729** is clean/pushed, adding verified payment-detail read recovery and
+reviewed map source. All202 financial/client/schema hashes and3map hashes are preserved;
+combined TypeScript passes. Prior42d fullCI35562351562 is green15/1; currentc426
+automatic gate pending. Details, actual UI/API/SQL evidence and cleanup limits are in
+[live Stream1](workstreams/01-gigs-payments.md). No new unit tests or provider writes.
 
-Map PR97 is retargeted to master at unchanged4c6f11771, combining the three-file
-read-error/order repair and popup destination while preserving separate commits and
-real UI/SQL evidence. Automatic96/d10e35562256054 and original97/4c6f35562565822
-passed their changed surfaces. Redundant manual96/35562211102 was canceled, not passed;
-combined final-tree97/35562416370 remains the full gate. Native/workflow bytes are
-identical between96 and97. No merge claim yet. Stream3 latest03 hash5c13c460 captured.
-Documentation98 exactbb37437b8 automatic35563086879 passed; it remains draft until
-this batch disposition is published. Automatic CI may appear several minutes late;
-do not dispatch a duplicate after a short absence. Root runtimes remain stopped;
-peer runtime/fixtures preserved. PR34/47 stay draft and PR46/user work untouched.
+Docs98 merged63a27fd24 after exact60da CI35564213230. Combined mapPR97 source4c6f
+passed fullCI35562416370; its documentation-only9b update awaits its own gate/merge.
+Stream3 durable364hashes verified/latest03 captured. PR34/47 remain draft, root
+runtimes stopped, peer resources preserved. Finish the integration batch next.
 
 ## September 21, 05:00 UTC — payment-details read recovery verified
 
