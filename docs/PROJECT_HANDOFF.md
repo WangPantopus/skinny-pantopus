@@ -1,5 +1,42 @@
 # Pantopus project handoff
 
+## September21 — paid default repair published; next scopes assigned
+
+Paid branch `codex/paid-gig-integration` is clean/pushed at
+`e970ea26a16526c684ce2087fef0563f7bc26403`, including the verified default-card
+repair `d1da221dbf01a75a863b147c32f0c0fc7640c8f8` and final master
+`b409bc9190dd43bbdcee0cdba8f307ae959d2dc3`. Documentation119 merged after
+exact667563758 CI35586138577. Required new-head
+[CI35586627926](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35586627926)
+is running; application/web/schema gates passed, native gates remain pending.
+Keep this published head fixed. Prior a795 full CI passed15 applicable jobs/one skip.
+
+Combined TypeScript and scoped lint exit0 (19 existing warnings), whitespace clean.
+The three application files exactly match accepted candidate bytes: default-card
+component and merged120/121 notification/member components. Backend/native unchanged;
+70 affected backend checks and bounded peer UI/SQL evidence are reused. No broad
+current-runtime rerun or new unit tests. PR47 describes the published head/evidence;
+PR34/47 stay draft, unrelated46 remains separate.
+
+Default-phase durable mirror has34 verified artifacts, including source bindings,
+combined checks and publication receipts. Actual intact reversed default replies
+reproduced the defect; the repaired UI serializes writes, survives two real database
+denials/retry and reload. The first timed-out reply remains excluded. All four exact
+fixture counts0, original grants restored, API/tab closed; Next18133 and owned
+Supabase64561–67 retained. Zero provider calls; native/provider/session/cross-tab
+boundaries are unchanged.
+
+Stream2's new actual role confirmation survived navigation and then sent POST200,
+changing Guest to Admin with one SQL audit. Coordinator reviewed15 frozen baseline
+artifacts, source map and complete fixture/runtime cleanup. README grants only an
+in-place role-dialog ownership/lifetime repair; no repeat baseline or shared UI change.
+Stream3's495-file source reconciliation was hash-verified. README grants one natural
+node-cron tick with exact fixture/query/transport isolation and retained-row snapshots;
+whole-app scheduler, hosted delivery and daily agenda remain unverified. No heavy
+native build is reserved. All three streams remain incomplete; no restart prompts,
+duplicate tasks or speculative policy work are needed.
+
+
 ## September21, 09:55 UTC — web follow-ups integrated; paid gate passed
 
 PR120 merged `246407e8ea2fa1973b2ba242b9c80c67284b18d3` after exact03279bd78

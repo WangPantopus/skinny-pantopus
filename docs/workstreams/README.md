@@ -1,5 +1,49 @@
 # Three-stream coordination
 
+## September21 — confirmation repair and isolated scheduler verification
+
+Paid head e970ea26a is published and fixed under CI35586627926. It contains the
+verified d1da default-card repair and final master b409 from documentation119.
+PR34/47 stay draft;46 remains separate. No new unit tests or heavy native build.
+
+Stream2 is sole writer for role-confirmation lifetime in existing
+`frontend/apps/web/src/app/(app)/app/homes/[id]/members/page.tsx`.
+Coordinator reviewed the actual post-departure POST200/SQL role change and the
+15-artifact durable baseline, including five current sources/25 reference bindings
+and exact fixture/runtime cleanup. Do not reproduce that baseline again. Reuse
+existing retire/generation and MemberDetail guards: track identity of this caller's
+role dialog, dismiss it with false on retirement only while still owned, capture
+revision/token/API origin/session marker before await, reject stale confirmation
+before POST, and guard stale completion UI. Preserve other dialogs, permissions,
+role cycle, controls and navigation. No shared confirmStore/global dialog, backend,
+schema, new application file or selector change. Reacquire only owned18141/18142/
+64550–59 after ownership checks. Verify normal current confirmation once, departure
+closes/noPOST with full member/audit rows unchanged, return/new confirmation works,
+and current error/retry where affected. Reuse121 cancellation/role/permission evidence.
+Session or other-dialog races require actual UI evidence before claiming acceptance.
+Restore exact fixtures/grants and release owned runtime afterward; publish a draft.
+
+Stream3 may perform the proposed private, isolated natural-cadence check on b409.
+Coordinator reviewed495 durable hashes and the existing registration/worker: real
+node-cron schedules bookingReminders at UTC `3,18,33,48 * * * *`; the worker begins
+with a global completion sweep. Never enable all jobs on the retained database.
+Load unchanged jobs/index.js in a private child and allow only the bookingReminders
+wrapped jobName through to real node-cron; record skipped registrations. Install
+fail-closed guards before imports and check module-load side effects. Every Booking
+read/PATCH must include the exact temporary booking ID, including completion sweep;
+all downstream writes must be tied to its exact reminder/notification identity.
+Reject unexpected writes and external provider transports; allow only owned local
+SQL and SMTP127.0.0.1:64535. Keep existing page/event/account/preferences read-only.
+Snapshot retained Booking/Page/ReminderLog/Notification rows and check no unrelated
+change or addition. Wait for original wall-clock schedule, with no time advance or
+manual worker call; record registration, callback, SQL receipt/notice and local SMTP.
+Stop the task/child after one callback, remove exact temporary rows/messages, verify
+retained snapshots and report cleanup. Keep existing18130/18131/64531–37 reservation;
+no new database/runtime allocation, application edit, provider send or native build.
+This proves selected-job natural timer execution under synthetic isolation, not
+unmodified all-jobs app startup, hosted delivery or daily-agenda acceptance. If guards
+cannot establish isolation, stop this check and report the concrete boundary.
+
 ## Next bounded work after PR119 publication
 
 PR120/121 are merged; paid a795 fullCI passed. Coordinator will adopt final master
