@@ -90,7 +90,10 @@ failures still prevent installed tip acceptance.
 
 Coordinator merged reviewed PR65/66/67/69 as61080b399/2d12b85a7/d69482d3f/5eab68ab7
 only after their current checks and bounded UI/API evidence passed. PR70 comment
-privacy/draft/native mapping is separately reviewed with native CI pending. Stream3's
+privacy/draft/native mapping is separately reviewed. iPhone16 CI failed on the same
+expired booking fixture already fixed in paid9ecf66fc7/9ae1edb3b. Stream3 will reuse
+those exact commits without changing its live runtime, then rerun required CI.
+Stream3's
 real-SMTP reminder repair and personal composer repair are separate dependent
 draft PR72 atcbfba3503 and PR73 at423176969. Coordinator source and exact-source
 evidence review found no issue within those bounded scopes; CI/dependency merges
