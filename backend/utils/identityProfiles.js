@@ -144,14 +144,18 @@ async function getLocalProfileByHandle(handle) {
 }
 
 async function ensureLocalProfile(userId) {
-  const existing = await getLocalProfileByUserId(userId);
+  const readExisting = () => supabaseAdmin.from('LocalProfile')
+    .select('*').eq('user_id', userId).maybeSingle();
+  const { data: existing, error: readError } = await readExisting();
+  if (readError) throw readError;
   if (existing) return existing;
 
-  const { data: user } = await supabaseAdmin
+  const { data: user, error: userError } = await supabaseAdmin
     .from('User')
     .select('id, username, name, first_name, middle_name, last_name, profile_picture_url, bio, city, state, verified')
     .eq('id', userId)
     .maybeSingle();
+  if (userError) throw userError;
   if (!user) return null;
   const exposeLocality = await canExposePublicLocality(user.id);
 
@@ -166,7 +170,6 @@ async function ensureLocalProfile(userId) {
     public_city: exposeLocality ? (user.city || null) : null,
     public_state: exposeLocality ? (user.state || null) : null,
     show_neighborhood: exposeLocality,
-    verified_resident: !!user.verified,
   };
 
   const { data: created, error } = await supabaseAdmin
@@ -174,7 +177,12 @@ async function ensureLocalProfile(userId) {
     .insert(payload)
     .select()
     .single();
-  if (error) return { id: `legacy-local-${user.id}`, ...payload, user };
+  if (error?.code === '23505') {
+    const raced = await readExisting();
+    if (raced.error) throw raced.error;
+    if (raced.data) return raced.data;
+  }
+  if (error) throw error;
   return created;
 }
 
