@@ -24,9 +24,10 @@ Coordinator merged PR65/66/67/69 after each current-head checks and bounded UI/A
 proof; mastercefdadd3e contains those reviewed scopes and published coordination. PR70 comment privacy/draft
 retention is separately reviewed. Its iPhone16 CI failed on the existing expired
 InviteeManageBooking fixture, matching already accepted paid commits9ecf66fc7 and
-9ae1edb3b. Stream3 is authorized to reuse those exact commits in an isolated
-checkout without changing its live runtime or combining the dependent drafts;
-required CI on the repaired head must pass before integration. Stream3 continues actual
+9ae1edb3b. Stream3 reused those exact commits in an isolated checkout and pushed PR70
+**07827d2b0** without changing its live423 runtime or combining dependent drafts.
+The repaired head requires fresh CI before integration; PR72/73 passed their own
+current-head checks and remain dependent drafts. Do not repeat the fixture repair. Stream3 continues actual
 SMTP reminder verification under its existing service/runtime grant. PR72 atcbfba3503
 and PR73 at423176969 publish separate dependent drafts for reminder recovery and
 personal profile/draft retention. Current CI and precise retained fixture limits are
