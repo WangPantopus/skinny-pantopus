@@ -400,7 +400,7 @@ async function isScopedBlocked(viewerId, targetUserId, scope = 'full') {
     : [scope, 'full']; // specific scope + full always applies
 
   // Check both directions of UserProfileBlock
-  const { data: blocks } = await supabaseAdmin
+  const { data: blocks, error } = await supabaseAdmin
     .from('UserProfileBlock')
     .select('id')
     .or(
@@ -409,6 +409,7 @@ async function isScopedBlocked(viewerId, targetUserId, scope = 'full') {
     .in('block_scope', scopeFilter)
     .limit(1);
 
+  if (error) throw error;
   return blocks && blocks.length > 0;
 }
 
