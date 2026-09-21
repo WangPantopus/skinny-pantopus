@@ -7,6 +7,66 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## September21, 07:49 UTC — completion-proof UI verification complete
+
+Paid source remains **b75637fd82f4554ffbd51fb85a3115cf97aa9d17**, clean/pushed,
+fullCI35572520685 application/web/schema gates passed; native jobs still running.
+No application edit or new unit test in the completion-proof milestone. Existing
+CompletionFlow/FileUpload→SDK→upload.js/gigs.js→s3Service→File/mark_gig_completed
+and local private Supabase Storage verified, with9source bindings including existing
+21600/21700 contracts. Reuse prior32/32 completion/review/stop HTTP/SQL and paid
+capture evidence; do not repeat their unchanged policies.
+
+Actual IAB22–24, two independently cleaned phases:
+- Mismatched PNGbytes/jpg declaration returns400; note/file retained, File0 and
+  Gig stillin_progress. Exact owned bucket absence makes valid upload503 with same
+  retained draft/no completion command. Restore private bucket, keyboard Enter
+  uploads200→mark-completed200, one File/object and exact note/private reference.
+- Separate requester existing Review & Confirm/Review Work shows exact note and
+  one real image (complete/natural192×192/displayblock) and blob proof link. Owner/
+  worker protected GET200 bytes match storedSHA; unrelated403/anonymous401;
+  direct public Storage URL400, protected response private,no-store.
+- Second phase destroys only successful upload reply after actual File/object
+  persistence. UI error retains draft; no completion command. Enter retry reuses
+  exact File/object1 and completes once.
+- Second task uploads two files; after first actual save, private harness revokes
+  service-role completion RPC execution. Second file fails503, two UI attachments
+  retained, first File stays and Gig in_progress. Restore grant, Enter retry reuses
+  first and adds only missing second, then completes once. Final3Files/3objects/
+  2owner notices across phase2, one completion POST per task; protected reads match.
+
+No demonstrated application defect requiring repair in this bounded sequence.
+Synthetic fixture sign-in/ancillary shell and preassigned free gigs; real UI/SDK/
+routes/SQL/local Storage, controlled reply loss/privilege change. Existing generic
+completion error toast observed; no specific-message improvement claim. No provider
+writes, owner approval, native/hosted storage, or whole attachment/financial closure.
+
+Exact final cleanup for each phase: User/authUser/Gig/GigBid/GigQuestion/Payment/
+File/Notification/storage.objects/storage.buckets all0; original service-role EXECUTE
+restored. APIs stopped, tabs22–24closed, fault markers consumed; Next18133 and owned
+79schema Supabase64561–67 retained. Peer resources untouched. Private originals
+/private/tmp/pantopus-stream1-completion-proof-r1 and-r2; durable owner audits
+20260921-stream1-completion-proof-r1 **11files** and-r2 **14files**, each manifest
+verified,9source bindings, final cleanup. Credentials/operator logs excluded.
+
+Integration: PR103 merged74ab0f74e on7a9bea32d CI35572773645; PR105 mergeda0b952379
+ona8941dd1e CI35573070220; PR107 merged4e69c23b8 on55ef4c6ab CI35573379836;
+PR108 merged12eddf992 ona18a26ea4 CI35573732930; PR109 mergedc7755c345 oncad6ba789
+CI35574099206. All guarded exact heads, source/evidence reviewed, no override.
+PR110 master update requested after originale50ed CI passed; PR111 original36fb
+CI35574234363 passed and4source bindings/448durable files reviewed. Live02/03 frozen
+coordinate/relationship handoffs captured05fa6f0b9. Doc-only106 remains unmerged.
+
+Stream2 completes only current optional-clearing grant before another repair:
+initial fill('') text-clear attempts were invalid and excluded; candidate reverted.
+Corrected keyboard deletion plus DOM-empty readback proves5text fields and empty
+trash select omitted by unchanged payload, then restored by save. Only six payload
+lines may change after each actual baseline/contract. No schema/transaction expansion.
+Coordinate parser grant remains a separate frozen3-line milestone. Stream3 may run
+professional self-editor verification with exact temporary actor profile/restoration;
+no new app repair granted while111 integrates. Public endpoint without a screen caller
+can be HTTP-only; no fabricated UI. Fee-policy question remains unanswered.
+
 ## September 21, 07:26 UTC — paid publication and Home integrations
 
 Paid **b75637fd82f4554ffbd51fb85a3115cf97aa9d17** is pushed to draft47, including
