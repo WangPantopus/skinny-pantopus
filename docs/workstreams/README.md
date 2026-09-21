@@ -4,6 +4,17 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21,04:10UTC — bounded Pulse hide persistence grant
+
+Stream3 sole writer existing backend/routes/posts.js /hide/:id handler only, after
+actual PostHide INSERT denial returned200/toast/card removal while SQL remained0
+and reload brought the card back. Check lookup/upsert errors through existing500,
+preserve nonexistent404 and current access policy/styles; reuse frontend rejection
+behavior. Verify realUI500/card retention, restore/retry/persistence/reload, duplicate
+idempotency and exact owned hide cleanup. No new files/tests or filter/unmute changes.
+PR93 frozen/coordinator-owned; separate branch. Root includes PR93 in the imminent
+paid batch and holds its source/CI stable while later peer scopes remain separate.
+
 ## September21,04:08UTC — root bidder runtime released
 
 Existing OffersPanel canonical identity repaired locally ata3ff82a01 and actual
