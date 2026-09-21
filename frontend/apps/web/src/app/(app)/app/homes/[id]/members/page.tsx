@@ -10,6 +10,8 @@ import type { HouseholdAccessRequestRow } from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import ErrorState from '@/components/ui/ErrorState';
+import { failureMessage } from '@/components/home/share/shareFailure';
 
 const ROLE_ORDER = ['owner', 'admin', 'manager', 'member', 'restricted_member', 'guest'];
 const DISPLAY_ROLE_ORDER = ['owner', 'admin', 'manager', 'lease_resident', 'member', 'restricted_member', 'guest', 'service_provider'];
@@ -59,6 +61,7 @@ function MembersContent() {
   const [tab, setTab] = useState<MemberTab>('members');
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
   const [membersError, setMembersError] = useState('');
+  const [requestsError, setRequestsError] = useState('');
   const generation = useRef(0);
   const pageConfirmation = useRef<ReturnType<typeof confirmStore.getSnapshot>>(null);
 
@@ -72,7 +75,7 @@ function MembersContent() {
     const dialog = pageConfirmation.current;
     pageConfirmation.current = null;
     if (dialog && confirmStore.getSnapshot() === dialog) confirmStore.close(false);
-    setMembers([]); setMyAccess(null); setAuditLog([]); setAccessRequests([]); setMembersError(''); setBusyRequestId(null);
+    setMembers([]); setMyAccess(null); setAuditLog([]); setAccessRequests([]); setRequestsError(''); setMembersError(''); setBusyRequestId(null);
   }, []);
   const fetchData = useCallback(async () => {
     if (!homeId) return;
@@ -99,6 +102,7 @@ function MembersContent() {
     }
     if (auditRes.status === 'fulfilled') setAuditLog((auditRes.value as any)?.entries || (auditRes.value as any)?.log || []);
     if (reqRes.status === 'fulfilled') setAccessRequests(reqRes.value.requests || []);
+    else setRequestsError(failureMessage(reqRes.reason, 'Requests could not be loaded. Please try again.'));
     setLoading(false);
   }, [homeId, retire]);
 
@@ -165,22 +169,31 @@ function MembersContent() {
 
   const handleApproveAccessRequest = useCallback(async (requestId: string) => {
     if (!canManage || !homeId) return;
-    const yes = await confirmStore.open({
+    const revision = generation.current, token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
+    const current = () => generation.current === revision && api.getAuthToken() === token && api.getApiBaseUrl() === origin
+      && localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY) === marker && document.visibilityState !== 'hidden';
+    const confirmation = confirmStore.open({
       title: 'Send invitation',
       description: 'This creates a personal invitation for them to accept in the app.',
       confirmLabel: 'Send invite',
       variant: 'primary',
     });
-    if (!yes) return;
+    const dialog = confirmStore.getSnapshot();
+    pageConfirmation.current = dialog;
+    const yes = await confirmation;
+    if (pageConfirmation.current === dialog) pageConfirmation.current = null;
+    if (!yes || !current()) return;
     setBusyRequestId(requestId);
     try {
       await api.approveHouseholdAccessRequest(homeId, requestId);
+      if (!current()) return;
       toast.success('Invitation sent');
       await fetchData();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to approve request');
+      if (current()) toast.error(err?.message || 'Failed to approve request');
     } finally {
-      setBusyRequestId(null);
+      if (current()) setBusyRequestId(null);
     }
   }, [homeId, canManage, fetchData]);
 
@@ -244,7 +257,7 @@ function MembersContent() {
         </button>
         {canManage && (
           <button type="button" onClick={() => setTab('requests')} className={`px-4 py-2.5 text-sm font-medium transition whitespace-nowrap ${tab === 'requests' ? 'text-emerald-600 border-b-2 border-emerald-600' : 'text-app-text-secondary hover:text-app-text'}`}>
-            Requests ({accessRequests.length})
+            Requests {!requestsError && `(${accessRequests.length})`}
           </button>
         )}
         {canManage && (
@@ -309,7 +322,9 @@ function MembersContent() {
         </div>
       ) : tab === 'requests' ? (
         canManage ? (
-          accessRequests.length === 0 ? (
+          requestsError ? (
+            <ErrorState message={requestsError} onRetry={fetchData} />
+          ) : accessRequests.length === 0 ? (
             <div className="text-center py-16 px-4">
               <Mail className="w-10 h-10 mx-auto text-app-text-muted mb-3" />
               <p className="text-sm text-app-text-secondary">No pending requests</p>
