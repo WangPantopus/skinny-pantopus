@@ -1,5 +1,26 @@
 # Three-stream coordination
 
+## Scheduling Resume repair grant — September21, 09:21 UTC
+
+Stream3 is sole writer only for existing
+`frontend/apps/web/src/components/scheduling/hub/NotificationPrefsForm.tsx`.
+Actual keyboard Resume hid the paused banner/enabled controls without a preferences
+PUT; SQL remained paused:true and full reload restored the banner. Exact temporary
+row was removed, original absence restored. Four new evidence hashes and the seven
+unchanged current/archive/open callback comparisons were reviewed.
+
+Reuse the existing serialized preference persist/rollback path with a nested
+scheduling spread and paused:false. Derive rendered paused state from the existing
+optimistic/confirmed preference state so failure rollback and owner-generation
+retirement remain effective. Preserve unrelated keys, controls, layout and normal
+navigation. Verify actual UI PUT/SQL/full reload, real write-failure rollback and
+retry, and exact fixture/grant cleanup. No SDK/backend/schema/new file/unit test,
+worker pause/delivery-policy change or new native acceptance. Use only the existing
+owned runtime. This is a bounded repair grant, not merge approval or broad closure.
+Paid a795 remains fixed under full CI35582693975; hold the next feature merges until
+that gate and the next batch review. Stream2's newly reported role-cycle baseline
+remains under review; its corrected HTTP receipt capture is not application work.
+
 ## Current integration checkpoint — September21, 09:12 UTC
 
 PR114–118 are merged into master27cd8b112 after source review, actual bounded
