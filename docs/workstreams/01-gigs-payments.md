@@ -2,6 +2,16 @@
 
 ## September21,03:08UTC — pending wallet read failure repaired
 
+Latest03:16UTC: PR86 exactc5802b4a1 passed CI35556598901 and merged
+**3277477fc73e8588c0975fafa7f5a417c3b0e9af**. Coordinator verified3sourcehashes,
+actualfailure/retry/lostcommittedresponse/keyboard/cachedfilter recovery and exact4
+fixturecleanup with13originalrows/readflagsunchanged. Crossaccount response was
+disconnected, not intact-delivery evidence. Frozen03 4aa01061 captured at e97b1257d.
+Currentpaid03bf9 CI35556379254 has allnon-native checks passed; Android/iOS run.
+Nextpublishdocumentation-onlyPR79 at this feature-batch boundary; retain currentpaid
+source/CI instead of churning it for unrelatednotification changes. FurtherStream3
+A05 catalog work is read-only until a verified gap receives ownership.
+
 Paid clean/pushed **03bf9bd1b4a3504b8a71eb1f835c1bc3a3e59169** adds only three lines
 in existing WalletBalanceCard.tsx: treat rejected pending-release read as existing
 carderror, and set existingloading while retrying both wallet reads. Baseline actual

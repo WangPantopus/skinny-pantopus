@@ -9,6 +9,16 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 ## Current checkpoint — September21,03:08UTC
 
+Latest03:16UTC: PR86 exactc5802b4a1 passed CI35556598901 and merged
+**3277477fc73e8588c0975fafa7f5a417c3b0e9af**. Coordinator verified3sourcehashes,
+actualfailure/retry/lostcommittedresponse/keyboard/cachedfilter recovery and exact4
+fixturecleanup with13originalrows/readflagsunchanged. Crossaccount response was
+disconnected, not intact-delivery evidence. Frozen03 4aa01061 captured at e97b1257d.
+Currentpaid03bf9 CI35556379254 has allnon-native checks passed; Android/iOS run.
+Nextpublishdocumentation-onlyPR79 at this feature-batch boundary; retain currentpaid
+source/CI instead of churning it for unrelatednotification changes. FurtherStream3
+A05 catalog work is read-only until a verified gap receives ownership.
+
 Paid branch clean/pushed03bf9bd1b includes reviewed masterc1c03a3c6 and two focused
 wallet read/retry repairs, verified in real UI/routes/SQL. Refund session intact-reply
 acceptance and earlier Stripe TEST evidence are preserved. Details, hashes and
