@@ -1,6 +1,6 @@
 # Stream 1 — Gigs and payments
 
-## Current checkpoint — September 21, 2026, 00:11 UTC
+## Current checkpoint — September 21, 2026, 00:21 UTC
 
 Worktree `/private/tmp/pantopus-paid-gig-integration`; branch
 `codex/paid-gig-integration`; clean and pushed at **8825c192866498a6ab065a5d53f007b0abd637a7**.
@@ -10,7 +10,9 @@ account deletion PR65). Subsequent social merges remain on master until the next
 justified batch integration; their unrelated journeys need no duplicate payment run.
 
 [Current CI35545431059](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35545431059)
-is running on8825c1928. Previous combined CI35544523207 was superseded; its backend,
+completed **SUCCESS** on8825c1928:15 applicable checks pass/one Seeder skip,
+including Android quality/emulator and all three iOS simulators. Previous combined
+CI35544523207 was superseded; its backend,
 web and database checks passed, but it is not a completed green run. Earlier paid
 9ae1edb3b [CI35542623560](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35542623560)
 fully passed, including Android and all three iOS simulators. No new unit tests
@@ -73,7 +75,7 @@ Private durable evidence under the owner's `.pantopus-recovery/audits/`:
 - `20260920-stream1-session-integration-r1`:7 files hash verified; combined account switch.
 - `20260920-stream1-stop-stripe-r1`:18 files hash verified; stop receipts and Offers repair.
 - `20260920-stream1-refund-stripe-r1`:13 files hash verified; partial/full refund proof.
-- `20260920-stream1-offers-race-r1`:13 files hash verified; delayed read and11 zero counts.
+- `20260920-stream1-offers-race-r1`:13 phase files plus final CI receipt hash verified; delayed read and11 zero counts.
 Each has EVIDENCE.md, source/state/provider details and cleanup. Credentials, caches
 and operator logs stay private and outside Git/chat. CUA observations are in active
 task `01a0c0d1-0703-70c3-b842-6d01bc8ca48b`.
@@ -88,14 +90,22 @@ failures still prevent installed tip acceptance.
 
 Coordinator merged reviewed PR65/66/67/69 as61080b399/2d12b85a7/d69482d3f/5eab68ab7
 only after their current checks and bounded UI/API evidence passed. PR70 comment
-privacy/draft/native mapping is separately reviewed with native CI pending. Stream3's
-real-SMTP reminder repair and personal composer repair have bounded existing-file grants. Live README
-contains exact shared-file/runtime grants; later dirty Stream3 status is author-owned.
+privacy/draft/native mapping is separately reviewed. iPhone16 CI failed on the same
+expired booking fixture already fixed in paid9ecf66fc7/9ae1edb3b. Stream3 reused
+those exact commits in an isolated checkout and pushed PR70 at07827d2b0; live423
+runtime stayed unchanged. Fresh current-head CI is required, not another fixture
+repair. PR72/73 current-head checks passed; dependency integration remains open.
+Stream3's
+real-SMTP reminder repair and personal composer repair are separate dependent
+draft PR72 atcbfba3503 and PR73 at423176969. Coordinator source and exact-source
+evidence review found no issue within those bounded scopes; CI/dependency merges
+remain required. Live README contains exact shared-file/runtime grants.
 
-Documentation PR68 merged as4f951d29c after all applicable checks passed.
+Documentation PR68 merged as4f951d29c and PR71 ascefdadd3e after all applicable checks passed.
 
-Next: finish current paid CI, publish this follow-up documentation checkpoint, then
-continue existing provider/native/backlog acceptance. Historical transfer/reversal,
+Next: publish this green-CI documentation checkpoint, then continue existing
+provider/native/backlog acceptance. Required paid CI is complete; PR47 remains draft.
+Historical transfer/reversal,
 disputes, disabled storage and native journeys remain open. Fee payer/recipient/timing
 still needs the pending product decision. No broad inventory row is closed.
 
