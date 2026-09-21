@@ -4,6 +4,19 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21,03:35UTC — bounded marketplace Q&A read grant
+
+Stream3 is sole writer of the existing marketplace detail useListingDetail.ts questions
+loader, page.tsx prop wiring and QASection.tsx read error/retry and canonical safe asker
+identity/href. Actual question creation persisted, but ListingQuestion SELECT denial
+returned500 and displayed Questions(0)/No questions without retry; canonical safe asker
+identity was also ignored. Reuse accepted question creation/save evidence. Preserve
+forms, actions, styling and prior report fixes. No new files/tests/backend/schema/type
+or unproven mutation changes. Compare existing/archive/open branches; verify cold/warm
+failure, retry, genuine empty, persisted question/public navigation and feasible request
+retirement. Restore exact SQL privileges and clean owned question/notification fixtures.
+PR89 remains coordinator-owned/frozen at216e533af; use a separate branch for Q&A.
+
 ## September21,03:25UTC — canonical marketplace seller grant
 
 Stream3 sole writer existing SellerSection.tsx canonical displayName/handle/avatarUrl/

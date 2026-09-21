@@ -9,6 +9,14 @@ Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
 ## Current checkpoint — September21,03:08UTC
 
+Latest03:37UTC: PR88 passed CI35557360294 and merged cc28ddd3e78eccd24dd7615f4bfe7cbbc938feb4.
+PR89 canonical seller identity at216e533af passed CI35557699093 and merged
+ a1261027024cad7171348813e9dc750b8cf07b58. Both existing source hashes and unchanged
+integration app diff were verified; actual public navigation and unavailable href
+fallback evidence reused. Separate Q&A read grant is in live README. Paid03bf9
+CI35556379254 has all three iOS simulators and Android emulator passed; Android
+lint/test/assemble remains running. Root runtime remains stopped; no duplicate tests.
+
 Latest03:25UTC: PR88 marketplace report956dab1d1 reviewed (2sourcehashes, actual7
 UIreasons→SQL, error/draft/retry, invalidHTTPboundaries and exact8tablecleanup0).
 CI35557360294 pending. Frozen03 ab18fb6e captured at6ffb331c7/writerreleased for
