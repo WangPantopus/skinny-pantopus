@@ -1,5 +1,90 @@
 # Stream 1 — Gigs and payments
 
+## September 21, 07:15 UTC — atomic question votes verified
+
+Branch codex/paid-gig-integration; local **e2b03de6b0fa17c15199ead374fce57959b0fb79**,
+not yet pushed while published3025 CI35570109862 completes native jobs. Changed only
+backend/routes/gigs.js upvote handler and new reserved forward migration
+supabase/migrations/20260916022200_gig_question_vote_atomic.sql. Existing parent row
+lock scopes question to supplied gig; toggle and exact recount commit in one SQL
+transaction. SECURITY INVOKER, fixed search_path/5s lock timeout, service-role execute
+only. Existing tables/unique/FK/UI/SDK/toggle response preserved. Six identical old
+handlers/no existing transactional artifact establish why separate REST writes cannot
+serve this repair and an additive function is needed; applied history unchanged.
+
+Baseline actual UI count UPDATE failure returned200 with vote1/count0; DELETE failure
+returned200 with vote1/count0. Wrong-gig path mutated the real question200. Plain
+parallel HTTP from two actors returned200 twice with2votes/count1, no forced interleaving.
+Candidate actual UI fixture-only constraints force failure after INSERT and DELETE:
+500/error with both vote/count rolled back, repeated Enter retry and restored grants
+recover. Existing toast says Failed to update upvote; initial observation searched the
+backend message and timed out, corrected repeated proof retained. Existing incorrect
+count7/votes0 becomes1/1 after actual UI toggle; no historical backfill claim.
+
+Ten real HTTP/SQL groups verify parallel add/remove, same-actor serialized toggles,
+wrong-gig/missing404, no-auth401, SELECT/DELETE/UPDATE denial rollback, held parent-row
+lock timeout500 and released retry200, anon/authenticated RPC execution denied.
+Existing2suites250tests pass; no new tests. Pinned CLI2.116 canonical function lint
+passes384application functions/118trigger bindings with existing6reviewed PostGIS
+errors/43warnings. Initial global2.98 scan was not the canonical gate. Syntax/diff pass.
+Full new-migration CI remains pending publication;3025 does not include this function.
+
+Reused unchanged Q&A creation/read/identity/action and paid financial evidence.
+New durable mirror: owner .pantopus-recovery/audits/20260921-stream1-gig-qa-vote-r1,
+28files plus manifest, binds candidate-results/source/comparison/HTTP/SQL/UI/checks/
+cleanup. Private original /private/tmp/pantopus-stream1-gig-qa-vote-r1. Synthetic local
+identity/ancillary reads and seeded questions; actual UI/SDK/router/PostgREST/SQL,
+controlled late-write constraints/lock hold. No provider writes. Toggle remains
+non-idempotent per accepted request; no lost-response/account-switch/installed-native/
+hosted/provider/attachments/new question-creation acceptance.
+
+Final8table fixture counts0,5privileges restored,temporary constraints0; API stopped,
+IAB21closed, Next18133/session95908 and own79schema Supabase64561–67 retained. No peer
+resources/caches/data changed and no native build. Publish reviewable application
+commit after current gate, integrate ready peer PRs separately. Existing P02 cold
+historical discovery beyond24h remains next root source reconciliation; not yet a new
+runtime acceptance claim or repair grant.
+
+## September 21, 07:15 UTC — verified repairs and current integration queue
+
+Stream1 local **e2b03de6b0fa17c15199ead374fce57959b0fb79** atomically toggles
+question votes and their count in the existing handler plus reserved forward22200
+function. Actual UI late-write failures roll back both records, error/retry recovers;
+real concurrent actors, same-actor toggles, wrong-gig404, denied access and lock timeout
+pass. Existing250 regressions and pinned2.116 schema-function gate pass. Detailed
+28-file evidence and limits are in live01. Published3025 remains fixed while its full
+CI35570109862 native jobs finish; e2b is not yet pushed. PR34/47 remain draft.
+
+PR101 is merged **944489d5449286d2b362cd96334bcd771636f0fc** after exact CI.
+PR102 original50289 CI35570755239 passed; guarded master update produced
+**3de541d72295f98ed905df32d2d7ec87eaf86ca4**. Only the already-reviewed booking worker
+changed during integration; Home source/evidence remain identical. Await new exact-head
+checks before merge. PR103 frozen7e165 CI35571103116 passed; one-line getPrefs repair
+and4source bindings reviewed. Its required master update follows102 to avoid redundant
+CI. PR104 frozen **deda07ecf57f5cf9d8e052e1215782afd60db790**, stacked on102, is reviewed
+within member read/retry and delayed-response limits; all14durable hashes/7source
+bindings match. ExactCI35571776785 still required. Live02 frozen d209c063 captured in
+**96047e4f5**; peer may continue status updates. No broader acceptance-row closure.
+
+Current sole-writer grants after actual failures:
+- Stream2 existing HomeSettingsTab.tsx only: actual settings503 rendered false48h/
+  blank defaults despite saved24h/text and left Save enabled. Existing error/retry,
+  loading and current Home/authority lifetime; no save-protocol/backend/schema changes.
+  Separate follow-up branch preserves PR104. Own18141/18142/64551–59; no native slot.
+- Stream3 existing identitySearch.js searchTableFields only: actual PublicPersona
+  SELECT failure returned200/false empty search. Surface failed field queries through
+  existing error path, preserve auth/visibility/ranking/shape. Five variants compared;
+  following failure/retry works and is reused. Own18130/18131/64531–37; no native slot.
+- Previous Stream3 schedulingNotifyPrefs.js getPrefs-only grant produced PR103:
+  preserve saved scheduling keys before canonical normalization. Actual save/reload,
+  UPDATE500 rollback/retry and peer-account HTTP isolation verified. Original no-row
+  state restored, grant restored, no worker/provider delivery claim.
+
+Root retains Next18133 and own79-migration Supabase64561–67; API18132 stopped after
+exact8table cleanup0,5privileges restored and temporary constraints removed. IAB21 closed.
+Peer runtimes/evidence remain owned and untouched. No heavy native build is active.
+Continue bounded verification and integration; no new unit tests or design changes.
+
 ## September 21, 06:54 UTC — atomic question-vote repair reserved
 
 Root reproduced actual UI upvote200 with saved vote1/count0 when count UPDATE fails;

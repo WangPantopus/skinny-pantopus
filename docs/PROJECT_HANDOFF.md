@@ -7,6 +7,46 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## September 21, 07:15 UTC — verified repairs and current integration queue
+
+Stream1 local **e2b03de6b0fa17c15199ead374fce57959b0fb79** atomically toggles
+question votes and their count in the existing handler plus reserved forward22200
+function. Actual UI late-write failures roll back both records, error/retry recovers;
+real concurrent actors, same-actor toggles, wrong-gig404, denied access and lock timeout
+pass. Existing250 regressions and pinned2.116 schema-function gate pass. Detailed
+28-file evidence and limits are in live01. Published3025 remains fixed while its full
+CI35570109862 native jobs finish; e2b is not yet pushed. PR34/47 remain draft.
+
+PR101 is merged **944489d5449286d2b362cd96334bcd771636f0fc** after exact CI.
+PR102 original50289 CI35570755239 passed; guarded master update produced
+**3de541d72295f98ed905df32d2d7ec87eaf86ca4**. Only the already-reviewed booking worker
+changed during integration; Home source/evidence remain identical. Await new exact-head
+checks before merge. PR103 frozen7e165 CI35571103116 passed; one-line getPrefs repair
+and4source bindings reviewed. Its required master update follows102 to avoid redundant
+CI. PR104 frozen **deda07ecf57f5cf9d8e052e1215782afd60db790**, stacked on102, is reviewed
+within member read/retry and delayed-response limits; all14durable hashes/7source
+bindings match. ExactCI35571776785 still required. Live02 frozen d209c063 captured in
+**96047e4f5**; peer may continue status updates. No broader acceptance-row closure.
+
+Current sole-writer grants after actual failures:
+- Stream2 existing HomeSettingsTab.tsx only: actual settings503 rendered false48h/
+  blank defaults despite saved24h/text and left Save enabled. Existing error/retry,
+  loading and current Home/authority lifetime; no save-protocol/backend/schema changes.
+  Separate follow-up branch preserves PR104. Own18141/18142/64551–59; no native slot.
+- Stream3 existing identitySearch.js searchTableFields only: actual PublicPersona
+  SELECT failure returned200/false empty search. Surface failed field queries through
+  existing error path, preserve auth/visibility/ranking/shape. Five variants compared;
+  following failure/retry works and is reused. Own18130/18131/64531–37; no native slot.
+- Previous Stream3 schedulingNotifyPrefs.js getPrefs-only grant produced PR103:
+  preserve saved scheduling keys before canonical normalization. Actual save/reload,
+  UPDATE500 rollback/retry and peer-account HTTP isolation verified. Original no-row
+  state restored, grant restored, no worker/provider delivery claim.
+
+Root retains Next18133 and own79-migration Supabase64561–67; API18132 stopped after
+exact8table cleanup0,5privileges restored and temporary constraints removed. IAB21 closed.
+Peer runtimes/evidence remain owned and untouched. No heavy native build is active.
+Continue bounded verification and integration; no new unit tests or design changes.
+
 ## September 21, 06:49 UTC — all streams resumed; integration candidate published
 
 User explicitly resumed all three existing tasks beyond single milestones. Paid
