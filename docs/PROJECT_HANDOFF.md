@@ -7,7 +7,28 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## Latest coordination — September 21, 04:19 UTC
+
+PR94 Hide persistence error repair is merged as b463ee3850e089b523426317b90d9bb246f82c89
+from exact1fb5a58adc after CI35560095912 passed and real UI/SQL/source/cleanup review.
+Paid24c519653 stays unchanged for CI35560003741; web/backend/schema/privacy checks
+passed, native jobs remain running. Next smaller Stream3 filter-read/unmute failure
+scope is assigned in live README. Persona mute identity/schema changes remain a
+proposal. Root runtimes remain stopped; Stream3 retains its owned runtime/fixtures.
+PR34/47 remain drafts and broader acceptance limits remain open.
+
 ## Current checkpoint — September 21, 03:57 UTC
+
+Latest04:12UTC: paid **24c5196537c06de9b03f45fa8b6b78357247cb82** is clean/pushed,
+including bidder repaira3ff82a01 and reviewed mastere8ece6ebc through PR93. Current
+[combined CI35560003741](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35560003741)
+pending. Prior2a05 CI35559173441 is superseded (non-native checks passed, native
+unfinished), not green. Accepted Offers/wallet/backend/SQL/SDK hashes unchanged by
+integration; bidder durable mirror now15files including integration receipt. PR93
+exacte036af696 passed CI35559652324 and merged e8ece6ebc9a8f3696fd903831e5a98ea0fd6579a
+only after three source hashes, real retry/destination and cleanup review. Hold paid
+source stable until this gate; later Stream3 Hide/mute findings remain separate.
+Root fixtures/runtimes remain cleaned/stopped. PR34/47 remain draft.
 
 Paid **2a05e797e** is clean/pushed, including reviewed masteref7382ea1 through PR91.
 Actual Stripe TEST capture→wallet release→notification return found and repaired

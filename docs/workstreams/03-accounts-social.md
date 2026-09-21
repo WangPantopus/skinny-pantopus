@@ -1,12 +1,12 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T03:54:26.540179+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T04:13:22.948492+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
-branch `codex/stream3-listing-notification-routes`, local/pushed HEAD **ea8e8603c106233369e04b655248a5091edb5c20**.
+branch `codex/stream3-pulse-hide-errors`, local/pushed HEAD **1fb5a58adc576cddd4219e4921a3c1ad5c22b01c**.
 Application tree clean; only owned untracked `.next-stream3/` remains. Runtime source
-matches masterfd04ae43c plus exactly notificationRoutes.ts below.
+matches mastere8ece6ebc plus the single posts.js hide handler below.
 Previous local branch codex/workstream-accounts-social preserved atafe8d2f4c; its remote
 primary branch remains21b93aa62. Do not push later milestones into that old ref.
 Coordinator requested explicit commit pushes for the later independent milestones:
@@ -21,6 +21,85 @@ All three attached to this task. Author did not merge. Retarget master only afte
 prerequisites merge; do not push later commits into PR70 or conflate another stream's
 CI with this one. Coordinator asked to finish these bounded handoffs before a new
 application scope. Independent evidence/inventory continues.
+
+## Current N03/A05 Pulse hide persistence milestone
+
+[Draft PR94](https://github.com/WangPantopus/skinny-pantopus/pull/94), app39513752b,
+review **1fb5a58adc576cddd4219e4921a3c1ad5c22b01c** includes reviewed mastere8ece6ebc
+(PR93 exact e036 passed CI35559652324 and coordinator merged). Sole granted handler
+backend/routes/posts.js /hide/:id checks existing post lookup and upsert errors;
+maybeSingle preserves confirmed absent404, catch500 reused. No caller/policy/design/
+schema/newfile/test change. Compared six existing/archive/open sources; all ignored
+hide persistence error. Existing client already displays failure and retains card.
+
+Baseline actual Bob Beacon feed Hide Post under PostHide INSERT denial returned200
+at04:07:29.364, toast Post hidden and card removed, SQL0; reload restored post.
+Candidate actual same failure500 at04:10:12.705 keeps card/Failed to hide post. Restore
+and same-menu retry200 saves exact rowfbfa8bec; fullreload remains empty. Two concurrent
+real authenticated HTTP retries200/200 preserve one row; absentpost404, unauth401,
+Post SELECT denial500. AuxiliaryHTTPsession logout200. Browser uses existing local
+GoTrue/HTTP18130/PostgREST/SQL64532, not synthetic authentication or mocked persistence.
+
+Exact temporary PostHide fbfa8bec-87a2-4315-a51e-9cf7bc295339 removed; PostHide0/PostMute0,
+original followerpost retained; INSERT/SELECT restored. Authaudit/session effects
+retained. Direct cleanup may leave existing filtercache until TTL/restart; no recovery
+claim beyond recorded UI. Backend owned restart session2461, Next unchanged. Syntax/
+diffcheck pass; requiredCIpending, native/provider/delayedsession unverified, no rowclosure.
+
+Private pulse-hide-baseline/sourcecomparison/candidate/boundaries files; durable332files
+manifest **f5c94e6cc7b6a76c3a335d162bcc526cb3d9de922cb6df899b77d6acdb1dbe5f**.
+Next distinct reproduced lead: PostCard MuteUser on Beacon sends canonical personaID
+as user, persisted PostMute0b80d9dd, toast/cardremoval then reload restores post.
+Exacttemporaryrow cleaned0. Existing persona muteFollowing is notifications-only;
+reusing it for hide-from-feed would change policy. Preserve safe public identities,
+no private author restoration or new table. Further contract comparison/assignment
+needed before repair. Filter/unmute error handling remains sourcelead, unverified.
+
+## Current A05 messaging destination milestone
+
+[Draft PR93](https://github.com/WangPantopus/skinny-pantopus/pull/93), exact
+**e036af696090b47d037cd0fad810c6fc31694a89**, base master9f14a638a after documentation
+PR87 publication and explicit three-file coordinator grant. PR91 merged ef7382ea1
+following exact CI35558601157. No application differences from ea8e to new base;
+accepted evidence reused. Exactly existing useListingDetail send-success destination,
+PublicProfileClient.handleMessage destination and ChatRichCard listing href changed.
+Prior archive/open/master comparisons retained; no new files/tests/routes/design/policy.
+
+Actual Dana baseline direct201/message201 persisted but navigated ignored roomquery
+and inbox. Existing inbox row correctly opened conversation/Bob. Its ViewListing
+link hit Next404. Hydrated public Bob Message repeated ignoredroomquery. Candidate
+uses captured seller/recipient ID for existing conversation route and existing
+marketplace detail href. Errors and other card types remain unchanged.
+
+Actual candidate UI on Next18131/full app18130/local GoTrue/PostgREST/SQL64532:
+scoped ChatMessage INSERT denial gave direct201/message500, zero messages, retained
+draft/form and no navigation. Restoring INSERT then same-form retry gave message201,
+exactly one persisted listing_offer and correct conversation/Bob with exact draft.
+ViewListing opened authorized detail200. Seller publicprofile Message activated via
+Enter returned correct conversation and saved message. After exact listing deletion,
+keyboard ViewListing gave HTTP404/Listing not found with no stale detail. Source-bound
+prior blocked Marketplace403/database503 and SDK/session checks reused; no new delayed
+session/duplicate-tap/native/provider acceptance. UserIdentityLink remains source-only,
+outside grant. Other card types unchanged by exactdiff, not broadly rerun.
+
+Exact fixture listing4157ed45-9453-4432-b540-9c0184a030fe and roomc022a97f-4174-4b42-
+9d4c-14d760e3fe79 retired. Listing/views/interactions/questions/room/messages/participants0;
+original ChatRoom/ChatMessage/ChatParticipant/Notification ID sets unchanged. Original
+DanaEvan block retained; INSERT restored; authaudit/session effects retained. Browser
+Dana remains on deleted fixture's notfound page; owned runtimes unchanged.
+
+Typecheck0errors, scopedESLint0errors/5existingwarnings; no newtests. Required CI pending,
+coordinator review/integration separate. Evidence marketplace-message-baseline/source-
+comparison/candidate-fixture/candidate/types/lint/pr files and actual HTTPlog; browser
+action history in this task. Durable325files manifest
+**4e1e6529b4315dcad5f2d22086e5081fa86371842a5429733cc6842bcbe8b266**.
+Private artifact-specific sources/config remain authoritative, not blanket retests.
+
+Independent N03 read-only reconciliation: actual own publicprofile Activity shows Dana's
+two retained Connections posts and follower post, backed by GET200 and exact three SQL
+Post rows. Connections source loads connected authors excluding self; existing parity
+doc describes that scope, so no policychange inferred. Native My Posts remains untested.
+No fixture changes. Next continue remaining N/A acceptance; this milestone closes no row.
 
 ## Current A05/N04 milestone — listing reporting
 
