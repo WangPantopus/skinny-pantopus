@@ -1,6 +1,6 @@
 # Stream 3 — Accounts, social and notifications
 
-Updated 2026-09-21T03:24:23.690368+00:00. **Stream incomplete; bounded milestones under review.**
+Updated 2026-09-21T03:54:26.540179+00:00. **Stream incomplete; bounded milestones under review.**
 Sole live status is this neutral coordination file. No new unit tests written.
 
 Application worktree `/private/tmp/pantopus-workstream-accounts-social`, checked-out
@@ -171,6 +171,43 @@ existing-regression/types/lint logs. Durable313files manifest
 19dfb8b2c669141ee28c28974c3c1381344d290bae5e91cd4a8b4a5af1051fdc. Next independent N04/A05 existingMarketplace
 MessageSeller blocked-entry verification, reusing accepted backendblock policy;
 no new repair assignment or sharedfilechange. Other whole-stream limits remain.
+
+## N04/A05 no-code Marketplace messaging extension and next findings
+
+On ea8e8603c, actual Marketplace MessageSeller→existing createDirectChat denies
+Evan→Dana403 and Dana→Evan403 under the retained DanaUserBlock. Both actualforms
+retain unsentdraft/error. Revoked isolatedUserBlockSELECT and restarted onlyowned
+API to ensure coldcache: sameform503. SELECTrestored, retry403; no sendMessage call.
+ChatRoom/Participant/Message/Notification totals unchanged. Exact two disposable
+listings d2a6286c-2687-4a56-a748-43c0b4fb08f1 and8af13f77-5bd9-457e-a17b-d590f5145938,
+views/interactions/messages/offers cleaned0; originalblock unchanged. No source
+change/newtests. This extends entry-point evidence, not independent socket/native
+or unblock/concurrency acceptance. Backend now session94409 on18130, same private
+launcher/log append; Next18131 unchanged. Dana browseractive/authauditsretained.
+
+Independent successful-message baseline found next concrete defects, not repaired
+while coordinator closes current integrationbatch. SQLseeded Boblisting6a18d868-
+0aa9-410f-9c6c-e39ca84a597b; actual DanaUI direct201/message201 saved exactlyone
+listing_offer in newroom eed0f38e-1a06-4d68-8039-a4c14c5b87e8. Existing caller sends
+/app/chat?room=... but ChatList ignoresquery and opens inbox. Inboxrow opens existing
+/app/chat/conversation/Bob correctly and shows persistedmessage. Its existing
+ChatRichCard ViewListing uses /app/listings/id and actualNext404. Hydrated public
+Bobprofile Message repeats sameignoredroomquery/inbox. UserIdentityLink has a third
+samequery caller; sourcelead only, popoverUI not verified. No file edits/grant yet.
+
+Exact positivefixture listing/newroom/message/participants cleaned0 via canonical
+FKcascade; no newNotification rows in thisphase. Initial cleanup read used wrong
+message_typecolumn, failed beforemutation; corrected canonical type query/cleanup
+succeeded. OriginalroomIDs preserved, DanaEvan block retained. Evidence private
+marketplace-block-before/results and marketplace-message-before/baseline/persisted.
+Durable318files manifest 79012cecb848844bb52acbc910f6f578494dabbbcd0815b77e0fcc13bf753073. CurrentPR91 exactea8
+passedCI35558601157; coordinator merging bounded route scope, author doesnotmerge.
+
+Next after documentationbatch: obtain assignment for reproduced existing
+useListingDetail send-success destination, PublicProfileClient.handleMessage and
+ChatRichCard listinghref. Compare allopen/archive variants; reuse canonical existing
+conversation and marketplace screens, preservestyles/policies; no replacementroutes
+or tests. Continue other whole-stream limits; this is not Stream3 completion.
 
 ## Coordinator integration progress (read-only reconciliation)
 

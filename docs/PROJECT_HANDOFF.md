@@ -7,6 +7,20 @@ features. The [80-row inventory](REMAINING_WORK_2026-09-11.md) is the ordered ba
 its8 locally closed/72 partial or open rows are not an effort/completion percentage.
 Follow [AGENTS.md](../AGENTS.md). R05 and the app remain incomplete.
 
+## Current checkpoint — September 21, 03:57 UTC
+
+Paid **2a05e797e** is clean/pushed, including reviewed masteref7382ea1 through PR91.
+Actual Stripe TEST capture→wallet release→notification return found and repaired
+stale history after the balance refreshed. Two real captures, exact1063c/638c credits,
+concurrent/repeated worker uniqueness, same-filter failure/retry and payer return
+are verified within [Stream1's recorded limits](workstreams/01-gigs-payments.md).
+Only two existing wallet files changed; no new unit tests or design changes.
+Fixtures and owned runtimes are cleaned; both test captures refunded. Current combined
+CI35559173441 is pending; earlier03bf9 full CI35556379254 passed. PR34/47 remain draft.
+Coordinator PR87 publishes this documentation batch separately; PR88/89/90/91 were
+reviewed and merged only after their current-head CI gates. Stream3's next proven
+message-destination defects remain unedited pending the next bounded grant.
+
 ## Current checkpoint — September21,03:08UTC
 
 Latest03:46UTC: paid **03bf9bd1b4a3504b8a71eb1f835c1bc3a3e59169** completed

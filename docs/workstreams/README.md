@@ -4,6 +4,16 @@ Updated September 16, 2026. The user authorized three concurrent streams. This
 folder coordinates their next bounded milestones; it does not replace the existing
 backlog, acceptance evidence, or verification-first instructions.
 
+## September21,03:57UTC — Stream1 runtime released; integration batch closing
+
+Paid2a05e797e includes verified wallet history-refresh repair02706ba39 and reviewed
+masteref7382ea1 through PR91; combinedCI35559173441 pending. Owned18132/18133/64561–67
+released, wallet-release-r1/f9200290 rows0/grantrestored/tabsclosed/cachepreserved;
+two test captures refunded/customerdeleted. No native reservation.
+Stream3 no-code message entry evidence captured; resolver PR91 merged. Next concrete
+message destination findings remain read-only during documentation PR87 publication.
+Root owns shared status/publication; Stream3 retains its existing runtime/fixtures.
+
 ## September21,03:43UTC — marketplace notification destination grant
 
 Stream3 sole writer existing web lib/notificationRoutes.ts for supported listing,

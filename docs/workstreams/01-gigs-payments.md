@@ -1,5 +1,50 @@
 # Stream 1 — Gigs and payments
 
+## September 21, 03:57 UTC — wallet release return repaired and verified
+
+Paid branch is clean and pushed at **2a05e797e853b81df71e122f57f014c2e15b40e5**.
+Focused repair **02706ba39** changes only existing wallet/page.tsx and
+WalletTransactionList.tsx: refresh history when the displayed balance changes,
+preserving the selected filter and page. Baseline actual wallet-credit notification
+return updated balance to1063c but retained false empty history; SQL held one income
+row and HTTP showed no history refresh. Existing page is identical across master,
+paid/web staging, place and initial archive; all history variants lacked this refresh
+input. Reuse in place, no new files/schema/backend/style or unit tests.
+
+Fresh Chrome/IAB UI→SDK→routes→Stripe TEST→full77 SQL: first1250c and second750c
+bid authorization→worker Start Work/completion→owner approval/capture. Existing
+worker did not release before cooling elapsed; owned clocks were then advanced.
+Concurrent/repeated workers left exactly two settlements/two income rows and four
+settlement notices/outbox events. Credits1063c+638c produce1701c wallet balance.
+Candidate kept Task Income selected. New-credit notification return fetched history;
+actual SELECT500 showed existing error/retry, restored SELECT plus same Retry showed
+both exact credits. Payer notice returned to the exact second completed gig with
+owner controls. No bank payout or real48-hour waiting claim.
+
+Private wallet-release-r1/f9200290 evidence:35 mirrored/hash-verified files under
+owner `.pantopus-recovery/audits/20260921-stream1-wallet-release-r1`.
+Synthetic local identity/socket/push; actual payment/SQL and in-app notification
+returns. Existing unchanged relay/concurrency evidence reused; outbox transport
+not newly run. Unknown-balance-neutral changes and overlapping delayed history
+reads remain unverified. Initial missing test publishable key and mixed127/localhost
+cookie setup corrected in the harness; no app repair for either setup issue.
+
+Both Stripe TEST captures fully refunded, one owned customer deleted, SQL aggregate0
+and seven-table explicit counts0; original history SELECT restored. Owned API/Next/
+Supabase stopped, all three owned browser tabs closed, own cache retained privately,
+generated tsconfig restored. Cumulative15 originals:8 captures fully refunded9250c,
+7 unpaid cancels,7 customers deleted. Immutable TEST provider history retained.
+
+Reviewed master **ef7382ea13f2b99e25458a6ddf535064642c2335** (through PR91) merged into
+paid as2a05e797e. Wallet/payment source hashes unchanged by integration; current
+[combined CI35559173441](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35559173441)
+is pending. Earlier03bf9 CI35556379254 passed all15 applicable checks/one skip.
+PR34/47 remain draft; no broad acceptance row closed. PR91 exactea8e8603c passed
+CI35558601157 before integration, with one resolver source hash and real destination
+proof reviewed. Separate next marketplace message-destination findings stay unedited
+until documentation publication/ownership grant. Next: current combined CI and
+remaining source-bound P08/P09/P10, native/provider/policy limits.
+
 ## September21,03:08UTC — pending wallet read failure repaired
 
 Latest03:46UTC: paid **03bf9bd1b4a3504b8a71eb1f835c1bc3a3e59169** completed
