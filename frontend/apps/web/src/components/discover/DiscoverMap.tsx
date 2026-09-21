@@ -680,7 +680,7 @@ function PostPinPopup({ marker }: { marker: MapMarker }) {
         </p>
       )}
       <a
-        href={`/app/posts/${marker.id}`}
+        href={`/app/feed/post/${marker.id}`}
         className="text-xs font-semibold text-app-text-secondary hover:text-app-text transition"
       >
         View Post →
