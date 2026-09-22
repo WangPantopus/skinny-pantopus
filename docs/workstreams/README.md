@@ -17,7 +17,7 @@ pay and declined-card→abort both released their real intents (canceled) and re
 the bid. Synthetic identity/Connect, local Storage bucket for hosted S3, no socket push,
 emulator/simulator only. Cleanup: real refund of the1250 capture, both750 intents
 canceled, customer deleted, owned rows0, bucket removed, devices shut down. Owner audit
-20260922-stream1-p08-native-r1 (84 files,42 screens), MANIFESTe6f24b4fad3484d8b4582f45aaada099b9be48c4efa74371089ac15e1d37c3e7.
+20260922-stream1-p08-native-r1 (84 files,42 screens), MANIFEST5590f05258babb98d27b2fd420382154a68e5405f9e8a5a21e8bdef98ee1b76c.
 Paid adoption of master57d6beb7d waits for its running CI. PR34/47 remain drafts.
 
 ## September 22 — P03 installed Android aged tip discovery accepted (bounded); Android control recipe

@@ -26,7 +26,7 @@ open. Errors: only expected fake-Connect lookups. Limits: synthetic identity/Con
 captured, emulator/simulator only, cooling-off advanced by SQL, no native3DS/partial
 refund/dispute here. Cleanup: refund re_3UIK7g… of the1250 capture, both750 intents
 canceled, customer deleted, owned rows0, File rows0, bucket emptied/deleted, API/devices
-stopped, worktree clean. Owner audit20260922-stream1-p08-native-r1 MANIFESTe6f24b4fad3484d8b4582f45aaada099b9be48c4efa74371089ac15e1d37c3e7.
+stopped, worktree clean. Owner audit20260922-stream1-p08-native-r1 MANIFEST5590f05258babb98d27b2fd420382154a68e5405f9e8a5a21e8bdef98ee1b76c.
 
 ## September 22 — P03 installed Android tips: aged discovery accepted on the owned AVD
 
