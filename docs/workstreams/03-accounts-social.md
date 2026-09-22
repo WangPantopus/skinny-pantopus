@@ -4055,3 +4055,41 @@ and external provider/device limits are intentionally reported separately:
 No new unit tests were added per user direction. The workstream is ready for coordinator review of the
 Android source commit and status/evidence commit; no merge, hosted migration, provider activation,
 or independent CI claim is made here.
+
+
+## A03 Android local chooser-to-byte upload boundary (2026-09-22 addendum)
+
+To close one independently local A03 acceptance gap without holding a heavy build slot, I reused
+the installed Android APK (SHA-256
+`2728688a30a78449c990c302ebc72053802322772a990e7a3a6030e2265d504a`) and the existing profile
+Portfolio screen. After real local Bob authentication, **Profile → Portfolio → Add portfolio
+item** opened the existing `ActivityResultContracts.GetContent("*/*")` flow. Android DocumentsUI
+showed the owned Downloads file `stream3-portfolio-r1.png`; selecting it returned the real
+content URI, display name, MIME type and 68 bytes to the existing sheet, which populated the
+filename and title. Tapping the existing Add control issued the real multipart
+`POST /api/files/portfolio` through API 18130.
+
+The request returned HTTP 500. The backend receipt is the existing route's S3 thumbnail/original
+upload path failing with `Resolved credential object is not valid`; the local runtime has no valid
+AWS bucket/credential configuration. SQL showed zero Bob `File` rows for the marker and zero Bob
+File rows overall, so no partial record was left. The emulator file was deleted, Bob logged out
+through Settings, and the API stopped cleanly. This proves the chooser and byte-read path through
+the app's existing caller and API boundary, while the final hosted object/persistence step is
+blocked by the shared-storage provider configuration. No local replacement, schema change, UI
+redesign, provider activation or unit test was added; an owner with approved isolated S3-compatible
+credentials must rerun the same existing journey for successful hosted persistence evidence.
+Evidence: `n03-android-portfolio-chooser-failure-20260922.json`.
+
+## PR195 CI repair and current head (2026-09-22 addendum)
+
+Fresh current-master CI run `35763514679` exposed 21 existing
+`PublicProfileViewModelTest` failures caused by the new block-list call being evaluated for
+established Persona test profiles whose mocks intentionally do not provide a blocked-list result.
+The focused source repair scopes the already verified personal UserBlock visibility check to the
+Local profile kind—the concrete reopened local-neighbor gap—while leaving Persona, Relationship and
+other block scopes unchanged. Existing class verification then passed with
+`./gradlew :app:testDebugUnitTest --tests app.pantopus.android.ui.screens.profile.PublicProfileViewModelTest`
+(`BUILD SUCCESSFUL`, 37 tasks, 2m43s). The repair is commit `3b374454a` on PR [#195](https://github.com/WangPantopus/skinny-pantopus/pull/195), still one changed production file relative to current master; fresh exact-head CI is running. No new tests were written or modified.
+
+The private durable bundle now contains 182 files; refreshed MANIFEST SHA-256 is
+`0c14162f655e7b7ec546201eac52a4206032df56f9e3f990073f75c0a9c027ea`.
