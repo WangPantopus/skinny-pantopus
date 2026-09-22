@@ -12,8 +12,8 @@ Queue190→191→192→193→194→195→196, then docs161/170/174;46 untouched.
 PR1963f82ae478 is published with real booking cancellation/refund recovery and capture-race
 repairs. Seven StripeTEST bookings covered database rollback, pending recovery, manual worker,
 captured refund, both approval/cancel race orderings, forbidden actor/concurrent retry and lost
-reply.107 existing checks pass; no new unit tests. FullCI35771063543 runs.31-file evidence
-MANIFEST76e68a5cf728e489b74ed6b5a6d45bbe401c125ab14bbddc911de1bca1603d86.
+reply.107 existing checks pass; no new unit tests. FullCI35771063543 passes, including full schema replay and production web build.31-file evidence
+MANIFESTe0619dec00aa1c562cf52de7e8793e23671ebf0b4cf55dc7a35db5b4c258226f.
 All owned provider/SQL/auth fixtures cleaned; API18132/Next18133 stopped and Chrome closed.
 Retain ledger88 unchanged: original84 plus private228/229, public230/231; earlier224 remains
 as previously archived. Public231 matches the tested cancellation function exactly. No
@@ -49,7 +49,7 @@ reverse ordering stays retryable, then refunds after capture. A lost success rep
 through GET. Legacy inconsistent rows display needs-review without inventing policy.
 
 [31-file cancellation evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-booking-cancellation-r1/RESULT.md),
-MANIFEST76e68a5cf728e489b74ed6b5a6d45bbe401c125ab14bbddc911de1bca1603d86.
+MANIFESTe0619dec00aa1c562cf52de7e8793e23671ebf0b4cf55dc7a35db5b4c258226f.
 A–D used real Chrome checkout; E–G API-created race fixtures reused that unchanged checkout
 proof and actual StripeTEST pm_card_visa, then real Chrome cancellation. Approval was API;
 unchanged host UI proof is reused from193. Natural scheduler, native booking, decline/no-show,
