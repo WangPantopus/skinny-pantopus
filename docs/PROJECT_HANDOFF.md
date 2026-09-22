@@ -1,5 +1,21 @@
 # Pantopus project handoff
 
+## Current coordinator checkpoint — September 22, 15:00 UTC
+
+PR1878b4573cb9 completes bounded lost-dispute wallet recovery: actual TEST first-delivery
+and retry web/API/SQL, truthful database errors, debt/proof controls,51 existing tests and
+full CI35743104345 pass. Sixteen-file MANIFESTd42a9fedd0ce85fe1e325e5d5a75d02f0073341924f16e8b0c04a1e13a90152a.
+Both fixture sets cleaned, customers deleted, lost TEST charges nonrefundable/no duplicate
+refund; API18132/Next18133 stopped, browser tabs closed, app tree clean. Retained ledger80.
+Current masterf9176cc2c full CI35740318739 passed; paid integration fast-forwarded/pushed
+to that head after migration-policy check. Active app branch codex/lost-dispute-wallet-recovery
+is based there. PR167766feedca still waits for Android lint/test/assemble. Queue167→168→177
+→179→180→182→183→184→185→186→187; docs161/170/174 last. PR186cf34d604d is green; Stream3
+146-file MANIFEST51339e601abe137bf8c636133d25d37b4cfddacd0a28a36ef7257515cdde3de0 verified.
+Stream2 candidate183 Later/Share verification is in docs55bf17370; final durable/body/RESUME
+handoff and heavy-slot release requested. Eight closed/72partial-open remain. Earlier
+runtime snapshots below are historical; exact boundaries are in each stream's status.
+
 Current runtime override, September22 14:44UTC: Stream1 reopened owned API18132/Next18133 for a fresh lost-dispute-after-income check, prefixf9220533, tab6. Provider cleanup pending; retainedledger80. Completed185 evidence/cleanup remains accepted. See newest Stream1 status. PR186 is now queued after185. Earlier runtime snapshots below are historical.
 
 ## Current coordinator checkpoint — September 22, 14:37 UTC

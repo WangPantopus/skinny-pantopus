@@ -1,5 +1,44 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — lost-dispute wallet recovery complete; PR187
+
+Branch codex/lost-dispute-wallet-recovery,8b4573cb9ab797ff676ca71feb971ec3b96e379d,
+[PR187](https://github.com/WangPantopus/skinny-pantopus/pull/187), currentmasterbasef9176cc2c.
+One existing backend/stripe/stripeWebhooks.js changes15add/2remove. Real TEST1250charge,
+worker1062income, delayed actual created/closed-lost events left Payment refunded1250
+but wallet1062 and its existing recovery target0. Current/merged/initial/all-ref comparison
+found no wired wallet recovery in the lost handler. Reused existing locked refund recovery
+RPC: no new SQL/table/service/screen/design/navigation/unit test. Fallback update/RPC
+failure now throws before acknowledging the provider event.
+
+Actual RPC EXECUTE denial500 retained retry and financial/notice state; exact ACL restoration
+and same-event retry200 recovered1062 once. Payment UPDATE denial500/exactACLrestore/retry
+preserved money. Post-commit duplicate deliveries unchanged. Three rollback SQL controls
+verify frozen/insufficient funds→durable debt→later recovery/reuse, wrong-income identity40001,
+with exact fixture restoration. Web wallet0, disabled withdrawal, matching1062adjustment.
+Separate fresh candidate TEST1250charge/worker1062 and first created/closed-lost delivery
+(no event reset) recovered1062; real web confirmed0/adjustment and duplicate deliveries
+preserved financial rows plus six notices. Existing51tests/5suites, syntax/diff and full
+[CI35743104345](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35743104345)
+passed backend/Docker/fresh schema/SQL contracts. No native job or UI redesign required by diff.
+
+Durable16-file [result](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-lost-dispute-wallet-r1/RESULT.md),
+MANIFESTd42a9fedd0ce85fe1e325e5d5a75d02f0073341924f16e8b0c04a1e13a90152a.
+Synthetic identity/fulfillment/maturity/delayed local transport; actual Stripe TEST events
+locally signed. Initial candidate/fault case explicitly reopened its one baseline event;
+fresh candidate did not. Debt/proof controls are rollback SQL only. No natural48hour,
+native/physical-device, hosted transport/worker, Connect/bank/live-money or external notice
+receipt claim; P06 remains partial. A private resume-directory setup error and initial
+zero-target-versus-absent-row assertion were corrected without application changes.
+
+Bothf9220533/34 independent cleanup22SQL/auth/eventchecks0each. Lost TEST charges1250
+nonrefundable, no duplicate refund objects, both customers deleted; actual logouts/tabs6/7
+closed; final API18132/Next18133 stopped, generated Next files restored/removed, app treeclean.
+Retain owned DBledger80 from185;187 changes no SQL or history. PRbody/privateRESUME updated.
+Masterf9176cc2c full CI35740318739 passed; paidintegration adopted/pushed f9176 after guardpass.
+PR167 waits oneAndroidjob; queue167→168→177→179→180→182→183→184→185→186→187, docs last.
+Next: serial review/integration and remaining P06/P07 reconciliation boundaries.
+
 ## September 22 — active lost-dispute-after-income verification
 
 New owned source lead after185 completion: existing lost-dispute handler records
