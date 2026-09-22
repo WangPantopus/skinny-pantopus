@@ -1076,3 +1076,20 @@ Coordinator reacquired same SQL64552/API64551 and web[::1]:18141/API18142 for St
   the LAN proxy `192.168.0.176:18142`; its source is PR160 plus the accepted
   PR175 bill-field allowlist. No application branch was merged or changed for
   this runtime handoff.
+
+## Native head refresh — September22
+
+- Coordinator refreshed PR160 to `4cca0a681` after merging current master;
+  this includes the current iOS AppDelegate change while retaining the
+  accepted Stream2 native fixes. The earlier exact-head CI receipt
+  `35719644248` remains valid for `ede5b72b5`; fresh required CI for `4cca0a681`
+  is running under the coordinator's merge queue.
+- The signed device artifact was rebuilt from `4cca0a681` successfully at
+  `/private/tmp/pantopus-stream2-ios-latest/.stream2-device-dd/Build/Products/Debug-iphoneos/Pantopus.app`.
+  The bundle is `app.pantopus.ios` signed by local Apple Development team
+  `6UYZBA546R`. The physical iPhone remains Offline, so installation and
+  device-launch acceptance are still unverified.
+- The LAN runtime was restarted from a temporary detached `4cca0a681` source
+  with accepted PR175 commit `501caf65a` applied (`cc885ab23`), without changing
+  the native fixture rows. Backend and proxy health both return 200 through
+  `127.0.0.1:18143` and `192.168.0.176:18142`.
