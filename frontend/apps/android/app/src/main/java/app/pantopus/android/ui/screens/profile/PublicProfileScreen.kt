@@ -499,11 +499,15 @@ internal fun LocalProfileLoadedFrame(
         },
         body = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
-                ProfileFollowRow(
-                    follow = follow,
-                    onFollow = onFollow,
-                    modifier = Modifier.padding(horizontal = Spacing.s4),
-                )
+                // A blocked profile keeps no Follow control (the server refuses
+                // the follow in both directions).
+                if (connection != ProfileConnection.Blocked) {
+                    ProfileFollowRow(
+                        follow = follow,
+                        onFollow = onFollow,
+                        modifier = Modifier.padding(horizontal = Spacing.s4),
+                    )
+                }
                 Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
                     LocalProfileTabStrip(
                         postCount = content.posts.size.takeIf { it > 0 },
