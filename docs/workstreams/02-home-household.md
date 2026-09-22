@@ -8,9 +8,63 @@ The first populated-row review found a concrete preservation failure: changing o
 
 The exact current APK (commit `ee69cbd8d`, SHA256 `073e9467e787df1fad93b9d3b28cfaa9db89c7fbaaee30b1e8eea4b850710491`) was assembled with `:app:assembleDebug --no-daemon`, installed on `emulator-5556`, and exercised through the real owner UI and LAN backend. On a populated synthetic row, title-only edit returned HTTP 200 with `location=Cabinet 2` and all existing detail keys preserved; the detail screen reloaded the title. A temporary `home.edit=false` override produced HTTP 403 with the draft retained and SQL unchanged; removing only that override and retrying returned HTTP 200 and again preserved all untouched fields.
 
+The exact current iOS head was also built in the isolated checkout `/private/tmp/pantopus-stream2-ios-latest` from `ee69cbd8d`. `xcodebuild -sdk iphoneos -configuration Debug` completed `BUILD SUCCEEDED`; deep code-sign verification passed, bundle `app.pantopus.ios`, and the embedded `PantopusAPIBaseURL` is `http://192.168.0.176:18142`. The artifact is `/private/tmp/pantopus-stream2-ios-latest/frontend/apps/ios/.stream2-device-dd-ee69/Build/Products/Debug-iphoneos/Pantopus.app`, main binary SHA256 `b57e7d667fc218045f29136bf78429c94b22864c27921669dcb8b22087baa28a`. CoreDevice still reports the paired iPhone unavailable (4016), so no physical install or launch is claimed.
+
 Two disposable response-integrity journeys used the same rebuilt app and exact row-scoped caller. A proxy changed a valid HTTP 200 readback to an invalid `type`; the form stayed open with the draft retained. A second proxy changed only the returned `emergency.id` and `home_id` to foreign values; the form again stayed open instead of dismissing or accepting a foreign row. The server-side synthetic updates and all helper rows were then deleted by exact id. Final retained counts for the fixture home are `HomeEmergency=0`, `HomePermissionOverride=0`, and `HomeAuditLog=0`; loopback and LAN health are HTTP 200/database connected.
 
 Durable sanitized evidence is `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-native-emergency-edit-r1/`, MANIFEST SHA256 `74fcd7c12203e35e524e7665293ee53ce6f2449fc6e85e1514340682dfd7ea55`. It includes the prior loss reproduction, rebuilt preservation/denial receipts, malformed and identity readback boundaries, screenshots, APK hash and cleanup. Exact-head CI run `35764090022` is still running; its detect, deployment, backend, web, database and instrumented prerequisites are green so far. The physical iPhone remains unavailable to CoreDevice (4016/unavailable), so no physical iPhone install or launch is claimed. The backend is available at `192.168.0.176:18142` for a connected device.
+
+## September 22 exact Home/residency/records/mail accounting — existing 40-row inventory
+
+This is the requested reconciliation of the existing Home slice of the 80-area
+backlog: H01–H08, R01–R06, I01–I07, D01–D10, F01–F05 and M01–M04. It is an
+accounting of current evidence and remaining acceptance boundaries, not a new
+tracker or a claim that partial workflows close a whole row. The slice is **8
+closed and 32 partial/open**. The eight closed rows are the existing H01–H06 and
+R01–R02 receipts; every other row retains an explicit boundary below.
+
+| Row | Current disposition and bounded evidence | Remaining boundary before row closure |
+|---|---|---|
+| H01 | **Closed — verified/preserve.** Existing detail/property authority and held-result retirement receipts are reused. | None within the recorded H01 scope; release-wide gates remain separate. |
+| H02 | **Closed — verified/preserve.** Existing list authority, safe errors and held-result retirement receipts are reused. | None within the recorded H02 scope. |
+| H03 | **Closed — verified/preserve.** Existing explicit projections and retryable detail/list/occupant reads are accepted. | None within the recorded H03 scope. |
+| H04 | **Closed — verified/preserve.** Existing per-field grants, household references and current roster are accepted. | Managed history and peer ownership remain separately gated outside H04. |
+| H05 | **Closed — verified/preserve.** Existing native identity, ownership, residency and current-access receipts are accepted. | Broader onboarding/first-use boundaries remain H07/H08/U01/U02. |
+| H06 | **Closed — verified/preserve.** Existing guarded deletion eligibility and occupancy/null behavior are accepted. | Broader member onboarding remains H08. |
+| H07 | **Partial/open.** Admission, invitation, task and native/browser recovery receipts are reused; recent native Home repairs do not change the row boundary. | New-account/provider/lifecycle exit criteria and remaining onboarding combinations. |
+| H08 | **Partial/open.** Owner/applicant/private-setup lists, selected-address and recipient decision paths are evidenced. | Broader new-account, provider and onboarding/verification exit criteria. |
+| R01 | **Closed — verified/preserve.** Prepared residency review, protected originals/receipts, decisions, restart and access retirement are accepted. | Release-wide gates remain separate. |
+| R02 | **Closed — verified/preserve.** Atomic submission, lock races, selected-address fencing, populated preservation and legacy compatibility are accepted. | Historical-binary UI, hosted adoption and broader applicant/reviewer lifecycle remain outside R02. |
+| R03 | **Partial/open.** Backend/browser/iOS/Android removal and current D10 self-leave use existing protected routes and receipts. | Complete re-entry, old unsubmitted reviewer originals and remaining occupancy lifecycle. |
+| R04 | **Partial/open.** Existing ordinary claim/review and relationship milestones are reused. | Ownership transfer, challenge/dispute and recovery paths. |
+| R05 | **Partial/open.** Existing lease approval/end/move-out/request repairs and native receipts are reused; PR176 only repairs the Home Settings caller. | Remaining lease attachment/provider/lifecycle combinations and broader release acceptance. |
+| R06 | **Partial/open.** No new closure evidence in this stream. | Residency pass/letter issue, view, revoke and public verification. |
+| I01 | **Partial/open.** No new closure evidence; current Home work does not establish checklist generation/cache freshness. | Health-score lag and uncertain-save recovery after checklist generation. |
+| I02 | **Partial/open.** Existing malformed-card/read evidence is reused. | Nested row validation, metadata, generation races, carryover/history and pagination. |
+| I03 | **Partial/open.** No new closure evidence. | Seasonal checklist hire/correct-gig linkage and original-intent recovery. |
+| I04 | **Partial/open.** D03 bill date/amount bounded repairs are accepted; they do not close calendar policy. | Local date rules, dashboard boundaries, recurrence and DST transitions. |
+| I05 | **Partial/open.** Existing property/detail readers are preserved. | Provider/data acceptance, stale cache, absent/wrong-property and verification wording. |
+| I06 | **Partial/open.** No new closure evidence. | Weather, air quality, alerts, daylight and civic sections across geography/provider states. |
+| I07 | **Partial/open.** Individual stale-reader repairs are recorded, including D09 response-integrity controls. | Mounted-view/cache invalidation without navigation, timeline labels and pagination. |
+| D01 | **Partial/open.** Package permission/status controls, Emergency PUT/DELETE and guest-pass repairs are real end-to-end; PR192 is the current preservation milestone. | Issues and remaining Home-entity mutations, receipts and complete create/edit/delete coverage. |
+| D02 | **Partial/open.** Existing panel error/draft retention is reused where verified. | Embedded issue/bill/package media, silent write failures, cancellation and unknown-save cases. |
+| D03 | **Partial/open.** Standalone bill-unit/date behavior and package `in_transit` contract are repaired and evidenced. | Final cross-client/server contract and remaining native/provider boundaries. |
+| D04 | **Partial/open.** No new closure evidence. | One truthful lifecycle across HomeMaintenanceLog/HomeIssue and competing readers/writers. |
+| D05 | **Partial/open.** Settings read/save, permission, atomic and response-lifetime evidence is recorded. | General settings recovery, concurrent edits, retained intent, privacy and explicit clearing across clients. |
+| D06 | **Partial/open.** Home privacy read-failure repair and actual consumer recovery are recorded. | Every exposed privacy control and all native/other consumers. |
+| D07 | **Partial/open.** Invitation send/decline/role/audit and mailbox-preferences route repair evidence is recorded. | ShareCenter, Members/Security and provider-panel empty/error states plus explicit role choice. |
+| D08 | **Partial/open.** Browser M02 share lifecycle and Android guest-pass issue/revoke/share evidence are accepted within limits. | Native/hosted external-share expiry, exact-resource scope, account changes and storage lifecycle. |
+| D09 | **Partial/open.** Pets/polls false-empty routes and page retry behavior are repaired; PR192 readback guards malformed success. | Remaining malformed-success readers and complete cross-client verification. |
+| D10 | **Partial/open.** Real Settings self-leave now uses the existing `/move-out` transaction and was restored cleanly. | Household delete/linked-resource cleanup across history, files, balances and live obligations. |
+| F01 | **Partial/open.** Home bill cards are covered by D03 evidence only. | Place overview/detail across web/iOS/Android, fractions, currencies, periods and totals. |
+| F02 | **Partial/open.** Existing privacy/error distinctions are reused where recorded. | Place financial failures, source absence, access retirement and joint Home/Place privacy. |
+| F03 | **Partial/open.** Home bill create/edit/delete boundaries are recorded. | Place bill splits, malformed input, currency changes and permission-limited actions. |
+| F04 | **Partial/open.** No new closure evidence. | Contributor eligibility, withdrawal/deletion, freshness, scale and retention. |
+| F05 | **Partial/open.** No new closure evidence. | Final legacy/current bill format integration, worker deployment and safe schedule retirement. |
+| M01 | **Partial/open.** Existing mailbox route and preferences route contracts are preserved; PR178 repairs route ordering only. | Private-mail recipient/attention/privacy/trust, membership state, errors and exact-content returns. |
+| M02 | **Partial/open.** Browser guest-pass issue/view/revoke/time-window/view-limit journey and Android create/Later/Share/revoke are accepted; copied/public-page and provider limits are labelled. | Complete native/hosted guest flow, exact copied-link/public rendering and broader external-share acceptance. |
+| M03 | **Partial/open.** Existing pagination/read receipts are reused where recorded. | Large-household/history ordering, performance and cross-resource scale checks. |
+| M04 | **Partial/open.** No new closure evidence beyond the mailbox route repair. | Reachable conversions, translations, signing, physical-mail and neighbor-request behavior. |
 
 ## September 22 native Emergency form dismissal — focused repair verified, PR191
 
