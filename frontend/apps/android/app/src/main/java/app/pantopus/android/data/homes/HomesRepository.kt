@@ -215,6 +215,16 @@ open class HomesRepository
             request: CreateEmergencyRequest,
         ): NetworkResult<CreateEmergencyResponse> = safeApiCall { api.createHomeEmergency(homeId, request) }
 
+        /** `PUT /api/homes/:id/emergencies/:emergencyId`. */
+        open suspend fun updateHomeEmergency(
+            homeId: String,
+            emergencyId: String,
+            request: CreateEmergencyRequest,
+        ): NetworkResult<CreateEmergencyResponse> =
+            safeApiCall {
+                api.updateHomeEmergency(homeId, emergencyId, request)
+            }
+
         /** `DELETE /api/homes/:id/emergencies/:emergencyId`. */
         open suspend fun deleteHomeEmergency(
             homeId: String,

@@ -41,8 +41,9 @@ sealed interface EmergencyInfoDetailUiState {
 
 /**
  * P2.8 — Backs the Emergency Info detail. Loads the parent list and
- * finds the row by id (no GET-by-id today). Edit remains local-only because
- * the backend has no PUT handler; delete uses the existing DELETE route.
+ * finds the row by id (no GET-by-id today). The detail reloads whenever
+ * the route resumes so a server edit appears when the user returns.
+ * Delete commits through the existing DELETE route before leaving the detail.
  */
 @HiltViewModel
 class EmergencyInfoDetailViewModel
@@ -169,6 +170,9 @@ class EmergencyInfoDetailViewModel
                         } catch (_: Throwable) {
                             Instant.now()
                         },
+                    location = dto.location,
+                    rawDetails = dto.details.orEmpty(),
+                    homeId = dto.homeId,
                 )
         }
     }

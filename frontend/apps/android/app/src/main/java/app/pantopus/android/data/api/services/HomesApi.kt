@@ -321,6 +321,14 @@ interface HomesApi {
         @Body body: CreateEmergencyRequest,
     ): CreateEmergencyResponse
 
+    /** `PUT /api/homes/:id/emergencies/:emergencyId`. */
+    @PUT("api/homes/{id}/emergencies/{emergencyId}")
+    suspend fun updateHomeEmergency(
+        @Path("id") homeId: String,
+        @Path("emergencyId") emergencyId: String,
+        @Body body: CreateEmergencyRequest,
+    ): CreateEmergencyResponse
+
     /** `DELETE /api/homes/:id/emergencies/:emergencyId` — route `backend/routes/home.js:3730`. */
     @DELETE("api/homes/{id}/emergencies/{emergencyId}")
     suspend fun deleteHomeEmergency(
