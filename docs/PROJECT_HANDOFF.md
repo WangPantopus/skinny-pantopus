@@ -1,5 +1,21 @@
 # Pantopus project handoff
 
+## Current coordinator checkpoint — September 22, 14:28 UTC
+
+PR166 merged f9176cc2c after exact ae03e34d2 passed CI35735947354; PR167 is
+refreshing for fresh checks. Master aggregate2b7378aa4 still has an Android job
+pending; do not equate the successful PR checks with merged-master acceptance.
+Queue167→168→177→179→180→182→183→184→active won-release repair, docs161/170/174
+last. Stream1 actual TEST won-dispute failure is reproduced and its candidate now
+credits1062 cents exactly once across concurrent/repeated workers; real web wallet
+shows10.62. Candidate branch codex/won-dispute-wallet-release is uncommitted.
+Owned DB64562 ledger80 includes forward20260922022300; original79 rows unchanged.
+API18132/Next18133 and owned test provider fixture remain active for negative
+controls and cleanup. See newest Stream1 section; no native/hosted/Connect claim.
+Stream2 holds the heavy native build slot. Stream3 N02 Mark-all mutation/restore
+is accepted as a bounded Android journey and continues feasible N/A cases.
+Eight closed/72partial-open counts remain. Earlier checkpoints are historical.
+
 ## Current coordinator checkpoint — September 22, 14:00 UTC
 
 Current master2b7378aa4 incorporates PR165/181 after their fresh passing checks;

@@ -1,5 +1,35 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — won-dispute wallet release, candidate verification in progress
+
+Branch codex/won-dispute-wallet-release from2b7378aa4, currently uncommitted:
+backend/jobs/processPendingTransfers.js, backend/routes/paymentOps.js, and necessary
+forward migration20260922022300_won_dispute_wallet_release.sql. Current/archived/all-ref
+comparison found existing worker/admin/SQL guards excluded all dispute IDs. Actual
+Stripe TEST closed/won retained the ID and restored captured_hold, but controlled mature
+cooling age yielded worker skip, RPC PAYMENT_STATE, falsely healthy admin status and
+zero web wallet earnings. Synthetic identity/fulfillment and controlled age remain limits.
+
+Candidate admits ID-bearing won disputes while preserving unresolved/lost/unknown guards,
+existing payment proof, cooling, refund, locks and receipt idempotency. Exact forward
+migration applied only to owned SQL64562: ledger79→80, original79 rows byte-identical
+SHAf99ecb69aa861013765ad31fb22e9de1e5253956a41df859b17b9509379989c0;
+fileSHA6637fa06e4b500f67240321195541882d74fb4ae53e41173b712af3729b119f8.
+Function signatures, owner, ACL and settings preserved; an initial metadata assertion
+rolled back its entire transaction before the successful application. Applied history
+was not rewritten. Existing80 tests/6suites pass; final schema replay/CI remains pending.
+
+Actual candidate admin health degraded/stuck1, worker non-admin403, two concurrent jobs
+plus repeat200, direct RPC reused=true. SQL exactly one1062-cent credit, one settlement,
+two delivery rows/two notices, dispute ID/status unchanged. Existing web wallet shows
+10.62 balance and one matching task-income row. Negative guards/recovery controls and
+cleanup still in progress; no whole-row/native/hosted/Connect/provider-delivery closure.
+Private evidence /private/tmp/pantopus-stream1-won-release-r1; durable bundle pending.
+API18132 PID47886 and Next18133 PID43664 active, IAB tab5 logged in as owned worker;
+f9220532 provider customer and won TEST charge require exact refund/customer/SQL cleanup.
+Retain DB ledger80/functions afterward. Private RESUME updated. PR166 mergedf9176cc2c
+on fresh passing35735947354, PR167 refreshing; docs merge last.
+
 ## September 22 — release configuration inventory and next won-dispute release check
 
 Read-only GitHub metadata at sourceb0986380b/master2b7378aa4: repository and all four
