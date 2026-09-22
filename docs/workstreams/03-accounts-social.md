@@ -1,3 +1,109 @@
+# CURRENT STREAM 3 RESUME SUMMARY — 2026-09-22
+
+This is the current handoff point. It supersedes older opening paragraphs and stale “pending”
+wording below while preserving the detailed history and evidence links. Stream 3 is not a whole-app
+closure claim; it is ready for coordinator integration review with the explicit open boundaries here.
+
+## Git, application and merge state
+
+- **Application worktree:** `/private/tmp/pantopus-workstream-accounts-social`, branch
+  `local/stream3-ios-integration`, `HEAD=b956a00767835586b5114698a3a2e91fbcddefad`. It has
+  unrelated existing local web changes in `frontend/apps/web/src/lib/publicShare.ts`,
+  `frontend/apps/web/tsconfig.json` and untracked `frontend/apps/web/.next-stream3/`; preserve
+  them and do not reset or fold them into Stream 3.
+- **Android worktree:** `/private/tmp/pantopus-stream3-android`, branch
+  `local/stream3-android-integration`, clean at `HEAD=3b374454ad07060cf5dcaa1ce02fc48b3be4c88e`.
+- **Live coordination worktree:** `/Users/yingpengwang/pantopus-coordination`, branch
+  `codex/workstream-coordination`; this file is the only live Stream 3 status location. The
+  current status commits are pushed to `origin/codex/workstream-coordination`.
+- **PR195:** [open](https://github.com/WangPantopus/skinny-pantopus/pull/195), head
+  `3b374454ad07060cf5dcaa1ce02fc48b3be4c88e`, coordinator merge pending. Exact-head CI run
+  `35768401037` is green for Android lint/test/assemble, Android emulator tests, database replay/
+  lint, safeguards and aggregate CI OK; backend/web/iOS/seeder jobs were skipped by change
+  detection. No merge was performed by Stream 3.
+- **Merged scoped repairs:** PR163 → `e5335f584dd99f82e7c66a3974b04400098f0c0c`; PR168 →
+  `b30e0d395`; PR178 mailbox route order → `715ccd8c0`; PR182 profile PATCH contract → merged
+  remotely at head `7b6ddc6516769e02d12b6eff37f52fb0d326455e` on 2026-09-22. The older PR182
+  paragraph below says “no merge” because it predates that merge; treat this summary as current.
+
+## Grouped implementation repairs and source bindings
+
+- **Cache invalidation:** existing `backend/routes/blocks.js` and
+  `backend/routes/neighborMessages.js`; PR163 repaired block/unblock feed-filter invalidation
+  without redesigning the cache or schema.
+- **Android social safety:** existing
+  `frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/profile/PublicProfileViewModel.kt`
+  is the sole PR195 production diff. It scopes the personal `UserBlock` visibility guard to Local
+  profiles and fails closed when `/api/users/blocked` is unavailable; Persona/Relationship scopes
+  remain distinct. The earlier Detekt-only extraction is in the merged PR168 Android path.
+- **Profile PATCH contract:** existing `backend/routes/users.js` commits `26fe9d57f` and
+  `b956a0076` return the canonical user projection and emit `PROFILE_READBACK_UNAVAILABLE` after
+  a write when UserSkill readback fails. No DTO, UI, schema or migration replacement was added.
+- **Mailbox:** PR178’s existing route-order repair is integrated; Stream 3 made no duplicate
+  mailbox implementation.
+
+## Evidence and runtime bindings
+
+Durable evidence is at
+`/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream3-native-social-r1`.
+The verified bundle has 198 files and MANIFEST SHA-256
+`1fa796d1b6f08e89b549f0aadf0f6986241fbd511184ff2825dc889071957f26`; raw logs, credentials,
+tokens and database archives remain outside Git/chat. Operational receipts are under
+`/private/tmp/pantopus-stream3-20260920-r1`.
+
+Accepted real boundaries include: PR163 web screen → HTTP → PostgREST/SQL cache behavior;
+installed Android notification list/filter/read/delete/Cancel/offline rollback/retry and induced
+HTTP-5xx rollback/retry; Android local-neighbor block → Settings → fresh deep link with fail-closed
+blocked-list read fault; Pulse/Beacon/follow/post/reply/mute and identity separation; A03 chooser →
+real multipart portfolio upload reaching the existing S3 credential failure with zero File rows;
+A05 installed profile PATCH 503 preserving two unsaved values → same-form 200 retry; A02 cold-process
+session restoration and logout; and A04 route plus installed Add Home provider-unavailable result,
+retry, draft preservation, disabled continuation and discard/logout.
+
+Source/APK/device bindings: Android repair source head `3b374454a`; installed repaired APK
+SHA-256 `2728688a30a78449c990c302ebc72053802322772a990e7a3a6030e2265d504a`; earlier retained
+notification APK SHA-256 `83cc0db08992e83dd1faa87a7baacdf582624a3e847f965f6361ab5fdd2cdf93`;
+Android device `emulator-5554`; retained iOS simulator `Pantopus Stream3 Social R2`, UDID
+`0AE16FA0-E244-414F-86C8-24893BDFD979`. Intended local ports are API `18130`, Next `18131`,
+Postgres/PostgREST `64531/64532`, Mailpit `64535/64536`; API and Next are currently stopped,
+while the retained local Supabase/Mailpit containers remain available for an assigned runtime.
+The N03 release-build/native slot has not been reassigned and no build should start here.
+
+Fixture cleanup is recorded: N03 block/home/occupancy/overlay counts zero; N02 HTTP-5xx target
+removed after successful retry; A03 Bob File rows zero after S3 failure; A04 temporary HomeAddress,
+Home and AddressClaim rows zero; A05 Bob first/last/middle/bio restored, zero UserSkill rows and
+privileges restored; every exercised account logged out and local API processes stopped.
+
+## Current authoritative acceptance accounting
+
+The exact quoted N01–N05/A01–A05 criteria and evidence mapping are in the “Exact ten-row acceptance
+mapping for next handoff” section below. Current state is: N01 release/device notification states
+remain partial; N02 physical Android remains open; N03 release-candidate Pulse/Beacon cohort remains
+open; N04 moderation processing, wider entry points and full native/socket/provider lifetime remain
+open; N05 daily-agenda delivery has no settled producer/recipient/channel policy; A01 external
+Apple/Google callbacks remain open; A02 provider/device revocation combinations remain open; A03
+hosted storage success/lifecycle remains open; A04 legitimate unavailable handling is accepted but
+activated Smarty/geography/unit success remains open; A05 owner-routed Marketplace/subscription/
+booking/wallet/mail/search/Home/payment actions remain open. Unit-test coverage is excluded from
+these functional/evidence estimates and no new unit tests were written.
+
+## Next actions and explicit non-actions
+
+Coordinator may merge/refresh PR195 after its queue, then assign a release-candidate native slot or
+provide the physical device/provider/policy/route ownership needed by an open row. The next agent may
+use the exact prerequisites in the final section below, preserve accepted reports, and repair only a
+reproduced defect in the existing caller/endpoint/service contract. Do **not** rerun the accepted
+PR163 cache journey, PR168 Detekt repair, PR195 local block/read-fault journey, N02 emulator
+notification matrix, A03 S3 credential failure, A04 provider-unavailable variants, A05 profile
+503→200 retry, or A02 cold-process pass. Do not start a native build without the reassigned slot;
+do not activate providers, purchase services, run hosted migrations, add schema, redesign UI, add
+unit-test files, or merge independently.
+
+Known boundaries/inconsistencies are deliberate: the A04 UI used literal `%20` street input from
+ADB, so it does not claim normal geography success; the installed APK is debug, not release
+candidate; green PR195 CI does not claim skipped backend/web/iOS jobs; and historical sections below
+retain their original timestamps and limits.
+
 # Stream 3 — Accounts, social and notifications
 
 Current September21 10:33UTC: approved isolated natural scheduler check completed
