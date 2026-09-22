@@ -40,7 +40,7 @@ All three run on APK `db303e5bbe782a089715f8b91808b4f37c5fa3c96841edb37d23f8ac29
   - Remote revocation (fixture 401) signs out with "Your session has expired".
   - Another account on the same device sees no checkout (owner reads 403).
   - The owner's cancel voids the intent.
-- **U02 Android payment screens (22:48–23:03)** — audit `20260922-stream1-u02-android-payment-a11y-r1`, MANIFEST `26ca2ea80ad573a40310398304d854b158c612df1e99cea3d90035f922aeb33b`. Font scale 2.0 and dark mode are usable, except that a dark-mode tip-sheet title was nearly invisible. That is **repaired in PR198** (`6f3436bf3`, one file, theme-aware sheet text; light mode pixel-identical; APK `d95cbe13…` now on emulator-5558). Layout proposals needing design approval: the WINNER badge and progress-label wrapping at 2.0.
+- **U02 Android payment screens (22:48–23:03)** — audit `20260922-stream1-u02-android-payment-a11y-r1`, MANIFEST `26ca2ea80ad573a40310398304d854b158c612df1e99cea3d90035f922aeb33b`. Font scale 2.0 and dark mode are usable, except that a dark-mode tip-sheet title was nearly invisible. That is **repaired and merged in PR198** (`6f3436bf3` → master `4cc024ba3`, one file, theme-aware sheet text; light mode pixel-identical; APK `d95cbe13…` now on emulator-5558). Layout proposals needing design approval: the WINNER badge and progress-label wrapping at 2.0.
 - Rows: P03, P06, P08, P09 and U02 stay partial.
   - P03: iOS native tips and unavailable local-storage recovery.
   - P06: the capture-proof decision, normal-path native presentation, and Connect/hosted operation.
