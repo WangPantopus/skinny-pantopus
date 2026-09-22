@@ -4196,20 +4196,13 @@ router.get('/:id/pets', verifyToken, async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      // Table may not exist yet if migration hasn't been applied — return empty
-      if (error.message && (error.message.includes('does not exist') || error.code === '42P01')) {
-        logger.warn('HomePet table not found, returning empty', { homeId });
-        return res.json({ pets: [] });
-      }
+      // An unavailable read is an error, never a confirmed-empty list.
       logger.error('Error fetching pets', { error: error.message, homeId });
       return res.status(500).json({ error: 'Failed to fetch pets' });
     }
 
     res.json({ pets: data || [] });
   } catch (err) {
-    if (err.message && (err.message.includes('does not exist') || err.message.includes('42P01'))) {
-      return res.json({ pets: [] });
-    }
     logger.error('Pets fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch pets' });
   }
@@ -4391,11 +4384,7 @@ router.get('/:id/polls', verifyToken, async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      // Table may not exist yet if migration hasn't been applied — return empty
-      if (error.message && (error.message.includes('does not exist') || error.code === '42P01')) {
-        logger.warn('HomePoll table not found, returning empty', { homeId });
-        return res.json({ polls: [] });
-      }
+      // An unavailable read is an error, never a confirmed-empty list.
       logger.error('Error fetching polls', { error: error.message, homeId });
       return res.status(500).json({ error: 'Failed to fetch polls' });
     }
@@ -4453,9 +4442,6 @@ router.get('/:id/polls', verifyToken, async (req, res) => {
 
     res.json({ polls: enriched });
   } catch (err) {
-    if (err.message && (err.message.includes('does not exist') || err.message.includes('42P01'))) {
-      return res.json({ polls: [] });
-    }
     logger.error('Polls fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch polls' });
   }

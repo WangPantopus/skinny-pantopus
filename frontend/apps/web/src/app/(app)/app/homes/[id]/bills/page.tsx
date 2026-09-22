@@ -23,6 +23,8 @@ function BillsContent() {
 
   const [bills, setBills] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed read is shown as unavailable with a retry, never as an empty list.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [tab, setTab] = useState<BillTab>('upcoming');
   const [showCreate, setShowCreate] = useState(false);
 
@@ -40,8 +42,10 @@ function BillsContent() {
     if (!homeId) return;
     try {
       const res = await api.homeProfile.getHomeBills(homeId);
+      setLoadError(null);
       setBills((res as any)?.bills || []);
     } catch {
+      setLoadError('Current bills could not be loaded. Retry to check current information.');
       toast.error('Failed to load bills');
     }
   }, [homeId]);
@@ -193,6 +197,12 @@ function BillsContent() {
         </div>
       )}
 
+      {loadError ? (
+        <div className="text-center py-16">
+          <p className="text-sm text-app-text-secondary">{loadError}</p>
+          <button type="button" onClick={() => { setLoading(true); fetchBills().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+        </div>
+      ) : (<>
       {/* Tabs */}
       <div className="flex border-b border-app-border mb-4">
         {TABS.map((t) => (
@@ -273,6 +283,7 @@ function BillsContent() {
           })}
         </div>
       )}
+      </>)}
     </div>
   );
 }
