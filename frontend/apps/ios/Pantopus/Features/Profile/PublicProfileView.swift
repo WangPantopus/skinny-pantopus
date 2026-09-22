@@ -350,7 +350,9 @@ public struct PublicProfileView: View {
     /// (`src/app/user/[id].tsx:522-569`). Hidden on your own profile and
     /// when signed out, matching RN.
     @ViewBuilder private var followRow: some View {
-        if viewModel.canFollow {
+        // A blocked profile keeps no Follow control (the server refuses the
+        // follow in both directions).
+        if viewModel.canFollow, viewModel.connection != .blocked {
             Group {
                 if viewModel.isFollowing {
                     GhostButton(
