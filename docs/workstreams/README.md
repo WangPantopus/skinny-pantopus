@@ -1,5 +1,7 @@
 # Three-stream coordination
 
+Runtime update September22 15:04 UTC: Stream1 API18132/Next18133 are reserved again for ownedf9220535 won-after-wallet-income status verification; actualTESTcharge/customer cleanup pending, ledger80 retained. No new application edit yet; see newest Stream1 section. Stream2 heavy slot explicitly released;183 final16-file MANIFESTdc9f2a3c5820a6adaa10e365a2443c2a7c0b1b47bf81995e0f91082f884eb022 independently verified. PR167 also awaits a source-correct installed notification-tap binding from Stream3 before merge. Earlier runtime snapshots below are historical.
+
 ## Current coordinator checkpoint — September 22, 15:00 UTC
 
 PR1878b4573cb9 completes bounded lost-dispute wallet recovery: actual TEST first-delivery

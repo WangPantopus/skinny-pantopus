@@ -1,5 +1,22 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — active won-dispute status after prior wallet income
+
+Clean newbranchcodex/won-dispute-payment-state from verifiedmasterf9176cc2c. Existing
+won handler selects transferred only for stripe_transfer_id; the already accepted
+wallet projection provides exact income proof. Current/merged/initial/all-ref comparison
+recorded before edit. New owned real TEST1250charge and actualworker1062income predate
+deliberately delayed created-event delivery. Pending real won closure/status/UI check;
+no defect or application change claimed yet. Synthetic identity/fulfillment/age remain.
+Private /private/tmp/pantopus-stream1-won-wallet-state-r1, prefixf9220535, API18132PID36137,
+Next18133PID38644, IABtab8 worker session. Setup alreadydone; keep provider receipt for
+actual won refund/customer/exactSQL cleanup. Retain ledger80; privateRESUME current.
+PR183 durable16files dc9f2a3c5820a6adaa10e365a2443c2a7c0b1b47bf81995e0f91082f884eb022
+verified; peer body/privateRESUME/docsd81b1098b current, heavybuildslot released.
+PR167 final notificationPath rewrite needs an actual source-correct installed notification
+row tap; earlier broad bare-link evidence alone does not bind it. Peer3 is resolving this
+while its last Android CI job runs. Preserve all accepted evidence and queue order.
+
 ## September 22 — lost-dispute wallet recovery complete; PR187
 
 Branch codex/lost-dispute-wallet-recovery,8b4573cb9ab797ff676ca71feb971ec3b96e379d,
