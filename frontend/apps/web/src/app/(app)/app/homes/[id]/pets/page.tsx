@@ -19,6 +19,8 @@ function PetsContent() {
 
   const [pets, setPets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed read is shown as unavailable with a retry, never as an empty list.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -35,8 +37,10 @@ function PetsContent() {
     if (!homeId) return;
     try {
       const res = await api.homeProfile.getHomePets(homeId);
+      setLoadError(null);
       setPets((res as any)?.pets || []);
-    } catch { toast.error('Failed to load pets'); }
+    } catch {
+      setLoadError('Current pets could not be loaded. Retry to check current information.'); toast.error('Failed to load pets'); }
   }, [homeId]);
 
   useEffect(() => { setLoading(true); fetchPets().finally(() => setLoading(false)); }, [fetchPets]);
@@ -100,6 +104,12 @@ function PetsContent() {
         </div>
       )}
 
+      {loadError ? (
+        <div className="text-center py-16">
+          <p className="text-sm text-app-text-secondary">{loadError}</p>
+          <button type="button" onClick={() => { setLoading(true); fetchPets().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+        </div>
+      ) : (<>
       {pets.length === 0 ? (
         <div className="text-center py-16">
           <span className="text-4xl block mb-3">{'\uD83D\uDC3E'}</span>
@@ -160,6 +170,7 @@ function PetsContent() {
           })}
         </div>
       )}
+      </>)}
     </div>
   );
 }

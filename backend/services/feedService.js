@@ -293,6 +293,7 @@ async function getMuteAndHideFilters(userId) {
     { data: mutes, error: mutesError },
     { data: hides, error: hidesError },
     { data: blocks, error: blocksError },
+    { data: userBlocks, error: userBlocksError },
     { data: personaBlocks, error: personaBlocksError },
     { data: feedPrefs, error: feedPrefsError },
   ] = await Promise.all([
@@ -302,11 +303,15 @@ async function getMuteAndHideFilters(userId) {
       .select('requester_id, addressee_id')
       .eq('status', 'blocked')
       .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`),
+    // Profile blocks (UserBlock) hide content in both directions, like messaging.
+    supabaseAdmin.from('UserBlock')
+      .select('blocker_user_id, blocked_user_id')
+      .or(`blocker_user_id.eq.${userId},blocked_user_id.eq.${userId}`),
     supabaseAdmin.from('PersonaBlock').select('persona_id').eq('blocked_user_id', userId),
     supabaseAdmin.from('UserFeedPreference').select('*').eq('user_id', userId).maybeSingle(),
   ]);
 
-  const filterError = mutesError || hidesError || blocksError || personaBlocksError || feedPrefsError;
+  const filterError = mutesError || hidesError || blocksError || userBlocksError || personaBlocksError || feedPrefsError;
   if (filterError) throw new Error(`Failed to load feed filters: ${filterError.message}`);
 
   const blockedUserIds = new Set();
@@ -314,6 +319,11 @@ async function getMuteAndHideFilters(userId) {
     for (const b of blocks) {
       if (b.requester_id === userId) blockedUserIds.add(b.addressee_id);
       else blockedUserIds.add(b.requester_id);
+    }
+  }
+  if (userBlocks) {
+    for (const b of userBlocks) {
+      blockedUserIds.add(b.blocker_user_id === userId ? b.blocked_user_id : b.blocker_user_id);
     }
   }
 
