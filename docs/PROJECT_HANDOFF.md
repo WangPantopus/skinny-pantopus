@@ -14,12 +14,14 @@ PR158 was already closed, and PR159's reconciliation is incorporated into this l
   merged as `6e24aef59` after current4cca0a CI35724788993 passed all checks. Its previous
   exact ede5b72b full CI35719644248 passed. PR175 merged0b1a26cc1 after exact
   5c5c91b9d CI35728607795 passed. PR176 merged95016cdbb after fresh CI35729368796 and reviewed cleanup.
-  Serial code order:178 →165 →166
+  PR178 merged715ccd8c0 after CI35731690811.
+  Serial code order:165 →181 →166
   →167 →168 →177 →179 →180; update each branch and require fresh checks. Docs161/170/174 last;
   verify-only171/172 never merge, close after their fixes land.
-- **Stream 1:** paid integration adopted/pushed `0b1a26cc1`; its tree exactly matches
-  accepted PR1755c5c91b9d, merged-master CI35729253722 still runs, migration policy passed.
-  Paid worktree is clean at `codex/web-offer-price-precision`09a878d38, PR180;
+- **Stream 1:** paid integration adopted/pushed `715ccd8c0`; tree exactly matches accepted
+  PR1780f1a00b16, aggregate master CI35732165373 runs. Original guard also stalled onNode20;
+  PR181037421e1d fixes its input pipe, actual guard passesNode20/24 and CI35732925365 passes.
+  Paid worktree is clean at `codex/migration-file-hashing`037421e1d. PR18009a878d38;
   real ranked/fallback web amounts and identity now correct,99existing tests and
   CI35730870955 pass.10-file MANIFEST109eb987ba8896e22c4a39db3150863f40a681634380952bee62816020e087c1. PR179 at924ac3299 remains ready. Ranked offers return200 on both native apps and web;
   15 existing scoring tests and CI35728227377 pass, 12-file manifest
@@ -31,10 +33,10 @@ PR158 was already closed, and PR159's reconciliation is incorporated into this l
   `2560b7c78a9971316680390b8225b120e00f427c2f8cc52f9ab100a90659b9de`.
   Earlier P10 workload, local O02 recovery, ledger and release-link evidence is retained.
 - **Stream 2:** existing task `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` continues Home
-  native verification; PR160/175/176 are merged. Seven-file176 durable evidence verified;
+  native verification; PR160/175/176/178 are merged. Seven-file176 durable evidence verified;
   changed occupancy fields restored, generated audit/notice and3later matching notices removed.
   PR1789ff513826 moves unchanged mailbox GET/PATCH preferences before generic /:id;
-  its4-file durable evidence is verified, current-master refresh requested; full preference
+  its4-file durable evidence is verified and merged after current-head CI; full preference
   snapshot equality is peer-reported, coordinator requested concrete hashes or narrower claim;
   no current frontend preferences caller or UI edit is assumed. Docs161/private RESUME
   remain its reporting locations; preserve its owned runtime and fixtures.
@@ -52,7 +54,8 @@ PR158 was already closed, and PR159's reconciliation is incorporated into this l
 Runtime: retained Stream1 SQL64562/API64561 stays up, ledger79. Native3DS owned SQL
 fixtures from that milestone are zero; all test intents canceled/customers deleted.
 Price-check exact fixtures are now0; API18132/Next18133 stopped, browser logged out/closed.
-A pre-existing detached04:02UTC completion File retains pending cleanup; see01 boundary.
+The detached04:02UTC completion File was recovered through the real worker/local Storage
+after natural retry delay, then exact own tombstone/bucket cleaned; broad metadata matches0.
 Stream1 native apps terminated; C2BCF36A/emulator5558 retained.
 Stream3 holds the exclusive heavy native build grant for A05 if artifact review requires it;
 release promptly if unused or after build. Coordinator stopped only its retained Maestro
@@ -60,7 +63,8 @@ xcodebuild driver on C2 and verified no xcodebuild before issuing this grant. Pe
 by their streams. Private coordinator continuation:
 `/private/tmp/pantopus-stream1-wallet-read-r1/RESUME-2026-09-22.md`.
 
-Next: existing completion-file retention and native dispute/remaining P10/provider boundaries;
+Next: native dispute/remaining P10/provider boundaries; CUA rejects Simulator, explicit
+Maestro/ADB-driver question pending with user; independent API/SQL/web work continues;
 continue peer row orders and serial merges. Hosted/Connect/live, physical-device,
 production recovery and release association/configuration remain unverified. P04/P05
 fee payer/recipient and the recorded founder decisions remain unresolved.

@@ -1,6 +1,27 @@
 # Stream 1 — Gigs and payments
 
-## September 22 — migration blob hashing repaired; PR181 checks running
+## September 22 — prior completion-file retention recovered and cleaned
+
+The pre-existing04:02UTC tombstone discovered by the price audit was the sole actual
+cleanup candidate with matching original synthetic owner/gig. Existing worker
+homeDocumentRecovery.completionFiles and real RPC/local Storage were exercised:
+missing private bucket404 → selected1/pending1/removed0; claim cleared, immutable data
+unchanged. Immediate repeat selected0. After natural10minute eligibility13:24:16UTC,
+created only the owned absent private bucket empty; actual worker selected1/removed1/
+pending0, marking cleanup complete. Deletion was idempotent for an already-absent key;
+no fresh uploaded-byte or hosted-provider deletion claim. No time/SQLclock acceleration.
+
+Removed the empty bucket and exact synthetic tombstone under transaction-local replica
+role with immutable identity predicates. Broad historical File metadata matches0,
+bucket absent/objects0/ledger79 retained. No application/test/schema/policy change;
+production retention policy remains open. No new UI journey; reuses actual native proof
+lineage and binds current worker/source715ccd8c0. Six-file durable owner
+20260922-stream1-completion-retention-r1, MANIFEST bcbba6474c358cc4b4b24471a68d3fa6ac308dae6d519d1e3002be6c086d5eea;
+all hashes verified. API18132/Next18133 remain stopped, native apps terminated, own
+devices/DB retained, peers untouched. Private RESUME updated. No row closes.
+
+
+## September 22 — migration blob hashing repaired; PR181 CI passed
 
 Paid integration adopted/pushed715ccd8c0 (merged178), exact tree equal to accepted
 PR1780f1a00b16/CI35731690811. Merged-master aggregate35732165373 is running.
@@ -16,8 +37,8 @@ Actual repository guard passes on both Node20.20.0 and24.13.0; all6 existing pol
 pass, including >1MiB baseline, changed applied SQL and append-only order. Paid migration/
 policy bytes match these validated bytes; no claim that the old checker passed unchanged.
 [CI35732925365](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35732925365)
-is running. Five-file durable bundle20260922-stream1-migration-file-hashing-r1, MANIFEST
-6a237dd952b417da62b0da872f813b6d1968e79e7175083fd0f2a3bc5e8993c9; refresh after CI.
+passed all required checks. Five-file durable bundle20260922-stream1-migration-file-hashing-r1,
+MANIFEST d22713d9cc18beb371788f0f737ad867d3021bec3d98709b5fdabb84df56129f.
 Application worktree clean/committed/pushed. No fixture/provider/native changes by this repair.
 
 Separate existing completion-file recovery observed missing bucket404 → one pending
