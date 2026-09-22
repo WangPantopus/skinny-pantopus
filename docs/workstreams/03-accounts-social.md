@@ -3611,3 +3611,68 @@ The durable bundle now has 135 files; MANIFEST SHA-256 is
 
 This accounting separates implementation, local UI/API/SQL E2E, CI, and external-provider/device
 boundaries. It is not a whole-stream completion claim.
+
+## N02 native saved notifications — Mark all read mutation and exact fixture restoration (2026-09-22)
+
+Coordinator requested the existing installed-screen mutation rather than leaving the visible
+control unexercised. I captured the complete Auth Bob notification snapshot first
+(`n02-mark-all-before.json`: 11 rows, 7 unread, 4 read), then used the installed Android
+Notifications screen on `emulator-5554` against the retained local API/SQL runtime. Tapping the
+existing **Mark all read** control produced an Android logcat `HTTP POST -> 200`; the screen then
+showed All 11, Unread 0, Read 11, and SQL confirmed 11 rows with 0 unread. No new rows were
+created. The action was deliberately reversed using one SQL transaction that updated only each
+captured row's `is_read` value by exact id. Reopening the installed screen returned All 11,
+Unread 7, Read 4; SQL matched. Full evidence is in
+`n02-mark-all-android-20260922.json`, `n02-mark-all-before.json`,
+`n02-mark-all-after.xml`, and `n02-mark-all-restored.xml`.
+
+This verifies the real Android UI -> HTTP handler -> persisted notification mutation and the
+read-state refresh/restore path for an owned local fixture. It does not establish FCM/APNs
+provider delivery, physical-device behavior, or background/cold-start receipt. The restored
+fixture is intentionally unchanged for subsequent agents. The durable bundle now has 140 files;
+MANIFEST SHA-256 is `641bd363087878b984abc539d34c3d30277ca40d4e39d1e74a1bf58e0b18bd98`.
+
+## N05 daily-agenda source and contract reconciliation (2026-09-22)
+
+The source comparison requested by the coordinator is now recorded in
+`n05-daily-agenda-source-reconciliation-20260922.json`. It searched the Stream 3 checkout at
+`b956a00767835586b5114698a3a2e91fbcddefad`, current `origin/master` at
+`2b7378aa474a26b67ea6f9dba61ad97105aa7c0b`, all local refs, and the existing backend,
+frontend, Supabase, scripts and docs roots. History search found only the original Calendarly
+UI import (`ede9ad4e6`) and the initial import (`ae6fe86c0`) for the `daily_agenda` key; no
+archived/open branch adds a producer or delivery worker.
+
+The current web component persists a `daily_agenda` row with copy **Each morning at 8am** and
+email-default presentation. The current iOS and Android models explicitly document that the old
+Daily agenda label mapped to the server's `booking_request` key and now present **Booking
+request**. The backend scheduling route/service persists generic preferences and reminder lead
+times; `bookingReminders`, the cron registration, `notificationService`, `mailDayNotification`
+and `internalBriefing` contain no daily-agenda consumer. The exact file hashes and findings are
+in the evidence JSON. Therefore the persistence/UI contract exists locally, but producer
+schedule/timezone, included agenda items, recipients/channels, quiet hours, retries/deduplication,
+read-record semantics and access-change behavior remain undecided. No daily-agenda worker,
+provider send, native/background behavior, schema or unit test was added; a saved toggle is not
+delivery evidence.
+
+## A05 mailbox route-order disposition correction (2026-09-22)
+
+The earlier boundary wording was stale. Coordinator confirms the mailbox preferences route-order
+repair is merged in PR178 at commit `715ccd8c0`. Stream 3 made no duplicate mailbox change; the
+issue is now an integrated coordinator disposition rather than an open Stream 3 repair. The
+remaining A05 boundaries are the existing audience feature flag and Home/payment/booking/wallet
+routes owned by their respective streams.
+
+## Updated current boundary accounting after N02 Mark all and N05 source reconciliation
+
+- **N02:** web/API/SQL and installed Android list/filter/logout plus the existing Mark all read
+  mutation are verified against the owned local fixture. Provider delivery, token rotation,
+  physical-device and background/cold-start behavior remain unverified.
+- **N05:** reminder/pause/retry evidence and preference persistence are recorded. The exact
+  source comparison finds no daily-agenda producer or consumer, and the advertised delivery
+  semantics are undecided; no delivery claim or speculative worker was made.
+- **A05:** profile report/search/edit and installed Android profile save are verified; mailbox
+  route-order repair is integrated as PR178 `715ccd8c0`, so no duplicate repair remains. Audience
+  remains feature-flag gated; Home/payment/booking/wallet findings route to their owners.
+
+This remains a bounded Stream 3 accounting, not a whole-app completion claim. Unit-test coverage
+is intentionally excluded from completion percentages and no new unit tests were written.
