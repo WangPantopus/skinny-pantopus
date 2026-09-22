@@ -464,12 +464,7 @@ extension AuthManager {
     /// publish the reason. No network call — the server already knows.
     func endSession(reason: SessionEndReason) {
         let hadSession = clearLocalSession(preservingContentArrival: true)
-        // Only a session that actually ended here gets a reason. A 401 from
-        // a request that raced a deliberate sign-out (or a fresh install)
-        // must not tell the login screen "Your session has expired".
-        if hadSession {
-            setSessionEndReason(reason)
-        }
+        setSessionEndReason(reason)
         if PendingDeepLinkStore.peek() != nil {
             DeepLinkRouter.shared.requestLoginPresentation()
         }
