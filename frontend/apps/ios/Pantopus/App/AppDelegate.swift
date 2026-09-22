@@ -143,7 +143,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         // `UNNotification` onto the main actor.
         let userInfo = response.notification.request.content.userInfo
         let deepLink = HomeTaskNotificationRoute.pushPath(userInfo)
-            ?? (userInfo["link"] as? String)
+            ?? DeepLinkRouter.notificationPath(type: userInfo["type"] as? String, link: userInfo["link"] as? String)
             ?? (userInfo["deepLink"] as? String)
             // Briefing / monthly-receipt pushes carry no `link` — compose one
             // from `type` + `briefingKind` + `briefingDeliveryId`.
