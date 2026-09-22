@@ -6,13 +6,12 @@ PR189 merged6bec1e878 after exact073f0806a fullCI35766200401. PR190 integration7
 retains tip and won-dispute worker guards;128 existing regressions pass. Migration guard
 caught225 sorting behind merged226; public230 preserves the original225 SQL/ledger and
 accepts its exact prior transformation. RealSQL preservation and fullCI35771059661 pass.190 merged ea43d92b3 at19:04:59UTC.
-191 now1b9e43788 runs freshCI35771470998; only Android lint/test/assemble remains.
-192 integration is prepared locally at5db91f43b in /private/tmp/pantopus-pr192-integration
-(detached, clean). Three conflicts retain both accepted PUT/Edit and DELETE behavior;
-only API/repository member additions and the shared comment were reconciled. No native
-build or rerun. Do not push until191 merges; then merge its latest base and run fresh CI.
-Original Stream2 worktree and installed evidence remain untouched.
-Queue190→191→192→193→194→195→196, then docs161/170/174;46 untouched.
+191 merged2048d9713 after exact1b9e43788 fullCI35771470998 at19:49:24UTC.
+192 integrationea044ebea is pushed to the existing PR; fresh checks are required. Three
+conflicts retain both accepted PUT/Edit and DELETE behavior; API/repository members and
+shared comment reconciled. Merge of191 caused no additional source delta. Original Stream2
+worktree and installed evidence remain untouched; no native build or accepted journey rerun.
+Queue192→193→194→195→196, then docs161/170/174;46 untouched.
 
 PR1963f82ae478 is published with real booking cancellation/refund recovery and capture-race
 repairs. Seven StripeTEST bookings covered database rollback, pending recovery, manual worker,
@@ -26,7 +25,8 @@ hosted deployment, natural scheduler delivery or whole-row closure is claimed.
 
 Coordinator recovered Stream2's completed11-file ee69cbd8d preservation evidence and copied
 it unchanged to durable20260922-stream2-native-emergency-edit-preservation-r1; all hashes
-verified, MANIFEST224096ef2d8be6fc42133397140131aef8f663eb7c8e0c58c0170d96e6e4521e.
+verified, original MANIFEST224096ef2d8be6fc42133397140131aef8f663eb7c8e0c58c0170d96e6e4521e.
+Adding the integration receipt yields12 files, MANIFEST9993d82400671c7a5249ac0e8cb159a5c303cfda2b4ba013b663212226ffa5d0.
 Installed title-only preservation,403/retry, malformed type and wrong id/home retain the form;
 coordinator independently confirmed HomeEmergency/override/audit counts0.192 fullCI35764090022
 passed. Its prior bundle claim was missing; this recovered bundle is the actual durable owner.
@@ -34,9 +34,10 @@ Last four Stream2 follow-up turns completed with no output; no new progress/slot
 40-row accounting is inferred. Existing backend/LAN runtime is preserved. 192 is accepted within its recorded preservation scope and remains queued after191;
 its completed journeys must not be rerun. Outstanding row accounting does not block this repair.
 
-Stream3's192-file bundle hashes pass, MANIFEST758a5f48e9757539b69863d1bf043724573c3724acc0ccf1f62094c51a814b1a.
-A04 real Auth/HTTP/SQL now verifies provider-unavailable full/unit-address results and cleanup;
-UI and successful external geography/unit disambiguation are not claimed.
+Stream3's198-file bundle hashes pass, MANIFEST1fa796d1b6f08e89b549f0aadf0f6986241fbd511184ff2825dc889071957f26.
+A04 actual installed AddHome/API unavailable response retains draft, offers Retry/Edit and
+disables Continue. Retry and discard/logout pass; no application repair. Literal%20 street
+input limits normal-address claims; successful external geography/unit resolution is unverified.
 Installed profile readback503 preserves2 unsaved; restored grant/retry200 shows saved;
 exact cleanup/logout/API stop recorded and XMLs independently checked.
 Android cold-process session/profile200 and logout200 are accepted within local scope;
@@ -44,8 +45,8 @@ portfolio chooser reaches actual upload500 due invalid storage credentials, no p
 iOS installed destination remains a precise UI-control boundary.1953b374454a fullCI35768401037
 passes; remains queued after194. Stream3 corrected its authoritative mapping: N02 is physical
 Android acceptance and A04 is address/Smarty coverage; OAuth belongs toA01. The older current
-table still needs the same correction. Next bounded task is the existing address UI under
-provider unavailability, reusing Home evidence and preserving its ownership.
+table is corrected too. Stream3 continues the next genuinely unverified local criterion or
+records exact remaining device/provider/policy prerequisites; no repeated outage variants.
 Count remains9closed/71partial-open; P01 is a separate bounded milestone.
 
 
