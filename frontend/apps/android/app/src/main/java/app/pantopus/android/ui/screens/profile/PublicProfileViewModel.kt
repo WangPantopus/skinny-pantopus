@@ -628,6 +628,31 @@ class PublicProfileViewModel
                 _isFollowing.value = false
                 return
             }
+
+            // Personal UserBlock rows are deliberately distinct from the
+            // Relationship graph: GET /:id/relationship reports only the
+            // latter. Resolve the existing personal block list first so a
+            // fresh profile navigation cannot restore Follow/Connect for a
+            // user this account has already blocked. A failed read fails
+            // closed by leaving the profile non-actionable; it must never
+            // turn an unavailable authorization check into an affordance.
+            when (val blockedResult = blocks.blocked()) {
+                is NetworkResult.Success -> {
+                    if (blockedResult.data.blocked.any { it.userId == profileId }) {
+                        _canFollow.value = false
+                        _isFollowing.value = false
+                        _connection.value = ProfileConnection.Blocked
+                        return
+                    }
+                }
+                is NetworkResult.Failure -> {
+                    _canFollow.value = false
+                    _isFollowing.value = false
+                    _toastMessage.value = "Couldn't verify block status. Actions are unavailable."
+                    return
+                }
+            }
+
             when (val result = social.relationship(profileId)) {
                 is NetworkResult.Success -> {
                     _isFollowing.value = result.data.following == true
