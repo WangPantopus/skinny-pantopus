@@ -36,10 +36,15 @@ untouched; duplicate PR158 was already closed. This does not close any acceptanc
 Runtime: retained Stream1 wallet-read-r1 SQL64562/API64561 remains up, ledger79; exact
 P10 scale fixtures are cleaned to zero and18132/18133 are free. Peer runtimes, devices
 and retained fixtures belong to their streams. One heavy native build at a time; the
-coordinator granted the slot to Stream3 after Stream2 released its focused checks
-(no active xcodebuild/GradleMain; idle Gradle daemon96732 retained). Stream3 must check
-processes before each invocation and notify release. No simultaneous build is authorized. Private Stream1 continuation:
+Stream3 released its Android build/UI verification slot. Stream1 now reserves the
+slot for a bounded official local Maestro driver capability check on its own C2BCF36A
+simulator; peers must request another grant. No simultaneous build is authorized. Private Stream1 continuation:
 `/private/tmp/pantopus-stream1-wallet-read-r1/RESUME-2026-09-22.md`.
+
+PR163 is now merged as `e5335f584` after refreshed CI and real cache-transition
+evidence. PR164 awaits fresh native checks; separate Home bill contract PR175 is green.
+The local O02 recovery rehearsal passed within its recorded data/catalog/file scope;
+hosted recovery remains open. See Stream1 status for evidence and limitations.
 
 Next: finish/review current CI repairs, serialize code merges on current heads, publish
 documentation last, then continue each existing row order. Native dispute/3DS, broader

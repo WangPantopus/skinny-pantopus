@@ -3211,3 +3211,68 @@ clears it, and the terminal 401 handler ignores a 401 while it is set and state 
 signedOut; endSession is unchanged. AuthManagerTests + DeepLinkRouterSessionReturnTests
 41/41 locally, PR152 CI green on 72ec734db (all three simulators). Stream3 accounts scope
 for this session is complete; awaiting merges of PR149/151/152 and the next assignment.
+
+## Stream 3 resumed verification — cache boundary and CI handoff (2026-09-22)
+
+This section records the resumed work after the previous native batch; it does not replace
+the earlier evidence or claim closure for the remaining N01–N05/A01–A05 inventory rows.
+
+### PR163 warm-cache repair
+
+Requirement: a block or unblock must take effect through the existing feed screen without
+waiting for the feed-filter TTL. The existing implementation cached UserBlock-derived feed
+filters for 60 seconds and block routes only invalidated the block-service cache.
+
+Baseline reproduced on the retained local API/DB and the real browser Connections screen:
+Bob warmed a temporary Dana post, blocked Dana from Dana's existing profile menu, and
+immediately reloaded the feed; the post remained visible. Bob then unblocked Dana from
+Settings → Blocked Users and immediately reloaded; the post remained hidden until the
+normal 60-second TTL expired. This is a real UI → HTTP → persistence → feed observation;
+the temporary relationship/post/blocks were fixture rows, not mocked persistence.
+
+Repair is the smallest existing-service extension in PR163 commit `d6b623a0e`: after a
+successful block/unblock, `routes/blocks.js` invalidates both affected users' feed-filter
+caches; sender blocking in `routes/neighborMessages.js` does the same. The candidate API
+was started from the PR163 worktree on the retained port, and the same real UI journey
+immediately hid the post after block and restored it after unblock. The candidate did not
+touch peer runtimes. Existing follow/post/comment privacy checks remain documented in the
+PR and were not redesigned.
+
+Cleanup was completed against the recorded fixture IDs. Final probes show no temporary
+probe post, relationship, or block; retained baseline is 6 posts, 20 notifications, and
+1 pre-existing UserBlock. The cleanup helper was invoked with `--help` by mistake, but its
+actual deletion set matched the recorded temporary batch; no unrelated rows were retained.
+Evidence: private operational audit under
+`/private/tmp/pantopus-stream3-20260920-r1` and durable native bundle
+`.pantopus-recovery/audits/20260922-stream3-native-social-r1` (MANIFEST
+`d3edb148d21ba3434156570d751fee06a4ae3f07bf53bfed60a6fda09ef21cb2`). PR body updated with the reproduced baseline, repair, cleanup and
+limitations. The coordinator refreshed the branch to `f1ca9002` and merged PR163 as
+`e5335f584dd99f82e7c66a3974b04400098f0c0c`.
+
+### Android PR168 CI repair
+
+Fresh PR168 CI reached ktlint and instrumented tests but failed Detekt because the newly
+added `PrivacyHandshakeViewModel.fetchAndProject` measured complexity 22 (threshold 18).
+The code was repaired in place by extracting the existing suggestion/follow fallback and
+its unchanged error branches into `fetchSuggestionAndFollow`; no suppression or new test
+was added. Branch `codex/stream3-android-social-follow-block-chat` was rebased onto
+`origin/master` `662ab04b` and force-with-lease pushed at `41b1c8a15`. The coordinator
+will run the next CI; no new native build is claimed for this code-only repair.
+
+### Fresh Android native recheck and current boundaries
+
+The cache repair is verified end to end on the retained web runtime. The granted Android
+slot was used once: `:app:assembleDebug` succeeded from integration `b0f7b6bbe`, the fresh
+APK was installed only on `emulator-5554`, and the four pending screens were exercised.
+Current Location opened the real Android permission dialog and denial returned the existing
+location error; Beacon Follow exercised the 404 suggestion fallback plus plain follow 201;
+the retained reverse UserBlock produced Follow 403 and the existing refusal toast; direct
+message send produced 403, the blocked-conversation banner, and zero persisted ChatMessage
+rows. Android logged out through Settings afterward. Screenshots and records are in the
+durable bundle; its current MANIFEST is `d3edb148d21ba3434156570d751fee06a4ae3f07bf53bfed60a6fda09ef21cb2`.
+
+New iOS device-hub interaction is currently unavailable, and no provider delivery,
+physical-device, hosted-migration, or APNs/FCM evidence is claimed here. The Android slot
+is released. Remaining work is coordinator integration/CI and the other independently open
+N01–N05/A01–A05 acceptance rows; do not rerun the cleanup helper or claim unit-test
+coverage as feature closure.

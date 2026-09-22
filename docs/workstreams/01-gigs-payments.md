@@ -1,5 +1,43 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — O02 local recovery rehearsal and peer integration
+
+The existing backup runbook was exercised against the owned wallet-read-r1 project
+(PostgreSQL 17.6, retained ledger 79) using synthetic users, a gig, a bid, an initializing
+payment attempt and a private Storage object. Encrypted archive recovery preserved exact
+row fingerprints and the complete ledger. Normalized ownership, privileges, RLS flags,
+policies and routine definitions match across public/auth/storage. One refund CHECK
+constraint has an equivalent PostgreSQL array-cast rendering; its exact expressions and
+eight SQL truth-table cases are recorded. No source constraint or migration was changed.
+
+Raw restore alone missed the managed GraphQL wrapper definition and additional grants
+on three PostGIS objects. The final recovery package captures those before restore and
+reapplies the original definitions/grants. External file bytes were backed up separately,
+the original removed, and the recovery upload downloaded with an identical SHA256. This
+is a bounded local operator rehearsal, not a generic hosted restore command or complete
+API/Auth/Storage service recovery. Global role recovery, hosted credentials/configuration,
+provider storage and measured RPO/RTO remain unverified; O02 is not closed.
+
+Owner evidence: `.pantopus-recovery/audits/20260922-stream1-restore-r1/`, 5 files;
+MANIFEST `8d834f4d561f29af20b509062c1fb6934051ec686c5163970a5dec688b61bf39`.
+No application change or new unit test. Exact f9220520 fixtures, bucket/objects and the
+temporary restore database were cleaned; source ledger remains 79. Encrypted archives,
+archive password and operator logs remain outside Git and the evidence bundle.
+SQL64562/API64561 stays up.
+
+Peer PR163 merged as `e5335f584dd99f82e7c66a3974b04400098f0c0c` after refreshed head
+`f1ca9002f581b86d5ea23b1badf6c1569f5a4df6` passed CI. Its real browser block/unblock
+cache repair and all 102 evidence hashes were reviewed (manifest735ba1dd…429f).
+PR164's refreshed `db91f33ff73b5c012e361a1061c9fbe3e0e07a62` awaits native CI.
+PR175 separately carries the Home bill-field contract repair at501caf65a; CI is green,
+with direct authenticated API/SQL evidence and a concretely unreachable web edit entry.
+PR160's original native jobs were canceled by a temporary push; its full exact-ede5b72b
+workflow35719644248 must finish before native checks are accepted.
+
+Next: serialize164→160→175→165→166→167→168, documentation last. Stream3 released
+its Android build slot; Stream1 reserves the slot for a bounded Maestro driver capability
+check on its own C2BCF36A simulator. No concurrent native build is authorized.
+
 ## September22 — retained ledger and native-control boundaries
 
 Read-only G03/G04/O01 reconciliation at master662ab04b5: source has81 runnable SQL
