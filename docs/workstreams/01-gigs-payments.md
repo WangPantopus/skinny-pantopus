@@ -1,5 +1,32 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — release configuration inventory and next won-dispute release check
+
+Read-only GitHub metadata at sourceb0986380b/master2b7378aa4: repository and all four
+environment secret lists are empty; staging/production deployment and migration flags
+are false. User-owned repository has no organization-secret inheritance. Native release
+workflows reference signing/store/provider configuration not present in those lists;
+external/local host secret stores were not inspected. Master protection requires strict
+CI OK/admin enforcement, disallows force pushes/deletions. No release/configuration/
+provider change or workflow dispatch. Existing deployment/rollback source unchanged
+since acceptedc262b84af; reuse47 simulated checks, not a new hosted rehearsal.
+
+Four-file durable20260922-stream1-release-config-r1, MANIFEST
+ec0e2f5115a2a9e2a2245cbb69e4256c32a3db42e8e8d2769940c386b62b183e.
+Existing docs/ci-cd.md and release/prod-config-checklist.md remain the configuration
+procedure; this inventory adds no new tracker/application/test. O/L rows stay partial.
+
+Next concrete source lead: won webhook preserves dispute_id and restores captured_hold,
+but processPendingTransfers, the settlement RPC and admin stuck queries exclude every
+dispute_id. Current/archived/all-ref comparison is recorded. Worktree is clean on new
+codex/won-dispute-wallet-release from2b7378aa4; no application change. An isolated fresh
+TEST fixturef9220532 is being prepared to reproduce post-win wallet eligibility after a
+controlled mature cooling timestamp. This is synthetic age/identity/fulfillment, not a
+naturally elapsed48hour acceptance. API18132 owns this fixture; Next18133 remains stopped.
+Private continuation /private/tmp/pantopus-stream1-won-release-r1. Keep its provider
+objects until actual won resolution/refund/customer/SQL cleanup; peer resources untouched.
+
+
 ## September 22 — dispute evidence repaired and real TEST won/lost verified; PR184
 
 Branch codex/dispute-evidence-contract, current b0986380b01f0475d4421897e7b4a5826d0b5a1f
