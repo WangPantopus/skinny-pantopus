@@ -147,10 +147,10 @@ class BillDetailViewModel
             )
         }
 
-        /** Soft-delete — backend has no DELETE for bills. */
+        /** Soft-delete — backend has no DELETE for bills; HomeBill_status_chk spells it `canceled`. */
         fun remove() {
             update(
-                UpdateBillRequest(status = "cancelled"),
+                UpdateBillRequest(status = "canceled"),
                 dismissOnSuccess = true,
             )
         }

@@ -2720,8 +2720,9 @@ router.put('/:id/bills/:billId', verifyToken, async (req, res) => {
     for (const key of allowed) {
       if (req.body[key] !== undefined) updates[key] = req.body[key];
     }
-    if (updates.status === 'paid' && !updates.paid_at) {
-      updates.paid_at = new Date().toISOString();
+    // Clients that send their own paid_at still need the payer recorded.
+    if (updates.status === 'paid') {
+      if (!updates.paid_at) updates.paid_at = new Date().toISOString();
       if (!updates.paid_by) updates.paid_by = userId;
     }
     updates.updated_at = new Date().toISOString();
