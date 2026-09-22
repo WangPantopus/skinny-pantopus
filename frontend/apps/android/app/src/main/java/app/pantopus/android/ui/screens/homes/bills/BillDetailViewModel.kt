@@ -172,11 +172,10 @@ class BillDetailViewModel
                     if (revision != generation) return@launch
                     when (result) {
                         is NetworkResult.Success -> {
-                            val statusMatches =
-                                request.status == null ||
-                                    result.data.bill.status == request.status ||
-                                    (request.status == "canceled" && result.data.bill.status == "cancelled")
-                            check(result.data.bill.id == billId && result.data.bill.homeId == homeId && statusMatches) {
+                            check(
+                                result.data.bill.id == billId && result.data.bill.homeId == homeId &&
+                                    responseStatusMatches(request, result.data.bill),
+                            ) {
                                 "Bill change could not be verified."
                             }
                             _state.value = current.copy(bill = result.data.bill, saving = false, saveError = null)
@@ -199,5 +198,13 @@ class BillDetailViewModel
                     }
                 }
             }
+        }
+
+        private fun responseStatusMatches(
+            request: UpdateBillRequest,
+            bill: BillDto,
+        ): Boolean {
+            if (request.status == null || bill.status == request.status) return true
+            return request.status == "canceled" && bill.status == "cancelled"
         }
     }
