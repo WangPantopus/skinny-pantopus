@@ -1,12 +1,14 @@
 # Stream 2 — Home and household
 
-## September 22 native Android guest-pass form — focused dismiss repair pending rebuilt verification
+## September 22 native Android guest-pass form — focused dismiss repair rebuilt and verified
 
 The retained Android owner journey reached the existing Home Members → Guests → Add a guest form. A valid real submission created one `HomeGuestPass` row and one existing `guest_pass_created` audit, then showed the existing **Guest pass created / Share this pass now?** dialog. Tapping the existing **Later** action closed the dialog but left the form open. Source comparison found the existing `LaunchedEffect(state.shouldDismiss)` cleared its own key before its 700 ms delay; Compose cancelled that effect before the existing `onSent()` navigation callback could pop the form.
 
 PR183 (`codex/native-guest-pass-dismiss-20260922`, commit `83f507457`) makes the smallest in-place repair in `frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/homes/guests/AddGuestFormScreen.kt`: the existing state acknowledgement now runs after the delay, preserving the existing callback, screen layout and navigation. No new screen, callback, route, service, schema, migration or design change was added.
 
-The real created pass was revoked through the existing DELETE route (HTTP 200; `guest_pass_revoked` audit), then the synthetic pass and exactly its two generated audit rows were deleted. Final fixture counts were `HomeGuestPass=0` and HomeAuditLog=0. Private evidence: `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-native-guest-pass-dismiss-r1/`, MANIFEST SHA256 `589247cc9afb8a6b56a28f465a863969c79afacaef2d881eccbaaa73491d31ed`. Rebuilt installed Android verification of the repaired Later → caller journey is pending the coordinator's native-build reservation; no build was started for PR183. Native copied-link/passcode viewing remains outside this Android receipt and is covered by accepted browser M02 evidence.
+The repaired app was rebuilt with `:app:assembleDebug --no-daemon` (successful, 2m23s), installed on retained `emulator-5556`, and exercised through the real owner flow: Home dashboard → Members → Guests → Add guest → valid two-hour pass submission → existing **Guest pass created / Share this pass now?** dialog → **Later**. The existing Members/Guests screen returned with the Add guest form dismissed, proving the caller callback now completes. The APK SHA256 is `d7e8e07707e356f40d995ccc21cde9274e30c6eecaf83b6c56b2023d43cfa72c`.
+
+The created pass was revoked through the existing LAN DELETE route (HTTP 200; `guest_pass_revoked` audit), then the synthetic pass and exactly its two generated audit rows were deleted. Final fixture counts were `HomeGuestPass=0` and HomeAuditLog=0; backend health remained 200. Private evidence: `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-native-guest-pass-dismiss-r1/`, MANIFEST SHA256 `e048dbd5052f01e1b0d8c1b43663637784625c5db0f16bd98b9a425cbb4b9bbe`. No native build is running. Native copied-link/passcode viewing remains outside this Android receipt and is covered by accepted browser M02 evidence; physical iPhone install/launch remains unavailable while device `00008140-00087999020B001C` is offline.
 
 ## September 22 native owner My Tasks — runtime schema compatibility repaired and verified
 
