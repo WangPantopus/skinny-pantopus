@@ -1,11 +1,42 @@
 # Stream 1 — Gigs and payments
+Current runtime override, September22 17:20UTC: Stream1 uses only API18132/Next18133 and IAB13 for owned free-booking signup fixturef9220540, provider creation forbidden. Branchcodex/booking-account-continuation frommastera460; no application change yet. The receipt links to /signup while the existing auth route is/register; actual link verification underway. Previous193 paid fixtures remain cleaned. Stream3 retains heavy-native slot.
+
+
+## September 22 — booking account continuation published
+
+Branch `codex/booking-account-continuation`, `8b2bd6e05f871d0f9ac501601313cece64abaa8e`,
+[PR194](https://github.com/WangPantopus/skinny-pantopus/pull/194), based on master `a460fd5d1`.
+[CI35761158118](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35761158118) is
+running. Only `ConfirmedView.tsx` changes: import the existing authPageHref helper and use the
+existing registration route with My bookings as the return destination. No new tests/design.
+
+Actual anonymous free-booking UI → POST201/confirmed SQL → Create an account led to /signup,
+which was handled as username signup. The canonical user route returned404 and the browser
+showed a page error. After repair, the same receipt opens the existing registration form;
+Sign in preserves the redirect, and disposable account login200 → real My bookings GET200
+shows the confirmed appointment. Selected booking state is unchanged; no payment/provider calls.
+Web typecheck has zero errors; focused lint/diff checks pass. No registration submission,
+password change, terms acceptance, verification email, OAuth or full A01/A05/U closure claim.
+
+[10-file evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-booking-account-continuation-r1/RESULT.md),
+MANIFEST `5205345ad9a5b7a23474d68f60a14a10d9f7b6210f4428b7b1c8ea44be2a657b`.
+All16 owned SQL checks and auth users0; retained ledger84 unchanged. No provider objects.
+Settings logout reached/login; IAB13 closed; API18132/Next18133 stopped and owned Next artifacts
+cleaned. App branch clean/pushed. The initial ancillary username200 is excluded from canonical
+lookup evidence; actual Next document200 is not mislabeled404. Private RESUME/PR body current.
+
+PR193 is now a completed bounded milestone with full exact-head CI35759729609 and final21-file
+MANIFEST `615be4471455d0bbfb91dbe03aab918820b119534149189418cf53cc80f8a526`; its cleanup remains valid.
+Next: await194 exact-head checks, continue serial integration at183, review192 preservation and
+peer row accounting. No additional Stream1 runtime/native slot is held; Stream3 native grant
+remains active. Current inventory9 closed/71 partial-open, with P01 separate.
+
 
 ## September 22 — booking payment receipt and destination repair published
 
 Branch `codex/booking-payment-receipt`, commit `877ad94f6802227bc02f654d26a617203874227c`,
 [PR193](https://github.com/WangPantopus/skinny-pantopus/pull/193), based on master `a460fd5d1`.
-[CI35759729609](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35759729609) is
-queued; this is not yet an accepted final-CI milestone. The application worktree is clean/pushed.
+[CI35759729609](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35759729609) passed all required checks; this bounded milestone is complete. The application worktree is clean/pushed.
 
 Reproduced in the real booking journey: the receipt said “Payment received” for an uncaptured
 Stripe authorization, and the release notification led to `/gigs/null` and a real 404. Three
@@ -22,7 +53,7 @@ after actual capture. All40 relevant existing backend checks, web zero-error typ
 lint, syntax and diff checks passed. This does not close the full P07/A05/U rows.
 
 [Durable evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-booking-payment-receipt-r1/RESULT.md):
-20 files, MANIFEST `a117ee055abf0772bdd10dbae603f259e9ad1ecfb8b62f4010f3a8ad5d8bec4e`.
+21 files, MANIFEST `615be4471455d0bbfb91dbe03aab918820b119534149189418cf53cc80f8a526`.
 Limits: synthetic sign-in/page/availability, local forwarding of an actual TEST event, controlled
 maturity, no native booking-notification, hosted mail/push, bank/Connect/live or atomic booking
 notice-failure/recovery acceptance. IAB's Stripe frame stayed blank; Chrome checkout worked.
@@ -31,7 +62,7 @@ unused intent canceled and test customer deleted. Full retained84-row ledger unc
 browser sessions logged out/tabs closed; API18132/Next18133 stopped, owned cache removed and
 generated tsconfig restored. Private RESUME and PR body updated; raw logs/secrets remain private.
 
-Next: await193 exact-head CI, continue the serial queue at183, and finish peer row reconciliation.
+Next: continue the serial queue at183, and finish peer row reconciliation.
 PR191's six evidence hashes and one-file diff are reviewed. PR192 remains pending a focused
 untouched-location/detail preservation and malformed-readback review. Stream3 owns the single
 heavy native slot for reproduced N03 Follow reappearing on a fresh blocked-profile open.

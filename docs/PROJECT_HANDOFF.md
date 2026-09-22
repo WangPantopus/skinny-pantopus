@@ -1,11 +1,13 @@
 # Pantopus project handoff
+Current September22 checkpoint: PR193 passed fullCI35759729609; PR1948b2bd6e05 is published with real free-booking → registration → existing-account → saved-booking proof, exact cleanup and freshCI35761158118 running. Stream1 now has no API/Next/browser runtime; ledger84 retained unchanged. Queue183 waits only Android lint/test/assemble.192 remains held for data-preservation review. See newest Stream1 status for evidence and limits; count9closed/71partial-open unchanged.
+
 
 ## Current coordinator checkpoint — September 22, 17:18 UTC
 
 Booking PR193 `877ad94f6` is published; real Chrome/Stripe TEST/host approval/worker/web
-notification/SQL verification and exact cleanup passed. Required CI35759729609 is queued.
+notification/SQL verification and exact cleanup passed. Required CI35759729609 passed.
 Three existing files fix uncaptured “Payment received” wording and the `/gigs/null` booking
-release link.20-file evidence MANIFEST `a117ee055abf0772bdd10dbae603f259e9ad1ecfb8b62f4010f3a8ad5d8bec4e`;
+release link.21-file evidence MANIFEST `615be4471455d0bbfb91dbe03aab918820b119534149189418cf53cc80f8a526`;
 full details and limits are in Stream1 status. No whole-row closure. API18132/Next18133 and
 owned tabs are stopped/closed; retain ledger84 unchanged. Stream1 app is clean/pushed.
 
