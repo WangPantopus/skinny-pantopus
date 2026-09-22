@@ -252,12 +252,15 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
         let homeName = detail.base.name?.nonEmpty
             ?? detail.base.address?.nonEmpty
             ?? "This home"
+        // The chip and footer describe this viewer's real standing: the detail
+        // payload carries their owner_status / occupancy verification and role.
+        let verified = detail.ownershipStatus == "verified" || detail.residencyStatus == "verified"
         identity = HomeSettingsSampleData.Identity(
             homeName: homeName,
-            addressChipLabel: isPending ? "Verifying" : "Verified",
-            addressChipTone: isPending ? .warning : .success
+            addressChipLabel: isPending ? "Verifying" : (verified ? "Verified" : "Unverified"),
+            addressChipTone: (isPending || !verified) ? .warning : .success
         )
-        footerCaption = "\(homeName) · \(isPending ? "Claim pending" : "Owner")"
+        footerCaption = "\(homeName) · \(isPending ? "Claim pending" : Self.roleLabel(detail: detail, access: access))"
 
         var resolved = RowSubtexts()
         resolved.address = Self.addressLine(for: detail.base)
@@ -265,6 +268,14 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
         resolved.people = Self.peopleSubtext(occupants: occupants)
         subtexts = resolved
         if !isRenaming { renameDraft = identity.homeName }
+    }
+
+    /// Human label for the viewer's role in this home (owner, else their role_base).
+    private static func roleLabel(detail: HomeDetail, access: HomeAccessDTO?) -> String {
+        if access?.isOwner == true || detail.isOwner { return "Owner" }
+        guard let base = access?.roleBase ?? detail.roleBase, !base.isEmpty else { return "Member" }
+        let words = base.replacingOccurrences(of: "_", with: " ")
+        return words.prefix(1).uppercased() + words.dropFirst()
     }
 
     /// RN's `canEdit` (`settings/index.tsx:47`): owner, an explicit

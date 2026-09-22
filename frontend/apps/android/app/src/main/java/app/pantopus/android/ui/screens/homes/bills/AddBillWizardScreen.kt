@@ -480,9 +480,11 @@ private fun SimpleDatePickerDialog(
     onSelect: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // Material3's DatePicker works in UTC-midnight millis; converting through the
+    // device zone shifted the picked day (Sep 30 picked, Sep 29 saved in PDT).
     val initialMillis =
         (initial ?: LocalDate.now())
-            .atStartOfDay(ZoneId.systemDefault())
+            .atStartOfDay(java.time.ZoneOffset.UTC)
             .toInstant()
             .toEpochMilli()
     val state = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = initialMillis)
@@ -495,7 +497,7 @@ private fun SimpleDatePickerDialog(
                     val date =
                         java.time.Instant
                             .ofEpochMilli(picked)
-                            .atZone(ZoneId.systemDefault())
+                            .atZone(java.time.ZoneOffset.UTC)
                             .toLocalDate()
                     onSelect(date)
                 } else {

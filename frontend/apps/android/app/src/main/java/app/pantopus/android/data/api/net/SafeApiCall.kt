@@ -51,6 +51,8 @@ suspend inline fun <T> safeApiCall(
             }
         NetworkResult.Failure(mapped)
     } catch (error: JsonDataException) {
+        // The user only sees "Received an unexpected response."; keep the cause in the log.
+        timber.log.Timber.tag("HTTP").w(error, "decoding failure")
         NetworkResult.Failure(NetworkError.Decoding(error))
     } catch (error: IOException) {
         NetworkResult.Failure(NetworkError.Transport(error))
