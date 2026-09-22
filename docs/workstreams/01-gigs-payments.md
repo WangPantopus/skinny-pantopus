@@ -1,5 +1,28 @@
 # Stream 1 — Gigs and payments
 
+## Active coordinator checkpoint — September 22, 16:04 UTC
+
+PR168 exact142220190 passed CI35746647258 and merged b30e0d395; PR177 refreshed
+5129406fd with fresh CI pending. Prior master3c1e4a47d aggregate35746635358 passed.
+Paid integration retains last accepted f9176 while repair branches remain separate.
+PR185 reopened for a concrete regression:22300 replaced the20900 stop wrapper;
+actual concurrent settlement versus Gig→Payment locking reproduced40P01. Forward226
+restores the exact20900 wrapper and applies the won guard to its inner function.
+Candidate e4e552075 passes the real lock check and27 existing rollback guard cases;
+fresh CI pending. Do not merge185 until its repaired head passes review and CI.
+PR190 candidate6c49692d6 renumbers unmerged224→227 and targets the canonical inner
+function after clean-schema CI exposed the wrong target. Applied224 is retained as
+an explicitly superseded private candidate-only ledger entry, exact archived SQL;
+no applied rows changed.225 refund proof remains. Retained SQL64562 ledger84 with
+all prior entries unchanged; canonical full replay remains CI-owned/pending.
+Fresh ownedf9220538 actual TEST1250 tip has one income/settlement, two delivery rows,
+and three notices after atomic failure/concurrent-worker controls. API18132 resumed,
+Next18133 PID3909 and CUA tab11 active; provider/customer/SQL cleanup pending.
+No native, hosted, provider-push or row closure claim. Heavy native slot free.
+Queue177→179→180→182→183→184→185→186→187→188→189→190; docs161/170/174 last.
+Eight closed/72partial-open unchanged. Earlier runtime checkpoints are historical.
+
+
 ## September 22 — active legacy tip release notice repair
 
 Runtime update 2026-09-22 15:34 UTC: Stream1 API18132 PID3240/Next18133 PID3909 and CUA tab10 are active for owned f9220537 legacy tip release notification failure. Actual TEST1250 tip proof seeded as historical row; real worker credited1250 but lost both notices under INSERT denial and normal retry did not repair. New branch codex/tip-wallet-release-delivery based currentmaster3c1e4a47d (masterCI still pending); small existing-worker candidate plus reserved forward20260922022400 extends existing settlement/delivery functions to tips. Migration not yet applied; ledger80 retained. Provider charge/customer cleanup pending. Completed188 remains accepted. Heavy native slot free; Stream2/3 continue their existing assignments. Earlier runtime snapshots below are historical.
