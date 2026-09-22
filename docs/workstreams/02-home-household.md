@@ -1140,3 +1140,23 @@ Coordinator reacquired same SQL64552/API64551 and web[::1]:18141/API18142 for St
   GET/PATCH receipts, exact existing-block move, validation receipt and
   byte-equal `MailPreferences` restoration. No UI/SDK/schema/migration/test
   change or raw credential is included.
+
+## Installed native continuation — Android viewer/owner boundary — September22
+
+- Reused the retained Android emulator `emulator-5556` with the existing
+  viewer session and r5 build. The real Home dashboard opened Home Members and
+  rendered the three existing fixture members (owner plus two tenants), and
+  Home Settings loaded its existing identity/property/access sections. No
+  member or settings mutation was sent.
+- From the same viewer Home Settings route, Documents reached the real list
+  screen and rendered the existing permission error (`You don't have
+  permission to do that.`) with Retry. The viewer's real Home `/me` payload
+  lacks `docs.view`, so this is the expected server/UI denial state rather
+  than an empty-list or crash. The retained screenshot is private at
+  `.stream2-verification/native/shots/android-home-members-r6.png`.
+- A real owner login against the running backend returned HTTP 200 for Home
+  `/me`, documents, guest-passes, tasks and issues; all five collections were
+  empty. The installed viewer dashboard Tasks tab still shows the existing
+  placeholder despite `tasks.view`/`tasks.edit`, and Issues has no reachable
+  Home entry for this account. These remain recorded IA/product gaps; no
+  redesign or speculative navigation repair was made.
