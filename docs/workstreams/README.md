@@ -1,6 +1,6 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — September 22, 2026, 22:55 UTC
+## CURRENT RESUME POINT — September 22, 2026, 23:10 UTC
 
 The coordinator role moved at about 21:05 UTC to the Claude Code session "Pantopus Stream 1 coordinator handoff" (Stream 1 developer + coordinator). Before any writing it verified that the previous Codex coordinator thread `01a0c897-33be-7011-b55b-b82291ba9fd2` had completed at 20:35 UTC, and that the Stream 2 (`01a0c0d4-2278-71d3-bc23-a9d789d2afeb`) and Stream 3 (`01a0a824-301b-74e3-a1d9-b205714ed7a1`) Codex tasks had been `task_complete` since 20:07/20:15 UTC. **The coordinator cannot message Codex tasks.** The founder relays the peer assignments below, or authorizes the coordinator to act for those streams. No duplicate agent was started for a peer worktree. The 20:00 UTC consolidation is preserved below as history.
 
@@ -40,7 +40,8 @@ All three run on APK `db303e5bbe782a089715f8b91808b4f37c5fa3c96841edb37d23f8ac29
   - Remote revocation (fixture 401) signs out with "Your session has expired".
   - Another account on the same device sees no checkout (owner reads 403).
   - The owner's cancel voids the intent.
-- Rows: P03, P06, P08 and P09 stay partial.
+- **U02 Android payment screens (22:48–23:03)** — audit `20260922-stream1-u02-android-payment-a11y-r1`, MANIFEST `26ca2ea80ad573a40310398304d854b158c612df1e99cea3d90035f922aeb33b`. Font scale 2.0 and dark mode are usable, except that a dark-mode tip-sheet title was nearly invisible. That is **repaired in PR198** (`6f3436bf3`, one file, theme-aware sheet text; light mode pixel-identical; APK `d95cbe13…` now on emulator-5558). Layout proposals needing design approval: the WINNER badge and progress-label wrapping at 2.0.
+- Rows: P03, P06, P08, P09 and U02 stay partial.
   - P03: iOS native tips and unavailable local-storage recovery.
   - P06: the capture-proof decision, normal-path native presentation, and Connect/hosted operation.
   - P09: historical Connect reversal and broader close/release.
