@@ -3717,3 +3717,38 @@ retained follow/unfollow, posting, reply, mute, identity-scope and restricted-po
 applies within its recorded limits. Release/provider freshness, installed-native discovery/reply,
 and product decisions for suspension/deletion remain unverified or policy-owned. No unit-test
 coverage is claimed or required for this functional estimate.
+
+## N03 public post old-link after deletion — reproduced cache defect and focused repair (2026-09-22)
+
+Coordinator requested the existing public-post path be exercised with an owned disposable post.
+Before editing, current `origin/master` and the paid-gig, booking-lifecycle, iOS-social and
+Android-social refs all had the same `fetchPublicPost` implementation: the existing shared
+`fetchPublicJson` `revalidate: 60` cache, with no post-specific invalidation. History contained no
+archived/open post-link repair. The existing route is `frontend/apps/web/src/app/posts/[id]/page.tsx`
+and its API caller is `fetchPublicPost` in `frontend/apps/web/src/lib/publicShare.ts`; it keeps the
+existing public post page, explicit-share state and 404 treatment.
+
+A disposable public `Post` row was inserted for owned Auth Bob with global/public visibility. The
+real IAB rendered the existing public post page with its title/content, Open In App and Join the
+conversation links. The owner then used the existing HTTP `DELETE /api/posts/:id` handler (200).
+The same real unauthenticated API GET returned 404 and Postgres showed count 0, but a hard reload
+of the real browser still rendered the deleted post from the 60-second server cache. This was a
+reproduced stale-content failure, not a source assumption.
+
+PR [#186](https://github.com/WangPantopus/skinny-pantopus/pull/186) now also applies the existing
+opt-in `noStore` fetch option to `fetchPublicPost` (latest commit `cf34d604d`). The persona
+no-store repair remains in the same focused old-link/access-change PR; other public-share fetches,
+page layout, navigation and visual treatment are unchanged. After the repair the same deleted
+URL rendered the existing Next 404 page (`404`, `This page could not be found.`), while API stayed
+404 and SQL stayed at zero. No post row or other fixture survived; the isolated browser tab was
+closed.
+
+Focused verification: real API/PostgREST/SQL creation, public UI read, owner DELETE, API 404/SQL
+zero and browser stale/404 recheck; `pnpm --filter @pantopus/web type-check` exit 0 and
+`git diff --check` exit 0. Evidence: `n03-public-post-old-link-20260922.json` and
+`n03-public-post-delete-20260922.json`. The durable bundle now has 145 files; MANIFEST SHA-256 is
+`eb052cdef91a4948efa16cf93828137ce42de653784f772280bffd0d2624a0b6`.
+
+This verifies public-post deletion invalidation locally. It does not invent or claim a separate
+non-owner visibility-revocation policy, native/provider delivery, or hosted deployment behavior.
+PR review/CI and coordinator integration remain separate.
