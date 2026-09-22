@@ -2598,6 +2598,20 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
       mailPrefs = await getOrCreateMailPreferences(userId);
     }
 
+    // Keep the PATCH receipt compatible with the canonical GET profile
+    // projection consumed by native clients. The edited-user receipt above
+    // historically omitted account metadata, skills and residency, which
+    // made an otherwise successful 200 response fail native decoding.
+    const [skillsResult, residency] = await Promise.all([
+      supabaseAdmin
+        .from('UserSkill')
+        .select('skill_name')
+        .eq('user_id', userId)
+        .order('display_order', { ascending: true }),
+      getPublicResidencySummary(userId, req.user?.id || null),
+    ]);
+    const userSkills = skillsResult.data || [];
+
     logger.info('Profile updated', { userId });
 
     res.json({
@@ -2616,11 +2630,20 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
         state: userData.state,
         zipcode: userData.zipcode,
         dateOfBirth: userData.date_of_birth,
-
-        // NEW
         bio: userData.bio,
         tagline: userData.tagline,
         socialLinks: userData.social_links || {},
+        accountType: userData.account_type,
+        role: userData.role,
+        verified: userData.verified,
+        residency,
+        avatar_url: userData.avatar_url || null,
+        profile_picture_url: userData.profile_picture_url || null,
+        profilePicture: userData.profile_picture_url || null,
+        skills: userSkills.map(s => s.skill_name),
+        average_rating: userData.average_rating || 0,
+        gigs_posted: userData.gigs_posted || 0,
+        gigs_completed: userData.gigs_completed || 0,
         profileVisibility: userData.profile_visibility || 'public',
         profile_visibility: userData.profile_visibility || 'public',
         showEmail: userData.show_email || false,
@@ -2636,7 +2659,7 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
           showEmail: userData.show_email || false,
           showPhone: userData.show_phone || false,
         },
-
+        createdAt: userData.created_at,
         updatedAt: userData.updated_at,
       },
     });
