@@ -1,5 +1,20 @@
 # Three-stream coordination
 
+## Current coordinator checkpoint — September 22, 14:00 UTC
+
+Current master2b7378aa4 incorporates PR165/181 after their fresh passing checks;
+merged-master aggregateCI35735938178 remains pending. PR166ae03e34d2 runs fresh
+CI35735947354. Queue166→167→168→177→179→180→182→183→184, docs161/170/174 last;
+verify-only171/172 never merge. PR184b0986380b is ready with CI35736547362 passed:
+real TEST dispute evidence and won/lost web/API/SQL,26-file MANIFEST
+fbc00aebb22595d4d3a8f098f15af2623633f168506a32b58b2301c299062ed2. Both fixture sets
+clean, both test customers deleted, API18132/Next18133 stopped, app worktree clean.
+No native/hosted/Connect claim; see newest Stream1 section for exact boundaries.
+Stream2 owns the exclusive heavy native build grant for PR183 guest-pass return
+verification on5556; Stream3 continues feasible retained-binary N/A cases. Eight
+closed/72partial-open counts remain. Earlier snapshots below are historical.
+
+
 ## Current coordinator checkpoint — September 22, 13:50 UTC
 
 PR165 merged39492cd52 after full fresh CI35732209909; PR181 merged2b7378aa4

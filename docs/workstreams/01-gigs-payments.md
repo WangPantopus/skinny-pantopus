@@ -1,5 +1,61 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — dispute evidence repaired and real TEST won/lost verified; PR184
+
+Branch codex/dispute-evidence-contract, current b0986380b01f0475d4421897e7b4a5826d0b5a1f
+from master2b7378aa4, [PR184](https://github.com/WangPantopus/skinny-pantopus/pull/184).
+One existing backend/stripe/disputeService.js,47 added/47 removed lines; no new file,
+table, migration, unit test or UI/presentation/navigation change. Current/archived/all-ref
+comparison found the same obsolete reader. Actual original webhook silently saved only
+payment IDs/times after failed Gig.location/address, GigBid.amount, User.full_name,
+Review.content and Message reads. Canonical-only intermediate then reproduced real
+Stripe file_upload rejection of narrative text. Repair uses canonical fields, truthful
+query errors/optional records, correct currency/amount units, and bounded existing text
+evidence. Latest50 visible payer/payee text messages exclude deleted/system/third-party
+records. Private exact-address/file references are not added; photo bytes remain outside
+this narrative service.
+
+Actual first Stripe TEST1250 charge/event → existing local webhook → Payment/notices →
+real web History disputed. Candidate draft included completion/review/two-party chat with
+submission_count0. Actual ChatMessage ACL denial returned500 without changing Payment or
+provider evidence; exact ACL restored, retry200. Missing/no-dispute payments refused;
+optional rows absent allowed;52-message load selected03–52 in order,17340-character draft
+accepted. Concurrent duplicate created events preserved one event row/two notices.
+Deliberate TEST winning_evidence control produced real closed/won event: captured_hold,
+two resolved notices and matching web History; later evidence submission refused.
+
+A fresh candidate1250 charge verified the automatic webhook caller end to end: complete
+provider draft, no failure flag, web disputed. Deliberate TEST losing_evidence control
+produced real closed/lost → refunded_full/refunded_amount1250, no transfer/wallet credit/
+settlement/duplicate Refund row; matching web History. Concurrent closed-event repeats
+preserved Payment and four notices. These are actual TEST API outcomes and unchanged
+provider events locally signed/forwarded, not hosted event delivery or production
+submissions. Identity/session/fulfillment/Connect are synthetic. No native dispute UI,
+transferred-loss debt, Connect/live payout, physical device or photo-upload claim.
+
+Eight existing webhook regressions, syntax/diff and exact
+[CI35736547362](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35736547362)
+pass. Ready PR body current.26-file sanitized durable owner bundle
+`.pantopus-recovery/audits/20260922-stream1-dispute-evidence-r1/`, MANIFEST
+fbc00aebb22595d4d3a8f098f15af2623633f168506a32b58b2301c299062ed2; all hashes verified.
+Both f9220530/f9220531 fixture families zero across16 checks; ledger79 retained.
+Won charge refunded1250, both TEST customers deleted; lost charge nonrefundable and no
+second refund issued. Both browsers logged out/closed, API18132/Next18133 stopped,
+generated cache/config cleaned. Own DB/devices retained, native apps terminated.
+Private RESUME/current provider cleanup receipts retained outside Git. No row closes.
+
+Coordinator master2b7378aa4 aggregateCI35735938178 pending; PR166ae03e34d2 fresh
+CI35735947354 pending. Remaining serial order166→167→168→177→179→180→182→183→184,
+then docs161/170/174; verify-only171/172 never merge. PR18383f507457 is Stream2's
+one-line Android guest prompt return repair, baseline actual UI/API/SQL; rebuilt
+verification underway on owned5556. Stream2 has the exclusive heavy native build grant
+(observed its Gradle13629 before grant confirmation); coordinator/Stream3 have none.
+Stream3’s135-file bc8dadc5cee6c2b301beec356935cef14a9c7cacadef96620badf9290a41da3c verified;
+its N02 mark-all/N03 remaining feasible cases and receipt-time correction continue.
+Next Stream1: remaining payment/operations/provider-boundary review and serial merges;
+CUA Simulator rejection/alternate-driver question remains pending with user.
+
+
 ## September 22 — notification and migration guard integrated; dispute verification active
 
 PR165 merged39492cd52ed4949ff6c01acdf5d41e92153e9466 after exact
