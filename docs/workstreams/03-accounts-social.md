@@ -3763,3 +3763,78 @@ corroborate the same local capture window. The separate Mark all receipt remains
 `n02-timestamp-correction-20260922.json`; no session time was invented and no UI/API/SQL result
 changed. The durable bundle now has 146 files; MANIFEST SHA-256 is
 `51339e601abe137bf8c636133d25d37b4cfddacd0a28a36ef7257515cdde3de0`.
+
+## N02 installed Android single-notification delete (2026-09-22)
+
+The accepted web PR86 deletion/failure/retry evidence was reviewed before this pass and was not
+repeated: it already covers real web single-delete success, DELETE failure/toast and retry, lost
+successful reply, duplicate taps, delayed filter-switch stale-row handling and account-switch
+retirement. The remaining locally feasible client-specific gap was the installed Android success
+control. No application source or UI design changed.
+
+A disposable Auth Bob `Notification` row was inserted directly in the owned local SQL fixture with
+marker `n02-delete-r1`, then the retained Android APK (SHA
+`83cc0db08992e83dd1faa87a7baacdf582624a3e847f965f6361ab5fdd2cdf93`) loaded the existing
+Notifications screen through the real API. The row was visible with All 12 / Unread 8 / Read 4.
+Long-pressing the existing row opened the existing **Delete notification?** confirmation; tapping
+its existing Delete action generated `DELETE /api/notifications/c86bfd54-d3f8-469b-b5e1-ee7f6ca20590`
+HTTP 200 in the backend log and the Android HTTP log. The row disappeared from the installed
+screen. SQL then showed Bob Notification rows 11, unread 7, fixture rows 0 and target rows 0.
+The disposable row therefore required no restore; exact-id/marker cleanup was verified. The app
+was logged out through Settings → Log out and the follow-up request returned 401.
+
+Evidence: `n02-android-single-delete-20260922.json`, `n02-delete-before.xml`,
+`n02-delete-after-confirm.xml`, `n02-delete-after.png`, and `n02-delete-http.log`. This binds
+installed Android UI → HTTP DELETE handler → persisted deletion for one owned fixture. It does not
+claim Android installed failure/retry behavior; the accepted web evidence covers those cases, and
+no new unit tests were added. Physical Android and FCM/APNs delivery remain external boundaries.
+
+## N02 installed Android `new_follower` notification destination (2026-09-22)
+
+Coordinator requested a final-rewrite binding for the retained Android implementation in
+`DeepLinkRouter.notificationPath` (the `new_follower` single-segment rewrite to `/u/<username>`).
+Using the same retained installed APK, a disposable Auth Bob row was inserted with type
+`new_follower`, link `/stream3_auth_r3_evan`, unread state, and marker
+`n02-new-follower-r1`; the follower id was the existing Auth Evan fixture. This is a real persisted
+notice, not a direct bare-link launch.
+
+The installed Notifications screen showed the disposable card at All 12 / Unread 8 / Read 4. A
+real tap on that row generated the existing `PATCH /api/notifications/9a6e99b5-cedf-4101-a93d-4e539aeeb86a/read`
+200, then the backend logged `GET /api/users/username/stream3_auth_r3_evan`,
+`GET /api/users/d3671605-b8cc-4e92-8c82-99aa5041ff48/relationship`, and the existing transaction
+review read. Android's installed HTTP log recorded the corresponding GET 200 responses. The
+visible destination was the existing public profile showing **Auth Evan** and
+`stream3_auth_r3_evan`; no raw web URL was launched. SQL confirmed the notice was read before
+cleanup and the Bob←Evan `UserFollow` count remained 0. The exact disposable notice was deleted by
+id plus marker and the final SQL marker count was 0. Settings → Log out then returned the app to
+Sign in; the backend recorded `auth.signed_out` and the following request returned 401.
+
+Evidence: `n02-android-new-follower-destination-20260922.json`,
+`n02-new-follower-before.xml`, `n02-new-follower-after.xml`,
+`n02-new-follower-profile.png`, and `n02-new-follower-http.log`. This verifies the final
+`new_follower` implementation through the real installed notification row, read mutation, native
+routing, profile API, relationship/read-only companion calls, visible profile and persisted cleanup.
+It does not establish provider-delivered notification receipt, physical-device behavior,
+foreground/background/cold-start FCM behavior, or iOS installed destination behavior. The retained
+APK is the accepted build; no heavy native build or unit test was run. The local API log also shows
+an existing non-fatal `chat.local_profile_identity_lookup_error` during hub bootstrap
+(`LocalProfile.verified_resident` is absent in this fixture schema); it did not block the
+notification/profile journey and was not changed in this pass.
+
+## N02 client-specific boundary accounting after the Android destination pass
+
+- **Web:** accepted PR86 evidence remains the source for real list/read/delete failure/retry,
+  lost-reply, duplicate-tap, stale-response and account-switch cases. No broad rerun was needed.
+- **Android:** installed list/filter/logout, Mark all read with exact restoration, single-delete
+  success, and the persisted `new_follower` row → native Auth Evan profile destination are now
+  bound to the retained local runtime. Android installed delete failure/retry and provider receipt
+  remain unverified; no source change was necessary.
+- **iOS:** the existing accepted notification model/UI evidence remains applicable for its source
+  contract, but this run has no fresh installed iOS destination/provider receipt. No iOS claim is
+  added here.
+- **Provider/device:** no APNs/FCM delivery, token rotation, physical handset, or true
+  foreground/background/cold-start delivery claim is made. These remain explicit external limits,
+  separate from local implementation and UI/API/SQL success.
+
+The durable private evidence bundle now has 156 files; MANIFEST SHA-256 is
+`76d55079d8681671d302a6d418f9c9d7f8238f4db8acf29cfbead60ab594fe27`.
