@@ -4176,9 +4176,10 @@ The older generic row table above predates the latest native evidence. The curre
 - **N01:** local saved-record/list/preferences and installed controls are evidenced; APNs/FCM
   delivery, token rotation, physical-device delivery, and true provider foreground/background/
   cold-start behavior remain unverified.
-- **N02:** web and installed Android list/filter/read/delete/Cancel/offline rollback/reconnect retry,
-  `new_follower` destination, and induced Android HTTP-5xx rollback/retry are evidenced. iOS
-  installed destination and provider delivery remain unavailable; no duplicate repair is indicated.
+- **N02:** the authoritative remaining criterion is physical Android notification/device acceptance.
+  Installed Android emulator list/filter/read/delete/Cancel/offline rollback/reconnect retry,
+  `new_follower` destination, and induced Android HTTP-5xx rollback/retry are supporting emulator
+  evidence only; physical Android acceptance remains open because no physical Android is available.
 - **N03:** web/API/SQL and Android discovery/follow/unfollow/post/reply/mute/identity/block paths,
   including reopened local-neighbor block visibility and fail-closed blocked-list read fault, are
   evidenced. Fresh iOS/provider freshness and policy changes across Persona/UserBlock/local-home
@@ -4196,8 +4197,11 @@ The older generic row table above predates the latest native evidence. The curre
 - **A03:** existing document-picker/chooser-to-byte path and local reads/quota are evidenced; the
   real hosted portfolio upload returned the provider's existing credential 500 with no partial row,
   so hosted S3/CloudFront success and lifecycle remain shared-provider boundaries.
-- **A04:** local provider capability and invalid-provider handling are evidenced; real provider
-  consent/callback/production activation remains unavailable and was not changed.
+- **A04:** the authoritative row is address/provider coverage: activated Smarty, geography/unit
+  disambiguation and legitimate unavailable responses. Real local full-address and unit routes now
+  return explicit unavailable/manual-review envelopes and the installed Add Home form preserves its
+  draft with retry/edit and a disabled continuation; activated external provider success remains
+  unavailable without provider ownership.
 - **A05:** web report/search/edit/audience/mailbox and installed profile save are evidenced; this
   addendum now also covers installed profile readback HTTP-503 preservation and same-form HTTP-200
   retry. Marketplace/subscription/booking/wallet/mail/search and Home/payment findings remain with
@@ -4245,3 +4249,101 @@ Smarty/geography result or schema/application change was made.
 Evidence: `a04-address-unavailable-20260922.json`; the raw local API log remains operational only.
 The durable private bundle now contains 192 files with MANIFEST SHA-256
 `758a5f48e9757539b69863d1bf043724573c3724acc0ccf1f62094c51a814b1a`.
+
+## Exact ten-row acceptance mapping for next handoff (2026-09-22)
+
+This block quotes the current authoritative criterion and binds it to the evidence above. It
+supersedes earlier shorthand rows while preserving their reports.
+
+- **N01 criterion:** “Close remaining release-build notification states across platforms: exact
+  post/chat/task destinations, foreground/background/cold start, permission denial, login
+  continuation, token changes, account switching and unread state. Preserve completed evidence
+  rather than rerunning it blindly.” Existing web/native notification routes, saved-record reads,
+  unread/preferences, Android emulator actions and installed cold-process/session continuity are
+  retained. Release-build cross-platform foreground/background/cold-start delivery, token-change
+  behavior and physical-device delivery remain unverified.
+- **N02 criterion:** “Physical Android notification/device acceptance remains unverified; emulator
+  delivery is not hardware acceptance. No physical Android is currently available in the recorded
+  setup.” Installed Android emulator list/filter/read/delete/Cancel/offline rollback/reconnect
+  retry, destination and induced HTTP-5xx rollback/retry are recorded as emulator evidence only.
+  The physical Android acceptance row remains open solely because the required device is unavailable.
+- **N03 criterion:** “Release-candidate Pulse and Beacon journeys must preserve address-free
+  discovery, explicit following, eligible posting, conversation/reply return, mute/unfollow and
+  private/public identity boundaries.” Web/API/SQL and retained Android discovery, follow/unfollow,
+  Beacon fallback, posting/reply, mute and identity separation are recorded. A fresh release-
+  candidate native cohort for the complete Pulse/Beacon sequence remains unverified; no policy or
+  provider claim is inferred from the debug APK evidence.
+- **N04 criterion:** “Reporting, blocking, moderation and old/shared/deep-link access need a
+  usable end-to-end safety workflow under the final release flags. Draft PR51 at `dfc860bfe` has
+  bounded browser/HTTP/PostgreSQL and regression evidence; native lifetime, real socket/provider
+  delivery and wider entry-point acceptance remain open.” Web/API/SQL report persistence,
+  idempotence/failure/retry, block/unblock, DM denial, cache/access/deep-link checks and installed
+  Android safety are recorded, including PR195’s fail-closed local-neighbor visibility repair.
+  Moderation processing, full native lifetime/socket/provider delivery and any wider entry point
+  outside the exercised inventory remain open.
+- **N05 criterion:** “Any promised calendar/reminder delivery must arrive once, open the correct
+  authorized destination and honor preferences; saved schedule data is separate evidence.” Existing
+  reminder worker/pause/retry/destination evidence and real preference persistence are recorded.
+  No daily-agenda producer/consumer or settled delivery policy exists in this scope, so a saved
+  preference is not counted as delivery.
+- **A01 criterion:** “Remaining real signup, verification/recovery email and OAuth callbacks,
+  including Apple/Google, cancellation, provider failure and return to the original authorized
+  destination.” Web signup/email verification/recovery and accepted native account flows are
+  recorded, including actionable unverified-login feedback. External Apple/Google consent,
+  cancellation/failure callbacks and authorized return remain unverified.
+- **A02 criterion:** “Real onboarding/account session expiry, revocation, logout/account switching
+  and local protected-data retirement across provider and client combinations not covered by
+  controlled local login.” Natural refresh/retry, logout failure/retry, remote sign-out, lock-down,
+  account switching, local-data retirement and installed Android cold-process restoration are
+  recorded. Provider-combination revocation and other client/provider combinations outside the
+  controlled local runtime remain unverified.
+- **A03 criterion:** “Hosted media/document upload, preview, replacement, deletion, permissions,
+  quotas and file cleanup under actual Auth/Storage configuration.” Existing profile/document
+  screens, reads/quota and Android chooser-to-byte request are recorded. The real hosted portfolio
+  request reached the existing S3 path and returned its credential 500 with no partial row; hosted
+  success and complete preview/replacement/deletion/permission/lifecycle evidence require shared
+  storage credentials/ownership.
+- **A04 criterion:** “Remaining address/provider coverage, including activated Smarty scenarios,
+  geography/unit disambiguation and legitimate unavailable responses. Prepare what is possible on
+  existing/free capacity first.” The real local full-address and unit-revalidation routes now
+  return explicit `ADDRESS_VALIDATION_UNAVAILABLE` and `ADDRESS_REVALIDATION_UNAVAILABLE` verdicts
+  under the existing disabled-provider configuration, with an isolated multi-unit fixture and
+  exact cleanup. Activated Smarty/geography success and external provider scenarios remain
+  unavailable without provider ownership/credentials; no activation or purchase was made.
+- **A05 criterion:** “Reconcile all reachable marketplace, subscription, booking, wallet, mail,
+  profile, search and adjacent actions against the current release inventory. Old static audits
+  are discovery inputs, not proof that each item is still broken.” Web report/search/audience/
+  mailbox/profile edit and installed profile save plus the installed profile readback fault/retry
+  are recorded. Marketplace/subscription/booking/wallet/search-adjacent and Home/payment findings
+  remain with their owners; the `/signup` booking misroute was not duplicated.
+
+No unit-test coverage is claimed or required by the user direction. The remaining items above are
+explicit device, release-candidate, provider, policy or owner boundaries rather than silently
+converted implementation claims.
+
+## A04 installed Add Home unavailable response and retry (2026-09-22 addendum)
+
+The route-only A04 unavailable result was followed through the existing installed Android caller to
+check that a successful HTTP 200 envelope cannot look like verified success or discard the address
+form. On `emulator-5554` with real Auth Bob login, **Hub → Start verification → Add address
+manually** accepted the existing street/unit/city/state/ZIP fields and issued the real
+`POST /api/v1/address/validate` against the same local runtime with Google/Smarty unavailable.
+The response was HTTP 200 with `error_code=ADDRESS_VALIDATION_UNAVAILABLE`,
+`verdict.status=SERVICE_ERROR`, `address_id=null`, confidence 0 and `next_actions=[manual_review]`.
+
+The existing Android screen rendered **Address verification is unavailable. Try again.** with
+**Try again** and **Edit address** actions. It retained all entered fields, showed the existing
+step-2 property-review surface, and kept **Continue** disabled; it did not create a Home or claim
+or present a verified result. Tapping **Try again** repeated the same real HTTP request and left the
+same banner, fields and disabled continuation. Going back opened the existing **Discard your
+progress?** dialog; choosing **Discard** removed the draft, and Settings → Log out returned HTTP
+200. The API process then stopped cleanly.
+
+This is installed UI/API behavior on the existing caller, not a mocked response. The server's
+`manual_review` next action is recorded as an explicit provider/policy boundary; the current client
+offers retry/edit and does not submit a manual review case. No application repair was justified
+because the draft is preserved, the failure is visible and continuation is blocked. Evidence:
+`a04-address-ui-unavailable-20260922.json` and
+`a04-address-ui-evidence-20260922/{form-before.xml,after-unavailable.xml,after-retry.xml,after-unavailable.png,after-retry.png}`.
+The durable private bundle now contains 198 files with MANIFEST SHA-256
+`1fa796d1b6f08e89b549f0aadf0f6986241fbd511184ff2825dc889071957f26`.
