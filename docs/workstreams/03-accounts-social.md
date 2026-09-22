@@ -42,6 +42,22 @@ closure claim; it is ready for coordinator integration review with the explicit 
 - **Mailbox:** PR178’s existing route-order repair is integrated; Stream 3 made no duplicate
   mailbox implementation.
 
+## Earlier Stream 3 coverage retained for integration review
+
+The table below groups the earlier merged work and its accepted evidence so the next agent can
+continue from the existing implementation and reports rather than repeat the same journeys. The
+PR links identify the source revisions; the detailed reports and bundle indexes remain the
+evidence of behavior and limits.
+
+| Area and existing source contract | Merged work and retained evidence | Current boundary |
+| --- | --- | --- |
+| Auth/session callers, web session state, native sign-in and deliberate logout | [PR136](https://github.com/WangPantopus/skinny-pantopus/pull/136), [PR138](https://github.com/WangPantopus/skinny-pantopus/pull/138), [PR145](https://github.com/WangPantopus/skinny-pantopus/pull/145), [PR149](https://github.com/WangPantopus/skinny-pantopus/pull/149), [PR151](https://github.com/WangPantopus/skinny-pantopus/pull/151), [PR152](https://github.com/WangPantopus/skinny-pantopus/pull/152); retained browser/native evidence covers logout/session-expiry feedback, push registration after sign-in, resend verification and iOS deliberate sign-out. | Apple/Google callback, provider cancellation/revocation and physical-device/keychain behavior remain unverified; A01/A02 stay partial. |
+| Web social, chat, feed, map, profile, marketplace and Beacon callers | [PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51), [PR64](https://github.com/WangPantopus/skinny-pantopus/pull/64)–[PR70](https://github.com/WangPantopus/skinny-pantopus/pull/70), [PR73](https://github.com/WangPantopus/skinny-pantopus/pull/73), [PR83](https://github.com/WangPantopus/skinny-pantopus/pull/83)–[PR97](https://github.com/WangPantopus/skinny-pantopus/pull/97), [PR99](https://github.com/WangPantopus/skinny-pantopus/pull/99), [PR105](https://github.com/WangPantopus/skinny-pantopus/pull/105), [PR107](https://github.com/WangPantopus/skinny-pantopus/pull/107), [PR111](https://github.com/WangPantopus/skinny-pantopus/pull/111), [PR114](https://github.com/WangPantopus/skinny-pantopus/pull/114), [PR115](https://github.com/WangPantopus/skinny-pantopus/pull/115), [PR117](https://github.com/WangPantopus/skinny-pantopus/pull/117), [PR178](https://github.com/WangPantopus/skinny-pantopus/pull/178), [PR186](https://github.com/WangPantopus/skinny-pantopus/pull/186); retained browser/API/SQL evidence covers reports, failed drafts, search, profile authorization, chat destinations, feed filters, Beacon links/comments and stale-handle recovery. | Owner-routed Marketplace, Home, payment, booking, wallet and subscription actions remain with their owning streams; provider/native release evidence is limited. |
+| Scheduling, reminder preferences and booking notification routes | [PR72](https://github.com/WangPantopus/skinny-pantopus/pull/72), [PR75](https://github.com/WangPantopus/skinny-pantopus/pull/75), [PR77](https://github.com/WangPantopus/skinny-pantopus/pull/77), [PR80](https://github.com/WangPantopus/skinny-pantopus/pull/80), [PR81](https://github.com/WangPantopus/skinny-pantopus/pull/81), [PR101](https://github.com/WangPantopus/skinny-pantopus/pull/101), [PR103](https://github.com/WangPantopus/skinny-pantopus/pull/103), [PR120](https://github.com/WangPantopus/skinny-pantopus/pull/120), [PR126](https://github.com/WangPantopus/skinny-pantopus/pull/126), [PR129](https://github.com/WangPantopus/skinny-pantopus/pull/129); retained worker/source, retry, preference, local SMTP and paused-host evidence is indexed in the N05 sections. | No claim of a settled daily-agenda producer/recipient/channel policy or physical delivered reminder; natural-timer evidence remains bounded to the recorded local run. |
+| Native notifications, Pulse/Beacon and profile safety callers | [PR164](https://github.com/WangPantopus/skinny-pantopus/pull/164), [PR165](https://github.com/WangPantopus/skinny-pantopus/pull/165), [PR166](https://github.com/WangPantopus/skinny-pantopus/pull/166), [PR167](https://github.com/WangPantopus/skinny-pantopus/pull/167), [PR168](https://github.com/WangPantopus/skinny-pantopus/pull/168), plus the open [PR195](https://github.com/WangPantopus/skinny-pantopus/pull/195); retained installed-emulator evidence covers notification list/actions and local social identity/follow/post/reply/mute boundaries. | N02 still needs physical Android notification acceptance; N01 release/device states, N03 release-candidate cohort, and wider N04 native/socket/provider lifetime remain open. Emulator evidence is local/emulator evidence only. |
+| Block/unblock cache and safety endpoints | [PR163](https://github.com/WangPantopus/skinny-pantopus/pull/163) retained the existing `blocks.js`/`neighborMessages.js` contracts and real browser → HTTP → PostgREST/SQL cache evidence. | Hosted moderation/provider processing and remaining entry-point/socket coverage are not claimed. |
+| Profile persistence and provider-backed storage/address boundaries | [PR182](https://github.com/WangPantopus/skinny-pantopus/pull/182) retained the existing `users.js` PATCH contract and installed 503→200 readback retry; A03/A04 retained chooser/S3 failure and address-provider-unavailable UI/API evidence. | Hosted storage success/lifecycle and activated Smarty/geography/unit success remain unverified; the A04 literal `%20` street fixture is explicitly not a geography-success claim. |
+
 ## Evidence and runtime bindings
 
 Durable evidence is at
@@ -65,9 +81,15 @@ SHA-256 `2728688a30a78449c990c302ebc72053802322772a990e7a3a6030e2265d504a`; earl
 notification APK SHA-256 `83cc0db08992e83dd1faa87a7baacdf582624a3e847f965f6361ab5fdd2cdf93`;
 Android device `emulator-5554`; retained iOS simulator `Pantopus Stream3 Social R2`, UDID
 `0AE16FA0-E244-414F-86C8-24893BDFD979`. Intended local ports are API `18130`, Next `18131`,
-Postgres/PostgREST `64531/64532`, Mailpit `64535/64536`; API and Next are currently stopped,
+SQL/Postgres `64532`, PostgREST `64531`, Mailpit `64535/64536`; API and Next are currently stopped,
 while the retained local Supabase/Mailpit containers remain available for an assigned runtime.
 The N03 release-build/native slot has not been reassigned and no build should start here.
+
+The current native bundle above is authoritative for the latest installed work. Earlier retained
+indexes remain applicable where their source/configuration is unchanged: the 20260915 social
+bundle MANIFEST is `a653476145474080a0f32bc48382d48ecc2fce31c79b163a4ea0cb3114d3afaa`, and the
+20260920 accounts/social bundle is recorded with MANIFEST
+`cca38fc28830dcfad59513da6062a496b44576974d61d032033de70cb7b1926a` in its detailed section.
 
 Fixture cleanup is recorded: N03 block/home/occupancy/overlay counts zero; N02 HTTP-5xx target
 removed after successful retry; A03 Bob File rows zero after S3 failure; A04 temporary HomeAddress,
