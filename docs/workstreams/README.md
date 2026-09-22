@@ -1,5 +1,26 @@
 # Three-stream coordination
 
+## Current coordinator checkpoint — September 22, 16:13 UTC
+
+PR1906c49692d6 completes bounded tip wallet release delivery: fresh actual TEST/web/API/SQL,
+atomic notification fault rollback, concurrent/repeated release, tip refund/debt/proof/lease
+controls,125 existing tests and full CI35751529326 pass.22-file MANIFEST
+9832f273d1653f4c7ebb7e2c981f18e6e47374cd44154436800e17f206560f65 independently verified.
+Both TEST1250charges refunded/customers deleted;22 cleanup checks0 each; owned browser
+sessions, API18132/Next18133 and Next artifacts cleaned. App branch clean.
+PR185 e4e552075 additionally repairs the reproduced40P01 stop lock-order regression:
+forward226 restores20900 wrapper and won inner guard; actual concurrent SQL plus27 guards
+and full CI35751454258 pass. Existing won-release proof preserved in19-file updated MANIFEST
+e0447e564e236c0fb24709319299cfa2704d483cdd9f401e968c4a55dab97c48.
+Retain owned SQL64562 ledger84/original79 unchanged. Applied224 is superseded private
+candidate-only history, exact archived SQL;225/226/227 forward repairs preserve all prior
+rows. This is not hosted/canonical ledger adoption. No native/hosted/Connect/push/full-row
+closure. PR bodies and private RESUME updated. Heavy native slot free.
+PR168 merged b30e0d395; PR1775129406fd freshCI35751227114 still runs iOS.
+Queue177→179→180→182→183→184→185→186→187→188→189→190; docs161/170/174 last.
+Eight closed/72partial-open unchanged. Earlier runtime checkpoints are historical.
+
+
 ## Active coordinator checkpoint — September 22, 16:04 UTC
 
 PR168 exact142220190 passed CI35746647258 and merged b30e0d395; PR177 refreshed

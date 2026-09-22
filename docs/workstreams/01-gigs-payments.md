@@ -1,5 +1,58 @@
 # Stream 1 — Gigs and payments
 
+## September22 — tip wallet release delivery completed; PR190
+
+Branch `codex/tip-wallet-release-delivery`, `6c49692d690249568d8a8036c5d9a23dd6883194`,
+[PR190](https://github.com/WangPantopus/skinny-pantopus/pull/190), base3c1e4a47d.
+Changed existing `backend/jobs/processPendingTransfers.js` and existing lifecycle assertion
+in `backend/tests/paymentReliability.test.js`; necessary forward225 tip refund proof and
+227 inner settlement/delivery extension. No new test/table/service/screen or redesign.
+Actual TEST1250 historical tip, real worker/web wallet/popover/SQL reproduced money committed
+with both release alerts lost under Notification INSERT denial; repeat skipped the row.
+Current/master/all-ref source comparison justified extending the existing settlement/outbox.
+
+Fresh actual TEST1250 candidate: notice fault inside the transaction leaves wallet0/no
+settlement and capture notice only; concurrent/repeated worker then credits1250 exactly once,
+one tip_income/settlement, two delivery rows/release notices plus one original capture notice.
+Canonical inner body is identical to the verified candidate; public209 wrapper supplies its
+lock timeout. Real duplicate workers/RPC reuse preserve money. CUA wallet12.50/one tip row,
+release notice→existing wallet and SQLreadtrue. Historical adoption adds no credit/backfill.
+Rollback SQL tip refund once, frozen debt/recovery, wrong type and stale lease controls pass.
+125 existing tests/six suites pass after one existing boundary expectation update. Full
+[CI35751529326](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35751529326)
+passes backend/Docker/complete schema/original SQL contracts/safeguards.
+
+Durable22-file [result](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-tip-wallet-delivery-r1/RESULT.md),
+MANIFEST `9832f273d1653f4c7ebb7e2c981f18e6e47374cd44154436800e17f206560f65` verified.
+Limits: synthetic sign-in/historical admission/maturity; transaction-only synthetic refund
+receipts and lease controls; actual TEST provider charge/cleanup. Local17.6 ARM64 reserved
+role denial caused reported supautils SIGSEGV; private existing contracts substitute only a
+transaction-only inheriting denied role, removed by rollback. CI originals pass unmodified.
+No provider push, natural cooling, native tip create/cancel/3DS, hosted/Connect/bank/live or
+whole-row closure. Both f9220537/38 charges refunded1250/customersdeleted,22 checks0 each.
+Actual logout/login returns and tab closure verified; API/Next stopped, owned cache removed,
+app clean. Retain SQL64562ledger84 with original79 hash unchanged. Applied224 is explicitly
+superseded private candidate-only history (archived exactb21f7aede19044555ba768888ac7afafc3eea4ebd245042311efdbefb7f279b5);
+unmerged source renamed227. All applied rows preserved. PRbody/privateRESUME current.
+
+## September22 — PR185 stop-fence regression repaired
+
+PR185 now `e4e552075d8a5c0cff8dd92c4d658c6bdf243f3f`:22300 had overwritten20900's public
+Gig→Payment wrapper. Fresh190CI exposed wrong target; actual concurrent settlement/stop-style
+locking reproduced40P01. Necessary forward226 preserves applied22300, restores exact20900
+wrapper and applies won guard to existing inner implementation. Real same-lock check now
+completes both transactions;27 existing guards pass exact rollback. Function metadata and
+five-second wrapper timeout preserved. Full CI35751454258 passes. Earlier actual TESTwon
+release evidence reused. No additional provider journey claimed by synthetic lock/guard controls.
+Updated19-file won-release bundle, MANIFEST `e0447e564e236c0fb24709319299cfa2704d483cdd9f401e968c4a55dab97c48`;
+original13 files preserved with [follow-up](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-won-dispute-release-r1/STOP_FENCE_FOLLOWUP.md).
+TemporaryPayment302/controlGig business fields restored, both SQL transactions rolled back;
+companion fresh tip fixture now fullycleaned. No full-row/native/hosted closure.
+
+Next: continue serial fresh-head integration and remaining P07 booking notice source/contract
+verification, then unresolved P/O/L boundaries. Preserve completed evidence and owner decisions.
+
+
 ## Active coordinator checkpoint — September 22, 16:04 UTC
 
 PR168 exact142220190 passed CI35746647258 and merged b30e0d395; PR177 refreshed
