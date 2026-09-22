@@ -3389,3 +3389,22 @@ code was edited because this is a shared mailbox route-order finding awaiting co
 ownership. The evidence records the actual status, source ordering, and no-write boundary;
 no seed/send/claim/archive/star/delete, provider/SMTP, or native mailbox-delivery claim was
 made.
+
+## A05 audience/subscription entry — feature-flag boundary (2026-09-22)
+
+The existing web `/app/audience` route was opened with an authorized Bob fixture. Its
+current `audience_profile` flag-off behavior redirected through the existing effect to
+`/app/persona`, where the legacy Beacon creation screen was visible with handle, display
+name, bio, public-link and Next controls. No Beacon or subscription form was submitted.
+
+The same boundary was checked through the real API: Bob login HTTP 200, `GET
+/api/personas/me` HTTP 200 with `persona:null`, `GET /api/personas/audience-identity/me`
+HTTP 404 `Not found` because that endpoint is feature-flag gated, and logout HTTP 200.
+Before/after SQL counts for `PublicPersona|BroadcastChannel|PersonaMembership|PersonaTier|PersonaBlock|Notification`
+were identical at `1|1|1|3|0|20`, proving no write or notification side effect. Evidence:
+`a05-audience-api-20260922.json`; the durable 114-file MANIFEST is
+**504858aec1ac7d0f0e67ca9ac52d3b1c68f4d48d8ab977f4dc0beae45f07183a**.
+
+This records the current release-flag boundary and legacy fallback. It does not claim
+Beacon creation, paid subscription checkout, Stripe/provider, native audience, or payment
+acceptance; no application/schema/unit-test change was made.
