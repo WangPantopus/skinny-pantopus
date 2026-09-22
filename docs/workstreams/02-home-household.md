@@ -1118,8 +1118,10 @@ Coordinator reacquired same SQL64552/API64551 and web[::1]:18141/API18142 for St
 
 ## PR176/PR178 evidence publication — September22
 
-- The redacted PR176 bundle is retained at
-  `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-pr176-home-leave-r1/`.
+- The redacted PR176 bundle is durably retained at
+  `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-home-leave-r1/`
+  (source capture:
+  `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-pr176-home-leave-r1/`).
   Its `MANIFEST.json` SHA256 is
   `753f7626e155727c71da8dd254b3b9fec4e03c09e77b9b772c01e21c38d69c0e`.
   It contains the reproduced `/detach` failures, the real Settings
@@ -1132,14 +1134,18 @@ Coordinator reacquired same SQL64552/API64551 and web[::1]:18141/API18142 for St
   were deleted by exact home/member metadata, leaving zero matching rows. The
   bundle does not claim byte-equality for untouched full-row fields. No token,
   password or raw proxy body is included.
-- The redacted PR178 bundle is retained at
-  `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-pr178-mailbox-preferences-r1/`.
+- The redacted PR178 bundle is durably retained at
+  `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-mailbox-preferences-r1/`
+  (source capture:
+  `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-pr178-mailbox-preferences-r1/`).
   Its `MANIFEST.json` SHA256 is
   `1c72d93b6eea04b7dc66454df99bb68d7804a53e46d9d9dea138592f63455057`.
   It contains the real direct/LAN 404 baseline, patched temporary-backend 200
-  GET/PATCH receipts, exact existing-block move, validation receipt and
-  byte-equal `MailPreferences` restoration. No UI/SDK/schema/migration/test
-  change or raw credential is included.
+  GET/PATCH receipts, exact existing-block move and validation receipt. The
+  retained fixture comparison reported the existing `MailPreferences` row
+  restored; no before/restored hash pair was captured, so this status does not
+  claim byte-equal full-row proof. No UI/SDK/schema/migration/test change or
+  raw credential is included.
 
 ## Installed native continuation — Android viewer/owner boundary — September22
 
