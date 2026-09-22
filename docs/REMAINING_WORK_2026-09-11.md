@@ -19,6 +19,8 @@ The payment integration is on master with broader acceptance still open. Bounded
 10,001-bid proof, retained-ledger and native-control limits are in Stream1 status.
 No closed-row count changes.
 
+September22 P06/P07 adds bounded PR185 won-dispute wallet release: actual TEST won event, concurrent/repeated worker, real web wallet,27 SQL guard controls and clean provider/fixture teardown; full CI passes. Native/hosted/Connect/live boundaries remain open. See [Stream1 evidence](workstreams/01-gigs-payments.md); counts remain8closed/72partial-open.
+
 The current handoff supersedes historical PR state below; source-specific paid
 candidate evidence is linked there and does not establish master acceptance.
 

@@ -1,5 +1,43 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — won-dispute release milestone complete; PR185
+
+Branch codex/won-dispute-wallet-release, ae5364db9cf8fa9c359d48d9e17e3d7792a34e70,
+[PR185](https://github.com/WangPantopus/skinny-pantopus/pull/185), base2b7378aa4.
+Existing worker/admin eligibility and three SQL guards excluded every dispute ID;
+actual TEST closed/won restored captured_hold but stayed unpaid, RPC PAYMENT_STATE,
+admin falsely healthy/stuck0 and web balance0. Three paths changed: processPendingTransfers,
+paymentOps, and necessary forward20260922022300. Existing function bodies reused;
+no table/screen/design/navigation/unit test added, no applied history rewritten.
+The forward explicitly preserves retained settlement lock_timeout5s (fresh canonical
+replay adds that explicit bound if absent); signatures/owners/ACL/settings verified.
+
+Candidate actual admin degraded/stuck1 and non-admin403; two concurrent workers,
+repeat and direct reuse yield exactly one1062-cent income/settlement, two durable
+in-app delivery rows/notices, web wallet10.62. Dispute ID/status retained. Twenty-seven
+rollback-only SQL controls cover active/lost/unknown/missing statuses, proof, cooling,
+refunds, legacy income/reconciliation; owned snapshots exactly restored. Real55P03
+row-lock timeout retries safely; real worker repairs controlled stale transfer_pending
+without duplicate credit. Private harness timestamp-trigger/bigint assertion adjustments
+are documented separately from application defects. Existing80tests/6suites, syntax,
+diff and migration-policy checks pass. Full exact-head
+[CI35740929536](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35740929536)
+passes backend/Docker/fresh schema replay/SQL contracts/CI OK.
+
+Durable [13-file result](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-won-dispute-release-r1/RESULT.md),
+MANIFEST367a6a9418d85e5f735c62aa6b40024fb8d800731d1e4cd4eac857790c907a81.
+Synthetic identity/fulfillment, deliberately mature cooling/crash timestamps, locally
+signed actual TEST events; rollback controls use synthetic capture IDs. No natural48hour,
+native/physical-device, hosted worker, Connect/bank/live money or external notice-delivery
+claim. No full P-row closure. Private raw logs/provider objects excluded from bundle/Git.
+
+Independent cleanup:22 SQL/auth/event checks zero; TEST1250 charge refunded1250/customer
+deleted; actual logout reached login, tab5 closed, API18132/Next18133 stopped; generated
+Next files restored/removed and app worktree clean. Retained SQL64562 ledger80 and new
+function definitions remain; original79 ledger rows unchanged hashf99ecb69aa861013765ad31fb22e9de1e5253956a41df859b17b9509379989c0.
+Private RESUME updated. PR166 mergedf9176cc2c;167766feedca freshCI pending. Next: serial
+integration and inspect existing lost-dispute-after-wallet-release path before any repair.
+
 ## September 22 — won-dispute wallet release, candidate verification in progress
 
 Branch codex/won-dispute-wallet-release from2b7378aa4, currently uncommitted:

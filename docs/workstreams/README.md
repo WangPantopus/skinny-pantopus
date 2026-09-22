@@ -1,5 +1,20 @@
 # Three-stream coordination
 
+## Current coordinator checkpoint — September 22, 14:37 UTC
+
+PR185 ae5364db9 is a completed bounded won-dispute release milestone: actual TEST
+won event, real worker/web wallet1062 once,27 SQL guard cases, timeout/recovery checks,
+80 existing tests and full CI35740929536 including fresh schema/SQL contracts passed.
+Thirteen-file durable MANIFEST367a6a9418d85e5f735c62aa6b40024fb8d800731d1e4cd4eac857790c907a81.
+TEST1250 refunded, customer deleted,22 owned SQL/auth/event checks zero; web tab closed,
+API18132/Next18133 stopped; application worktree clean. Retained SQL64562 ledger80,
+original79 entries unchanged. No native/hosted/Connect/bank or full P-row closure.
+PR166 mergedf9176cc2c; PR167766feedca fresh Android checks pending. Current merged-master
+CI35740318739 runs; older2b aggregate cancelled after superseding merge. Queue167→168
+→177→179→180→182→183→184→185; docs161/170/174 last. Stream2 owns the heavy native build
+slot; Stream3 continues feasible N/A verification. Eight closed/72partial-open remain.
+Earlier checkpoints below are historical. See Stream1 for exact evidence and limits.
+
 ## Current coordinator checkpoint — September 22, 14:28 UTC
 
 PR166 merged f9176cc2c after exact ae03e34d2 passed CI35735947354; PR167 is
