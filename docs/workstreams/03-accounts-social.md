@@ -3784,7 +3784,7 @@ The disposable row therefore required no restore; exact-id/marker cleanup was ve
 was logged out through Settings → Log out and the follow-up request returned 401.
 
 Evidence: `n02-android-single-delete-20260922.json`, `n02-delete-before.xml`,
-`n02-delete-after-confirm.xml`, `n02-delete-after.png`, and `n02-delete-http.log`. This binds
+`n02-delete-after-confirm.xml`, `n02-delete-after.png`, and `n02-android-delete-http-receipt-20260922.json`. This binds
 installed Android UI → HTTP DELETE handler → persisted deletion for one owned fixture. It does not
 claim Android installed failure/retry behavior; the accepted web evidence covers those cases, and
 no new unit tests were added. Physical Android and FCM/APNs delivery remain external boundaries.
@@ -3811,7 +3811,7 @@ Sign in; the backend recorded `auth.signed_out` and the following request return
 
 Evidence: `n02-android-new-follower-destination-20260922.json`,
 `n02-new-follower-before.xml`, `n02-new-follower-after.xml`,
-`n02-new-follower-profile.png`, and `n02-new-follower-http.log`. This verifies the final
+`n02-new-follower-profile.png`, and `n02-android-new-follower-http-receipt-20260922.json`. This verifies the final
 `new_follower` implementation through the real installed notification row, read mutation, native
 routing, profile API, relationship/read-only companion calls, visible profile and persisted cleanup.
 It does not establish provider-delivered notification receipt, physical-device behavior,
@@ -3837,4 +3837,9 @@ notification/profile journey and was not changed in this pass.
   separate from local implementation and UI/API/SQL success.
 
 The durable private evidence bundle now has 156 files; MANIFEST SHA-256 is
-`76d55079d8681671d302a6d418f9c9d7f8238f4db8acf29cfbead60ab594fe27`.
+`99bf0cb46f5127210137e35290932978fd914d2cca950d78e384ac50d41fa3c1`. Raw log files remain only in the private
+operational folder; the durable bundle contains sanitized request/status receipts.
+
+## Evidence bundle hygiene correction (2026-09-22)
+
+Raw Android/backend `.log` files from the N02 passes were removed from the durable private bundle after coordinator review. The raw originals remain only under `/private/tmp/pantopus-stream3-20260920-r1`; durable evidence now uses `n02-android-delete-http-receipt-20260922.json` and `n02-android-new-follower-http-receipt-20260922.json` with method/path/status summaries. The refreshed 156-file MANIFEST SHA-256 is `99bf0cb46f5127210137e35290932978fd914d2cca950d78e384ac50d41fa3c1`. No journey was rerun and no application behavior changed.
