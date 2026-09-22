@@ -117,8 +117,12 @@ final class BillDetailViewModel {
                 HomesEndpoints.updateBill(homeId: homeId, billId: billId, request: request)
             )
             try financeAccess.require(managing: true)
-            guard response.bill.id == billId, response.bill.homeId == homeId,
-                  request.status == nil || response.bill.status == request.status else { throw APIError.invalidResponse }
+            let statusMatches = request.status == nil
+                || response.bill.status == request.status
+                || (request.status == "canceled" && response.bill.status == "cancelled")
+            guard response.bill.id == billId, response.bill.homeId == homeId, statusMatches else {
+                throw APIError.invalidResponse
+            }
             onChanged()
             if case let .loaded(_, splits) = state {
                 contentState = .loaded(response.bill, splits)

@@ -540,7 +540,8 @@ class BillsListViewModel
 
             /**
              * Derive the chip status per the T6.0a contract:
-             *  - [BillChipStatus.Cancelled]  when status is "cancelled"
+             *  - [BillChipStatus.Cancelled]  when status is "canceled" (the
+             *    server spelling) or the historical "cancelled" spelling
              *  - [BillChipStatus.Paid]       when status is "paid"
              *  - [BillChipStatus.Scheduled]  when status is "scheduled"
              *  - [BillChipStatus.Overdue]    when due_date is in the past
@@ -555,7 +556,7 @@ class BillsListViewModel
                 val due = bill.dueDate?.let(::parseInstant)
                 val sevenDaysOut = now.plus(Duration.ofDays(7))
                 return when {
-                    bill.status == "canceled" -> BillChipStatus.Cancelled // server spelling (HomeBill_status_chk)
+                    bill.status == "canceled" || bill.status == "cancelled" -> BillChipStatus.Cancelled
                     bill.status == "paid" -> BillChipStatus.Paid
                     bill.status == "scheduled" -> BillChipStatus.Scheduled
                     due?.isBefore(now) == true -> BillChipStatus.Overdue

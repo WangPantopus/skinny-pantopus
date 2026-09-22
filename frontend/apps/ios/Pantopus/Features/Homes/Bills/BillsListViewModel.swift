@@ -388,14 +388,15 @@ final class BillsListViewModel: ListOfRowsDataSource {
     }
 
     /// Derive the chip status per the T6.0a contract:
-    ///   - `cancelled`   when status is "cancelled"
+    ///   - `cancelled`   when status is "canceled" (the server spelling) or
+    ///                   the historical "cancelled" spelling
     ///   - `paid`        when status is "paid"
     ///   - `scheduled`   when status is "scheduled"
     ///   - `overdue`     when due_date is in the past
     ///   - `dueSoon`     when due_date is within the next 7 days
     ///   - `due`         otherwise
     static func chipStatus(for bill: BillDTO, now: Date) -> BillChipStatus {
-        if bill.status == "canceled" { return .cancelled } // server spelling (HomeBill_status_chk)
+        if bill.status == "canceled" || bill.status == "cancelled" { return .cancelled }
         if bill.status == "paid" { return .paid }
         if bill.status == "scheduled" { return .scheduled }
         if let iso = bill.dueDate, let due = parseDate(iso) {

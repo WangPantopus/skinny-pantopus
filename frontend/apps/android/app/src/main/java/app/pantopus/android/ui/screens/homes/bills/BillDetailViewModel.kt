@@ -172,10 +172,13 @@ class BillDetailViewModel
                     if (revision != generation) return@launch
                     when (result) {
                         is NetworkResult.Success -> {
-                            check(
-                                result.data.bill.id == billId && result.data.bill.homeId == homeId &&
-                                    (request.status == null || result.data.bill.status == request.status),
-                            ) { "Bill change could not be verified." }
+                            val statusMatches =
+                                request.status == null ||
+                                    result.data.bill.status == request.status ||
+                                    (request.status == "canceled" && result.data.bill.status == "cancelled")
+                            check(result.data.bill.id == billId && result.data.bill.homeId == homeId && statusMatches) {
+                                "Bill change could not be verified."
+                            }
                             _state.value = current.copy(bill = result.data.bill, saving = false, saveError = null)
                             onChanged()
                             if (dismissOnSuccess) onClose()
