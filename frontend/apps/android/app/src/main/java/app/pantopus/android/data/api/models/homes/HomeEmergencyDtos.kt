@@ -57,3 +57,9 @@ data class CreateEmergencyRequest(
 data class CreateEmergencyResponse(
     val emergency: HomeEmergencyDto,
 )
+
+/** Envelope for `DELETE /api/homes/:id/emergencies/:emergencyId`. */
+@JsonClass(generateAdapter = true)
+data class DeleteEmergencyResponse(
+    val message: String? = null,
+)

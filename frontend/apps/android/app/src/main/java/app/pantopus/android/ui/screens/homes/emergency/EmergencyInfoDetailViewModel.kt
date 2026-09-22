@@ -31,6 +31,7 @@ sealed interface EmergencyInfoDetailUiState {
         val draft: EmergencyFormDraft,
         val isDeleting: Boolean = false,
         val showsDeleteConfirm: Boolean = false,
+        val deleteError: String? = null,
     ) : EmergencyInfoDetailUiState
 
     data object Missing : EmergencyInfoDetailUiState
@@ -41,8 +42,8 @@ sealed interface EmergencyInfoDetailUiState {
 /**
  * P2.8 — Backs the Emergency Info detail. Loads the parent list and
  * finds the row by id (no GET-by-id today). The detail reloads whenever
- * the route resumes so an edit committed by the child form reflects the
- * server row when the user returns.
+ * the route resumes so a server edit appears when the user returns.
+ * Delete commits through the existing DELETE route before leaving the detail.
  */
 @HiltViewModel
 class EmergencyInfoDetailViewModel
@@ -125,13 +126,27 @@ class EmergencyInfoDetailViewModel
 
         fun confirmDelete() {
             val current = _state.value
-            if (current !is EmergencyInfoDetailUiState.Loaded) return
+            if (current !is EmergencyInfoDetailUiState.Loaded || current.isDeleting) return
             _state.value = current.copy(isDeleting = true, showsDeleteConfirm = false)
-            // Backend has no DELETE handler today; commit locally and
-            // signal the parent navigator so the list refresh closes
-            // out the cycle.
-            _isDeleted.value = true
-            onChanged()
+            viewModelScope.launch {
+                when (val result = repo.deleteHomeEmergency(homeId, emergencyId)) {
+                    is NetworkResult.Success -> {
+                        _isDeleted.value = true
+                        onChanged()
+                    }
+                    is NetworkResult.Failure ->
+                        _state.update { state ->
+                            if (state is EmergencyInfoDetailUiState.Loaded) {
+                                state.copy(
+                                    isDeleting = false,
+                                    deleteError = result.error.message ?: "Couldn't delete this item.",
+                                )
+                            } else {
+                                state
+                            }
+                        }
+                }
+            }
         }
 
         companion object {

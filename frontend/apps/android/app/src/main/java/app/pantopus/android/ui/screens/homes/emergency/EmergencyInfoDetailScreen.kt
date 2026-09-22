@@ -195,6 +195,13 @@ private fun LoadedShell(
                     DetailsCard(text = draft.details)
                 }
                 MetaCard(draft = draft)
+                state.deleteError?.let { message ->
+                    Text(
+                        text = message,
+                        style = PantopusTextStyle.small,
+                        color = PantopusColors.error,
+                    )
+                }
                 ActionsRow(
                     isDeleting = state.isDeleting,
                     onEdit = onEdit,

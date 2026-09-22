@@ -104,8 +104,8 @@ fun AddGuestFormScreen(
 
     LaunchedEffect(state.shouldDismiss) {
         if (state.shouldDismiss) {
-            viewModel.acknowledgeDismiss()
             delay(700)
+            viewModel.acknowledgeDismiss()
             onSent()
         }
     }
