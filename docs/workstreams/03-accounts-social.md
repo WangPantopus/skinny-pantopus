@@ -3369,3 +3369,23 @@ for `UserFollow|UserBlock|UserReport|Notification|ChatMessage|Post` were identic
 The identity-search `local_profile` id is deliberately distinct from the Auth User id; the
 route href is the established destination contract. Evidence: `a05-search-api-20260922.json`.
 The refreshed 112-file MANIFEST is **4a55f3e217be0b6fad71802d3d8a3a1bb403a9ad429e2ab78874d2870e6de9ae**.
+
+## A05 mailbox screen/API read pass — route-order finding (2026-09-22)
+
+The existing web Mail sidebar opened `/app/mailbox` in the retained local runtime and
+showed the existing Personal Mailbox empty state with Compose and scope/filter controls.
+A real authorized Bob API session then called `GET /api/mailbox?scope=personal` and received
+HTTP 200 with zero mail items; logout returned HTTP 200. Before/after SQL counts for
+`Mail|MailAction|Notification|UserFollow|UserBlock|UserReport` were identical at
+`0|0|20|0|1|0`, so this read-only mailbox pass created no records or social side effects.
+Evidence: `a05-mailbox-api-20260922.json`; the durable 113-file MANIFEST is
+**14a8d7dbd312353923955306778267ac0d37161d8190717c0d88a4fdb83cc294**.
+
+The same API session exposed a concrete existing route-order gap: `GET /api/mailbox/preferences`
+returned HTTP 404 even though `backend/routes/mailbox.js` declares a GET `/preferences`
+handler. The generic GET `/:id` mail-detail route appears earlier and consumes the literal
+`preferences` path; no current frontend caller references the preferences SDK methods. No
+code was edited because this is a shared mailbox route-order finding awaiting coordinator
+ownership. The evidence records the actual status, source ordering, and no-write boundary;
+no seed/send/claim/archive/star/delete, provider/SMTP, or native mailbox-delivery claim was
+made.
