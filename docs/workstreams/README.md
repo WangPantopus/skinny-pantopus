@@ -1,5 +1,590 @@
 # Three-stream coordination
 
+## CURRENT RESUME POINT — September 22, 2026, 22:45 UTC
+
+The coordinator role moved at about 21:05 UTC to the Claude Code session "Pantopus Stream 1 coordinator handoff" (Stream 1 developer + coordinator). Before any writing it verified that the previous Codex coordinator thread `01a0c897-33be-7011-b55b-b82291ba9fd2` had completed at 20:35 UTC, and that the Stream 2 (`01a0c0d4-2278-71d3-bc23-a9d789d2afeb`) and Stream 3 (`01a0a824-301b-74e3-a1d9-b205714ed7a1`) Codex tasks had been `task_complete` since 20:07/20:15 UTC. **The coordinator cannot message Codex tasks.** The founder relays the peer assignments below, or authorizes the coordinator to act for those streams. No duplicate agent was started for a peer worktree. The 20:00 UTC consolidation is preserved below as history.
+
+### Integration queue — complete
+
+| PR | Exact merged head / fresh CI | Merge commit |
+|---|---|---|
+| 192 Emergency edit | `ea044ebea7` / `35776302859` (all jobs incl. Android) | `37cb6d2167b1a59e7e77406feda59ca97873927c` |
+| 193 booking receipt/notice | `4d38c43ec4` / `35785266136` | `6f7c700e6cfefa8fd070b74b354160b921e80b68` |
+| 194 registration return | `e8ccf56e51` / `35785918190`. The coordinator resolved the single `ConfirmedView.tsx` import conflict by keeping both imports. | `094ed5826bcfd36a6f956984103e861e484dbd93` |
+| 195 Android Local block state | `7f557a0069` / `35786420151` | `86f63a0eaf70dfc808950649aae34ef45015c985` |
+| 196 booking cancellation/refund | `46330f275a` / `35790106402`; PR193 labels already cover its `capture_pending`/`refund_pending` states | **`b36d379b2362cd35b2a15d86892400796304b46e`** (final master) |
+
+Final canonical migrations end `20260922023000` (public230) → `20260922023100` (public231). Applied history was not rewritten; retained prototype ledgers are untouched. Docs PR161 (`1a9317245`, only three superseded summary lines not carried) and PR170 (`815b6e495`, 117-line `native-social-r1` history appended verbatim) are merged into this hub branch and land with PR174. **Master merges do not deploy:** in Deploy Backend run `35789209741`, the check passed and every build, migration and deploy step was skipped (backend deployment disabled). Aggregate CI for final master is run `35791178691`. The earlier `2048d971` push failed only in the iOS iPhone 16 `CeremonialMailViewModelTests.testContinueFromDecideAdvancesToVerify` timeout, which passed on iPhone 16 Pro/SE in the same run.
+
+### Stream 1 milestones since takeover (heavy native slot released at 22:13 UTC)
+
+All three run on APK `db303e5bbe782a089715f8b91808b4f37c5fa3c96841edb37d23f8ac29365077` (master `094ed5826`; later merges touch no gig refund/tip path), the owned `emulator-5558`, real Stripe TEST and the retained wallet-read-r1 candidate ledger (88 rows, unchanged). Cleanup was independently verified (TEST intents refunded/canceled, customers deleted, owned SQL rows 0):
+
+- **P09 Android payer** — audit `20260922-stream1-p09-android-r1`, MANIFEST `670186c9170493fa9b2caf7e72c6d6136c58a13f64508aea7b124d8decaed5e9`. Covers: authorization, owner capture, partial refund, lost committed reply → Check status (no duplicate), disabled over-limit Continue and hold release. Post-refund wallet release credited exactly the refund-aware 213 of 1063.
+- **P09 Android refund failures/denial** — audit `20260922-stream1-p09-android-faults-r1`, MANIFEST `7a38ecf7a58fb0897e8a81ddb0e4984695a8cd2d0db63de980484ff96c6d4fce`. Covers: provider down → one refund after the one-minute lease; provider-created refund with lost reply → adopted on retry with no second create; worker/stranger 403 with no worker controls.
+- **P03 Android native tips** — audit `20260922-stream1-p03-android-tip-r1`, MANIFEST `f81b0244a24f64dfc610e02d55ea3beb399f29bbddd4d627dd0f7ff1457237ec`. Covers: new-card tip, sheet-dismiss pending → Cancel tip, 3DS success, 3DS failure → recovery on the same intent, and the three-tip limit.
+- Harness gaps found and fixed inside the bundles (not app defects): the Android bid panel needs the real `offersV2` router, and Android paid-bid admission needs the login `sessionId` that the real bearer login returns.
+- Observations (UX proposals, no reproduced production failure):
+  - A credential without `sessionId` makes Accept a silent no-op. Check whether the server returns one for unbound sessions.
+  - A refund retry inside the one-minute lease returns "pending" without explaining the wait.
+  - The tip-limit message is generic.
+- Rows: P03 and P09 stay partial. P03's remainder is unavailable local-storage recovery. P09's remainder is historical Connect reversal and broader close/release. Count unchanged.
+
+### Owners, checkouts and reservations
+
+| Stream | Application checkout | Runtime / devices | Next |
+|---|---|---|---|
+| 1 + coordinator (Claude) | `/private/tmp/pantopus-paid-gig-integration` on local `codex/stream1-verification-20260922` at final master `b36d379b2` (clean, no commits). Coordinator checkout `/private/tmp/pantopus-pr192-integration` detached at `094ed5826` is the APK source (ignored build outputs/backend deps only). The historical `codex/paid-gig-integration` ref is preserved. | No API/Next running. Retained SQL64562/PostgREST64561 ledger88. `emulator-5558` keeps the P09/P03 APK with app data cleared; iOS `C2BCF36A…` idle. Heavy slot **unassigned**; Stream 3 has the next claim. | Next Stream 1 criterion: P06 native dispute presentation, or the P08 native denial/lost/stale cases, after confirming the existing native dispute UI. |
+| 2 Home (Codex `01a0c0d4…`, idle) | `/private/tmp/pantopus-workstream-home` at `ee69cbd8d` (now merged through PR192). When starting R06 the owner moves to a fresh branch from master, preserving `.next-stream2`. | API18143/LAN18142 retained; its `home.js` runtime patch is **identical** to merged PR192 (47 added lines), so adopt master at the next restart and keep the backup. `:8000` from the Home worktree is the founder device backend. SQL64554/PostgREST64553, emulator-5556, iOS `6F914A30…`. | **R06**, below. |
+| 3 Accounts/social (Codex `01a0a824…`, idle) | iOS `/private/tmp/pantopus-workstream-accounts-social` `b956a0076` (preserve `publicShare.ts`/tsconfig edits, `.next-stream3`). Android `/private/tmp/pantopus-stream3-android` fast-forwarded by the coordinator to merged `7f557a006` (clean). | SQL64532/PostgREST64531, Mailpit64535/36. **Correction:** Next `[::1]:18131` is running (pid 15494 from the Stream 3 worktree), contrary to the 20:00 note; left untouched. iOS `0AE16FA0…`, emulator-5554. | **iOS parity of PR195**, below. Gets the heavy slot next. |
+
+### Peer assignments (existing tasks; founder relays)
+
+**Stream 2: R06, residency letters.** Backlog criterion: "Residency passes/letters are separate from household admission: verify issue, view, revoke and public-verification access independently." Existing implementation: `backend/routes/residencyLetters.js` mounted at `/api/homes` (`POST/GET /:id/residency-letters`, `GET …/:letterId/pdf`, `POST …/:letterId/revoke`), public check `GET /api/public/residency-letters/:code` (`backend/routes/public.js:730`), `backend/services/residencyLetterService.js`, legacy migrations 157/189, web Identity → Residency letter controls, iOS `ResidencyLettersEndpoints.swift`, Android `ResidencyLettersApi.kt`/`ResidencyLetterDtos.kt`. Reuse PR45 (merged 2026-09-14) expiry projection/labels and its Chrome evidence; do not repeat expiry-label checks. Remaining work: real web UI→API→SQL issue by an authorized member; view/download; public verification by code showing only the intended fields; revoke; the public check then showing revoked/invalid; denial for non-members, removed members and unauthorized roles; letter issue/revoke not changing household admission, and admission changes not silently validating letters. Then the installed Android/iOS callers on the retained devices. Repair only a reproduced defect, in place. Hand off with a durable bundle plus manifest, an in-place update to row R06 in live 02, and a PR only for a repair. The coordinator merges.
+
+**Stream 3: iOS parity of the PR195 defect (N04/N03).** PR195 fixed Android only. iOS `frontend/apps/ios/Pantopus/Features/Profile/PublicProfileViewModel.swift` `loadRelationship(id:)` (about line 630 on master) reads only `GET /api/users/:id/relationship`, which excludes personal `UserBlock` rows (`GET /api/users/blocked`, `backend/routes/blocks.js:138`). On a read error it leaves `canFollow` true. Remaining work: on installed iOS `0AE16FA0`, after a personal block from a Local-profile neighbor, a fresh profile open must not restore Follow/Connect, unblock must restore them, and a failed blocked-list read must fail closed. Also check the web public profile reopen. Reuse the PR195 fixture recipe (Home `2ca4bc33…`, Bob owner/Evan member, LocalProfile overlay) and its Android evidence; do not rerun Android. If reproduced, mirror PR195 minimally: Local scope only, Persona/Relationship policy separation preserved, no layout change, no new tests. The iOS build needs the heavy slot after Stream 1 releases it. Hand off with a PR, a bundle and an update to live 03.
+
+### Unchanged rules
+
+One writer per application worktree. The coordinator owns shared status, the backlog and merges. Preserve designs, fixtures, retained ledgers and runtime patches. No new unit tests, trackers or speculative rebuilds. The count stays **9 closed / 71 partial-open**; nothing since the takeover closes a whole row.
+
+---
+
+## Historical coordination and grants — preserved
+
+## Consolidation checkpoint — September 22, 2026, 20:00 UTC (superseded by the current resume point above)
+
+The founder requested that all three streams summarize **all implemented fixes, verification, evidence, cleanup and next actions** so another agent can resume without losing or repeating work. That consolidation is now the active documentation milestone. These current summaries supersede older chronological checkpoints; original reports/history remain preserved.
+
+Read the current summary at the top of each existing status file:
+
+- [Stream1 current summary](01-gigs-payments.md), [Stream2 current summary](02-home-household.md), [Stream3 current summary](03-accounts-social.md).
+- [Shared handoff](../PROJECT_HANDOFF.md), [authoritative80-row backlog](../REMAINING_WORK_2026-09-11.md), [verification-first rules and preserved reports](../VERIFICATION_FIRST_2026-09-13.md).
+
+### Single live location and existing owners
+
+Live hub: `/Users/yingpengwang/pantopus-coordination`, `codex/workstream-coordination`, PR174. Stream files here are live; supplemental docs161/170 retain history and must not overwrite current summaries during merge. No new tasks, agents, tracking documents or accepted-journey reruns were needed for consolidation.
+
+| Existing task / owner | Application checkout and source | Current owned runtime |
+|---|---|---|
+| Stream1/coordinator `01a0c0d1-0703-70c3-b842-6d01bc8ca48b` | `/private/tmp/pantopus-paid-gig-integration`, `codex/booking-cancellation-recovery`,3f82ae4786 clean/pushed. Separate PR192 integration checkout detachedea044ebea; PR190 checkout7a555c92e preserved. | API18132/Next18133/browser stopped. Retain SQL64562/PostgREST64561 ledger88; Stream1 simulatorC2BCF36A… and own AVD. |
+| Stream2/Home `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` | `/private/tmp/pantopus-workstream-home`, `codex/native-emergency-edit-20260922`,ee69cbd8d; untracked Next cache preserved. Docs161 at4d33f5f53 incorporated into live02. Original checkout remains behind integration intentionally. | API18143/LAN18142, SQL64554/PostgREST64553 retained. Backend detachedcc885ab23 has accepted local home.js patch/backup; preserve. Android5556/iOS6F914A30…; physical iPhone unavailable4016. |
+| Stream3/accounts-social `01a0a824-301b-74e3-a1d9-b205714ed7a1` | `/private/tmp/pantopus-workstream-accounts-social`, local/stream3-ios-integration b956a0076; existing unrelated web edits preserved. Android `/private/tmp/pantopus-stream3-android` clean3b374454a. | API18130/Next18131 stopped; SQL64532/PostgREST64531 and Mailpit64535/36 retained. Android5554/iOS0AE16FA0… preserved. |
+
+**Heavy native slot: unassigned.** Stream2 released it in its published handoff. Do not infer a Stream3 N03 grant or launch a build during this documentation task. Before any later build/install, coordinator records the owner, actual process check and resource reservation; idle daemons are not permission to kill caches or peer processes.
+
+One writer per application worktree. Stream1 owns P/G/O/L and shared integration; Stream2 H/R/I/D/F/M; Stream3 N/A; U checks accompany each. Coordinator owns shared handoff/backlog/README and merges. Preserve source/fixtures, compare existing and archived implementations first, reproduce before a minimal repair, and preserve all visual/navigation designs. No new unit tests or unit coverage target.
+
+### Current integration order
+
+| Item | Current source / evidence | Next action |
+|---|---|---|
+| Master | `2048d971396a4a2e83e4d61bb612b395760cf97c`, PR191 merged;189/190/191 exact-head CI passed | Recheck remote and aggregate master CI; never infer aggregate success from canceled older runs. |
+| PR192 | `ea044ebea7aedfae5c939e65ac1bccd841fc9e47`; CI35776302859 native jobs pending. Preserves both accepted Edit and Delete; original installed source `ee69cbd8d` retained. | Finish fresh CI, then merge reviewed head. No repeat native build/journey needed for unchanged preserved behavior. |
+| PR193 | `877ad94f6802227bc02f654d26a617203874227c`, CI35759729609 passed; booking payment wording/notice destination | Update after192; require fresh exact-head CI. |
+| PR194 | `8b2bd6e05f871d0f9ac501601313cece64abaa8e`, CI35761158118 passed; registration return | Update after193; require fresh exact-head CI. |
+| PR195 | `3b374454ad07060cf5dcaa1ce02fc48b3be4c88e`, CI35768401037 passed; Android Local block state on reopen | Update after194; preserve Persona/Relationship policy separation. |
+| PR196 | `3f82ae4786362a31069539080bff28f603e68f2d`, CI35771063543 passed; booking atomic cancellation/recovery and stale-capture guard | Update after195; public231 must follow230 without rewriting applied history. |
+| Docs161/170/174 | Open. Home summary through4d33f5f53 is incorporated in live02; social summary is in live03; full history preserved. | Integrate docs last, preserving the current summaries and all original evidence/history. PR46 remains untouched. |
+
+### Resume safely
+
+Each current stream summary contains completed code groups, precise source/CI, existing evidence paths and hashes, row-specific open criteria, cleanup and next action. Coordinator checked96 manifests/2,084 listed hashes without repeating product journeys. Home's pushed summary existed despite empty task replies and is now incorporated; use it instead of recreating work. The all-app count is9 closed/71 partial-open; no new closure from this handoff.
+
+Do not overwrite applied ledger rows, promote private prototype histories into canonical migrations, clear untracked user work, reset dirty runtime patches, or reuse another stream's ports/device/fixtures. Refresh exact Git/PR/CI state before acting; read private operational notes without exposing credentials or raw logs. Accepted unchanged evidence is reusable. Skipped CI jobs and unavailable provider/device boundaries remain explicit; no silent assumption of end-to-end success.
+
+The original working agreement and historical grants remain below for context. Their dated branch/slot/port snapshots are superseded by this summary, while preservation and single-writer rules continue to apply.
+
+## Current coordinator checkpoint — September22, 19:05 UTC
+
+PR189 merged6bec1e878 after exact073f0806a fullCI35766200401. PR190 integration7a555c92e
+retains tip and won-dispute worker guards;128 existing regressions pass. Migration guard
+caught225 sorting behind merged226; public230 preserves the original225 SQL/ledger and
+accepts its exact prior transformation. RealSQL preservation and fullCI35771059661 pass.190 merged ea43d92b3 at19:04:59UTC.
+191 merged2048d9713 after exact1b9e43788 fullCI35771470998 at19:49:24UTC.
+192 integrationea044ebea is pushed to the existing PR; fresh checks are required. Three
+conflicts retain both accepted PUT/Edit and DELETE behavior; API/repository members and
+shared comment reconciled. Merge of191 caused no additional source delta. Original Stream2
+worktree and installed evidence remain untouched; no native build or accepted journey rerun.
+Queue192→193→194→195→196, then docs161/170/174;46 untouched.
+
+PR1963f82ae478 is published with real booking cancellation/refund recovery and capture-race
+repairs. Seven StripeTEST bookings covered database rollback, pending recovery, manual worker,
+captured refund, both approval/cancel race orderings, forbidden actor/concurrent retry and lost
+reply.107 existing checks pass; no new unit tests. FullCI35771063543 passes, including full schema replay and production web build.31-file evidence
+MANIFESTe0619dec00aa1c562cf52de7e8793e23671ebf0b4cf55dc7a35db5b4c258226f.
+All owned provider/SQL/auth fixtures cleaned; API18132/Next18133 stopped and Chrome closed.
+Retain ledger88 unchanged: original84 plus private228/229, public230/231; earlier224 remains
+as previously archived. Public231 matches the tested cancellation function exactly. No
+hosted deployment, natural scheduler delivery or whole-row closure is claimed.
+
+Coordinator recovered Stream2's completed11-file ee69cbd8d preservation evidence and copied
+it unchanged to durable20260922-stream2-native-emergency-edit-preservation-r1; all hashes
+verified, original MANIFEST224096ef2d8be6fc42133397140131aef8f663eb7c8e0c58c0170d96e6e4521e.
+Adding the integration receipt yields12 files, MANIFEST9993d82400671c7a5249ac0e8cb159a5c303cfda2b4ba013b663212226ffa5d0.
+Installed title-only preservation,403/retry, malformed type and wrong id/home retain the form;
+coordinator independently confirmed HomeEmergency/override/audit counts0.192 fullCI35764090022
+passed. Its prior bundle claim was missing; this recovered bundle is the actual durable owner.
+Last four Stream2 follow-up turns completed with no output; no new progress/slot release or
+40-row accounting is inferred. Existing backend/LAN runtime is preserved. 192 is accepted within its recorded preservation scope and remains queued after191;
+its completed journeys must not be rerun. Outstanding row accounting does not block this repair.
+
+Stream3's198-file bundle hashes pass, MANIFEST1fa796d1b6f08e89b549f0aadf0f6986241fbd511184ff2825dc889071957f26.
+A04 actual installed AddHome/API unavailable response retains draft, offers Retry/Edit and
+disables Continue. Retry and discard/logout pass; no application repair. Literal%20 street
+input limits normal-address claims; successful external geography/unit resolution is unverified.
+Installed profile readback503 preserves2 unsaved; restored grant/retry200 shows saved;
+exact cleanup/logout/API stop recorded and XMLs independently checked.
+Android cold-process session/profile200 and logout200 are accepted within local scope;
+portfolio chooser reaches actual upload500 due invalid storage credentials, no partial File.
+iOS installed destination remains a precise UI-control boundary.1953b374454a fullCI35768401037
+passes; remains queued after194. Stream3 corrected its authoritative mapping: N02 is physical
+Android acceptance and A04 is address/Smarty coverage; OAuth belongs toA01. The older current
+table is corrected too. Stream3 continues the next genuinely unverified local criterion or
+records exact remaining device/provider/policy prerequisites; no repeated outage variants.
+Count remains9closed/71partial-open; P01 is a separate bounded milestone.
+
+
+## Active cancellation repair — September22, 18:30 UTC
+
+Actual Chrome cancellation under a45-second refund-queue SELECT denial returned200 and a
+terminal success page while TEST1250 remained authorized and no refund request existed.
+Reload offered no recovery. Exact original grant restored; reproduction.json/provider/SQL
+receipts retained privately under stream1-booking-cancel-r1. Normal A release passed.
+
+Root candidate extends existing booking service/public route/refund orchestration and web
+cancel/manage screens. Forward20260922022800 atomically reserves the existing refund request
+with Booking cancellation and a frozen decision in existing Payment metadata; no new table,
+column, screen, service or unit test. Applied only to retained owned SQL64562: ledger84→85,
+all84 prior rows exact, anon/authenticated execution denied and service_role allowed.
+Source SHA2561f04aee96c7a34586d1f6b6d91b88430d5fab3c3d8d6ce4223af2f3596550d3b.
+Candidate remains uncommitted and NOT accepted.64 existing relevant checks and web typecheck
+pass; real fresh transaction-failure/provider-failure/retry/worker verification is underway.
+Legacy B now truthfully displays payment-needs-review; no historic cancellation policy is
+invented. B's real held TEST authorization still needs explicit cleanup. API restarted at
+owned PID/session72039, Next50617, Chrome257777434 active. No fault currently active.
+
+PR188 merged715d62fed after exact e18fab7ae CI35765718055.189073f0806a runs fresh
+CI35766200401.192 remains held for installed preservation;195 Android lint/test/assemble
+failed35763514679 and its owner is assigned the exact-job repair. Stream2 retains native slot.
+No whole-row closure;9closed/71partial-open. Prior checkpoint/runtime paragraphs are history.
+
+
+## Current checkpoint — September 22, 18:15 UTC
+
+PR186 merged d845ed22d after fresh CI35764010625; PR187 merged 7c4a2702f after
+fresh CI35765132114. PR188 now e18fab7ae runs CI35765718055. Current-master
+aggregate remains pending; paid integration retains previously accepted a460.
+Queue188→189→190→191→192(preservation hold)→193→194→195, then docs161/170/174.
+
+Stream1 cancellation fixture f9220541 is active on API18132/Next18133 against
+retained SQL64562/API64561, branch codex/booking-cancellation-recovery at96356ea80.
+Actual Chrome checkout and real Stripe TEST authorization followed by ordinary invitee
+cancellation passed: Booking cancelled, provider authorization cancelled, one successful
+PaymentRefundRequest release; no capture or cash-refund claim. Second failure fixture is
+not yet created; Chrome controls are intermittently timing out. No database fault or app
+repair has been applied. Existing receipt/account-link findings remain owned by193/194.
+Stream2 owns the native slot for192 preservation and malformed-response verification.
+Stream3 continues its next local boundary;195 remains its one-file current-master repair.
+Retain ledger84 and fixture/provider cleanup references privately. Count9closed/71partial-open.
+
+
+## Stream1 runtime reservation — booking cancellation, September22
+
+Reserve API18132/Next18133 and one new Chrome tab for owned fixturef9220541 against retained
+SQL64562/API64561. Branchcodex/booking-cancellation-recovery starts at currentmaster96356ea80;
+its master aggregate remains pending, and no application change is made. Verify existing real
+booking cancellation/refund failure recovery using actual Stripe TEST, synthetic identity and
+page/availability; no hosted mail/push/native build. Prior39/40 fixtures remain cleaned.
+Stream2 owns the heavy native slot. Preserve the original84-row ledger and all peer resources.
+
+
+Current checkpoint: PR184/185 merged after exact-head full checks;186933b60326 runs freshCI35764010625. Currentmaster963 aggregate remains pending. Root's populated two-Home-forward rehearsal preserved15,232 rows across387 tables and existing financial/document records; two affected SQL workflows passed, scratch fixtures removed, original ledger84 and all table fingerprints unchanged. No G03/G04 closure or hosted adoption. Root source-reviewing booking cancellation recovery; no active API/browser. Stream2 owns native slot for192; Stream3's195 now has only its profile repair. Details/evidence in newest01 section;9closed/71partial-open unchanged.
+
+
+## Native slot update — September22, 17:50 UTC
+
+Stream3 explicitly released the slot after N02 HTTP500/retry and N03 profile-block reopen
+verification, exact cleanup and API shutdown. All181 bundle hashes verified. Stream2 now owns
+one focused PR192 preservation build/install; Stream1 continues source/SQL review only.
+PR195 publication must use current master plus its one-file repair, retaining the installed
+integration build and reusing unchanged source evidence. No extra verification-only PR.
+
+
+## Current checkpoint — September 22, 17:44 UTC
+
+PR closure audit verifies that171/172 reused fixes already merged through164–168;38–42
+were incorporated through43.159's full history and158's documentation are preserved in open
+replacement PRs174/170; those documents are not yet merged. All nine current closed-without-
+merge PRs were checked, with no discarded application changes found. Exact descriptions and
+replacement links are corrected; see the newest Stream1 section for evidence and process limits.
+
+PR183 merged3e8d11dfd after exact-head full CI35757736325.184's update is requested; fresh-head
+CI is required. Paid integration is pushed at previously acceptedmastera460, fullCI35757725186
+and migration guard passed. PR194 fullCI35761158118 passed;193/194 remain queued for integration.
+Stream1 has no API/Next/browser/native runtime; all booking fixtures cleaned, ledger84 unchanged.
+Stream3 owns the native slot;192 remains held for preservation review. Docs161/170/174 last;
+9closed/71partial-open unchanged. Earlier runtime snapshots below are historical.
+
+Current September22 checkpoint: PR193 passed fullCI35759729609; PR1948b2bd6e05 is published with real free-booking → registration → existing-account → saved-booking proof, exact cleanup and freshCI35761158118 running. Stream1 now has no API/Next/browser runtime; ledger84 retained unchanged. Queue183 waits only Android lint/test/assemble.192 remains held for data-preservation review. See newest Stream1 status for evidence and limits; count9closed/71partial-open unchanged.
+
+Current runtime override, September22 17:20UTC: Stream1 uses only API18132/Next18133 and IAB13 for owned free-booking signup fixturef9220540, provider creation forbidden. Branchcodex/booking-account-continuation frommastera460; no application change yet. The receipt links to /signup while the existing auth route is/register; actual link verification underway. Previous193 paid fixtures remain cleaned. Stream3 retains heavy-native slot.
+
+
+## Current coordinator checkpoint — September 22, 17:18 UTC
+
+Booking PR193 `877ad94f6` is published; real Chrome/Stripe TEST/host approval/worker/web
+notification/SQL verification and exact cleanup passed. Required CI35759729609 passed.
+Three existing files fix uncaptured “Payment received” wording and the `/gigs/null` booking
+release link.21-file evidence MANIFEST `615be4471455d0bbfb91dbe03aab918820b119534149189418cf53cc80f8a526`;
+full details and limits are in Stream1 status. No whole-row closure. API18132/Next18133 and
+owned tabs are stopped/closed; retain ledger84 unchanged. Stream1 app is clean/pushed.
+
+PR182 merged as `a460fd5d1`; PR183 `990d05e9d` still runs fresh Android checks. Continue
+184→185→186→187→188→189→190→191→192→193 after each predecessor, with192 held for
+its precise data-preservation review. Stream3 holds the sole heavy native slot for the new
+reproduced N03 reopen defect. Stream2/3 row accounting is underway. Stream1's25 P/G/O/L rows
+and5 U rows are reconciled in the existing status file. Count9 closed/71 partial-open;
+P01 remains a separate bounded milestone. Docs161/170/174 remain last.
+
+
+## Active native reservation — September 22, 17:13 UTC
+
+Stream3 owns one focused Android assemble/install for the reproduced N03 local-neighbor
+block state lost on fresh reopen. Existing fixtures/device only; no schema or redesign.
+Stream2 continues PR192 preservation review and accounting without another native build.
+Stream1 uses only its web/API/SQL booking runtime. Release the slot explicitly when done.
+
+## Current reconciliation — September 22
+
+The founder requested an accurate account of days of work after the closed count remained
+unchanged. G02 is now closed on verified Git ancestry and preservation evidence: PR34 and
+PR47 are merged, both original histories remain in master, and unrelated local work is intact.
+Current inventory: **9 closed / 71 partial or open**, with P01 still a separate completed
+bounded milestone. This is a stale-accounting correction; the founder performed the merge.
+[G02 evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-backlog-g02-closure-r1/RESULT.md),
+MANIFEST `659f9f4761c1adbfd0d7e20419afed8f4324b6ea83b88808e50e98db0720717d`.
+
+Streams2/3 are reconciling exact unmet criteria and closure candidates in their existing
+status files while safely completing current milestones. Stream1 owns the matching payment,
+integration and launch accounting. Do not equate partial workflows or merged repairs with
+whole-row closure; do not impose unrelated hardware/provider gates. The founder reaffirmed
+real client/API/SQL success, failure, recovery and edge-case verification, with no new unit
+tests or coverage target. Preserve designs and accepted evidence.
+
+PR177 merged `50b1ee8d7` after CI35751227114; PR179 merged `1313ea68b` after CI35755064344;
+PR180 merged `fc29902ca` after CI35755564437. PR182 merged `a460fd5d1` after full
+CI35756333346. PR183 `990d05e9d` now runs fresh CI. PR191/192 are published for coordinator
+review after190; docs161/170/174 remain last. Current master aggregate CI is pending.
+
+Booking verification reached real Chrome checkout, actual TEST1250 authorization, real host
+Approve200/capture and confirmed SQL. Controlled maturity plus the existing worker credited
+1063 to the host wallet. Reproduced: confirmation said Payment received before capture;
+payer release notice says a gig and points to /gigs/null, which returns realAPI404/Gig not found.
+Candidate branch codex/booking-payment-receipt now repairs status wording and the booking
+notification destination in three existing files; verification is underway. IAB's
+blank Stripe frame is a separate browser boundary; Chrome card checkout succeeded. Owned
+f9220539 provider objects, two bookings and three synthetic identities are still retained
+for repair verification/explicit cleanup; ledger84 unchanged. API18132/Next18133 and two
+owned browser tabs are active. No native build. Earlier runtime/count checkpoints are history.
+
+
+## Active coordinator checkpoint — September 22, booking verification
+
+Stream1 reserves API18132/Next18133 against its retained wallet-read-r1 SQL64562/API64561
+for owned f9220539 priced booking verification. Existing ConfirmFlow/CheckoutPanel →
+public booking route → bookingService/schedulingPaymentsService/stripeService →
+Booking/Payment is the current source trace; no application defect or repair yet.
+Synthetic fixture identity and page/availability; actual Stripe TEST only. No hosted mail/push,
+new schema or native build. Original ledger84 is snapshotted and preserved; prior tip fixtures
+remain cleaned. Stream1 API/Next process details and provider cleanup references stay private.
+
+Stream2 is assigned the reproduced single-file Emergency create dismissal repair, followed by
+existing Emergency Edit persistence: compare all refs/archives and extend the existing Home
+emergency route only if no update contract can be reused. No parallel service/table, new unit
+tests or redesign; real client/API/SQL and permission/failure/retry required. It completed an
+owned build for the dismissal candidate and is cleaning its fixture. Reserve before next build.
+PR171/172 are closed without merge; their verification branches/evidence remain preserved.
+Queue177 still awaits final iOS CI, then179→180→182→183→184→185→186→187→188→189→190;
+docs161/170/174 last. Counts8closed/72partial-open remain unchanged.
+
+
+Provider preparation2026-09-22: current consolidated L01 pricing/activation draft is in [the existing release checklist](../release/prod-config-checklist.md). No purchases/activation; exactAWS/entitlement/policy components remain. See newest Stream1 checkpoint; counts8closed/72partial-open unchanged.
+
+## Current coordinator checkpoint — September 22, 16:13 UTC
+
+PR1906c49692d6 completes bounded tip wallet release delivery: fresh actual TEST/web/API/SQL,
+atomic notification fault rollback, concurrent/repeated release, tip refund/debt/proof/lease
+controls,125 existing tests and full CI35751529326 pass.22-file MANIFEST
+9832f273d1653f4c7ebb7e2c981f18e6e47374cd44154436800e17f206560f65 independently verified.
+Both TEST1250charges refunded/customers deleted;22 cleanup checks0 each; owned browser
+sessions, API18132/Next18133 and Next artifacts cleaned. App branch clean.
+PR185 e4e552075 additionally repairs the reproduced40P01 stop lock-order regression:
+forward226 restores20900 wrapper and won inner guard; actual concurrent SQL plus27 guards
+and full CI35751454258 pass. Existing won-release proof preserved in19-file updated MANIFEST
+e0447e564e236c0fb24709319299cfa2704d483cdd9f401e968c4a55dab97c48.
+Retain owned SQL64562 ledger84/original79 unchanged. Applied224 is superseded private
+candidate-only history, exact archived SQL;225/226/227 forward repairs preserve all prior
+rows. This is not hosted/canonical ledger adoption. No native/hosted/Connect/push/full-row
+closure. PR bodies and private RESUME updated. Heavy native slot free.
+PR168 merged b30e0d395; PR1775129406fd freshCI35751227114 still runs iOS.
+Queue177→179→180→182→183→184→185→186→187→188→189→190; docs161/170/174 last.
+Eight closed/72partial-open unchanged. Earlier runtime checkpoints are historical.
+
+
+## Active coordinator checkpoint — September 22, 16:04 UTC
+
+PR168 exact142220190 passed CI35746647258 and merged b30e0d395; PR177 refreshed
+5129406fd with fresh CI pending. Prior master3c1e4a47d aggregate35746635358 passed.
+Paid integration retains last accepted f9176 while repair branches remain separate.
+PR185 reopened for a concrete regression:22300 replaced the20900 stop wrapper;
+actual concurrent settlement versus Gig→Payment locking reproduced40P01. Forward226
+restores the exact20900 wrapper and applies the won guard to its inner function.
+Candidate e4e552075 passes the real lock check and27 existing rollback guard cases;
+fresh CI pending. Do not merge185 until its repaired head passes review and CI.
+PR190 candidate6c49692d6 renumbers unmerged224→227 and targets the canonical inner
+function after clean-schema CI exposed the wrong target. Applied224 is retained as
+an explicitly superseded private candidate-only ledger entry, exact archived SQL;
+no applied rows changed.225 refund proof remains. Retained SQL64562 ledger84 with
+all prior entries unchanged; canonical full replay remains CI-owned/pending.
+Fresh ownedf9220538 actual TEST1250 tip has one income/settlement, two delivery rows,
+and three notices after atomic failure/concurrent-worker controls. API18132 resumed,
+Next18133 PID3909 and CUA tab11 active; provider/customer/SQL cleanup pending.
+No native, hosted, provider-push or row closure claim. Heavy native slot free.
+Queue177→179→180→182→183→184→185→186→187→188→189→190; docs161/170/174 last.
+Eight closed/72partial-open unchanged. Earlier runtime checkpoints are historical.
+
+
+Runtime update 2026-09-22 15:34 UTC: Stream1 API18132 PID3240/Next18133 PID3909 and CUA tab10 are active for owned f9220537 legacy tip release notification failure. Actual TEST1250 tip proof seeded as historical row; real worker credited1250 but lost both notices under INSERT denial and normal retry did not repair. New branch codex/tip-wallet-release-delivery based currentmaster3c1e4a47d (masterCI still pending); small existing-worker candidate plus reserved forward20260922022400 extends existing settlement/delivery functions to tips. Migration not yet applied; ledger80 retained. Provider charge/customer cleanup pending. Completed188 remains accepted. Heavy native slot free; Stream2/3 continue their existing assignments. Earlier runtime snapshots below are historical.
+
+## Current coordinator checkpoint — September 22, 15:25 UTC
+
+PR188cd6d6876c completes bounded won-after-wallet-income state repair: actual TEST baseline,
+fresh first-delivery web/API/SQL, three truthful privilege failure/retry controls and51existing
+tests/CI35745486220 pass.14-file MANIFEST4198e8d08fa19d016fef54dae9f30cf77b63852a47898f5a53851fa437b63057.
+Both TESTcharges refunded/customerdeleted;22 SQL/auth/event checks0 each. API18132/Next18133
+stopped/tabsclosed/appclean; retain SQL64562 ledger80 and original79 entries unchanged.
+PR167 merged3c1e4a47d after766feed passed CI35740330734 and final installed notification-tap
+proof; sanitized Stream3 156-file MANIFEST99bf0cb46f5127210137e35290932978fd914d2cca950d78e384ac50d41fa3c1 verified.
+PR168142220190 runs freshCI35746647258; merged-master3c1e4a47d CI pending. Paid integration
+retains last acceptedf9176. Stream2 completed189EmergencyDelete candidate0cbb505fe and
+released heavy native slot;189CI35746587131 pending, coordinator evidence review next.
+Queue168→177→179→180→182→183→184→185→186→187→188→189; docs161/170/174 last.
+Verify-only171/172 never merge. Eight closed/72partial-open remain. Earlier checkpoints
+below are historical; exact evidence/limits/runtime state are in the stream status files.
+
+## Current coordinator checkpoint — September 22, 15:00 UTC
+
+PR1878b4573cb9 completes bounded lost-dispute wallet recovery: actual TEST first-delivery
+and retry web/API/SQL, truthful database errors, debt/proof controls,51 existing tests and
+full CI35743104345 pass. Sixteen-file MANIFESTd42a9fedd0ce85fe1e325e5d5a75d02f0073341924f16e8b0c04a1e13a90152a.
+Both fixture sets cleaned, customers deleted, lost TEST charges nonrefundable/no duplicate
+refund; API18132/Next18133 stopped, browser tabs closed, app tree clean. Retained ledger80.
+Current masterf9176cc2c full CI35740318739 passed; paid integration fast-forwarded/pushed
+to that head after migration-policy check. Active app branch codex/lost-dispute-wallet-recovery
+is based there. PR167766feedca still waits for Android lint/test/assemble. Queue167→168→177
+→179→180→182→183→184→185→186→187; docs161/170/174 last. PR186cf34d604d is green; Stream3
+146-file MANIFEST51339e601abe137bf8c636133d25d37b4cfddacd0a28a36ef7257515cdde3de0 verified.
+Stream2 candidate183 Later/Share verification is in docs55bf17370; final durable/body/RESUME
+handoff and heavy-slot release requested. Eight closed/72partial-open remain. Earlier
+runtime snapshots below are historical; exact boundaries are in each stream's status.
+
+Current runtime override, September22 14:44UTC: Stream1 reopened owned API18132/Next18133 for a fresh lost-dispute-after-income check, prefixf9220533, tab6. Provider cleanup pending; retainedledger80. Completed185 evidence/cleanup remains accepted. See newest Stream1 status. PR186 is now queued after185. Earlier runtime snapshots below are historical.
+
+## Current coordinator checkpoint — September 22, 14:37 UTC
+
+PR185 ae5364db9 is a completed bounded won-dispute release milestone: actual TEST
+won event, real worker/web wallet1062 once,27 SQL guard cases, timeout/recovery checks,
+80 existing tests and full CI35740929536 including fresh schema/SQL contracts passed.
+Thirteen-file durable MANIFEST367a6a9418d85e5f735c62aa6b40024fb8d800731d1e4cd4eac857790c907a81.
+TEST1250 refunded, customer deleted,22 owned SQL/auth/event checks zero; web tab closed,
+API18132/Next18133 stopped; application worktree clean. Retained SQL64562 ledger80,
+original79 entries unchanged. No native/hosted/Connect/bank or full P-row closure.
+PR166 mergedf9176cc2c; PR167766feedca fresh Android checks pending. Current merged-master
+CI35740318739 runs; older2b aggregate cancelled after superseding merge. Queue167→168
+→177→179→180→182→183→184→185; docs161/170/174 last. Stream2 owns the heavy native build
+slot; Stream3 continues feasible N/A verification. Eight closed/72partial-open remain.
+Earlier checkpoints below are historical. See Stream1 for exact evidence and limits.
+
+## Current coordinator checkpoint — September 22, 14:28 UTC
+
+PR166 merged f9176cc2c after exact ae03e34d2 passed CI35735947354; PR167 is
+refreshing for fresh checks. Master aggregate2b7378aa4 still has an Android job
+pending; do not equate the successful PR checks with merged-master acceptance.
+Queue167→168→177→179→180→182→183→184→active won-release repair, docs161/170/174
+last. Stream1 actual TEST won-dispute failure is reproduced and its candidate now
+credits1062 cents exactly once across concurrent/repeated workers; real web wallet
+shows10.62. Candidate branch codex/won-dispute-wallet-release is uncommitted.
+Owned DB64562 ledger80 includes forward20260922022300; original79 rows unchanged.
+API18132/Next18133 and owned test provider fixture remain active for negative
+controls and cleanup. See newest Stream1 section; no native/hosted/Connect claim.
+Stream2 holds the heavy native build slot. Stream3 N02 Mark-all mutation/restore
+is accepted as a bounded Android journey and continues feasible N/A cases.
+Eight closed/72partial-open counts remain. Earlier checkpoints are historical.
+
+## Current coordinator checkpoint — September 22, 14:00 UTC
+
+Current master2b7378aa4 incorporates PR165/181 after their fresh passing checks;
+merged-master aggregateCI35735938178 remains pending. PR166ae03e34d2 runs fresh
+CI35735947354. Queue166→167→168→177→179→180→182→183→184, docs161/170/174 last;
+verify-only171/172 never merge. PR184b0986380b is ready with CI35736547362 passed:
+real TEST dispute evidence and won/lost web/API/SQL,26-file MANIFEST
+fbc00aebb22595d4d3a8f098f15af2623633f168506a32b58b2301c299062ed2. Both fixture sets
+clean, both test customers deleted, API18132/Next18133 stopped, app worktree clean.
+No native/hosted/Connect claim; see newest Stream1 section for exact boundaries.
+Stream2 owns the exclusive heavy native build grant for PR183 guest-pass return
+verification on5556; Stream3 continues feasible retained-binary N/A cases. Eight
+closed/72partial-open counts remain. Earlier snapshots below are historical.
+
+
+## Current coordinator checkpoint — September 22, 13:50 UTC
+
+PR165 merged39492cd52 after full fresh CI35732209909; PR181 merged2b7378aa4
+after fresh CI35735581542. Current master2b7378aa4; aggregate merged-master checks
+pending. Queue166→167→168→177→179→180→182, then the active dispute repair;
+docs161/170/174 last, verify-only171/172 never merge. Current Stream1 branch
+codex/dispute-evidence-contract has one focused existing-service repair in verification;
+API18132/Next18133 and owned real Stripe TEST dispute fixture are active. Stream3
+released the heavy build slot. See the newest Stream1 section for exact source,
+evidence, provider cleanup requirements and native-control limits. Eight closed/72
+partial-open counts remain. The older runtime and merge snapshots below are historical.
+
+
+## START HERE — September 22, coordinator resumed after the paid merge
+
+The founder resumed all three existing streams and requested current-master adoption.
+The older founder STOP and draft dispositions below are historical: PR47 merged as
+`69be3c11dc8520aed91228570460487d5579c82d`; PR34 is also merged. PR46 remains untouched;
+PR158 was already closed, and PR159's reconciliation is incorporated into this live hub.
+
+- **Integration:** PR173 P10 pagination merged `662ab04b5`; PR163 social privacy/cache
+  merged `e5335f584`; PR164 push-tap isolation merged `3b4404ed3`. Each passed exact-head
+  CI before merge. PR164 tests initially passed but artifact upload timed out; the failed
+  job rerun passed on unchanged source. Master3b4404ed3 CI35724702512 passed. PR160
+  merged as `6e24aef59` after current4cca0a CI35724788993 passed all checks. Its previous
+  exact ede5b72b full CI35719644248 passed. PR175 merged0b1a26cc1 after exact
+  5c5c91b9d CI35728607795 passed. PR176 merged95016cdbb after fresh CI35729368796 and reviewed cleanup.
+  PR178 merged715ccd8c0 after CI35731690811.
+  Serial code order:165 →181 →166
+  →167 →168 →177 →179 →180; update each branch and require fresh checks. Docs161/170/174 last;
+  verify-only171/172 never merge, close after their fixes land.
+- **Stream 1:** paid integration adopted/pushed `715ccd8c0`; tree exactly matches accepted
+  PR1780f1a00b16, aggregate master CI35732165373 runs. Original guard also stalled onNode20;
+  PR181037421e1d fixes its input pipe, actual guard passesNode20/24 and CI35732925365 passes.
+  Paid worktree is clean at `codex/migration-file-hashing`037421e1d. PR18009a878d38;
+  real ranked/fallback web amounts and identity now correct,99existing tests and
+  CI35730870955 pass.10-file MANIFEST109eb987ba8896e22c4a39db3150863f40a681634380952bee62816020e087c1. PR179 at924ac3299 remains ready. Ranked offers return200 on both native apps and web;
+  15 existing scoring tests and CI35728227377 pass, 12-file manifest
+  `d6e38fbfba28f4a1f4914e5bd41ac8b4ef1ceef53842badac122e56a3c67fcf1`.
+  PR177ad20c667d remains ready in the queue. Installed iOS failed/successful3DS now returns automatically;
+  iOS and Android cancellation restores pending bid/open gig; same-intent retries
+  reconcile with real API/SQL/Stripe TEST. Build +77 existing focused tests and exact
+  CI35723156495 pass. The26-file owner bundle MANIFEST is
+  `2560b7c78a9971316680390b8225b120e00f427c2f8cc52f9ab100a90659b9de`.
+  Earlier P10 workload, local O02 recovery, ledger and release-link evidence is retained.
+- **Stream 2:** existing task `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` continues Home
+  native verification; PR160/175/176/178 are merged. Seven-file176 durable evidence verified;
+  changed occupancy fields restored, generated audit/notice and3later matching notices removed.
+  PR1789ff513826 moves unchanged mailbox GET/PATCH preferences before generic /:id;
+  its4-file durable evidence is verified and merged after current-head CI; full preference
+  snapshot equality is peer-reported, coordinator requested concrete hashes or narrower claim;
+  no current frontend preferences caller or UI edit is assumed. Docs161/private RESUME
+  remain its reporting locations; preserve its owned runtime and fixtures.
+- **Stream 3:** existing task `01a0a824-301b-74e3-a1d9-b205714ed7a1` finished native
+  follow/block/message checks and exact cleanup/password restoration, and continues A05
+  native profile editing after bounded A03/N05/A04/N02 web/API/SQL checks.
+  All126 durable file hashes verified; MANIFEST
+  `c84f26b102a99957228616fc4644ce60437aa8f600839b1d2bf0cfdb0c4df681`.
+  Delivery/provider/physical-device boundaries remain explicit.
+  See newest03 sections for limits and direct hub commits; preserve docs170 history.
+- **Counts:** 8 closed (H01–H06, R01–R02), 72 partial/open. P01 is a completed bounded
+  tip-reservation milestone, not a ninth closed row. Partial journeys/green CI do not
+  close a row. Earlier234 Stream1 and149 Home evidence hashes were verified and reused.
+
+Runtime: retained Stream1 SQL64562/API64561 stays up, ledger79. Native3DS owned SQL
+fixtures from that milestone are zero; all test intents canceled/customers deleted.
+Price-check exact fixtures are now0; API18132/Next18133 stopped, browser logged out/closed.
+The detached04:02UTC completion File was recovered through the real worker/local Storage
+after natural retry delay, then exact own tombstone/bucket cleaned; broad metadata matches0.
+Stream1 native apps terminated; C2BCF36A/emulator5558 retained.
+Stream3 holds the exclusive heavy native build grant for A05 if artifact review requires it;
+release promptly if unused or after build. Coordinator stopped only its retained Maestro
+xcodebuild driver on C2 and verified no xcodebuild before issuing this grant. Peer devices, databases and processes remain owned
+by their streams. Private coordinator continuation:
+`/private/tmp/pantopus-stream1-wallet-read-r1/RESUME-2026-09-22.md`.
+
+Next: native dispute/remaining P10/provider boundaries; CUA rejects Simulator, explicit
+Maestro/ADB-driver question pending with user; independent API/SQL/web work continues;
+continue peer row orders and serial merges. Hosted/Connect/live, physical-device,
+production recovery and release association/configuration remain unverified. P04/P05
+fee payer/recipient and the recorded founder decisions remain unresolved.
+
+## September 22 09:30 UTC — founder STOP; exact state of the parallel Stream 2/3 session (START HERE for Streams 2 and 3)
+
+Both stream agents were stopped mid-batch on the founder's instruction. Everything is
+committed and pushed; nothing is merged. Runtimes were deliberately left running so the
+next agent can continue without a rebuild. All PRs below need `gh pr update-branch`
+before CI is final (they are BEHIND master 39fd33433).
+
+**Stream 2 (Home)** — code [PR160](https://github.com/WangPantopus/skinny-pantopus/pull/160)
+`codex/stream2-home-batch1-20260922` head 417a46465 (CI rerunning after a ktlint fix; the
+prior head was green except that rule); docs [PR161](https://github.com/WangPantopus/skinny-pantopus/pull/161)
+`codex/stream2-home-docs-20260922` edf9dabd4 (five newest-first sections in
+02-home-household.md). Web milestones done and cleaned: D02 attachments/silent write
+errors (6ce4dbfc2), D03 standalone bill units (340185123), package `delivered_at`
+clearing + vendor_name (bfa286b24), D09 false-empty pets/polls readers (f05d2c5b7).
+Native batch 1 (installed iOS + Android, real GoTrue logins on disposable project
+`pantopus-stream2-native-r1`): Android bill date off-by-one, Android Mark paid/Remove Moshi
+NPE, "cancelled"→"canceled" on both, backend `paid_by`, iOS due-date UTC parse, D05
+hard-coded "Owner"/"Verified" settings labels now derived from the real role/verification
+(27b0fcf82, 46b7df6bd). Bundles: `20260922-stream2-{media-discard,bill-units,
+package-delivered-at,false-empty-readers,home-native-batch1}-r1`. Runtime left running:
+project 64553/64554 (ledger 59), backend pid 45479 :18143, logging proxy pid 52633
+:18142, emulator-5556 (pid 37281, app r5, viewer logged in), simulator 6F914A30 (iOS r4,
+viewer logged in), fixture rows HomeBill 3 / HomeOccupancy 3. Open founder calls: issue/
+bill/package attachments have no server contract; Android has no Issues entry point for a
+member without a Local Profile; Docs "Upload document" shown to docs.view-only; hub
+"Verify your home" shown to verified lease residents; web bill edit panel unreachable and
+PUT drops bill_type/period/currency; issue PUT requires home.edit while RLS allows the
+reporter. Next: PR160 CI green → native Issues, tasks, members, settings/notifications,
+guest passes, docs, emergency, calendar, pets, residency; then D remainder → R03–R06 →
+I → F → M → H07/H08. Resume note: `/private/tmp/pantopus-workstream-home/.stream2-verification/RESUME-2026-09-22.md`.
+
+**Stream 3 (accounts/social)** — fix PRs from master c1280e078, one each:
+[163](https://github.com/WangPantopus/skinny-pantopus/pull/163) backend UserBlock gate on
+follow/feed/post/comments (Gate 3a fails because an added import shifted an allowlisted
+`users.js` line; remedy in the PR body), [164](https://github.com/WangPantopus/skinny-pantopus/pull/164)
+iOS background push-tap crash (green), [165](https://github.com/WangPantopus/skinny-pantopus/pull/165)
+iOS sheet dismissal + `new_follower` rewrite (green), [166](https://github.com/WangPantopus/skinny-pantopus/pull/166)
+iOS Beacon follow fallback / Follow hidden after block / refused-send banner (green),
+[167](https://github.com/WangPantopus/skinny-pantopus/pull/167) and
+[168](https://github.com/WangPantopus/skinny-pantopus/pull/168) Android twins (ktlint findings
+listed in the PR bodies; 168 not yet re-verified on device). Docs
+[PR170](https://github.com/WangPantopus/skinny-pantopus/pull/170) `codex/stream3-social-docs-20260922`
+3ae65c3e6 (appended sections in 03-accounts-social.md). Verification-only integration
+branches `codex/stream3-verify-{ios,android}-integration` (PR171/172) are never for merge;
+close them once the fix PRs land. Verified on installed iOS (Evan) and Android (Bob):
+N03 feed/empty/503-retry/post/reply/follow/identity, N04 report post+user, block, blocked
+list/unblock/re-block, DM 403 both directions, block-in-DM, held reply; N01 list/unread/
+tap destinations, simctl push foreground+background, Android background/cold-start links,
+permission denial, login continuation and account switch. Bundle
+`20260922-stream3-native-social-r1` (100 files, MANIFEST 9ff965be…faf4). Runtime left
+running: API pid 49623 :18130 (running PR163 code), Next 36139 :18131, stream3
+containers, simulator 0AE16FA0 (Evan, build e86b9fe5b), emulator-5554 (Evan, APK
+827f28a08, location permission revoked). NOT yet cleaned: 2 Posts, 2 PostComments, 1
+PostReport, 2 UserReports, 2 UserBlocks, 1 UserFollow, 5 Notifications
+(`cleanup-social-r4-rows.py`); Evan has 2 active sessions and a throwaway password
+(`restore-evan-password.py`). Founder calls: persona surfaces are not gated by a personal
+UserBlock; no report-outcome notification producer exists; "PERSONA · VERIFIED" chip
+semantics. Next: fix CI on 163/167/168, install the 10c4368c6 APK and finish the four
+Android re-verifications, rerun the touched iOS/Android suites, cleanup + password
+restore, then batch 2 A05 → A03 → N05 → A02 → A01 → A04/N02. Resume note:
+`/private/tmp/pantopus-stream3-20260920-r1/RESUME-2026-09-22.md`.
+
+**Coordinator**: PR159 (this branch) carries the P01 relabel and these handoffs; merge
+order is the founder's/coordinator's call. PR158 is a stale duplicate of merged PR157 —
+close it. PR47 is ready for review at the founder's discretion; PR34 draft; PR46 separate.
+
 ## September 22 — peer PRs 149/151/152/154 merged; P10 durable-checkout worker check; PR47 ready for review
 
 All four peer PRs are merged after branch updates and fresh required checks: PR149
@@ -29,6 +614,54 @@ and its exact CI is running. Remaining Stream1 scope before PR47 can be called c
 P04/P05 cancellation-fee payer/recipient decision (founder), native dispute/3DS, P10
 workload/retention, hosted/Connect/live boundaries. PR34 stays draft with older migration
 names; PR46 separate.
+## September 22 07:20 UTC — second session resumed Streams 2 and 3 in parallel (START HERE if taking over)
+
+A second Claude session (cwd `~/skinny-pantopus`) resumed the backlog while the
+original Stream 1 coordinator session was still live in
+`/private/tmp/pantopus-paid-gig-integration`. Division of work, so nobody duplicates:
+
+- **Stream 1 / hub / merges** stay with the live coordinator session: paid branch, all P
+  rows, PR merge order 149 (merged) → 154 → 151 → 152, the hub worktree
+  `~/pantopus-coordination`, README/handoff/backlog publication. The second session did not
+  touch that worktree or merge anything. PR47 was marked ready by the founder (CI green on
+  043ca750e); merging it is the founder's call. PR158 duplicates merged PR157 and is DIRTY:
+  close it, do not merge. PR159 (this branch) reconciles the P01 checkmark with the
+  8-of-80 count and carries this handoff.
+- **Stream 2** runs as a background agent in `/private/tmp/pantopus-workstream-home`.
+  Scope, in order: D02 media discard / silent write errors (issue, bill, package panels),
+  D03 bill amount units, package `delivered_at` clearing, D09 false-empty readers, then
+  installed iOS (simulator `6F914A30-8585-4B05-9E05-94441675F10A` "Pantopus Stream2
+  Packages") + Android (AVD `Pantopus_Home_Recurrence_Acceptance`, emulator-5556) Home
+  journeys for every owned row (D, R03–R06, I, F, M, H07/H08 remainder) against the
+  disposable full-schema project `/private/tmp/pantopus-stream2-native-r1` with the
+  worktree backend on 18142. Code branches `codex/home-*`, one PR each, never merged by
+  the agent. Live status sections go to the TOP of `docs/workstreams/02-home-household.md`
+  on docs branch `codex/stream2-home-docs-20260922` (worktree
+  `/private/tmp/pantopus-stream2-docs`, its own docs PR). Private resume note:
+  `/private/tmp/pantopus-workstream-home/.stream2-verification/RESUME-2026-09-22.md`.
+- **Stream 3** runs as a background agent in
+  `/private/tmp/pantopus-workstream-accounts-social` on the retained runtime (API 18130,
+  Next 18131 at `stream3-auth.localhost`, Supabase `pantopus-stream3-block-r1` 64531–37,
+  Mailpit 64535/36, simulator `0AE16FA0-E244-414F-86C8-24893BDFD979`, emulator-5554 AVD
+  `Pantopus_Stream3_Accounts_R3`, fixtures Bob/Dana/Evan). Scope, in order: installed
+  iOS+Android N03/N04/N01, then A05 native sweep, A03 local media, N05 direct worker
+  reminder delivery, A02/A01 remainders, A04/N02 boundary notes. Code branches
+  `codex/stream3-*`, one PR each, never merged by the agent. Status sections are APPENDED
+  to `docs/workstreams/03-accounts-social.md` on docs branch
+  `codex/stream3-social-docs-20260922` (worktree `/private/tmp/pantopus-stream3-docs`).
+  Private resume note: `/private/tmp/pantopus-stream3-20260920-r1/RESUME-2026-09-22.md`.
+- Rules in force for both agents: reproduce on the real app before changing code; smallest
+  repair inside the existing implementation; no redesign, no unit tests; every milestone
+  committed and pushed before the next; one heavy native build at a time; only owned
+  fixtures/devices/containers; evidence bundles under
+  `~/skinny-pantopus/.pantopus-recovery/audits/20260922-stream{2,3}-<slug>-r1/` with
+  `MANIFEST.json`; founder/provider/hosted/physical-device boundaries recorded, never
+  blocking. Founder direction: every owned row must be verified from the real installed
+  iOS and Android apps, not only web.
+- How to take over: `gh pr list --state open` for `codex/home-*`, `codex/stream3-*`,
+  `codex/stream2-home-docs-20260922`, `codex/stream3-social-docs-20260922`; read the two
+  RESUME notes and the newest 02/03 sections; check `list_sessions` for a still-running
+  coordinator or agent before touching Stream 1, the hub, or the stream runtimes.
 
 ## September 22 — peer PR review: 149/151/154 approved pending refreshed CI; 152 blocked
 

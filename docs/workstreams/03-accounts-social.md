@@ -1,3 +1,134 @@
+# CURRENT STREAM 3 RESUME SUMMARY — 2026-09-22
+
+This is the current handoff point. It supersedes older opening paragraphs and stale “pending”
+wording below while preserving the detailed history and evidence links. Stream 3 is not a whole-app
+closure claim; it is ready for coordinator integration review with the explicit open boundaries here.
+
+## Git, application and merge state
+
+- **Application worktree:** `/private/tmp/pantopus-workstream-accounts-social`, branch
+  `local/stream3-ios-integration`, `HEAD=b956a00767835586b5114698a3a2e91fbcddefad`. It has
+  unrelated existing local web changes in `frontend/apps/web/src/lib/publicShare.ts`,
+  `frontend/apps/web/tsconfig.json` and untracked `frontend/apps/web/.next-stream3/`; preserve
+  them and do not reset or fold them into Stream 3.
+- **Android worktree:** `/private/tmp/pantopus-stream3-android`, branch
+  `local/stream3-android-integration`, clean at `HEAD=3b374454ad07060cf5dcaa1ce02fc48b3be4c88e`.
+- **Live coordination worktree:** `/Users/yingpengwang/pantopus-coordination`, branch
+  `codex/workstream-coordination`; this file is the only live Stream 3 status location. The
+  current status commits are pushed to `origin/codex/workstream-coordination`.
+- **PR195:** [merged](https://github.com/WangPantopus/skinny-pantopus/pull/195) by the coordinator at 22:05 UTC as
+  `86f63a0eaf70dfc808950649aae34ef45015c985` after update to `7f557a0069` and fresh exact-head CI `35786420151`
+  (Android lint/test/assemble, emulator tests, schema replay and aggregate CI OK). The earlier head
+  `3b374454a` CI `35768401037` also passed. The Android worktree was fast-forwarded (clean) to `7f557a006`.
+- **Merged scoped repairs:** PR163 → `e5335f584dd99f82e7c66a3974b04400098f0c0c`; PR168 →
+  `b30e0d395`; PR178 mailbox route order → `715ccd8c0`; PR182 profile PATCH contract → merged
+  remotely at head `7b6ddc6516769e02d12b6eff37f52fb0d326455e` on 2026-09-22. The older PR182
+  paragraph below says “no merge” because it predates that merge; treat this summary as current.
+
+## Grouped implementation repairs and source bindings
+
+- **Cache invalidation:** existing `backend/routes/blocks.js` and
+  `backend/routes/neighborMessages.js`; PR163 repaired block/unblock feed-filter invalidation
+  without redesigning the cache or schema.
+- **Android social safety:** existing
+  `frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/profile/PublicProfileViewModel.kt`
+  is the sole PR195 production diff. It scopes the personal `UserBlock` visibility guard to Local
+  profiles and fails closed when `/api/users/blocked` is unavailable; Persona/Relationship scopes
+  remain distinct. The earlier Detekt-only extraction is in the merged PR168 Android path.
+- **Profile PATCH contract:** existing `backend/routes/users.js` commits `26fe9d57f` and
+  `b956a0076` return the canonical user projection and emit `PROFILE_READBACK_UNAVAILABLE` after
+  a write when UserSkill readback fails. No DTO, UI, schema or migration replacement was added.
+- **Mailbox:** PR178’s existing route-order repair is integrated; Stream 3 made no duplicate
+  mailbox implementation.
+
+## Earlier Stream 3 coverage retained for integration review
+
+The table below groups the earlier merged work and its accepted evidence so the next agent can
+continue from the existing implementation and reports rather than repeat the same journeys. The
+PR links identify the source revisions; the detailed reports and bundle indexes remain the
+evidence of behavior and limits.
+
+| Area and existing source contract | Merged work and retained evidence | Current boundary |
+| --- | --- | --- |
+| Auth/session callers, web session state, native sign-in and deliberate logout | [PR65](https://github.com/WangPantopus/skinny-pantopus/pull/65), [PR82](https://github.com/WangPantopus/skinny-pantopus/pull/82), [PR136](https://github.com/WangPantopus/skinny-pantopus/pull/136), [PR138](https://github.com/WangPantopus/skinny-pantopus/pull/138), [PR145](https://github.com/WangPantopus/skinny-pantopus/pull/145), [PR149](https://github.com/WangPantopus/skinny-pantopus/pull/149), [PR151](https://github.com/WangPantopus/skinny-pantopus/pull/151), [PR152](https://github.com/WangPantopus/skinny-pantopus/pull/152); retained browser/native evidence covers account-deletion confirmation, unavailable security records, logout/session-expiry feedback, push registration after sign-in, resend verification and iOS deliberate sign-out. | Apple/Google callback, provider cancellation/revocation and physical-device/keychain behavior remain unverified; A01/A02 stay partial. |
+| Web social, chat, feed, map, profile, marketplace and Beacon callers | [PR51](https://github.com/WangPantopus/skinny-pantopus/pull/51), [PR64](https://github.com/WangPantopus/skinny-pantopus/pull/64), [PR65](https://github.com/WangPantopus/skinny-pantopus/pull/65), [PR66](https://github.com/WangPantopus/skinny-pantopus/pull/66), [PR67](https://github.com/WangPantopus/skinny-pantopus/pull/67), [PR69](https://github.com/WangPantopus/skinny-pantopus/pull/69), [PR70](https://github.com/WangPantopus/skinny-pantopus/pull/70), [PR73](https://github.com/WangPantopus/skinny-pantopus/pull/73), [PR83](https://github.com/WangPantopus/skinny-pantopus/pull/83), [PR84](https://github.com/WangPantopus/skinny-pantopus/pull/84), [PR85](https://github.com/WangPantopus/skinny-pantopus/pull/85), [PR86](https://github.com/WangPantopus/skinny-pantopus/pull/86), [PR88](https://github.com/WangPantopus/skinny-pantopus/pull/88), [PR89](https://github.com/WangPantopus/skinny-pantopus/pull/89), [PR90](https://github.com/WangPantopus/skinny-pantopus/pull/90), [PR91](https://github.com/WangPantopus/skinny-pantopus/pull/91), [PR93](https://github.com/WangPantopus/skinny-pantopus/pull/93), [PR94](https://github.com/WangPantopus/skinny-pantopus/pull/94), [PR95](https://github.com/WangPantopus/skinny-pantopus/pull/95), [PR96](https://github.com/WangPantopus/skinny-pantopus/pull/96), [PR97](https://github.com/WangPantopus/skinny-pantopus/pull/97), [PR99](https://github.com/WangPantopus/skinny-pantopus/pull/99), [PR105](https://github.com/WangPantopus/skinny-pantopus/pull/105), [PR107](https://github.com/WangPantopus/skinny-pantopus/pull/107), [PR111](https://github.com/WangPantopus/skinny-pantopus/pull/111), [PR114](https://github.com/WangPantopus/skinny-pantopus/pull/114), [PR115](https://github.com/WangPantopus/skinny-pantopus/pull/115), [PR117](https://github.com/WangPantopus/skinny-pantopus/pull/117), [PR178](https://github.com/WangPantopus/skinny-pantopus/pull/178), [PR186](https://github.com/WangPantopus/skinny-pantopus/pull/186); retained browser/API/SQL evidence covers reports, failed drafts, search, profile authorization, chat destinations, feed filters, Beacon links/comments and stale-handle recovery. | Owner-routed Marketplace, Home, payment, booking, wallet and subscription actions remain with their owning streams; provider/native release evidence is limited. |
+| Scheduling, reminder preferences and booking notification routes | [PR72](https://github.com/WangPantopus/skinny-pantopus/pull/72), [PR75](https://github.com/WangPantopus/skinny-pantopus/pull/75), [PR77](https://github.com/WangPantopus/skinny-pantopus/pull/77), [PR80](https://github.com/WangPantopus/skinny-pantopus/pull/80), [PR81](https://github.com/WangPantopus/skinny-pantopus/pull/81), [PR101](https://github.com/WangPantopus/skinny-pantopus/pull/101), [PR103](https://github.com/WangPantopus/skinny-pantopus/pull/103), [PR120](https://github.com/WangPantopus/skinny-pantopus/pull/120), [PR126](https://github.com/WangPantopus/skinny-pantopus/pull/126), [PR129](https://github.com/WangPantopus/skinny-pantopus/pull/129); retained worker/source, retry, preference, local SMTP and paused-host evidence is indexed in the N05 sections. | No claim of a settled daily-agenda producer/recipient/channel policy or physical delivered reminder; natural-timer evidence remains bounded to the recorded local run. |
+| Native notifications, Pulse/Beacon and profile safety callers | [PR164](https://github.com/WangPantopus/skinny-pantopus/pull/164), [PR165](https://github.com/WangPantopus/skinny-pantopus/pull/165), [PR166](https://github.com/WangPantopus/skinny-pantopus/pull/166), [PR167](https://github.com/WangPantopus/skinny-pantopus/pull/167), [PR168](https://github.com/WangPantopus/skinny-pantopus/pull/168), plus the open [PR195](https://github.com/WangPantopus/skinny-pantopus/pull/195); retained installed-emulator evidence covers N01 local notification controls and local social identity/follow/post/reply/mute boundaries. | N02 still needs physical Android notification acceptance; N01 release/device states, N03 release-candidate cohort, and wider N04 native/socket/provider lifetime remain open. Emulator evidence is local/emulator evidence only. |
+| Block/unblock cache and safety endpoints | [PR163](https://github.com/WangPantopus/skinny-pantopus/pull/163) retained the existing `blocks.js`/`neighborMessages.js` contracts and real browser → HTTP → PostgREST/SQL cache evidence. | Hosted moderation/provider processing and remaining entry-point/socket coverage are not claimed. |
+| Profile persistence and provider-backed storage/address boundaries | [PR182](https://github.com/WangPantopus/skinny-pantopus/pull/182) retained the existing `users.js` PATCH contract and installed 503→200 readback retry; A03/A04 retained chooser/S3 failure and address-provider-unavailable UI/API evidence. | Hosted storage success/lifecycle and activated Smarty/geography/unit success remain unverified; the A04 literal `%20` street fixture is explicitly not a geography-success claim. |
+
+## Evidence and runtime bindings
+
+Durable evidence is at
+`/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream3-native-social-r1`.
+The verified bundle has 198 files and MANIFEST SHA-256
+`1fa796d1b6f08e89b549f0aadf0f6986241fbd511184ff2825dc889071957f26`; raw logs, credentials,
+tokens and database archives remain outside Git/chat. Operational receipts are under
+`/private/tmp/pantopus-stream3-20260920-r1`.
+
+Accepted real boundaries include: PR163 web screen → HTTP → PostgREST/SQL cache behavior;
+installed Android notification list/filter/read/delete/Cancel/offline rollback/retry and induced
+HTTP-5xx rollback/retry; Android local-neighbor block → Settings → fresh deep link with fail-closed
+blocked-list read fault; Pulse/Beacon/follow/post/reply/mute and identity separation; A03 chooser →
+real multipart portfolio upload reaching the existing S3 credential failure with zero File rows;
+A05 installed profile PATCH 503 preserving two unsaved values → same-form 200 retry; A02 cold-process
+session restoration and logout; and A04 route plus installed Add Home provider-unavailable result,
+retry, draft preservation, disabled continuation and discard/logout.
+
+Source/APK/device bindings: Android repair source head `3b374454a`; installed repaired APK
+SHA-256 `2728688a30a78449c990c302ebc72053802322772a990e7a3a6030e2265d504a`; earlier retained
+notification APK SHA-256 `83cc0db08992e83dd1faa87a7baacdf582624a3e847f965f6361ab5fdd2cdf93`;
+Android device `emulator-5554`; retained iOS simulator `Pantopus Stream3 Social R2`, UDID
+`0AE16FA0-E244-414F-86C8-24893BDFD979`. Intended local ports are API `18130`, Next `18131`,
+SQL/Postgres `64532`, PostgREST `64531`, Mailpit `64535/64536`; API and Next are currently stopped,
+while the retained local Supabase/Mailpit containers remain available for an assigned runtime.
+The N03 release-build/native slot has not been reassigned and no build should start here.
+
+The current native bundle above is authoritative for the latest installed work. Earlier retained
+indexes remain applicable where their source/configuration is unchanged: the 20260915 social
+bundle [current MANIFEST](../../../skinny-pantopus/.pantopus-recovery/audits/20260915-stream3-social-r2/MANIFEST.json) is `f5ac697ba9f06552aeda14b1bbfa01f4b795779817bcf4f9bbe1e368956bac13`; the
+20260920 accounts/social [current MANIFEST](../../../skinny-pantopus/.pantopus-recovery/audits/20260920-stream3-accounts-social-r3/MANIFEST.json) is
+`09b2c346c28031033c2943bacfb85ae7ae54b5cba4bef232df18b039b210971c`. These are file hashes re-read
+at consolidation; older a6534761/cca38fc2 values below identify earlier bundle snapshots, not
+the current manifest bytes. Earlier artifacts keep their own original source and runtime limits.
+
+Fixture cleanup is recorded: N03 block/home/occupancy/overlay counts zero; N01 local/emulator HTTP-5xx target
+removed after successful retry; A03 Bob File rows zero after S3 failure; A04 temporary HomeAddress,
+Home and AddressClaim rows zero; A05 Bob first/last/middle/bio restored, zero UserSkill rows and
+privileges restored; every exercised account logged out and local API processes stopped.
+
+## Current authoritative acceptance accounting
+
+The exact quoted N01–N05/A01–A05 criteria and evidence mapping are in the “Exact ten-row acceptance
+mapping for next handoff” section below. Current state is: N01 release/device notification states
+remain partial; N02 physical Android remains open; N03 release-candidate Pulse/Beacon cohort remains
+open; N04 moderation processing, wider entry points and full native/socket/provider lifetime remain
+open; N05 daily-agenda delivery has no settled producer/recipient/channel policy; A01 external
+Apple/Google callbacks remain open; A02 provider/device revocation combinations remain open; A03
+hosted storage success/lifecycle remains open; A04 legitimate unavailable handling is accepted but
+activated Smarty/geography/unit success remains open; A05 owner-routed Marketplace/subscription/
+booking/wallet/mail/search/Home/payment actions remain open. Unit-test coverage is excluded from
+these functional/evidence estimates and no new unit tests were written.
+
+## Next actions and explicit non-actions
+
+PR195 is merged (`86f63a0ea`). **Assigned next (coordinator, 22:45 UTC): iOS parity of the PR195 defect.** iOS
+`PublicProfileViewModel.loadRelationship(id:)` reads only `/relationship` and leaves `canFollow` true on error.
+Reproduce on installed iOS `0AE16FA0` first, then mirror PR195 minimally (Local scope only) only if it reproduces. The heavy
+native slot goes to Stream 3 next; details are in the coordination summary's current resume point. The next agent may
+use the exact prerequisites in the final section below, preserve accepted reports, and repair only a
+reproduced defect in the existing caller/endpoint/service contract. Do **not** rerun the accepted
+PR163 cache journey, PR168 Detekt repair, PR195 local block/read-fault journey, N01 local/emulator
+notification matrix, A03 S3 credential failure, A04 provider-unavailable variants, A05 profile
+503→200 retry, or A02 cold-process pass. Do not start a native build without the reassigned slot;
+do not activate providers, purchase services, run hosted migrations, add schema, redesign UI, add
+unit-test files, or merge independently.
+
+Known boundaries/inconsistencies are deliberate: the A04 UI used literal `%20` street input from
+ADB, so it does not claim normal geography success; the installed APK is debug, not release
+candidate; green PR195 CI does not claim skipped backend/web/iOS jobs; and historical sections below
+retain their original timestamps and limits.
+
 # Stream 3 — Accounts, social and notifications
 
 Current September21 10:33UTC: approved isolated natural scheduler check completed
@@ -3211,3 +3342,1291 @@ clears it, and the terminal 401 handler ignores a 401 while it is set and state 
 signedOut; endSession is unchanged. AuthManagerTests + DeepLinkRouterSessionReturnTests
 41/41 locally, PR152 CI green on 72ec734db (all three simulators). Stream3 accounts scope
 for this session is complete; awaiting merges of PR149/151/152 and the next assignment.
+
+## Stream 3 resumed verification — cache boundary and CI handoff (2026-09-22)
+
+This section records the resumed work after the previous native batch; it does not replace
+the earlier evidence or claim closure for the remaining N01–N05/A01–A05 inventory rows.
+
+### PR163 warm-cache repair
+
+Requirement: a block or unblock must take effect through the existing feed screen without
+waiting for the feed-filter TTL. The existing implementation cached UserBlock-derived feed
+filters for 60 seconds and block routes only invalidated the block-service cache.
+
+Baseline reproduced on the retained local API/DB and the real browser Connections screen:
+Bob warmed a temporary Dana post, blocked Dana from Dana's existing profile menu, and
+immediately reloaded the feed; the post remained visible. Bob then unblocked Dana from
+Settings → Blocked Users and immediately reloaded; the post remained hidden until the
+normal 60-second TTL expired. This is a real UI → HTTP → persistence → feed observation;
+the temporary relationship/post/blocks were fixture rows, not mocked persistence.
+
+Repair is the smallest existing-service extension in PR163 commit `d6b623a0e`: after a
+successful block/unblock, `routes/blocks.js` invalidates both affected users' feed-filter
+caches; sender blocking in `routes/neighborMessages.js` does the same. The candidate API
+was started from the PR163 worktree on the retained port, and the same real UI journey
+immediately hid the post after block and restored it after unblock. The candidate did not
+touch peer runtimes. Existing follow/post/comment privacy checks remain documented in the
+PR and were not redesigned.
+
+Cleanup was completed against the recorded fixture IDs. Final probes show no temporary
+probe post, relationship, or block; retained baseline is 6 posts, 20 notifications, and
+1 pre-existing UserBlock. The cleanup helper was invoked with `--help` by mistake, but its
+actual deletion set matched the recorded temporary batch; no unrelated rows were retained.
+Evidence: private operational audit under
+`/private/tmp/pantopus-stream3-20260920-r1` and durable native bundle
+`.pantopus-recovery/audits/20260922-stream3-native-social-r1` (MANIFEST
+`4a9cf65e2182ae604aef07e049d6cf54dce248b9805f98a8291c7a751f708aea`). PR body updated with the reproduced baseline, repair, cleanup and
+limitations. The coordinator refreshed the branch to `f1ca9002` and merged PR163 as
+`e5335f584dd99f82e7c66a3974b04400098f0c0c`.
+
+### Android PR168 CI repair
+
+Fresh PR168 CI reached ktlint and instrumented tests but failed Detekt because the newly
+added `PrivacyHandshakeViewModel.fetchAndProject` measured complexity 22 (threshold 18).
+The code was repaired in place by extracting the existing suggestion/follow fallback and
+its unchanged error branches into `fetchSuggestionAndFollow`; no suppression or new test
+was added. Branch `codex/stream3-android-social-follow-block-chat` was rebased onto
+`origin/master` `662ab04b` and force-with-lease pushed at `41b1c8a15`. The coordinator
+will run the next CI; no new native build is claimed for this code-only repair.
+
+### Fresh Android native recheck and current boundaries
+
+The cache repair is verified end to end on the retained web runtime. The granted Android
+slot was used once: `:app:assembleDebug` succeeded from integration `b0f7b6bbe`, the fresh
+APK was installed only on `emulator-5554`, and the four pending screens were exercised.
+Current Location opened the real Android permission dialog and denial returned the existing
+location error; Beacon Follow exercised the 404 suggestion fallback plus plain follow 201;
+the retained reverse UserBlock produced Follow 403 and the existing refusal toast; direct
+message send produced 403, the blocked-conversation banner, and zero persisted ChatMessage
+rows. A same-actor Bob→Evan block was also created and removed through the real profile and
+Settings screens. The retained fixtures derive `Persona` identity (no home-residency context),
+so the Persona Follow affordance remained visible after that personal UserBlock; this is a
+distinct Persona scope and does not substantiate the local-neighbor Follow-row-hide branch.
+Android logged out through Settings afterward. Screenshots and records are in the durable
+bundle; its current MANIFEST is `4a9cf65e2182ae604aef07e049d6cf54dce248b9805f98a8291c7a751f708aea`.
+
+Final cleanup capture: `final-cleanup-20260922.json` records the restored baseline
+(6 posts, 8 comments, 20 notifications, 1 retained pre-existing UserBlock, zero
+temporary follows/reports, Evan active sessions 0, Bob active sessions 4). Evan's
+recorded fixture password was restored through the real reset link and endpoint; the
+private helper's payload typo was corrected after the first failed attempt, and the
+verification session was revoked. Mailpit history was preserved (44 retained messages
+at capture). The refreshed bundle MANIFEST is
+`4a9cf65e2182ae604aef07e049d6cf54dce248b9805f98a8291c7a751f708aea`.
+
+New iOS device-hub interaction is currently unavailable, and no provider delivery,
+physical-device, hosted-migration, or APNs/FCM evidence is claimed here. The Android slot
+is released. Remaining work is coordinator integration/CI and the other independently open
+N01–N05/A01–A05 acceptance rows; do not rerun the cleanup helper or claim unit-test
+coverage as feature closure.
+
+## A05 profile safety action — real web reachability and report contract (2026-09-22)
+
+The initial bounded A05 pass exercised the existing web profile action through the retained
+local runtime. An authorized isolated Bob fixture logged in through the real
+`stream3-auth.localhost:18131` login page, opened Dana's real public profile, expanded
+its existing overflow menu, selected **Report profile**, and reached the existing
+**Report User** modal. Selecting an allowed reason enabled the existing **Submit Report**
+button. The final click, persistence, duplicate, failure/retry, and cleanup were completed
+in the addendum below; the initial source/UI evidence remains separately bound in
+`a05-profile-report-source-ui-20260922.json`.
+
+The source trace is bound to the current worktree: `PublicProfileClient.handleReport`
+creates the action-scoped target, `submitReport` calls the existing
+`api.users.reportUser`, the SDK posts `/api/users/:userId/report`, and `users.js` applies
+`verifyToken`, the established Joi reason set, target existence, duplicate idempotence,
+`UserReport` persistence, and a 503 when the table is unavailable. `ProfileHeader` keeps
+Report profile in the existing overflow menu and `ReportModal` keeps the current visual
+and reason treatment. The final status and refreshed MANIFEST are recorded below.
+
+No application file, schema, provider, or unit test was added.
+
+### A05 profile report — persistence, duplicate, failure and cleanup complete
+
+The prepared report was submitted through the same real browser UI on the retained local
+API/database. The UI showed the existing `Report submitted` toast and SQL found exactly one
+`UserReport` row for the isolated Bob→Dana pair (`spam`). Repeating the same report through
+the UI returned the same generic success toast and SQL remained one row with the same id,
+matching the endpoint's existing `already_reported` idempotence contract.
+
+For the unavailable-storage case, `service_role` SELECT on `UserReport` was revoked before
+a third UI submission. The UI showed the existing `Couldn't submit your report. Please
+retry.` toast and no extra row was written. SELECT/INSERT were restored, a retry through the
+UI returned the success toast, and SQL still showed the single original row. The exact
+temporary row was then deleted with actor/target/reason predicates (`DELETE 1`, follow-up
+count 0); the fixture actor logged out through Settings → Log Out and the browser ended at
+`/login`. Evidence: `a05-profile-report-final-evidence-20260922.json`. The source/UI checkpoint was 111 files; the API evidence below refreshes the bundle to 112 files.
+
+This closes the web profile report journey within the local fixture scope. It does not claim
+moderation-review behavior, provider delivery, an external recipient, or a native profile
+report screen; existing native and other content-report evidence remains the applicable
+coverage for those surfaces. No application/schema/unit-test change was made.
+
+
+## A05 profile search → destination — actual web workflow (2026-09-22)
+
+A separate reachable-action pass used the existing web AppShell search with the isolated
+Bob fixture. Typing `stream3_auth_r3_dana` and submitting the real header form navigated to
+`/app/discover?q=stream3_auth_r3_dana`; the real universal-search result list showed
+`Auth Dana /stream3_auth_r3_dana PROFILE`. Clicking that existing result opened the real
+`/stream3_auth_r3_dana` profile route and showed the existing Message, Request / Hire,
+Follow, Share, and overflow actions. The actor then logged out through Settings → Log Out
+and the browser ended at `/login`.
+
+The source trace is `AppShell.openDiscover` → existing `/app/discover?q=` route,
+`useUniversalSearch` → `identitySearch.searchProfiles` for profile scopes with stale-query
+retirement, and `UnifiedResultCard` → `router.push(item.href)`. Evidence is
+`a05-search-profile-destination-20260922.json`; the source/UI checkpoint was the 111-file manifest; the API evidence below refreshes it. This verifies the
+real web search-to-profile destination within the local runtime; it does not claim search
+provider/index freshness, native search parity, or unrelated marketplace/subscription/
+booking/wallet/mail actions. No application/schema/unit-test change was made.
+
+The report-storage fault injection is also explicitly bounded: service_role SELECT was
+revoked only on `UserReport`, then SELECT/INSERT were restored; final `\dp` showed the
+standard full `arwdDxtm` ACL. No other table privilege was touched. A pre-fault ACL snapshot
+was not captured, so the evidence records the final ACL and this limitation rather than
+claiming an unsubstantiated byte-for-byte before/after comparison.
+
+
+### A05 profile search — API and no-write evidence addendum
+
+The same search journey was bound to the real API and retained SQL. An authorized Bob
+fixture login returned HTTP 200; `GET /api/identity/search?scope=all&q=stream3_auth_r3_dana&limit=5`
+returned HTTP 200 with one `local_profile` result (`Auth Dana`, href
+`/stream3_auth_r3_dana`), and fixture logout returned HTTP 200. Before/after SQL counts
+for `UserFollow|UserBlock|UserReport|Notification|ChatMessage|Post` were identical at
+`0|1|0|20|0|6`, proving the read-only search made no social/report/message/post writes.
+The identity-search `local_profile` id is deliberately distinct from the Auth User id; the
+route href is the established destination contract. Evidence: `a05-search-api-20260922.json`.
+The refreshed 112-file MANIFEST is **4a55f3e217be0b6fad71802d3d8a3a1bb403a9ad429e2ab78874d2870e6de9ae**.
+
+## A05 mailbox screen/API read pass — route-order finding (2026-09-22)
+
+The existing web Mail sidebar opened `/app/mailbox` in the retained local runtime and
+showed the existing Personal Mailbox empty state with Compose and scope/filter controls.
+A real authorized Bob API session then called `GET /api/mailbox?scope=personal` and received
+HTTP 200 with zero mail items; logout returned HTTP 200. Before/after SQL counts for
+`Mail|MailAction|Notification|UserFollow|UserBlock|UserReport` were identical at
+`0|0|20|0|1|0`, so this read-only mailbox pass created no records or social side effects.
+Evidence: `a05-mailbox-api-20260922.json`; the durable 113-file MANIFEST is
+**14a8d7dbd312353923955306778267ac0d37161d8190717c0d88a4fdb83cc294**.
+
+The same API session exposed a concrete existing route-order gap: `GET /api/mailbox/preferences`
+returned HTTP 404 even though `backend/routes/mailbox.js` declares a GET `/preferences`
+handler. The generic GET `/:id` mail-detail route appears earlier and consumes the literal
+`preferences` path; no current frontend caller references the preferences SDK methods. No
+code was edited because this is a shared mailbox route-order finding awaiting coordinator
+ownership. The evidence records the actual status, source ordering, and no-write boundary;
+no seed/send/claim/archive/star/delete, provider/SMTP, or native mailbox-delivery claim was
+made.
+
+## A05 audience/subscription entry — feature-flag boundary (2026-09-22)
+
+The existing web `/app/audience` route was opened with an authorized Bob fixture. Its
+current `audience_profile` flag-off behavior redirected through the existing effect to
+`/app/persona`, where the legacy Beacon creation screen was visible with handle, display
+name, bio, public-link and Next controls. No Beacon or subscription form was submitted.
+
+The same boundary was checked through the real API: Bob login HTTP 200, `GET
+/api/personas/me` HTTP 200 with `persona:null`, `GET /api/personas/audience-identity/me`
+HTTP 404 `Not found` because that endpoint is feature-flag gated, and logout HTTP 200.
+Before/after SQL counts for `PublicPersona|BroadcastChannel|PersonaMembership|PersonaTier|PersonaBlock|Notification`
+were identical at `1|1|1|3|0|20`, proving no write or notification side effect. Evidence:
+`a05-audience-api-20260922.json`; the durable 114-file MANIFEST is
+**504858aec1ac7d0f0e67ca9ac52d3b1c68f4d48d8ab977f4dc0beae45f07183a**.
+
+This records the current release-flag boundary and legacy fallback. It does not claim
+Beacon creation, paid subscription checkout, Stripe/provider, native audience, or payment
+acceptance; no application/schema/unit-test change was made.
+
+## A03 shared storage/provider reconciliation — real profile UI and local API/SQL (2026-09-22)
+
+This bounded A03 pass reused the existing upload/document implementations and the accepted private document, native picker, and completion-proof evidence already linked in the verification reconciliation. It did not add or replace a screen, service, table, migration, provider configuration, or unit test. The source was rebound to application worktree `local/stream3-ios-integration` at `acedbf14a83bcae72ce4817504661fd3809caa1a`; the relevant storage source paths and SHA-256 bindings are in `a03-storage-source-ui-20260922.json`.
+
+The real web UI used the authorized isolated Auth Bob fixture through `stream3-auth.localhost:18131`, opened the existing `/app/profile/edit` caller, and rendered the existing **Edit Profile → Profile Picture → Upload Photo** control. Its observed file input accepts JPEG/PNG/GIF/WebP, is single-file, and retains the existing 5 MB client message. No file was selected and no upload was submitted, so this is real screen/picker evidence only; it does not claim provider upload success. The tab was logged out/closed afterward.
+
+An authorized isolated Bob session then used the retained real API at `127.0.0.1:18130` and SQL64532. `GET /api/users/profile`, `GET /api/files/portfolio`, `GET /api/files/portfolio/:Dana`, and `GET /api/homes` each returned HTTP 200. Before/after counts for `File`, Bob's `File`, `FileQuota`, local `storage.buckets`, local `storage.objects`, and `Notification` were identical at zero files/quota/storage objects and the retained notification count. API health returned HTTP 200 with a connected database. Details are in `a03-read-api-20260922.json`.
+
+Because the existing `/api/files/quota` handler calls `get_or_create_user_quota`, a separate bounded journey verified that contract rather than silently treating it as a read. With Bob's quota row confirmed absent before the request, the real authorized `GET /api/files/quota` returned HTTP 200 and persisted one exact `FileQuota` row (1 GiB limit, 0 used, 1000 max files). After logout, the exact Bob row was deleted (`DELETE 1`) and the final row count returned to zero. Details are in `a03-quota-route-20260922.json`.
+
+Implementation completion: existing caller, SDK, route, quota RPC, local SQL and cleanup were exercised; no repair was required. Local test success: the UI/API/SQL checks above passed; no new unit tests were written per instruction. End-to-end verification: local web screen plus real HTTP and persisted local rows are supported; no bytes were uploaded in this pass. CI/integration: no CI rerun or code PR was created because no application source changed; existing accepted CI/evidence remains reusable only where its source/configuration is unchanged.
+
+The implementation retains two established storage boundaries: the web profile caller uses `@pantopus/api` upload `POST /api/upload/profile-picture` backed by the S3 service, while legacy `files.ts` also exposes Supabase-backed home/portfolio/generic contracts. The existing document/lease and gig-completion evidence remains source-bound and was not replaced. No current profile caller uses the legacy profile-picture route; this source difference was recorded, not redesigned.
+
+Remaining A03 limitations are explicit: hosted S3/CloudFront permissions, quotas, lifecycle and production buckets were not exercised; no external provider or hosted migration was touched; no new iOS/Android chooser/provider journey was run in this pass; and provider success/failure for an actual profile or home byte upload remains unverified here. Local storage buckets/objects were empty at cleanup. Evidence bundle `20260922-stream3-native-social-r1` now has 118 files; MANIFEST SHA-256 is `62c8d789cd79b1bb2a5a00c1f4420bfbbbd1c0c2a2825991d54aa8ed40ca5c05`. No fixture credentials, raw tokens, or operator logs were added to Git.
+
+## N05 daily-agenda preference — actual web/API/SQL contract check (2026-09-22)
+
+This bounded N05 follow-up reused the merged host-pause and host-reminder-email repairs and did not repeat their accepted worker journeys. Source was rebound to the current Stream3 checkout `local/stream3-ios-integration` at `acedbf14a83bcae72ce4817504661fd3809caa1a`; six relevant source hashes and the implementation comparison are in `n05-daily-agenda-source-ui-20260922.json`.
+
+The real IAB opened `/app/scheduling/settings/notifications` for the authorized isolated Auth Bob fixture. The existing screen visibly renders **Daily agenda — Each morning at 8am**. Email was initially pressed; Push and SMS were disabled. Clicking the existing Email control produced **Notification changes saved**, persisted `scheduling.host.daily_agenda.email=false`, and visibly cleared the pressed state. Clicking it again produced the same save confirmation, persisted `email=true`, and restored the pressed state. Settings → Log Out ended at `/login`, and the tab was closed.
+
+The companion real API read returned HTTP 200 from `GET /api/scheduling/notification-preferences`; Bob had no preference row before the UI write, and the default response contained `notify_me`, `notify_attendees`, and `reminder_lead_times` but no `daily_agenda` key. The two UI clicks created and updated one preference row through the existing PUT route. Notification count remained 20, BookingReminderLog 3, and Mail 0. After capture, the exact Bob `SchedulingNotificationPreference` row was deleted (`DELETE 1`) and the final row was absent. Evidence: `n05-daily-agenda-api-20260922.json` and `n05-daily-agenda-final-20260922.json`.
+
+Assessment: the user-facing preference and persistence contract work locally, but the current scoped backend search/source has no daily-agenda scheduler or delivery consumer. A saved toggle is not a delivered agenda. No digest, worker, notification policy, schema, provider, native surface, or unit test was added because the finding does not authorize inventing that policy. Implementation/local checks and cleanup pass; end-to-end delivery, provider/native/background/cold-start and hosted email/push boundaries remain unverified. The durable bundle now has 121 files with MANIFEST SHA-256 `e16a92fb8f895ddbc665db499aa88c19d9d5f4a7745a6cf44c8e639a2fa894a3`.
+
+## N02 saved notifications — real web read/filter and API/SQL reconciliation (2026-09-22)
+
+This bounded N02 pass reused the existing notification route, SDK, page, badge context,
+and AppShell behavior. Source was rebound to the current Stream3 checkout
+`local/stream3-ios-integration` at `acedbf14a83bcae72ce4817504661fd3809caa1a`; the
+relevant source hashes are recorded in `n02-notifications-ui-source-20260922.json`.
+No application file, schema, provider configuration, or unit test was added.
+
+The real IAB opened `/app/notifications` for the authorized isolated Auth Bob fixture.
+After the existing login redirect completed, the screen rendered **Notifications**, the
+existing **Mark all read** action, all/unread/read filters, and notification rows for
+reminders, booking confirmations, and Beacon activity. The initial state showed 7 unread
+notifications. Selecting **Unread** rendered 7 rows; selecting **Read** rendered 4 rows.
+No mark-read or delete mutation was sent. Settings → Log Out returned the tab to `/login`,
+and the IAB tab was closed.
+
+The same fixture used the real local API. Login returned HTTP 200;
+`GET /api/notifications?limit=20` returned HTTP 200 with 11 records and `unreadCount=7`;
+`GET /api/notifications/unread-count` returned HTTP 200 with the existing count/total/
+byContext payload; `GET /api/hub/preferences` returned HTTP 200; and logout returned
+HTTP 200. Before/after SQL counts were unchanged: Notification total 20, Bob unread 7,
+PushToken 0, UserNotificationPreferences 0, and Bob active AuthSession 4. Evidence is in
+`n02-notifications-api-20260922.json` and `n02-notifications-ui-source-20260922.json`;
+the refreshed durable bundle MANIFEST is
+`c84f26b102a99957228616fc4644ce60437aa8f600839b1d2bf0cfdb0c4df681` (126 files).
+
+Assessment: implementation and local API/UI read behavior are verified for the web
+saved-notification surface, with no repair indicated by this pass. End-to-end provider or
+device behavior is not claimed: APNs/FCM delivery, token registration/rotation, denied
+permission, foreground/background/cold-start delivery, account-switch continuation, and
+physical-device evidence remain open or are covered only by the prior bounded native
+evidence. CI/integration was not rerun because no application source changed; no unit-test
+coverage is claimed or required for this read-only verification.
+
+## A04 provider/OAuth capability boundary — current local read-only check (2026-09-22)
+
+A04 source was rebound to the current Stream3 checkout `local/stream3-ios-integration` at `acedbf14a83bcae72ce4817504661fd3809caa1a`; route/config/provider hashes and the existing staging report binding are in `a04-provider-source-20260922.json`. The accepted provider report remains authoritative for Smarty/geographic/Lob behavior and disabled Google/Apple staging capability; no provider activation or address ownership change was authorized.
+
+The retained local API performed only capability reads. `GET /api/users/oauth/google` and `/api/users/oauth/apple` each returned HTTP 200 with the existing local GoTrue authorization URL. The generated local authorize URLs were fetched with `redirect: manual`; both returned HTTP 400 with no `Location`, so no external provider consent or callback was followed. Invalid provider `bogus` returned HTTP 400 with the existing validation message. SQL counts for User (3), AuthSession (180), Notification (20), and auth audit rows (453) were identical before and after; no session, user, notification, mail or provider row was created. Evidence: `a04-provider-api-20260922.json` and `a04-provider-boundary-20260922.json`.
+
+Implementation/local verification: existing provider-name validation, local authorize URL generation and disabled-provider failure are confirmed; no repair is indicated. End-to-end/provider verification: no successful or cancelled Google/Apple consent, Smarty/geographic validation, Lob postcard, hosted provider, production configuration or purchase was exercised. CI/integration: no code changed, so no CI or PR was created. The durable bundle now has 124 files; MANIFEST SHA-256 is `09677f0c24dca41fab514514db773c2c63a73bb2448a4b9b478506c24fac3334`.
+
+## A05 native profile edit — PATCH response contract and installed Android journey (2026-09-22)
+
+This was the next uncovered A05 action after the web report/search/mailbox/audience checks. The
+existing Android caller was located in the installed Edit profile screen and its profile API
+client; the server caller is `backend/routes/users.js` `PATCH /api/users/profile`. The baseline
+was reproduced with the existing Auth Bob fixture: the real Android screen entered valid first
+and last names, the endpoint returned HTTP 200, but the native `ProfileUpdateResponse.user`
+decoder failed because the PATCH receipt omitted canonical account metadata, residency, skills,
+avatar/stat fields and `createdAt`. The screen retained **2 unsaved** and analytics recorded
+`form.edit_profile.submit result=error`, although SQL had already applied the name update.
+No Android DTO defaults or UI redesign was added.
+
+The smallest repair is in application commit `26fe9d57f8568b704969e60c515dde07e3e9aa10`
+(and follow-up `b956a0076`): the existing PATCH receipt now reuses the saved `User` row plus
+the existing `UserSkill` and `getPublicResidencySummary` projection, returning the same canonical
+fields consumed by GET `/api/users/profile` (`accountType`, `role`, `verified`, `residency`,
+avatar aliases, skills, stats, `createdAt`, settings and timestamps). A controlled service-role
+`UserSkill` SELECT fault initially showed the old code returned HTTP 200 with `skills: []`,
+which could falsely confirm emptiness. The follow-up now returns HTTP 503 with
+`PROFILE_READBACK_UNAVAILABLE` after the write when that readback is unavailable; the privilege
+was restored and the temporary bio was cleared. A normal real-token PATCH after restoration
+returned HTTP 200 with all canonical fields, and the exact profile cleanup was verified.
+Evidence: `a05-native-profile-edit-contract-20260922.json` and
+`a05-profile-skill-read-fault-20260922.json`.
+
+End-to-end installed Android verification used the existing APK on `emulator-5554`
+(SHA-256 `83cc0db08992e83dd1faa87a7baacdf582624a3e847f965f6361ab5fdd2cdf93`); Android source
+was unchanged after reverting the rejected generic-default experiment. The real API/SQL runtime
+was local GoTrue/PostgREST/SQL on 18130/64531/64532. Saving valid Auth/Bob names produced
+`HTTP PATCH -> 200`, `form.edit_profile.submit result=success`, and cleared the unsaved
+indicator. A temporary `BobTemp` last-name edit showed one unsaved change; **Discard** restored
+Bob with no PATCH. Clearing last name rendered the existing **Last name is required.** error,
+retained the unsaved state, and sent no HTTP request. The fixture was restored to
+`first_name=NULL`, `last_name=NULL`, `name='Auth Bob'`; API GET confirmed that state and no
+skills rows existed for this fixture. Evidence: `a05-native-profile-edit-ui-20260922.json`
+and `a05-native-profile-edit-cleanup-20260922.json`.
+
+Implementation completion: the response contract and truthful readback failure path are repaired
+and pushed on `local/stream3-ios-integration`; no schema, migration, provider or native source
+file changed. Local verification: `node --check backend/routes/users.js`, `git diff --check`,
+normal HTTP contract, controlled SQL fault and cleanup all passed. Installed-screen E2E:
+Android save/discard/validation passed against persisted local data. CI/integration: no new unit
+tests were written per instruction; coordinator CI/review remains required, and the branch is
+pushed for coordinator integration. No fresh iOS installed build was needed for this backend-only
+contract change; iOS decoder/device behavior remains accepted/source-bound evidence rather than a
+new iOS run. Bob has no `UserSkill` rows, so this fixture proves the field is present and typed as
+an array but does not prove a populated-skill preservation case. External photo upload/OAuth and
+provider delivery remain outside this journey.
+
+The durable audit bundle now contains 130 files with MANIFEST SHA-256
+`a17d90aa41cae3167b7cf76e50dc67de6d193cd587c74ddd93f0ba6990dce915`. The current local API
+process was stopped after verification; the user-owned browser tab was left untouched. No
+credentials, raw tokens, database archives or operator logs were added to Git.
+
+### A05 native profile edit — populated-skill preservation addendum
+
+Coordinator requested a populated-skill case rather than relying only on Bob's empty baseline. A
+single disposable `UserSkill` row (`Stream3 Temporary Skill`) was inserted for Bob, then a real
+GoTrue bearer called the existing PATCH route on an isolated API instance at 18134. GET before,
+PATCH 200, and GET after each returned the one skill unchanged alongside the canonical fields;
+the PATCH also applied a temporary bio. The exact row was deleted by id/user predicate, the bio,
+first/last/name baseline was restored, and SQL ended at zero Bob `UserSkill` rows. Evidence:
+`a05-native-profile-edit-populated-skill-20260922.json`. This is HTTP/API/persistence evidence
+for populated-skill preservation; the installed Android screen's prior save used the same decoder
+contract, while the skill list itself is not rendered by the current Edit profile screen.
+
+The refreshed durable bundle has 131 files; MANIFEST SHA-256 is
+`1ed1182466b240fab36ecc6b2bd4a0eb92b2b4706c339174b7fd4ef29ff982fc`. The app repair remains
+backend-only, so no new native build was needed; the exclusive heavy slot is released.
+
+### A05 profile PATCH review/CI receipt
+
+The focused repair was republished from current `master` as PR [#182](https://github.com/WangPantopus/skinny-pantopus/pull/182)
+(branch `codex/stream3-profile-contract`) so coordinator review does not inherit the other
+Stream3 integration commits. PR CI completed green for backend privacy/Jest, backend Docker,
+complete schema replay/lint, deployment/migration safeguards, and change detection; Seeder,
+Web, Web E2E, Android and iOS jobs were correctly skipped by the change detector. No merge or
+hosted activation was performed.
+
+A fresh iOS profile save was attempted against the retained installed simulator, but its current
+state is the existing security sign-out screen and the Device Hub control surface timed out; no
+valid iOS save claim is made. The Android installed-screen and real API/SQL evidence above remain
+the supported native E2E result for this backend-only contract repair.
+
+## N02 native saved notifications — installed Android list/filter read pass (2026-09-22)
+
+The retained installed Android app was relaunched against the owned local API at 18130 with the
+existing Auth Bob session. The real **Notifications** screen loaded through HTTP GET 200s and
+rendered the existing All/Unread/Read tabs, **Mark all read** action, and notification cards.
+The initial tab counts were All 11, Unread 7, Read 4. Selecting Unread showed count 7; selecting
+Read showed count 4. No mark-read/delete action was tapped. Settings → Log out completed through
+the actual screen; the final API log recorded the session revoked and subsequent unauthenticated
+hub request. Evidence: `n02-android-ui-20260922.json`, `unread.xml`, `read.xml`, and
+`read-filter.png`.
+
+SQL before/after remained unchanged: Notification total 20, Bob unread 7, Bob PushToken rows 0,
+and Bob UserNotificationPreferences rows 0. The emulator's Firebase provider logged its existing
+invalid-local-API-key warning; this is an emulator/provider boundary, not FCM delivery evidence.
+Implementation and installed-screen local E2E pass for list/filter/logout; no application source
+changed and no unit tests were added. Physical Android, APNs/FCM provider delivery, token
+registration/rotation, and cold-start/foreground/background provider delivery remain unverified.
+The durable bundle now has 135 files; MANIFEST SHA-256 is
+`bc8dadc5cee6c2b301beec356935cef14a9c7cacadef96620badf9290a41da3c`.
+
+## Current ordered boundary accounting after native N02 pass (2026-09-22)
+
+- **N01:** retained web/native route and local notification records are covered by existing
+  evidence plus the N02 Android read pass; provider-delivered foreground/background/cold-start,
+  token rotation and physical-device acceptance still require APNs/FCM-capable credentials or
+  hardware. No local repair is indicated.
+- **N02:** web/API/SQL read/filter and installed Android list/filter/logout are now bound. Mark-all
+  mutation, provider delivery and physical-device behavior remain intentionally unexercised.
+- **N03:** local discovery/follow/post/reply/mute and identity-scope evidence is retained; remaining
+  release-flag/provider freshness and old-link/access-change cases need a current fixture or an
+  owner decision before changing policy. Existing Persona and UserBlock scopes remain distinct.
+- **N04:** block/unblock, blocked DM, report, access/error/cache paths and installed Android safety
+  checks are recorded; hosted moderation/provider review and any cross-stream schema/FK repair
+  remain coordinator/shared-owner work.
+- **N05:** reminder/pause/retry evidence and the real daily-agenda preference save are recorded;
+  the current source has no daily-agenda delivery consumer, so no delivery claim is possible
+  without an established scheduler/policy owner. Saved schedule alone remains insufficient.
+- **A01–A02:** signup/verification/recovery, refresh/logout/revocation/account switching and
+  protected-data retirement use accepted evidence; external OAuth/provider consent and physical
+  device boundaries remain unavailable locally. No shared auth edit is proposed.
+- **A03–A04:** local storage reads/quota and provider capability boundaries are recorded; hosted
+  S3/CloudFront, external OAuth/address providers and production activation require provider/shared
+  ownership. No activation or migration was performed.
+- **A05:** profile report/search/edit and installed Android profile save are verified; mailbox
+  preferences remains an existing route-order issue owned outside this stream, audience remains
+  feature-flag gated, and Home/payment/booking/wallet findings route to their owners. No duplicate
+  replacement implementation is authorized.
+
+This accounting separates implementation, local UI/API/SQL E2E, CI, and external-provider/device
+boundaries. It is not a whole-stream completion claim.
+
+## N02 native saved notifications — Mark all read mutation and exact fixture restoration (2026-09-22)
+
+Coordinator requested the existing installed-screen mutation rather than leaving the visible
+control unexercised. I captured the complete Auth Bob notification snapshot first
+(`n02-mark-all-before.json`: 11 rows, 7 unread, 4 read), then used the installed Android
+Notifications screen on `emulator-5554` against the retained local API/SQL runtime. Tapping the
+existing **Mark all read** control produced an Android logcat `HTTP POST -> 200`; the screen then
+showed All 11, Unread 0, Read 11, and SQL confirmed 11 rows with 0 unread. No new rows were
+created. The action was deliberately reversed using one SQL transaction that updated only each
+captured row's `is_read` value by exact id. Reopening the installed screen returned All 11,
+Unread 7, Read 4; SQL matched. Full evidence is in
+`n02-mark-all-android-20260922.json`, `n02-mark-all-before.json`,
+`n02-mark-all-after.xml`, and `n02-mark-all-restored.xml`.
+
+This verifies the real Android UI -> HTTP handler -> persisted notification mutation and the
+read-state refresh/restore path for an owned local fixture. It does not establish FCM/APNs
+provider delivery, physical-device behavior, or background/cold-start receipt. The restored
+fixture is intentionally unchanged for subsequent agents. The durable bundle now has 140 files;
+MANIFEST SHA-256 is `641bd363087878b984abc539d34c3d30277ca40d4e39d1e74a1bf58e0b18bd98`.
+
+## N05 daily-agenda source and contract reconciliation (2026-09-22)
+
+The source comparison requested by the coordinator is now recorded in
+`n05-daily-agenda-source-reconciliation-20260922.json`. It searched the Stream 3 checkout at
+`b956a00767835586b5114698a3a2e91fbcddefad`, current `origin/master` at
+`2b7378aa474a26b67ea6f9dba61ad97105aa7c0b`, all local refs, and the existing backend,
+frontend, Supabase, scripts and docs roots. History search found only the original Calendarly
+UI import (`ede9ad4e6`) and the initial import (`ae6fe86c0`) for the `daily_agenda` key; no
+archived/open branch adds a producer or delivery worker.
+
+The current web component persists a `daily_agenda` row with copy **Each morning at 8am** and
+email-default presentation. The current iOS and Android models explicitly document that the old
+Daily agenda label mapped to the server's `booking_request` key and now present **Booking
+request**. The backend scheduling route/service persists generic preferences and reminder lead
+times; `bookingReminders`, the cron registration, `notificationService`, `mailDayNotification`
+and `internalBriefing` contain no daily-agenda consumer. The exact file hashes and findings are
+in the evidence JSON. Therefore the persistence/UI contract exists locally, but producer
+schedule/timezone, included agenda items, recipients/channels, quiet hours, retries/deduplication,
+read-record semantics and access-change behavior remain undecided. No daily-agenda worker,
+provider send, native/background behavior, schema or unit test was added; a saved toggle is not
+delivery evidence.
+
+## A05 mailbox route-order disposition correction (2026-09-22)
+
+The earlier boundary wording was stale. Coordinator confirms the mailbox preferences route-order
+repair is merged in PR178 at commit `715ccd8c0`. Stream 3 made no duplicate mailbox change; the
+issue is now an integrated coordinator disposition rather than an open Stream 3 repair. The
+remaining A05 boundaries are the existing audience feature flag and Home/payment/booking/wallet
+routes owned by their respective streams.
+
+## Updated current boundary accounting after N02 Mark all and N05 source reconciliation
+
+- **N02:** web/API/SQL and installed Android list/filter/logout plus the existing Mark all read
+  mutation are verified against the owned local fixture. Provider delivery, token rotation,
+  physical-device and background/cold-start behavior remain unverified.
+- **N05:** reminder/pause/retry evidence and preference persistence are recorded. The exact
+  source comparison finds no daily-agenda producer or consumer, and the advertised delivery
+  semantics are undecided; no delivery claim or speculative worker was made.
+- **A05:** profile report/search/edit and installed Android profile save are verified; mailbox
+  route-order repair is integrated as PR178 `715ccd8c0`, so no duplicate repair remains. Audience
+  remains feature-flag gated; Home/payment/booking/wallet findings route to their owners.
+
+This remains a bounded Stream 3 accounting, not a whole-app completion claim. Unit-test coverage
+is intentionally excluded from completion percentages and no new unit tests were written.
+
+## N03 old Beacon link after handle access change — focused repair and browser regression (2026-09-22)
+
+A current owned fixture was used instead of closing this case from the historical old-link note.
+The existing Beacon owner changed `stream3-local-r3` to disposable `stream3-old-link-r1` through
+`PATCH /api/personas/:id`; the real API immediately returned 404 for the old handle and 200 for
+the new handle, including the current posts route. The real IAB browser initially reproduced a
+concrete stale-page defect: `/persona/stream3-local-r3` still rendered the previous Beacon after
+reload because `fetchPublicPersona` shared the public-share `revalidate: 60` cache. This was an
+actual server/UI cache result, not a mocked response.
+
+The smallest repair is PR [#186](https://github.com/WangPantopus/skinny-pantopus/pull/186),
+commit `f941c3bb4`, from current `origin/master` `2b7378aa4`. It adds an opt-in `noStore` fetch
+option in the existing `publicShare` helper and applies it only to `fetchPublicPersona`; all
+other public-share fetches, page layout, visual treatment, navigation and the existing 404 page
+remain unchanged. After the repair, the same IAB old URL rendered the existing 404 page, while
+the current URL rendered the existing Beacon screen with `@stream3-old-link-r1`. The owner then
+restored the original handle through the existing PATCH route; the original URL rendered the
+existing Beacon screen again and the disposable URL returned 404. API and SQL cleanup confirmed
+the original persona handle, audience identity handle and follower count were restored. No new
+fixture rows, schema, provider, native screen or unit test was added.
+
+Focused verification: real GoTrue owner/fan login, HTTP 200/404 routes, PostgREST/SQL persisted
+handle and identity reads, real IAB AX snapshots for stale 404/current Beacon/restored Beacon,
+`pnpm --filter @pantopus/web type-check` exit 0 and `git diff --check` exit 0. Evidence:
+`n03-old-link-access-change-20260922.json`, `n03-old-link-ui-20260922.json`, and
+`n03-ui-cleanup-20260922.json`. The durable bundle now has 143 files; MANIFEST SHA-256 is
+`cfee70e780cd8f0a70808577ce29a58d5fc77985959fdd0f7f1e6218ce9e5a4f`.
+
+The real browser/API case verifies old-link invalidation after an authorized handle change and
+exact restoration. It does not establish native/provider delivery or decide suspension/deletion
+policy. PR review/CI and coordinator integration remain separate; the standalone PR is attached
+for review and must not be merged independently here.
+
+## Current N03 disposition after old-link pass
+
+N03 now has a current web/API/SQL old-link/access-change regression and focused repair in review;
+retained follow/unfollow, posting, reply, mute, identity-scope and restricted-post evidence still
+applies within its recorded limits. Release/provider freshness, installed-native discovery/reply,
+and product decisions for suspension/deletion remain unverified or policy-owned. No unit-test
+coverage is claimed or required for this functional estimate.
+
+## N03 public post old-link after deletion — reproduced cache defect and focused repair (2026-09-22)
+
+Coordinator requested the existing public-post path be exercised with an owned disposable post.
+Before editing, current `origin/master` and the paid-gig, booking-lifecycle, iOS-social and
+Android-social refs all had the same `fetchPublicPost` implementation: the existing shared
+`fetchPublicJson` `revalidate: 60` cache, with no post-specific invalidation. History contained no
+archived/open post-link repair. The existing route is `frontend/apps/web/src/app/posts/[id]/page.tsx`
+and its API caller is `fetchPublicPost` in `frontend/apps/web/src/lib/publicShare.ts`; it keeps the
+existing public post page, explicit-share state and 404 treatment.
+
+A disposable public `Post` row was inserted for owned Auth Bob with global/public visibility. The
+real IAB rendered the existing public post page with its title/content, Open In App and Join the
+conversation links. The owner then used the existing HTTP `DELETE /api/posts/:id` handler (200).
+The same real unauthenticated API GET returned 404 and Postgres showed count 0, but a hard reload
+of the real browser still rendered the deleted post from the 60-second server cache. This was a
+reproduced stale-content failure, not a source assumption.
+
+PR [#186](https://github.com/WangPantopus/skinny-pantopus/pull/186) now also applies the existing
+opt-in `noStore` fetch option to `fetchPublicPost` (latest commit `cf34d604d`). The persona
+no-store repair remains in the same focused old-link/access-change PR; other public-share fetches,
+page layout, navigation and visual treatment are unchanged. After the repair the same deleted
+URL rendered the existing Next 404 page (`404`, `This page could not be found.`), while API stayed
+404 and SQL stayed at zero. No post row or other fixture survived; the isolated browser tab was
+closed.
+
+Focused verification: real API/PostgREST/SQL creation, public UI read, owner DELETE, API 404/SQL
+zero and browser stale/404 recheck; `pnpm --filter @pantopus/web type-check` exit 0 and
+`git diff --check` exit 0. Evidence: `n03-public-post-old-link-20260922.json` and
+`n03-public-post-delete-20260922.json`. The durable bundle now has 145 files; MANIFEST SHA-256 is
+`eb052cdef91a4948efa16cf93828137ce42de653784f772280bffd0d2624a0b6`.
+
+This verifies public-post deletion invalidation locally. It does not invent or claim a separate
+non-owner visibility-revocation policy, native/provider delivery, or hosted deployment behavior.
+PR review/CI and coordinator integration remain separate.
+
+## N02 native receipt timestamp correction (2026-09-22)
+
+The earlier `n02-android-ui-20260922.json` receipt had an unsupported future Pacific timestamp
+(`13:45:00-0700`). It has been corrected to `06:44:22-0700` using the filesystem mtime of the
+captured `read-filter.png`; `unread.xml` (`06:43:57-0700`) and `read.xml` (`06:44:01-0700`)
+corroborate the same local capture window. The separate Mark all receipt remains
+`06:52:46-0700`, sourced from `n02-mark-all-after.xml` mtime. The correction is recorded in
+`n02-timestamp-correction-20260922.json`; no session time was invented and no UI/API/SQL result
+changed. The durable bundle now has 146 files; MANIFEST SHA-256 is
+`51339e601abe137bf8c636133d25d37b4cfddacd0a28a36ef7257515cdde3de0`.
+
+## N02 installed Android single-notification delete (2026-09-22)
+
+The accepted web PR86 deletion/failure/retry evidence was reviewed before this pass and was not
+repeated: it already covers real web single-delete success, DELETE failure/toast and retry, lost
+successful reply, duplicate taps, delayed filter-switch stale-row handling and account-switch
+retirement. The remaining locally feasible client-specific gap was the installed Android success
+control. No application source or UI design changed.
+
+A disposable Auth Bob `Notification` row was inserted directly in the owned local SQL fixture with
+marker `n02-delete-r1`, then the retained Android APK (SHA
+`83cc0db08992e83dd1faa87a7baacdf582624a3e847f965f6361ab5fdd2cdf93`) loaded the existing
+Notifications screen through the real API. The row was visible with All 12 / Unread 8 / Read 4.
+Long-pressing the existing row opened the existing **Delete notification?** confirmation; tapping
+its existing Delete action generated `DELETE /api/notifications/c86bfd54-d3f8-469b-b5e1-ee7f6ca20590`
+HTTP 200 in the backend log and the Android HTTP log. The row disappeared from the installed
+screen. SQL then showed Bob Notification rows 11, unread 7, fixture rows 0 and target rows 0.
+The disposable row therefore required no restore; exact-id/marker cleanup was verified. The app
+was logged out through Settings → Log out and the follow-up request returned 401.
+
+Evidence: `n02-android-single-delete-20260922.json`, `n02-delete-before.xml`,
+`n02-delete-after-confirm.xml`, `n02-delete-after.png`, and `n02-android-delete-http-receipt-20260922.json`. This binds
+installed Android UI → HTTP DELETE handler → persisted deletion for one owned fixture. It does not
+claim Android installed failure/retry behavior; the accepted web evidence covers those cases, and
+no new unit tests were added. Physical Android and FCM/APNs delivery remain external boundaries.
+
+## N02 installed Android `new_follower` notification destination (2026-09-22)
+
+Coordinator requested a final-rewrite binding for the retained Android implementation in
+`DeepLinkRouter.notificationPath` (the `new_follower` single-segment rewrite to `/u/<username>`).
+Using the same retained installed APK, a disposable Auth Bob row was inserted with type
+`new_follower`, link `/stream3_auth_r3_evan`, unread state, and marker
+`n02-new-follower-r1`; the follower id was the existing Auth Evan fixture. This is a real persisted
+notice, not a direct bare-link launch.
+
+The installed Notifications screen showed the disposable card at All 12 / Unread 8 / Read 4. A
+real tap on that row generated the existing `PATCH /api/notifications/9a6e99b5-cedf-4101-a93d-4e539aeeb86a/read`
+200, then the backend logged `GET /api/users/username/stream3_auth_r3_evan`,
+`GET /api/users/d3671605-b8cc-4e92-8c82-99aa5041ff48/relationship`, and the existing transaction
+review read. Android's installed HTTP log recorded the corresponding GET 200 responses. The
+visible destination was the existing public profile showing **Auth Evan** and
+`stream3_auth_r3_evan`; no raw web URL was launched. SQL confirmed the notice was read before
+cleanup and the Bob←Evan `UserFollow` count remained 0. The exact disposable notice was deleted by
+id plus marker and the final SQL marker count was 0. Settings → Log out then returned the app to
+Sign in; the backend recorded `auth.signed_out` and the following request returned 401.
+
+Evidence: `n02-android-new-follower-destination-20260922.json`,
+`n02-new-follower-before.xml`, `n02-new-follower-after.xml`,
+`n02-new-follower-profile.png`, and `n02-android-new-follower-http-receipt-20260922.json`. This verifies the final
+`new_follower` implementation through the real installed notification row, read mutation, native
+routing, profile API, relationship/read-only companion calls, visible profile and persisted cleanup.
+It does not establish provider-delivered notification receipt, physical-device behavior,
+foreground/background/cold-start FCM behavior, or iOS installed destination behavior. The retained
+APK is the accepted build; no heavy native build or unit test was run. The local API log also shows
+an existing non-fatal `chat.local_profile_identity_lookup_error` during hub bootstrap
+(`LocalProfile.verified_resident` is absent in this fixture schema); it did not block the
+notification/profile journey and was not changed in this pass.
+
+## N02 client-specific boundary accounting after the Android destination pass
+
+- **Web:** accepted PR86 evidence remains the source for real list/read/delete failure/retry,
+  lost-reply, duplicate-tap, stale-response and account-switch cases. No broad rerun was needed.
+- **Android:** installed list/filter/logout, Mark all read with exact restoration, single-delete
+  success, and the persisted `new_follower` row → native Auth Evan profile destination are now
+  bound to the retained local runtime. Android installed delete failure/retry and provider receipt
+  remain unverified; no source change was necessary.
+- **iOS:** the existing accepted notification model/UI evidence remains applicable for its source
+  contract, but this run has no fresh installed iOS destination/provider receipt. No iOS claim is
+  added here.
+- **Provider/device:** no APNs/FCM delivery, token rotation, physical handset, or true
+  foreground/background/cold-start delivery claim is made. These remain explicit external limits,
+  separate from local implementation and UI/API/SQL success.
+
+The durable private evidence bundle now has 156 files; MANIFEST SHA-256 is
+`99bf0cb46f5127210137e35290932978fd914d2cca950d78e384ac50d41fa3c1`. Raw log files remain only in the private
+operational folder; the durable bundle contains sanitized request/status receipts.
+
+## Evidence bundle hygiene correction (2026-09-22)
+
+Raw Android/backend `.log` files from the N02 passes were removed from the durable private bundle after coordinator review. The raw originals remain only under `/private/tmp/pantopus-stream3-20260920-r1`; durable evidence now uses `n02-android-delete-http-receipt-20260922.json` and `n02-android-new-follower-http-receipt-20260922.json` with method/path/status summaries. The refreshed 156-file MANIFEST SHA-256 is `99bf0cb46f5127210137e35290932978fd914d2cca950d78e384ac50d41fa3c1`. No journey was rerun and no application behavior changed.
+
+## N02 installed Android delete Cancel, offline rollback and retry (2026-09-22)
+
+Coordinator requested one final client-specific control check where the retained runtime could
+support it without a build. A disposable unread Auth Bob notification (`n02-cancel-r1`) was shown
+on the installed Android Notifications screen with All 12 / Unread 8 / Read 4. Long-pressing the
+existing row opened **Delete notification?**. Tapping the existing **Cancel** control closed the
+confirmation without sending DELETE; the row remained visible and SQL stayed at 12 Bob rows, 8
+unread, marker count 1.
+
+For a real offline failure, I stopped only the owned API process after the confirmation opened and
+then tapped the same existing Delete control. Android recorded `HTTP DELETE -> transport failure`.
+The installed screen rolled the optimistic removal back: after scrolling to the top,
+the original **Stream3 cancel notification** card and unread dot were visible again. SQL remained
+at 12 rows / 8 unread / marker 1. This is a real transport outage and rollback, not a mocked
+repository result.
+
+I restarted the same local API, repeated the same long-press/confirmation/Delete journey, and the
+installed Android log recorded DELETE 200. The card disappeared, SQL returned to Bob 11 rows / 7
+unread, and exact id plus marker counts were 0. Settings → Log out returned Sign in, with the
+follow-up request receiving 401. The durable evidence uses sanitized receipts only:
+`n02-android-delete-cancel-failure-retry-20260922.json`,
+`n02-android-delete-cancel-failure-retry-http-receipt-20260922.json`,
+`cancel-before.xml`, `cancel-confirm.xml`, `cancel-after.xml`, `failure-confirm.xml`,
+`failure-after-scroll.xml`, `n02-cancel-failure-after-scroll.png`, `retry-after.xml`, and
+`n02-cancel-retry-after.png`.
+
+This adds installed Android Cancel, network-failure rollback and reconnect retry evidence. It does
+not claim an Android HTTP 5xx fault; accepted web PR86 evidence remains the source for real HTTP
+failure/toast, lost-reply, duplicate-tap and stale-response cases. No application source, design,
+build, schema or unit test changed. No provider/device delivery claim is made. The existing
+non-fatal hub `chat.local_profile_identity_lookup_error` remains a local schema boundary only.
+
+The durable private bundle now has 166 files; MANIFEST SHA-256 is
+`f1996b9a0d3b3d284c73eab0f643bee3b484927daf43c85e9c4655bcca74ba00`.
+
+## PR168 description and N03 Android boundary reconciliation (2026-09-22)
+
+PR [#168](https://github.com/WangPantopus/skinny-pantopus/pull/168) now describes the final
+implementation and current evidence rather than the retired founder-stop/ktlint-failure state.
+The body records the existing handshake 404 → plain-follow fallback, the blocked-profile Follow
+visibility guard, the blocked-chat refusal banner, the extracted complexity helper and ktlint
+repair, retained installed APK SHA `83cc0db08992e83dd1faa87a7baacdf582624a3e847f965f6361ab5fdd2cdf93`,
+and current CI run `35746647258`. It explicitly preserves the unverified local-neighbor
+Follow-row-hide branch: the installed Persona fixture has no local-home residency context, so its
+Persona Follow affordance remains a distinct scope and is not claimed as local-neighbor evidence.
+
+The current PR CI has Detect changes, deployment/migration safeguards and complete schema replay/lint
+passing; Android lint/assemble and emulator checks are still running. No new source, build, schema
+or unit-test work was performed during this documentation update.
+
+## Final N01–N05/A01–A05 client-specific disposition (2026-09-22)
+
+Coordinator confirms PR168 merged as `b30e0d395` after exact-head CI run
+`35746647258` passed. The following row-by-row disposition supersedes the earlier generic
+whole-stream table and records whether another local journey is independently actionable:
+
+- **N01 — notification delivery and continuation:** Existing web/native notification routes,
+  saved-record reads, login continuation, unread/preferences handling and the installed Android
+  list/filter/mark-read controls are covered by the retained reports and current N02 evidence.
+  Foreground/background/cold-start provider receipt, token rotation, physical Android/iPhone
+  delivery and provider-denied permission behavior remain unverified. No local source journey can
+  close those rows without APNs/FCM credentials or hardware; saved `Notification` rows must not be
+  presented as provider-delivery evidence.
+- **N02 — saved notification actions and destinations:** Web/API/SQL PR86 evidence covers read,
+  delete, HTTP failure/toast, lost reply, retry, duplicate tap, stale response and account-switch
+  retirement. Retained Android now covers list/filter/logout, Mark all with exact restoration,
+  single delete, Cancel, offline transport failure with optimistic rollback, reconnect retry and
+  a real `new_follower` row through read mutation to the native Auth Evan profile. A fresh iOS
+  installed destination and Android HTTP-5xx injection remain unrun; the latter is the same source
+  failure path already bound on web. Provider receipt and physical-device delivery remain external.
+  No non-redundant local repair is indicated.
+- **N03 — Pulse, Beacon and social identity:** Retained web/API/SQL and native evidence covers
+  discovery/follow/unfollow, Beacon fallback under the release flag, posting/reply/mute paths,
+  blocked access, identity separation and old-link/access-change invalidation. The Persona fixture
+  has no local-home residency context, so it does not prove the separate local-neighbor
+  Follow-row-hide branch. Native discovery/post/reply/mute on a fresh release cohort, provider
+  freshness and any product decision that changes Persona/UserBlock/local-neighbor scope remain
+  open; a new native build is unnecessary unless the coordinator assigns that distinct fixture
+  journey.
+- **N04 — social safety:** Block/unblock from the existing profile/settings paths, blocked DM
+  denial, reverse-block persistence, report creation/idempotence/failure/retry, access/cache/error
+  behavior and installed Android safety paths are recorded. Remaining work is hosted moderation or
+  shared-owner schema/FK integration and any iOS physical/provider boundary; no independent local
+  source repair is indicated. Existing UserBlock, UserProfileBlock, PersonaBlock and Relationship
+  scopes remain distinct.
+- **N05 — reminders/calendar:** Natural reminder worker, pause/resume, retry/failure and
+  authorized destination evidence are retained, and the daily-agenda web preference has a real
+  UI/API/SQL persistence proof. Source reconciliation found no daily-agenda producer/consumer or
+  settled schedule/recipient/channel/retry contract. Delivery cannot be verified locally until an
+  owner defines that policy and assigns a scheduler/provider; a saved preference alone is not
+  delivery evidence.
+- **A01 — signup, verification and recovery:** Real web signup/email verification/reset and the
+  accepted native account journeys are recorded, including actionable unverified-login feedback.
+  External Google/Apple consent/callback/provider failures and physical-provider boundaries remain
+  unavailable locally; no additional local auth screen repair is indicated.
+- **A02 — sessions and account lifetime:** Natural refresh, transient retry, logout failure/retry,
+  remote sign-out, lock-down, account switching and protected local-data retirement use accepted
+  evidence. Remaining physical provider revocation, cold-process/device and external OAuth return
+  boundaries require provider/device capability; no shared auth edit is proposed.
+- **A03 — shared storage:** Existing profile/document picker UI, local profile/portfolio/home reads,
+  quota route and exact cleanup are recorded. A real native chooser-to-byte upload and hosted
+  S3/CloudFront permissions/lifecycle/quota/provider failure remain unverified and require shared
+  storage ownership or provider credentials; no local replacement is justified.
+- **A04 — provider dependencies/OAuth:** Current local Google/Apple capability reads and invalid
+  provider handling are recorded, with no activation or external callback followed. Real provider
+  consent/callback/failure, hosted address/storage dependencies and production activation remain
+  external/shared-owner boundaries; no local provider configuration change is authorized.
+- **A05 — remaining reachable actions:** Web profile report/search/edit and audience/mailbox
+  boundaries plus installed Android profile save are recorded; the mailbox route-order repair is
+  integrated as PR178 `715ccd8c0`. Remaining Marketplace/subscription/booking/wallet/mail/search
+  actions and Home/payment findings belong to their owners; they require source ownership or an
+  explicitly assigned route fixture rather than another Stream 3 duplicate audit.
+
+This is the final client-specific accounting for this pass. It separates implementation and local
+UI/API/SQL evidence from CI/merge state and provider, device, policy and ownership boundaries. No
+unit-test coverage is claimed or required, and no new tracker or raw log was added.
+
+
+## N02 installed Android HTTP 5xx delete rollback and retry (2026-09-22 addendum)
+
+This closes the previously listed Android HTTP-5xx injection gap for the locally retained
+implementation. I reused the existing Notifications screen, confirmation, DELETE handler and
+owned PostgREST/SQL fixture; no application, schema, design, or migration change was made. The
+retained installed APK was SHA-256
+`83cc0db08992e83dd1faa87a7baacdf582624a3e847f965f6361ab5fdd2cdf93`, running against the owned
+API on port 18130 and PostgREST/SQL on 64531/64532. Auth Bob
+`c021d181-d7df-4ba9-9e49-fd1cdd6d5548` received disposable Notification
+`8559382b-224b-42cb-8b40-505316df9e9b` with type `stream3_notification_http500_check` and marker
+`n02-http500-r1`.
+
+Baseline fault: after confirming the existing long-press **Delete notification?** action, I
+revoked only `DELETE` on the existing `public."Notification"` table from `service_role`. The
+installed Android log recorded `HTTP DELETE -> 500 (145ms)`; the API recorded the real DELETE
+path and PostgreSQL `permission denied for table Notification`. SQL stayed at 12 Bob rows / 8
+unread / fixture 1 / target 1, so the row was not silently lost. After restoring the grant, the
+same installed row and confirmation path recorded HTTP 200 (123ms); SQL became 11 / 7 / 0 / 0
+and the existing screen no longer showed the fixture. The API was stopped cleanly, the grant was
+checked true, the disposable row was absent, and the installed account was logged out through
+Settings → Log out. The failure-state XML/screenshot was not retained before compaction; the
+sanitized Android HTTP receipt, backend 500 receipt, unchanged SQL counts and retained post-retry
+XML substantiate the result. No provider, physical-device, iOS, CI, hosted-migration or unit-test
+claim is made.
+
+Evidence: `n02-android-http500-delete-retry-20260922.json`,
+`n02-android-http500-delete-retry-http-receipt-20260922.json`, and `retry-after.xml` in the
+private durable bundle. This is an induced local database-permission fault and is separate from
+provider delivery. It complements, rather than duplicates, the accepted web PR86 failure/retry
+journey.
+
+## N03 installed Android local-neighbor block-state repair (2026-09-22 addendum)
+
+The accepted PR168 Android implementation had a concrete reopened-profile defect: its existing
+relationship endpoint reports `Relationship` only, while personal blocks are stored in
+`UserBlock`. After a real profile **More → Block this user**, the same screen hid Follow/Connect,
+but a fresh deep-link reopen fetched profile/posts/relationship and restored Follow/Connect even
+though the Bob → Evan `UserBlock` row still existed. The canonical local-neighbor source was
+checked before editing: `GET /api/users/id/:id` derives verified residency from existing
+`HomeOccupancy`, and the existing `ProfileFollowRow` renders from `canFollow`; no new table or
+scope was needed.
+
+Focused repair on branch `local/stream3-android-integration` extends the existing
+`PublicProfileViewModel.loadRelationship` path. It reads the existing `/api/users/blocked` list
+before calling the existing relationship endpoint; a matching personal `UserBlock` sets
+`canFollow=false`, `isFollowing=false`, and `connection=Blocked`. A blocked-list read failure
+fails closed with non-actionable actions and the existing truthful toast rather than restoring
+Follow/Connect. Relationship, PersonaBlock and other scopes remain distinct. The existing visual
+layout/navigation was preserved and no unit tests, schema/model files or migrations were added.
+
+The focused Android build passed (`./gradlew :app:assembleDebug`, 43 tasks, `BUILD SUCCESSFUL in
+1m 24s`); installed APK SHA-256 is
+`2728688a30a78449c990c302ebc72053802322772a990e7a3a6030e2265d504a`. With an owned canonical
+fixture (existing Home `2ca4bc33-a285-4faa-9420-48edb97eb603`, Bob owner and Evan member both
+active/verified, existing Evan LocalProfile temporarily exposing the local badge), the installed
+UI showed Verified neighbor + Follow/Connect before blocking. Real profile block POST 200 hid the
+actions. A fresh deep-link reopen on the repaired APK kept Message + Verified neighbor and showed
+zero Follow/Connect. Settings → Blocked users listed Evan; existing Unblock removed the row, and
+a fresh reopen restored Follow/Connect. With `SELECT` on `public."UserBlock"` revoked, the real
+`GET /api/users/blocked` returned 500; the repaired profile stayed non-actionable with no
+Follow/Connect and the UserBlock row remained. The SELECT grant was restored before cleanup.
+Exact cleanup removed the UserBlock, restored the LocalProfile overlay, deleted the two
+HomeOccupancy rows and Home; final counts were block=0/home=0/occupancy=0/overlay=0. The
+installed account was logged out through Settings and the API was stopped cleanly.
+
+Evidence: `n03-android-local-follow-block-repair-20260922.json`, its sanitized HTTP receipt,
+`n03-local-before.xml/png`, `n03-local-after-block.xml/png`,
+`n03-local-blocked-refresh.xml/png` (pre-repair reproduction), `n03-repair-blocked.xml/png`,
+`n03-repair-unblocked.xml`, and `n03-repair-readfault.xml/png`. iOS installed behavior, physical
+provider/device behavior, CI/integration merge state and hosted moderation remain separate
+boundaries; this addendum claims only the verified Android local-profile path.
+
+## Stream 3 handoff reconciliation after the 2026-09-22 native passes
+
+The durable private evidence bundle now contains 181 files; refreshed MANIFEST SHA-256 is
+`637c0364dd9c2e700270ef1dc9e328d66b0a2005601dca503cc9be5a5f572e92`. Raw logs and credentials
+remain outside the bundle. Implementation completion, local UI/API/SQL success, CI/merge state,
+and external provider/device limits are intentionally reported separately:
+
+- **N01:** local saved-record/list/preferences and installed Android controls are evidenced; APNs/FCM provider delivery, token rotation, physical devices, and true foreground/background/cold-start delivery remain unavailable.
+- **N02:** web PR86 and installed Android list/filter/read/delete/cancel/offline rollback/retry/new-follower destination plus the induced Android HTTP-5xx rollback/retry are evidenced; iOS installed destination and provider delivery remain unavailable.
+- **N03:** web/API/SQL and Android discovery/follow/unfollow/post/reply/mute/identity/block paths are evidenced, including the repaired reopened local-neighbor block state; fresh iOS cohort/provider freshness and any policy change across Persona/UserBlock/local-neighbor scopes remain unverified.
+- **N04:** local block/unblock, DM refusal, reporting/idempotence/failure/retry and access/cache/error paths are evidenced; hosted moderation/shared-owner schema, iOS installed and provider boundaries remain outside this worktree.
+- **N05:** reminder worker and daily-agenda preference persistence are evidenced; no source producer/consumer or settled delivery policy exists for daily-agenda delivery, so delivery is not claimed.
+- **A01:** signup, verification, recovery and native account flows are evidenced; external Google/Apple consent/callback and provider failures remain unavailable.
+- **A02:** refresh, retry, logout, remote sign-out, lock-down, account switching and local-data retirement are evidenced; physical provider revocation/cold-process boundaries remain unavailable.
+- **A03:** existing profile/document-picker contracts, reads and quota are evidenced; native chooser-to-byte upload and hosted storage permissions/lifecycle remain shared-provider boundaries.
+- **A04:** local provider capability and invalid-provider handling are evidenced; real consent/callback/production activation remains unavailable and was not changed.
+- **A05:** reachable web/native report, search, edit, audience, mailbox and profile actions are evidenced; booking/payment/Home findings remain with their owners. The `/signup` booking misroute is already owned by Stream 1 and was not duplicated here.
+
+No new unit tests were added per user direction. The workstream is ready for coordinator review of the
+Android source commit and status/evidence commit; no merge, hosted migration, provider activation,
+or independent CI claim is made here.
+
+
+## A03 Android local chooser-to-byte upload boundary (2026-09-22 addendum)
+
+To close one independently local A03 acceptance gap without holding a heavy build slot, I reused
+the installed Android APK (SHA-256
+`2728688a30a78449c990c302ebc72053802322772a990e7a3a6030e2265d504a`) and the existing profile
+Portfolio screen. After real local Bob authentication, **Profile → Portfolio → Add portfolio
+item** opened the existing `ActivityResultContracts.GetContent("*/*")` flow. Android DocumentsUI
+showed the owned Downloads file `stream3-portfolio-r1.png`; selecting it returned the real
+content URI, display name, MIME type and 68 bytes to the existing sheet, which populated the
+filename and title. Tapping the existing Add control issued the real multipart
+`POST /api/files/portfolio` through API 18130.
+
+The request returned HTTP 500. The backend receipt is the existing route's S3 thumbnail/original
+upload path failing with `Resolved credential object is not valid`; the local runtime has no valid
+AWS bucket/credential configuration. SQL showed zero Bob `File` rows for the marker and zero Bob
+File rows overall, so no partial record was left. The emulator file was deleted, Bob logged out
+through Settings, and the API stopped cleanly. This proves the chooser and byte-read path through
+the app's existing caller and API boundary, while the final hosted object/persistence step is
+blocked by the shared-storage provider configuration. No local replacement, schema change, UI
+redesign, provider activation or unit test was added; an owner with approved isolated S3-compatible
+credentials must rerun the same existing journey for successful hosted persistence evidence.
+Evidence: `n03-android-portfolio-chooser-failure-20260922.json`.
+
+## PR195 CI repair and current head (2026-09-22 addendum)
+
+Fresh current-master CI run `35763514679` exposed 21 existing
+`PublicProfileViewModelTest` failures caused by the new block-list call being evaluated for
+established Persona test profiles whose mocks intentionally do not provide a blocked-list result.
+The focused source repair scopes the already verified personal UserBlock visibility check to the
+Local profile kind—the concrete reopened local-neighbor gap—while leaving Persona, Relationship and
+other block scopes unchanged. Existing class verification then passed with
+`./gradlew :app:testDebugUnitTest --tests app.pantopus.android.ui.screens.profile.PublicProfileViewModelTest`
+(`BUILD SUCCESSFUL`, 37 tasks, 2m43s). The repair is commit `3b374454a` on PR [#195](https://github.com/WangPantopus/skinny-pantopus/pull/195), still one changed production file relative to current master; fresh exact-head CI is running. No new tests were written or modified.
+
+The private durable bundle now contains 182 files; refreshed MANIFEST SHA-256 is
+`0c14162f655e7b7ec546201eac52a4206032df56f9e3f990073f75c0a9c027ea`.
+
+
+## N02 retained iOS saved-notification destination capability check (2026-09-22 addendum)
+
+A bounded read-only check used the owned booted **Pantopus Stream3 Social R2** simulator
+`0AE16FA0-E244-414F-86C8-24893BDFD979` (iOS 26.5). `xcrun simctl listapps` confirmed the
+installed `app.pantopus.ios` build 1.0.0 (1); `xcrun simctl launch` returned process 58323 and a
+screenshot captured the actual Pantopus sign-in screen. It showed the existing security message
+**You were signed out for security. Sign in again.** and a masked remembered Auth Evan account.
+
+This check did not mutate simulator state, restart the device, build/install, inject a notification,
+or enter credentials. The current session exposes no CUA native app/accessibility surface
+(`getApp("Simulator")` is invalid), so I could enumerate/launch/capture but could not navigate the
+installed UI to a saved notification row or destination. The iOS saved-notification destination
+therefore remains explicitly unverified; this is a precise simulator-control/session boundary,
+separate from APNs delivery and separate from Android/web evidence. Evidence:
+`n02-ios-saved-notification-capability-20260922.json` and `ios-capability-20260922.png`.
+
+The private durable bundle now contains 184 files; refreshed MANIFEST SHA-256 is
+`30fd45250bd87efe01dfb803d3c8635f771f75e1df04faf0e6107bd7b9ef99ed`.
+
+
+## A02 installed Android cold-process/session recovery (2026-09-22 addendum)
+
+I reused the installed Android build and the existing Bob fixture for the one locally actionable
+A02 boundary that remained distinct from the accepted web natural-expiry, synthetic retry and
+two-context remote sign-out evidence. A real Android login (`POST /api/users/login` 200) opened the
+existing hub with Auth, Notifications, Menu and setup cards. I then force-stopped the app process
+and relaunched the existing `MainActivity` without clearing app data or touching the database.
+
+The socket disconnected at 18:50:36.850Z. On cold relaunch the API received no second login; instead
+`GET /api/users/profile` 200 at 18:50:40.344Z was followed by a new socket session and the normal
+hub/chat/discovery/notification reads. The installed app first showed its existing notification
+permission prompt; tapping the existing **Don’t allow** control returned to the authenticated hub
+showing Auth, Notifications, Menu and the existing setup cards. This binds local process retirement
+→ protected session restoration → real UI/API continuity. Settings → Log out then returned Sign in,
+`POST /api/users/logout` 200, the follow-up hub request was no-token/401, and the API stopped
+cleanly. No source, schema, provider, design or unit-test change was made.
+
+Evidence: `a02-android-cold-process-recovery-20260922.json`, `a02-cold-before.xml`, and
+`a02-cold-after.xml`. The post-permission hub XML was not retained separately; the visible state
+and API receipts are recorded honestly. This does not claim physical keychain failure, provider
+revocation, APNs/FCM delivery or hosted OAuth behavior. The durable private bundle now contains
+187 files; refreshed MANIFEST SHA-256 is
+`3f0a7bac2613d80a2a6d314e1b8eaa51c5671b4a412fc071aec989fc3a3edb47`.
+
+## A05 installed Android profile readback fault and retry (2026-09-22 addendum)
+
+The existing backend repair for the profile PATCH readback contract had already been verified at
+HTTP/API level, but its user-facing Android fault/retry state had not been exercised. I reused the
+existing installed APK (`2728688a30a78449c990c302ebc72053802322772a990e7a3a6030e2265d504a`) on
+`emulator-5554`, the existing **Settings → Edit profile** screen, and the existing
+`PATCH /api/users/profile` caller. With the disposable Auth Bob fixture, I entered temporary
+`Fault` / `Probem` values and tapped the existing Save control after revoking only
+`SELECT` on `public."UserSkill"` from `service_role`. The real request returned HTTP 503 with
+`PROFILE_READBACK_UNAVAILABLE`; the server logged that the profile write completed but skills
+readback was unavailable. The installed screen retained **2 unsaved changes** and did not show a
+false saved state. This is the real UI/API boundary for the repaired readback error path, not a
+mocked response.
+
+After restoring the existing `UserSkill` SELECT grant, the same pending form was retried through
+the same Save control. The real request returned HTTP 200; the screen showed **All changes saved ·
+just now**, and the server logged `Profile updated`. The temporary first/last name write was then
+removed by an exact SQL fixture cleanup because the public PATCH validation requires string name
+parts; the User row ended with `first_name=NULL`, `last_name=NULL`, `middle_name=NULL`, `name='Auth Bob'`,
+`bio=NULL`, zero Bob `UserSkill` rows, and the SELECT grant restored. Settings logout returned
+HTTP 200 and the local API process was stopped. No application, schema, design, provider or unit
+-test change was made.
+
+Evidence: `a05-android-profile-readback-fault-retry-20260922.json` and
+`a05-android-fault-evidence-20260922/{fault-before.xml,fault-after-503.xml,retry-200.xml}`.
+The two fault-state XML captures intentionally have the same visible state because the repaired
+failure preserves the pending form; the distinct retry XML records the transition to saved. This
+proves local installed UI/API/SQL error and retry handling. It does not claim hosted provider,
+iOS or physical-device behavior.
+
+## Current row-accounting correction after the native addenda (2026-09-22)
+
+The older generic row table above predates the latest native evidence. The current accounting is:
+
+- **N01:** local saved-record/list/preferences and installed controls are evidenced; APNs/FCM
+  delivery, token rotation, physical-device delivery, and true provider foreground/background/
+  cold-start behavior remain unverified.
+- **N02:** the authoritative remaining criterion is physical Android notification/device acceptance.
+  Installed Android emulator list/filter/read/delete/Cancel/offline rollback/reconnect retry,
+  `new_follower` destination, and induced Android HTTP-5xx rollback/retry are supporting emulator
+  evidence only; physical Android acceptance remains open because no physical Android is available.
+- **N03:** web/API/SQL and Android discovery/follow/unfollow/post/reply/mute/identity/block paths,
+  including reopened local-neighbor block visibility and fail-closed blocked-list read fault, are
+  evidenced. Fresh iOS/provider freshness and policy changes across Persona/UserBlock/local-home
+  scopes remain outside this local runtime.
+- **N04:** local block/unblock, blocked DM refusal, report idempotence/failure/retry, access/cache/
+  error paths and installed Android safety are evidenced. Hosted moderation/shared-owner schema and
+  iOS/provider boundaries remain owner work.
+- **N05:** reminder worker/pause/retry and daily-agenda preference persistence are evidenced; no
+  daily-agenda producer/consumer or settled delivery policy exists, so delivery is not claimed.
+- **A01:** web/native signup, verification, recovery and unverified-login feedback are evidenced;
+  external Google/Apple consent/callback/provider boundaries remain unavailable.
+- **A02:** refresh/retry/logout/remote sign-out/lock-down/account switching/local-data retirement
+  and installed Android cold-process session restoration are evidenced; physical provider
+  revocation and external OAuth return remain unavailable.
+- **A03:** existing document-picker/chooser-to-byte path and local reads/quota are evidenced; the
+  real hosted portfolio upload returned the provider's existing credential 500 with no partial row,
+  so hosted S3/CloudFront success and lifecycle remain shared-provider boundaries.
+- **A04:** the authoritative row is address/provider coverage: activated Smarty, geography/unit
+  disambiguation and legitimate unavailable responses. Real local full-address and unit routes now
+  return explicit unavailable/manual-review envelopes and the installed Add Home form preserves its
+  draft with retry/edit and a disabled continuation; activated external provider success remains
+  unavailable without provider ownership.
+- **A05:** web report/search/edit/audience/mailbox and installed profile save are evidenced; this
+  addendum now also covers installed profile readback HTTP-503 preservation and same-form HTTP-200
+  retry. Marketplace/subscription/booking/wallet/mail/search and Home/payment findings remain with
+  their owners.
+
+The durable private bundle now contains 191 files with MANIFEST SHA-256
+`f72d89f805e0592d0a7d967e2ed1afb121dfe10ad81212543b2c2efc4f892107`. No unit-test coverage is
+claimed or required; implementation, local UI/API/SQL behavior, CI, merge, and external provider
+boundaries remain separately reported.
+
+## PR195 exact-head CI completion (2026-09-22 addendum)
+
+The fresh current-master CI run `35768401037` for PR [#195](https://github.com/WangPantopus/skinny-pantopus/pull/195)
+completed successfully at head `3b374454ad07060cf5dcaa1ce02fc48b3be4c88e`. Android **Lint, test,
+assemble** and **Instrumented tests (emulator)** are SUCCESS, as are deployment/migration safeguards,
+complete schema replay/lint, change detection and the aggregate **CI OK** job. Backend, web, iOS and
+seeder jobs were correctly skipped by change detection because this PR contains the focused Android
+production repair only. The earlier exact-head failure was superseded by this scoped Local-profile
+guard repair; no merge was performed here. Coordinator review/merge remains the integration boundary.
+
+## Authoritative N02/A04 row mapping correction (2026-09-22)
+
+The authoritative backlog in `docs/REMAINING_WORK_2026-09-11.md` defines **N02** as:
+“Physical Android notification/device acceptance remains unverified; emulator delivery is not
+hardware acceptance. No physical Android is currently available in the recorded setup.” The
+installed Android/emulator notification journeys and the induced HTTP-5xx rollback/retry remain
+valid emulator/local evidence, but they do not close that physical-device criterion. This row has
+no additional iOS or provider requirement in the authoritative wording, so those are not counted
+as N02 gaps here.
+
+The same backlog defines **A04** as: “Remaining address/provider coverage, including activated
+Smarty scenarios, geography/unit disambiguation and legitimate unavailable responses. Prepare
+what is possible on existing/free capacity first.” OAuth consent/callback belongs to **A01** and
+is removed from the A04 accounting. A bounded real local A04 route pass used the existing
+`POST /api/v1/address/validate` and `POST /api/v1/address/validate/unit` handlers with real Auth
+Bob bearer sessions and providers intentionally absent/disabled in the retained local
+configuration. Full validation returned HTTP 200 with `ADDRESS_VALIDATION_UNAVAILABLE`,
+`SERVICE_ERROR`, confidence 0 and `manual_review`; a temporary isolated multi-unit
+`HomeAddress` fixture (`missing_secondary_flag=true`) plus unit `2B` returned HTTP 200 with
+`ADDRESS_REVALIDATION_UNAVAILABLE` and the same explicit unavailable/manual-review verdict. Both
+sessions logged out HTTP 200; the temporary address was deleted (zero rows, no Home or
+AddressClaim), and the API stopped. No provider activation, purchase, successful external
+Smarty/geography result or schema/application change was made.
+
+Evidence: `a04-address-unavailable-20260922.json`; the raw local API log remains operational only.
+The durable private bundle now contains 192 files with MANIFEST SHA-256
+`758a5f48e9757539b69863d1bf043724573c3724acc0ccf1f62094c51a814b1a`.
+
+## Exact ten-row acceptance mapping for next handoff (2026-09-22)
+
+This block quotes the current authoritative criterion and binds it to the evidence above. It
+supersedes earlier shorthand rows while preserving their reports.
+
+- **N01 criterion:** “Close remaining release-build notification states across platforms: exact
+  post/chat/task destinations, foreground/background/cold start, permission denial, login
+  continuation, token changes, account switching and unread state. Preserve completed evidence
+  rather than rerunning it blindly.” Existing web/native notification routes, saved-record reads,
+  unread/preferences, Android emulator actions and installed cold-process/session continuity are
+  retained. Release-build cross-platform foreground/background/cold-start delivery, token-change
+  behavior and physical-device delivery remain unverified.
+- **N02 criterion:** “Physical Android notification/device acceptance remains unverified; emulator
+  delivery is not hardware acceptance. No physical Android is currently available in the recorded
+  setup.” Installed Android emulator list/filter/read/delete/Cancel/offline rollback/reconnect
+  retry, destination and induced HTTP-5xx rollback/retry are recorded as emulator evidence only.
+  The physical Android acceptance row remains open solely because the required device is unavailable.
+- **N03 criterion:** “Release-candidate Pulse and Beacon journeys must preserve address-free
+  discovery, explicit following, eligible posting, conversation/reply return, mute/unfollow and
+  private/public identity boundaries.” Web/API/SQL and retained Android discovery, follow/unfollow,
+  Beacon fallback, posting/reply, mute and identity separation are recorded. A fresh release-
+  candidate native cohort for the complete Pulse/Beacon sequence remains unverified; no policy or
+  provider claim is inferred from the debug APK evidence.
+- **N04 criterion:** “Reporting, blocking, moderation and old/shared/deep-link access need a
+  usable end-to-end safety workflow under the final release flags. Draft PR51 at `dfc860bfe` has
+  bounded browser/HTTP/PostgreSQL and regression evidence; native lifetime, real socket/provider
+  delivery and wider entry-point acceptance remain open.” Web/API/SQL report persistence,
+  idempotence/failure/retry, block/unblock, DM denial, cache/access/deep-link checks and installed
+  Android safety are recorded, including PR195’s fail-closed local-neighbor visibility repair.
+  Moderation processing, full native lifetime/socket/provider delivery and any wider entry point
+  outside the exercised inventory remain open.
+- **N05 criterion:** “Any promised calendar/reminder delivery must arrive once, open the correct
+  authorized destination and honor preferences; saved schedule data is separate evidence.” Existing
+  reminder worker/pause/retry/destination evidence and real preference persistence are recorded.
+  No daily-agenda producer/consumer or settled delivery policy exists in this scope, so a saved
+  preference is not counted as delivery.
+- **A01 criterion:** “Remaining real signup, verification/recovery email and OAuth callbacks,
+  including Apple/Google, cancellation, provider failure and return to the original authorized
+  destination.” Web signup/email verification/recovery and accepted native account flows are
+  recorded, including actionable unverified-login feedback. External Apple/Google consent,
+  cancellation/failure callbacks and authorized return remain unverified.
+- **A02 criterion:** “Real onboarding/account session expiry, revocation, logout/account switching
+  and local protected-data retirement across provider and client combinations not covered by
+  controlled local login.” Natural refresh/retry, logout failure/retry, remote sign-out, lock-down,
+  account switching, local-data retirement and installed Android cold-process restoration are
+  recorded. Provider-combination revocation and other client/provider combinations outside the
+  controlled local runtime remain unverified.
+- **A03 criterion:** “Hosted media/document upload, preview, replacement, deletion, permissions,
+  quotas and file cleanup under actual Auth/Storage configuration.” Existing profile/document
+  screens, reads/quota and Android chooser-to-byte request are recorded. The real hosted portfolio
+  request reached the existing S3 path and returned its credential 500 with no partial row; hosted
+  success and complete preview/replacement/deletion/permission/lifecycle evidence require shared
+  storage credentials/ownership.
+- **A04 criterion:** “Remaining address/provider coverage, including activated Smarty scenarios,
+  geography/unit disambiguation and legitimate unavailable responses. Prepare what is possible on
+  existing/free capacity first.” The real local full-address and unit-revalidation routes now
+  return explicit `ADDRESS_VALIDATION_UNAVAILABLE` and `ADDRESS_REVALIDATION_UNAVAILABLE` verdicts
+  under the existing disabled-provider configuration, with an isolated multi-unit fixture and
+  exact cleanup. Activated Smarty/geography success and external provider scenarios remain
+  unavailable without provider ownership/credentials; no activation or purchase was made.
+- **A05 criterion:** “Reconcile all reachable marketplace, subscription, booking, wallet, mail,
+  profile, search and adjacent actions against the current release inventory. Old static audits
+  are discovery inputs, not proof that each item is still broken.” Web report/search/audience/
+  mailbox/profile edit and installed profile save plus the installed profile readback fault/retry
+  are recorded. Marketplace/subscription/booking/wallet/search-adjacent and Home/payment findings
+  remain with their owners; the `/signup` booking misroute was not duplicated.
+
+No unit-test coverage is claimed or required by the user direction. The remaining items above are
+explicit device, release-candidate, provider, policy or owner boundaries rather than silently
+converted implementation claims.
+
+## A04 installed Add Home unavailable response and retry (2026-09-22 addendum)
+
+The route-only A04 unavailable result was followed through the existing installed Android caller to
+check that a successful HTTP 200 envelope cannot look like verified success or discard the address
+form. On `emulator-5554` with real Auth Bob login, **Hub → Start verification → Add address
+manually** accepted the existing street/unit/city/state/ZIP fields and issued the real
+`POST /api/v1/address/validate` against the same local runtime with Google/Smarty unavailable.
+The response was HTTP 200 with `error_code=ADDRESS_VALIDATION_UNAVAILABLE`,
+`verdict.status=SERVICE_ERROR`, `address_id=null`, confidence 0 and `next_actions=[manual_review]`.
+
+The existing Android screen rendered **Address verification is unavailable. Try again.** with
+**Try again** and **Edit address** actions. It retained all entered fields, showed the existing
+step-2 property-review surface, and kept **Continue** disabled; it did not create a Home or claim
+or present a verified result. Tapping **Try again** repeated the same real HTTP request and left the
+same banner, fields and disabled continuation. Going back opened the existing **Discard your
+progress?** dialog; choosing **Discard** removed the draft, and Settings → Log out returned HTTP
+200. The API process then stopped cleanly.
+
+This is installed UI/API behavior on the existing caller, not a mocked response. The server's
+`manual_review` next action is recorded as an explicit provider/policy boundary; the current client
+offers retry/edit and does not submit a manual review case. No application repair was justified
+because the draft is preserved, the failure is visible and continuation is blocked. Evidence:
+`a04-address-ui-unavailable-20260922.json` and
+`a04-address-ui-evidence-20260922/{form-before.xml,after-unavailable.xml,after-retry.xml,after-unavailable.png,after-retry.png}`.
+The durable private bundle now contains 198 files with MANIFEST SHA-256
+`1fa796d1b6f08e89b549f0aadf0f6986241fbd511184ff2825dc889071957f26`.
+
+## Minimal prerequisites for the remaining open criteria (2026-09-22)
+
+No further local variant is justified after the accepted A04 unavailable UI/retry pass. The next
+agent should start only when the corresponding capability is present:
+
+- **N01:** a release-candidate build on the target platforms, an authorized notification provider
+  fixture with token rotation, and physical-device access for foreground/background/cold-start and
+  permission-continuation evidence.
+- **N02:** a physical Android device and release build capable of receiving the authorized
+  notification fixture; emulator evidence cannot substitute for this row.
+- **N03:** an assigned release-candidate native build slot with final Pulse/Beacon flags and
+  disposable address-free identities/posts/replies so the complete discovery → follow → eligible
+  post → reply return → mute/unfollow → private/public identity sequence can be exercised.
+- **N04:** a moderation owner who can provide the final release flags, moderation processing
+  disposition and any approved socket/provider fixture needed beyond the recorded local HTTP/SQL
+  and installed Android safety paths.
+- **N05:** a product owner must define the daily-agenda producer, recipient/channel, exact-once
+  timing, authorized destination and retry policy; then an assigned scheduler/provider runtime is
+  required. A saved preference cannot supply those missing semantics.
+- **A01:** authorized Apple/Google OAuth client credentials, redirect origins and consent/callback
+  environments, plus provider failure/cancellation controls for returning to a protected original
+  destination.
+- **A02:** approved provider revocation/expiry controls and at least the required client/device
+  combinations for keychain/session retirement; controlled local login cannot prove them.
+- **A03:** shared storage owner approval plus valid isolated S3/CloudFront credentials, bucket,
+  quota/lifecycle and cleanup fixture for hosted byte upload/preview/replacement/deletion.
+- **A04:** activated Smarty/geography/unit provider credentials or a free approved provider fixture
+  that yields real candidate/disambiguation outcomes. The legitimate-unavailable response and
+  installed retry/draft behavior are already accepted locally.
+- **A05:** route ownership and authorized fixtures for Marketplace, subscription, booking, wallet,
+  mail/search-adjacent and Home/payment actions; Stream 3 should not duplicate those owners' audits.
+
+These are capability prerequisites, not new backlog rows. No provider activation, purchase, schema
+change, design change or unit-test file was added.
+
+## N03/N04/N01 native-social-r1 — installed iOS+Android journeys verified; 8 defects reproduced, 6 PRs (September 22)
+
+Branches (each from master c1280e078, none merged): backend `codex/stream3-userblock-content-gate`
+29951b76a → PR163; iOS `codex/stream3-ios-push-tap-main-thread` 579a57fe7 → PR164,
+`codex/stream3-ios-deeplink-surface` 8890d1a58 → PR165, `codex/stream3-ios-social-follow-block-chat`
+8b4d47c0a → PR166; Android `codex/stream3-android-deeplink-location` 32a216f9a → PR167,
+`codex/stream3-android-social-follow-block-chat` f248ce8e9 → PR168. Verification builds came from
+local integration branches (iOS 4adcc12c8 = 164+165+166, Android 827f28a08 = 167+168), one native
+build at a time. Retained API restarted once from the exact captured recipe (80982 → 49623) to load
+PR163; Next 36139, DB, Mailpit and both devices retained.
+
+Runtime/actors: iOS 0AE16FA0 as Evan, Android emulator-5554 as Bob (later Evan for the account
+switch). Evan's fixture password was rotated to a throwaway through the REAL forgot/reset flow
+(pantopus://auth/reset-password deep link) because the headless simulator offers no scriptable or
+pasteboard text path and the fixture value must never be printed; restored at cleanup by the same
+real flow from a script. Simulated GPS on both devices; the emulator's fused location never returned
+a fix (geo fix + test provider both failed) so Android posted to Connections.
+
+Verified natively (real API/SQL receipts per journey): Pulse Nearby/Connections feed load, empty
+state, injected 503 error frame + Try again recovery (both); address-free rendering (city/coords
+label only, no street); iOS Nearby Ask post via fresh GPS (POST /api/posts 201, ask_local/nearby),
+Android Connections post (201); shared post link to another user's Nearby post (Android 200);
+comment + threaded reply with post_commented / comment_replied notifications and exact foreground
+tap destinations on both platforms; Beacon profile, follow/unfollow of a user and (after the fix) of
+a Beacon; report post (PostReport pending), report user (UserReport pending) on both; block from the
+profile on both, Settings → Blocked users list/unblock/re-block with one DELETE for a double tap
+(Android), block while a DM is open (Android details sheet, thread closes); DM after block refused
+403 in both directions (no ChatMessage written); held block reply (private hook, 25 s auto-release);
+simctl push foreground banner + tap destination; Android background (HOME→link) and cold start
+(force-stop→link) destinations; POST_NOTIFICATIONS denial (system prompt → logcat only, no in-app
+state); Android sign-out → deferred post link → login form → sign in as Evan → continuation to the
+post and Evan-only unread count.
+
+Reproduced defects → repairs: (1) iOS background push banner tap crashed (SIGABRT, UIKit
+state-restoration assert in the async didReceive completion) → PR164; (2) iOS Place/Mail-tab deep
+links rendered under the Nearby→Pulse sheet (profile, Beacon, notifications; 3 occurrences) → PR165;
+(3) new_follower link `/<username>` unroutable natively (tap marked read, no navigation) → PR165 +
+PR167; (4) Beacon Follow dead-ended on the flag-gated fan-handle-suggestion 404 under the release
+default → plain-follow fallback PR166 + PR168; (5) UserBlock did not gate follow/feed/post
+reads/comments — blocker followed the blocked user (notification delivered), blocked author's post
+readable via shared link → PR163 (backend) + Follow row hidden after block PR166/PR168; (6) chat 403
+rendered as bare "Failed to send · Retry" → banner copy PR166/PR168; (7) Android composer "Current
+Location" never requested the runtime permission → PR167; (8) Android `pantopus://feed` from a
+child screen left the child on top (recorded, not fixed — navigateToRootTab restoreState).
+
+Re-verified on the rebuilt iOS app: sheet dismissed and Notifications visible on the link;
+new_follower tap opens the profile; Beacon follow → suggestion 404 → POST /api/personas/:id/follow
+201 → "You're following" step (Dana got persona_follow); refused send shows "You can't send messages
+in this conversation."; background banner tap keeps pid 52093 (0 crash reports) and opens the room.
+Backend gate on the restarted API: Bob's post → 403 for Evan, blocked comments dropped, follow → 403.
+Backend Jest 10 suites/153 pass. Android: bare-username link opens the profile on the rebuilt app; the remaining Android re-verification (composer permission prompt, Beacon fallback, blocked Follow, refused-send copy) runs after the next Android rebuild carrying 87460475e (two emulator ANRs under xcodebuild host load ≈21 were starvation, not app defects).
+
+Limits: simctl push and adb `am start` stand in for APNs/FCM (no provider delivery); emulator, not
+hardware (N02 boundary unchanged); throwaway password rotation labelled; no report-outcome
+notification exists (no PostReport/UserReport reader) — moderation outcome is a product boundary;
+persona broadcasts remain readable/followable across a personal UserBlock (persona surfaces gated by
+PersonaBlock/tier only) — founder call; retained DB lacks find_businesses_nearby (matched-businesses
+404) and LocalProfile.verified_resident; Mapbox key absent so location_name is a coordinate string;
+iOS Ask title not rendered on native cards/detail (design question, web to compare); `PERSONA ·
+VERIFIED` chip shown for any user without home residency (derivedKind) — product call; iOS pushed
+Place-stack screens show duplicated back/title chrome (presentation, untouched).
+
+Cleanup: partial — pre-existing Notification read flags restored from preflight after an accidental "Mark all read" (Bob), POST_NOTIFICATIONS re-granted, iOS Beacon membership removed by unfollow; batch-1 rows (2 Posts, 2 PostComments, 1 PostReport, 2 UserReports, 2 UserBlocks, 1 UserFollow, 5 Notifications) still present for the remaining re-verification and are deleted child-first by `cleanup-social-r4-rows.py` (dry run recorded); Evan stays signed in on both devices for batch 2 and his fixture password is restored at the final cleanup by `restore-evan-password.py` (real reset flow).
+
+Evidence: `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream3-native-social-r1/`
+(preflight.json, n03/n04/n01-native-result.json, push payload, crash .ips, screenshots), 95
+files, MANIFEST **392f263c7ff73f9500a2c43cf05d1cb90c1ef3efea74fcb6e5f5bbb1ab1c3b14**. CI at publication: PR163 29951b76a FAILURE/SKIPPED/SUCCESS;PR164 579a57fe7 /SKIPPED/SUCCESS;PR165 ba8f7374e /SKIPPED/SUCCESS;PR166 8b4d47c0a /SKIPPED/SUCCESS;PR167 87460475e /SKIPPED/SUCCESS;PR168 f248ce8e9 /FAILURE/SKIPPED/SUCCESS; Runtime: API pid 49623:18130 (codex/stream3-userblock-content-gate 29951b76a), Next 36139:18131, containers *pantopus-stream3-block-r1 + pantopus-stream3-mail-r3, simulator 0AE16FA0 (installed local/stream3-ios-integration e86b9fe5b = PR164+165+166), emulator-5554 (installed 827f28a08 = PR167 first commit + PR168; rebuild with 87460475e pending). Next: finish the Android re-verification, run touched unit suites, batch-1 row cleanup, then batch 2 rows (A05 native sweep → A03 → N05 → A02 → A01 → A04/N02 notes).
+Open founder questions: personal block vs persona surfaces; Ask title rendering; PERSONA·VERIFIED chip semantics; report-outcome notifications.
+
+
+## Founder stop — native-social-r1 state at 09:25UTC (September 22)
+
+Stopped on instruction before the Android on-device re-verification finished. Everything is
+committed and pushed; no build is running. Branches/heads/PRs: backend
+`codex/stream3-userblock-content-gate` 29951b76a → PR163 (CI: privacy Gate 3a fails because the
+new top-level require shifted the allowlisted `routes/users.js:306` compat line to :307 — remedy:
+inline the require at the follow-route use site or move the allowlist key; Jest passed); iOS
+`codex/stream3-ios-push-tap-main-thread` 579a57fe7 → PR164 (CI green), `codex/stream3-ios-deeplink-surface`
+ba8f7374e → PR165 (CI green; router widening withdrawn for the accepted unknown-path contract,
+replaced by a type-scoped `new_follower` link rewrite), `codex/stream3-ios-social-follow-block-chat`
+8b4d47c0a → PR166 (CI green); Android `codex/stream3-android-deeplink-location` 87460475e → PR167
+(CI green), `codex/stream3-android-social-follow-block-chat` f248ce8e9 → PR168 (CI: ktlint, three
+formatting findings listed in the PR); verification builds pushed as `codex/stream3-verify-ios-integration`
+e86b9fe5b and `codex/stream3-verify-android-integration` 10c4368c6 (never for merge); docs PR170.
+
+Reproduced/fixed: see the section above (8 defects, 6 PRs). Re-verified on device: all iOS fixes
+(sheet dismissal, new_follower tap → profile on the r4c build only for the list path, Beacon plain
+follow, refused-send banner, background push tap without crash) and the backend gate (403 post read,
+comments dropped, follow refused). Not re-verified: Android composer permission prompt, Android
+Beacon fallback / blocked Follow row / refused-send copy on the rebuilt APK (the installed APK is
+827f28a08 = PR167 first commit + PR168; the 87460475e rewrite is built locally but not installed);
+iOS DeepLinkRouter suites not rerun after the rewrite (last run on 46bde64f3: 123 executed, 3
+failures all from the withdrawn widening); Android unit suites not run.
+
+Evidence: `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream3-native-social-r1/`
+100 files, MANIFEST **9ff965be0d1042fc3e147ee15bb5224c1c2c500ede9bd59be251d9ee8721faf4** (result.md indexes
+every journey; crash .ips, push payload, cleanup/restore scripts included). Limits: simctl push and
+adb `am start` stand in for APNs/FCM; simulator/emulator only; Evan's password rotated through the
+real reset flow (throwaway, never the fixture value in transcripts).
+
+Runtime left running: API pid 49623 on 127.0.0.1:18130 (code = PR163 branch), Next pid 36139 on
+18131 (stream3-auth.localhost), containers `*pantopus-stream3-block-r1` + `pantopus-stream3-mail-r3`,
+simulator 0AE16FA0 signed in as Evan with build e86b9fe5b, emulator-5554 signed in as Evan (Bob
+signed out) with the 827f28a08 APK; emulator location permission revoked for the pending test.
+Rows created and NOT cleaned (guarded child-first script `cleanup-social-r4-rows.py` in the bundle):
+Posts 5f7a2322/b9cf8480, PostComments 60a4048a/b4691d46, PostReport de0dfb95, UserReports
+a492140b/ac8a85d3, UserBlocks 440b7047/acde5f0c, UserFollow 63bcd4ff, Notifications b35ea1b0/
+a78eb98a/93b05807/46375f39/04922c53. Evan has 2 active device sessions and the throwaway password
+(`restore-evan-password.py` restores it through the real reset flow); Bob's pre-existing notification
+read flags were restored and POST_NOTIFICATIONS re-granted.
+
+Exact next step: fix the two CI findings (PR163 inline require; PR168 ktlint), install the
+10c4368c6 APK, finish the four Android re-verifications, rerun the iOS DeepLinkRouter suites and
+the Android view-model suites, run the cleanup + password restore, refresh MANIFEST/docs, then
+batch 2 (A05 → A03 → N05 → A02 → A01 → A04/N02). START HERE note:
+`/private/tmp/pantopus-stream3-20260920-r1/RESUME-2026-09-22.md`.

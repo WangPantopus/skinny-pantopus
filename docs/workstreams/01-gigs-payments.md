@@ -1,4 +1,1193 @@
-# Stream 1 — Gigs and payments
+# Stream 1 — Gigs, payments and coordination
+
+## CURRENT RESUME SUMMARY — September 22, 2026
+
+This is the current takeover point. It supersedes the dated checkpoints below, which are preserved as history. The founder requested consolidation of **all three streams** before more feature work. No application change, new test or accepted-journey rerun was made for this handoff. Read the [shared handoff](../PROJECT_HANDOFF.md), [coordination state](README.md), and the existing [80-row backlog](../REMAINING_WORK_2026-09-11.md); this file indexes implementation and evidence, not a second backlog.
+
+### Source, publication and exact next integration
+
+- **Queue complete (22:40 UTC):** PR192 `37cb6d216`, PR193 `6f7c700e6`, PR194 `094ed5826` (both-import conflict resolution), PR195 `86f63a0ea` and PR196 `b36d379b2` merged serially, each after a fresh exact-head CI. **Final master `b36d379b2362cd35b2a15d86892400796304b46e`.** Master merges do not deploy (Deploy Backend steps skipped while disabled). Final aggregate master CI is run `35791178691`.
+- Application `/private/tmp/pantopus-paid-gig-integration` is now on local `codex/stream1-verification-20260922` at final master (clean, no commits). PR196's `codex/booking-cancellation-recovery` (`46330f275`) is merged and preserved. The historical `codex/paid-gig-integration` ref remains at accepted `a460fd5d18f4d77b20ea5e6fdef95c84866363ad`; do not reset it.
+- Coordinator checkout `/private/tmp/pantopus-pr192-integration` is detached at `094ed5826`. It is the source of the P09/P03 Android APK `db303e5b…` (ignored build outputs and pnpm backend deps only). PR34/47 are merged by the founder; PR46 remains untouched.
+- Docs PR161/170 are merged into the hub branch and land with PR174. The shared current summaries live only on `/Users/yingpengwang/pantopus-coordination`, branch `codex/workstream-coordination`.
+- PR190 merged `ea43d92b3` after exact `7a555c92e` / CI35771059661. Its integration checkout `/private/tmp/pantopus-pr190-integration` is clean on `codex/tip-wallet-release-delivery`. One worker conflict preserved both tip and won-dispute safeguards;128 existing relevant checks passed.
+
+### Completed implementation and verification to reuse
+
+This groups the full recorded work, including earlier fixes inside merged PR34/47. Exact source hashes, before/after receipts and original evidence-class limits remain in the dated sections below and their linked reports. Older test additions are historical artifacts; the current founder direction is **no new unit tests or coverage targets**.
+
+| Area and existing source | Completed repair / accepted verification | Publication / remaining limit |
+|---|---|---|
+| Assignment and Start Work: `backend/routes/gigs.js`, existing lifecycle helpers; native GigDetail view models and web My Bids cards | Restored409 conflict/503 recovery semantics; bound assignment identity, accepted timestamp and displayed terms; guarded duplicates and stale session/departure/reassignment callbacks. Actual HTTP/SQL races and installed iOS/Android Start Work evidence supersede the older source-only paragraphs. | Merged PR34/47; commits599de1586,9397e39a7,a65411758,4ad88ec11. No-show/fee policy remains P04/P05. |
+| Completion/approval/reopen and stop/refund command services and SQL | Protected original requests, immutable displayed terms, permission/receipt recovery and one stored transition;32 real HTTP/SQL completion-policy checks. Chrome actual TEST authorization→start→completion→owner capture; actual hold release/reopen and lost-response recovery;500c partial then750c remaining refund. | Merged PR34/47; no live funds, historical Connect or whole P04/P09 closure. |
+| Existing tip service/routes, retained commands and web/native receipts | Original request/provider parameters frozen before provider creation; reserve/check/resume/cancel/legacy/three-tip limit. Real browser decline, failed/successful3DS, cancellation and response-loss recovery. Naturally aged >24h discovery verified on web/iOS/Android; native failure/lost/duplicate/stale recovery accepted. | Merged PR34/47. Native tip creation/cancel/3DS and unavailable local storage remain separate. |
+| Existing paid-bid checkout/offer UI and iOS Stripe return | Repaired canceled checkout/offer refresh and PaymentSheet callback routing. Installed iOS poster + Android worker actual TEST authorize→start→proof→capture→wallet; installed iOS partial refund/hold release; native3DS success/failure return. | PR34/47 and PR177 merged. Native notification return, Android payer refund and broader client lifetime cases remain. |
+| Wallet, payment details and saved-card web readers/actions | Real read failures remain errors instead of zero/empty; retry recovers; canonical release notification return. Default-card overlapping replies reproduced and serialized; failed/default retries match SQL. Saved-card removal results retire with account/caller lifetime, including delayed error; refund replies after account switch stay isolated. | Merged inside PR47. Synthetic cards/identity in saved-card checks; actual provider claims only where explicitly bound. |
+| Gig offers, bidder/poster identity and Q&A: `gigs.js`, existing Offer/QA components and projections | Canonical bidder/profile identity; Q&A read errors, visible vote/pin/delete failures, restored unpin/author-delete. SQL atomic question-vote toggle/recount fixes wrong-gig writes, partial failure and concurrent count drift. Later ranked-offer reader uses canonical verification and card preserves offer amount/fallback name. | PR47 plus PR179/180 merged. New-question attachments and untested native/lost-response vote cases remain. |
+| Completion files: existing `CompletionFlow`/`FileUpload`, upload/gigs routes, `s3Service`, File/SQL | No replacement needed. Real UI→private local storage→SQL: invalid bytes, absent bucket, protected owner/worker reads, unrelated/anonymous denial, lost upload reply and partial multi-file retry. Original-retention delete failure and natural retry cleanup accepted. | Verification-only bundles; local bucket is not hosted S3 lifecycle acceptance. |
+| P10 expiry worker and durable checkout |10,001-bid pagination prevents retained checkout starvation; durable checkout is never incorrectly swept, existing Resume/Cancel releases it. Owned completion retention workload/cleanup verified. | PR173 merged. Production-sized capacity/retention/provider delivery remain. |
+| Dispute evidence: existing dispute builder, Stripe routes/services and wallet workers | Canonical records produce draft evidence, including automatic caller; read failure/retry and actual TEST won/lost closure. Won-before-income release; lost-after-income debt/proof recovery; won-after-existing-income status restoration without duplicate money; DB failure, retry and duplicate-event controls. | PR184/185/187/188 merged. Native dispute UI, real historical Connect/reversal and hosted debt/support remain. |
+| Tip wallet delivery: existing worker/outbox/SQL reservation | Notice and wallet receipt commit together; actual TEST/web/SQL atomic fault/concurrency, refund/debt/lease controls. PR185 restores stop-lock order after reproduced deadlock. PR190 preserves prior225 function/ledger with forward230. | PR185/190 merged; native/hosted notice delivery remains. |
+| Booking receipt and notification destination | ConfirmedView distinguishes authorization from received funds; booking wallet notice returns to existing My bookings instead of `/gigs/null`. Actual Chrome checkout→host UI approval/capture→worker1063 wallet credit→web notice destination200. | PR193 `877ad94f6802227bc02f654d26a617203874227c`, CI35759729609 passed; queued. |
+| Booking account continuation | Existing receipt links to `/register` through `authPageHref` with My bookings return; anonymous free booking→registration→existing Sign in→saved booking200. | PR194 `8b2bd6e05f871d0f9ac501601313cece64abaa8e`, CI35761158118 passed; queued. No actual new registration/terms/OAuth claim. |
+| Booking cancellation/refund/capture race | Existing service commits Booking cancellation, frozen Payment metadata and existing refund reservation atomically; web Cancel/Manage render pending/confirmed/unavailable/review states, preserve reason/retry and recover a lost reply. Capture CAS blocks stale approval after cancellation; prepared capture blocks conflicting release. | PR196 `3f82ae4786`, CI35771063543 passed; queued. See seven real TEST cases below. |
+| Integration/migrations/recovery/launch | Migration blob hashing fixed; ordered public forwards preserve applied candidate SQL. Owned restore/object-byte recovery, read-only app-link/config inventory, populated Home/payment rehearsal (15,232 rows/387 tables preserved) and two affected SQL workflows. Provider activation/cost draft in existing release checklist. | PR181 merged; verification-only controls are local, not hosted adoption or launch approval. |
+| Coordinator review and code preservation | Reviewed peer source/evidence/cleanup and exact-head CI, resolved integration conflicts, preserved original branches. All nine closed-unmerged PRs audited:171/172 reuse164–168;38–42 incorporated43;159 history preserved174;158 docs preserved170/174. No discarded application change found. | Closed-PR audit complete; docs replacements remain open, extra PR overhead was avoidable. Do not reopen or recreate accepted fixes. |
+
+PR links: [#34](https://github.com/WangPantopus/skinny-pantopus/pull/34), [#47](https://github.com/WangPantopus/skinny-pantopus/pull/47), [#173](https://github.com/WangPantopus/skinny-pantopus/pull/173), [#177](https://github.com/WangPantopus/skinny-pantopus/pull/177), [#179](https://github.com/WangPantopus/skinny-pantopus/pull/179), [#180](https://github.com/WangPantopus/skinny-pantopus/pull/180), [#181](https://github.com/WangPantopus/skinny-pantopus/pull/181), [#184](https://github.com/WangPantopus/skinny-pantopus/pull/184), [#185](https://github.com/WangPantopus/skinny-pantopus/pull/185), [#187](https://github.com/WangPantopus/skinny-pantopus/pull/187), [#188](https://github.com/WangPantopus/skinny-pantopus/pull/188), [#190](https://github.com/WangPantopus/skinny-pantopus/pull/190), [#193](https://github.com/WangPantopus/skinny-pantopus/pull/193), [#194](https://github.com/WangPantopus/skinny-pantopus/pull/194), [#196](https://github.com/WangPantopus/skinny-pantopus/pull/196). Cross-stream fixes belong to the [Home](02-home-household.md) and [accounts/social](03-accounts-social.md) summaries; coordinator review is not a second implementation.
+
+### PR196 exact seven-booking acceptance and cleanup
+
+A normal authorization release passed. B reproduced original queue-read failure returning false terminal success with funds still authorized; candidate reports legacy review-required and B was explicitly released during cleanup. C verifies final-write rollback, durable pending reservation under a queue-read fault, provider failure, natural lease expiry and one release after concurrent manual-worker retries. D captured1250 then refunded1250 through real Cancel UI. E reproduced a stale approval capturing after cancellation; the pre-fix charge was explicitly refunded, not claimed auto-recovered. F repeats the race after the capture guard: zero captured, one release, foreign actor403 and concurrent retries. G prepares capture first: cancellation503 preserves booking/draft; approval capture200, then UI cancellation refunds and a dropped success reply recovers by GET.
+
+A–D use actual Chrome checkout; E–G use existing public creation API/Stripe TEST setup and real Chrome cancellation. Host approval is API-driven here and reuses unchanged PR193 host UI evidence. Identity/ancillary shell and email/push suppression are synthetic. Manual worker invocation does not prove natural scheduler delivery. Native booking, hosted delivery, decline/no-show, all policies, packages/cohosts and legacy inconsistent-record repair are unverified.
+
+All seven TEST intents are canceled or fully refunded; owned TEST customer deleted;16 SQL categories plus auth users zero; all grants/faults restored. API18132/Next18133 stopped, owned browser closed, generated tsconfig restored, owned cache removed.107 existing relevant checks, web typecheck/scoped lint/backend syntax and full CI pass; no new unit tests.
+
+### Evidence index and retained runtime
+
+The existing durable audit root is `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits`. September22 consolidation independently checked96 existing Stream1/Stream2/latest Stream3 manifests and2,084 listed file hashes, all matched. This is integrity verification, not rerunning product journeys. Older bundles without that manifest format retain their original report limits. Key current milestones:
+
+| Existing evidence bundle | Files checked | MANIFEST SHA-256 |
+|---|---:|---|
+| [20260922-stream1-booking-cancellation-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-booking-cancellation-r1/MANIFEST.json) | 31 | `e0619dec00aa1c562cf52de7e8793e23671ebf0b4cf55dc7a35db5b4c258226f` |
+| [20260922-stream1-booking-payment-receipt-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-booking-payment-receipt-r1/MANIFEST.json) | 21 | `615be4471455d0bbfb91dbe03aab918820b119534149189418cf53cc80f8a526` |
+| [20260922-stream1-booking-account-continuation-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-booking-account-continuation-r1/MANIFEST.json) | 11 | `a5c386aa6031375973032b4526a2b92350f6fad5bdd7789d2f80a87b22869cb3` |
+| [20260922-stream1-tip-wallet-delivery-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-tip-wallet-delivery-r1/MANIFEST.json) | 24 | `ccfad1373925aa234fa77d615071789ecde7fe9a7f28c205b22b673f8b1ce7f6` |
+| [20260922-stream1-dispute-evidence-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-dispute-evidence-r1/MANIFEST.json) | 26 | `fbc00aebb22595d4d3a8f098f15af2623633f168506a32b58b2301c299062ed2` |
+| [20260922-stream1-won-dispute-release-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-won-dispute-release-r1/MANIFEST.json) | 19 | `e0447e564e236c0fb24709319299cfa2704d483cdd9f401e968c4a55dab97c48` |
+| [20260922-stream1-lost-dispute-wallet-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-lost-dispute-wallet-r1/MANIFEST.json) | 16 | `d42a9fedd0ce85fe1e325e5d5a75d02f0073341924f16e8b0c04a1e13a90152a` |
+| [20260922-stream1-won-dispute-state-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-won-dispute-state-r1/MANIFEST.json) | 14 | `4198e8d08fa19d016fef54dae9f30cf77b63852a47898f5a53851fa437b63057` |
+| [20260922-stream1-p08-native-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-p08-native-r1/MANIFEST.json) | 84 | `5590f05258babb98d27b2fd420382154a68e5405f9e8a5a21e8bdef98ee1b76c` |
+| [20260922-stream1-p09-native-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-p09-native-r1/MANIFEST.json) | 66 | `46227a8c58c06f44198bba35a796b019ee5e2ebab7f759196303d29881a07c70` |
+| [20260922-stream1-p09-android-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-p09-android-r1/MANIFEST.json) | 63 | `670186c9170493fa9b2caf7e72c6d6136c58a13f64508aea7b124d8decaed5e9` |
+| [20260922-stream1-p09-android-faults-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-p09-android-faults-r1/MANIFEST.json) | 34 | `7a38ecf7a58fb0897e8a81ddb0e4984695a8cd2d0db63de980484ff96c6d4fce` |
+| [20260922-stream1-native-3ds-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-native-3ds-r1/MANIFEST.json) | 26 | `2560b7c78a9971316680390b8225b120e00f427c2f8cc52f9ab100a90659b9de` |
+| [20260922-stream1-tip-age-discovery-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-tip-age-discovery-r1/MANIFEST.json) | 64 | `a6e561d352e3a4e30905311e2a31b44d0c429ddbedb2c6fe3644a4afe4762715` |
+| [20260922-stream1-p10-workload-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-p10-workload-r1/MANIFEST.json) | 11 | `6ae2bfc722dcfe2dcde596f535990e596105524da6eb7747eebc451198184487` |
+| [20260922-stream1-completion-retention-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-completion-retention-r1/MANIFEST.json) | 6 | `bcbba6474c358cc4b4b24471a68d3fa6ac308dae6d519d1e3002be6c086d5eea` |
+| [20260922-stream1-combined-home-upgrade-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-combined-home-upgrade-r1/MANIFEST.json) | 10 | `07796b3323983c6c928a4f4e277872e60566f6c7a9e1acb5e20219ccda38e47a` |
+| [20260922-stream1-pr-closure-review-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-pr-closure-review-r1/MANIFEST.json) | 3 | `d590109a8ecd6d740f98d0449f6e4c6c0c5b0a4a59687c8f351b4ca2d3fe508d` |
+
+Earlier September20/21 tip/refund/stop/session, wallet/card, gig/Q&A and completion-proof bundles remain linked with source and cleanup receipts in the detailed history below; preserve them. No credential, device token, database archive or raw operator log belongs in Git or chat.
+
+- Retain owned `supabase_db_pantopus-stream1-wallet-read-r1`, SQL64562/PostgREST64561, **ledger88** unchanged. Original84 plus private228/229 and public230/231 are retained; earlier private224 remains archived too. Never edit/remove applied migration rows or original SQL to satisfy ordering checks.
+- Private228 SQL SHA256 `1f04aee96c7a34586d1f6b6d91b88430d5fab3c3d8d6ce4223af2f3596550d3b`; final public231 `0fe1fc3e12c90831a083b51a5d5765055b4b975d7db1118b6e59327ef9f0fa21`. Public231 preserves the tested function definition and prior87 rows. Fresh installs use public231; retained prototype databases preserve228/229. PR190 public230 preserves already-applied private225 transformation. Deploy forwards before callers; hosted execution is not authorized by local proof.
+- Private operational resume: `/private/tmp/pantopus-stream1-booking-cancel-r1/RESUME.md`. No active Stream1 API/Next/browser/native build. Retained simulator `C2BCF36A-F300-48C1-9BA7-876CA9F61E55` and AVD `Pantopus_Stream1_Start_R2` remain owned by Stream1; recheck actual process/device state before use. Other streams' resources are protected.
+
+## Current Stream 1 acceptance accounting — 25 P/G/O/L rows and 5 shared U rows
+
+This accounting uses the original row criteria and accepted bundles already linked below.
+Current count remains 9 closed/71 partial-open. G02 is the sole newly closed row in this
+reconciliation; the founder performed its integration. P01 is a completed bounded milestone.
+The remaining cells name concrete missing evidence or decisions; an untested case is not a
+reproduced defect. No extra hardware/provider requirement is imposed on a source-only row.
+
+| Row | Accepted work to preserve | Exact remaining boundary / disposition |
+|---|---|---|
+| P01 | Original tip reservation, immutable provider parameters, route/SQL recovery | Completed reservation milestone; original report explicitly assigns broader real-provider acceptance to P02/L01. Preserve the founder's instruction not to count this milestone as whole-row closure. |
+| P02 | Actual TEST original recovery, decline/retry, browser 3DS/cancel, naturally aged >24h discovery on all three clients | Historical reconciliation beyond the restored owned examples and hosted provider operation remain unverified. Cold discovery is complete and must not be repeated from the old note. |
+| P03 | Installed iOS/Android aged recovery, provider failure, lost reply, duplicate tap and stale retry; browser actual TEST checkout | Native tip creation/cancellation/3DS and unavailable local-storage recovery remain separate from paid-bid PaymentSheet acceptance. Locally actionable when supported device control is available. |
+| P04 | Start Work, completion/reopen/owner capture, immutable displayed terms; actual TEST paid workflow | No-show/cancellation-fee payer and recipient policy is a founder decision. Do not invent or silently waive fees. |
+| P05 | Zero-fee unstarted stop and held-money recovery | Explicit fee/residual policy and its execution remain undecided; no code change is authorized by the empty checkbox alone. |
+| P06 | Actual TEST dispute evidence, won/lost outcomes before and after wallet income, debt/proof controls and recovery | Native dispute presentation/actions; historical real Connect transfer/reversal and hosted support/debt operation. Local native presentation is distinct from unavailable Connect credentials. |
+| P07 | Paid-gig atomic wallet delivery; reviewed tip atomic-delivery repair190 | PR193 receipt/release destination and PR196 cancellation/refund recovery are verified and queued. Broader booking delivery, support handling of legacy unknown outcomes and native/hosted delivery remain open. |
+| P08 | Installed iOS poster/Android worker actual TEST bid→authorization→proof upload→capture→wallet; browser journey | Exact native notification return and remaining role/client-specific denial/lost/stale/account-lifetime cases; local Storage is not hosted S3 and synthetic Connect is not bank payout. |
+| P09 | Browser actual TEST refunds/stops; installed iOS partial refund, lost reply recovery, over-limit guard and hold release; **installed Android payer** (Sep22 evening, APK `db303e5b…`/master `094ed5826`): authorization, owner capture, $5 partial refund, lost committed reply → Check status (provider calls [500,500], no duplicate), disabled over-limit Continue, $7.50 hold release; post-refund wallet release credits exactly the refund-aware share (213 of 1063 after 1000 refunded). Audit `20260922-stream1-p09-android-r1`, MANIFEST `670186c9…d5e9`. Android refund failures: provider unavailable → Retry after the lease makes one refund; provider-created refund with lost reply → Retry adopts it with no duplicate; worker/stranger 403 with no worker controls. Audit `20260922-stream1-p09-android-faults-r1`, MANIFEST `7a38ecf7…4fce`. | Historical real Connect transfer/reversal (credentials) and broader close/release scope. Native 3DS is accepted separately; dispute UI stays P06. The optional UX note (a retry inside the one-minute lease returns pending without explanation) is a proposal, not a defect. |
+| P10 | 10,001-bid expiry/pagination, retained durable checkout behavior, completion-original retention and cleanup recovery | Production workload/capacity and provider delivery remain; bounded local workload checks must not be repeated just because production is unavailable. |
+| G01 | PR32/34/47 merged; reviewed queue PR192–196 merged serially at fresh exact-head CI (final master `b36d379b2`) | Original Home/payment acceptance rows remain; merge count is not feature acceptance. |
+| G02 | Both original payment heads/merge are master ancestors; main index clean, unrelated work preserved | Closed with the dedicated Git evidence bundle. |
+| G03 | Final canonical source on master `b36d379b2` ends public230 `20260922023000` → public231 `20260922023100` with no rewrite of applied history. Retained ledger88 is explicitly a candidate ledger (same payment migrations under pre-renumbering versions plus private prototypes). | Reconcile each hosted ledger against the final ordered source. Do not copy retained prototype rows into canonical history. |
+| G04 | Complete-schema CI plus a populated Home/payment rehearsal preserving15,232 rows across387 tables and two affected SQL workflows | Final combined queued-forward adoption/deletion dependencies and hosted preservation remain open. Retained private224/228/229 are noncanonical; preserve their original ledger rows and SQL. |
+| G05 | Each merged PR passed its own fresh exact-head CI (192–196 run IDs in the current summary). Final-master aggregate CI is run `35791178691`. | Record the final aggregate result; a flaky iOS CeremonialMail timeout on iPhone 16 (`2048d971`) is the only failure seen, and it passed on the other simulators. Cancelled superseded runs are not acceptance. |
+| O01 | Local ledger inventories and preserved migration history | Named hosted environments and their actual ledgers/adoption plans; no historical ledger rewrite. |
+| O02 | Bounded owned database restore plus independent local object-byte recovery | Recovery from the actual external file store, production backups and approved recovery objectives. Local bytes do not establish hosted recoverability. |
+| O03 | Repository config/secret inventory and local contracts | Actual hosted Auth/Storage/queue/provider configuration and least-privilege checks for the release candidate. |
+| O04 | Source/build/flags recorded per accepted milestone | One final cross-client release manifest after integration, including geography and actual deployed worker/schema versions. Can prepare locally; deployed drift needs environment access. |
+| O05 | Existing deployment/support/runbook artifacts | Validate exact production routing, certificates, observability, rollback and post-deploy procedure; actual cutover remains a later concrete approval. |
+| O06 | Existing debug builds and bounded worker/retention proofs | Distribution signing/store builds and production APNs/FCM plus deployment-sized capacity. Debug simulator success is not store delivery. |
+| L01 | Consolidated source/pricing/activation draft in existing release checklist | Account entitlements, AWS sizing/traffic, vendor allowances and founder policy inputs before final priced review. No services purchased. |
+| L02 | Local real-provider TEST subjourneys | Approved-provider scenarios and final release-specific Home/Pulse/Beacon matrix after that bundle. |
+| L03 | No production cutover claimed | Approved deployment, actual post-deploy checks and rollback readiness. |
+| L04 | No pilot/product-market fit claim | Consenting users, pilot outcomes and fixes from real usage after readiness. |
+| U01 | Accepted unit/invitation identity repairs | Personal residency-card distinctions, narrow member/badge/chat overlap, verification wording and long activity identities. These need current rendered evidence. |
+| U02 | Workflow-level visual checks only | Remaining reachable-screen large text/zoom/keyboard/screen-reader/contrast/dark-mode matrix. Most is locally actionable; no blanket provider gate. |
+| U03 | Recorded per-workflow error/retry/duplicate/cancel/lost-reply checks | Apply missing cases to each actual affected client; PR193/196 booking receipt/cancellation failures are now repaired within their recorded scopes. No claim of all-app edge-case coverage. |
+| U04 | Accepted Home/account-switch and session lifetimes | Remaining multi-client foreground/background/cold-process and concurrent-account journeys. Physical-provider receipt is only one separate boundary. |
+| U05 | Existing screen and action catalogs | Final integrated release-build inventory on all three clients after repair integration; keep every unfinished reachable action explicit. |
+
+
+### Resume without losing or repeating work
+
+Finish the serial integration queue and documentation publication first. Then pick one exact unmet criterion from the existing table/backlog, trace its unchanged screen→caller→API→service→SQL, reuse accepted evidence and reserve only its required runtime. P04/P05 fee payer/recipient, activated providers/credentials, real physical devices, hosted storage/deployment and final daily-agenda policy require their explicit external prerequisite; continue independent local work meanwhile. Do not build duplicate implementations, add tests for coverage, reset retained ledgers, or infer full-row closure from merged PRs. Current whole-backlog count remains9 closed/71 partial-open; P01 is a separate bounded milestone.
+
+---
+
+## Historical checkpoints and detailed evidence — preserved
+
+The following dated records describe their original source, runtime and limits. Their “current”, “pending”, “active”, “next” and slot assignments are historical; the current summary above and shared coordination state take precedence.
+
+
+## Current coordinator checkpoint — September22, 19:05 UTC
+
+PR189 merged6bec1e878 after exact073f0806a fullCI35766200401. PR190 integration7a555c92e
+retains tip and won-dispute worker guards;128 existing regressions pass. Migration guard
+caught225 sorting behind merged226; public230 preserves the original225 SQL/ledger and
+accepts its exact prior transformation. RealSQL preservation and fullCI35771059661 pass.190 merged ea43d92b3 at19:04:59UTC.
+191 merged2048d9713 after exact1b9e43788 fullCI35771470998 at19:49:24UTC.
+192 integrationea044ebea is pushed to the existing PR; fresh checks are required. Three
+conflicts retain both accepted PUT/Edit and DELETE behavior; API/repository members and
+shared comment reconciled. Merge of191 caused no additional source delta. Original Stream2
+worktree and installed evidence remain untouched; no native build or accepted journey rerun.
+Queue192→193→194→195→196, then docs161/170/174;46 untouched.
+
+PR1963f82ae478 is published with real booking cancellation/refund recovery and capture-race
+repairs. Seven StripeTEST bookings covered database rollback, pending recovery, manual worker,
+captured refund, both approval/cancel race orderings, forbidden actor/concurrent retry and lost
+reply.107 existing checks pass; no new unit tests. FullCI35771063543 passes, including full schema replay and production web build.31-file evidence
+MANIFESTe0619dec00aa1c562cf52de7e8793e23671ebf0b4cf55dc7a35db5b4c258226f.
+All owned provider/SQL/auth fixtures cleaned; API18132/Next18133 stopped and Chrome closed.
+Retain ledger88 unchanged: original84 plus private228/229, public230/231; earlier224 remains
+as previously archived. Public231 matches the tested cancellation function exactly. No
+hosted deployment, natural scheduler delivery or whole-row closure is claimed.
+
+Coordinator recovered Stream2's completed11-file ee69cbd8d preservation evidence and copied
+it unchanged to durable20260922-stream2-native-emergency-edit-preservation-r1; all hashes
+verified, original MANIFEST224096ef2d8be6fc42133397140131aef8f663eb7c8e0c58c0170d96e6e4521e.
+Adding the integration receipt yields12 files, MANIFEST9993d82400671c7a5249ac0e8cb159a5c303cfda2b4ba013b663212226ffa5d0.
+Installed title-only preservation,403/retry, malformed type and wrong id/home retain the form;
+coordinator independently confirmed HomeEmergency/override/audit counts0.192 fullCI35764090022
+passed. Its prior bundle claim was missing; this recovered bundle is the actual durable owner.
+Last four Stream2 follow-up turns completed with no output; no new progress/slot release or
+40-row accounting is inferred. Existing backend/LAN runtime is preserved. 192 is accepted within its recorded preservation scope and remains queued after191;
+its completed journeys must not be rerun. Outstanding row accounting does not block this repair.
+
+Stream3's198-file bundle hashes pass, MANIFEST1fa796d1b6f08e89b549f0aadf0f6986241fbd511184ff2825dc889071957f26.
+A04 actual installed AddHome/API unavailable response retains draft, offers Retry/Edit and
+disables Continue. Retry and discard/logout pass; no application repair. Literal%20 street
+input limits normal-address claims; successful external geography/unit resolution is unverified.
+Installed profile readback503 preserves2 unsaved; restored grant/retry200 shows saved;
+exact cleanup/logout/API stop recorded and XMLs independently checked.
+Android cold-process session/profile200 and logout200 are accepted within local scope;
+portfolio chooser reaches actual upload500 due invalid storage credentials, no partial File.
+iOS installed destination remains a precise UI-control boundary.1953b374454a fullCI35768401037
+passes; remains queued after194. Stream3 corrected its authoritative mapping: N02 is physical
+Android acceptance and A04 is address/Smarty coverage; OAuth belongs toA01. The older current
+table is corrected too. Stream3 continues the next genuinely unverified local criterion or
+records exact remaining device/provider/policy prerequisites; no repeated outage variants.
+Count remains9closed/71partial-open; P01 is a separate bounded milestone.
+
+
+## Booking cancellation and integration evidence — September22
+
+[PR196](https://github.com/WangPantopus/skinny-pantopus/pull/196) extends the existing service,
+public API, Cancel/Manage screens and non-gig capture preparation. No new table/column/queue
+or parallel service; one new service-only SQL transaction wrapper is necessary to atomically
+reserve the existing refund and cancel the booking. The primary reproduced queue-read failure
+returned200 with no request and a held1250 authorization. A second controlled stale host
+approval captured after release reservation; the minimal capture CAS prevents it. Actual
+reverse ordering stays retryable, then refunds after capture. A lost success reply recovers
+through GET. Legacy inconsistent rows display needs-review without inventing policy.
+
+[31-file cancellation evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-booking-cancellation-r1/RESULT.md),
+MANIFESTe0619dec00aa1c562cf52de7e8793e23671ebf0b4cf55dc7a35db5b4c258226f.
+A–D used real Chrome checkout; E–G API-created race fixtures reused that unchanged checkout
+proof and actual StripeTEST pm_card_visa, then real Chrome cancellation. Approval was API;
+unchanged host UI proof is reused from193. Natural scheduler, native booking, decline/no-show,
+all policy permutations and package/cohost recovery remain unverified by this bundle.
+
+Local migration check initially caught the missing compatibility declaration after private228
+had already applied.228 was archived exactly; public229 added the declaration with identical
+pg_get_functiondef. Subsequent serial integration required tip230 and cancellation231;
+all applied versions/SQL remain intact, ledger88, final231 is byte-identical to229. This is
+forward-only candidate promotion, not a rewrite of applied history. The original84 rows remain
+unchanged. Fresh replay/current-head CI are required before integration. Rollout migration→API→web.
+
+[PR190 preserved integration evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-tip-wallet-delivery-r1/RESULT.md)
+now contains24 files, MANIFESTccfad1373925aa234fa77d615071789ecde7fe9a7f28c205b22b673f8b1ce7f6.
+The one worker conflict retains both protected tip states and won-dispute allowance.128 existing
+regressions and current-base migration guard pass.230 checked both exact old/transformed function
+branches in real PostgreSQL, preserving all86 prior rows when advancing to87;231 then to88.
+No accepted payment journey was rerun just for this merge.
+
+## Active cancellation repair — September22, 18:30 UTC
+
+Actual Chrome cancellation under a45-second refund-queue SELECT denial returned200 and a
+terminal success page while TEST1250 remained authorized and no refund request existed.
+Reload offered no recovery. Exact original grant restored; reproduction.json/provider/SQL
+receipts retained privately under stream1-booking-cancel-r1. Normal A release passed.
+
+Root candidate extends existing booking service/public route/refund orchestration and web
+cancel/manage screens. Forward20260922022800 atomically reserves the existing refund request
+with Booking cancellation and a frozen decision in existing Payment metadata; no new table,
+column, screen, service or unit test. Applied only to retained owned SQL64562: ledger84→85,
+all84 prior rows exact, anon/authenticated execution denied and service_role allowed.
+Source SHA2561f04aee96c7a34586d1f6b6d91b88430d5fab3c3d8d6ce4223af2f3596550d3b.
+Candidate remains uncommitted and NOT accepted.64 existing relevant checks and web typecheck
+pass; real fresh transaction-failure/provider-failure/retry/worker verification is underway.
+Legacy B now truthfully displays payment-needs-review; no historic cancellation policy is
+invented. B's real held TEST authorization still needs explicit cleanup. API restarted at
+owned PID/session72039, Next50617, Chrome257777434 active. No fault currently active.
+
+PR188 merged715d62fed after exact e18fab7ae CI35765718055.189073f0806a runs fresh
+CI35766200401.192 remains held for installed preservation;195 Android lint/test/assemble
+failed35763514679 and its owner is assigned the exact-job repair. Stream2 retains native slot.
+No whole-row closure;9closed/71partial-open. Prior checkpoint/runtime paragraphs are history.
+
+
+## Current checkpoint — September 22, 18:15 UTC
+
+PR186 merged d845ed22d after fresh CI35764010625; PR187 merged 7c4a2702f after
+fresh CI35765132114. PR188 now e18fab7ae runs CI35765718055. Current-master
+aggregate remains pending; paid integration retains previously accepted a460.
+Queue188→189→190→191→192(preservation hold)→193→194→195, then docs161/170/174.
+
+Stream1 cancellation fixture f9220541 is active on API18132/Next18133 against
+retained SQL64562/API64561, branch codex/booking-cancellation-recovery at96356ea80.
+Actual Chrome checkout and real Stripe TEST authorization followed by ordinary invitee
+cancellation passed: Booking cancelled, provider authorization cancelled, one successful
+PaymentRefundRequest release; no capture or cash-refund claim. Second failure fixture is
+not yet created; Chrome controls are intermittently timing out. No database fault or app
+repair has been applied. Existing receipt/account-link findings remain owned by193/194.
+Stream2 owns the native slot for192 preservation and malformed-response verification.
+Stream3 continues its next local boundary;195 remains its one-file current-master repair.
+Retain ledger84 and fixture/provider cleanup references privately. Count9closed/71partial-open.
+
+
+## September22 — populated Home/payment upgrade preservation verified
+
+No application source changed. Two exact merged Home forwards absent from the retained payment
+runtime were applied to an owned scratch copy:20260921010000 and20260922010000. All15,232 rows
+across387 public/auth/storage/ledger tables retained identical fingerprints, including five
+payments, wallet income/settlement, partial refund, cooling-off/disputed obligations, six package
+statuses and private document/file metadata. Catalog changes were exactly the Home settings
+function and package status constraint; other functions, ACLs, RLS, columns and triggers persisted.
+The existing Home settings and Home-to-gig publication SQL workflows passed and rolled back.
+
+[Ten-file evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-combined-home-upgrade-r1/RESULT.md),
+MANIFEST07796b3323983c6c928a4f4e277872e60566f6c7a9e1acb5e20219ccda38e47a.
+Private-copy restore required original GraphQL wrapper and PostGIS ACL restoration; all387
+baseline fingerprints matched. One Refund CHECK spelling difference was semantically equal
+for five valid statuses, invalid andNULL. These local restore mechanics changed no app/hosted
+schema or grant. The22 retained paid bodies match merged source;222 differs by one comment only.
+The ledger84 was preserved throughout. Synthetic identities/provider references/file metadata;
+no real provider call or object-byte acceptance. This bounded rehearsal does not close G03/G04
+or establish canonical populated/hosted ledger adoption. Remaining190 integration still matters.
+
+Cleanup dropped only the new owned scratch database and all its fixtures. Original retained
+postgres still matches all387 fingerprints and ledger84; existing containers remain up. No
+API/browser/native runtime started. Raw dump/operator logs remain private and outside evidence.
+Next root boundary: source review of actual booking cancellation/refund failure recovery, which
+is not covered by the accepted booking receipt/account-link journeys. No app edit or new booking
+fixture yet. Stream2 holds the native slot for192; Stream3 has published195 as a one-file
+current-master repair and continues independent local work.
+
+PR184 merged958f6a411 after CI35762588714;185 merged96356ea80 after CI35763379470.186 now
+933b60326 runs freshCI35764010625. Current-master963 aggregate35763998922 still runs; prior
+183/184 master aggregates were cancelled by subsequent integrations, not accepted as green.
+Paid integration retains previously accepteda460. Queue186→187→188→189→190→191→192(review)
+→193→194→195; docs161/170/174 last. Whole-row count9closed/71partial-open unchanged.
+
+
+## September 22, 17:44 UTC — closed PR audit and integration checkpoint
+
+The founder asked whether closing PRs discarded or duplicated earlier work. The complete
+194-PR inventory contains nine closed without merge:171,172,159,158,38–42. Source/history
+checks at master a460fd5d1 establish the following:
+
+-171 reused the five original patches from merged164/165/166; all eight touched files match
+master exactly.172 reused the three application patches from merged167/168; eight files match,
+and the ninth differs only by the exact later CI helper extraction41b1c8a from168.
+-159's entire head is an ancestor of open174.158 has only a104-line documentation diff,
+preserved verbatim in open170 and174; its associated145/149/151/152 code is already merged.
+These replacement documents are still pending merge, not already published on master.
+-38–42's original heads are all ancestors of merged43 and master.
+
+No application change was discarded in those closures. The combined branches reused existing
+commits for installed testing; extra PRs added avoidable review overhead. Empty descriptions
+on171/172/158 and broad closure comments obscured the mappings. Descriptions now state the
+exact replacements and pending-documentation distinction. This audit does not establish that
+all historical investigation was efficient. Do not create another verification-only PR when
+a retained build/branch can be referenced from the existing fix PRs. Continue original evidence
+reuse and smallest-repair rules; no accepted journey was rerun for this history audit.
+
+[Three-file audit](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-pr-closure-review-r1/RESULT.md),
+MANIFEST d590109a8ecd6d740f98d0449f6e4c6c0c5b0a4a59687c8f351b4ca2d3fe508d.
+
+PR183 exact990d05e9d passed full CI35757736325 and merged as3e8d11dfdf76c8322634761e7322643abf2d8368.
+PR184 update was requested with expectedb0986380b; await its new head and fresh checks before
+merging. Prior mastera460 full CI35757725186 passed; paid integration was fast-forwarded and
+pushed toa460 after the migration-policy check. Newly merged183 master CI is not yet accepted.
+PR194 exact8b2bd6e05 passed full CI35761158118; its final11-file evidence MANIFEST is
+a5c386aa6031375973032b4526a2b92350f6fad5bdd7789d2f80a87b22869cb3. PR193 remains full-green; both await serial integration.
+Stream1 branchcodex/booking-account-continuation remains clean/pushed. All owned booking
+fixtures/tabs/API/Next are cleaned; retained ledger84 unchanged. No native slot held by Stream1.
+Stream3's N03 native reservation remains active;192 remains held for data-preservation review.
+Next:184→185→186→187→188→189→190→191→192(review hold)→193→194; docs161/170/174 last.
+Existing row count9closed/71partial-open unchanged; peer row reconciliations remain pending.
+
+Current runtime override, September22 17:20UTC: Stream1 uses only API18132/Next18133 and IAB13 for owned free-booking signup fixturef9220540, provider creation forbidden. Branchcodex/booking-account-continuation frommastera460; no application change yet. The receipt links to /signup while the existing auth route is/register; actual link verification underway. Previous193 paid fixtures remain cleaned. Stream3 retains heavy-native slot.
+
+
+## September 22 — booking account continuation published
+
+Branch `codex/booking-account-continuation`, `8b2bd6e05f871d0f9ac501601313cece64abaa8e`,
+[PR194](https://github.com/WangPantopus/skinny-pantopus/pull/194), based on master `a460fd5d1`.
+[CI35761158118](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35761158118) passed. Only `ConfirmedView.tsx` changes: import the existing authPageHref helper and use the
+existing registration route with My bookings as the return destination. No new tests/design.
+
+Actual anonymous free-booking UI → POST201/confirmed SQL → Create an account led to /signup,
+which was handled as username signup. The canonical user route returned404 and the browser
+showed a page error. After repair, the same receipt opens the existing registration form;
+Sign in preserves the redirect, and disposable account login200 → real My bookings GET200
+shows the confirmed appointment. Selected booking state is unchanged; no payment/provider calls.
+Web typecheck has zero errors; focused lint/diff checks pass. No registration submission,
+password change, terms acceptance, verification email, OAuth or full A01/A05/U closure claim.
+
+[11-file evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-booking-account-continuation-r1/RESULT.md),
+MANIFEST `a5c386aa6031375973032b4526a2b92350f6fad5bdd7789d2f80a87b22869cb3`.
+All16 owned SQL checks and auth users0; retained ledger84 unchanged. No provider objects.
+Settings logout reached/login; IAB13 closed; API18132/Next18133 stopped and owned Next artifacts
+cleaned. App branch clean/pushed. The initial ancillary username200 is excluded from canonical
+lookup evidence; actual Next document200 is not mislabeled404. Private RESUME/PR body current.
+
+PR193 is now a completed bounded milestone with full exact-head CI35759729609 and final21-file
+MANIFEST `615be4471455d0bbfb91dbe03aab918820b119534149189418cf53cc80f8a526`; its cleanup remains valid.
+Next: await194 exact-head checks, continue serial integration at183, review192 preservation and
+peer row accounting. No additional Stream1 runtime/native slot is held; Stream3 native grant
+remains active. Current inventory9 closed/71 partial-open, with P01 separate.
+
+
+## September 22 — booking payment receipt and destination repair published
+
+Branch `codex/booking-payment-receipt`, commit `877ad94f6802227bc02f654d26a617203874227c`,
+[PR193](https://github.com/WangPantopus/skinny-pantopus/pull/193), based on master `a460fd5d1`.
+[CI35759729609](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35759729609) passed all required checks; this bounded milestone is complete. The application worktree is clean/pushed.
+
+Reproduced in the real booking journey: the receipt said “Payment received” for an uncaptured
+Stripe authorization, and the release notification led to `/gigs/null` and a real 404. Three
+existing files repair the receipt's status wording and booking-aware release metadata/destination:
+`ConfirmedView.tsx`, `PaymentStatusBadge.tsx`, and `processPendingTransfers.js`. No design,
+new unit test, screen, service, table or migration. Existing source and286 refs were compared.
+
+Fresh Chrome/Stripe TEST card authorization showed Authorizing, then Authorized after the actual
+owned event was forwarded through the local real webhook. Host Approve captured $12.50. Two
+real release-worker runs after controlled maturity produced one $10.63 income and two notices.
+The payer tapped Booking payment complete, reached My bookings with HTTP200 and the confirmed
+appointment, and its SQL read state changed once. The final receipt showed Payment received
+after actual capture. All40 relevant existing backend checks, web zero-error typecheck, focused
+lint, syntax and diff checks passed. This does not close the full P07/A05/U rows.
+
+[Durable evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-booking-payment-receipt-r1/RESULT.md):
+21 files, MANIFEST `615be4471455d0bbfb91dbe03aab918820b119534149189418cf53cc80f8a526`.
+Limits: synthetic sign-in/page/availability, local forwarding of an actual TEST event, controlled
+maturity, no native booking-notification, hosted mail/push, bank/Connect/live or atomic booking
+notice-failure/recovery acceptance. IAB's Stripe frame stayed blank; Chrome checkout worked.
+All16 owned SQL cleanup checks and auth users are zero. Two captured TEST charges fully refunded,
+unused intent canceled and test customer deleted. Full retained84-row ledger unchanged. Both
+browser sessions logged out/tabs closed; API18132/Next18133 stopped, owned cache removed and
+generated tsconfig restored. Private RESUME and PR body updated; raw logs/secrets remain private.
+
+Next: continue the serial queue at183, and finish peer row reconciliation.
+PR191's six evidence hashes and one-file diff are reviewed. PR192 remains pending a focused
+untouched-location/detail preservation and malformed-readback review. Stream3 owns the single
+heavy native slot for reproduced N03 Follow reappearing on a fresh blocked-profile open.
+Current official inventory remains9 closed/71 partial-open; P01 is a separate bounded milestone.
+
+
+## Current reconciliation — September 22
+
+The founder requested an accurate account of days of work after the closed count remained
+unchanged. G02 is now closed on verified Git ancestry and preservation evidence: PR34 and
+PR47 are merged, both original histories remain in master, and unrelated local work is intact.
+Current inventory: **9 closed / 71 partial or open**, with P01 still a separate completed
+bounded milestone. This is a stale-accounting correction; the founder performed the merge.
+[G02 evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-backlog-g02-closure-r1/RESULT.md),
+MANIFEST `659f9f4761c1adbfd0d7e20419afed8f4324b6ea83b88808e50e98db0720717d`.
+
+Streams2/3 are reconciling exact unmet criteria and closure candidates in their existing
+status files while safely completing current milestones. Stream1 owns the matching payment,
+integration and launch accounting. Do not equate partial workflows or merged repairs with
+whole-row closure; do not impose unrelated hardware/provider gates. The founder reaffirmed
+real client/API/SQL success, failure, recovery and edge-case verification, with no new unit
+tests or coverage target. Preserve designs and accepted evidence.
+
+PR177 merged `50b1ee8d7` after CI35751227114; PR179 merged `1313ea68b` after CI35755064344;
+PR180 merged `fc29902ca` after CI35755564437. PR182 merged `a460fd5d1` after full
+CI35756333346. PR183 `990d05e9d` now runs fresh CI. PR191/192 are published for coordinator
+review after190; docs161/170/174 remain last. Current master aggregate CI is pending.
+
+Booking verification reached real Chrome checkout, actual TEST1250 authorization, real host
+Approve200/capture and confirmed SQL. Controlled maturity plus the existing worker credited
+1063 to the host wallet. Reproduced: confirmation said Payment received before capture;
+payer release notice says a gig and points to /gigs/null, which returns realAPI404/Gig not found.
+Candidate branch codex/booking-payment-receipt now repairs status wording and the booking
+notification destination in three existing files; verification is underway. IAB's
+blank Stripe frame is a separate browser boundary; Chrome card checkout succeeded. Owned
+f9220539 provider objects, two bookings and three synthetic identities are still retained
+for repair verification/explicit cleanup; ledger84 unchanged. API18132/Next18133 and two
+owned browser tabs are active. No native build. Earlier runtime/count checkpoints are history.
+
+
+
+## September 22 — Stream1 row reconciliation against current evidence
+
+This accounting uses the original row criteria and accepted bundles already linked below.
+Current count remains 9 closed/71 partial-open. G02 is the sole newly closed row in this
+reconciliation; the founder performed its integration. P01 is a completed bounded milestone.
+The remaining cells name concrete missing evidence or decisions; an untested case is not a
+reproduced defect. No extra hardware/provider requirement is imposed on a source-only row.
+
+| Row | Accepted work to preserve | Exact remaining boundary / disposition |
+|---|---|---|
+| P01 | Original tip reservation, immutable provider parameters, route/SQL recovery | Completed reservation milestone; original report explicitly assigns broader real-provider acceptance to P02/L01. Preserve the founder's instruction not to count this milestone as whole-row closure. |
+| P02 | Actual TEST original recovery, decline/retry, browser 3DS/cancel, naturally aged >24h discovery on all three clients | Historical reconciliation beyond the restored owned examples and hosted provider operation remain unverified. Cold discovery is complete and must not be repeated from the old note. |
+| P03 | Installed iOS/Android aged recovery, provider failure, lost reply, duplicate tap and stale retry; browser actual TEST checkout | Native tip creation/cancellation/3DS and unavailable local-storage recovery remain separate from paid-bid PaymentSheet acceptance. Locally actionable when supported device control is available. |
+| P04 | Start Work, completion/reopen/owner capture, immutable displayed terms; actual TEST paid workflow | No-show/cancellation-fee payer and recipient policy is a founder decision. Do not invent or silently waive fees. |
+| P05 | Zero-fee unstarted stop and held-money recovery | Explicit fee/residual policy and its execution remain undecided; no code change is authorized by the empty checkbox alone. |
+| P06 | Actual TEST dispute evidence, won/lost outcomes before and after wallet income, debt/proof controls and recovery | Native dispute presentation/actions; historical real Connect transfer/reversal and hosted support/debt operation. Local native presentation is distinct from unavailable Connect credentials. |
+| P07 | Paid-gig atomic wallet delivery; reviewed tip atomic-delivery repair190 | Booking receipt and release destination defects are reproduced and under repair. Booking delivery failure/recovery and support handling of retained unknown operations remain beyond this normal-delivery proof. |
+| P08 | Installed iOS poster/Android worker actual TEST bid→authorization→proof upload→capture→wallet; browser journey | Exact native notification return and remaining role/client-specific denial/lost/stale/account-lifetime cases; local Storage is not hosted S3 and synthetic Connect is not bank payout. |
+| P09 | Browser actual TEST refunds/stops; installed iOS partial refund, lost reply recovery, over-limit guard and hold release | Android payer refund controls, native dispute/3DS where applicable, post-refund wallet release and historical transfer reversal. An Android worker participating in setup is not Android payer refund acceptance. |
+| P10 | 10,001-bid expiry/pagination, retained durable checkout behavior, completion-original retention and cleanup recovery | Production workload/capacity and provider delivery remain; bounded local workload checks must not be repeated just because production is unavailable. |
+| G01 | PR32/34/47 merged; reviewed repairs integrating serially | Remaining reviewed repair queue and original Home/payment acceptance; merge count is not feature acceptance. |
+| G02 | Both original payment heads/merge are master ancestors; main index clean, unrelated work preserved | Closed with the dedicated Git evidence bundle. |
+| G03 | Combined master source now81 SQL files, through22200; constituent PR schema replay passes | Finish integration of reserved forward223/225/226/227 and recheck ordered source; old59-version inventory is retired. |
+| G04 | Multiple complete clean-schema CI replays and source-bound local populated controls | Final combined populated upgrade/deletion-dependency preservation after the queued forwards; retained candidate224 ledger is explicitly noncanonical. |
+| G05 | Each merged PR passed its own exact-head CI | Current aggregate master CI plus final remaining PR heads. Earlier master runs canceled by subsequent merges are not aggregate acceptance. |
+| O01 | Local ledger inventories and preserved migration history | Named hosted environments and their actual ledgers/adoption plans; no historical ledger rewrite. |
+| O02 | Bounded owned database restore plus independent local object-byte recovery | Recovery from the actual external file store, production backups and approved recovery objectives. Local bytes do not establish hosted recoverability. |
+| O03 | Repository config/secret inventory and local contracts | Actual hosted Auth/Storage/queue/provider configuration and least-privilege checks for the release candidate. |
+| O04 | Source/build/flags recorded per accepted milestone | One final cross-client release manifest after integration, including geography and actual deployed worker/schema versions. Can prepare locally; deployed drift needs environment access. |
+| O05 | Existing deployment/support/runbook artifacts | Validate exact production routing, certificates, observability, rollback and post-deploy procedure; actual cutover remains a later concrete approval. |
+| O06 | Existing debug builds and bounded worker/retention proofs | Distribution signing/store builds and production APNs/FCM plus deployment-sized capacity. Debug simulator success is not store delivery. |
+| L01 | Consolidated source/pricing/activation draft in existing release checklist | Account entitlements, AWS sizing/traffic, vendor allowances and founder policy inputs before final priced review. No services purchased. |
+| L02 | Local real-provider TEST subjourneys | Approved-provider scenarios and final release-specific Home/Pulse/Beacon matrix after that bundle. |
+| L03 | No production cutover claimed | Approved deployment, actual post-deploy checks and rollback readiness. |
+| L04 | No pilot/product-market fit claim | Consenting users, pilot outcomes and fixes from real usage after readiness. |
+| U01 | Accepted unit/invitation identity repairs | Personal residency-card distinctions, narrow member/badge/chat overlap, verification wording and long activity identities. These need current rendered evidence. |
+| U02 | Workflow-level visual checks only | Remaining reachable-screen large text/zoom/keyboard/screen-reader/contrast/dark-mode matrix. Most is locally actionable; no blanket provider gate. |
+| U03 | Recorded per-workflow error/retry/duplicate/cancel/lost-reply checks | Apply missing cases to each actual affected client; current booking receipt/notice failure is concrete. No claim of all-app edge-case coverage. |
+| U04 | Accepted Home/account-switch and session lifetimes | Remaining multi-client foreground/background/cold-process and concurrent-account journeys. Physical-provider receipt is only one separate boundary. |
+| U05 | Existing screen and action catalogs | Final integrated release-build inventory on all three clients after repair integration; keep every unfinished reachable action explicit. |
+
+Next: complete the current booking repair and evidence cleanup, review peers' corresponding
+row reconciliation, and continue the serial PR queue. Do not reopen accepted journeys merely
+to create activity, and do not relabel unresolved whole rows as complete for a higher count.
+
+
+## Active coordinator checkpoint — September 22, booking verification
+
+Stream1 reserves API18132/Next18133 against its retained wallet-read-r1 SQL64562/API64561
+for owned f9220539 priced booking verification. Existing ConfirmFlow/CheckoutPanel →
+public booking route → bookingService/schedulingPaymentsService/stripeService →
+Booking/Payment is the current source trace; no application defect or repair yet.
+Synthetic fixture identity and page/availability; actual Stripe TEST only. No hosted mail/push,
+new schema or native build. Original ledger84 is snapshotted and preserved; prior tip fixtures
+remain cleaned. Stream1 API/Next process details and provider cleanup references stay private.
+
+Stream2 is assigned the reproduced single-file Emergency create dismissal repair, followed by
+existing Emergency Edit persistence: compare all refs/archives and extend the existing Home
+emergency route only if no update contract can be reused. No parallel service/table, new unit
+tests or redesign; real client/API/SQL and permission/failure/retry required. It completed an
+owned build for the dismissal candidate and is cleaning its fixture. Reserve before next build.
+PR171/172 are closed without merge; their verification branches/evidence remain preserved.
+Queue177 still awaits final iOS CI, then179→180→182→183→184→185→186→187→188→189→190;
+docs161/170/174 last. Counts8closed/72partial-open remain unchanged.
+
+
+## September22 — consolidated provider cost/activation draft
+
+Existing [release checklist](../release/prod-config-checklist.md) updated in hubce56569b9 with
+current official USD pricing, current integration paths, partial base$70/month or$116/month
+equivalent with the displayed Smarty annual option, and explicit excludedAWS/usage/recovery
+costs. No purchase/activation or full L01closure. Three-file durable provider-cost-plan-r1
+MANIFEST `6642347a4e0f16d61ccfd6e71611ca42c12f053b5ca7a10c3b3c1a223db7659c` binds source, budget arithmetic and limits. All80-row counts unchanged.
+Actualaccount entitlements, exactAWS sizing/traffic andSmarty allowance, recovery objective,
+geography/caps and founder policies remain required before the combined activation review.
+MailboxSMS placeholder is a source-only M lead sent to Stream2; no recipient contacted.
+No runtime changes; Stream1appclean/API+Nextstopped/retainedledger84. Queue177iOSCIpending.
+
+
+## September22 — tip wallet release delivery completed; PR190
+
+Branch `codex/tip-wallet-release-delivery`, `6c49692d690249568d8a8036c5d9a23dd6883194`,
+[PR190](https://github.com/WangPantopus/skinny-pantopus/pull/190), base3c1e4a47d.
+Changed existing `backend/jobs/processPendingTransfers.js` and existing lifecycle assertion
+in `backend/tests/paymentReliability.test.js`; necessary forward225 tip refund proof and
+227 inner settlement/delivery extension. No new test/table/service/screen or redesign.
+Actual TEST1250 historical tip, real worker/web wallet/popover/SQL reproduced money committed
+with both release alerts lost under Notification INSERT denial; repeat skipped the row.
+Current/master/all-ref source comparison justified extending the existing settlement/outbox.
+
+Fresh actual TEST1250 candidate: notice fault inside the transaction leaves wallet0/no
+settlement and capture notice only; concurrent/repeated worker then credits1250 exactly once,
+one tip_income/settlement, two delivery rows/release notices plus one original capture notice.
+Canonical inner body is identical to the verified candidate; public209 wrapper supplies its
+lock timeout. Real duplicate workers/RPC reuse preserve money. CUA wallet12.50/one tip row,
+release notice→existing wallet and SQLreadtrue. Historical adoption adds no credit/backfill.
+Rollback SQL tip refund once, frozen debt/recovery, wrong type and stale lease controls pass.
+125 existing tests/six suites pass after one existing boundary expectation update. Full
+[CI35751529326](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35751529326)
+passes backend/Docker/complete schema/original SQL contracts/safeguards.
+
+Durable22-file [result](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-tip-wallet-delivery-r1/RESULT.md),
+MANIFEST `9832f273d1653f4c7ebb7e2c981f18e6e47374cd44154436800e17f206560f65` verified.
+Limits: synthetic sign-in/historical admission/maturity; transaction-only synthetic refund
+receipts and lease controls; actual TEST provider charge/cleanup. Local17.6 ARM64 reserved
+role denial caused reported supautils SIGSEGV; private existing contracts substitute only a
+transaction-only inheriting denied role, removed by rollback. CI originals pass unmodified.
+No provider push, natural cooling, native tip create/cancel/3DS, hosted/Connect/bank/live or
+whole-row closure. Both f9220537/38 charges refunded1250/customersdeleted,22 checks0 each.
+Actual logout/login returns and tab closure verified; API/Next stopped, owned cache removed,
+app clean. Retain SQL64562ledger84 with original79 hash unchanged. Applied224 is explicitly
+superseded private candidate-only history (archived exactb21f7aede19044555ba768888ac7afafc3eea4ebd245042311efdbefb7f279b5);
+unmerged source renamed227. All applied rows preserved. PRbody/privateRESUME current.
+
+## September22 — PR185 stop-fence regression repaired
+
+PR185 now `e4e552075d8a5c0cff8dd92c4d658c6bdf243f3f`:22300 had overwritten20900's public
+Gig→Payment wrapper. Fresh190CI exposed wrong target; actual concurrent settlement/stop-style
+locking reproduced40P01. Necessary forward226 preserves applied22300, restores exact20900
+wrapper and applies won guard to existing inner implementation. Real same-lock check now
+completes both transactions;27 existing guards pass exact rollback. Function metadata and
+five-second wrapper timeout preserved. Full CI35751454258 passes. Earlier actual TESTwon
+release evidence reused. No additional provider journey claimed by synthetic lock/guard controls.
+Updated19-file won-release bundle, MANIFEST `e0447e564e236c0fb24709319299cfa2704d483cdd9f401e968c4a55dab97c48`;
+original13 files preserved with [follow-up](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-won-dispute-release-r1/STOP_FENCE_FOLLOWUP.md).
+TemporaryPayment302/controlGig business fields restored, both SQL transactions rolled back;
+companion fresh tip fixture now fullycleaned. No full-row/native/hosted closure.
+
+Next: continue serial fresh-head integration and remaining P07 booking notice source/contract
+verification, then unresolved P/O/L boundaries. Preserve completed evidence and owner decisions.
+
+
+## Active coordinator checkpoint — September 22, 16:04 UTC
+
+PR168 exact142220190 passed CI35746647258 and merged b30e0d395; PR177 refreshed
+5129406fd with fresh CI pending. Prior master3c1e4a47d aggregate35746635358 passed.
+Paid integration retains last accepted f9176 while repair branches remain separate.
+PR185 reopened for a concrete regression:22300 replaced the20900 stop wrapper;
+actual concurrent settlement versus Gig→Payment locking reproduced40P01. Forward226
+restores the exact20900 wrapper and applies the won guard to its inner function.
+Candidate e4e552075 passes the real lock check and27 existing rollback guard cases;
+fresh CI pending. Do not merge185 until its repaired head passes review and CI.
+PR190 candidate6c49692d6 renumbers unmerged224→227 and targets the canonical inner
+function after clean-schema CI exposed the wrong target. Applied224 is retained as
+an explicitly superseded private candidate-only ledger entry, exact archived SQL;
+no applied rows changed.225 refund proof remains. Retained SQL64562 ledger84 with
+all prior entries unchanged; canonical full replay remains CI-owned/pending.
+Fresh ownedf9220538 actual TEST1250 tip has one income/settlement, two delivery rows,
+and three notices after atomic failure/concurrent-worker controls. API18132 resumed,
+Next18133 PID3909 and CUA tab11 active; provider/customer/SQL cleanup pending.
+No native, hosted, provider-push or row closure claim. Heavy native slot free.
+Queue177→179→180→182→183→184→185→186→187→188→189→190; docs161/170/174 last.
+Eight closed/72partial-open unchanged. Earlier runtime checkpoints are historical.
+
+
+## September 22 — active legacy tip release notice repair
+
+Runtime update 2026-09-22 15:34 UTC: Stream1 API18132 PID3240/Next18133 PID3909 and CUA tab10 are active for owned f9220537 legacy tip release notification failure. Actual TEST1250 tip proof seeded as historical row; real worker credited1250 but lost both notices under INSERT denial and normal retry did not repair. New branch codex/tip-wallet-release-delivery based currentmaster3c1e4a47d (masterCI still pending); small existing-worker candidate plus reserved forward20260922022400 extends existing settlement/delivery functions to tips. Migration not yet applied; ledger80 retained. Provider charge/customer cleanup pending. Completed188 remains accepted. Heavy native slot free; Stream2/3 continue their existing assignments. Earlier runtime snapshots below are historical.
+
+Actual existing web wallet0→12.50; notification popover retains only the durable capture notice.
+Baseline and source comparison private /private/tmp/pantopus-stream1-tip-wallet-delivery-r1.
+One existing-worker candidate uses the existing locked settlement for tips; necessary forward
+20260922022400 extends its proof/type/Gig checks and current delivery reader, no parallel table,
+service or screen. Candidate verification/schema application pending; no success claim.
+The pre-existing tip capture delivery remains unchanged. Setup alreadydone once; keepprovider
+receipt for actual1250refund/customer/exactSQLcleanup; synthetic historicaladmission/age limits.
+
+## September 22 — won-dispute state after wallet income complete; PR188
+
+Branch `codex/won-dispute-payment-state`, `cd6d6876cd32ce132c936e2e7601a6fad98e6873`,
+[PR188](https://github.com/WangPantopus/skinny-pantopus/pull/188), base verified masterf9176cc2c.
+One existing `backend/stripe/stripeWebhooks.js` changes20add/4remove. Actual TEST1250charge,
+existing worker1062income and delayed actual won dispute event reproduced Payment/Gig
+captured_hold and web History captured hold despite exact wallet_credited projection.
+Compared current/merged/initial/all-ref implementations; reused existing wallet projection.
+The handler now restores transferred using that proof, checks fallback failures and
+updates the current Gig mirror before acknowledging. No new SQL/service/table/screen,
+unit test, layout, styling or navigation change.
+
+Actual PaymentWalletSettlement SELECT, Payment UPDATE and Gig UPDATE privilege faults each
+returned500 and left the event unprocessed; exact ACL restoration/retry200 repaired state
+without money changes. The intermediate Payment-only candidate exposed the stale Gig mirror;
+the final repair covers it. Separate fresh candidate actual TEST first won-event delivery
+(no event reset) restored both rows transferred, preserving one1062income/settlement. Two
+concurrent processed duplicates preserved money and six notices. CUA existing web History
+showed transferred→disputed→transferred with10.62. Existing51tests/5suites, syntax/diff and
+[CI35745486220](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35745486220)
+passed backend/Docker/full fresh schema/SQL/safeguards; native/web jobs skipped by diff.
+
+Durable14-file [result](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-won-dispute-state-r1/RESULT.md),
+MANIFEST `4198e8d08fa19d016fef54dae9f30cf77b63852a47898f5a53851fa437b63057`, independently verified.
+Limits: synthetic identity/fulfillment/maturity, deliberate delayed locally signed forwarding
+of unchanged actual TEST events. Baseline fault replay explicitly reopened its owned event;
+fresh candidate did not. Compact CUA accessibility receipt, no screenshot export. No native
+dispute, natural48hour, hosted transport/worker, Connect/bank/live-money or external notice
+claim. A private cleanup/start race rolled back the initial fresh seed; awaiting old cleanup
+and confirming both prefixes0 resolved it before successful setup, without application edits.
+Bothf9220535/36 have22 independent SQL/auth/event checks0 each. Both TEST charges refunded1250,
+both customers deleted, both CUA tabs logged out/closed, API18132/Next18133 stopped and owned
+Next generated files cleaned. Retain SQL64562 ledger80/original79 hash unchanged; app treeclean.
+PRbody/privateRESUME current. Eight closed/72partial-open unchanged; P06 remains partial.
+
+Coordinator: PR167 merged3c1e4a47d after exact766feed all CI35740330734 passed and installed
+final notification-row tap bound to sanitized156-file Stream3 MANIFEST
+99bf0cb46f5127210137e35290932978fd914d2cca950d78e384ac50d41fa3c1 (all hashes verified).
+PR168 refreshed142220190; freshCI35746647258 running. Current merged-master3c1e4a47d
+aggregate CI pending; paid integration retains last acceptedf9176. Stream2 completed189
+Emergency Delete candidate and released heavy slot, CI35746587131 pending; coordinator
+review/evidence validation next. Queue168→177→179→180→182→183→184→185→186→187→188→189,
+docs161/170/174 last; verify-only171/172 never merge. Continue independent remainingP/O/L
+verification and peer review while freshCI runs; do not repeat accepted journeys.
+
+## September 22 — lost-dispute wallet recovery complete; PR187
+
+Branch codex/lost-dispute-wallet-recovery,8b4573cb9ab797ff676ca71feb971ec3b96e379d,
+[PR187](https://github.com/WangPantopus/skinny-pantopus/pull/187), currentmasterbasef9176cc2c.
+One existing backend/stripe/stripeWebhooks.js changes15add/2remove. Real TEST1250charge,
+worker1062income, delayed actual created/closed-lost events left Payment refunded1250
+but wallet1062 and its existing recovery target0. Current/merged/initial/all-ref comparison
+found no wired wallet recovery in the lost handler. Reused existing locked refund recovery
+RPC: no new SQL/table/service/screen/design/navigation/unit test. Fallback update/RPC
+failure now throws before acknowledging the provider event.
+
+Actual RPC EXECUTE denial500 retained retry and financial/notice state; exact ACL restoration
+and same-event retry200 recovered1062 once. Payment UPDATE denial500/exactACLrestore/retry
+preserved money. Post-commit duplicate deliveries unchanged. Three rollback SQL controls
+verify frozen/insufficient funds→durable debt→later recovery/reuse, wrong-income identity40001,
+with exact fixture restoration. Web wallet0, disabled withdrawal, matching1062adjustment.
+Separate fresh candidate TEST1250charge/worker1062 and first created/closed-lost delivery
+(no event reset) recovered1062; real web confirmed0/adjustment and duplicate deliveries
+preserved financial rows plus six notices. Existing51tests/5suites, syntax/diff and full
+[CI35743104345](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35743104345)
+passed backend/Docker/fresh schema/SQL contracts. No native job or UI redesign required by diff.
+
+Durable16-file [result](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-lost-dispute-wallet-r1/RESULT.md),
+MANIFESTd42a9fedd0ce85fe1e325e5d5a75d02f0073341924f16e8b0c04a1e13a90152a.
+Synthetic identity/fulfillment/maturity/delayed local transport; actual Stripe TEST events
+locally signed. Initial candidate/fault case explicitly reopened its one baseline event;
+fresh candidate did not. Debt/proof controls are rollback SQL only. No natural48hour,
+native/physical-device, hosted transport/worker, Connect/bank/live-money or external notice
+receipt claim; P06 remains partial. A private resume-directory setup error and initial
+zero-target-versus-absent-row assertion were corrected without application changes.
+
+Bothf9220533/34 independent cleanup22SQL/auth/eventchecks0each. Lost TEST charges1250
+nonrefundable, no duplicate refund objects, both customers deleted; actual logouts/tabs6/7
+closed; final API18132/Next18133 stopped, generated Next files restored/removed, app treeclean.
+Retain owned DBledger80 from185;187 changes no SQL or history. PRbody/privateRESUME updated.
+Masterf9176cc2c full CI35740318739 passed; paidintegration adopted/pushed f9176 after guardpass.
+PR167 waits oneAndroidjob; queue167→168→177→179→180→182→183→184→185→186→187, docs last.
+Next: serial review/integration and remaining P06/P07 reconciliation boundaries.
+
+## September 22 — active lost-dispute-after-income verification
+
+New owned source lead after185 completion: existing lost-dispute handler records
+refunded_amount but only logs transferred-provider liability; existing wallet refund
+recovery RPC is not called. No application change yet. Relevant stripeWebhooks blob
+f854080bed2a740a86a751da42ceeec0f62b297c matchescurrentmaster at current185 checkout;
+current/merged/initial/all-ref comparisons retained in private lost-wallet-r1 evidence.
+Owned real TEST1250charge credited1062 via actualworker before deliberately delayed
+created-event delivery. Web wallet shows1062. Identity/completion/cooling/delivery order
+are controlled fixtures, not natural age or live bank behavior. Real created/lost closed
+sequence is now being checked against wallet SQL/UI; no failure claim before readback.
+API18132 PID440/Next18133 PID2382 active; IABtab6 workerloggedin. Exactprefixf9220533,
+private /private/tmp/pantopus-stream1-lost-wallet-r1, provider cleanup pending. Never rerun
+setup; keep owned provider receipt for final loss-aware cleanup. Retain ledger80. Private
+RESUME updated. PR186f941c3bb4 now CIpassed, queuedafter185; source/evidence review underway.
+
+## September 22 — won-dispute release milestone complete; PR185
+
+Branch codex/won-dispute-wallet-release, ae5364db9cf8fa9c359d48d9e17e3d7792a34e70,
+[PR185](https://github.com/WangPantopus/skinny-pantopus/pull/185), base2b7378aa4.
+Existing worker/admin eligibility and three SQL guards excluded every dispute ID;
+actual TEST closed/won restored captured_hold but stayed unpaid, RPC PAYMENT_STATE,
+admin falsely healthy/stuck0 and web balance0. Three paths changed: processPendingTransfers,
+paymentOps, and necessary forward20260922022300. Existing function bodies reused;
+no table/screen/design/navigation/unit test added, no applied history rewritten.
+The forward explicitly preserves retained settlement lock_timeout5s (fresh canonical
+replay adds that explicit bound if absent); signatures/owners/ACL/settings verified.
+
+Candidate actual admin degraded/stuck1 and non-admin403; two concurrent workers,
+repeat and direct reuse yield exactly one1062-cent income/settlement, two durable
+in-app delivery rows/notices, web wallet10.62. Dispute ID/status retained. Twenty-seven
+rollback-only SQL controls cover active/lost/unknown/missing statuses, proof, cooling,
+refunds, legacy income/reconciliation; owned snapshots exactly restored. Real55P03
+row-lock timeout retries safely; real worker repairs controlled stale transfer_pending
+without duplicate credit. Private harness timestamp-trigger/bigint assertion adjustments
+are documented separately from application defects. Existing80tests/6suites, syntax,
+diff and migration-policy checks pass. Full exact-head
+[CI35740929536](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35740929536)
+passes backend/Docker/fresh schema replay/SQL contracts/CI OK.
+
+Durable [13-file result](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-won-dispute-release-r1/RESULT.md),
+MANIFEST367a6a9418d85e5f735c62aa6b40024fb8d800731d1e4cd4eac857790c907a81.
+Synthetic identity/fulfillment, deliberately mature cooling/crash timestamps, locally
+signed actual TEST events; rollback controls use synthetic capture IDs. No natural48hour,
+native/physical-device, hosted worker, Connect/bank/live money or external notice-delivery
+claim. No full P-row closure. Private raw logs/provider objects excluded from bundle/Git.
+
+Independent cleanup:22 SQL/auth/event checks zero; TEST1250 charge refunded1250/customer
+deleted; actual logout reached login, tab5 closed, API18132/Next18133 stopped; generated
+Next files restored/removed and app worktree clean. Retained SQL64562 ledger80 and new
+function definitions remain; original79 ledger rows unchanged hashf99ecb69aa861013765ad31fb22e9de1e5253956a41df859b17b9509379989c0.
+Private RESUME updated. PR166 mergedf9176cc2c;167766feedca freshCI pending. Next: serial
+integration and inspect existing lost-dispute-after-wallet-release path before any repair.
+
+## September 22 — won-dispute wallet release, candidate verification in progress
+
+Branch codex/won-dispute-wallet-release from2b7378aa4, currently uncommitted:
+backend/jobs/processPendingTransfers.js, backend/routes/paymentOps.js, and necessary
+forward migration20260922022300_won_dispute_wallet_release.sql. Current/archived/all-ref
+comparison found existing worker/admin/SQL guards excluded all dispute IDs. Actual
+Stripe TEST closed/won retained the ID and restored captured_hold, but controlled mature
+cooling age yielded worker skip, RPC PAYMENT_STATE, falsely healthy admin status and
+zero web wallet earnings. Synthetic identity/fulfillment and controlled age remain limits.
+
+Candidate admits ID-bearing won disputes while preserving unresolved/lost/unknown guards,
+existing payment proof, cooling, refund, locks and receipt idempotency. Exact forward
+migration applied only to owned SQL64562: ledger79→80, original79 rows byte-identical
+SHAf99ecb69aa861013765ad31fb22e9de1e5253956a41df859b17b9509379989c0;
+fileSHA6637fa06e4b500f67240321195541882d74fb4ae53e41173b712af3729b119f8.
+Function signatures, owner, ACL and settings preserved; an initial metadata assertion
+rolled back its entire transaction before the successful application. Applied history
+was not rewritten. Existing80 tests/6suites pass; final schema replay/CI remains pending.
+
+Actual candidate admin health degraded/stuck1, worker non-admin403, two concurrent jobs
+plus repeat200, direct RPC reused=true. SQL exactly one1062-cent credit, one settlement,
+two delivery rows/two notices, dispute ID/status unchanged. Existing web wallet shows
+10.62 balance and one matching task-income row. Negative guards/recovery controls and
+cleanup still in progress; no whole-row/native/hosted/Connect/provider-delivery closure.
+Private evidence /private/tmp/pantopus-stream1-won-release-r1; durable bundle pending.
+API18132 PID47886 and Next18133 PID43664 active, IAB tab5 logged in as owned worker;
+f9220532 provider customer and won TEST charge require exact refund/customer/SQL cleanup.
+Retain DB ledger80/functions afterward. Private RESUME updated. PR166 mergedf9176cc2c
+on fresh passing35735947354, PR167 refreshing; docs merge last.
+
+## September 22 — release configuration inventory and next won-dispute release check
+
+Read-only GitHub metadata at sourceb0986380b/master2b7378aa4: repository and all four
+environment secret lists are empty; staging/production deployment and migration flags
+are false. User-owned repository has no organization-secret inheritance. Native release
+workflows reference signing/store/provider configuration not present in those lists;
+external/local host secret stores were not inspected. Master protection requires strict
+CI OK/admin enforcement, disallows force pushes/deletions. No release/configuration/
+provider change or workflow dispatch. Existing deployment/rollback source unchanged
+since acceptedc262b84af; reuse47 simulated checks, not a new hosted rehearsal.
+
+Four-file durable20260922-stream1-release-config-r1, MANIFEST
+ec0e2f5115a2a9e2a2245cbb69e4256c32a3db42e8e8d2769940c386b62b183e.
+Existing docs/ci-cd.md and release/prod-config-checklist.md remain the configuration
+procedure; this inventory adds no new tracker/application/test. O/L rows stay partial.
+
+Next concrete source lead: won webhook preserves dispute_id and restores captured_hold,
+but processPendingTransfers, the settlement RPC and admin stuck queries exclude every
+dispute_id. Current/archived/all-ref comparison is recorded. Worktree is clean on new
+codex/won-dispute-wallet-release from2b7378aa4; no application change. An isolated fresh
+TEST fixturef9220532 is being prepared to reproduce post-win wallet eligibility after a
+controlled mature cooling timestamp. This is synthetic age/identity/fulfillment, not a
+naturally elapsed48hour acceptance. API18132 owns this fixture; Next18133 remains stopped.
+Private continuation /private/tmp/pantopus-stream1-won-release-r1. Keep its provider
+objects until actual won resolution/refund/customer/SQL cleanup; peer resources untouched.
+
+
+## September 22 — dispute evidence repaired and real TEST won/lost verified; PR184
+
+Branch codex/dispute-evidence-contract, current b0986380b01f0475d4421897e7b4a5826d0b5a1f
+from master2b7378aa4, [PR184](https://github.com/WangPantopus/skinny-pantopus/pull/184).
+One existing backend/stripe/disputeService.js,47 added/47 removed lines; no new file,
+table, migration, unit test or UI/presentation/navigation change. Current/archived/all-ref
+comparison found the same obsolete reader. Actual original webhook silently saved only
+payment IDs/times after failed Gig.location/address, GigBid.amount, User.full_name,
+Review.content and Message reads. Canonical-only intermediate then reproduced real
+Stripe file_upload rejection of narrative text. Repair uses canonical fields, truthful
+query errors/optional records, correct currency/amount units, and bounded existing text
+evidence. Latest50 visible payer/payee text messages exclude deleted/system/third-party
+records. Private exact-address/file references are not added; photo bytes remain outside
+this narrative service.
+
+Actual first Stripe TEST1250 charge/event → existing local webhook → Payment/notices →
+real web History disputed. Candidate draft included completion/review/two-party chat with
+submission_count0. Actual ChatMessage ACL denial returned500 without changing Payment or
+provider evidence; exact ACL restored, retry200. Missing/no-dispute payments refused;
+optional rows absent allowed;52-message load selected03–52 in order,17340-character draft
+accepted. Concurrent duplicate created events preserved one event row/two notices.
+Deliberate TEST winning_evidence control produced real closed/won event: captured_hold,
+two resolved notices and matching web History; later evidence submission refused.
+
+A fresh candidate1250 charge verified the automatic webhook caller end to end: complete
+provider draft, no failure flag, web disputed. Deliberate TEST losing_evidence control
+produced real closed/lost → refunded_full/refunded_amount1250, no transfer/wallet credit/
+settlement/duplicate Refund row; matching web History. Concurrent closed-event repeats
+preserved Payment and four notices. These are actual TEST API outcomes and unchanged
+provider events locally signed/forwarded, not hosted event delivery or production
+submissions. Identity/session/fulfillment/Connect are synthetic. No native dispute UI,
+transferred-loss debt, Connect/live payout, physical device or photo-upload claim.
+
+Eight existing webhook regressions, syntax/diff and exact
+[CI35736547362](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35736547362)
+pass. Ready PR body current.26-file sanitized durable owner bundle
+`.pantopus-recovery/audits/20260922-stream1-dispute-evidence-r1/`, MANIFEST
+fbc00aebb22595d4d3a8f098f15af2623633f168506a32b58b2301c299062ed2; all hashes verified.
+Both f9220530/f9220531 fixture families zero across16 checks; ledger79 retained.
+Won charge refunded1250, both TEST customers deleted; lost charge nonrefundable and no
+second refund issued. Both browsers logged out/closed, API18132/Next18133 stopped,
+generated cache/config cleaned. Own DB/devices retained, native apps terminated.
+Private RESUME/current provider cleanup receipts retained outside Git. No row closes.
+
+Coordinator master2b7378aa4 aggregateCI35735938178 pending; PR166ae03e34d2 fresh
+CI35735947354 pending. Remaining serial order166→167→168→177→179→180→182→183→184,
+then docs161/170/174; verify-only171/172 never merge. PR18383f507457 is Stream2's
+one-line Android guest prompt return repair, baseline actual UI/API/SQL; rebuilt
+verification underway on owned5556. Stream2 has the exclusive heavy native build grant
+(observed its Gradle13629 before grant confirmation); coordinator/Stream3 have none.
+Stream3’s135-file bc8dadc5cee6c2b301beec356935cef14a9c7cacadef96620badf9290a41da3c verified;
+its N02 mark-all/N03 remaining feasible cases and receipt-time correction continue.
+Next Stream1: remaining payment/operations/provider-boundary review and serial merges;
+CUA Simulator rejection/alternate-driver question remains pending with user.
+
+
+## September 22 — notification and migration guard integrated; dispute verification active
+
+PR165 merged39492cd52ed4949ff6c01acdf5d41e92153e9466 after exact
+f8079b1f1/CI35732209909 passed, including all three iOS simulator jobs. PR181 merged
+2b7378aa474a26b67ea6f9dba61ad97105aa7c0b after current47ec9205c/CI35735581542 passed.
+Their PR bodies now describe final behavior and verification limits. Next166 has a
+current-master update requested; remaining queue166→167→168→177→179→180→182,
+then new dispute repair and docs161/170/174. Verify-only171/172 never merge.
+Merged-master checks remain required; the preceding715 aggregate was still running
+before these merges and is not recorded as passed.
+
+Current application branch codex/dispute-evidence-contract starts from715ccd8c0,
+with a focused uncommitted change in existing backend/stripe/disputeService.js.
+Real Stripe TEST1250 charge generated a dispute; unchanged provider event locally
+signed/forwarded through the actual webhook returned200 and persisted disputed plus
+two notices. Web History changed captured_hold→disputed. Baseline evidence silently
+omitted Gig/Bid/User/Review/Chat due to nonexistent schema names; canonical-only reader
+then reproduced Stripe's rejection of narrative text used as a file-upload ID.
+Candidate corrects existing names, uses the supported bounded narrative field, preserves
+money units, and excludes deleted/system/third-party messages. Actual saved TEST draft
+contains the two-party conversation, completion and review with no final submission.
+Actual SQL permission refusal returns500 with provider evidence/payment unchanged;
+restored ACL retry200. Optional-row/missing-payment controls and52-message latest50/
+17340-character provider draft pass. Eight existing webhook regressions pass. New PR,
+CI, durable sanitized bundle and final provider/SQL cleanup are still pending.
+
+Runtime is ACTIVE: Stream1 API18132 and Next18133, owned retained SQL64562/API64561;
+f9220530 synthetic dispute fixtures and one real Stripe TEST dispute/customer remain.
+Private runtime/cleanup instructions are in /private/tmp/pantopus-stream1-dispute-r1
+and coordinator private RESUME. Resolve the owned TEST dispute before refund/cleanup;
+no live/provider-hosted acceptance. CUA tab3 is logged in on web History; native apps
+remain terminated on retained C2/5558. CUA's Simulator rejection leaves native dispute
+unverified; alternate-driver user question remains pending. Stream3 released heavy
+build grant; no heavy build is reserved. Peer resources remain untouched.
+
+PR182 is reviewed as backend-only canonical profile PATCH repair and has green
+CI35734436958. The131-file Stream3 MANIFEST1ed1182466b240fab36ecc6b2bd4a0eb92b2b4706c339174b7fd4ef29ff982fc
+was independently verified, including populated-skill preservation and cleanup;
+newer peer N02 evidence is pending coordinator verification. No backlog row closes.
+
+
+## September 22 — prior completion-file retention recovered and cleaned
+
+The pre-existing04:02UTC tombstone discovered by the price audit was the sole actual
+cleanup candidate with matching original synthetic owner/gig. Existing worker
+homeDocumentRecovery.completionFiles and real RPC/local Storage were exercised:
+missing private bucket404 → selected1/pending1/removed0; claim cleared, immutable data
+unchanged. Immediate repeat selected0. After natural10minute eligibility13:24:16UTC,
+created only the owned absent private bucket empty; actual worker selected1/removed1/
+pending0, marking cleanup complete. Deletion was idempotent for an already-absent key;
+no fresh uploaded-byte or hosted-provider deletion claim. No time/SQLclock acceleration.
+
+Removed the empty bucket and exact synthetic tombstone under transaction-local replica
+role with immutable identity predicates. Broad historical File metadata matches0,
+bucket absent/objects0/ledger79 retained. No application/test/schema/policy change;
+production retention policy remains open. No new UI journey; reuses actual native proof
+lineage and binds current worker/source715ccd8c0. Six-file durable owner
+20260922-stream1-completion-retention-r1, MANIFEST bcbba6474c358cc4b4b24471a68d3fa6ac308dae6d519d1e3002be6c086d5eea;
+all hashes verified. API18132/Next18133 remain stopped, native apps terminated, own
+devices/DB retained, peers untouched. Private RESUME updated. No row closes.
+
+
+## September 22 — migration blob hashing repaired; PR181 CI passed
+
+Paid integration adopted/pushed715ccd8c0 (merged178), exact tree equal to accepted
+PR1780f1a00b16/CI35731690811. Merged-master aggregate35732165373 is running.
+Current branch `codex/migration-file-hashing`,037421e1dc3820897534866be438bfe948cf32f7,
+[PR181](https://github.com/WangPantopus/skinny-pantopus/pull/181), repairs the reproduced
+local migration guard stall: Node20.20.0 also blocked in git hash-object --stdin while
+feeding a1.40MB/1.17MB baseline, after earlier Node24 stalls. Only owned stuck Git child
+92214 was terminated. Existing checker now hashes each path with --no-filters and ignored
+stdin; raw-byte comparison and history/order rules preserved, two lines changed.
+No migration/policy/application-UI file or new unit test. Current/archived/all-ref checked.
+
+Actual repository guard passes on both Node20.20.0 and24.13.0; all6 existing policy tests
+pass, including >1MiB baseline, changed applied SQL and append-only order. Paid migration/
+policy bytes match these validated bytes; no claim that the old checker passed unchanged.
+[CI35732925365](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35732925365)
+passed all required checks. Five-file durable bundle20260922-stream1-migration-file-hashing-r1,
+MANIFEST d22713d9cc18beb371788f0f737ad867d3021bec3d98709b5fdabb84df56129f.
+Application worktree clean/committed/pushed. No fixture/provider/native changes by this repair.
+
+Separate existing completion-file recovery observed missing bucket404 → one pending
+tombstone/no deletion, immediate retryselected0. Natural retry threshold13:24:16UTC;
+continue existing worker recovery then exact own residue cleanup. API18132/Next18133
+stopped; own database/devices retained. CUA rejects Simulator as unavailable; explicit
+Maestro/ADB-driver question is pending with user; independent web/API/SQL work continues.
+Stream3 heavy grant remains; backend own-profile response repair is being verified.
+Next serial order165→181→166→167→168→177→179→180, docs last. No row closes.
+
+
+## September 22 — web offer amount and fallback identity repaired; PR180
+
+Branch `codex/web-offer-price-precision`, exact `09a878d384d0abc033fccdc6b8c6f3ca7c7129a5`,
+[PR180](https://github.com/WangPantopus/skinny-pantopus/pull/180), starts from adopted
+master0b1a26cc1. Paid integration was pushed there after tree equality with accepted
+PR1755c5c91b9d and migration policy passed (Node20.20.0); merged-master CI still running
+at adoption. Actual web baseline: ranked bid12.50 rendered13; v2-only503 invoked real
+legacy bids but showed0/Helper despite canonical bid_amount12.50/safe bidder.displayName.
+Current/archived/all-ref comparison found the same card. Smallest repair: existing
+OfferCardV2 reuses formatPrice and safe displayName, three added/two removed lines.
+No new application file, schema, unit test, layout or navigation change.
+
+Actual CUA web → SDK → existing API/PostgREST/SQL now shows Tip Worker R1/$12.50 on both
+ranked/fallback paths, plus12→$12 and0→$0. Final touched full GigBid row including
+microsecond timestamps restored exactly; six collection projections match by stable id.
+No accept/decline, payment/provider object or unintended writes. Existing99 checkout/
+entrypoint regressions, web type gate0 errors and scoped lint0 errors/2 existing warnings
+pass. Exact [CI35730870955](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35730870955)
+passes; native/backend jobs skipped by changed paths. Integrate PR179 before180: API18132
+loaded179924ac3299 before frontend checkout changed. This paired runtime is explicit.
+
+Durable owner `.pantopus-recovery/audits/20260922-stream1-offer-card-r1/`,10files;
+MANIFEST `109eb987ba8896e22c4a39db3150863f40a681634380952bee62816020e087c1`.
+All hashes verified. Actual Settings logout200→/login, tab2 closed; API18132/Next18133
+stopped, generated tsconfig/cache removed, application worktree clean. Exact fixture
+IDs/foreign-key counts0 across12tables, ledger79 retained. A broad substring scan found
+one pre-existing detached completion File from04:02UTC with null user/gig keys and
+pending storage cleanup; preserved for separate existing cleanup-contract review.
+This price milestone created no files; zero fixture FK counts are not zero historical
+metadata. Native apps remain terminated, devices retained; Stream3 owns heavy build grant.
+
+Synthetic identity/session/Connect and unrelated ancillary collections; socket/push/email
+unavailable. No new native/hosted/physical/account/lifecycle/concurrency acceptance or row
+closure. Initial local chunk-load hydration recovered on fresh reload; no auth app change.
+Coordinator merged176 as95016cdbb after fresh CI35729368796 and reviewed7-file bundle;
+178 current-master update requested next. Continue retention/native dispute and serial
+integration. PR body and private RESUME current.
+
+## September 22 — ranked offers reader repaired; PR179
+
+Branch `codex/offers-user-verification-contract`, commit
+`924ac3299ba73191f1cbdf7dd5060f33931cf853`, is
+[PR179](https://github.com/WangPantopus/skinny-pantopus/pull/179), based on master3b4404ed3.
+Paid integration adopted/pushed that master after exact CI35724702512 and migration
+policy passed. The unchanged policy check passed on Node20.20.0 after Node24's child
+stdin hashing stalled; only the owned stuck child was stopped. No checker source changed.
+
+Reused actual native3DS baseline: both clients' ranked-offers GET500 came from selecting
+nonexistent `User.verified_at`. Canonical and retained SQL already expose `verified`.
+Current/archived/all-ref comparison found the same query; the existing route now selects
+that boolean and returns strict true in bidder/trust projections. Three lines in existing
+`backend/routes/offersV2.js`; no new app file, migration, unit test, scoring or UI change.
+
+Installed iOS and Android now receive offers200 without legacy fallback and display
+their existing Best Match treatment. Real web login → `/app/gigs-v2/:id` also receives
+ranked offers200 and renders one bid. Actual User boolean true/false/null projects
+true/false/false; amount12.50/score45/rank1 unchanged. Worker/other403, missing/malformed
+gig404. UI before/after collections unchanged, zero provider objects. Original verified
+value restored; timestamp driver precision is bounded and all disposable rows deleted.
+
+All15 existing scoring tests, syntax/diff and exact
+[CI35728227377](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35728227377)
+pass. Current-master update/fresh CI remains required before serial merge. Owner bundle
+`.pantopus-recovery/audits/20260922-stream1-offers-reader-r1/`:12 files; MANIFEST
+`d6e38fbfba28f4a1f4914e5bd41ac8b4ef1ceef53842badac122e56a3c67fcf1`.
+
+Browser logged out to/login and tab closed; apps terminated; API18132/Next18133 stopped.
+Independent12-table fixture counts0; ledger79 retained. Only owned generated tsconfig/cache
+changes removed. Owned devices stay available; heavy slot free, peer resources untouched.
+Synthetic identity/session, local retained schema/provider and device boundaries remain;
+no row closes. Stale browser cookies and missing harness logout handling were corrected
+only in the private harness. CUA export is unavailable: compact observed AX and real
+API/SQL are retained, without a claimed web screenshot.
+
+Next: actual web offer12.50 renders13 because existing OfferCardV2 uses toFixed(0).
+This separate monetary display defect is recorded for the smallest existing-card repair;
+then continue native dispute/provider and remaining payment scope. Coordinator merged
+PR160 as6e24aef59 after all CI35724788993 passed; PR175 is updated to5c5c91b9d with fresh
+CI running. Reviewed178 moves the unchanged mailbox preferences block before/:id;
+176/178 exact evidence handoffs remain with Stream2. Private RESUME updated.
+
+## September 22 — native 3DS return repaired and verified; PR177
+
+Repair branch `codex/ios-stripe-authentication-return`, commit
+`ad20c667d1b13f866c6244a1486b9b3bdf181f46`, is
+[PR177](https://github.com/WangPantopus/skinny-pantopus/pull/177). The paid integration
+branch previously adopted and pushed `e5335f584` after exact merged-master CI passed
+and migration policy passed. The paid worktree now holds this clean repair branch.
+
+Installed iOS baseline required manual Safari Close after both failed and successful
+Stripe TEST 3DS. The existing shared PaymentSheet now supplies the registered `pantopus`
+return URL, and the existing app URL handler forwards Stripe callbacks before normal
+routing: three added lines in two existing files. No new app file/unit test or visual
+change. All-ref source comparison found no alternative implementation to reuse.
+
+Installed candidate failure automatically returns the authentication error with card
+retained; retry/COMPLETE automatically assigns the gig using the original 750c intent.
+Separate authentication-page cancellation then sheet dismissal calls abort-accept200,
+cancels 550c, and restores pending bid/open gig. Retained Android APK matches accepted
+P08 binary and relevant current source: failed/successful 3DS retry also uses one 1250c
+intent; background from a separate challenge and actual launcher return recover the
+existing Resume/Cancel dialog. Cancel payment setup cancels 550c and restores the bid.
+Actual app → real routes/services → SQL → Stripe TEST receipts agree; zero capture.
+
+Candidate build and 77 existing focused tests passed (56 deep-link, 13 recovery, 8 save),
+with scoped lint/format/diff. Exact [CI35723156495](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35723156495)
+passed all required checks, including three iOS devices. PR177 is behind later peer
+merges and needs its current-master update/fresh CI before serial integration.
+
+Owner bundle `.pantopus-recovery/audits/20260922-stream1-native-3ds-r1/`: 26 files;
+MANIFEST `2560b7c78a9971316680390b8225b120e00f427c2f8cc52f9ab100a90659b9de`.
+Baseline and candidate test intents canceled/customers deleted; independent owned
+SQL counts zero across 12 relevant tables, retained ledger79 unchanged. API18132 stopped,
+18133 free; apps terminated, owned devices retained. SQL64562/API64561 stays up.
+Heavy native build slot is free; peers request a grant. No peer resource changed.
+
+Limits: synthetic identity/session and Connect, real Stripe TEST, simulator/emulator;
+no live/hosted/physical bank-app, cold-process-death/account-switch/concurrent3DS claim.
+Existing accepted recovery evidence remains bounded; no payment row closes. Harness
+corrections mounted the real v2 offers router and supplied the server sessionId contract.
+Both native traces then exposed a separate offers reader500: `User.verified_at` does not
+exist; canonical and retained User have `verified`. Existing legacy fallback preserved
+checkout. Next repair this reproduced query in a separate current-master branch, then
+continue native dispute/provider gaps. P04/P05 fee policy still needs founder decision.
+Private RESUME updated with evidence, cleanup, CI and next action.
+
+## September 22 — O02 local recovery rehearsal and peer integration
+
+The existing backup runbook was exercised against the owned wallet-read-r1 project
+(PostgreSQL 17.6, retained ledger 79) using synthetic users, a gig, a bid, an initializing
+payment attempt and a private Storage object. Encrypted archive recovery preserved exact
+row fingerprints and the complete ledger. Normalized ownership, privileges, RLS flags,
+policies and routine definitions match across public/auth/storage. One refund CHECK
+constraint has an equivalent PostgreSQL array-cast rendering; its exact expressions and
+eight SQL truth-table cases are recorded. No source constraint or migration was changed.
+
+Raw restore alone missed the managed GraphQL wrapper definition and additional grants
+on three PostGIS objects. The final recovery package captures those before restore and
+reapplies the original definitions/grants. External file bytes were backed up separately,
+the original removed, and the recovery upload downloaded with an identical SHA256. This
+is a bounded local operator rehearsal, not a generic hosted restore command or complete
+API/Auth/Storage service recovery. Global role recovery, hosted credentials/configuration,
+provider storage and measured RPO/RTO remain unverified; O02 is not closed.
+
+Owner evidence: `.pantopus-recovery/audits/20260922-stream1-restore-r1/`, 5 files;
+MANIFEST `8d834f4d561f29af20b509062c1fb6934051ec686c5163970a5dec688b61bf39`.
+No application change or new unit test. Exact f9220520 fixtures, bucket/objects and the
+temporary restore database were cleaned; source ledger remains 79. Encrypted archives,
+archive password and operator logs remain outside Git and the evidence bundle.
+SQL64562/API64561 stays up.
+
+Peer PR163 merged as `e5335f584dd99f82e7c66a3974b04400098f0c0c` after refreshed head
+`f1ca9002f581b86d5ea23b1badf6c1569f5a4df6` passed CI. Its real browser block/unblock
+cache repair and all 102 evidence hashes were reviewed (manifest735ba1dd…429f).
+PR164's refreshed `db91f33ff73b5c012e361a1061c9fbe3e0e07a62` awaits native CI.
+PR175 separately carries the Home bill-field contract repair at501caf65a; CI is green,
+with direct authenticated API/SQL evidence and a concretely unreachable web edit entry.
+PR160's original native jobs were canceled by a temporary push; its full exact-ede5b72b
+workflow35719644248 must finish before native checks are accepted.
+
+Next: serialize164→160→175→165→166→167→168, documentation last. Stream3 released
+its Android build slot. Stream1’s local Maestro hierarchy and installed-launch probe
+passed on C2BCF36A; its current3DS UI run uses the installed driver without reinstalling
+or building the app. The heavy build/initial-driver slot is now granted to Stream2.
+
+## September22 — retained ledger and native-control boundaries
+
+Read-only G03/G04/O01 reconciliation at master662ab04b5: source has81 runnable SQL
+migrations; owned wallet-read-r1 has79 applied versions.57 retained files match current
+names and bytes,21 paid files are byte-identical under newer names, and the22nd differs
+only by one deployment-order comment. Two later Home migrations (atomic settings profile
+and package in_transit) are absent. The79-entry payment evidence is preserved with that
+exact boundary; current-master canonical CI replay does not establish populated adoption.
+No ledger/schema was changed. Do not blindly push the renamed chain or rewrite history;
+use a reviewed canonical environment/adoption plan for combined current-master journeys.
+Owner bundle `.pantopus-recovery/audits/20260922-stream1-ledger-reconciliation-r1/`,2 files;
+MANIFEST `eb71401e1159060c07675161a46adfa20d66e8bc9c09511b230f60cf83af4370`.
+
+Native UI capability: active Xcode27 has DeviceHub.app rather than Simulator.app.
+CUA bindings to DeviceHub by ID, verified path and Xcode developer-tool launcher all
+time out; Xcode accessibility responds. No device reset or peer device change. Task-local
+official Maestro2.10.0 archive checksum verified and CLI help works (analytics disabled),
+and a later hierarchy/installed-launch probe passed. Native3DS is now in progress using
+the existing P08-derived real Stripe TEST runtime on18132; acceptance is recorded only
+after full app/API/SQL/provider reconciliation and cleanup. Native dispute remains open.
+No new fixtures, tables, application files or tests. Retained SQL64562/API64561 stays up.
+
+## September 22 — read-only release app-link boundary (O04/O05/N01)
+
+The current public `.com` apex and www hosts return both association files with HTTP
+200, JSON content types and no redirect. Their AASA still lists only the legacy
+`6UYZBA546R.com.pantopus.app`; current source already includes native
+`6UYZBA546R.app.pantopus.ios`. The deployed file is therefore behind the repository.
+Published and repository Android assetlinks both list only `com.pantopus.app`, while
+the native app uses `app.pantopus.android`. Its actual distribution certificate must
+be verified before adding that package; do not reuse the Expo fingerprint by guess.
+
+`pantopus.app`, its www host, and the configured native Release/Staging API defaults
+`api.pantopus.app` / `staging.api.pantopus.app` do not resolve from this Mac. Build
+secrets can override source defaults: this does not establish a signed binary's
+effective URL. The June static readiness report was treated as historical, not as
+a live result. No hosted setting, DNS, source or provider activation was changed.
+
+Owner evidence: `.pantopus-recovery/audits/20260922-stream1-release-links-r1/`,
+3 files; MANIFEST SHA256
+`397f4e5614019f880136ccc51eba4dc4f7455fd05c02ba7de97301c9c7badf6f`.
+This is source/public HTTPS/DNS evidence, not installed-device association acceptance.
+No fixtures or runtime created. Remaining boundary: reviewed hosted deployment, native
+release signing/certificate evidence, exact binary configuration, and installed-device
+link verification. Routed to Stream3 as a reusable N01 boundary; no acceptance row closes.
+
+## September 22 — current-master rebase and P10 expiry pagination repair
+
+Branch `codex/p10-expired-bid-pagination`, source
+`9f1d1db824bffdbff3dfe0a1cd406a7565ff0451`, [PR173](https://github.com/WangPantopus/skinny-pantopus/pull/173).
+Paid integration was first rebased/pushed to master69be3c11d (PR47 and34 merged by the
+founder); the new repair starts from that master in the existing paid worktree.
+Changed path: `backend/jobs/expirePendingPaymentBids.js` only. Exact CI35715834339 passes all applicable checks. PR173 merged as662ab04b5 after initial master69be3c11 CI35714120974 completed fully green; paid integration adopted/pushed662ab04b5 with migration policy passing. No new application file, table, migration, service, screen or unit test.
+
+Reproduced with actual job/SDK/PostgREST/SQL:1000 retained durable attempts fill the
+server's1000-row page; a later expired legacy bid remains pending_payment after two
+worker runs, with0 writes. The existing worker now reads stable-ID pages of500 before
+its unchanged durable/provider checks. Candidate reads500+500+1, reverts the legacy
+bid and preserves all1000 durable attempts. Repeat makes0 writes. Two simultaneous
+workers send two status-guarded PATCH requests and converge to the same SQL state;
+this does not prove one HTTP request or provider cancellation idempotency.
+
+One injected later-page503 is recovered by the SDK's own retry. Sustained503 exhausts
+its four attempts with0 writes; a malformed200 object also makes0 writes. Both recover
+on the next clean run. Existing paidGigPaymentProof:87/87; syntax, diff and actual-base
+migration policy pass. Reuse the prior installed P10 checkout→expiry→Resume/Cancel
+evidence (all20 hashes verified) and current master's passed complete-schema replay.
+
+Evidence: owner `.pantopus-recovery/audits/20260922-stream1-p10-workload-r1/`,11 files;
+Capacity extension:10,000 durable attempts plus one later legacy bid; first pass47.6s
+with1 guarded update, repeat81.0s with0 writes. All durable attempts retained. These
+are local timing observations, not hosted throughput guarantees.
+
+MANIFEST SHA256 `6ae2bfc722dcfe2dcde596f535990e596105524da6eb7747eebc451198184487`.
+Scale fixtures are direct synthetic SQL; response controls are labelled loopback
+transport injections. No provider calls, new native acceptance, hosted throughput or
+P10 row closure. Memory/very-large-backlog throughput, provider operations at volume,
+notification volume and durable-retention policy remain open.
+
+Cleanup: exact f9220510 Gig/GigBid/GigPaymentAcceptance/User/auth.users counts0 after
+every run; ledger79 unchanged, no schema/trigger/permission edits. Retained owned
+SQL64562/API64561 stays up;18132/18133 free; no Stream1 native build/server started.
+Peer resources untouched. Private RESUME updated. Next: finish exact CI/source review
+and integrate serially, then remaining P10/native dispute/3DS acceptance.
 
 ## September 22 — P10 durable checkout vs. expiry worker; master re-adopted into paid
 

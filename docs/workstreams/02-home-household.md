@@ -1,4 +1,259 @@
+# CURRENT RESUME SUMMARY — Stream 2 Home and household (September 22, 2026)
+
+This section is the takeover point for another agent. It consolidates existing receipts and the coordinator's current integration state; the detailed historical sections below remain authoritative for individual journeys. Do not repeat accepted journeys, create a second tracker, or infer whole-row closure from a bounded repair.
+
+**Source and integration boundary**
+
+- The original application worktree is `/private/tmp/pantopus-workstream-home`, branch `codex/native-emergency-edit-20260922`, HEAD `ee69cbd8d74367a22fbdfa4d9c4c306d3c662eb3`. It is intentionally unchanged and is 46 commits behind the coordinator's isolated PR192 integration head `ea044ebea7aedfae5c939e65ac1bccd841fc9e47` in `/private/tmp/pantopus-pr192-integration`; do not pull, reset, merge, or re-verify there unless the coordinator assigns that integration checkout.
+- **PR192 merged** at 21:12 UTC as `37cb6d2167b1a59e7e77406feda59ca97873927c` after its fresh exact-head CI `35776302859` passed on `ea044ebea7` (all jobs, including Android lint/test/assemble and instrumented). It preserves the accepted Emergency Edit and Delete behavior. The original checkout at `ee69cbd8d` and its installed APK remain the evidence source; that commit is now in master history. The retained `stream2-backend-latest` route patch is identical to the merged route (all 47 added lines match), so the runtime can adopt master at its next restart; keep the backup.
+- The sole live status is this file in `/Users/yingpengwang/pantopus-coordination` on `codex/workstream-coordination` (PR174). Coordinator incorporated the complete preserved PR161 status through `4d33f5f5314581b6561efc43089e86822913bb98`; that supplemental docs branch remains open, not a second live tracker. Coordinator owns merge/disposition and shared backlog updates.
+
+**Completed Stream 2 code and contract changes**
+
+- **PR144 → PR154 → PR160 package/bill batch:** merged PR144 `708b0a931` (package edit/manage authorization, own-record gating, In Transit migration/status validation and control visibility) and PR154 `b56fad654` (native package list reload, delivered-package pickup controls, confirmed-write dismissal and stale-error clearing). PR160 merged `6e24aef59` after exact CI `35724788993` (prior native receipt `35719644248`): it preserves historical bill status spellings, fixes Android/iOS bill date and paid/remove receipts, derives native identity/verification from occupancy, repairs D02 media/error handling, D03 standalone bill units, D09 false-empty pets/polls/readers, package lifecycle fields and the existing Home settings viewer labels. Existing screens, layouts and navigation remain intact.
+- **PR175/176/178:** PR175 merged `0b1a26cc1` after CI `35728607795`, extending the existing HomeBill PUT allowlist/API type for dashboard-submitted fields; PR176 merged `95016cdbb` after CI `35729368796`, changing the existing web Settings Leave Home caller from admin `/detach` to self-service `/move-out`; PR178 merged `715ccd8c0` after CI `35731690811`, moving the existing mailbox preferences GET/PATCH block before generic `/:id` routing. No replacement screen, service, table or migration was introduced.
+- **PR183:** merged `3e8d11dfd` after exact CI `35757736325`; the existing Android guest-pass form acknowledges dismissal after its delay so the existing callback returns to Members/Guests. Real create → Later and Share/Copy chooser → dismissal → DELETE/revoke journeys were cleaned exactly.
+- **PR189/191/192 Emergency:** PR189 merged `6bec1e878` after CI `35766200401`; existing Android API/repository bindings now call the existing row-scoped DELETE and retain failed detail state with retry. PR191 merged `2048d9713` after CI `35771470998`; the existing Add Emergency form waits before acknowledging dismissal. PR192's source commits `5f9e6cf7f`, `96fb8ce3f`, `46c27c85d`, `a26545c10`, `ee69cbd8d` add the existing row-scoped PUT route/client binding, server-reload detail refresh, draft retention, untouched location/raw-detail preservation, and malformed/foreign identity response guards. `a26545c10` only aligns the existing regression fixture with the server envelope; no new test case/file was added. PR190 `ea43d92b3` is a coordinator-owned non-Stream2 integration merge; it adds no Stream2 app scope.
+
+**Accepted end-to-end evidence and exact artifacts**
+
+- The current Android APK from `ee69cbd8d` is SHA256 `073e9467e787df1fad93b9d3b28cfaa9db89c7fbaaee30b1e8eea4b850710491`, installed on `emulator-5556`. A populated title-only Emergency edit preserved `location=Cabinet 2`, `phone`, `custom_key` and `detail`; the detail reloaded from the server. A real `home.edit=false` response returned 403 with the draft and SQL unchanged; removing only that override and retrying returned 200. Disposable malformed-type and wrong `id`/`home_id` HTTP 200 readbacks kept the form open with its draft. Final fixture counts were `HomeEmergency=0`, `HomePermissionOverride=0`, `HomeAuditLog=0`.
+- Earlier installed Android/iOS package and bill receipts, guest-pass create/Later/Share/revoke, Emergency DELETE, web Leave Home, mailbox route, D02/D03/D09 and PR160 evidence remain accepted within their recorded provider, hosted, synthetic-account and emulator/simulator limits. Key durable manifests include native batch `3302c64717b8cd983679c4e504ccf32bbcb62d244ab98ecfd2fff5bd5208db59`, package native `805d8d448de1d748c9b9af4e29476038bea79371b6bb067c98507ea932b5e211`, guest pass `dc9f2a3c5820a6adaa10e365a2443c2a7c0b1b47bf81995e0f91082f884eb022`, Emergency DELETE `48d996eef15c28b61006603e608f5573beee7975ec6b752a30bc19bc847cd052`, PR176 `753f7626e155727c71da8dd254b3b9fec4e03c09e77b9b772c01e21c38d69c0e`, and PR178 `1c72d93b6eea04b7dc66454df99bb68d7804a53e46d9d9dea138592f63455057`.
+- The coordinator-authoritative current PR192 preservation bundle is `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-native-emergency-edit-preservation-r1/`, 12 files, `MANIFEST.json` SHA256 `9993d82400671c7a5249ac0e8cb159a5c303cfda2b4ba013b663212226ffa5d0`. It contains the recovered 11-file `ee69cbd8d` evidence plus the integration receipt; no journey was rerun for publication. The earlier local working bundle and older audit-root references are superseded for handoff by this path.
+- The exact current iOS device build was signed from `ee69cbd8d` at `/private/tmp/pantopus-stream2-ios-latest/frontend/apps/ios/.stream2-device-dd-ee69/Build/Products/Debug-iphoneos/Pantopus.app`; bundle `app.pantopus.ios`, embedded API/socket `http://192.168.0.176:18142`, main binary SHA256 `b57e7d667fc218045f29136bf78429c94b22864c27921669dcb8b22087baa28a`, deep codesign valid. Physical iPhone `00008140-00087999020B001C` remains CoreDevice `unavailable`/4016; no install or launch is claimed.
+
+**Runtime, device and cleanup boundary**
+
+- Retained backend is `127.0.0.1:18143` behind LAN proxy `192.168.0.176:18142`; both health endpoints return 200 with the database connected. Port 18141 is unused. No `xcodebuild`, Gradle or Swift compiler is active; the one-heavy-native-build slot is released.
+- Home fixture `f0e51100-0000-4000-8000-000000000200` is reconciled to zero synthetic Emergency, permission-override and audit rows. The existing runtime and provider/hosted boundaries remain labelled; no shared cache, peer runtime, migration ledger or unrelated fixture was removed.
+
+**Authoritative 40-row Home accounting**
+
+The existing inventory is exactly H01–H08, R01–R06, I01–I07, D01–D10, F01–F05 and M01–M04: **8 closed** (H01–H06, R01–R02) and **32 partial/open** (H07–H08, R03–R06, I01–I07, D01–D10, F01–F05, M01–M04). The existing 80-row backlog remains authoritative. The exact 40-row evidence mapping below this summary explains its remaining criteria and must be updated in place when a bounded criterion changes. Current open boundaries include onboarding/provider/lifecycle exit criteria, ownership transfer and residency passes, health/property/weather/calendar consumers, remaining Home mutations and media/unknown-save semantics, settings/privacy/concurrency, external-share hosted lifecycle, Place finance, and private-mail/large-household/neighbor actions. No partial row is closed by green CI alone.
+
+**Precise next actions / no-repeat instructions**
+
+1. Done: the coordinator merged PR192 (`37cb6d216`). Reuse the recorded `ee69cbd8d` installed evidence and the durable bundle; do not rerun Emergency Edit/Delete, guest-pass, bill, package, Leave Home or mailbox journeys.
+2. If the physical iPhone becomes available, install the existing signed `.app` against LAN `18142` without rebuilding; until then, physical-device acceptance remains unverified.
+3. **Next assigned row: R06 residency letters** (issue, view, public verification, revoke and denial across web/iOS/Android). The exact criterion, existing implementation and resources are in the coordination summary's current resume point. Preserve all current runtime/fixture cleanup and use only the live docs status file for further reporting.
+
+
+**Earlier implementation groups preserved in this handoff**
+
+| Existing area/source | Completed fixes and evidence to reuse | Publication / limits |
+|---|---|---|
+| Home authority, identity, residency and lease routes/services/SQL; existing native Home screens | Detail/list projections, per-field grants, current authority, native identity/first use, residency protected commands/receipts, invitations, lease requests and private file readers. Original accepted reports remain linked from the backlog and verification-first reconciliation. | PR32/35/36/37/43/44/45 merged; closed H01–H06/R01–R02 preserved. PR38–42 histories incorporated in43, not discarded. Broader R03–R06/provider/lifecycle limits remain. |
+| Browser guest/share and emergency: existing guest page, ShareCenter/ScopedShareModal, Home SDK/routes | Honest expiry/view-limit/scheduled/reissue states, passcode bounds, error/retry, stale-result retirement; actual issue→copy→view→revoke plus real permission/SQL controls. Scoped links, DocsCard share, emergency persistence and download error handling followed. | PR53/60 merged; native/hosted external-share breadth remains D08/M02. |
+| Dashboard/standalone audit and members: existing Home tabs and members page | Distinguish read500/403 from empty and retry; permission writes stay tied to selected member; correct existing five-role cycle; retire role/decline/invitation confirmations with caller/session; real request-list and audit failure/retry. | PR102/104/121/123/125/128/131/133 merged. Do not replay accepted UI/HTTP/SQL denial/retry and cleanup; explicit role-choice/product and broader provider panels remain. |
+| Home settings/profile/privacy: existing HomeSettingsTab, edit modal, HomePrivacyService/routes, update_home_settings SQL | Recover failed reads before edits; use canonical PATCH/coordinate contract; persist optional clearing; fail closed on privacy read and partial-write pre-read failure; one atomic Home/profile/settings transaction. | PR108/109/110/112/116/118/137 merged. Existing retained-save/lifetime attempt limitations remain explicit; no full concurrent/account-lifetime claim. |
+| Home package/bill/issue/pet/poll web panels and native Home models | Package row opens existing editor with current write permissions/status controls; native list/detail/pickup/remove recovery; truthful media handling and errors; canonical bill units/dates/status/paid_by/fields; native occupancy labels; false-empty readers fixed. | PR144/154/160/175 merged. Existing D02 attachments contract and remaining native actions/unknown-save/provider cases are not closed. |
+
+Individual changed paths, source commits, before/after cases, exact SQL cleanup and existing regressions for these groups are preserved below; PR diffs contain the complete changed-file lists. No earlier test history is permission to add new unit tests now.
+
+**Coordinator recovery and runtime qualifications (September22)**
+
+- The peer's handoff was successfully pushed to its existing docs branch even though the task surfaced no assistant/tool output. Coordinator recovered that published work rather than regenerating evidence. The older `native-emergency-edit-r1` mirror was missing at the first check but is now present with16 files and MANIFEST `67224abeddb3f92194dedb785f283bd8b4f4f961e696eee42e710ddf13f466ed`; its common source artifacts match the12-file preservation bundle. Both are preserved; use the latter for the coordinator integration receipt.
+- Original Home checkout has untracked `frontend/apps/web/.next-stream2/`; preserve it. `/private/tmp/pantopus-stream2-backend-latest` is detached at `cc885ab2315a289d7b809555dd00f759b1b82511` with a modified `backend/routes/home.js` and `home.js.before-emergency-edit` backup. This is the retained local runtime patch, not an unpublished feature to discard. Compare its exact route patch to accepted192 before adopting later source; do not reset it or start a duplicate runtime.
+- Native SQL64554/PostgREST64553 retains59 ledger rows and the explicitly noncanonical22000 boost-column/index overlay described below; never rewrite this ledger or claim a full latest replay. Preserve existing synthetic fixture accounts/occupancies/bills; zero Emergency/override/audit cleanup does not mean the whole runtime database is empty.
+- Stream2 has explicitly released the heavy native slot in its published handoff. Coordinator has not reassigned it; no build is authorized during this documentation consolidation. Idle Gradle/Kotlin daemons are not an active build and were not killed. API18143/LAN proxy18142 are intentionally retained. Historical `/api/health`404 is not a failed health check; use the established health endpoint from the private runtime recipe.
+- Devices: Android `emulator-5556`, iOS simulator `6F914A30-8585-4B05-9E05-94441675F10A`; physical iPhone unavailable/CoreDevice4016. Private operational resume is `/private/tmp/pantopus-workstream-home/.stream2-verification/RESUME-2026-09-22.md`. Never print its credential-bearing companion files or proxy request logs.
+
+**Verified current evidence references**
+
+| Existing evidence bundle | Files checked | MANIFEST SHA-256 |
+|---|---:|---|
+| [20260922-stream2-home-native-batch1-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-home-native-batch1-r1/MANIFEST.json) | 97 | `3302c64717b8cd983679c4e504ccf32bbcb62d244ab98ecfd2fff5bd5208db59` |
+| [20260922-stream2-package-native-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-package-native-r1/MANIFEST.json) | 30 | `805d8d448de1d748c9b9af4e29476038bea79371b6bb067c98507ea932b5e211` |
+| [20260922-stream2-media-discard-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-media-discard-r1/MANIFEST.json) | 16 | `102f6979a5bf99979eb98a6152314631939d67b0a90d085239fa2eeae7c5be3d` |
+| [20260922-stream2-bill-units-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-bill-units-r1/MANIFEST.json) | 10 | `215707aa9eaa607f4bdd57692d5906ec496cffa6c74849083dc667bd693f6f29` |
+| [20260922-stream2-package-delivered-at-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-package-delivered-at-r1/MANIFEST.json) | 12 | `08dfb466c794556271c7e72b7b318cf95e9aeec190304775967cef3b63b5e865` |
+| [20260922-stream2-false-empty-readers-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-false-empty-readers-r1/MANIFEST.json) | 14 | `b6c12b6f2dc470f26a7d32b8afc4eda7e29d076accd1ababc7b39444ee3f27c5` |
+| [20260922-stream2-home-leave-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-home-leave-r1/MANIFEST.json) | 7 | `753f7626e155727c71da8dd254b3b9fec4e03c09e77b9b772c01e21c38d69c0e` |
+| [20260922-stream2-mailbox-preferences-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-mailbox-preferences-r1/MANIFEST.json) | 4 | `1c72d93b6eea04b7dc66454df99bb68d7804a53e46d9d9dea138592f63455057` |
+| [20260922-stream2-native-guest-pass-dismiss-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-native-guest-pass-dismiss-r1/MANIFEST.json) | 16 | `dc9f2a3c5820a6adaa10e365a2443c2a7c0b1b47bf81995e0f91082f884eb022` |
+| [20260922-stream2-native-emergency-delete-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-native-emergency-delete-r1/MANIFEST.json) | 6 | `48d996eef15c28b61006603e608f5573beee7975ec6b752a30bc19bc847cd052` |
+| [20260922-stream2-native-emergency-dismiss-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-native-emergency-dismiss-r1/MANIFEST.json) | 6 | `0eddbb79b71f81217caaaa67f8c4ed4eb8f74b77879dd0ff1a1e2abe7566819c` |
+| [20260922-stream2-native-emergency-edit-preservation-r1](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-native-emergency-edit-preservation-r1/MANIFEST.json) | 12 | `9993d82400671c7a5249ac0e8cb159a5c303cfda2b4ba013b663212226ffa5d0` |
+
+Earlier September21 audit/member/settings/privacy/confirmation/package bundles remain linked below with their original hashes and limits. The handoff integrity pass found no missing or changed listed file in96 checked bundles; it did not repeat product verification. Older “pending”, “current” and runtime paragraphs below are chronological evidence, not instructions overriding this summary.
+
+## September 22 native Emergency Info edit — focused persistence and response-integrity repair verified end to end
+
+The retained Android owner flow reproduced a concrete persistence gap after the accepted PR191 dismissal repair: Home dashboard → Emergency info → existing row → Edit opened the existing form, but `submitEdit` only committed a local draft. There was no Android PUT binding and no backend update route, so the change could not survive a server reload. Source comparison found the existing Home Emergency POST/DELETE route, DTO shape, form, detail route and shared web client; an in-place extension was sufficient and no new screen, service, table or migration was justified.
+
+PR192 (`codex/native-emergency-edit-20260922`, commits `5f9e6cf7f`, `96fb8ce3f`, `46c27c85d`, `a26545c10`, and `ee69cbd8d`) adds the row-scoped `PUT /api/homes/:id/emergencies/:emergencyId`, reuses the existing Android DTO/API/repository, submits edits through the existing form, retains the draft on failed requests, reloads the existing detail on route resume, and exposes the same established PUT contract through the shared web SDK. `a26545c10` only aligns the existing edit regression fixture with the server-save envelope; no new test case or test file was added. Existing layout, styling and navigation remain unchanged.
+
+The first populated-row review found a concrete preservation failure: changing only a title sent `location:null` and only the visible `detail` key, losing the untouched location, phone and custom key in SQL. The in-place repair carries the existing location and raw details through `EmergencyFormDraft`, merges only dirty visible keys, preserves legacy projections, and refuses to dismiss on malformed or identity-mismatched successful readbacks.
+
+The exact current APK (commit `ee69cbd8d`, SHA256 `073e9467e787df1fad93b9d3b28cfaa9db89c7fbaaee30b1e8eea4b850710491`) was assembled with `:app:assembleDebug --no-daemon`, installed on `emulator-5556`, and exercised through the real owner UI and LAN backend. On a populated synthetic row, title-only edit returned HTTP 200 with `location=Cabinet 2` and all existing detail keys preserved; the detail screen reloaded the title. A temporary `home.edit=false` override produced HTTP 403 with the draft retained and SQL unchanged; removing only that override and retrying returned HTTP 200 and again preserved all untouched fields.
+
+The exact current iOS head was also built in the isolated checkout `/private/tmp/pantopus-stream2-ios-latest` from `ee69cbd8d`. `xcodebuild -sdk iphoneos -configuration Debug` completed `BUILD SUCCEEDED`; deep code-sign verification passed, bundle `app.pantopus.ios`, and the embedded `PantopusAPIBaseURL` is `http://192.168.0.176:18142`. The artifact is `/private/tmp/pantopus-stream2-ios-latest/frontend/apps/ios/.stream2-device-dd-ee69/Build/Products/Debug-iphoneos/Pantopus.app`, main binary SHA256 `b57e7d667fc218045f29136bf78429c94b22864c27921669dcb8b22087baa28a`. CoreDevice still reports the paired iPhone unavailable (4016), so no physical install or launch is claimed.
+
+Two disposable response-integrity journeys used the same rebuilt app and exact row-scoped caller. A proxy changed a valid HTTP 200 readback to an invalid `type`; the form stayed open with the draft retained. A second proxy changed only the returned `emergency.id` and `home_id` to foreign values; the form again stayed open instead of dismissing or accepting a foreign row. The server-side synthetic updates and all helper rows were then deleted by exact id. Final retained counts for the fixture home are `HomeEmergency=0`, `HomePermissionOverride=0`, and `HomeAuditLog=0`; loopback and LAN health are HTTP 200/database connected.
+
+Durable sanitized evidence is `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-native-emergency-edit-r1/`, current `MANIFEST.json` SHA256 `67224abeddb3f92194dedb785f283bd8b4f4f961e696eee42e710ddf13f466ed`. It includes the prior loss reproduction, rebuilt preservation/denial receipts, malformed and identity readback boundaries, screenshots, APK hash and cleanup. Exact-head CI run `35764090022` completed successfully, including Android lint/test/assemble, instrumented tests, backend/web/database and safeguards; iOS and Seeder were correctly skipped by path detection. The physical iPhone remains unavailable to CoreDevice (4016/unavailable), so no physical iPhone install or launch is claimed. The backend is available at `192.168.0.176:18142` for a connected device.
+
+**Bounded handoff receipt:** The sanitized local bundle at `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-native-emergency-edit-preservation-r1/` and the 16-file durable bundle have identical bytes for every common artifact; no durable file was missing and no journey was rerun. The coordinator also verified the unchanged 11-artifact mirror at `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-native-emergency-edit-preservation-r1/`, MANIFEST SHA256 `224096ef2d8be6fc42133397140131aef8f663eb7c8e0c58c0170d96e6e4521e`. Current source is `ee69cbd8d74367a22fbdfa4d9c4c306d3c662eb3` on `codex/native-emergency-edit-20260922`. Accepted limits remain the unavailable physical iPhone and the synthetic local fixture/provider boundary. Final fixture cleanup is `HomeEmergency=0`, `HomePermissionOverride=0`, `HomeAuditLog=0`; loopback/LAN health are HTTP 200/database connected. No native build is active and the heavy-build slot is released.
+
+## September 22 exact Home/residency/records/mail accounting — existing 40-row inventory
+
+This is the requested reconciliation of the existing Home slice of the 80-area
+backlog: H01–H08, R01–R06, I01–I07, D01–D10, F01–F05 and M01–M04. It is an
+accounting of current evidence and remaining acceptance boundaries, not a new
+tracker or a claim that partial workflows close a whole row. The slice is **8
+closed and 32 partial/open**. The eight closed rows are the existing H01–H06 and
+R01–R02 receipts; every other row retains an explicit boundary below.
+
+| Row | Current disposition and bounded evidence | Remaining boundary before row closure |
+|---|---|---|
+| H01 | **Closed — verified/preserve.** Existing detail/property authority and held-result retirement receipts are reused. | None within the recorded H01 scope; release-wide gates remain separate. |
+| H02 | **Closed — verified/preserve.** Existing list authority, safe errors and held-result retirement receipts are reused. | None within the recorded H02 scope. |
+| H03 | **Closed — verified/preserve.** Existing explicit projections and retryable detail/list/occupant reads are accepted. | None within the recorded H03 scope. |
+| H04 | **Closed — verified/preserve.** Existing per-field grants, household references and current roster are accepted. | Managed history and peer ownership remain separately gated outside H04. |
+| H05 | **Closed — verified/preserve.** Existing native identity, ownership, residency and current-access receipts are accepted. | Broader onboarding/first-use boundaries remain H07/H08/U01/U02. |
+| H06 | **Closed — verified/preserve.** Existing guarded deletion eligibility and occupancy/null behavior are accepted. | Broader member onboarding remains H08. |
+| H07 | **Partial/open.** Admission, invitation, task and native/browser recovery receipts are reused; recent native Home repairs do not change the row boundary. | New-account/provider/lifecycle exit criteria and remaining onboarding combinations. |
+| H08 | **Partial/open.** Owner/applicant/private-setup lists, selected-address and recipient decision paths are evidenced. | Broader new-account, provider and onboarding/verification exit criteria. |
+| R01 | **Closed — verified/preserve.** Prepared residency review, protected originals/receipts, decisions, restart and access retirement are accepted. | Release-wide gates remain separate. |
+| R02 | **Closed — verified/preserve.** Atomic submission, lock races, selected-address fencing, populated preservation and legacy compatibility are accepted. | Historical-binary UI, hosted adoption and broader applicant/reviewer lifecycle remain outside R02. |
+| R03 | **Partial/open.** Backend/browser/iOS/Android removal and current D10 self-leave use existing protected routes and receipts. | Complete re-entry, old unsubmitted reviewer originals and remaining occupancy lifecycle. |
+| R04 | **Partial/open.** Existing ordinary claim/review and relationship milestones are reused. | Ownership transfer, challenge/dispute and recovery paths. |
+| R05 | **Partial/open.** Existing lease approval/end/move-out/request repairs and native receipts are reused; PR176 only repairs the Home Settings caller. | Remaining lease attachment/provider/lifecycle combinations and broader release acceptance. |
+| R06 | **Partial/open.** No new closure evidence in this stream. | Residency pass/letter issue, view, revoke and public verification. |
+| I01 | **Partial/open.** No new closure evidence; current Home work does not establish checklist generation/cache freshness. | Health-score lag and uncertain-save recovery after checklist generation. |
+| I02 | **Partial/open.** Existing malformed-card/read evidence is reused. | Nested row validation, metadata, generation races, carryover/history and pagination. |
+| I03 | **Partial/open.** No new closure evidence. | Seasonal checklist hire/correct-gig linkage and original-intent recovery. |
+| I04 | **Partial/open.** D03 bill date/amount bounded repairs are accepted; they do not close calendar policy. | Local date rules, dashboard boundaries, recurrence and DST transitions. |
+| I05 | **Partial/open.** Existing property/detail readers are preserved. | Provider/data acceptance, stale cache, absent/wrong-property and verification wording. |
+| I06 | **Partial/open.** No new closure evidence. | Weather, air quality, alerts, daylight and civic sections across geography/provider states. |
+| I07 | **Partial/open.** Individual stale-reader repairs are recorded, including D09 response-integrity controls. | Mounted-view/cache invalidation without navigation, timeline labels and pagination. |
+| D01 | **Partial/open.** Package permission/status controls, Emergency PUT/DELETE and guest-pass repairs are real end-to-end; PR192 is the current preservation milestone. | Issues and remaining Home-entity mutations, receipts and complete create/edit/delete coverage. |
+| D02 | **Partial/open.** Existing panel error/draft retention is reused where verified. | Embedded issue/bill/package media, silent write failures, cancellation and unknown-save cases. |
+| D03 | **Partial/open.** Standalone bill-unit/date behavior and package `in_transit` contract are repaired and evidenced. | Final cross-client/server contract and remaining native/provider boundaries. |
+| D04 | **Partial/open.** No new closure evidence. | One truthful lifecycle across HomeMaintenanceLog/HomeIssue and competing readers/writers. |
+| D05 | **Partial/open.** Settings read/save, permission, atomic and response-lifetime evidence is recorded. | General settings recovery, concurrent edits, retained intent, privacy and explicit clearing across clients. |
+| D06 | **Partial/open.** Home privacy read-failure repair and actual consumer recovery are recorded. | Every exposed privacy control and all native/other consumers. |
+| D07 | **Partial/open.** Invitation send/decline/role/audit and mailbox-preferences route repair evidence is recorded. | ShareCenter, Members/Security and provider-panel empty/error states plus explicit role choice. |
+| D08 | **Partial/open.** Browser M02 share lifecycle and Android guest-pass issue/revoke/share evidence are accepted within limits. | Native/hosted external-share expiry, exact-resource scope, account changes and storage lifecycle. |
+| D09 | **Partial/open.** Pets/polls false-empty routes and page retry behavior are repaired; PR192 readback guards malformed success. | Remaining malformed-success readers and complete cross-client verification. |
+| D10 | **Partial/open.** Real Settings self-leave now uses the existing `/move-out` transaction and was restored cleanly. | Household delete/linked-resource cleanup across history, files, balances and live obligations. |
+| F01 | **Partial/open.** Home bill cards are covered by D03 evidence only. | Place overview/detail across web/iOS/Android, fractions, currencies, periods and totals. |
+| F02 | **Partial/open.** Existing privacy/error distinctions are reused where recorded. | Place financial failures, source absence, access retirement and joint Home/Place privacy. |
+| F03 | **Partial/open.** Home bill create/edit/delete boundaries are recorded. | Place bill splits, malformed input, currency changes and permission-limited actions. |
+| F04 | **Partial/open.** No new closure evidence. | Contributor eligibility, withdrawal/deletion, freshness, scale and retention. |
+| F05 | **Partial/open.** No new closure evidence. | Final legacy/current bill format integration, worker deployment and safe schedule retirement. |
+| M01 | **Partial/open.** Existing mailbox route and preferences route contracts are preserved; PR178 repairs route ordering only. | Private-mail recipient/attention/privacy/trust, membership state, errors and exact-content returns. |
+| M02 | **Partial/open.** Browser guest-pass issue/view/revoke/time-window/view-limit journey and Android create/Later/Share/revoke are accepted; copied/public-page and provider limits are labelled. | Complete native/hosted guest flow, exact copied-link/public rendering and broader external-share acceptance. |
+| M03 | **Partial/open.** Existing pagination/read receipts are reused where recorded. | Large-household/history ordering, performance and cross-resource scale checks. |
+| M04 | **Partial/open.** No new closure evidence beyond the mailbox route repair. | Reachable conversions, translations, signing, physical-mail and neighbor-request behavior. |
+
+## September 22 native Emergency form dismissal — focused repair verified, PR191
+
+The retained Android owner flow reproduced a second Emergency contract failure after a successful Save: Home dashboard → Home health **Add contact** → Emergency info → Add info → valid Other entry. The existing `AddEmergencyInfoFormScreen` acknowledged `state.shouldDismiss` before its 400 ms delay, cancelling its own effect before `onClose()` ran. Two Save attempts therefore produced two real POSTs and two identical `HomeEmergency` rows while the form remained open (SQL 0 → 2). Source comparison found no alternate Emergency implementation; the accepted Guest form repair `83f507457` already uses delay before acknowledgement.
+
+PR191 (`codex/native-emergency-dismiss-20260922`, commit `016a77b3e`) makes the one-line in-place repair: wait the existing 400 ms, acknowledge dismissal, then invoke the existing close callback. No layout, styling, navigation destination, route, service, schema, migration or test file changed.
+
+The repaired app was rebuilt with `./gradlew :app:assembleDebug --no-daemon` (BUILD SUCCESSFUL, 2m44s; 43 tasks), installed on retained `emulator-5556`, APK SHA256 `f4c70c6868d612b1dd7d0a996cf4081f975a98a856152d2a3b49ddc73d0657ff`. A real owner Save for `Stream2 dismiss fixed` / `Dismiss test detail` returned to the existing list with **All 1 / Contacts 1**, and SQL showed exactly one row. The earlier duplicate rows and this repaired synthetic row were deleted by exact id; final `HomeEmergency=0` and `HomeAuditLog=0`, with loopback/LAN backend health 200.
+
+The same installed journey also observed the existing Emergency **Edit** path: it opened the seeded form but returned to unchanged detail with no PUT request or SQL change because the backend has no `PUT /api/homes/:id/emergencies/:emergencyId` route. That remains a separate explicit contract gap; PR191 does not claim or repair it.
+
+Durable sanitized evidence is `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-native-emergency-dismiss-r1/`, MANIFEST SHA256 `0eddbb79b71f81217caaaa67f8c4ed4eb8f74b77879dd0ff1a1e2abe7566819c`. PR191 CI is pending; no native build is active and the heavy slot is released.
+
+## September 22 native Emergency Info DELETE — focused repair verified end to end
+
+The retained Android owner flow reproduced a concrete persistence defect in the existing Emergency Info screen: Home dashboard → Emergency info → row → Delete → confirmation → Delete returned to the list, but the original `EmergencyInfoDetailViewModel.confirmDelete` only toggled local Compose state. Two real synthetic `HomeEmergency` rows remained in SQL. Source comparison found the existing backend `DELETE /api/homes/:id/emergencies/:emergencyId` route in `backend/routes/home.js` (home-management authorization, row-scoped delete, 200/404 behavior), but no Android Retrofit or repository binding in current, archived, or open refs.
+
+PR189 (`codex/native-emergency-delete-20260922`, commits `0cbb505fe` and `5820dbb40`) makes the smallest in-place repair: it binds that existing route in `HomesApi` and `HomesRepository`, commits the local deletion only after a successful response, and keeps a failed detail loaded with newly wired functional server-error feedback and retry, rendered with the existing detail-screen typography. The existing screen layout, navigation, backend route, schema and migration history remain unchanged. No new screen, service, table, migration or unit test was added.
+
+The repaired app was built with `./gradlew :app:assembleDebug --no-daemon` (BUILD SUCCESSFUL, 2m45s; 43 tasks), installed on retained `emulator-5556`, and exercised through the real owner UI, backend and SQL. Cancel kept the detail open with count 2. Two successful confirmations for two distinct rows used the repaired caller and existing DELETE route, returned to the list, reduced `HomeEmergency` 2 → 1 → 0, and rendered the existing `No emergency info set up` state. For the error path, one row was created through the UI, only the owner's temporary `home.edit` and `security.manage` overrides were disabled, and Delete returned the existing safe `You don't have permission to do that.` message while the detail and SQL row remained. Removing only those overrides and retrying deleted the row and returned to the empty state. Final retained fixture counts are `HomeEmergency=0`, temporary `HomePermissionOverride=0`, and `HomeAuditLog=0`; loopback and LAN backend health are HTTP 200/database connected.
+
+Installed APK SHA256 is `691a3ac059660f3880e805d18d0061544d8f547104ceb808d9bd277df6b54fa3`. The existing `EmergencyInfoDetailViewModelTest` was updated only to stub the new successful repository contract (no new test was added), and the focused test run passed. Sanitized source/build/UI/SQL/cleanup evidence is durable at `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-native-emergency-delete-r1/`, MANIFEST SHA256 `48d996eef15c28b61006603e608f5573beee7975ec6b752a30bc19bc847cd052`. The first PR189 run 35746587131 had Android instrumented, database, deployment and detect green but exposed that stale fixture. Fresh run 35750020370 for `5820dbb40` is fully green: Android lint/test/assemble, Android instrumented emulator, database replay/lint, deployment safeguards, detect, and the aggregate CI OK; unrelated surfaces were correctly skipped. Its local Android build and real installed journey are complete. The physical iPhone remains unavailable (CoreDevice 4016), so no iPhone install or launch is claimed. The heavy native-build slot is released after this verification.
+
 # Stream 2 — Home and household
+
+## September 22 native Android guest-pass form — focused dismiss repair rebuilt and verified
+
+The retained Android owner journey reached the existing Home Members → Guests → Add a guest form. A valid real submission created one `HomeGuestPass` row and one existing `guest_pass_created` audit, then showed the existing **Guest pass created / Share this pass now?** dialog. Tapping the existing **Later** action closed the dialog but left the form open. Source comparison found the existing `LaunchedEffect(state.shouldDismiss)` cleared its own key before its 700 ms delay; Compose cancelled that effect before the existing `onSent()` navigation callback could pop the form.
+
+PR183 (`codex/native-guest-pass-dismiss-20260922`, commit `83f507457`) makes the smallest in-place repair in `frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/homes/guests/AddGuestFormScreen.kt`: the existing state acknowledgement now runs after the delay, preserving the existing callback, screen layout and navigation. No new screen, callback, route, service, schema, migration or design change was added.
+
+The repaired app was rebuilt with `:app:assembleDebug --no-daemon` (successful, 2m23s), installed on retained `emulator-5556`, and exercised through the real owner flow: Home dashboard → Members → Guests → Add guest → valid two-hour pass submission → existing **Guest pass created / Share this pass now?** dialog → **Later**. The existing Members/Guests screen returned with the Add guest form dismissed, proving the caller callback now completes. The APK SHA256 is `d7e8e07707e356f40d995ccc21cde9274e30c6eecaf83b6c56b2023d43cfa72c`.
+
+The first created pass was revoked through the existing LAN DELETE route (HTTP 200; `guest_pass_revoked` audit), then that synthetic pass and exactly its two generated audit rows were deleted. Final fixture counts were `HomeGuestPass=0` and `HomeAuditLog=0`; backend health remained 200.
+
+The same rebuilt owner app then exercised the existing **Share** action after a second valid two-hour create. The Android system chooser rendered the guest message, a `https://pantopus.app/guest/` link prefix, and Copy to clipboard/Chrome/Drive/Messages targets; tapping Copy returned to the existing Members → Guests screen with the form dismissed. The shell cannot read the emulator clipboard, so exact copied bytes and public guest-page rendering remain covered by accepted browser M02 evidence. That UI pass plus one direct API create probe were both revoked through the existing DELETE route (HTTP 200 each), and exactly their four generated audit rows and two pass rows were deleted; final counts remained zero. PR183 CI run `35736295379` is fully green, including Android lint/test/assemble and instrumented tests; unrelated path jobs were skipped.
+
+The current Stream2 branch was also rebuilt for a physical iPhone in the isolated checkout at `/private/tmp/pantopus-stream2-ios-latest` from commit `83f507457`: `xcodebuild ... -sdk iphoneos -configuration Debug` completed with `BUILD SUCCEEDED`, deep code-sign verification passed, bundle `app.pantopus.ios`, Team `6UYZBA546R`, and the embedded API/socket URLs point to `http://192.168.0.176:18142`. Artifact: `/private/tmp/pantopus-stream2-ios-latest/.stream2-device-dd-current/Build/Products/Debug-iphoneos/Pantopus.app` (main binary SHA256 `d1a159468ed075e5355ba658cb1f2324f8289c0ea3af6bff2c5ebd634b7c4f38`). CoreDevice install was attempted once and returned error 4016 because the physical phone is unavailable; no launch is claimed. Backend loopback and LAN health both remain 200.
+
+The next ordered owner Home read was verified without mutation: Home Settings → Access codes loaded the existing screen with All (0), Wi-Fi (0), Alarm (0), Gate (0), Lockbox (0), “No access codes yet”, and the existing “Add your first code” action. No add/edit/delete action was taken and no fixture or audit row changed.
+
+The retained My Tasks runtime also carries a clearly labelled, disposable compatibility overlay: the existing source migration `20260922022000_restore_existing_gig_boost.sql` (SHA256 `9181c557fca7b8d67a6eb1eb85a524001fb20f907a957f363e01eb2e12065c7c`) was applied outside `supabase_migrations.schema_migrations` to restore the two nullable boost columns and existing partial index required by the unchanged Gig projection. The overlay is **not canonical full replay**; the migration ledger was not edited and has no `20260922022000` row. Catalog checks show both timestamp columns and `idx_gig_boost_active`, with `Gig=0` and `GigBid=0`; direct/LAN My Tasks returned 200 and the owner tabs rendered existing empty states.
+
+Durable sanitized evidence is `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-native-guest-pass-dismiss-r1/`, MANIFEST SHA256 `dc9f2a3c5820a6adaa10e365a2443c2a7c0b1b47bf81995e0f91082f884eb022`. It binds the source/build/API/SQL/cleanup receipts and runtime overlay details. No native build is running and the heavy slot is released. Native copied-link/passcode viewing remains outside this Android receipt and is covered by accepted browser M02 evidence; physical iPhone install/launch remains unavailable while device `00008140-00087999020B001C` is offline.
+
+## September 22 native owner My Tasks — runtime schema compatibility repaired and verified
+
+The retained Android owner journey reached the existing **My Tasks** screen, but the first real load showed `Couldn't load the list` / `Server error 500`. The existing backend route `GET /api/gigs/my-gigs` reproduced HTTP 500 on the same owner token. A disposable development backend isolated the server exception to the existing `GIG_LIST` projection requesting `Gig.boosted_at` while the retained disposable database was still at migration head `20260922010000` and lacked both nullable boost columns; `Gig` and `GigBid` each had zero rows.
+
+The source already contains the additive forward migration `supabase/migrations/20260922022000_restore_existing_gig_boost.sql`, also present on current `origin/master`. I applied that exact existing SQL to the disposable runtime only: `boosted_at`, `boost_expires_at`, and the existing partial index were restored. No application source, screen, SDK, route, service or migration history changed; migration history remains at `20260922010000` because this runtime intentionally does not replay the intervening paid-gig migrations. No fixture rows were inserted or changed.
+
+The real Android Retry control then reissued the same request and rendered the existing empty states: Open 0 / “No tasks posted yet — try Magic Task”, Active 0 / “No active tasks”, Done 0 / “No completed tasks yet”, and Closed 0 / “Nothing here”. Owner direct and LAN-proxy requests returned HTTP 200 with `{total:0,gigs:0}`; the viewer route also returned HTTP 200 with an empty envelope. The same retained owner session rendered the Home dashboard, verified Home Settings, empty Documents state, and the three seeded Members rows (owner, viewer tenant, editor tenant) through existing screens. No native build was started.
+
+Private evidence: `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-native-my-tasks-r1/`, MANIFEST SHA256 `0328a6438809cfd91cb46deb613c2e41aae8e473b35b3bcd9212d7cf23352a58`. The temporary diagnostic backend was stopped; retained backend 18143 and LAN proxy 18142 remain healthy. Physical iPhone remains unavailable/offline, so no install or launch is claimed. Provider, hosted, and physical-device boundaries remain open.
+
+## September 22 D10 household self-leave — repaired and verified in the real web journey
+
+The current Home Settings caller used `api.homes.detachFromHome(homeId)` for the member-facing **Leave Home** action. That existing admin endpoint requires a target `userId`: on the retained full-schema native-r1 runtime, a lease-resident viewer's no-body request returned 503 (`Cannot read properties of undefined (reading 'userId')`), and `{}` returned 400 (`userId` required), while all three fixture occupancies remained active. The existing SDK already exposes `api.homes.leaveHome`, which calls the existing self-service `POST /api/homes/:id/move-out` transaction. No new screen, service, endpoint, schema or migration was justified.
+
+PR176 (`codex/home-leave-route-20260922`, commit `ee9e78c5d`) makes that one-caller in-place repair. On the same runtime, the real Settings page was opened in a fresh Chromium context with the synthetic viewer session, **Leave Home** → confirmation **Leave** emitted exactly one `POST /api/homes/f0e51100-0000-4000-8000-000000000200/move-out` (HTTP 200) and navigated to `/app/hub`. SQL showed the existing transaction's occupancy soft-deactivation (`is_active=false`, `verification_status=moved_out`, member task management cleared), plus its existing notification and audit record. The synthetic occupancy row was restored byte-for-byte for the changed fields and only the two generated notification/audit rows were removed. The web type-check gate passes with 0 errors.
+
+Runtime boundary: the retained backend was restarted with the local web origins so the browser's same-origin API proxy passed CORS preflight; no application CORS source change was made. Browser login itself was rate-limited after earlier probes, so the E2E context used the same synthetic GoTrue access token as a bearer header while exercising the actual page and caller. Provider, hosted and physical-device boundaries remain open. Coordinator owns merge and shared backlog disposition.
+
+## September 22 latest native runtime handoff
+
+The physical iPhone `00008140-00087999020B001C` is currently offline, so no device install or launch is claimed. The retained backend is healthy on 18143, with its disposable proxy exposed on the Mac LAN at `http://192.168.0.176:18142` (health 200) for a connected device on the same network. The running backend process was loaded from the accepted PR160 head plus the isolated PR175 bill-field contract and a real owner PUT persisted all expanded fields before the fixture was restored. The latest accepted native branch (`ede5b72b5`, PR160) was built in a detached runtime checkout with the LAN API/socket configuration; `make bootstrap` and an incremental Debug `xcodebuild` for the retained iOS simulator completed exit 0. The retained simulator was not reset or reinstalled. Connect and unlock the iPhone before installing this artifact; physical-device/provider acceptance remains unverified.
+
+## September 22 PR160 CI correction and master rebase — source repaired, full CI green
+
+PR160 branch `codex/stream2-home-batch1-20260922` was rebased onto verified master `69be3c11dc8520aed91228570460487d5579c82d` and force-pushed with `--force-with-lease`; current head is `ede5b72b5b774df7a27f559ab581df8e6c930528`. The pre-rebase run 35709144530 reproduced the same production/history spelling split on Android and iOS: fixtures and historical responses use `cancelled`, while the canonical server contract uses `canceled`. Android and iOS bill-list projections now classify both spellings as cancelled, and both bill-detail mutation receipts accept the historical spelling only when validating a canonical remove request. The existing Android settings fixture now supplies explicit `ownershipStatus: "verified"` for its established-home assertion; production settings remains explicit-status-only so absent proof stays unverified. No new tests, screens, migrations or design changes were added.
+
+Fresh run 35715936875 then exposed one additional exact issue: Android detekt rejected `BillDetailViewModel.update` at cyclomatic complexity 18 after the compatibility predicate was added (threshold 18). Commit `ede5b72b5` extracts that predicate into a private helper without changing the receipt checks or accepted status spellings. The exact-head full CI dispatch 35719644248 is now green: iOS lint/build/test bundles and tests on iPhone SE (3rd generation), iPhone 16 and iPhone 16 Pro; Android lint/test/assemble and instrumented emulator; plus the web/backend/database/deployment gates.
+
+The next reachable web contract gap was then reproduced against the retained native backend and SQL before editing: an owner PUT containing `bill_type`, `currency`, `period_start`, and `period_end` returned 200 but silently left those `HomeBill` columns unchanged because the existing route allowlist omitted them, even though the existing dashboard `BillSlidePanel` submits them. The repair is isolated in PR175, branch `codex/home-bill-field-contract-20260922`, commit `501caf65a` from current master; it extends that allowlist in place and widens the existing API client type. No screen, layout, schema, migration or test file was added. Owner verification returned 200 with every submitted field in the response and SQL, the original fixture was restored immediately, and a viewer PUT remained 403 with SQL unchanged. Invalid bill type and malformed date remain rejected by the existing database contract; reversed periods and arbitrary currency text remain accepted because the existing schema defines no corresponding constraint, so no new policy was invented. The dashboard source has no bill-row edit callback, so the existing edit panel remains unreachable without a founder navigation decision. PR160 remains the separate compatibility milestone at `ede5b72b5b774df7a27f559ab581df8e6c930528`.
+
+Evidence and limits: `git diff --check`, SwiftFormat and SwiftLint pass on changed files. Focused Android Gradle regressions (`BillsListViewModelTest`, `HomeFinanceAccessTest`, `HomeSettingsViewModelTest`) pass after the repair. Backend `homeEffectivePermissions` and `homeProfileV2` pass (97 tests) for the isolated bill-field branch, and the web type-check gate remains at 0 errors. The generated-project iOS focused run reached the bill/finance tests and passed the status/finance cases; five pre-existing date-subtitle assertions fail one day early on the retained simulator. Those fixtures use full `T00:00:00Z` timestamps, which are instants and therefore render on the prior calendar day in America/Los_Angeles; they do not exercise the production `HomeBill.due_date` `date` contract. Bare `yyyy-MM-dd` values are parsed in the device calendar (the accepted Sep 30 native evidence remains valid), so no source change is justified. The same run built successfully; changing the process `TZ` does not change the simulator timezone. Master CI run 35714120974 is fully green, including Android unit/assemble; exact-head native receipt 35719644248 is also fully green. The native slot is released. Existing native runtime/devices remain untouched: iOS simulator 6F914A30, Android emulator-5556, backend proxy 18142/18143 and disposable project `pantopus-stream2-native-r1` remain as recorded below. The retained untracked web cache is preserved.
+
+Next: the bounded native bill/settings regressions, generated-project iOS run and bill-field route repair are complete; the retained native Home row list can resume with Issues when the entry-point decision and native driver are available. The source map is complete: iOS reaches Issues through Dashboard `view_maintenance` → Maintenance list → the existing top-bar Issues action → `HomeIssuesListView`; Android has the same `view_maintenance` dashboard callback and `MaintenanceListScreen` → `HomeIssuesListScreen` route, but the retained viewer session exposes no reachable Maintenance/Issues entry in its actual drawer/dashboard state, matching the recorded IA gap. No navigation repair is justified without the founder's entry-point decision. Backend contract is `GET/POST/PUT /api/homes/:id/issues`; viewer `maintenance.view` can read, while create requires `maintenance.edit` or `maintenance.manage` and updates use the existing manage gate. Coordinator owns merge and shared backlog disposition.
+
+## September 22 native batch 1 (bills + D05 on installed iOS/Android) — repaired and verified; STOP received
+
+Branch `codex/stream2-home-batch1-20260922` head 417a464659821e2ee8772a36e69e3c6cfefa7e85 ([PR160](https://github.com/WangPantopus/skinny-pantopus/pull/160)); CI on this head at publication:    2 pass    9 pending (earlier head 46b7df6bd: Android ktlint failed on one line, fixed in 417a464659821e2ee8772a36e69e3c6cfefa7e85; all other jobs passed). Native commits 27b0fcf82, 46b7df6bd, 417a464659821e2ee8772a36e69e3c6cfefa7e85. Paths: `frontend/apps/android/.../homes/bills/{AddBillWizardScreen,BillDetailViewModel,BillsListViewModel}.kt`, `.../data/api/models/homes/BillDtos.kt`, `.../data/api/net/SafeApiCall.kt`, `.../homes/settings/HomeSettingsViewModel.kt`, `frontend/apps/ios/Pantopus/Features/Homes/Bills/{BillDetailView,BillsListViewModel,AddBillWizardViewModel}.swift`, `Features/Homes/Settings/HomeSettingsViewModel.swift`, `backend/routes/home.js` (bill PUT paid_by).
+
+Runtime: disposable full-schema project pantopus-stream2-native-r1 (API 64553, DB 64554, ledger 59), worktree backend on 18143 behind a harness-only logging proxy on 18142, real GoTrue logins (s2-pkg-owner / s2-pkg-viewer, passwords reset through the GoTrue admin API), Home f0e51100-…0200 seeded by psql (owner, lease_resident viewer with maintenance.view/finance.view/docs.view overrides). Installed apps: iOS on simulator 6F914A30 (existing 2026-09-21 build, then r2/r3/r4 rebuilds), Android on emulator-5556 (existing apk, then r2–r5 rebuilds).
+
+Reproduced (real app → real routes → SQL): Android add-bill date picker Sep 30 → Review "Sep 29" → stored 2026-09-29 (UTC-midnight millis converted through America/Los_Angeles); Android Mark paid and Remove bill sent no request at all — proxy showed only GET /me — the added log proved Moshi passed the absent amount into `BillDecimalAdapter.toJson`'s non-null parameter ("Received an unexpected response."); Android and iOS Remove sent `status: "cancelled"` (iOS reached the server: 500 "Failed to update bill" shown as "Server error 500", and the client sent the PUT twice for one tap); iOS Mark paid PUT {status paid, paid_at} 200 but SQL paid_by NULL (route only recorded the payer when the client omitted paid_at); iOS edit review formatted a UTC-parsed due date in the device zone ("Sep 29" for 2026-09-30); both lists only recognised "cancelled" so canceled bills stayed listed; D05: as the lease_resident, Android and iOS Home settings footers read "Stream2 native home · Owner" with a "Verified" chip.
+
+Fixed and re-verified on rebuilt installed apps: Android date Sep 30 → stored 2026-09-30 → detail "Due Sep 30" (r2); Mark paid → PUT 200, SQL paid with paid_by = owner (r3 + backend); Remove → PUT {canceled} 200, SQL canceled (r3), list hides it (r4); footer "Stream2 native home · Lease resident", chip VERIFIED from the viewer's occupancy (r5). iOS Remove → PUT {canceled} 200, SQL canceled, list Paid 1/All 1 (r3); viewer footer "Stream2 native home · Lease resident", chip VERIFIED, My Homes "Tenant · Household access", dashboard "SHARED HOME", health "You don't have access…" (r4). Viewer refusals over the real routes: PUT bill 403, POST bill 403, POST issue 403; Android viewer bill detail is read-only and the list offers no Add a bill. Account switch (Android Log out → viewer login; iOS uninstall keeps the card → "Not you? Remove this account" → viewer login): no previous user's data (drawer identity s2pkgviewer / "Package viewer").
+
+Evidence: owner audit `.pantopus-recovery/audits/20260922-stream2-home-native-batch1-r1/` (97 files incl. manifest, redacted proxy log, decoding-cause log, 48 iOS + 30 Android screens, source diff and bindings), MANIFEST 3302c64717b8cd983679c4e504ccf32bbcb62d244ab98ecfd2fff5bd5208db59. Limits: emulator/simulator only, synthetic accounts on a local project, harness proxy (its first version rewrote Host and broke DPoP login: 401 rendered as "Invalid email or password." — copy observation), no hosted providers/push/physical device, Android Issues screens unreachable for this account (drawer always Personal context, no dashboard tile, Me hub tiles need a bound Local Profile) so native issue journeys were not run; packages not re-run natively (server-only change); tasks/members/guest passes/docs/emergency/calendar/pets/residency native journeys not started. Observations not repaired: Android wizard "1 of 3" label never advances; Android Docs offers "Upload document" to a docs.view-only viewer; hub shows "Verify your home to unlock Pantopus" to a verified lease_resident on both platforms; Today's Pulse prints raw "smoke_season season".
+
+Cleanup/runtime state (STOP order: left running): native project containers up, backend 18143 + proxy 18142 up (PIDs in `.stream2-verification/native/*.pid`), emulator-5556 headless up with r5 installed (viewer logged in), simulator 6F914A30 booted with iOS r4 installed (viewer logged in), fixture rows HomeBill 3 / HomeOccupancy 3 / issues 0 in the native DB, ledger 59; web guest-r1 runtime stopped and cleaned (rows 0, ledger 57); founder's iOS .env restored; no build running. Next: after PR160 CI on 417a464659821e2ee8772a36e69e3c6cfefa7e85, resume the founder's row list with native Issues (Android entry point is a founder decision), then the remaining batch-1 native journeys; resume note `.stream2-verification/RESUME-2026-09-22.md` (START HERE block).
+
+## September 22 D09 false-empty readers — repaired and verified (web + routes)
+
+Branch `codex/stream2-home-batch1-20260922` commit f05d2c5b7 ([PR160](https://github.com/WangPantopus/skinny-pantopus/pull/160)); paths `backend/routes/home.js` (pets/polls GET), `frontend/apps/web/src/app/(app)/app/homes/[id]/{pets,bills,packages,polls}/page.tsx`. Reproduced: with the owned disposable DB's HomePet table renamed and PostgREST's schema cache stale, PostgREST answered 42P01 "relation public.HomePet does not exist" and GET /:id/pets answered **200 {pets: []}** (obsolete missing-table fallback; polls identical in source); the standalone Pets/Bills/Deliveries pages rendered "No pets registered" / "Upcoming (0) … No bills here" / "Expected (0) … No packages here" after a failed read with only a 5s toast (private read500 fault). Dashboard useHomeData already keeps failed lists as errors (unchanged). Repair: the two routes return their existing 500 on every read failure; the four pages keep a loadError and render the existing "Current … could not be loaded. Retry to check current information." copy with a Retry control instead of the tabs/list. Verified: stale-schema pets GET 500, restored 200; pages under read500 show the unavailable copy; Retry after the fault clears restores the list. Owner audit `.pantopus-recovery/audits/20260922-stream2-false-empty-readers-r1/` (14 files incl. manifest), MANIFEST b6c12b6f2dc470f26a7d32b8afc4eda7e29d076accd1ababc7b39444ee3f27c5. Limits: table rename on the owned disposable DB only (restored, ledger 57); polls page fault path source-verified. Cleanup (batch): fixture rows 0, ledger 57, five guest-r1 containers stopped/preserved, harness/Next stopped by PID, ports 18141/18142 free, tab closed, viewport reset. Next: native pass of batch 1 rows on the owned simulator/emulator. Founder question: none new.
+
+## September 22 package delivered_at / vendor_name — repaired and verified (web + route)
+
+Same branch, commit bfa286b24 (PR160); path `backend/routes/home.js` (package PUT). Reproduced through the real Edit Package panel and the standalone Deliveries page: Vendor "Vendor C" + In Transit → PUT 200 but vendor stayed "Vendor A" (allowlist) and delivered_at stayed set, so the in-transit package sat under Expected printing "Delivered 9/22/2026" (API baseline identical). Repair: expected/in_transit/out_for_delivery null delivered_at and picked_up_by unless set explicitly by the caller; other statuses unchanged; vendor_name joins the PUT allowlist (already accepted on POST). Verified: API delivered→picked_up→expected clears both, explicit delivered_at honored, returned keeps delivered_at, vendor-only PUT persists, bogus status 400; UI editor In Transit + Vendor E → SQL in_transit | Vendor E | null | null; standalone page no "Delivered" line; real dashboard read packages_expected 1 / arriving 0. Owner audit `20260922-stream2-package-delivered-at-r1/` (12 files), MANIFEST 08dfb466c794556271c7e72b7b318cf95e9aeec190304775967cef3b63b5e865. Limits: no package audit-log row (pre-existing); native package screens (accepted 2026-09-22) not re-run for this server-only change. Cleanup as above.
+
+## September 22 D03 standalone bill amount units — repaired and verified (web)
+
+Same branch, commit 340185123 (PR160); path `frontend/apps/web/src/app/(app)/app/homes/[id]/bills/page.tsx`. Reproduced on the real page against the real bill routes: HomeBill.amount is numeric(12,2) major units (dashboard BillsList prints "USD 18.25") but the page multiplied by 100 on create (12.34 → stored 1234.00) and divided by 100 on display ($0.18, "$0.76 total due"); due 2026-09-30 printed "Due 9/29/2026"; delete sent status "cancelled" → 500 → "Failed to delete bill". Repair inside the page: send the typed amount unchanged, refuse empty/non-numeric/non-positive amounts before any request ("Amount is required", same rule as the dashboard panel), format through the existing formatHomeBillAmount/formatHomeBillDate helpers, total only across one currency, delete sends 'canceled'. Verified: "USD 18.25 … Due Sep 30", create 12.34 → stored 12.34, "abc"/empty → client toast with no request, 0.005 → stored 0.01, delete → PUT canceled 200 "Bill deleted". Owner audit `20260922-stream2-bill-units-r1/` (10 files), MANIFEST 215707aa9eaa607f4bdd57692d5906ec496cffa6c74849083dc667bd693f6f29. Limits: further local-date rules remain I04; BillsList's hard-coded "$" total unchanged; native bill screens not exercised. Cleanup as above.
+
+## September 22 D02 media discard + silent write errors — repaired and verified (web + routes)
+
+Branch `codex/stream2-home-batch1-20260922` from master 8e04c4db9, commit 6ce4dbfc2 ([PR160](https://github.com/WangPantopus/skinny-pantopus/pull/160)); paths `frontend/apps/web/src/app/(app)/app/homes/[id]/dashboard/page.tsx`, `components/home/{IssueSlidePanel,BillSlidePanel}.tsx`, `backend/routes/home.js` (issue POST). Runtime: owned guest-r1 containers (ledger 57), private harness `.stream2-verification/media-discard-serve.cjs` on 18142 (real issue/bill/package/pet routes, real homePermissions, real homeDashboardService readers incl. the real dashboard read, real PostgREST/SQL; synthetic identity, synthetic task/event collections, private fault switch), Next dev 18141, browser pane. Reproduced in the real panels: Report Issue with `issue-photo-A.png` and Add Bill with `bill-receipt-A.pdf` → POST 201 with no attachment field, photos `[]`/details `{}`, File rows 0, storage 0, no upload request, panel closed, no notice (`void mediaFiles`); Mark Paid under a private write500 → no toast, only console.error; reporter (maintenance.edit) Update own issue → 403 "No permission to manage issues" rendered as generic "Failed to save issue" (SDK rejects with a plain object); viewer with only maintenance.view → POST /issues **201** although every client hides the control. Also verified: Cancel sends no write, dropped reply keeps draft/error/re-enabled button and retry 201, delayed reply + real double click → exactly one POST. Repair: existing toast notice after a successful save with attachments ("… saved, but N attachment(s) were not uploaded: attachments for … are not available yet"), Mark Paid/Pick Up failures surface the server reason via the existing toast, Issue/Bill panels keep the SDK message (PackageSlidePanel pattern), POST /:id/issues requires maintenance.edit/manage. Verified after: viewer POST 403, reporter POST 201 / PUT 403 shown inline, owner saves with files → 201 + notice, Mark Paid 500 → toast + row unchanged, success → row Paid. Package panel: source-identical handler repaired the same way; Sep 21/22 package evidence reused (Pick Up 403 with no toast). Owner audit `.pantopus-recovery/audits/20260922-stream2-media-discard-r1/` (16 files), MANIFEST 102f6979a5bf99979eb98a6152314631939d67b0a90d085239fa2eeae7c5be3d. Regressions: backend Jest homeEffectivePermissions/homePermissions/homeMaintenance/homeProfileV2 4 suites/135 tests; web type-check gate 0 errors (eslint not runnable in this worktree; CI). Limits: synthetic identity, harness-only minted tokens, tab-local visibilityState override after each navigation, files chosen via DataTransfer on the real input, some journeys scripted on the real controls. Not repaired, recorded: bill edit panel unreachable from the dashboard and bill PUT drops bill_type/period/currency; issue PUT requires home.edit while HomeIssue RLS lets the reporter update own rows; behavior change: members without maintenance.edit can no longer create issues through the route. **Open founder question:** should issues/bills/packages support attachments at all? `HomeIssue.photos text[]` exists with no client/reader; bills/packages have no media column; wiring `/api/files/home/:homeId` would be a new contract.
 
 ## September 22 packages — iOS and Android end-to-end on the real apps
 
@@ -1002,3 +1257,113 @@ Coordinator reacquired same SQL64552/API64551 and web[::1]:18141/API18142 for St
   failure.
 - **Runtime:** backend remains intentionally running for the user’s device
   session; no database rows, fixtures, caches or peer worktrees were changed.
+
+## Latest accepted native build and LAN handoff — September22
+
+- The accepted native source remains PR160 exact head `ede5b72b5`; its full CI
+  dispatch `35719644248` is green across iOS, Android, web, backend, database
+  and deployment gates. The focused Stream2 D10 web repair remains PR176
+  `ee9e78c5d` with CI `35722484544` green.
+- A generic signed physical-device Debug build completed successfully from the
+  accepted native source. Artifact:
+  `/private/tmp/pantopus-stream2-ios-latest/.stream2-device-dd/Build/Products/Debug-iphoneos/Pantopus.app`.
+  Bundle identifier is `app.pantopus.ios`; signing authority is the local Apple
+  Development team `6UYZBA546R`.
+- The retained physical iPhone remains Offline in `xcrun xctrace list devices`,
+  so no install or device launch is claimed. The signed artifact is ready once
+  the phone is connected/unlocked and paired. The retained Stream2 simulator
+  was not reset or replaced.
+- The combined temporary runtime is healthy at `127.0.0.1:18143` and through
+  the LAN proxy `192.168.0.176:18142`; its source is PR160 plus the accepted
+  PR175 bill-field allowlist. No application branch was merged or changed for
+  this runtime handoff.
+
+## Native head refresh — September22
+
+- Coordinator refreshed PR160 to `4cca0a681` after merging current master;
+  this includes the current iOS AppDelegate change while retaining the
+  accepted Stream2 native fixes. The earlier exact-head CI receipt
+  `35719644248` remains valid for `ede5b72b5`; fresh required CI for `4cca0a681`
+  is running under the coordinator's merge queue.
+- The signed device artifact was rebuilt from `4cca0a681` successfully at
+  `/private/tmp/pantopus-stream2-ios-latest/.stream2-device-dd/Build/Products/Debug-iphoneos/Pantopus.app`.
+  The bundle is `app.pantopus.ios` signed by local Apple Development team
+  `6UYZBA546R`. The physical iPhone remains Offline, so installation and
+  device-launch acceptance are still unverified.
+- The LAN runtime was restarted from a temporary detached `4cca0a681` source
+  with accepted PR175 commit `501caf65a` applied (`cc885ab23`), without changing
+  the native fixture rows. Backend and proxy health both return 200 through
+  `127.0.0.1:18143` and `192.168.0.176:18142`.
+
+## Corrected device runtime build — September22
+
+- Rechecked the build artifact before physical installation and found the
+  ignored build environment still embedded the retired `192.168.0.176:8000`
+  port. The disposable backend/proxy for this handoff is `192.168.0.176:18142`,
+  so the build-only `.env` was corrected and the project regenerated. No
+  application source, screen, service or schema file changed.
+- Rebuilt the generic signed `iphoneos` Debug artifact from native head
+  `4cca0a681`. The artifact at
+  `/private/tmp/pantopus-stream2-ios-latest/.stream2-device-dd/Build/Products/Debug-iphoneos/Pantopus.app`
+  now embeds `http://192.168.0.176:18142`, passes `codesign --verify --deep
+  --strict`, and remains `app.pantopus.ios` signed by team `6UYZBA546R`.
+- A real install attempt with `xcrun devicectl device install app` was rejected
+  by CoreDevice error 4016 because the paired iPhone is still `unavailable` and
+  cannot provide trusted connectivity, power assertion and developer services.
+  No install or launch is claimed. Once the phone is unlocked and reconnects,
+  this corrected artifact is ready for the install/launch retry.
+- Backend health remains 200 through both `127.0.0.1:18143` and
+  `192.168.0.176:18142`; the owner token also returned 200 for the existing
+  Home `/me`, documents, guest-passes, tasks and issues routes with zero
+  fixture rows. No fixture rows or peer resources were changed.
+
+## PR176/PR178 evidence publication — September22
+
+- The redacted PR176 bundle is durably retained at
+  `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-home-leave-r1/`
+  (source capture:
+  `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-pr176-home-leave-r1/`).
+  Its `MANIFEST.json` SHA256 is
+  `753f7626e155727c71da8dd254b3b9fec4e03c09e77b9b772c01e21c38d69c0e`.
+  It contains the reproduced `/detach` failures, the real Settings
+  `/move-out` receipt, explicit before/after/restored `is_active`,
+  `verification_status` and `can_manage_tasks` fields, the one-line source
+  diff and validation receipt. The accepted journey generated exactly one
+  `member_moved_out` Notification and one HomeAuditLog row; both were deleted
+  after the probe. A later retained-runtime check found three additional
+  matching synthetic notifications and no matching audit rows; those three
+  were deleted by exact home/member metadata, leaving zero matching rows. The
+  bundle does not claim byte-equality for untouched full-row fields. No token,
+  password or raw proxy body is included.
+- The redacted PR178 bundle is durably retained at
+  `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-mailbox-preferences-r1/`
+  (source capture:
+  `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-pr178-mailbox-preferences-r1/`).
+  Its `MANIFEST.json` SHA256 is
+  `1c72d93b6eea04b7dc66454df99bb68d7804a53e46d9d9dea138592f63455057`.
+  It contains the real direct/LAN 404 baseline, patched temporary-backend 200
+  GET/PATCH receipts, exact existing-block move and validation receipt. The
+  retained fixture comparison reported the existing `MailPreferences` row
+  restored; no before/restored hash pair was captured, so this status does not
+  claim byte-equal full-row proof. No UI/SDK/schema/migration/test change or
+  raw credential is included.
+
+## Installed native continuation — Android viewer/owner boundary — September22
+
+- Reused the retained Android emulator `emulator-5556` with the existing
+  viewer session and r5 build. The real Home dashboard opened Home Members and
+  rendered the three existing fixture members (owner plus two tenants), and
+  Home Settings loaded its existing identity/property/access sections. No
+  member or settings mutation was sent.
+- From the same viewer Home Settings route, Documents reached the real list
+  screen and rendered the existing permission error (`You don't have
+  permission to do that.`) with Retry. The viewer's real Home `/me` payload
+  lacks `docs.view`, so this is the expected server/UI denial state rather
+  than an empty-list or crash. The retained screenshot is private at
+  `.stream2-verification/native/shots/android-home-members-r6.png`.
+- A real owner login against the running backend returned HTTP 200 for Home
+  `/me`, documents, guest-passes, tasks and issues; all five collections were
+  empty. The installed viewer dashboard Tasks tab still shows the existing
+  placeholder despite `tasks.view`/`tasks.edit`, and Issues has no reachable
+  Home entry for this account. These remain recorded IA/product gaps; no
+  redesign or speculative navigation repair was made.
