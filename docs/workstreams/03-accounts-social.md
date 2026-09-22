@@ -3893,3 +3893,70 @@ Persona Follow affordance remains a distinct scope and is not claimed as local-n
 The current PR CI has Detect changes, deployment/migration safeguards and complete schema replay/lint
 passing; Android lint/assemble and emulator checks are still running. No new source, build, schema
 or unit-test work was performed during this documentation update.
+
+## Final N01–N05/A01–A05 client-specific disposition (2026-09-22)
+
+Coordinator confirms PR168 merged as `b30e0d395` after exact-head CI run
+`35746647258` passed. The following row-by-row disposition supersedes the earlier generic
+whole-stream table and records whether another local journey is independently actionable:
+
+- **N01 — notification delivery and continuation:** Existing web/native notification routes,
+  saved-record reads, login continuation, unread/preferences handling and the installed Android
+  list/filter/mark-read controls are covered by the retained reports and current N02 evidence.
+  Foreground/background/cold-start provider receipt, token rotation, physical Android/iPhone
+  delivery and provider-denied permission behavior remain unverified. No local source journey can
+  close those rows without APNs/FCM credentials or hardware; saved `Notification` rows must not be
+  presented as provider-delivery evidence.
+- **N02 — saved notification actions and destinations:** Web/API/SQL PR86 evidence covers read,
+  delete, HTTP failure/toast, lost reply, retry, duplicate tap, stale response and account-switch
+  retirement. Retained Android now covers list/filter/logout, Mark all with exact restoration,
+  single delete, Cancel, offline transport failure with optimistic rollback, reconnect retry and
+  a real `new_follower` row through read mutation to the native Auth Evan profile. A fresh iOS
+  installed destination and Android HTTP-5xx injection remain unrun; the latter is the same source
+  failure path already bound on web. Provider receipt and physical-device delivery remain external.
+  No non-redundant local repair is indicated.
+- **N03 — Pulse, Beacon and social identity:** Retained web/API/SQL and native evidence covers
+  discovery/follow/unfollow, Beacon fallback under the release flag, posting/reply/mute paths,
+  blocked access, identity separation and old-link/access-change invalidation. The Persona fixture
+  has no local-home residency context, so it does not prove the separate local-neighbor
+  Follow-row-hide branch. Native discovery/post/reply/mute on a fresh release cohort, provider
+  freshness and any product decision that changes Persona/UserBlock/local-neighbor scope remain
+  open; a new native build is unnecessary unless the coordinator assigns that distinct fixture
+  journey.
+- **N04 — social safety:** Block/unblock from the existing profile/settings paths, blocked DM
+  denial, reverse-block persistence, report creation/idempotence/failure/retry, access/cache/error
+  behavior and installed Android safety paths are recorded. Remaining work is hosted moderation or
+  shared-owner schema/FK integration and any iOS physical/provider boundary; no independent local
+  source repair is indicated. Existing UserBlock, UserProfileBlock, PersonaBlock and Relationship
+  scopes remain distinct.
+- **N05 — reminders/calendar:** Natural reminder worker, pause/resume, retry/failure and
+  authorized destination evidence are retained, and the daily-agenda web preference has a real
+  UI/API/SQL persistence proof. Source reconciliation found no daily-agenda producer/consumer or
+  settled schedule/recipient/channel/retry contract. Delivery cannot be verified locally until an
+  owner defines that policy and assigns a scheduler/provider; a saved preference alone is not
+  delivery evidence.
+- **A01 — signup, verification and recovery:** Real web signup/email verification/reset and the
+  accepted native account journeys are recorded, including actionable unverified-login feedback.
+  External Google/Apple consent/callback/provider failures and physical-provider boundaries remain
+  unavailable locally; no additional local auth screen repair is indicated.
+- **A02 — sessions and account lifetime:** Natural refresh, transient retry, logout failure/retry,
+  remote sign-out, lock-down, account switching and protected local-data retirement use accepted
+  evidence. Remaining physical provider revocation, cold-process/device and external OAuth return
+  boundaries require provider/device capability; no shared auth edit is proposed.
+- **A03 — shared storage:** Existing profile/document picker UI, local profile/portfolio/home reads,
+  quota route and exact cleanup are recorded. A real native chooser-to-byte upload and hosted
+  S3/CloudFront permissions/lifecycle/quota/provider failure remain unverified and require shared
+  storage ownership or provider credentials; no local replacement is justified.
+- **A04 — provider dependencies/OAuth:** Current local Google/Apple capability reads and invalid
+  provider handling are recorded, with no activation or external callback followed. Real provider
+  consent/callback/failure, hosted address/storage dependencies and production activation remain
+  external/shared-owner boundaries; no local provider configuration change is authorized.
+- **A05 — remaining reachable actions:** Web profile report/search/edit and audience/mailbox
+  boundaries plus installed Android profile save are recorded; the mailbox route-order repair is
+  integrated as PR178 `715ccd8c0`. Remaining Marketplace/subscription/booking/wallet/mail/search
+  actions and Home/payment findings belong to their owners; they require source ownership or an
+  explicitly assigned route fixture rather than another Stream 3 duplicate audit.
+
+This is the final client-specific accounting for this pass. It separates implementation and local
+UI/API/SQL evidence from CI/merge state and provider, device, policy and ownership boundaries. No
+unit-test coverage is claimed or required, and no new tracker or raw log was added.
