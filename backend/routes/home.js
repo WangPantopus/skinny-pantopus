@@ -3727,6 +3727,53 @@ router.post('/:id/emergencies', verifyToken, async (req, res) => {
 });
 
 /**
+ * PUT /api/homes/:id/emergencies/:emergencyId
+ */
+router.put('/:id/emergencies/:emergencyId', verifyToken, async (req, res) => {
+  try {
+    const { id: homeId, emergencyId } = req.params;
+    const userId = req.user.id;
+
+    const access = await checkHomePermission(homeId, userId, 'can_manage_home');
+    if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage home' });
+
+    const { type, label, location, details } = req.body;
+    if (!type || !label) {
+      return res.status(400).json({ error: 'type and label are required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('HomeEmergency')
+      .update({
+        type,
+        label,
+        location: location || null,
+        details: details || {},
+      })
+      .eq('id', emergencyId)
+      .eq('home_id', homeId)
+      .select();
+
+    if (error) {
+      if (error.code === '23514') {
+        return res.status(400).json({ error: 'This emergency type is not supported.', code: 'INVALID_EMERGENCY_TYPE' });
+      }
+      logger.error('Error updating home emergency', { error: error.message, homeId, emergencyId });
+      return res.status(500).json({ error: 'Failed to update emergency info' });
+    }
+    if (!data || data.length === 0) {
+      return res.status(404).json({ error: 'Emergency info not found', code: 'EMERGENCY_NOT_FOUND' });
+    }
+
+    const emergency = data[0];
+    res.json({ emergency: { ...emergency, info_type: emergency.type, location_in_home: emergency.location } });
+  } catch (err) {
+    logger.error('Emergency update error', { error: err.message });
+    res.status(500).json({ error: 'Failed to update emergency info' });
+  }
+});
+
+/**
  * DELETE /api/homes/:id/emergencies/:emergencyId
  */
 router.delete('/:id/emergencies/:emergencyId', verifyToken, async (req, res) => {
