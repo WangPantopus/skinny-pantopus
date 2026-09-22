@@ -730,7 +730,10 @@ object DeepLinkRouter {
      * (unknown paths are deliberately discarded); rewrite just that type to the
      * native short profile form `/u/<username>`.
      */
-    fun notificationPath(type: String?, link: String?): String? {
+    fun notificationPath(
+        type: String?,
+        link: String?,
+    ): String? {
         if (type != "new_follower" || link == null) return link
         val trimmed = link.removePrefix("/")
         val single = trimmed.isNotEmpty() && !trimmed.contains('/') && !trimmed.contains('?') && !trimmed.startsWith("@")

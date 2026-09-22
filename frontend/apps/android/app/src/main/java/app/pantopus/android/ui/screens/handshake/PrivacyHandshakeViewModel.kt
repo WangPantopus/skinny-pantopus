@@ -7,8 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.audience.PersonaSummaryDto
 import app.pantopus.android.data.api.models.audience.PersonaTierDto
-import app.pantopus.android.data.api.models.handshake.HandshakeBody
 import app.pantopus.android.data.api.models.handshake.FanHandleSuggestionResponse
+import app.pantopus.android.data.api.models.handshake.HandshakeBody
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.handshake.HandshakeError
