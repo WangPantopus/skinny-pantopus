@@ -6,7 +6,12 @@ PR189 merged6bec1e878 after exact073f0806a fullCI35766200401. PR190 integration7
 retains tip and won-dispute worker guards;128 existing regressions pass. Migration guard
 caught225 sorting behind merged226; public230 preserves the original225 SQL/ledger and
 accepts its exact prior transformation. RealSQL preservation and fullCI35771059661 pass.190 merged ea43d92b3 at19:04:59UTC.
-191 now1b9e43788 runs freshCI35771470998.
+191 now1b9e43788 runs freshCI35771470998; only Android lint/test/assemble remains.
+192 integration is prepared locally at5db91f43b in /private/tmp/pantopus-pr192-integration
+(detached, clean). Three conflicts retain both accepted PUT/Edit and DELETE behavior;
+only API/repository member additions and the shared comment were reconciled. No native
+build or rerun. Do not push until191 merges; then merge its latest base and run fresh CI.
+Original Stream2 worktree and installed evidence remain untouched.
 Queue190→191→192→193→194→195→196, then docs161/170/174;46 untouched.
 
 PR1963f82ae478 is published with real booking cancellation/refund recovery and capture-race
