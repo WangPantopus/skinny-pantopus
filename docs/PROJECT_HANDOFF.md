@@ -1,5 +1,33 @@
 # Pantopus project handoff
 
+## Current Stream1 publication and verification limits
+
+Paid `codex/paid-gig-integration` is clean/pushed at
+`53e738cfc629a31052d64209267c7eb4d432428a`, with renameeb6d612 and documentation
+masterc689c617 (PR140/141). Exact CI35607497359 now passes migration safeguards and
+fresh complete schema replay/lint/contracts. FullCI is still running; no aggregate
+green claim. Prior99baa CI finished with only migrationguard/resultingaggregate
+failure; all native jobs passed before the new push. No previous job was cancelled.
+22 SQL renames preserve exactbytes/order,58 masterSQL files/guard/localledgers
+unchanged; existing72 infrastructure checks and67wrapper verification reused.
+No appbehavior/design/newunit test, ledgerrepair, provider or hostedrollout change.
+PR34/47 remain drafts,46 separate; this paid head stays fixed while fullCI finishes.
+
+Home short-attempt34 hashes/fullstate/provenance/cleanup reviewed. Original200
+finished intact at20seconds; SettingsGET first arrived3ms afterward. NoAreadback/B
+draft existed beforedelivery, so late-draft boundary remains unverified. Unrelated
+guestpassGETs completed duringhold: no general observerblock, but exactbrowser/SDK/
+Next schedulingcause is unproven. Two attempts are preserved with their different
+limits; no third attempt or apprepair assigned. Ownedtab26/API/Next closed, five
+containers stopped/preserved, portsfree, exactfixtures0 and approvedledger56 retained.
+
+Stream3 preflight695 supports exactEvan zero-session scope. Subsequent Chrome
+creationtimeout aborted beforecredentials/auth. Coordinator verified697 hashes and
+fullbefore/aftermetadata/prefs equality, authHTTP[]. IAB31closed; no newChrometab
+confirmed in owned-targetinventory. Runtime/oldtabs/signedout state unchanged.
+The supported Chrome inventory changed from4 to2 afterCUAreset; IDs alone are not
+proof of storage/context change. This is a tooling boundary, not an appfailure.
+
 ## Home lifetime timing limitation reviewed; one bounded follow-up assigned
 
 Coordinator verified35 baseline artifacts (manifest22fe382e), full held/before-release/

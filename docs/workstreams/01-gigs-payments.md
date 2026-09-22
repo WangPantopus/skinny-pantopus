@@ -1,5 +1,196 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — P09 installed iOS refund and hold release (bounded native acceptance)
+
+Fresh runtime-p08-native.cjs (GIG_COMPLETION_BUCKET set), fixtures f9200390, iOS owner
+C2BCF36A + Android worker Pantopus_Stream1_Start_R2 (tokens retained, no re-login). Setup:
+Accept→4242→finalize-accept200 (authorized1250), Android start200, Android photo delivery
+(two409 from an orphaned completion File row of the previous run — same gig/user/bytes id,
+"Retain completion file cleanup records" protection, removed as supabase_admin under
+replica mode — then upload201/mark-completed200), iOS back+deep link→Confirm completion→
+complete200→captured_hold1250. Refunds and hold releases→Request a refund→5.00→Continue→
+"Submit this refund request?"→Request refund→POST refund200, Stripe re_…KVO1u00 500,
+Refund row succeeded, Payment refunded_partial500, History "$5.00 refund completed…".
+Lost committed reply on the second5.00: server committed (re_…qpvSpqi, refunded1000,
+two Refund rows) while the reply was destroyed; UI "The result is not confirmed. Check
+status to recover this request."→Check status→GET refunds200→History shows both refunds,
+refundCalls[500,500] only. With5.00 retained and $2.50 remaining, Continue disabled.
+Gig detail shows Partially Refunded. Gig0102: Accept→4242→authorized750 ("Authorization
+hold $7.50")→Release authorization hold→Continue→"Release this authorization hold?"→
+Release hold→POST refund200→intent pi_…17W8VMg7 canceled, Payment canceled, gig assigned,
+History "$7.50 authorization hold released. No captured charge was refunded."
+Limits: synthetic identity/Connect, local bucket, no socket push (deep link does not
+refetch an already-open detail), toasts not captured, remaining250 refunded by cleanup,
+no dispute/3DS/transfer job this round. Cleanup: re_…jx9SqOL250 (charge fully refunded
+1250), customer deleted, owned rows0 incl. File, bucket removed, API/devices stopped,
+worktree clean. Owner audit20260922-stream1-p09-native-r1 MANIFEST46227a8c58c06f44198bba35a796b019ee5e2ebab7f759196303d29881a07c70.
+
+## September 22 — P08 installed iOS+Android paid-gig journey (bounded native acceptance)
+
+Harness runtime-p08-native.cjs (adapted accepted wallet-release harness; Bearer→fixture
+actor, synthetic refresh/device-register handlers, real files router + owned private
+Storage bucket via GIG_COMPLETION_BUCKET). Fixture f9200390: owner iOS C2BCF36A candidate
+a65411758, worker Android Pantopus_Stream1_Start_R2 app.pantopus.android.debug.
+Journey: iOS Accept$12.50→accept200 (real customer/intent, manual capture)→PaymentSheet
+TEST4242→Pay→finalize-accept200→gig assigned/bid accepted/Payment authorized1250c; Android
+Start task→start200→in_progress, notices bid_accepted/gig_started; Android Mark as
+delivered: shim upload→mark-completed400 "Choose proof files uploaded by you" and real
+route without bucket→upload503, both surfaced as "Couldn't send your proof…" with the
+draft kept; with the bucket: upload201 (File gig_attachment/gig_completion completed,
+storage object)→mark-completed200→completed, completion_photos private reference,
+"Delivery confirmed · Proof sent · 1 photo"; iOS refreshed via deep link (no socket in the
+harness)→Confirm completion→complete200→captured_hold1250 (to_payee1063, fee187),
+cooling_off+48h, intent succeeded/captured, UI Payment Captured $1.87 fee; cooling-off
+advanced on the owned row→processPendingTransfers→wallet_credited, WalletTransaction
+gig_income1063 completed, Wallet1063, notices payout_sent/payment_completed; Android
+wallet $10.63 available / income row Cleared / Set up payouts. Gig0102: Accept→intent750→
+close sheet→abort-accept200→intent canceled, bid pending; Accept→new intent→4000…0002→
+"Your card was declined." (retry kept)→close→abort-accept200→second intent canceled, gig
+open. Errors: only expected fake-Connect lookups. Limits: synthetic identity/Connect
+(no payout/transfer), local bucket stands in for hosted S3, no socket push, toasts not
+captured, emulator/simulator only, cooling-off advanced by SQL, no native3DS/partial
+refund/dispute here. Cleanup: refund re_3UIK7g… of the1250 capture, both750 intents
+canceled, customer deleted, owned rows0, File rows0, bucket emptied/deleted, API/devices
+stopped, worktree clean. Owner audit20260922-stream1-p08-native-r1 MANIFEST5590f05258babb98d27b2fd420382154a68e5405f9e8a5a21e8bdef98ee1b76c.
+
+## September 22 — P03 installed Android tips: aged discovery accepted on the owned AVD
+
+Same harness as the web/iOS runs (fixtures1/4 restored again after the web cleanup).
+Owned Pantopus_Stream1_Start_R2 booted cold (snapshot failed; system Bluetooth crash
+dialog and notifications permission dismissed), existing login form with the owner
+fixture typed via adb, deep links pantopus://gigs/<id>. Gig0101: Send a tip reopened the
+server original (locked$5.00, Continue original tip/Cancel tip); Continue→POST/tip200
+704ms→list by customer→match→intent+charge retrieve→record refunded_full/succeeded;
+gig refreshed, dock back to Send a tip. Gig0104: injected list failure→POST202 pending,
+lease released, dock became Check tip status; lost committed reply plus two rapid taps→
+exactly one POST (200 body captured, socket destroyed), canceled recorded, sheet kept
+open with "The tip result is unconfirmed. Reopen and check the same original request.";
+stale retry→POST200 via reserve read only, no Stripe, sheet closed, dock Send a tip.
+Totals4 POST/tip,6 Stripe reads,0 writes,0 errors,0 notices. Limits: synthetic hub shell
+mismatch ("Couldn't load your hub", harness only), snackbars not captured, synthetic
+identity/device registration, emulator only. Cleanup: owned rows0 (harness and direct
+recount), API stopped, app force-stopped, emulator killed, Stripe intents unchanged,
+worktree clean. Evidence in owner audit20260922-stream1-tip-age-discovery-r1
+(evidence-android/, screens/, source/android-installed-binding.txt), MANIFEST
+a6e561d352e3a4e30905311e2a31b44d0c429ddbedb2c6fe3644a4afe4762715.
+
+## September 22 — P03 installed iOS tips: aged discovery accepted on the owned simulator
+
+Installed candidate a65411758 on C2BCF36A (PantopusAPIBaseURL127.0.0.1:18132; hashes
+3ce39139…/1b750276… unchanged) driven with simctl launch/openurl plus the supported
+control tool. Harness runtime-p02-native.cjs adds only synthetic /api/users/refresh and
+/api/auth/devices/register handlers and Bearer→fixture-actor mapping; real gigs/pays
+routers, real stripeService, real Stripe TEST reads, writes refused. Fixtures2 (gig0102,
+1000c, pi_3UHtJa…) and3 (gig0103,2000c, pi_3UHtLn…) restored from the September20 audit
+exactly as the web run. Existing login form with the owner fixture; keychain "Welcome
+back" card from an earlier fixture dismissed via Not you?.
+
+Gig0102: Send a tip reopened the server-side original (locked10.00, Continue original
+tip/Cancel tip). Continue→POST/tip200 544ms: list by customer→match by tip_request_id→
+intent+charge retrieve→record refunded_full/succeeded, receipt bound,
+payment_succeeded_at2026-09-20T22:35:34Z; sheet dismissed; reopen showed a fresh form
+(preview only). Gig0103: injected list failure→POST202 pending, sheet dismissed, reopen
+still offered Continue with locked20.00; lost committed reply plus two rapid taps→exactly
+one POST (200 body captured, socket destroyed), refunded_full recorded; reopen used the
+device-retained original (GET tip-requests only, no preview/provider call) and showed
+the existing payment-record copy with send disabled. Totals3 POST/tip,7 Stripe reads,0
+writes,0 errors,0 notices. Limits: toasts not captured, synthetic identity/device
+registration, simulator only, no cancel-tip natively, no Android/physical/hosted/Connect.
+Cleanup: owned rows0 (harness and direct recount), API stopped/port free, app terminated,
+owned simulator shut down, Stripe intents unchanged, worktree clean. Evidence in owner
+audit20260922-stream1-tip-age-discovery-r1 (evidence-native/, source/ios-installed-
+binding.txt), MANIFEST0b162fcf2d6d8494cca4ba7378e5234c187187f0e6f454fd09dc94e8d90159d2.
+
+## September 22 — P02 natural >24h provider discovery accepted (bounded web path)
+
+Paid53e738cfc unchanged (bindings for gigTipProof/stripeService/pays/TipModal/
+CompletionFlow/tip migrations in the audit). Runtime: retained owned
+pantopus-stream1-wallet-read-r1 (PostgREST64561/SQL64562, paid chain present), private
+API18132 (real gigs/pays routers, real stripeService, real Stripe TEST read-only with
+writes refused), unchanged Next18133, built-in browser at emulated1280x900. Fixture
+restored the app's own September20 durable originals for requests0b3bec81 (500c) and
+61d78415 (50c) via reserve_gig_tip_original plus one privileged restore of the audited
+provider_started_at/provider_params byte-identical, intent id absent (lost create
+reply); no clock moved. The intents were27.3h/27.1h old at run time; customer
+cus_VIU8… is deleted at Stripe yet still lists them.
+
+Real UI: fresh signed-in browser on gig0101 reopened the TipModal from
+preview.activeRequestId (Retry same tip/Cancel tip). Retry→POST/tip200 (574ms):
+claim→paymentIntents.list customer created.gte=provider_started_at−24h returned4→
+matched pi_3UHtAF4ZIe1twFvL1hOr5aRa by tip_request_id→intent+charge retrieve→record:
+payment refunded_full, state succeeded, receipt bound, payment_succeeded_at
+2026-09-20T22:31:31Z. UI showed the existing refund-history copy and Tip recorded.
+No tip_received notice, by the existing captured_hold-only trigger. On gig0104:
+injected list connection failure→POST202, state pending, Retry retained, no fake
+success; lost committed reply plus double-click→exactly one POST, canceled intent
+pi_3UHtP7… recorded (canceled/0c receipt), UI "The tip result is unknown. Keep and check
+the same request."; stale retry→200 in5ms via reserve read only, modal closed on
+canceled; reloads reopened no modal and made no provider call. Worker actor GETs on
+the owner's request/preview returned403 TIP_FORBIDDEN, unauthenticated401. Totals:3
+POST/tip,5 Stripe reads,0 writes,0 errors. release_gig_tip_original LEASE_LOST after
+record is the existing caught benign path.
+
+Limits: synthetic identity/ancillary feeds, built-in browser only, fixtures2/3 not
+replayed (same path), no native/hosted/Connect/live-mode, canceled toast not captured,
+historical transfer/reversal untouched. Cleanup: owned rows0 (SIGTERM cleanup and direct
+recount), API/Next stopped, ports18132/18133 free, private dist dir removed, tsconfig
+auto-edit reverted, worktree clean, retained containers untouched, Stripe intents
+unchanged, tab closed/viewport reset. Owner audit20260922-stream1-tip-age-discovery-r1:
+22 files, MANIFEST8a0530095c1ed0877bb758b231e63a5c3c0436534e1cb045e5d8c3b78fac7039.
+Coordination bookkeeping (CI35607497359 SUCCESS, PR143/144 merges, grants) is in the
+[live guide](README.md). P03 installed native tips is the next Stream1 boundary.
+
+## Coordinator package baseline assignment
+
+Reviewed12 package-source artifacts and54 Git bindings. Stream2 has one actual UI
+package-create/row-click baseline assigned in [live guide](README.md), with real
+packageAPI/SQL, exactcleanup and no repair yet. Existing editor is the candidate
+for reuse; status/schema and furtherwrite boundaries stay separate. Documentation142
+mergeded391c3a after exactCI; paid53e738 remains fixed on its running fullCI.
+
+## Current Stream1 publication and verification limits
+
+Paid `codex/paid-gig-integration` is clean/pushed at
+`53e738cfc629a31052d64209267c7eb4d432428a`, with renameeb6d612 and documentation
+masterc689c617 (PR140/141). Exact CI35607497359 now passes migration safeguards and
+fresh complete schema replay/lint/contracts. FullCI is still running; no aggregate
+green claim. Prior99baa CI finished with only migrationguard/resultingaggregate
+failure; all native jobs passed before the new push. No previous job was cancelled.
+22 SQL renames preserve exactbytes/order,58 masterSQL files/guard/localledgers
+unchanged; existing72 infrastructure checks and67wrapper verification reused.
+No appbehavior/design/newunit test, ledgerrepair, provider or hostedrollout change.
+PR34/47 remain drafts,46 separate; this paid head stays fixed while fullCI finishes.
+
+Home short-attempt34 hashes/fullstate/provenance/cleanup reviewed. Original200
+finished intact at20seconds; SettingsGET first arrived3ms afterward. NoAreadback/B
+draft existed beforedelivery, so late-draft boundary remains unverified. Unrelated
+guestpassGETs completed duringhold: no general observerblock, but exactbrowser/SDK/
+Next schedulingcause is unproven. Two attempts are preserved with their different
+limits; no third attempt or apprepair assigned. Ownedtab26/API/Next closed, five
+containers stopped/preserved, portsfree, exactfixtures0 and approvedledger56 retained.
+
+Stream3 preflight695 supports exactEvan zero-session scope. Subsequent Chrome
+creationtimeout aborted beforecredentials/auth. Coordinator verified697 hashes and
+fullbefore/aftermetadata/prefs equality, authHTTP[]. IAB31closed; no newChrometab
+confirmed in owned-targetinventory. Runtime/oldtabs/signedout state unchanged.
+The supported Chrome inventory changed from4 to2 afterCUAreset; IDs alone are not
+proof of storage/context change. This is a tooling boundary, not an appfailure.
+
+## Coordinator A02 remote-browser runtime assignment
+
+Reviewed695 hashes and12 currentmasterbindings. Exact knownEvan zero-session fixture,
+IAB/Chrome distinct-current-session proof, one Security signoutothers and natural
+cleanup assigned in [live guide](README.md). No otherfixture/account/schema/appedit.
+Paid next push remains fixed to migrationrename plus documentation140/141; later
+peer work stays separate until that exactCI completes.
+
+## Coordinator next A02 preflight
+
+Stream3 proposal692 reviewed; only narrow remote-action source rebinding, known-owned
+zero-session fixture inventory and supported browser-context inspection assigned in
+[live guide](README.md). No login/revocation/account creation or app edit assigned.
+Existing accepted691 local lost-response result is unchanged.
+
 ## Home lifetime timing limitation reviewed; one bounded follow-up assigned
 
 Coordinator verified35 baseline artifacts (manifest22fe382e), full held/before-release/
