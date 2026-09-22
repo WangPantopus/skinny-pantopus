@@ -290,6 +290,14 @@ export async function createHomeEmergency(
   return post<{ emergency: any }>(`/api/homes/${homeId}/emergencies`, data);
 }
 
+export async function updateHomeEmergency(
+  homeId: string,
+  emergencyId: string,
+  data: { type: HomeEmergencyType; label: string; location?: string | null; details?: Record<string, string> },
+) {
+  return put<{ emergency: any }>(`/api/homes/${homeId}/emergencies/${emergencyId}`, data);
+}
+
 export async function deleteHomeEmergency(homeId: string, emergencyId: string) {
   return del<{ message: string }>(`/api/homes/${homeId}/emergencies/${emergencyId}`);
 }

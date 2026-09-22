@@ -30,6 +30,8 @@ import {
   pillarTokens,
 } from "@/components/scheduling";
 import { ShimmerBlock } from "@/components/ui/Shimmer";
+import { getPaymentStatusLabel } from "@/components/payments/PaymentStatusBadge";
+import { authPageHref } from "@/lib/auth-utils";
 import BookingSummaryCard from "./BookingSummaryCard";
 import { formatCents, formatSlotRange } from "./confirmUtils";
 
@@ -315,9 +317,9 @@ export default function ConfirmedView({ token }: { token: string }) {
                 aria-hidden
               />
               <span className="flex-1 text-[12px] font-bold text-app-success">
-                {payment.payment_status === "processing"
-                  ? "Payment processing"
-                  : "Payment received"}
+                {["captured_hold", "transfer_scheduled", "transfer_pending", "transferred", "succeeded", "completed"].includes(payment.payment_status)
+                  ? "Payment received"
+                  : getPaymentStatusLabel(payment.payment_status)}
               </span>
               <span className="text-[15px] font-extrabold tabular-nums text-app-success">
                 {formatCents(payment.amount_total, payment.currency)}
@@ -361,7 +363,7 @@ export default function ConfirmedView({ token }: { token: string }) {
 
         {/* Create-account nudge */}
         <Link
-          href="/signup"
+          href={authPageHref("/register", "/app/scheduling/my-bookings")}
           className={clsx(
             "flex items-center gap-3 rounded-xl border px-3.5 py-3",
             tk.bgSoft,

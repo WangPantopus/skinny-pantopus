@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.models.homes.CreateMaintenanceRequest
 import app.pantopus.android.data.api.models.homes.CreatePackageRequest
 import app.pantopus.android.data.api.models.homes.CreatePollRequest
 import app.pantopus.android.data.api.models.homes.DeleteDocumentResponse
+import app.pantopus.android.data.api.models.homes.DeleteEmergencyResponse
 import app.pantopus.android.data.api.models.homes.DeleteOwnershipClaimResponse
 import app.pantopus.android.data.api.models.homes.FileUploadResponse
 import app.pantopus.android.data.api.models.homes.GetBillSplitsResponse
@@ -213,6 +214,22 @@ open class HomesRepository
             homeId: String,
             request: CreateEmergencyRequest,
         ): NetworkResult<CreateEmergencyResponse> = safeApiCall { api.createHomeEmergency(homeId, request) }
+
+        /** `PUT /api/homes/:id/emergencies/:emergencyId`. */
+        open suspend fun updateHomeEmergency(
+            homeId: String,
+            emergencyId: String,
+            request: CreateEmergencyRequest,
+        ): NetworkResult<CreateEmergencyResponse> =
+            safeApiCall {
+                api.updateHomeEmergency(homeId, emergencyId, request)
+            }
+
+        /** `DELETE /api/homes/:id/emergencies/:emergencyId`. */
+        open suspend fun deleteHomeEmergency(
+            homeId: String,
+            emergencyId: String,
+        ): NetworkResult<DeleteEmergencyResponse> = safeApiCall { api.deleteHomeEmergency(homeId, emergencyId) }
 
         // ─── Documents (T6.4b / P17) ──────────────────────────────
 
