@@ -1,5 +1,481 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — coordinator review of peer PRs 149/151/152/154
+
+Reviewed diffs, descriptions and CI. 149 (iOS push registration deferred until signed in),
+151 (verify-email alternate purpose retry) and 154 (native package detail/list fixes)
+approved pending refreshed CI after branch updates. 152 (iOS expired-banner after logout)
+blocked: two existing iOS regressions fail (see live guide). Paid branch is unaffected by
+these merges except docs; adoption of the next master happens after the merges settle.
+
+## September 22 — paid head81fa83103: master adoption and second migration renumbering
+
+Merge ac26fdf1a brought master111580dfa into paid (Home package permission and In Transit
+changes, Stream3 login fix, coordinator docs); the migration history guard then required
+the22 unmerged paid migrations to sort after20260922010000, so they were renamed to
+20260922020100–022200 (git mv, identical bytes, unchanged dependency order,222 refs
+checked for destination collisions) with the gig-tip contract reference updated. Local:
+`MIGRATION_BASE_SHA=origin/master node scripts/db/check-migrations.cjs` passes,
+`node --test scripts/deploy scripts/db scripts/staging` 72/72, sync-sql-contracts67
+wrappers. Exact CI35686792990 on81fa83103 fully green including fresh schema replay and
+both native suites. PR34 still carries the older filenames (draft).
+
+## September 22 — P09 installed iOS refund and hold release (bounded native acceptance)
+
+Fresh runtime-p08-native.cjs (GIG_COMPLETION_BUCKET set), fixtures f9200390, iOS owner
+C2BCF36A + Android worker Pantopus_Stream1_Start_R2 (tokens retained, no re-login). Setup:
+Accept→4242→finalize-accept200 (authorized1250), Android start200, Android photo delivery
+(two409 from an orphaned completion File row of the previous run — same gig/user/bytes id,
+"Retain completion file cleanup records" protection, removed as supabase_admin under
+replica mode — then upload201/mark-completed200), iOS back+deep link→Confirm completion→
+complete200→captured_hold1250. Refunds and hold releases→Request a refund→5.00→Continue→
+"Submit this refund request?"→Request refund→POST refund200, Stripe re_…KVO1u00 500,
+Refund row succeeded, Payment refunded_partial500, History "$5.00 refund completed…".
+Lost committed reply on the second5.00: server committed (re_…qpvSpqi, refunded1000,
+two Refund rows) while the reply was destroyed; UI "The result is not confirmed. Check
+status to recover this request."→Check status→GET refunds200→History shows both refunds,
+refundCalls[500,500] only. With5.00 retained and $2.50 remaining, Continue disabled.
+Gig detail shows Partially Refunded. Gig0102: Accept→4242→authorized750 ("Authorization
+hold $7.50")→Release authorization hold→Continue→"Release this authorization hold?"→
+Release hold→POST refund200→intent pi_…17W8VMg7 canceled, Payment canceled, gig assigned,
+History "$7.50 authorization hold released. No captured charge was refunded."
+Limits: synthetic identity/Connect, local bucket, no socket push (deep link does not
+refetch an already-open detail), toasts not captured, remaining250 refunded by cleanup,
+no dispute/3DS/transfer job this round. Cleanup: re_…jx9SqOL250 (charge fully refunded
+1250), customer deleted, owned rows0 incl. File, bucket removed, API/devices stopped,
+worktree clean. Owner audit20260922-stream1-p09-native-r1 MANIFEST46227a8c58c06f44198bba35a796b019ee5e2ebab7f759196303d29881a07c70.
+
+## September 22 — P08 installed iOS+Android paid-gig journey (bounded native acceptance)
+
+Harness runtime-p08-native.cjs (adapted accepted wallet-release harness; Bearer→fixture
+actor, synthetic refresh/device-register handlers, real files router + owned private
+Storage bucket via GIG_COMPLETION_BUCKET). Fixture f9200390: owner iOS C2BCF36A candidate
+a65411758, worker Android Pantopus_Stream1_Start_R2 app.pantopus.android.debug.
+Journey: iOS Accept$12.50→accept200 (real customer/intent, manual capture)→PaymentSheet
+TEST4242→Pay→finalize-accept200→gig assigned/bid accepted/Payment authorized1250c; Android
+Start task→start200→in_progress, notices bid_accepted/gig_started; Android Mark as
+delivered: shim upload→mark-completed400 "Choose proof files uploaded by you" and real
+route without bucket→upload503, both surfaced as "Couldn't send your proof…" with the
+draft kept; with the bucket: upload201 (File gig_attachment/gig_completion completed,
+storage object)→mark-completed200→completed, completion_photos private reference,
+"Delivery confirmed · Proof sent · 1 photo"; iOS refreshed via deep link (no socket in the
+harness)→Confirm completion→complete200→captured_hold1250 (to_payee1063, fee187),
+cooling_off+48h, intent succeeded/captured, UI Payment Captured $1.87 fee; cooling-off
+advanced on the owned row→processPendingTransfers→wallet_credited, WalletTransaction
+gig_income1063 completed, Wallet1063, notices payout_sent/payment_completed; Android
+wallet $10.63 available / income row Cleared / Set up payouts. Gig0102: Accept→intent750→
+close sheet→abort-accept200→intent canceled, bid pending; Accept→new intent→4000…0002→
+"Your card was declined." (retry kept)→close→abort-accept200→second intent canceled, gig
+open. Errors: only expected fake-Connect lookups. Limits: synthetic identity/Connect
+(no payout/transfer), local bucket stands in for hosted S3, no socket push, toasts not
+captured, emulator/simulator only, cooling-off advanced by SQL, no native3DS/partial
+refund/dispute here. Cleanup: refund re_3UIK7g… of the1250 capture, both750 intents
+canceled, customer deleted, owned rows0, File rows0, bucket emptied/deleted, API/devices
+stopped, worktree clean. Owner audit20260922-stream1-p08-native-r1 MANIFEST5590f05258babb98d27b2fd420382154a68e5405f9e8a5a21e8bdef98ee1b76c.
+
+## September 22 — P03 installed Android tips: aged discovery accepted on the owned AVD
+
+Same harness as the web/iOS runs (fixtures1/4 restored again after the web cleanup).
+Owned Pantopus_Stream1_Start_R2 booted cold (snapshot failed; system Bluetooth crash
+dialog and notifications permission dismissed), existing login form with the owner
+fixture typed via adb, deep links pantopus://gigs/<id>. Gig0101: Send a tip reopened the
+server original (locked$5.00, Continue original tip/Cancel tip); Continue→POST/tip200
+704ms→list by customer→match→intent+charge retrieve→record refunded_full/succeeded;
+gig refreshed, dock back to Send a tip. Gig0104: injected list failure→POST202 pending,
+lease released, dock became Check tip status; lost committed reply plus two rapid taps→
+exactly one POST (200 body captured, socket destroyed), canceled recorded, sheet kept
+open with "The tip result is unconfirmed. Reopen and check the same original request.";
+stale retry→POST200 via reserve read only, no Stripe, sheet closed, dock Send a tip.
+Totals4 POST/tip,6 Stripe reads,0 writes,0 errors,0 notices. Limits: synthetic hub shell
+mismatch ("Couldn't load your hub", harness only), snackbars not captured, synthetic
+identity/device registration, emulator only. Cleanup: owned rows0 (harness and direct
+recount), API stopped, app force-stopped, emulator killed, Stripe intents unchanged,
+worktree clean. Evidence in owner audit20260922-stream1-tip-age-discovery-r1
+(evidence-android/, screens/, source/android-installed-binding.txt), MANIFEST
+a6e561d352e3a4e30905311e2a31b44d0c429ddbedb2c6fe3644a4afe4762715.
+
+## September 22 — P03 installed iOS tips: aged discovery accepted on the owned simulator
+
+Installed candidate a65411758 on C2BCF36A (PantopusAPIBaseURL127.0.0.1:18132; hashes
+3ce39139…/1b750276… unchanged) driven with simctl launch/openurl plus the supported
+control tool. Harness runtime-p02-native.cjs adds only synthetic /api/users/refresh and
+/api/auth/devices/register handlers and Bearer→fixture-actor mapping; real gigs/pays
+routers, real stripeService, real Stripe TEST reads, writes refused. Fixtures2 (gig0102,
+1000c, pi_3UHtJa…) and3 (gig0103,2000c, pi_3UHtLn…) restored from the September20 audit
+exactly as the web run. Existing login form with the owner fixture; keychain "Welcome
+back" card from an earlier fixture dismissed via Not you?.
+
+Gig0102: Send a tip reopened the server-side original (locked10.00, Continue original
+tip/Cancel tip). Continue→POST/tip200 544ms: list by customer→match by tip_request_id→
+intent+charge retrieve→record refunded_full/succeeded, receipt bound,
+payment_succeeded_at2026-09-20T22:35:34Z; sheet dismissed; reopen showed a fresh form
+(preview only). Gig0103: injected list failure→POST202 pending, sheet dismissed, reopen
+still offered Continue with locked20.00; lost committed reply plus two rapid taps→exactly
+one POST (200 body captured, socket destroyed), refunded_full recorded; reopen used the
+device-retained original (GET tip-requests only, no preview/provider call) and showed
+the existing payment-record copy with send disabled. Totals3 POST/tip,7 Stripe reads,0
+writes,0 errors,0 notices. Limits: toasts not captured, synthetic identity/device
+registration, simulator only, no cancel-tip natively, no Android/physical/hosted/Connect.
+Cleanup: owned rows0 (harness and direct recount), API stopped/port free, app terminated,
+owned simulator shut down, Stripe intents unchanged, worktree clean. Evidence in owner
+audit20260922-stream1-tip-age-discovery-r1 (evidence-native/, source/ios-installed-
+binding.txt), MANIFEST0b162fcf2d6d8494cca4ba7378e5234c187187f0e6f454fd09dc94e8d90159d2.
+
+## September 22 — P02 natural >24h provider discovery accepted (bounded web path)
+
+Paid53e738cfc unchanged (bindings for gigTipProof/stripeService/pays/TipModal/
+CompletionFlow/tip migrations in the audit). Runtime: retained owned
+pantopus-stream1-wallet-read-r1 (PostgREST64561/SQL64562, paid chain present), private
+API18132 (real gigs/pays routers, real stripeService, real Stripe TEST read-only with
+writes refused), unchanged Next18133, built-in browser at emulated1280x900. Fixture
+restored the app's own September20 durable originals for requests0b3bec81 (500c) and
+61d78415 (50c) via reserve_gig_tip_original plus one privileged restore of the audited
+provider_started_at/provider_params byte-identical, intent id absent (lost create
+reply); no clock moved. The intents were27.3h/27.1h old at run time; customer
+cus_VIU8… is deleted at Stripe yet still lists them.
+
+Real UI: fresh signed-in browser on gig0101 reopened the TipModal from
+preview.activeRequestId (Retry same tip/Cancel tip). Retry→POST/tip200 (574ms):
+claim→paymentIntents.list customer created.gte=provider_started_at−24h returned4→
+matched pi_3UHtAF4ZIe1twFvL1hOr5aRa by tip_request_id→intent+charge retrieve→record:
+payment refunded_full, state succeeded, receipt bound, payment_succeeded_at
+2026-09-20T22:31:31Z. UI showed the existing refund-history copy and Tip recorded.
+No tip_received notice, by the existing captured_hold-only trigger. On gig0104:
+injected list connection failure→POST202, state pending, Retry retained, no fake
+success; lost committed reply plus double-click→exactly one POST, canceled intent
+pi_3UHtP7… recorded (canceled/0c receipt), UI "The tip result is unknown. Keep and check
+the same request."; stale retry→200 in5ms via reserve read only, modal closed on
+canceled; reloads reopened no modal and made no provider call. Worker actor GETs on
+the owner's request/preview returned403 TIP_FORBIDDEN, unauthenticated401. Totals:3
+POST/tip,5 Stripe reads,0 writes,0 errors. release_gig_tip_original LEASE_LOST after
+record is the existing caught benign path.
+
+Limits: synthetic identity/ancillary feeds, built-in browser only, fixtures2/3 not
+replayed (same path), no native/hosted/Connect/live-mode, canceled toast not captured,
+historical transfer/reversal untouched. Cleanup: owned rows0 (SIGTERM cleanup and direct
+recount), API/Next stopped, ports18132/18133 free, private dist dir removed, tsconfig
+auto-edit reverted, worktree clean, retained containers untouched, Stripe intents
+unchanged, tab closed/viewport reset. Owner audit20260922-stream1-tip-age-discovery-r1:
+22 files, MANIFEST8a0530095c1ed0877bb758b231e63a5c3c0436534e1cb045e5d8c3b78fac7039.
+Coordination bookkeeping (CI35607497359 SUCCESS, PR143/144 merges, grants) is in the
+[live guide](README.md). P03 installed native tips is the next Stream1 boundary.
+
+## Coordinator package baseline assignment
+
+Reviewed12 package-source artifacts and54 Git bindings. Stream2 has one actual UI
+package-create/row-click baseline assigned in [live guide](README.md), with real
+packageAPI/SQL, exactcleanup and no repair yet. Existing editor is the candidate
+for reuse; status/schema and furtherwrite boundaries stay separate. Documentation142
+mergeded391c3a after exactCI; paid53e738 remains fixed on its running fullCI.
+
+## Current Stream1 publication and verification limits
+
+Paid `codex/paid-gig-integration` is clean/pushed at
+`53e738cfc629a31052d64209267c7eb4d432428a`, with renameeb6d612 and documentation
+masterc689c617 (PR140/141). Exact CI35607497359 now passes migration safeguards and
+fresh complete schema replay/lint/contracts. FullCI is still running; no aggregate
+green claim. Prior99baa CI finished with only migrationguard/resultingaggregate
+failure; all native jobs passed before the new push. No previous job was cancelled.
+22 SQL renames preserve exactbytes/order,58 masterSQL files/guard/localledgers
+unchanged; existing72 infrastructure checks and67wrapper verification reused.
+No appbehavior/design/newunit test, ledgerrepair, provider or hostedrollout change.
+PR34/47 remain drafts,46 separate; this paid head stays fixed while fullCI finishes.
+
+Home short-attempt34 hashes/fullstate/provenance/cleanup reviewed. Original200
+finished intact at20seconds; SettingsGET first arrived3ms afterward. NoAreadback/B
+draft existed beforedelivery, so late-draft boundary remains unverified. Unrelated
+guestpassGETs completed duringhold: no general observerblock, but exactbrowser/SDK/
+Next schedulingcause is unproven. Two attempts are preserved with their different
+limits; no third attempt or apprepair assigned. Ownedtab26/API/Next closed, five
+containers stopped/preserved, portsfree, exactfixtures0 and approvedledger56 retained.
+
+Stream3 preflight695 supports exactEvan zero-session scope. Subsequent Chrome
+creationtimeout aborted beforecredentials/auth. Coordinator verified697 hashes and
+fullbefore/aftermetadata/prefs equality, authHTTP[]. IAB31closed; no newChrometab
+confirmed in owned-targetinventory. Runtime/oldtabs/signedout state unchanged.
+The supported Chrome inventory changed from4 to2 afterCUAreset; IDs alone are not
+proof of storage/context change. This is a tooling boundary, not an appfailure.
+
+## Coordinator A02 remote-browser runtime assignment
+
+Reviewed695 hashes and12 currentmasterbindings. Exact knownEvan zero-session fixture,
+IAB/Chrome distinct-current-session proof, one Security signoutothers and natural
+cleanup assigned in [live guide](README.md). No otherfixture/account/schema/appedit.
+Paid next push remains fixed to migrationrename plus documentation140/141; later
+peer work stays separate until that exactCI completes.
+
+## Coordinator next A02 preflight
+
+Stream3 proposal692 reviewed; only narrow remote-action source rebinding, known-owned
+zero-session fixture inventory and supported browser-context inspection assigned in
+[live guide](README.md). No login/revocation/account creation or app edit assigned.
+Existing accepted691 local lost-response result is unchanged.
+
+## Home lifetime timing limitation reviewed; one bounded follow-up assigned
+
+Coordinator verified35 baseline artifacts (manifest22fe382e), full held/before-release/
+after state equality, oneaudit/noBwrite, unchangedRPCprovenance/ledger56 and exact
+cleanup/freeports/stoppedfivecontainers. Corrected original200 was attempted56221ms
+after commit on an already destroyed socket/no finish. B was entered after42seconds;
+unchangedSDK timeout is30seconds, but exact timeout causality was not independently
+captured. No successful-late-response acceptance or applicationdefect. Earlier missed-
+matcher ordinary200 is excluded and separatelycleaned. Frozenlive02 hash26a1b0c3.
+
+Stream2 is assigned one shorter attempt from its reviewed next-proposal.md, same
+unchanged source/ownedfixtures and ports18141/18142/64550–59. Prepare A/observed
+controls before arming; one supported CUA invocation Save→freshpendingAX→Share→
+freshAX→Settings→freshcommittedA/readback→unsavedB/readback. No intervening shell/API
+roundtrip. Add only private request-arrival and close/finish observation at capture;
+automatically send untouched original200/body on originalsocket20seconds after
+commit regardless of UIprogress. Keep SDK30seconds unchanged. Stop interactions if
+A/readback/ordering fails or deadline passes; do not repeatwrite or manufacture
+success. Accept only freshGET200/readbackA and unsavedB before intact200 delivery,
+with onePATCH/oneaudit/fullsavedA. Observe B without newnavigation/focus/reload.
+No applicationrepair unless a defect is reproduced and handedoff. No schema/session/
+provider/native/newtest or duplicateatomicity/errorjourney. Exactcleanup as before.
+
+## September 21 — committed local sign-out response loss reviewed
+
+Coordinator independently verified691 Stream3 artifact hashes and complete own-session
+metadata comparisons. One ordinary local login added only its current session. Actual
+Settings logout retired that app/GoTrue session, with all other own metadata and full
+preferences unchanged, while original200 and four clearing-cookieheaders were held.
+After proof, only the original socket was destroyed at149ms; headersSent=false,
+close/destroyed=true and no finish. Final state exactly equals commit proof: no
+resurrection/newsession. Actual browser reachedlogin with original Settings redirect;
+one automaticrefresh401, no GoTrue token call or429. InitialAX retainedSettings/Bob.
+Browser-facing failure status and intermediate toast were not captured: no502/toast
+or zero-frame retirement claim. Manualretry was unavailable after Logout retired;
+no relogin/workaround performed. This accepts this bounded local upstream-response
+loss/recovery only, not physicaloffline/native/hosted or broad auth closure.
+
+Originalhook/env/argv/cwd restored; API48548/session80449, Next42165/42493 and DB
+retained. Fault/descriptors/tab30 removed, natural signedout/revoked state preserved.
+No applicationedit/newtest/acceptedjourney replay. Root review receipt is in owner
+audit20260921-stream1-migration-order-r3/logout-loss-reviewed.json. Frozenlive03
+745697b8 supplies owner details. Shared documentation140 passedCI and merged as
+ a5ef4d49ceb986a6655ae1ea5f8404bbf7a3cded. Paid localeb56ab2a1 adds only its three
+documents to verified renameeb6d612; actual-base guard still passes. Publication
+waits for prior99baa CI native jobs; fresh repaired-head replay/CI not yet accepted.
+
+## Stream3 local logout lost-response runtime assignment
+
+Coordinator verified677 durable artifacts (MANIFEST06df0aa1), all eight bindings
+against masterf4b277861, and frozenlive03 hash13ccd0c6. Seven also match paid; paid
+next.config.js differs only by existing /status/:token privacy headers. Auth/API
+proxy source is unchanged. An initial overbroad eight-paid-matches assertion failed;
+the premature runtime message was immediately withdrawn before this corrected grant.
+Stream3 confirmed no login/logout/refresh, hook write or APIrestart occurred before
+the correction; only read-only source/process inspection had run.
+Accepted82/136/138 do not cover same-account local logout with original reply lost
+after retirement. Existing implementation/instrumentation suffices; no defect yet.
+
+Stream3 reserves only retainedAPI18130/Next18131/ownDB and one new browser tab.
+One ordinary real local Bob login is assigned because browser is signedout; record
+new exact ownsession, full own app/GoTrue metadata/preferences. Rebind source and
+original hook/env/argv/cwd. Extend only existing private end-hook for one exact
+owned POSTlogout, loopback/aliasOrigin/cookie transport/SettingsReferer, expiring
+atomic descriptor. Hold original200 only with headersSent=false, at most8seconds
+below client timeout. On original pending socket prove currentapprevoked/GoTrueabsent
+and unchangedotherownmetadata/prefs before destroying only that original socket.
+Mismatch, non200, sentheaders, incomplete proof or deadline must release original
+untouched response if possible and stop; early disconnect gets its actual label.
+No manufacturedresponse/cookie/session, authDBwrite or secret logging.
+
+Observe actual Nextproxy/browser result and automaticauth; stale sessionflag can
+cause refresh. One samebutton retry is included only if currentLogout remains usable
+and identity is unchanged; no relogin/workaroundnavigation/resurrection. Verify actual
+recovery/no new or other-session changes; retain natural revocations/audits. Stop on
+unexpectedmutation/accountswitch. Restore exact hook/descriptor/APIconfiguration,
+close newtab, preserveNext/DB/peers. No newtests, native/hosted/externalprovider or
+applicationedit. Local API-to-Next reply loss does not establish physicaloffline.
+
+## Next independent verification while paid CI finishes
+
+The migration filename repair is localeb6d612beb96377c37ea546190e0d85f78529d7d:
+22 exact SQL renames and existing gig-tip contract references only. All58 master
+SQL files unchanged, actual-base guard passes,67 wrappers verify,72 existing
+infrastructure checks pass; no new tests. Preserved local ledger digest unchanged.
+Six artifacts in owner audit20260921-stream1-migration-order-r3. Publish once old
+CI35603240733 finishes so its running native checks are not cancelled; fresh replay
+and exact repaired-head CI remain required. No new schema scope in this batch.
+
+Stream2 may now run its previously reviewed10-artifact Home save-lifetime baseline
+on finalmasterf4b277861 after rebinding original Settings/SDK/backend/RPC bytes.
+Reserve only its owned prior ports18141/18142/64550–59 and stopped five-container
+stack; no native build. Preserve originald225 branch and accepted evidence, use
+an independent follow-up branch in its own application worktree. Existing exact
+owned fixture and private transport isolation only: hold one real settings200
+on the original socket after actual SQL commitA; Share→Settings loads committedA,
+enter unsavedB, release oldreply, observe currentdraft and full savedstate/oneaudit.
+Record UI/SDK/realAPI/SQL and socket delivery; do not manufacture success or mutate
+ledger/schema/provider/session. No app repair is assigned until failure is observed.
+Stop/restore exact instrumentation and owned fixtures; preserve approvedmigration56,
+other data and all peer resources. No duplicate atomicity/normal/error journey or
+new unit test. Existing source-only proposal remains the scope and evidence map.
+
+Stream3 next bounded work remains source-only: select the existing logout lost-
+committed-response boundary, bind accepted82/136/138 evidence to current source,
+compare UI handler/SDK/session retirement/API/GoTrue calls and distinguish lost
+response after retirement from acceptedpre-forward503. Report a precise existing-
+implementation gap or bounded real-response isolation proposal before runtime or
+code changes. No additional login/logout/refresh/provider/native action. Preserve
+current browser signed-out state, own source/evidence and retained runtime.
+
+## September 21 — migration ordering repair; native reservation released
+
+Current paid head99baa92b6 is clean/pushed, but CI35603240733 failed the migration
+history guard; fresh database replay was consequently skipped. Master now contains
+Home20260921010000, ahead of all22 still-unmerged paid migrations16020100–16022200.
+This is reproduced integration ordering failure, not a proven SQL execution defect.
+Existing runbook and prior3657af97d prescribe renaming unmerged files after master.
+Stream1 is sole writer for these22 filenames and their existing gig-tip contract
+references: reserve20260921020100–20260921022200 in unchanged dependency order.
+216 Git branch refs checked without destination collision. Preserve every SQL byte,
+all master migrations and every retained database/ledger. No include-all, ledger
+repair, schema mutation, hosted rollout, guard weakening or new unit test. Required
+checks: exact22 byte bindings/master immutability, actual-base policy, existing
+infrastructure contracts and fresh schema replay in required CI. Original failed CI
+remains failed; do not replay unchanged UI journeys for a filename-only repair.
+
+Native readiness ended without acceptance: installed iOS candidate hashes match
+prior evidence, but Simulator.app is missing and registered bundle attachment fails.
+Android owned AVD starts, but supported window listing/control is unavailable. Both
+owned devices are now stopped and ports5568/5569 free; no app input, build/install,
+fixture/provider or cache change. Native tips remain unverified. Three safe readiness
+artifacts are preserved in owner audit20260921-stream1-native-tip-readiness-r3.
+Stream2 remains stopped with its approved local migration retained; Stream3 restored
+API/Next/DB retained, later proposals source-only. PR34/47 stay draft,46 separate.
+
+## September 21 — reviewed batch pushed at99baa92b6
+
+Paid branch `codex/paid-gig-integration` is clean/pushed at
+`99baa92b6e776d5a1fb95aa7355e8be9f6277c17`, including final documentation master
+`f4b27786172d7b2cae641b4c94f9e77aa75928c1`. Documentation139 passedCI35602856156.
+Final adoption changed only five documents; all seven application source bindings
+remain identical to checked local1f1c353c, so local checks were reused. Exact published
+CI35603240733 is queued/running, not yet accepted. Prior48702 fullCI remains green.
+PR47 body is current; PR34/47 remain drafts,46 separate. Root durable review now26
+verified artifacts with final publication and PR-body receipts. No additional code
+or unit tests were added for publication.
+
+Next Stream1 boundary is P03 installed native tips. Read-only readiness checks found
+owned simulator C2BCF36A-F300-48C1-9BA7-876CA9F61E55 available/shutdown and no booted
+devices; installed Pantopus/debug-dylib hashes match the prior a65411758 candidate.
+Relevant ContentDetail, core auth/payment/environment source remains unchanged; other
+native areas differ, so any reuse is candidate-specific rather than full current build
+acceptance. Previous Simulator GUI and Android control failures remain unresolved
+until actual supported UI access is demonstrated. No native tip request/provider call
+or new build has run. Source/config/runtime evidence will remain separate from currentCI.
+
+## September 21 — reviewed application batch ready for final publication
+
+The application batch is merged through master
+`b946eb9ea99819ffb27f42252cdaab237d02dea0`. Paid branch
+`codex/paid-gig-integration` has a clean local integration commit
+`1f1c353cf529e7df4acdb1a1c5e84f13036e9479`; it is not pushed yet. Seven incoming
+application paths match their reviewed candidates exactly, including earlier Audit133.
+Financial backend and native source are unchanged. Remote paid48702 retains its
+successful full CI35596223401 (15 applicable passes, one Seeder skip).
+
+- SDK136 merged `2d66626c058ca6d57232fc0dd57311c58086fcf5` after original
+  CI35599880117 and updated CI35600453583 passed. Actual logout no longer causes
+  the automatic refresh burst; real login returns to the exact protected destination.
+- Atomic Settings137 merged `274e6e1c91c9049e855f6fe91e0484deebaedb2c` after original
+  CI35600568312 and updated CI35601168238 passed, including fresh schema validation.
+  One UI command saves name/type/settings/preferences together. Actual RPC denial
+  and final audit-insert failure left complete state unchanged; retry saved all
+  intended fields and one audit. Compatibility and validation evidence was reviewed.
+- Logout feedback138 merged `b946eb9ea99819ffb27f42252cdaab237d02dea0` after original
+  CI35601204534 and updated CI35601772751 passed. Actual pre-forward503 stays on
+  Settings with a usable error/retry; real retry200 retires only the current session
+  and reaches login without refresh/429. The original toast AX observation was
+  recovered from the recorded tool output, without another browser journey.
+
+Combined local verification passed: web type gate zero errors; scoped web lint zero
+errors/22 existing warnings; SDK lint zero errors/80 warnings; 57 existing auth checks;
+backend syntax and whitespace. No new unit tests. Existing page ts-nocheck and standalone
+SDK type diagnostics remain explicit limits; the latter was not rerun or claimed green.
+No accepted UI journey was replayed for this source-identical integration.
+
+Evidence: root owner audit `20260921-stream1-payment-method-removal-late-r2` now holds
+23 verified artifacts, including cohort-review.json, combined-source-bindings.json,
+combined-validation.json and check logs. Home candidate36 and Stream3 durable676 hashes
+were reviewed independently, including full rollback/session comparisons and cleanup.
+Final live02 hash44293645 and live03 hash32f46a2d were captured in f9b9b82ea; the earlier
+incorrect provisional live02 hash was rejected before staging and corrected by its owner.
+
+No private fault remains active. Root API/tab are closed; Next18133/PID47970 and owned
+Supabase are retained. Stream2 fixtures/constraint/ports are clean, five containers
+stopped/preserved; its approved forward migration and ledger56 intentionally remain.
+Stream3 restored API7948/session60505, Next42165/42493 and DB are retained, browser signed
+out and natural revocation records preserved. No local native build or provider send.
+Root retained DB has not applied the new Home migration: no combined local Home schema
+or runtime claim is made. Required rollout is migration, updated backend, then web;
+the old backend ignores profile keys. No hosted rollout is authorized or performed.
+
+Next: publish this documentation separately, adopt only its final documentation delta
+into the checked paid integration, verify source bindings again and push once for full
+CI. Reuse these local checks when that delta is docs-only. PR34/47 remain drafts and46
+separate. Later Home save-lifetime and other proposals remain outside this fixed batch.
+All three streams are incomplete; provider/device, unknown-commit, concurrency and wider
+acceptance limits remain in the existing backlog. Do not equate this batch with closure.
+
+## September21 — SDK136 merged; atomic Home137 reviewed
+
+PR136 updated0d5ee430 passedCI35600453583 and merged
+`2d66626c058ca6d57232fc0dd57311c58086fcf5`; tested SDK bytes unchanged by five-doc
+branch update. Preserved standaloneSDK type-error limitation and realUI/session bounds.
+
+PR137 originald225ff1e86e68ba6ff9e14c4ec43587760d0c65d is fixed/draft, current
+CI35600568312 pending. Coordinator reviewed four authorizedpaths,36 durablehashes,
+fullbefore/failure rows for RPC503 and finalauditinsert503 rollback, exactfunction/
+constraintcatalog restoration, eightUIwrites503/200/503/200/400/403/200/200 with no
+profilePATCH. Existing canonicalname/type/UTF16 validation, oldsettings-only sixfield
+clearing/profileomission/preferencepreservation,9invalidAPI+DB/14validDBrollback/
+5validHTTP cases inspected.24totalHTTPsettingsPATCHes, zero provider/newunit tests.
+TS/lint/syntax pass (6existinglintwarnings); freshschema replay remains CI-bound.
+Originalauthority/lock/audit/preferences/clearing contract retained. Exactfixtures/
+constraint/tab23/API/Next cleaned, ownfivecontainers stopped/preserved; candidate
+forwardmigration/ledger56 intentionallyretained. Frozenlive02 64fabc captured65a62c64e.
+Required rollout order: migration, updatedbackend, then webcaller. Oldbackend ignores
+name/type while saving otherfields, so webmustnotprecede backend. No hosted rollout.
+
+Separate logoutpre-forward503 baseline662hashes/fullownmetadata reviewed: current
+507ef9ec remainsactive and unchanged as expected, but existing handler silently returns
+to authenticatedPlace without error. Frozenlive03 187551b captured769917ca0; exacthook
+restored/API3800/session20593, Next/DBretained/tab28closed. TopREADME assigns only
+existingprofileSettings handleLogout catch/error/return repair on separatefinalmaster
+branch, real503/currentUIretry200/retirement checks and exactinstrumentationcleanup.
+This new boundary is not covered by136 successfullogout or PR82 postrevocationfailure.
+Keep paid48702 clean and green while these later milestones finish independently.
+
+## September21 — logout-return repair reviewed; next CI gate pending
+
+PR136 original d6fba68d3cf1154211849a1b659a7e48d03012a6 passedCI35599880117.
+Coordinator updated only five docs to current master893c1dc29; SDK bytes unchanged at
+updated `0d5ee43037e4e735d6313f84c2c5c896e8cc2f17`, CI35600453583 pending.
+Sole existing client.ts automaticweb401 gate now uses existing hasActiveSession;
+mobile/explicitrefresh/stale-sessionflag/generation/privacy retirement unchanged.
+
+Coordinator verified653 candidate artifacts, actual UIlogout/protecteddestination/
+login and independent complete own-session comparisons: only14312967 retired, new
+507ef9ec only addition; other own app/GoTrue metadata and fullprefs[] unchanged.
+Nine trailing privateGET401, zero refreshPOST/429; real login200/localGoTrue password
+200, exact originalquery return, identity-bound prefsGET304. Brief emptyaccount/default
+settings shell before login is not zero-frame retirement proof. Tab27closed/descriptor
+consumed, natural old/new session records and API73610/Next/DB retained.
+Existing57 auth tests passed, webtypegate0, SDKlint0errors/33warnings. StandaloneSDK
+35type diagnostics remain failing; isolated old/candidate59 normalizeddiagnostics are
+identical (copy adds resolutionerrors), not a green standaloneSDK claim. No new tests.
+Frozenlive03 aa065b5 captured950d299d5; rootreviewreceipt in later-review.json.
+
+Next one-shot pre-forward logout503 baseline is separately granted in liveREADME;
+no additional appfix accepted yet. Home atomiccandidate progress is peer-reported,
+awaiting final source/evidence/cleanup review. Keep136 and paid48702 fixed until gates
+resolve; combine only reviewed complete milestones. Docs135 merged893c1dc29 after
+exactCI35599630531 success. Rootr2 durablemirror now16 artifacts with later review.
+
 ## September21 — paid48702 full CI passed
 
 Exact published `48702bc9d6ef89d30361962b2acf49090e2ad83e` completed

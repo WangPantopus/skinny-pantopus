@@ -120,7 +120,7 @@ function reducer(state: State, action: Action): State {
         if (action.entity === 'tasks') counts.tasks_open = data.filter(row => ['open', 'in_progress'].includes(row.status)).length;
         if (action.entity === 'issues') counts.issues_open = data.filter(row => ['open', 'scheduled', 'in_progress'].includes(row.status)).length;
         if (action.entity === 'bills') counts.bills_due = data.filter(row => ['due', 'overdue'].includes(row.status)).length;
-        if (action.entity === 'packages') counts.packages_expected = data.filter(row => ['expected', 'out_for_delivery'].includes(row.status)).length;
+        if (action.entity === 'packages') counts.packages_expected = data.filter(row => ['expected', 'in_transit', 'out_for_delivery'].includes(row.status)).length;
       }
       return { ...state, [action.entity]: data, summaryCounts: counts };
     }

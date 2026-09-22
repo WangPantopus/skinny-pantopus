@@ -2698,3 +2698,405 @@ retry executed. PR82 client/provider bytes identical; historical retirement reta
 openPR metadata47/46/34 no dedicatedauthfix. Detailed source hashes/sequence/limits
 logout-burst-source-attribution.json; durable637 MANIFEST **edbf0d6a92976197bbcfd117b6447187555a08e7907669b056b7a0dc45feee9a**.
 Coordinator review pending; original failedreturn remains unverified.
+
+
+## PR136 — stop signed-out automatic web refresh
+
+Granted oneexisting SDK client.ts gate now requires hasActiveSession for automatic
+web401 refresh. Mobile branch, explicitrefresh, staleaccess sessionflag, generation
+guards/singleflight/privacy retirement unchanged. No limiter/backend/UI/provider
+redesign/newfiles/tests. Commit d6fba68d3cf1154211849a1b659a7e48d03012a6 pushed
+on codex/stream3-session-return-reconciliation; draft
+https://github.com/WangPantopus/skinny-pantopus/pull/136 (separate paidbatch).
+
+After naturalratewindow ordinary UI login created14312967-9a68-4c51-bcb0-0266f6898285;
+other own sessions unchanged. Candidate Nextcompiled SDK guard present in loaded
+page/layoutchunks; DOM script list recorded. Actual Settings keyboardlogout retired
+only14312967 registry/GoTrue;9 trailing privateGET401, **zero refreshPOST/429**.
+Observed immediate intermediate remounted shell had blankaccount/defaultsettings;
+then login navigation completed. Protected own scheduling-settings query redirected
+to exactlogin redirectTo, no private settings content in observedloginUI. Actual
+login200/localGoTrue passwordgrant20012:27:45 returned original path/query/AuthBob.
+Newsession507ef9ec-89b6-4ff3-a04c-6c69d5e0618c onlyaddition; all other own app/GoTrue
+metadata unchanged from postlogout. Fullprefs[] unchanged; identity-bound prefsGET304
+12:27:45.738 cachevalidation. Complete measuredcandidate interval:2POST200 (logout/
+returnlogin),9GET401, zero refresh/429; initial setup login precedes this interval.
+
+Cleanup: tab27closed, zero-delaydescriptorconsumed, retained natural revoked/audit/
+newloginrecords. API73610/Next42165+42493/DB unchanged, no counterreset/restart.
+Sourcebefore-finalcommit hash in logout-fix-before; UI/script/safeHTTP/SQL/GoTrue
+snapshots in logout-fix-*. Prior natural/explicitrefresh evidence reused for unchanged
+controlflow only; new401gate staleaccess compatibility sourcechecked, no newexpiry
+runtime claim. No native/hosted/negative-destination/broadsessionclosure. Baseline
+historical tab initiator stillunproven; candidate boundedjourney passes.
+
+Existing57 authArrival/sessionRefresh tests pass; web typegate0errors; SDKscoped
+lint0errors/33existingwarnings; diffcheckpass. StandaloneSDK typecheck stillfails35
+diagnostics. Isolated old/candidate compilecomparison both59normalizedidentical
+(includes copy-specific module resolutionerrors), not standalonegreen. Initial
+pnpm isolatedcommand couldn't resolve workspace; direct existingtsc used. Initial
+webeslint invocation ignored externalfile; actualpackageconfig rerun recorded.
+No newtests or testcoverage claim. RequiredCI pending, no merge/integration claim.
+Durable653 hashes verified; MANIFEST **2786b1fae61dbc82ed908c0c055900c7d4aeaff203e16157c7947cd6c9cdcd55**. Coordinatorreview.
+
+
+Next source-only A02 proposal: ordinary local logout pre-forwardfailure. PR82
+revocation partialfailure happened AFTER commit; PR136 local200 retirement and
+refreshnatural/transient cannot establish this boundary. Existing profilelogout
+catch assumes cookiescleared and navigateslogin after localclear; SDK clearsession
+only after POSTsuccess; retained sessionflag can still authenticate middlewarelogin
+redirect. Potential misleading failure handling requires actual baseline, not policy
+invention. Proposed separately granted exact owned507ef9ec session + one-shot
+preExpress POSTlogout503, noforward/SetCookie, fullmetadata/prefs equality/UIobserve.
+No runtime, retry/logout/login or appedit executed. Restore privatehook/env/restart
+ownAPI only ifgrant, close ownnewtab, preserve natural session; no cookie/clock/JWT/
+device/DBreset. Not genuineoffline or lostsuccessfulreply. Detailed existingfive
+bindings/isolation/cleanup in logout-failure-source-proposal.json. PR136fixed;
+CI35599880117 browserE2E/database/safeguards passed, webjob stillrunning.
+Durable654 hashes; MANIFEST **e4000f55b7a1c627d96027ca49e8e9e0880825b6081d9f0afa428b10b92877eb**; coordinatorreviewpending.
+
+
+PR136 exact d6fba68d3 CI35599880117 **SUCCESS**: weblint/typegate/Jest/productionbuild,
+IdentityFirewallE2E, database replay/safeguards andCI OK allpassed. Backend/native/
+Seeder jobs skipped bychangefilter, not runtimeverified. Receiptlogout-fix-ci.json;
+durable655 MANIFEST **b95bd5576d3d29058da1fef589f133638cdd744ca0d3775b2f01611f0a87c8b4**. Draft remains coordinatorreview/
+integration pending; standaloneSDKdiagnostic limitation unchanged.
+
+
+## Separate local logout pre-forward503 baseline — reproduced UI failure
+
+Granted exact Bob/current507ef9ec preflight matched complete prior metadata and UI.
+Private one-shot matched all exactlogout/18130/loopback/Origin/transport/Referer
+conditions;50312:37:15.297UTC, descriptorconsumed/noforward/noSetCookie. Actual
+Settings keyboardlogout showed no appfailure/retry, navigated automatically to
+/app/place displaying AuthBob. Devissuebadge briefly visible, not usablelogouterror.
+Full own app/GoTrue metadata and prefs[] unchanged; no GoTrue token receipt or
+HTTPlogin/refresh/retry, subsequent profile304s. Sessionretained as expected for
+pre-forwardfailure; silentlyreturning to authenticatedPlace is the reproducedgap.
+No manualretry/login/logout or apprepair. This is synthetic503, not actualoffline
+or lostsuccessfulreply; no native/provider/broadauthclosure.
+
+Cleanup complete: faultAPI3022stopped, restoredAPI3800/exec20593 originalargv/env/cwd
+exact in-memory comparison; originalhookSHAd7c8b95318bab69c34050b6924df8ed9f7a5b44be79d0a3f39e8b35cd9768a5d
+restored, markerabsent, testtab28closed, Next42165/42493+DB retained. Actualcurrent
+507ef9ec session retained, no DB/grant/device/cookie/clock/JWTmutation. Locald6f
+source/PR136 frozen; no new appedit/tests/CI in baseline. Privateenv/operatorlogs
+excluded. Safe logout-failure-before/after/intercept/runtime-change/cleanup/UI
+artifacts mirrored, 662 hashes; MANIFEST **c511bc373dccac4d4c578277c4376f00ca945675986e28931e2244ec1004fc14**. Coordinator
+review/repairassignment pending; scopedproposal reuse existing handleLogout error
+feedback and return before localclear/navigation on rejection, preservingdesign.
+
+
+## PR138 — actionable profile Settings logout failure
+
+Adopted finalmaster2d66626c on separate codex/stream3-logout-failure-feedback; old
+136branch preserved. Only existinghandleLogout catch: existingtoast.error safe
+Could not confirm sign-out. Please try again. thenreturn beforelocalclear/navigation.
+Successfulpath/otherhandlers/design unchanged. Commit287058421aea780806c59142fa7796df971b3e98
+pushed draft https://github.com/WangPantopus/skinny-pantopus/pull/138 . No newfiles/tests.
+
+ActualUI Bob/current507ef9ec preflight; reviewedprivate exactone-shot50312:41:56.166
+allmatchtrue/noforward/noSetCookie. Settings/identity retained; error visible inAX
+and keyboard LogOut stillusable. Full own app/GoTrue metadata andprefs[] unchanged.
+Fault consumed; samebutton keyboardretry real200 retiresonly507ef9ec inregistry/
+GoTrue and reacheslogin. Allotherownmetadata/prefs unchanged; zero refresh/429;
+no loginreturn replay (accepted136 unchangedsuccessfulpath reused). Onefault only,
+no optionalduplicateattempt. Synthetic preforward failure, not offline/lostcommit;
+wording doesnotassert stillsignedin for all errors. Native/hosted remainsunverified.
+
+Cleanup: faultAPI6394 stopped, restoredAPI7948/exec60505 originalenv/argv/cwd exact
+in-memory verified, originalhookSHA d7c8b95318bab69c34050b6924df8ed9f7a5b44be79d0a3f39e8b35cd9768a5d
+restored; descriptorabsent/tab29closed. Next42165/42493+DB retained. Naturalrevoked/
+auditrecords retained; browser now signedout, no resurrection/newlogin. Baseline
+andcandidate ownmetadata/UI/HTTP/cleanup in logout-feedback-*; privateenv/rawlogs
+excluded. Existing57authchecks pass, webtypegate0errors, scopedlint0errors/one
+existingts-nocheckwarning, diffpass. Sourcepage retains existingts-nocheck, so type
+gate alone doesnotverify handler; actualUI/HTTP/SQL is primary.
+
+ExactCI35601204534 queued at287058421; draftreview/integrationpending. Durable
+673 hashes; MANIFEST **6c40498319ab8d84d371dbf982c9d81b4eae7a2ac9533fa3cbc9dd3f80122272**. Fullstream remainsincomplete.
+
+
+Evidence correction: initial logout-feedback-ui-failure.txt saved a later AXdiff
+after toast removal, so alone didnot substantiate errorvisibility. Recovered original
+CUA function_call_output at12:41:56.394 from ownsession logline20980 into NEW
+logout-feedback-ui-failure-original-tool.txt: Settings URL/AuthBob and exacterror
+text at107, reusableLogout92 focused, Dismissnotification108. ProvenanceJSON records
+originalcall/timestamp/source/hash. Originaldiff preserved, no reconstruction or
+browser/relogin/logout replay. Durable675 verifiedhashes; MANIFEST
+**c6117ee2ec41d001556967f0b6b91ddf600d5afed7d1e9fefc7b1ee5b22a76cc**. PR138sourceunchanged; coordinatorreview.
+
+
+PR138 original exact287058421 CI35601204534 **SUCCESS**: webchecks/build,
+IdentityFirewallE2E, database replay/safeguards, aggregatepassed. Backend/native/
+Seeder skipped byscope, not runtimeproof. Receiptlogout-feedback-ci.json; durable
+676 verifiedhashes MANIFEST **bcd878a527a399fb842ffe0e80d75f5a79fea752430371b0cb539eca36022349**. Originalbranchfixed,
+coordinator merge/integration reviewpending. No further runtimeexpansion inbatch.
+
+
+## Final cohort disposition — PR138 merged, bounded acceptance retained
+
+Remote read confirms PR138 updated head532296c802ae9aba5616f26568c4398edd096db4
+CI35601772751 SUCCESS and merge b946eb9ea99819ffb27f42252cdaab237d02dea0.
+Coordinator reports update added only four accepted Home137 paths; tested Settings
+page bytes unchanged. PR137 merged274e6e1c first; coordinator combined paidlocal
+1f1c353c sourcebindings/checks reported passing. Those combined checks are coordinator
+evidence, not a Stream3 rerun. Original287058421/CI35601204534 evidence retained.
+Corrected original toast AX/provenance remains accepted; original later diff preserved.
+
+Implementation/CI/merge complete for this narrow handler repair. Actual acceptance
+remains synthetic pre-forward503 keeping Settings/error/currentidentity, unchanged
+fullownmetadata/prefs, then real local logoutretry200 retiring only507/currentGoTrue
+and reachinglogin without refreshburst/429. No native/hosted/genuineoffline/lostcommit
+or wholeauth/stream completion claim. Prior136 destinationreturn reused only for
+unchanged successfulflow. Fullstream broader acceptance remains open.
+
+Retained last-verified runtime API7948/exec60505, Next42165/42493, ownedDB; original
+privatehook/env restored, descriptorabsent/testtab29closed, browser signedout, natural
+revoked/auditrecords retained. This disposition update does not probe runtime again.
+No local sourceadoption, UI/API/check replay or new scope. Localoriginal287058421
+branch and old136ref preserved. Durable676 manifest remains
+bcd878a527a399fb842ffe0e80d75f5a79fea752430371b0cb539eca36022349.
+Coordinator finaldocumentation/publication owns next integration step.
+
+
+## Source-only next boundary — lost committed local logout reply
+
+Current originmasterf4b27786172d7b2cae641b4c94f9e77aa75928c1 fetched only, not adopted; local287058421
+fixed. Eight relevantpage/SDK/middleware/Nextproxy/backendservice bindings exactcurrent
+master. PR82 partialfailure AFTERretirement and destroyed globalreply duringaccount
+switch do not verify sameaccountlocalresponse-loss retry. PR136 successfuldelivered
+logout andPR138 preforward503 likewise insufficient. Boundaryunverified; no observed
+newdefect/runtimeclaim. Detailedlogout-lost-response-source-proposal.json mapsordering:
+queuedclearCookieheaders→resolveproof→GoTruelocalrevoke→best-effortregistry/audit→
+originalres.json; SDK onlyretireslocally afterreceivedsuccess, UIcatchsafeerror.
+HTTP200alone cannot prove revocation (helper/safeHook can swallowfailures).
+
+Propose separately granted newordinaryBoblogin (currentlysignedout), exactownsession
+snapshot; private one-shot exactlogout response-end hold ORIGINAL200 beforeheaders
+sent, verify SQLcurrentretired/GoTrueabsent andothermetadata/prefs unchanged while
+socketpending, then destroyonlyoriginalsocket beforeheaders/bodydelivery. No
+synthetic200/503, no cookie/tokenvalues. Record actualNextproxy/browser failure and
+automaticauth; stale sessionflag may triggerrecovery, so no no-refreshassumption.
+Optional separatelygranted samebuttonretry onlyifexistingcontrolremains; no relogin
+or workaround ifnot. Non200/headerssent/deadline/failedcommitproof: stop and release
+originaluntouched response wherepossible, record actualvariant. Preserve natural
+records; exacthook/env/ownedAPIrestore+closetab/descriptor cleanup. No appedit/tests/
+login/logout/refresh/provider/native/runtimeaction in this source-onlyassignment.
+Existingimplementation/privatehook suffices; no replacement/schema or duplicate
+backlog. Durable677 verifiedhashes MANIFEST **06df0aa18798993509bd9a092fa3596be0961bae2399f01eb54e044abc7f42d4**. Coordinator
+runtimereviewrequired; source/runtime/signedoutstate preserved.
+
+
+## Lost committed local logout reply — bounded original-response result
+
+Initial prematuregrant withdrawn before anyruntimeaction: onlyREADME/source/ps/Git
+reads occurred. Corrected written grant used aftereightmasterbindings confirmed;
+paidnext.config onlyunrelatedstatusprivacyheaders differs. Local287058421fixed,
+no adoption/appedit/test/provider/native action. One actualBoblogin established
+5d64b918-f785-4075-b742-67a0128f42f3; allotherownmetadata/prefs unchanged.
+
+Original actual Settingslogout200 held13:30:00.004UTC atresponseend withallrequest
+matchbooleans true, headersSentfalse,4queuedclearCookieheaders (no valuesrecorded).
+LiveSQLproof whilepending: exactcurrentregistryrevoked/GoTrueabsent, allotherown
+app/GoTrue rows andprefs[] equalbefore. Only afterproof, originalsocketdestroyed
+13:30:00.153 after149ms (under8secdeadline). Close13:30:00.154 hadheadersSentfalse,
+destroyed/socketDestroyedtrue,writableEnded/Finishedfalse; no finish event/original
+response delivery. Originalstatus200 comesfromheldresponse, not deliveredHTTPlog.
+No manufacturedstatus/body/session/cookie.
+
+FirstUI capture stillSettings/AuthBob; subsequent actualUI login preserving
+redirectTo=/app/profile/settings. OneautomaticrefreshPOST401 at13:30:04.836;
+no GoTruetokencall/newlogin/429. Full finalownmetadata/prefs exactlycommitproof;
+onlysetupsession wasretired, no resurrection. No currentLogoutcontrol remained,
+so conditionalmanualretry NOTperformed; no relogin/workaround. Actualbrowser
+endedsignedout; intermediateerror/toast and exactNext/browserlogoutstatus not
+captured (filteredbrowserlogs empty, retainedNextlog no matchingstatus). Do not
+claim a particular502/status or zero-frame privateUI; cachedSettings initially
+visible is not serverauthorization. OriginalAPI→Nextresponse-loss boundary proven,
+physicaloffline/native/hosted/providerfailure notverified. No repairneeded established
+for observed automaticrecovery; conditionalretry remainsunexercised.
+
+Cleanup: originalprivatehook exactSHAd7c8b95318bab69c34050b6924df8ed9f7a5b44be79d0a3f39e8b35cd9768a5d
+restored; faultAPI48055 stopped, restoredAPI48548/exec80449 original
+env/argv/cwd exactinmemory; descriptor/decisionabsent, tab30closed. Next42165/42493
++DBretained, naturalrevoked/auditrecords andsignedoutstatepreserved. No rawenv/log/
+token/cookie export. Safe logout-loss-* snapshots/observer/transport/UI/cleanup
+mirrored, 691 verifiedhashes MANIFEST **d49d23a7d72e93b75e6f7f2379e8a8d3a0d83d763ed874ca0eecc818b421120f**. No newCI/source
+change; coordinatorreviewpending within above limits.
+
+
+## Next inventory priority — A02 remote revocation/open browser (proposal only)
+
+Reuse accepted82/136/138/691. PR82 proved sign-out-others auxiliaryHTTP401, not
+private-state retirement/current authorization in a still-open secondary browser.
+Local logout/reply-loss acceptance cannot substitute. This is the next bounded
+security/session gap; native/provider/platform limitations remainopen. No repeated
+source searches or runtimejourneys thismilestone. ExistingSecurity step-up action→
+/api/auth/sessions/revoke-others→authDeviceService/AuthSession/GoTrue contract from
+accepted82; latest client/middleware bindings reused with exact priorlimits.
+
+Propose one visible secondarybrowser case after coordinator narrowremote-action
+source rebind and isolationreview. Existing authorizedfixture must have zeroactive
+sessions before creating two ownlogins; do not revoke retainedBob/peerfixture
+sessions. Two independent cookie/store contexts and distinctsessionIDs required;
+two tabs alone insufficient. Supported separateprofile capability or reviewedowned
+alternateorigin stillunverified. If no zero-sessionfixture/context, stop for exact
+assignment; no speculativeaccountcreation. ClientA actualSecurity signoutothers,
+clientBprotectedSettings read/poll denied/private-state retired; Aretained/Brevoked
+SQL/GoTrue, eventualsafe logincontinuation undercurrentauthorization. No global/
+offline/native/frozenbrowser/provider expansion or oldcancel/passwordtestrepeat.
+Naturalrecords retained, newlycreatedsessions cleanup onlywithinfuturegrant.
+Detailed a02-remote-open-browser-next-proposal.json. Not runtime-ready: fixture/context
+availability and narrowremoteroute binding pending. Current signedout/API48548/
+NextDB/source preserved. Durable692 MANIFEST **b5d2ea6bfc7064d33a17d47c34720268f3eae3223064e94ed6ea1a7c81418576**.
+
+
+A02 assigned readonlypreflight:12 targeted Security/StepUpSDK/routes/middleware/
+services/socket/config bindings exactmasterf4b277861, no sourceadoption/change.
+Knownowned AuthEvan d3671605-b8cc-4e92-8c82-99aa5041ff48 existsinapp+auth, email
+confirmed, zero unrevokedapp/GoTrue sessions/devices/resumegrants. Alice/Charlie
+zero counts excluded because actualaccountsdeleted; Bob3/Dana14actives preserved.
+Currentbrowser signedout; recoverytab4 untouched. No accountcreation/login/revoke.
+
+Supportedcontext inventory IAB1 andChromeextension4; distinctbrowser surfaces, not
+yet provenisolatedauthenticatedsessions. Proposed sameownedalias18131 inboth, no
+alternatehost/profileinstallation. Host-onlylax cookies, refreshpath/api/users/refresh;
+APIcapturedoriginalenv explicitlyallowsalias. AliasSocketContext uses sameorigin
+/socket.io rewrite, not literal-localhostdirectbranch. Actualsocketconnect/delivery
+stillunverified. Passwordstepup creates thenrevokes temporaryGoTrue session; future
+evidence must accountforit and confirmabsence, not assumeonlytwo sessioncreations.
+
+Future narrowjourney: verifydistinctA/Bsession IDs on sameexistingEvanfixture after
+recheckingzeroactive; AexistingSecuritystepup signoutothers, BvisibleprotectedSettings
+read/poll/sessionevent denies+retiresUI/login; Aretained/Brevoked andtempstepups gone.
+No historicalcancel/passwordcase replay/native/provider/global/offline expansion.
+CleanupnormalA logout onlyifgranted/newtabs only/naturalrecords retained. No runtime
+restart/appedit/tests/cookie-storage mutation or userhistory access. Detailed source/
+fixture/context/config a02-remote-open-browser-preflight.json plus two safe inventory
+artifacts; durable695 MANIFEST **c772d3d05b9548edf915893272db8bf7fcddd07799760ea4837df9a6e6f71655**. Runtimegrantpending.
+
+
+Assigned two-browser runtime stopped before authentication: exactEvanzero/full
+baseline confirmed (27historicalapp rows, GoTrue0,prefs0,devices/grants0). IABtab31
+opened login only. Chromecreate request timedout30s and resetCUA; oldChrome4 then
+reportedunavailable. No credentials entered in eitherbrowser; no login/revocation.
+Recovered/closed onlynewIAB31; laterbrowserinventory showsChrome2 andIAB1. Readonly
+Chrome2 ownedtargettab query returnednone; no Chromecreationconfirmed, no borrowed
+user tabs closed or storage/history read. No blindcreate retry/profile workaround.
+
+Full afterEvanmetadata/prefs exactlybaseline; no authHTTP sincebaseline. API48548/
+NextDB/source unchanged; originaltab4/signedoutstate preserved. This is capability
+interruption, not product failure or remote-revocation acceptance. Context4→2
+identity/retry scope needs coordinatorreconciliation; actual two-context isolation
+unverified. Safe remote-browser-before/abort artifacts; durable697
+MANIFEST **622e0f021ff1778933d0089cb65905867e8c23862bf94909c8dd569df1891eeb**. No tests/appedit/runtime restart.
+
+
+## A02 reconnect retry — runtime restored, second browser context unavailable
+
+README "one A02 browser reconnect retry" followed on a new Claude session (harness
+changed from Codex). Documented retainedAPI48548/80449 andNext42165/42493 were absent
+at start: no18130/18131 listener, PIDs gone, hostuptime1d3h (no reboot); retained
+Supabase stream3-block-r1 64531–37 andSMTP64535 still running. Only the owned API/Next
+were restarted from the exact previously captured private launch files (identical
+executable/argv/cwd/22-key env, original hook sha d7c8b953 unchanged, all21 fault
+trigger paths absent), Next with NEXT_DIST_DIR=.next-stream3 on stream3-auth.localhost
+18131; login page200. This is restoration from identical inputs, not continuity of the
+prior processes. No app edit/env mutation/DB write; local287058421 source fixed.
+
+Evan recheck after restart (a02-retry-before.json): appUnrevoked0/total27, GoTrue0,
+devices0, resumeGrants0, prefs0; appSessions/GoTrue/prefs byte-equal to remote-browser-
+abort.json; only two /api/health404 liveness probes in authHTTP since restart.
+
+Second context: Claude in Chrome list_connected_browsers returned [] initially and on
+the one bounded retry; tabs_context reported extension not connected, no tab group, no
+owned target tab. Google Chrome process57357 runs but no extension instance is signed
+in to this account. Prior Codex IAB1/Chrome4→2 identities are not addressable here.
+Per grant: no tab creation, profile/alternate browser/extension install, cookie edit,
+IAB login or credentials. Built-in browser pane left closed. Capability boundary, not
+product failure; distinct-session/A step-up/B retirement scope untouched.
+
+User reported the extension installed and signed in; three further connection reads
+still returned [] and one bounded tabs_context createIfEmpty reported not connected
+(no tab created). Read-tier computer-use look at Chrome only: profile window shows
+claude.ai settings with Preferred browser = Built-in browser and no pinned Claude
+extension icon; the other window is an Incognito Pantopus tab owned elsewhere, untouched.
+Extension instance is not registered to this account from this session; likely side
+panel never opened/signed in for this profile, different Claude account, or reload
+needed. No install/reload/sign-in/profile/incognito change performed.
+
+Artifacts a02-retry-before/runtime-restore/browser-boundary.json; durable700
+MANIFEST **6aadada10fe3ceb6f94576bf1b2becc3bc015e808e76fef69d0d7de807862f82**.
+Next: user opens the Claude side panel in Chrome signed in as this account (or
+coordinator assigns another supported second context); then Chrome target tab first,
+then IAB tab, per grant. Runtime36126(API)/36139(Next) retained. No tests/app edit.
+
+
+## A02 remote sign-out — two-context journey completed
+
+User confirmed the extension; Claude in Chrome then reported one connected browser.
+Evan rechecked zero (a02-retry-prelogin.json equal to before). Exactly two owned tabs:
+Chrome tab257777372 (clientA) and built-in pane tab (clientB, emulated1280x900 because
+the hidden pane reports0x0). One ordinary UI login each: A POST/api/users/login200
+01:32:03→session15b7e0a8; B 01:32:52→f10f6310. Binding by real requests: server
+AuthSession.user_agent from each login equals that browser's navigator.userAgent
+(Chrome/153 vs Claude/2.2553.1 Chrome/152); A's Security page listed both with
+"This device" on the earlier one. Two app + two GoTrue sessions, devices/grants/prefs0.
+
+A existing Security "Sign out of all other devices"→password step-up modal→POST
+/api/auth/step-up200 01:34:45.811→POST/api/auth/sessions/revoke-others200 .896 (both
+Chrome UA in API log). GoTrue audit: login .770 (temporary step-up session), logout
+.803 (temporary removed), logout .879 (B). SQL: B revoked_at01:34:45.884 reason user,
+A unrevoked; GoTrue only A; 27 historical rows/prefs/devices/grants byte-equal to
+baseline. Only non-session change: auth.users.last_sign_in_at moved to the step-up
+login time. A Security re-listed "This device" only; A polls continued304.
+
+B untouched on personal Settings: its next real ~5s polls at01:34:48.763 returned401
+(unread-count/chat stats/received-offers), SDK POST/api/users/refresh401 once, no
+GoTrue token call/429, then location /login?redirectTo=%2Fapp%2Fprofile%2Fsettings with
+Sign in form only. No manual control, workaround login or timer change. No socket
+connection/event evidence captured; no socket delivery claim. Retirement proven via
+HTTP401 path only. Post-retirement layout GETs401 observed, no visible failure.
+
+Assigned cleanup: A ordinary Settings Log Out→POST/api/users/logout200→/login;
+A revoked_at01:36:14 reason logout, no refresh POST/429; final GoTrue0/app unrevoked0,
+appTotal29 (27+2 natural revoked rows retained). Both owned tabs closed, viewport
+reset, no other tab/store touched. Runtime36126/36139 and DB retained; no fault
+triggers armed; no app edit/new test. Not physical offline/native/hosted/provider.
+Artifacts a02-retry-{prelogin,after-login-a,after-login-b,bindings-pre-revoke,
+after-revoke,final,result}.json; durable707
+MANIFEST **f50472b0c2c7825c8c5aa26a6ab59085ea6ff95329d406991d15cba8a7247234**.
+Next: coordinator review; A02 open-browser gap closed within these limits.
+
+
+## Next inventory priority — A01 signup verification and reset completion (proposal only)
+
+With the A02 open-browser gap closed, the next unresolved accounts row runnable on the
+retained local runtime is A01: complete signup/email verification and the password-reset
+final credential change that earlier needed user takeover. Eight bindings (users.js,
+emailService.js, register/verify-email/verify-email-sent/forgot-password/reset-password
+pages, SDK auth.ts) are byte-equal to origin/master ed391c3a6; local287058421 fixed.
+
+Contract from source: register→503 when delivery unavailable→400 taken/invalid→admin
+generateLink(signup)→User insert (verified:false, auth user deleted on insert failure)→own
+SMTP verification link {APP_URL}/verify-email?token_hash→503 if send fails→201, no
+auto-login. verify-email→anon verifyOtp→400 invalid/expired→User.verified sync→any
+verifyOtp session dropped→login. forgot-password (5/15min)→generateLink(recovery,
+/reset-password)→sendPasswordResetEmail→one enumeration-safe message. reset-password→
+client length/match checks→verifyOtp(recovery,token_hash)→scoped updateUser→revoke ALL
+sessions/devices/grants+watermark→200→login; 400 invalid/expired or unable. Mail sink is
+retained Mailpit 64535/64536 (12 lifecycle messages retained), not GoTrue's mailer.
+
+Proposed runtime (not started): one new owned synthetic stream3-auth-r3-*@example.com
+created only by the real register form and deleted exactly at cleanup; Evan d3671605
+(zero sessions) as reset target, password restored to the recorded fixture value by a
+second real reset. Journeys: signup success→Mailpit→verify link→verified→first login;
+duplicate email/username 400; login-before-verification actual response; consumed
+verify link reuse 400 and resend; reset success→old password fails/new succeeds; consumed
+reset token reuse 400; unknown email same message/no mail. Expired tokens need clock or
+config change (limit). No provider/native/hosted mail, no limiter exhaustion, no lost-
+response hook in this milestone. Detailed a01-signup-reset-source-proposal.json; durable708
+MANIFEST **f967e080959dde6c0e05f6b89f6275b651576cbb218712ee9b7f5d30d327cb01**.
+Coordinator fixture/account-creation grant required before runtime. Runtime36126/36139
+and signed-out state retained; no app edit/new test.

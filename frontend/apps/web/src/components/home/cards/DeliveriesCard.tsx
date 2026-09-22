@@ -30,7 +30,7 @@ export function DeliveriesCardPreview({
   onExpand: () => void;
 }) {
   const pending = packages.filter(
-    (p) => p.status === 'out_for_delivery' || p.status === 'expected'
+    (p) => p.status === 'out_for_delivery' || p.status === 'in_transit' || p.status === 'expected'
   );
 
   return (
@@ -76,6 +76,8 @@ export default function DeliveriesCard({
   onPackageClick,
   onBack,
   highlightPackageId,
+  canAddPackage = true,
+  canEditPackage,
 }: {
   packages: Record<string, any>[];
   homeId: string;
@@ -84,6 +86,10 @@ export default function DeliveriesCard({
   onPackageClick?: (pkg: Record<string, any>) => void;
   onBack: () => void;
   highlightPackageId?: string;
+  /** Hide "+ Track Package" for members without packages.edit/manage. */
+  canAddPackage?: boolean;
+  /** Per-package edit grant (packages.manage, or packages.edit on own packages); gates Pick Up and row opening. */
+  canEditPackage?: (pkg: Record<string, any>) => boolean;
 }) {
   const router = useRouter();
   const [subTab, setSubTab] = useState<SubTab>('expected');
@@ -114,12 +120,14 @@ export default function DeliveriesCard({
           <button onClick={onBack} className="text-sm text-app-text-secondary hover:text-app-text-strong transition flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Back</button>
           <h2 className="text-lg font-semibold text-app-text flex items-center gap-2"><Package className="w-5 h-5" /> Deliveries</h2>
         </div>
-        <button
-          onClick={onAddPackage}
-          className="px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition"
-        >
-          + Track Package
-        </button>
+        {canAddPackage && (
+          <button
+            onClick={onAddPackage}
+            className="px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition"
+          >
+            + Track Package
+          </button>
+        )}
       </div>
 
       <div className="flex gap-1 overflow-x-auto">
@@ -150,14 +158,15 @@ export default function DeliveriesCard({
         ) : (
           filtered.map((pkg) => {
             const cfg = STATUS_CONFIG[pkg.status] || STATUS_CONFIG.expected;
+            const editable = canEditPackage ? canEditPackage(pkg) : true;
             return (
               <div
                 key={pkg.id}
                 id={`pkg-${pkg.id}`}
-                className={`px-4 py-3 flex items-center gap-3 hover:bg-app-hover/50 transition cursor-pointer group ${
+                className={`px-4 py-3 flex items-center gap-3 hover:bg-app-hover/50 transition group ${editable ? 'cursor-pointer' : ''} ${
                   pkg.id === highlightPackageId ? 'bg-emerald-50 ring-1 ring-emerald-300' : ''
                 }`}
-                onClick={() => onPackageClick?.(pkg)}
+                onClick={() => { if (editable) onPackageClick?.(pkg); }}
               >
                 <span className="flex-shrink-0">{cfg.icon}</span>
 
@@ -181,7 +190,7 @@ export default function DeliveriesCard({
                   {cfg.label}
                 </span>
 
-                {pkg.status === 'delivered' && (
+                {pkg.status === 'delivered' && editable && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onMarkPickedUp(pkg.id); }}
                     className="opacity-0 group-hover:opacity-100 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition flex-shrink-0"

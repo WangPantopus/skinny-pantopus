@@ -562,6 +562,8 @@ router.patch('/:id/settings', verifyToken, async (req, res) => {
     }
 
     const {
+      name,
+      home_type,
       trash_day,
       house_rules,
       local_tips,
@@ -576,6 +578,8 @@ router.patch('/:id/settings', verifyToken, async (req, res) => {
     // Build home field updates
     const homeUpdates = {};
     const settableFields = {
+      name,
+      home_type,
       trash_day,
       house_rules,
       local_tips,
@@ -590,6 +594,14 @@ router.patch('/:id/settings', verifyToken, async (req, res) => {
       if (value !== undefined) {
         homeUpdates[key] = value;
       }
+    }
+
+    // Match the existing profile PATCH contract before the atomic settings write.
+    if (name !== undefined && name !== null && (typeof name !== 'string' || name.length > 120)) {
+      return res.status(400).json({ error: 'name must be a string of at most 120 characters or null' });
+    }
+    if (home_type !== undefined && !['house', 'apartment', 'condo', 'townhouse', 'studio', 'rv', 'mobile_home', 'trailer', 'multi_unit', 'other'].includes(home_type)) {
+      return res.status(400).json({ error: 'Invalid home_type' });
     }
 
     // Validate default_visibility if present
