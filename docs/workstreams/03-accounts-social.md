@@ -3068,3 +3068,35 @@ Artifacts a02-retry-{prelogin,after-login-a,after-login-b,bindings-pre-revoke,
 after-revoke,final,result}.json; durable707
 MANIFEST **f50472b0c2c7825c8c5aa26a6ab59085ea6ff95329d406991d15cba8a7247234**.
 Next: coordinator review; A02 open-browser gap closed within these limits.
+
+
+## Next inventory priority — A01 signup verification and reset completion (proposal only)
+
+With the A02 open-browser gap closed, the next unresolved accounts row runnable on the
+retained local runtime is A01: complete signup/email verification and the password-reset
+final credential change that earlier needed user takeover. Eight bindings (users.js,
+emailService.js, register/verify-email/verify-email-sent/forgot-password/reset-password
+pages, SDK auth.ts) are byte-equal to origin/master ed391c3a6; local287058421 fixed.
+
+Contract from source: register→503 when delivery unavailable→400 taken/invalid→admin
+generateLink(signup)→User insert (verified:false, auth user deleted on insert failure)→own
+SMTP verification link {APP_URL}/verify-email?token_hash→503 if send fails→201, no
+auto-login. verify-email→anon verifyOtp→400 invalid/expired→User.verified sync→any
+verifyOtp session dropped→login. forgot-password (5/15min)→generateLink(recovery,
+/reset-password)→sendPasswordResetEmail→one enumeration-safe message. reset-password→
+client length/match checks→verifyOtp(recovery,token_hash)→scoped updateUser→revoke ALL
+sessions/devices/grants+watermark→200→login; 400 invalid/expired or unable. Mail sink is
+retained Mailpit 64535/64536 (12 lifecycle messages retained), not GoTrue's mailer.
+
+Proposed runtime (not started): one new owned synthetic stream3-auth-r3-*@example.com
+created only by the real register form and deleted exactly at cleanup; Evan d3671605
+(zero sessions) as reset target, password restored to the recorded fixture value by a
+second real reset. Journeys: signup success→Mailpit→verify link→verified→first login;
+duplicate email/username 400; login-before-verification actual response; consumed
+verify link reuse 400 and resend; reset success→old password fails/new succeeds; consumed
+reset token reuse 400; unknown email same message/no mail. Expired tokens need clock or
+config change (limit). No provider/native/hosted mail, no limiter exhaustion, no lost-
+response hook in this milestone. Detailed a01-signup-reset-source-proposal.json; durable708
+MANIFEST **f967e080959dde6c0e05f6b89f6275b651576cbb218712ee9b7f5d30d327cb01**.
+Coordinator fixture/account-creation grant required before runtime. Runtime36126/36139
+and signed-out state retained; no app edit/new test.
