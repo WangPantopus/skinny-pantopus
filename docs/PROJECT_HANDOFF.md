@@ -1,5 +1,36 @@
 # Pantopus project handoff
 
+## Current reconciliation — September 22
+
+The founder requested an accurate account of days of work after the closed count remained
+unchanged. G02 is now closed on verified Git ancestry and preservation evidence: PR34 and
+PR47 are merged, both original histories remain in master, and unrelated local work is intact.
+Current inventory: **9 closed / 71 partial or open**, with P01 still a separate completed
+bounded milestone. This is a stale-accounting correction; the founder performed the merge.
+[G02 evidence](../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-backlog-g02-closure-r1/RESULT.md),
+MANIFEST `659f9f4761c1adbfd0d7e20419afed8f4324b6ea83b88808e50e98db0720717d`.
+
+Streams2/3 are reconciling exact unmet criteria and closure candidates in their existing
+status files while safely completing current milestones. Stream1 owns the matching payment,
+integration and launch accounting. Do not equate partial workflows or merged repairs with
+whole-row closure; do not impose unrelated hardware/provider gates. The founder reaffirmed
+real client/API/SQL success, failure, recovery and edge-case verification, with no new unit
+tests or coverage target. Preserve designs and accepted evidence.
+
+PR177 merged `50b1ee8d7` after CI35751227114; PR179 merged `1313ea68b` after CI35755064344;
+PR180 merged `fc29902ca` after CI35755564437. PR182 `7b6ddc651` awaits final schema check in
+CI35756333346. Continue the serial queue and keep docs161/170/174 last.
+
+Booking verification reached real Chrome checkout, actual TEST1250 authorization, real host
+Approve200/capture and confirmed SQL. Controlled maturity plus the existing worker credited
+1063 to the host wallet. Reproduced: confirmation said Payment received before capture;
+payer release notice says a gig and points to /gigs/null. No application repair yet. IAB's
+blank Stripe frame is a separate browser boundary; Chrome card checkout succeeded. Owned
+f9220539 provider objects, two bookings and three synthetic identities are still retained
+for repair verification/explicit cleanup; ledger84 unchanged. API18132/Next18133 and two
+owned browser tabs are active. No native build. Earlier runtime/count checkpoints are history.
+
+
 ## Active coordinator checkpoint — September 22, booking verification
 
 Stream1 reserves API18132/Next18133 against its retained wallet-read-r1 SQL64562/API64561

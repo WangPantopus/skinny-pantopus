@@ -17,7 +17,7 @@ September22: the founder merged PR47 and PR34 as `69be3c11d`; its full CI passed
 PR173 then merged as `662ab04b5`, repairing reproduced P10 expiry pagination.
 The payment integration is on master with broader acceptance still open. Bounded
 10,001-bid proof, retained-ledger and native-control limits are in Stream1 status.
-No closed-row count changes.
+This was recorded before the G02 closure reconciliation below.
 
 September22 P06/P07 adds bounded PR185 won-dispute wallet release: actual TEST won event, concurrent/repeated worker, real web wallet,27 SQL guard controls and clean provider/fixture teardown; full CI passes. Native/hosted/Connect/live boundaries remain open. See [Stream1 evidence](workstreams/01-gigs-payments.md); counts remain8closed/72partial-open.
 
@@ -48,7 +48,7 @@ Native reviewer history is accepted and integrated through PR #35 into #32.
 PR #36 current-claims HTTP/SDK/browser/native acceptance is also complete at
 `1c5f7bb1b`, with final CI 34781479982 passing. The existing presentation is restored and integrated from `a68e8f0e5`;
 CI 34785056441 passes all executed checks. See the current-claims report for
-rendering limits. PR #32 is now merged; PR #34 remains draft and unmerged. Counts remain 8 closed and 72 partial/open. Renewal/schema drafts
+rendering limits. Historical September 13 checkpoint: PR #32 was merged and PR #34 remained draft. The count then was 8 closed and 72 partial/open. Renewal/schema drafts
 remain paused pending an existing-implementation comparison.
 
 Updated September 13, 2026 after current-claims integration and design restoration.
@@ -56,15 +56,20 @@ Start with [the current handoff](PROJECT_HANDOFF.md) and
 [resume guide](SESSION_RESUME_2026-09-10.md). This is the authoritative ordered
 acceptance inventory; older dated reports retain their historical limits.
 
-**8 of 80 rows locally closed (H01–H06 and R01–R02); 72 partial/open.** P01 is
-additionally checked as a **completed bounded tip-reservation milestone** (September 16
-schema/service/route evidence) but is deliberately not counted as a closed row: its real
-provider, cold-discovery and reconciliation acceptance remain P02/L01, so nine rows carry a
-checkmark while the closed-row count stays 8. Reconciled September 22, 2026. Many open rows contain
-accepted subjourneys. The rows are not equally weighted and do not measure app
-implementation, effort remaining or a release date. Actual records, UI states,
-failures, recovery and current access establish acceptance; unit coverage alone
-does not. Further auditing may discover additional defects.
+**9 of 80 rows closed: H01–H06, R01–R02 and G02; 71 partial/open.**
+The September 22 reconciliation closes G02 because both original payment branch heads and
+the founder's PR47 merge are verified ancestors of current master, with no index conflicts
+or tracked changes in the main checkout and unrelated local work preserved. This is a
+correction to stale Git-integration accounting, not a newly verified application workflow.
+See [the G02 evidence](../.pantopus-recovery/audits/20260922-stream1-backlog-g02-closure-r1/RESULT.md).
+
+P01 remains a completed bounded tip-reservation milestone, not a closed row. Ten rows now
+carry checkmarks, but only nine meet their full row requirements. Rows are not equally
+weighted and do not measure implementation completeness or effort remaining. The remaining
+71 rows are undergoing evidence-to-criterion reconciliation in the existing stream status
+files; no generic device/provider gate may be added beyond a row's actual requirement.
+Accepted unchanged journeys must be reused. No new unit tests or coverage target is requested.
+
 
 Recipient invitation recovery passes backend/browser/iOS/Android. Sender
 [backend](home-invitation-sender-recovery-2026-09-12.md) and
@@ -235,8 +240,8 @@ limits remain. See live01/03 for source-bound evidence and next actions.
 
 ## 11. Integration and migration dependencies
 
-- [ ] G01 **Integrate:** Complete #32's Home scope and #34's payment scope before marking either ready. Keep PR descriptions matched to final scope; #32 includes accepted Task/R02 and backend/browser removal recovery while #34 remains unfinished.
-- [ ] G02 **Integrate:** Resolve #34's actual master conflicts without losing either branch's work; preserve all unrelated local changes.
+- [ ] G01 **Integrate:** PR32, PR34 and PR47 are now merged. Complete the remaining Home/payment acceptance and reviewed repair integration, keeping PR descriptions matched to final scope. Their merge does not close the broader acceptance requirements; use the current stream evidence and queue, not the retired draft state.
+- [x] G02 **Closed — September 22 reconciliation:** The founder merged PR47 as `69be3c11d`, and GitHub records PR34 merged. Both original heads and the merge are ancestors of current master. No unresolved index entries or tracked changes in the main checkout; the four previously recorded unrelated untracked locations remain preserved. [Source evidence](../.pantopus-recovery/audits/20260922-stream1-backlog-g02-closure-r1/RESULT.md), MANIFEST `659f9f4761c1adbfd0d7e20419afed8f4324b6ea83b88808e50e98db0720717d`. This source-integration criterion has no UI/provider boundary; broader payment, schema and launch acceptance remain in their own rows.
 - [ ] G03 **Integrate:** Reconcile the primary source’s 49 Home / 21 payment / 58 distinct combined migration versions and dependency order (12 byte-identical shared versions, zero collisions at this checkpoint). The source includes Task defaults `20260912050000` R02 compatibility `20260912060000` removal recovery `20260913010000` and reviewer history `20260913020000`. The latest 104-contract Home proof applies Home prerequisites only and does not complete combined paid/Home replay or adoption. Integrated PR #36 adds reader version `20260913030000` without new tables; the current inventory is 50 Home / 21 paid / 59 combined, with the same 12 shared versions. The preceding 49/21/58 count is historical. The reserved tip migration is unimplemented; review existing tip/schema paths before choosing a final change.
 - [ ] G04 **Integrate:** Replay the combined final schema, permissions/RPC contracts and populated upgrades; preserve old values, files and financial obligations and reconcile cross-branch deletion dependencies.
 - [ ] G05 **Integrate:** Pass required CI on each final PR head, review the integrated result and verify merged-master checks. Earlier green or cancelled runs are not substitutes. Preserve source-bound evidence of the a1d278e33 iPhone SE attachment-request setup timeout in CI 34784251075; current a68e8f0e5 passes all three iOS jobs, but the short fixture wait deserves a bounded stability follow-up.
