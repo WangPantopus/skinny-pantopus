@@ -376,6 +376,7 @@ extension AuthManager {
         let access = accessToken ?? store.get(SecureStoreKey.accessToken)
         let refresh = nonEmpty(store.get(SecureStoreKey.refreshToken))
         let hadSession = clearLocalSession(preservingLoginArrival: preservingLoginArrival)
+        didSignOutDeliberately = true
         if preservingLoginArrival != nil { DeepLinkRouter.shared.requestLoginPresentation() }
         if hadSession { Observability.shared.track("auth.signed_out", properties: ["scope": "local"]) }
         guard access != nil || refresh != nil else { return }

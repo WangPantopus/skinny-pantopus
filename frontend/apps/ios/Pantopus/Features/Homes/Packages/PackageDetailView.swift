@@ -79,7 +79,9 @@ final class PackageDetailViewModel {
     /// packages today. Marks as `returned` and closes the screen.
     func remove() async {
         await update(request: UpdatePackageRequest(status: "returned"))
-        if case .loaded = state {
+        // `state` stays `.loaded` after a failed update; only a confirmed
+        // write may close the screen, otherwise the error is lost.
+        if saveError == nil, case .loaded = state {
             onClose()
         }
     }
@@ -275,18 +277,24 @@ private struct PackageCtaStack: View {
     let onMarkPickedUp: () -> Void
     let onMarkMissing: () -> Void
 
+    /// Picked up, missing and returned close the record; a delivered
+    /// package is exactly the one that still needs "Mark picked up".
+    private var isClosed: Bool {
+        status == .pickedUp || status == .lost || status == .returned
+    }
+
     var body: some View {
         VStack(spacing: Spacing.s2) {
             PrimaryButton(
                 title: primaryTitle,
                 isLoading: saving,
-                isEnabled: !status.isTerminal && !saving
+                isEnabled: !isClosed && !saving
             ) {
                 await MainActor.run { onMarkPickedUp() }
             }
             .accessibilityIdentifier("packageDetail_markPickedUp")
 
-            if !status.isTerminal {
+            if !isClosed {
                 Button(action: onMarkMissing) {
                     Text("Mark missing")
                         .pantopusTextStyle(.small)

@@ -198,6 +198,14 @@ final class APIClient: @unchecked Sendable {
     /// `AuthDevice` row, and re-runs `/api/auth/devices/register` because a
     /// push-token change is one of the contract's re-register triggers.
     func registerPushToken(_ token: String, platform: String) async {
+        // No session yet (fresh install, signed out): remember the token so
+        // the device registration that follows sign-in carries it. Posting
+        // it now would 401, and that 401 ends a session that never existed
+        // ("Your session has expired" on first launch).
+        guard case .signedIn = await auth.state else {
+            await auth.pushTokenDidChange(token)
+            return
+        }
         let deviceId = await auth.deviceId
         var body: [String: String] = ["token": token, "platform": platform]
         if let deviceId {
