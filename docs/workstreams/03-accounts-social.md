@@ -3752,3 +3752,14 @@ zero and browser stale/404 recheck; `pnpm --filter @pantopus/web type-check` exi
 This verifies public-post deletion invalidation locally. It does not invent or claim a separate
 non-owner visibility-revocation policy, native/provider delivery, or hosted deployment behavior.
 PR review/CI and coordinator integration remain separate.
+
+## N02 native receipt timestamp correction (2026-09-22)
+
+The earlier `n02-android-ui-20260922.json` receipt had an unsupported future Pacific timestamp
+(`13:45:00-0700`). It has been corrected to `06:44:22-0700` using the filesystem mtime of the
+captured `read-filter.png`; `unread.xml` (`06:43:57-0700`) and `read.xml` (`06:44:01-0700`)
+corroborate the same local capture window. The separate Mark all receipt remains
+`06:52:46-0700`, sourced from `n02-mark-all-after.xml` mtime. The correction is recorded in
+`n02-timestamp-correction-20260922.json`; no session time was invented and no UI/API/SQL result
+changed. The durable bundle now has 146 files; MANIFEST SHA-256 is
+`51339e601abe137bf8c636133d25d37b4cfddacd0a28a36ef7257515cdde3de0`.
