@@ -3960,3 +3960,98 @@ whole-stream table and records whether another local journey is independently ac
 This is the final client-specific accounting for this pass. It separates implementation and local
 UI/API/SQL evidence from CI/merge state and provider, device, policy and ownership boundaries. No
 unit-test coverage is claimed or required, and no new tracker or raw log was added.
+
+
+## N02 installed Android HTTP 5xx delete rollback and retry (2026-09-22 addendum)
+
+This closes the previously listed Android HTTP-5xx injection gap for the locally retained
+implementation. I reused the existing Notifications screen, confirmation, DELETE handler and
+owned PostgREST/SQL fixture; no application, schema, design, or migration change was made. The
+retained installed APK was SHA-256
+`83cc0db08992e83dd1faa87a7baacdf582624a3e847f965f6361ab5fdd2cdf93`, running against the owned
+API on port 18130 and PostgREST/SQL on 64531/64532. Auth Bob
+`c021d181-d7df-4ba9-9e49-fd1cdd6d5548` received disposable Notification
+`8559382b-224b-42cb-8b40-505316df9e9b` with type `stream3_notification_http500_check` and marker
+`n02-http500-r1`.
+
+Baseline fault: after confirming the existing long-press **Delete notification?** action, I
+revoked only `DELETE` on the existing `public."Notification"` table from `service_role`. The
+installed Android log recorded `HTTP DELETE -> 500 (145ms)`; the API recorded the real DELETE
+path and PostgreSQL `permission denied for table Notification`. SQL stayed at 12 Bob rows / 8
+unread / fixture 1 / target 1, so the row was not silently lost. After restoring the grant, the
+same installed row and confirmation path recorded HTTP 200 (123ms); SQL became 11 / 7 / 0 / 0
+and the existing screen no longer showed the fixture. The API was stopped cleanly, the grant was
+checked true, the disposable row was absent, and the installed account was logged out through
+Settings → Log out. The failure-state XML/screenshot was not retained before compaction; the
+sanitized Android HTTP receipt, backend 500 receipt, unchanged SQL counts and retained post-retry
+XML substantiate the result. No provider, physical-device, iOS, CI, hosted-migration or unit-test
+claim is made.
+
+Evidence: `n02-android-http500-delete-retry-20260922.json`,
+`n02-android-http500-delete-retry-http-receipt-20260922.json`, and `retry-after.xml` in the
+private durable bundle. This is an induced local database-permission fault and is separate from
+provider delivery. It complements, rather than duplicates, the accepted web PR86 failure/retry
+journey.
+
+## N03 installed Android local-neighbor block-state repair (2026-09-22 addendum)
+
+The accepted PR168 Android implementation had a concrete reopened-profile defect: its existing
+relationship endpoint reports `Relationship` only, while personal blocks are stored in
+`UserBlock`. After a real profile **More → Block this user**, the same screen hid Follow/Connect,
+but a fresh deep-link reopen fetched profile/posts/relationship and restored Follow/Connect even
+though the Bob → Evan `UserBlock` row still existed. The canonical local-neighbor source was
+checked before editing: `GET /api/users/id/:id` derives verified residency from existing
+`HomeOccupancy`, and the existing `ProfileFollowRow` renders from `canFollow`; no new table or
+scope was needed.
+
+Focused repair on branch `local/stream3-android-integration` extends the existing
+`PublicProfileViewModel.loadRelationship` path. It reads the existing `/api/users/blocked` list
+before calling the existing relationship endpoint; a matching personal `UserBlock` sets
+`canFollow=false`, `isFollowing=false`, and `connection=Blocked`. A blocked-list read failure
+fails closed with non-actionable actions and the existing truthful toast rather than restoring
+Follow/Connect. Relationship, PersonaBlock and other scopes remain distinct. The existing visual
+layout/navigation was preserved and no unit tests, schema/model files or migrations were added.
+
+The focused Android build passed (`./gradlew :app:assembleDebug`, 43 tasks, `BUILD SUCCESSFUL in
+1m 24s`); installed APK SHA-256 is
+`2728688a30a78449c990c302ebc72053802322772a990e7a3a6030e2265d504a`. With an owned canonical
+fixture (existing Home `2ca4bc33-a285-4faa-9420-48edb97eb603`, Bob owner and Evan member both
+active/verified, existing Evan LocalProfile temporarily exposing the local badge), the installed
+UI showed Verified neighbor + Follow/Connect before blocking. Real profile block POST 200 hid the
+actions. A fresh deep-link reopen on the repaired APK kept Message + Verified neighbor and showed
+zero Follow/Connect. Settings → Blocked users listed Evan; existing Unblock removed the row, and
+a fresh reopen restored Follow/Connect. With `SELECT` on `public."UserBlock"` revoked, the real
+`GET /api/users/blocked` returned 500; the repaired profile stayed non-actionable with no
+Follow/Connect and the UserBlock row remained. The SELECT grant was restored before cleanup.
+Exact cleanup removed the UserBlock, restored the LocalProfile overlay, deleted the two
+HomeOccupancy rows and Home; final counts were block=0/home=0/occupancy=0/overlay=0. The
+installed account was logged out through Settings and the API was stopped cleanly.
+
+Evidence: `n03-android-local-follow-block-repair-20260922.json`, its sanitized HTTP receipt,
+`n03-local-before.xml/png`, `n03-local-after-block.xml/png`,
+`n03-local-blocked-refresh.xml/png` (pre-repair reproduction), `n03-repair-blocked.xml/png`,
+`n03-repair-unblocked.xml`, and `n03-repair-readfault.xml/png`. iOS installed behavior, physical
+provider/device behavior, CI/integration merge state and hosted moderation remain separate
+boundaries; this addendum claims only the verified Android local-profile path.
+
+## Stream 3 handoff reconciliation after the 2026-09-22 native passes
+
+The durable private evidence bundle now contains 181 files; refreshed MANIFEST SHA-256 is
+`637c0364dd9c2e700270ef1dc9e328d66b0a2005601dca503cc9be5a5f572e92`. Raw logs and credentials
+remain outside the bundle. Implementation completion, local UI/API/SQL success, CI/merge state,
+and external provider/device limits are intentionally reported separately:
+
+- **N01:** local saved-record/list/preferences and installed Android controls are evidenced; APNs/FCM provider delivery, token rotation, physical devices, and true foreground/background/cold-start delivery remain unavailable.
+- **N02:** web PR86 and installed Android list/filter/read/delete/cancel/offline rollback/retry/new-follower destination plus the induced Android HTTP-5xx rollback/retry are evidenced; iOS installed destination and provider delivery remain unavailable.
+- **N03:** web/API/SQL and Android discovery/follow/unfollow/post/reply/mute/identity/block paths are evidenced, including the repaired reopened local-neighbor block state; fresh iOS cohort/provider freshness and any policy change across Persona/UserBlock/local-neighbor scopes remain unverified.
+- **N04:** local block/unblock, DM refusal, reporting/idempotence/failure/retry and access/cache/error paths are evidenced; hosted moderation/shared-owner schema, iOS installed and provider boundaries remain outside this worktree.
+- **N05:** reminder worker and daily-agenda preference persistence are evidenced; no source producer/consumer or settled delivery policy exists for daily-agenda delivery, so delivery is not claimed.
+- **A01:** signup, verification, recovery and native account flows are evidenced; external Google/Apple consent/callback and provider failures remain unavailable.
+- **A02:** refresh, retry, logout, remote sign-out, lock-down, account switching and local-data retirement are evidenced; physical provider revocation/cold-process boundaries remain unavailable.
+- **A03:** existing profile/document-picker contracts, reads and quota are evidenced; native chooser-to-byte upload and hosted storage permissions/lifecycle remain shared-provider boundaries.
+- **A04:** local provider capability and invalid-provider handling are evidenced; real consent/callback/production activation remains unavailable and was not changed.
+- **A05:** reachable web/native report, search, edit, audience, mailbox and profile actions are evidenced; booking/payment/Home findings remain with their owners. The `/signup` booking misroute is already owned by Stream 1 and was not duplicated here.
+
+No new unit tests were added per user direction. The workstream is ready for coordinator review of the
+Android source commit and status/evidence commit; no merge, hosted migration, provider activation,
+or independent CI claim is made here.
