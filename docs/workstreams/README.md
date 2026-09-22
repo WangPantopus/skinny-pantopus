@@ -1,5 +1,33 @@
 # Three-stream coordination
 
+## Stream2 D01 package-edit entry baseline assignment
+
+Coordinator verified12 source artifacts (manifest61d14626),54 Git bindings with53
+present/one historicalmissing. All six compared dashboard variants give existing
+clickable Deliveries rows a no-op callback. Existing package-aware panel opener,
+editpanel/savehandler/SDK PUT/permissionroute/HomePackage contract already exist.
+This is a source lead, not yet an observed UIdefect; no replacement is justified.
+
+Assign one baseline on Stream2 owned18141/18142/64550–59/retainedledger56, current
+source rebound before runtime. Reuse existing ownedfixture/syntheticidentity only;
+relevant packageGET/POST/currentauthority/readprojection must run actual existing
+routes/services/SQL, including truly emptyGET200 and rendered createdrow. Label
+unrelated scaffoldcollections; do not synthesize the package list/editor result.
+Existing TrackPackage UI creates exactly one clearly synthetic expected package
+(description/carrier only; no media/tracking/provider). Record real201/fullrow and
+unrelatedfullstate. ExpandDeliveries and click that exact row once; capture actual
+panel/URL/controls/requests/fullstate. If editor opens, record then close unsaved.
+No PUT/status/pickup/repeatedcreate/fault or applicationedit is assigned. InTransit
+schema/read-filter mismatch is a separate later requirement, not part of this repair.
+
+Clean exact newlycreatedpackage and ownedbasefixture child-before-parent; verify
+allcounts0/fullunrelatedstate/RPCprovenance/ledger56 unchanged. Close newtab/ownAPI/
+Next/fivecontainers and releaseports; preserve otherdata/caches/devices/peers.
+No new appfile/helper/table/migration/design/unit test. Hand off reproduced outcome
+and smallest existing-opener wiring proposal only if rowno-op actually occurs.
+Reuse accepted dashboard-read/current-authority/panel-retirement evidence within
+source/runtime limits; no guest/member/Settings journey replay.
+
 ## Current paid head fixed; one A02 browser reconnect retry
 
 Paid53e738cfc is published, CI35607497359 safeguards/freshschema replay pass; fullCI

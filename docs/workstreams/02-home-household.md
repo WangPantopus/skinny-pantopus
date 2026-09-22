@@ -1,5 +1,35 @@
 # Stream 2 — Home and household
 
+## September 21 D01 package edit entry — actual no-op baseline frozen
+
+Under the live README assignment, preserved original branches and created independent **codex/home-package-edit-verification** at unchanged **f4b27786172d7b2cae641b4c94f9e77aa75928c1**. All9 prior package proposal source hashes rebound exactly. No application edit, new unit test, schema change or other accepted journey replay.
+
+Actual IAB27→SDK→Home routes/current authority→canonical package projection/PostgREST/SQL: genuine packageGET200[] rendered no packages. Existing expanded Deliveries Track Package form submitted only **Synthetic package edit baseline** and **USPS**; one POST201 saved expected package **be440c7a-ddc4-4484-9354-bc8c92fe33f6**. All unrelated full Home/Owner/Preference/occupancy/request/invitation/audit/ancillary state matched pre-create. One reload recovered exact saved row through actual packageGET200 and displayed it in expanded Deliveries.
+
+Clicked exact current AX50 package-row container once at1789999148584/8677. Before/after AX and URL are byte-identical; later1789999169687 observation is still identical, with only Home/Deliveries headings and no Edit Package/Close panel. Full before/after-click state exactly equal; only original createPOST201, zeroPUT/status/pickup/otherwrite/provider/blocked/suppressed events. **Existing row-to-editor no-op reproduced.** A preceding read-only selector inspection timed out, then an unavailable local binding failed before UI action; both excluded, with exactly one subsequent successful AX rowclick. No click repetition or edit attempt.
+
+Smallest source direction is existing dashboard/page.tsx callback plumbing: pass existing openPackagePanel(pkg) through DashboardTab to DeliveriesCard. Safe HOME_PACKAGE_LIST already includes created_by. Proposed per-record gate matches existing authenticated RLS: packages.manage OR packages.edit with created_by=currentUserId. No new editor/helper/service/table/migration or visual redesign is justified. **No repair implemented or merge-ready claim:** coordinator requested the following explicit release gates before opening existing edit controls.
+
+- Current service-role PUT calls checkHomePermission without a permission argument, so only current Home access is checked; it neither enforces package edit/manage nor verifies target author/visibility. Service-role client bypasses authenticated RLS. A UI gate cannot establish server authorization. This remains a source finding pending scoped reproduction/repair.
+- Edit mode exposes7 status choices: expected, in_transit, out_for_delivery, delivered, picked_up, lost, returned. Existing DB/read filter accepts6 excluding in_transit; PUT has no status enum validation and takes generic500 on DB error. In Transit is an explicit release gate, not an assumed working control. Both iOS/Android existing palettes use canonical expected with display label In transit and lost as Exception; detail actions write picked_up/lost/returned, without the web7-option editor. Native source only, no device acceptance.
+- Other existing edit contracts: vendor_name sent but omitted by PUT allowlist; media stripped/discarded; empty text/date omitted rather than explicitly cleared. Panel awaits save before close and retains current mounted draft on rejection, but plain SDK errors become generic Failed to save package. New lifecycle/error/unknown-save/permission/media/status acceptance is not established. Source-only contract note binds7 further current-master-matching native/permission/admin files.
+
+Cleanup: deleted only exactnewpackage before basefixture; allbasecounts/fullHome/Owner/Package/Preference/request/invite/occupancy/audit/ancillary state0, overrides/probeconstraint0. Full existing RPC definition/owner/ACL/effectiveEXECUTE and complete ledger56 unchanged, approved migration retained. Tab27/API/Next closed, five owned containers stopped/preserved, all reserved IPv4/6 ports18141/18142/64550–59 free. New inactive private runner removed after durable capture, no peer/native/cache changes. Source branch clean; no application commit for this runtime-only baseline.
+
+Durable owner `.pantopus-recovery/audits/20260921-stream2-package-edit-baseline-r1/`: **32 files plus manifest**, SHA256 **63560e50faf624c550801842f2b2c2e8b599ca9cb3d863ae4079163f6a32afc0**. Original23 actualbaseline files remain unchanged;9 source/contract appendix files added. Exact private fixture/runner/SQL, originalcaller/projection, API/fullstate/compactactualUI/cleanup/provenance/ledger and repair-gates evidence; all32 hashes verified. Prior12-source/54binding bundle reused. Synthetic sign-in/rate limits/unrelated dashboard collections remain explicit; real relevant package API/authority/projection/SQL. No broader D01/D03/native/hosted/provider/session/concurrency closure. **Frozen for coordinator review; no further runtime/app edit until assigned.**
+
+## September 21 D01/D03 package editing — next source-only proposal
+
+Coordinator captured shorter-lifetime status73d22529; both attempts/source/cleanup remain preserved, with no third attempt or protection/defect claim. Current clean Home branch stays atf4b277861. Read-only remote refresh found masterc689c617 and paid53e738; paid fullCI remains coordinator-owned/pending and this proposal is separate. No branch adoption/application edit/runtime restart/new test.
+
+Selected existing D01 package-edit recovery prerequisite to D03 status reconciliation. Dashboard DeliveriesCard renders clickable package rows but receives **onPackageClick={() => {}}**. Existing useHomePanels.openPackagePanel(pkg), hydrated PackageSlidePanel Edit Package mode, dashboard update handler and SDK/realPUT/PostgREST HomePackage already exist; every current opener invocation passes no package and opens create only. Standalone Deliveries has create/pickup/returned actions, no equivalent editor entry. This is a source lead, **not a reproduced browser failure**. D03 In Transit is indeed a UI option absent from current HomePackage CHECK/read filter, but its edit control is currently unreachable through this caller; do not manufacture a script-only UI baseline or alter status presentation/schema.
+
+Focused9paths×6current/master/paid/staging/design/archive refs=54bindings/53present1historicalmissing. All6 dashboard variants retain no-op package-click wiring. Reuse existing opener/panel/caller/route/table; no new application file/helper/screen/service/table/migration justified. Reused dashboard-current-summary package/status/read-permission and web-dashboard-access-retirement authority/panel evidence within recorded limits; no duplicate Settings/guest/member walks or accepted journeys.
+
+Proposed later runtime-only baseline after assignment/source binding: sameowned18141/18142/64550–59/ledger56/syntheticowner, real packageGET/POST and read service. Existing Track Package creates exactly one synthetic expected package (description/carrier, no media/provider), actual201/completeSQL. Click its exact rendered expanded Deliveries row once and observe whether existing Edit Package opens, with URL/controls/request evidence. No statusPUT/delete/pickup or repeatedcreate; if edit unexpectedly opens, record/close without save. Full package/ownership/occupancy/preferences/audit/ancillary state must remain unchanged by row click. Exact child-first fixture cleanup/RPC+ledger preservation/runtime release. No apprepair before reproduced baseline. Any eventual in-place opener callback wiring must preserve current edit/manage gates and layout; status/media/write-permission/unknown-save concerns remain separate.
+
+Durable owner `.pantopus-recovery/audits/20260921-stream2-package-edit-source-r1/`: **12 artifacts plus manifest**, SHA256 **61d1462666bc0b736480e2e4664e51eabaa7bdbbebe5bbf8c69fe801fbfff299**. Eight complete relevant source files, exact HomePackage baseline excerpt with full-file binding,54binding comparison, reused-evidence report hashes and proposal. All12 verified. **Source-only; no runtime or application expansion until coordinator assignment.**
+
 ## September 21 D05 shorter lifetime attempt — intact reply, required ordering unavailable
 
 Coordinator captured prior26a1b0c3 and assigned one shorter attempt. Same clean `codex/home-settings-save-lifetime-verification` at **f4b27786172d7b2cae641b4c94f9e77aa75928c1**, all8 original source bindings unchanged, prior d225/evidence preserved. Only private observer extended with request-arrival and response close/finish records and an automatic untouched200 deadline20s after real commit. SDK30s unchanged. No application/schema/provider/session/native/unit-test change or repeated write.
@@ -909,3 +939,30 @@ Coordinator reacquired same SQL64552/API64551 and web[::1]:18141/API18142 for St
 - **Cleanup:** exact rows/files/receipts/objects all0 again, private bucket removed by existing fixture cleanup; API18142/Next18141 stopped, own5 r1 containers stopped and preserved; no native slot. Two newly created tabs closed; no peer resource/cache/cookie edits. Temporary lint fallback symlink removed; app worktree tracked clean.
 
 **Final handoff:** PR60 remains draft/open/mergeable at66f834cc7b6325c27a32634020523a1b6dc7b3d0; CI35541676278 fully green. Author update complete and ready for coordinator publication. No merge, deployment, shared backlog closure, provider activation or native installation performed. Runtime released again and fixture cleanup0. Next bounded work remains installed native M02/Emergency and wider D08 account/hosted acceptance, subject to runtime/tool availability; do not repeat accepted browser/backend checks without a relevant change or concrete risk.
+
+## Local latest-code iPhone readiness — September21
+
+- **Source check:** `/private/tmp/pantopus-workstream-home` is clean at
+  `f4b27786172d7b2cae641b4c94f9e77aa75928c1`; `origin/master` is nine
+  coordination-only commits ahead and has no iOS or backend source diff, so no
+  application work was duplicated or changed for this build.
+- **Backend:** the existing local Supabase stack was reused (API `64521`, DB
+  `64522`); the backend is running from this worktree on `0.0.0.0:8000` with
+  `PGBOSS_ENABLED=false` and `CRON_ENABLED=false`. `GET /health` returned 200
+  with `{"status":"healthy","database":"connected"}` from both
+  `127.0.0.1` and `192.168.0.176`.
+- **iOS configuration/build:** ignored local `.env` points API and Socket.IO to
+  `http://192.168.0.176:8000`; `make bootstrap` generated the project. Debug
+  simulator build succeeded, installed and launched on iPhone 17 simulator;
+  the generated Info.plist contains the LAN URL and local-network ATS allowance.
+  Generic `iphoneos` arm64 build also succeeded (warnings only), but is
+  unsigned because no device profile was used.
+- **Physical-device limit:** `devicectl` sees iPhone Yingpeng paired, but the
+  install attempt was rejected because the phone was locked and Xcode could not
+  mount the developer disk image. A signing retry also found no Xcode account or
+  development profiles for the configured bundle/team. Unlock the phone and
+  add the active Apple Developer account/team in Xcode before retrying the
+  signed install. This is an environment/device limit, not an app-source
+  failure.
+- **Runtime:** backend remains intentionally running for the user’s device
+  session; no database rows, fixtures, caches or peer worktrees were changed.

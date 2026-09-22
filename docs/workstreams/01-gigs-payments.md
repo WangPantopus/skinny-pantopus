@@ -1,5 +1,13 @@
 # Stream 1 — Gigs and payments
 
+## Coordinator package baseline assignment
+
+Reviewed12 package-source artifacts and54 Git bindings. Stream2 has one actual UI
+package-create/row-click baseline assigned in [live guide](README.md), with real
+packageAPI/SQL, exactcleanup and no repair yet. Existing editor is the candidate
+for reuse; status/schema and furtherwrite boundaries stay separate. Documentation142
+mergeded391c3a after exactCI; paid53e738 remains fixed on its running fullCI.
+
 ## Current Stream1 publication and verification limits
 
 Paid `codex/paid-gig-integration` is clean/pushed at
