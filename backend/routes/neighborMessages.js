@@ -32,6 +32,7 @@ const { checkHomePermission } = require('../utils/homePermissions');
 const { resolveTier } = require('../services/placeIntelligenceService');
 const { createNotification } = require('../services/notificationService');
 const { isBlocked, invalidateBlockCache } = require('../services/blockService');
+const { invalidateFilterCache } = require('../services/feedService');
 const {
   MESSAGE_TEMPLATES,
   REPLY_TEMPLATES,
@@ -393,6 +394,8 @@ router.post('/:id/block', verifyToken, async (req, res) => {
     if (error) throw new Error(error.message);
 
     invalidateBlockCache(userId, senderId);
+    invalidateFilterCache(userId);
+    invalidateFilterCache(senderId);
     return res.json({ success: true });
   } catch (err) {
     if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
