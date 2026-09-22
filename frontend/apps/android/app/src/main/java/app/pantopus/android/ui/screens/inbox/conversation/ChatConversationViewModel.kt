@@ -871,6 +871,7 @@ class ChatConversationViewModel
          * `code: "PRE_BID_LIMIT"` when a non-bidder exceeds the gig room's
          * pre-bid message allowance (`backend/routes/chats.js:1574`).
          */
+
         /** A 403 refusal of the send itself (`chats.js` "Unable to message this user" / "Not a participant"). */
         private fun isSendRefused(error: NetworkError): Boolean =
             error is NetworkError.Forbidden || (error is NetworkError.ClientError && error.code == 403)
