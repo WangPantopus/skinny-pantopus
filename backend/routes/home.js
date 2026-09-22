@@ -2545,6 +2545,10 @@ router.post('/:id/issues', verifyToken, async (req, res) => {
 
     const access = await checkHomePermission(homeId, userId);
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    // Same grant as the web/native Report Issue controls; a view-only member is refused here, not only in the UI.
+    if (!['maintenance.edit', 'maintenance.manage'].some(permission => access.permissions.includes(permission))) {
+      return res.status(403).json({ error: 'Insufficient permissions to report issues' });
+    }
 
     const { title, description, severity, photos, estimated_cost, details } = req.body;
 
