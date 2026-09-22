@@ -1115,3 +1115,22 @@ Coordinator reacquired same SQL64552/API64551 and web[::1]:18141/API18142 for St
   `192.168.0.176:18142`; the owner token also returned 200 for the existing
   Home `/me`, documents, guest-passes, tasks and issues routes with zero
   fixture rows. No fixture rows or peer resources were changed.
+
+## PR176/PR178 evidence publication — September22
+
+- The redacted PR176 bundle is retained at
+  `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-pr176-home-leave-r1/`.
+  Its `MANIFEST.json` SHA256 is
+  `d6f5520076f56d99950abd23583a1dc4532b1140374fc4b7432129b1e426d195`.
+  It contains the reproduced `/detach` failures, the real Settings
+  `/move-out` receipt, the one-line source diff, validation receipt and exact
+  byte-equal occupancy/notification/audit cleanup. No token, password or raw
+  proxy body is included.
+- The redacted PR178 bundle is retained at
+  `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-pr178-mailbox-preferences-r1/`.
+  Its `MANIFEST.json` SHA256 is
+  `1c72d93b6eea04b7dc66454df99bb68d7804a53e46d9d9dea138592f63455057`.
+  It contains the real direct/LAN 404 baseline, patched temporary-backend 200
+  GET/PATCH receipts, exact existing-block move, validation receipt and
+  byte-equal `MailPreferences` restoration. No UI/SDK/schema/migration/test
+  change or raw credential is included.
