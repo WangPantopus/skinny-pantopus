@@ -1,5 +1,34 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — migration blob hashing repaired; PR181 checks running
+
+Paid integration adopted/pushed715ccd8c0 (merged178), exact tree equal to accepted
+PR1780f1a00b16/CI35731690811. Merged-master aggregate35732165373 is running.
+Current branch `codex/migration-file-hashing`,037421e1dc3820897534866be438bfe948cf32f7,
+[PR181](https://github.com/WangPantopus/skinny-pantopus/pull/181), repairs the reproduced
+local migration guard stall: Node20.20.0 also blocked in git hash-object --stdin while
+feeding a1.40MB/1.17MB baseline, after earlier Node24 stalls. Only owned stuck Git child
+92214 was terminated. Existing checker now hashes each path with --no-filters and ignored
+stdin; raw-byte comparison and history/order rules preserved, two lines changed.
+No migration/policy/application-UI file or new unit test. Current/archived/all-ref checked.
+
+Actual repository guard passes on both Node20.20.0 and24.13.0; all6 existing policy tests
+pass, including >1MiB baseline, changed applied SQL and append-only order. Paid migration/
+policy bytes match these validated bytes; no claim that the old checker passed unchanged.
+[CI35732925365](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35732925365)
+is running. Five-file durable bundle20260922-stream1-migration-file-hashing-r1, MANIFEST
+6a237dd952b417da62b0da872f813b6d1968e79e7175083fd0f2a3bc5e8993c9; refresh after CI.
+Application worktree clean/committed/pushed. No fixture/provider/native changes by this repair.
+
+Separate existing completion-file recovery observed missing bucket404 → one pending
+tombstone/no deletion, immediate retryselected0. Natural retry threshold13:24:16UTC;
+continue existing worker recovery then exact own residue cleanup. API18132/Next18133
+stopped; own database/devices retained. CUA rejects Simulator as unavailable; explicit
+Maestro/ADB-driver question is pending with user; independent web/API/SQL work continues.
+Stream3 heavy grant remains; backend own-profile response repair is being verified.
+Next serial order165→181→166→167→168→177→179→180, docs last. No row closes.
+
+
 ## September 22 — web offer amount and fallback identity repaired; PR180
 
 Branch `codex/web-offer-price-precision`, exact `09a878d384d0abc033fccdc6b8c6f3ca7c7129a5`,
