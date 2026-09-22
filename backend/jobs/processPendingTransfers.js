@@ -58,6 +58,7 @@ async function processPendingTransfers() {
     const selectFields = `
       id,
       gig_id,
+      booking_id,
       payer_id,
       payee_id,
       amount_total,
@@ -208,26 +209,33 @@ async function processPendingTransfers() {
 
         successCount++;
 
-        // Get gig title for notification
-        const { data: gig } = await supabaseAdmin
+        // Booking payments have no gig. Keep their notices on invitee-accessible
+        // booking pages instead of producing a /gigs/null destination.
+        const isBooking = payment.payment_type === 'booking_payment';
+        const { data: gig } = payment.gig_id ? await supabaseAdmin
           .from('Gig')
           .select('title')
           .eq('id', payment.gig_id)
-          .single();
+          .single() : { data: null };
 
         const gigTitle = gig?.title || 'a gig';
         const amountFormatted = `$${(transferAmount / 100).toFixed(2)}`;
+        const subjectMetadata = isBooking
+          ? { booking_id: payment.booking_id }
+          : { gig_id: payment.gig_id };
 
         // Notify provider: funds added to wallet
         createNotification({
           userId: payment.payee_id,
           type: 'payout_sent',
           title: `${amountFormatted} added to your wallet`,
-          body: `Your payment for "${gigTitle}" has been added to your Pantopus wallet. You can withdraw to your bank anytime.`,
+          body: isBooking
+            ? 'Your booking payment has been added to your Pantopus wallet. You can withdraw to your bank anytime.'
+            : `Your payment for "${gigTitle}" has been added to your Pantopus wallet. You can withdraw to your bank anytime.`,
           icon: '💰',
           link: '/app/settings/payments',
           metadata: {
-            gig_id: payment.gig_id,
+            ...subjectMetadata,
             payment_id: payment.id,
             amount: transferAmount,
           },
@@ -237,12 +245,12 @@ async function processPendingTransfers() {
         createNotification({
           userId: payment.payer_id,
           type: 'payment_completed',
-          title: `Payment complete for "${gigTitle}"`,
+          title: isBooking ? 'Booking payment complete' : `Payment complete for "${gigTitle}"`,
           body: `Your payment of ${amountFormatted} has been sent to the provider.`,
           icon: '✅',
-          link: `/gigs/${payment.gig_id}`,
+          link: isBooking ? '/app/scheduling/my-bookings' : `/gigs/${payment.gig_id}`,
           metadata: {
-            gig_id: payment.gig_id,
+            ...subjectMetadata,
             payment_id: payment.id,
             amount: payment.amount_total,
           },

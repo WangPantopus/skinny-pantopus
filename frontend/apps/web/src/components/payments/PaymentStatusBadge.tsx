@@ -33,6 +33,10 @@ const STATUS_MAP: Record<
   failed: { label: 'Failed', bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
 };
 
+export function getPaymentStatusLabel(status: string | undefined | null): string {
+  return (status && STATUS_MAP[status]?.label) || 'Payment status unavailable';
+}
+
 interface PaymentStatusBadgeProps {
   status: PaymentStatus | string | undefined | null;
   /** Show additional description tooltip on hover. */
