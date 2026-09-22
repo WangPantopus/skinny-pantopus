@@ -3245,7 +3245,7 @@ actual deletion set matched the recorded temporary batch; no unrelated rows were
 Evidence: private operational audit under
 `/private/tmp/pantopus-stream3-20260920-r1` and durable native bundle
 `.pantopus-recovery/audits/20260922-stream3-native-social-r1` (MANIFEST
-`d3edb148d21ba3434156570d751fee06a4ae3f07bf53bfed60a6fda09ef21cb2`). PR body updated with the reproduced baseline, repair, cleanup and
+`4a9cf65e2182ae604aef07e049d6cf54dce248b9805f98a8291c7a751f708aea`). PR body updated with the reproduced baseline, repair, cleanup and
 limitations. The coordinator refreshed the branch to `f1ca9002` and merged PR163 as
 `e5335f584dd99f82e7c66a3974b04400098f0c0c`.
 
@@ -3268,8 +3268,21 @@ Current Location opened the real Android permission dialog and denial returned t
 location error; Beacon Follow exercised the 404 suggestion fallback plus plain follow 201;
 the retained reverse UserBlock produced Follow 403 and the existing refusal toast; direct
 message send produced 403, the blocked-conversation banner, and zero persisted ChatMessage
-rows. Android logged out through Settings afterward. Screenshots and records are in the
-durable bundle; its current MANIFEST is `d3edb148d21ba3434156570d751fee06a4ae3f07bf53bfed60a6fda09ef21cb2`.
+rows. A same-actor Bob→Evan block was also created and removed through the real profile and
+Settings screens. The retained fixtures derive `Persona` identity (no home-residency context),
+so the Persona Follow affordance remained visible after that personal UserBlock; this is a
+distinct Persona scope and does not substantiate the local-neighbor Follow-row-hide branch.
+Android logged out through Settings afterward. Screenshots and records are in the durable
+bundle; its current MANIFEST is `4a9cf65e2182ae604aef07e049d6cf54dce248b9805f98a8291c7a751f708aea`.
+
+Final cleanup capture: `final-cleanup-20260922.json` records the restored baseline
+(6 posts, 8 comments, 20 notifications, 1 retained pre-existing UserBlock, zero
+temporary follows/reports, Evan active sessions 0, Bob active sessions 4). Evan's
+recorded fixture password was restored through the real reset link and endpoint; the
+private helper's payload typo was corrected after the first failed attempt, and the
+verification session was revoked. Mailpit history was preserved (44 retained messages
+at capture). The refreshed bundle MANIFEST is
+`4a9cf65e2182ae604aef07e049d6cf54dce248b9805f98a8291c7a751f708aea`.
 
 New iOS device-hub interaction is currently unavailable, and no provider delivery,
 physical-device, hosted-migration, or APNs/FCM evidence is claimed here. The Android slot

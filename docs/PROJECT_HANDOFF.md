@@ -34,11 +34,13 @@ untouched; duplicate PR158 was already closed. This does not close any acceptanc
   `.json` names; original evidence is preserved.
 
 Runtime: retained Stream1 wallet-read-r1 SQL64562/API64561 remains up, ledger79; exact
-P10 scale fixtures are cleaned to zero and18132/18133 are free. Peer runtimes, devices
+P10 scale fixtures are cleaned to zero. Stream1 has restarted its owned P08-derived
+real Stripe TEST native harness on18132 for3DS verification;18133 is free. Peer runtimes, devices
 and retained fixtures belong to their streams. One heavy native build at a time; the
-Stream3 released its Android build/UI verification slot. Stream1 now reserves the
-slot for a bounded official local Maestro driver capability check on its own C2BCF36A
-simulator; peers must request another grant. No simultaneous build is authorized. Private Stream1 continuation:
+Stream3 released its Android build/UI verification slot. Stream1’s official local
+Maestro2.10.0 hierarchy/installed-launch capability check passed on C2BCF36A; its payment
+UI continuation uses the installed driver without reinstalling or building the app.
+The heavy native build/initial-driver slot is now granted to Stream2 only. Private Stream1 continuation:
 `/private/tmp/pantopus-stream1-wallet-read-r1/RESUME-2026-09-22.md`.
 
 PR163 is now merged as `e5335f584` after refreshed CI and real cache-transition

@@ -35,8 +35,9 @@ PR160's original native jobs were canceled by a temporary push; its full exact-e
 workflow35719644248 must finish before native checks are accepted.
 
 Next: serialize164→160→175→165→166→167→168, documentation last. Stream3 released
-its Android build slot; Stream1 reserves the slot for a bounded Maestro driver capability
-check on its own C2BCF36A simulator. No concurrent native build is authorized.
+its Android build slot. Stream1’s local Maestro hierarchy and installed-launch probe
+passed on C2BCF36A; its current3DS UI run uses the installed driver without reinstalling
+or building the app. The heavy build/initial-driver slot is now granted to Stream2.
 
 ## September22 — retained ledger and native-control boundaries
 
@@ -55,8 +56,9 @@ Native UI capability: active Xcode27 has DeviceHub.app rather than Simulator.app
 CUA bindings to DeviceHub by ID, verified path and Xcode developer-tool launcher all
 time out; Xcode accessibility responds. No device reset or peer device change. Task-local
 official Maestro2.10.0 archive checksum verified and CLI help works (analytics disabled),
-but no driver invocation or new UI acceptance occurred. Native3DS/dispute and other new
-iOS interaction acceptance remain unverified; existing accepted evidence is preserved.
+and a later hierarchy/installed-launch probe passed. Native3DS is now in progress using
+the existing P08-derived real Stripe TEST runtime on18132; acceptance is recorded only
+after full app/API/SQL/provider reconciliation and cleanup. Native dispute remains open.
 No new fixtures, tables, application files or tests. Retained SQL64562/API64561 stays up.
 
 ## September 22 — read-only release app-link boundary (O04/O05/N01)
