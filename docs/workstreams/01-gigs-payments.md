@@ -1,29 +1,49 @@
 # Stream 1 — Gigs and payments
 
-## September22 — native3DS return defect; draftPR177
+## September 22 — native 3DS return repaired and verified; PR177
 
-Paid integration adopted/pushed master`e5335f584` after exactCI35719378741 passed;
-migration policy passes. The existing worktree now holds repair branch
-`codex/ios-stripe-authentication-return`, commit`ad20c667d`, draft
-[PR177](https://github.com/WangPantopus/skinny-pantopus/pull/177).
+Repair branch `codex/ios-stripe-authentication-return`, commit
+`ad20c667d1b13f866c6244a1486b9b3bdf181f46`, is
+[PR177](https://github.com/WangPantopus/skinny-pantopus/pull/177). The paid integration
+branch previously adopted and pushed `e5335f584` after exact merged-master CI passed
+and migration policy passed. The paid worktree now holds this clean repair branch.
 
-Installed iOSa65411758 (checkout source unchanged through662ab04b5) → real gigs/pays
-routes → Stripe TEST → retained SQL79 reproduced a return-flow gap. Both FAIL and
-COMPLETE on Stripe’s3DS page remain in Safari until manual Close. Failure creates no
-charge and leaves gig open; manual-close retry authorizes1250c using the same intent
-and finalizes assignment. The existing PaymentSheet configuration omitted returnURL
-and the app URL handler omitted StripeAPI.handleURLCallback. The three-line repair
-uses the registered pantopus scheme and forwards Stripe callbacks before normal routing.
-No new app files/unit tests or screen/navigation design changes. All-ref iOS history
-contains no alternative implementation. Focused SwiftLint/SwiftFormat and diff check pass.
+Installed iOS baseline required manual Safari Close after both failed and successful
+Stripe TEST 3DS. The existing shared PaymentSheet now supplies the registered `pantopus`
+return URL, and the existing app URL handler forwards Stripe callbacks before normal
+routing: three added lines in two existing files. No new app file/unit test or visual
+change. All-ref source comparison found no alternative implementation to reuse.
 
-Candidate build, installed automatic-return/failure/retry/cancel and exact CI remain
-pending. Stream2 owns the active native build slot; Stream1 requested the next slot.
-Private evidence and baseline result: `/private/tmp/pantopus-stream1-native-3ds-r1`.
-Publish its sanitized durable manifest after candidate verification. Baseline sole
-intent canceled/customer deleted/owned SQL0;18132/18133free, retained Supabase79 up.
-Synthetic identity/Connect and simulator/Stripe TEST boundaries remain; no row closes.
-Private RESUME updated.
+Installed candidate failure automatically returns the authentication error with card
+retained; retry/COMPLETE automatically assigns the gig using the original 750c intent.
+Separate authentication-page cancellation then sheet dismissal calls abort-accept200,
+cancels 550c, and restores pending bid/open gig. Retained Android APK matches accepted
+P08 binary and relevant current source: failed/successful 3DS retry also uses one 1250c
+intent; background from a separate challenge and actual launcher return recover the
+existing Resume/Cancel dialog. Cancel payment setup cancels 550c and restores the bid.
+Actual app → real routes/services → SQL → Stripe TEST receipts agree; zero capture.
+
+Candidate build and 77 existing focused tests passed (56 deep-link, 13 recovery, 8 save),
+with scoped lint/format/diff. Exact [CI35723156495](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35723156495)
+passed all required checks, including three iOS devices. PR177 is behind later peer
+merges and needs its current-master update/fresh CI before serial integration.
+
+Owner bundle `.pantopus-recovery/audits/20260922-stream1-native-3ds-r1/`: 26 files;
+MANIFEST `2560b7c78a9971316680390b8225b120e00f427c2f8cc52f9ab100a90659b9de`.
+Baseline and candidate test intents canceled/customers deleted; independent owned
+SQL counts zero across 12 relevant tables, retained ledger79 unchanged. API18132 stopped,
+18133 free; apps terminated, owned devices retained. SQL64562/API64561 stays up.
+Heavy native build slot is free; peers request a grant. No peer resource changed.
+
+Limits: synthetic identity/session and Connect, real Stripe TEST, simulator/emulator;
+no live/hosted/physical bank-app, cold-process-death/account-switch/concurrent3DS claim.
+Existing accepted recovery evidence remains bounded; no payment row closes. Harness
+corrections mounted the real v2 offers router and supplied the server sessionId contract.
+Both native traces then exposed a separate offers reader500: `User.verified_at` does not
+exist; canonical and retained User have `verified`. Existing legacy fallback preserved
+checkout. Next repair this reproduced query in a separate current-master branch, then
+continue native dispute/provider gaps. P04/P05 fee policy still needs founder decision.
+Private RESUME updated with evidence, cleanup, CI and next action.
 
 ## September 22 — O02 local recovery rehearsal and peer integration
 

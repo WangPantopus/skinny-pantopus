@@ -2,56 +2,57 @@
 
 ## START HERE — September 22, coordinator resumed after the paid merge
 
-The founder resumed all three streams and requested current-master rebases. The older
-founder STOP and draft-PR dispositions below are historical. GitHub confirms PR47 merged
-as `69be3c11dc8520aed91228570460487d5579c82d` and PR34 is also marked merged. PR46 is
-untouched; duplicate PR158 was already closed. This does not close any acceptance row.
+The founder resumed all three existing streams and requested current-master adoption.
+The older founder STOP and draft dispositions below are historical: PR47 merged as
+`69be3c11dc8520aed91228570460487d5579c82d`; PR34 is also merged. PR46 remains untouched;
+PR158 was already closed, and PR159's reconciliation is incorporated into this live hub.
 
-- **Master / Stream 1:** exact master CI [35714120974](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35714120974)
-  passed all checks, including all native jobs. Paid branch was rebased first to
-  `69be3c11d`, then fast-forwarded/pushed to `662ab04b5` after the one-file P10 repair
-  [PR173](https://github.com/WangPantopus/skinny-pantopus/pull/173),
-  `codex/p10-expired-bid-pagination` at `9f1d1db824bffdbff3dfe0a1cd406a7565ff0451`,
-  passed exact CI35715834339 and merged as `662ab04b5713256cd27d8a4d4de838d8bcd8747e`.
-  The paid worktree is clean on `codex/paid-gig-integration`; migration policy passes.
-  Later merged-master CI is observed separately; initial paid integration is accepted
-  only within its recorded scope.
-- **Stream 2:** existing task `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` resumed. PR160
-  rebased onto `69be3c11d`; existing regressions exposed historical `cancelled` receipt/
-  list compatibility and a settings fixture that lacked explicit verification. Minimal
-  repairs and a correction to that existing fixture await native checks. The production
-  UI retains explicit proof for Verified and the actual role; no false-label fallback.
-  Existing docs PR161 and private RESUME remain its reporting locations.
-- **Stream 3:** existing task `01a0a824-301b-74e3-a1d9-b205714ed7a1` resumed for PR163–168
-  CI remedies and the four unfinished Android re-verifications. Fresh remote checks
-  found failures on163,164,167,168;165/166 passed their prior heads. Verify-only171/172
-  are never for merge. Coordinator review additionally requested a real warm-feed
-  block/unblock cache reproduction before accepting163. Docs170 remains separate.
-- **Counts:** PR159's reconciliation is incorporated into the live coordination branch:
-  8 closed (H01–H06, R01–R02), 72 partial/open; P01 is a completed bounded milestone,
-  not a ninth closed row. All 234 Stream1, 149 Home and 100 social bundle file hashes
-  match their published manifests. Home manifests contain SHA256 text despite their
-  `.json` names; original evidence is preserved.
+- **Integration:** PR173 P10 pagination merged `662ab04b5`; PR163 social privacy/cache
+  merged `e5335f584`; PR164 push-tap isolation merged `3b4404ed3`. Each passed exact-head
+  CI before merge. PR164 tests initially passed but artifact upload timed out; the failed
+  job rerun passed on unchanged source. Current master is `3b4404ed3`; its merged CI is
+  still running. PR160 updated to `4cca0a681` with fresh CI35724788993 running. Its previous
+  exact ede5b72b full CI35719644248 passed. Serial code order:160 →175 →176 →165 →166
+  →167 →168 →177; update each branch and require fresh checks. Docs161/170/174 last;
+  verify-only171/172 never merge, close after their fixes land.
+- **Stream 1:** paid integration adopted/pushed `e5335f584` after merged CI and migration
+  policy passed. Clean paid worktree now holds `codex/ios-stripe-authentication-return`
+  at `ad20c667d`, PR177. Installed iOS failed/successful3DS now returns automatically;
+  iOS and Android cancellation restores pending bid/open gig; same-intent retries
+  reconcile with real API/SQL/Stripe TEST. Build +77 existing focused tests and exact
+  CI35723156495 pass. The26-file owner bundle MANIFEST is
+  `2560b7c78a9971316680390b8225b120e00f427c2f8cc52f9ab100a90659b9de`.
+  Earlier P10 workload, local O02 recovery, ledger and release-link evidence is retained.
+- **Stream 2:** existing task `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` continues Home
+  native verification; PR160 current CI is pending. Separate175 bill-field contract and
+  176 self-service leave-route repairs passed prior heads; current-master refresh remains.
+  Coordinator requested176's exact occupancy/task/notice/audit restoration evidence.
+  Mailbox GET preferences404 from generic /:id route ordering is assigned to Stream2;
+  no current frontend preferences caller or UI edit is assumed. Docs161/private RESUME
+  remain its reporting locations; preserve its owned runtime and fixtures.
+- **Stream 3:** existing task `01a0a824-301b-74e3-a1d9-b205714ed7a1` finished native
+  follow/block/message checks and exact cleanup/password restoration, and continues A05
+  then A03. Latest profile report/search/mailbox/audience reads include real API and SQL
+  evidence with explicit flag/provider boundaries. All114 durable file hashes verified;
+  MANIFEST `504858aec1ac7d0f0e67ca9ac52d3b1c68f4d48d8ab977f4dc0beae45f07183a`.
+  See newest03 sections for limits and direct hub commits; preserve docs170 history.
+- **Counts:** 8 closed (H01–H06, R01–R02), 72 partial/open. P01 is a completed bounded
+  tip-reservation milestone, not a ninth closed row. Partial journeys/green CI do not
+  close a row. Earlier234 Stream1 and149 Home evidence hashes were verified and reused.
 
-Runtime: retained Stream1 wallet-read-r1 SQL64562/API64561 remains up, ledger79; exact
-P10 scale fixtures are cleaned to zero. Stream1 has restarted its owned P08-derived
-real Stripe TEST native harness on18132 for3DS verification;18133 is free. Peer runtimes, devices
-and retained fixtures belong to their streams. One heavy native build at a time; the
-Stream3 released its Android build/UI verification slot. Stream1’s official local
-Maestro2.10.0 hierarchy/installed-launch capability check passed on C2BCF36A; its payment
-UI continuation uses the installed driver without reinstalling or building the app.
-The heavy native build/initial-driver slot is now granted to Stream2 only. Private Stream1 continuation:
+Runtime: retained Stream1 SQL64562/API64561 stays up, ledger79. Native3DS owned SQL
+fixtures are zero; all test intents canceled/customers deleted. API18132 stopped,
+18133 free; Stream1 apps terminated, owned C2BCF36A and emulator5558 retained for the
+next bounded check. Heavy native slot is free after the candidate build; request grants
+before starting another heavy build. Peer devices, databases and processes remain owned
+by their streams. Private coordinator continuation:
 `/private/tmp/pantopus-stream1-wallet-read-r1/RESUME-2026-09-22.md`.
 
-PR163 is now merged as `e5335f584` after refreshed CI and real cache-transition
-evidence. PR164 awaits fresh native checks; separate Home bill contract PR175 is green.
-The local O02 recovery rehearsal passed within its recorded data/catalog/file scope;
-hosted recovery remains open. See Stream1 status for evidence and limitations.
-
-Next: finish/review current CI repairs, serialize code merges on current heads, publish
-documentation last, then continue each existing row order. Native dispute/3DS, broader
-P10 capacity/retention, hosted/Connect/live and physical-device boundaries remain open.
-P04/P05 fee payer/recipient and the recorded founder decisions remain unresolved.
+Next: repair the reproduced native offers-reader500 (`User.verified_at` absent; existing
+`User.verified` available), then native dispute/remaining P10 and provider boundaries;
+continue peer row orders and serial merges. Hosted/Connect/live, physical-device,
+production recovery and release association/configuration remain unverified. P04/P05
+fee payer/recipient and the recorded founder decisions remain unresolved.
 
 ## September 22 09:30 UTC — founder STOP; exact state of the parallel Stream 2/3 session (START HERE for Streams 2 and 3)
 
