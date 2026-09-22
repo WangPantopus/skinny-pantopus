@@ -1,5 +1,7 @@
 # Pantopus project handoff
 
+Runtime update 2026-09-22 15:34 UTC: Stream1 API18132 PID3240/Next18133 PID3909 and CUA tab10 are active for owned f9220537 legacy tip release notification failure. Actual TEST1250 tip proof seeded as historical row; real worker credited1250 but lost both notices under INSERT denial and normal retry did not repair. New branch codex/tip-wallet-release-delivery based currentmaster3c1e4a47d (masterCI still pending); small existing-worker candidate plus reserved forward20260922022400 extends existing settlement/delivery functions to tips. Migration not yet applied; ledger80 retained. Provider charge/customer cleanup pending. Completed188 remains accepted. Heavy native slot free; Stream2/3 continue their existing assignments. Earlier runtime snapshots below are historical.
+
 ## Current coordinator checkpoint — September 22, 15:25 UTC
 
 PR188cd6d6876c completes bounded won-after-wallet-income state repair: actual TEST baseline,

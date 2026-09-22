@@ -1,5 +1,17 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — active legacy tip release notice repair
+
+Runtime update 2026-09-22 15:34 UTC: Stream1 API18132 PID3240/Next18133 PID3909 and CUA tab10 are active for owned f9220537 legacy tip release notification failure. Actual TEST1250 tip proof seeded as historical row; real worker credited1250 but lost both notices under INSERT denial and normal retry did not repair. New branch codex/tip-wallet-release-delivery based currentmaster3c1e4a47d (masterCI still pending); small existing-worker candidate plus reserved forward20260922022400 extends existing settlement/delivery functions to tips. Migration not yet applied; ledger80 retained. Provider charge/customer cleanup pending. Completed188 remains accepted. Heavy native slot free; Stream2/3 continue their existing assignments. Earlier runtime snapshots below are historical.
+
+Actual existing web wallet0→12.50; notification popover retains only the durable capture notice.
+Baseline and source comparison private /private/tmp/pantopus-stream1-tip-wallet-delivery-r1.
+One existing-worker candidate uses the existing locked settlement for tips; necessary forward
+20260922022400 extends its proof/type/Gig checks and current delivery reader, no parallel table,
+service or screen. Candidate verification/schema application pending; no success claim.
+The pre-existing tip capture delivery remains unchanged. Setup alreadydone once; keepprovider
+receipt for actual1250refund/customer/exactSQLcleanup; synthetic historicaladmission/age limits.
+
 ## September 22 — won-dispute state after wallet income complete; PR188
 
 Branch `codex/won-dispute-payment-state`, `cd6d6876cd32ce132c936e2e7601a6fad98e6873`,
