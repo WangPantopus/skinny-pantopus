@@ -12,12 +12,14 @@ PR158 was already closed, and PR159's reconciliation is incorporated into this l
   CI before merge. PR164 tests initially passed but artifact upload timed out; the failed
   job rerun passed on unchanged source. Master3b4404ed3 CI35724702512 passed. PR160
   merged as `6e24aef59` after current4cca0a CI35724788993 passed all checks. Its previous
-  exact ede5b72b full CI35719644248 passed. Serial code order:175 →176 →178 →165 →166
+  exact ede5b72b full CI35719644248 passed. PR175 merged0b1a26cc1 after exact
+  5c5c91b9d CI35728607795 passed. Serial code order:176 →178 →165 →166
   →167 →168 →177 →179; update each branch and require fresh checks. Docs161/170/174 last;
   verify-only171/172 never merge, close after their fixes land.
-- **Stream 1:** paid integration adopted/pushed `3b4404ed3` after merged CI and migration
-  policy passed. Clean paid worktree now holds `codex/offers-user-verification-contract`
-  at `924ac3299`, PR179. Ranked offers now return200 on both native apps and web;
+- **Stream 1:** paid integration adopted/pushed `0b1a26cc1`; its tree exactly matches
+  accepted PR1755c5c91b9d, merged-master CI35729253722 still runs, migration policy passed.
+  Paid worktree holds `codex/web-offer-price-precision` from that master; the existing card
+  repair is in verification. PR179 at924ac3299 remains ready. Ranked offers return200 on both native apps and web;
   15 existing scoring tests and CI35728227377 pass, 12-file manifest
   `d6e38fbfba28f4a1f4914e5bd41ac8b4ef1ceef53842badac122e56a3c67fcf1`.
   PR177ad20c667d remains ready in the queue. Installed iOS failed/successful3DS now returns automatically;
@@ -27,27 +29,31 @@ PR158 was already closed, and PR159's reconciliation is incorporated into this l
   `2560b7c78a9971316680390b8225b120e00f427c2f8cc52f9ab100a90659b9de`.
   Earlier P10 workload, local O02 recovery, ledger and release-link evidence is retained.
 - **Stream 2:** existing task `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` continues Home
-  native verification; PR160 is merged. PR1755c5c91b9d fresh CI is running. Separate175 bill-field contract and
-  176 self-service leave-route repairs passed prior heads; current-master refresh remains.
-  Coordinator requested176's exact occupancy/task/notice/audit restoration evidence.
-  Mailbox GET preferences404 from generic /:id route ordering is assigned to Stream2;
+  native verification; PR160/175 are merged. PR1767a9e2ba7c passes fresh CI35729368796.
+  Merge awaits its durable occupancy/task/notice/audit restoration evidence.
+  PR1789ff513826 moves unchanged mailbox GET/PATCH preferences before generic /:id;
+  its durable evidence handoff and current-master update remain with Stream2;
   no current frontend preferences caller or UI edit is assumed. Docs161/private RESUME
   remain its reporting locations; preserve its owned runtime and fixtures.
 - **Stream 3:** existing task `01a0a824-301b-74e3-a1d9-b205714ed7a1` finished native
   follow/block/message checks and exact cleanup/password restoration, and continues A05
-  then A03. Latest profile report/search/mailbox/audience reads include real API and SQL
-  evidence with explicit flag/provider boundaries. All114 durable file hashes verified;
-  MANIFEST `504858aec1ac7d0f0e67ca9ac52d3b1c68f4d48d8ab977f4dc0beae45f07183a`.
+  native profile editing after bounded A03/N05/A04/N02 web/API/SQL checks.
+  All126 durable file hashes verified; MANIFEST
+  `c84f26b102a99957228616fc4644ce60437aa8f600839b1d2bf0cfdb0c4df681`.
+  Delivery/provider/physical-device boundaries remain explicit.
   See newest03 sections for limits and direct hub commits; preserve docs170 history.
 - **Counts:** 8 closed (H01–H06, R01–R02), 72 partial/open. P01 is a completed bounded
   tip-reservation milestone, not a ninth closed row. Partial journeys/green CI do not
   close a row. Earlier234 Stream1 and149 Home evidence hashes were verified and reused.
 
 Runtime: retained Stream1 SQL64562/API64561 stays up, ledger79. Native3DS owned SQL
-fixtures are zero; all test intents canceled/customers deleted. API18132 stopped,
-18133 free; Stream1 apps terminated, owned C2BCF36A and emulator5558 retained for the
-next bounded check. Heavy native slot is free after the candidate build; request grants
-before starting another heavy build. Peer devices, databases and processes remain owned
+fixtures from that milestone are zero; all test intents canceled/customers deleted.
+Current price check uses own disposable f9200390 rows on API18132/Next18133;
+zero payment objects, browser active. API loaded PR179 before the frontend branch switch:
+that dependency is explicit. Stream1 native apps terminated; C2BCF36A/emulator5558 retained.
+Stream3 holds the exclusive heavy native build grant for A05 if artifact review requires it;
+release promptly if unused or after build. Coordinator stopped only its retained Maestro
+xcodebuild driver on C2 and verified no xcodebuild before issuing this grant. Peer devices, databases and processes remain owned
 by their streams. Private coordinator continuation:
 `/private/tmp/pantopus-stream1-wallet-read-r1/RESUME-2026-09-22.md`.
 

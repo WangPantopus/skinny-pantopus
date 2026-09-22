@@ -1,5 +1,22 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — current web offer-card verification
+
+Paid integration adopted/pushed0b1a26cc1 (PR175 merge), exact tree equal to accepted
+PR1755c5c91b9d/CI35728607795; merged-master35729253722 still runs. Migration policy passes
+using existing Node20.20.0. Current repair branch codex/web-offer-price-precision starts
+from that master. Baseline actual web ranked12.50→13; forced v2 failure invokes real
+legacy bids but renders0/Helper despite canonical bid_amount12.50/bidder.displayName.
+Existing card now reuses formatPrice and safe displayName; candidate fallback shows
+Tip Worker R1/$12.50. Further verification, cleanup and publication remain in progress.
+No new file/schema/unit test or visual redesign. API18132 loaded PR179924ac3299 before
+frontend checkout change; this is a paired-runtime dependency, not master-only evidence.
+Own SQL64562/API64561 ledger79 retained; f9200390 fixtures active, Next18133/browser
+active, native apps terminated. Stream3 holds heavy native grant; peers untouched.
+Private continuation: /private/tmp/pantopus-stream1-offer-price-r1/; coordinator RESUME
+remains in wallet-read-r1. No row closes.
+
+
 ## September 22 — ranked offers reader repaired; PR179
 
 Branch `codex/offers-user-verification-contract`, commit
