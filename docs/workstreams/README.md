@@ -1,5 +1,54 @@
 # Three-stream coordination
 
+## September 22 07:20 UTC — second session resumed Streams 2 and 3 in parallel (START HERE if taking over)
+
+A second Claude session (cwd `~/skinny-pantopus`) resumed the backlog while the
+original Stream 1 coordinator session was still live in
+`/private/tmp/pantopus-paid-gig-integration`. Division of work, so nobody duplicates:
+
+- **Stream 1 / hub / merges** stay with the live coordinator session: paid branch, all P
+  rows, PR merge order 149 (merged) → 154 → 151 → 152, the hub worktree
+  `~/pantopus-coordination`, README/handoff/backlog publication. The second session did not
+  touch that worktree or merge anything. PR47 was marked ready by the founder (CI green on
+  043ca750e); merging it is the founder's call. PR158 duplicates merged PR157 and is DIRTY:
+  close it, do not merge. PR159 (this branch) reconciles the P01 checkmark with the
+  8-of-80 count and carries this handoff.
+- **Stream 2** runs as a background agent in `/private/tmp/pantopus-workstream-home`.
+  Scope, in order: D02 media discard / silent write errors (issue, bill, package panels),
+  D03 bill amount units, package `delivered_at` clearing, D09 false-empty readers, then
+  installed iOS (simulator `6F914A30-8585-4B05-9E05-94441675F10A` "Pantopus Stream2
+  Packages") + Android (AVD `Pantopus_Home_Recurrence_Acceptance`, emulator-5556) Home
+  journeys for every owned row (D, R03–R06, I, F, M, H07/H08 remainder) against the
+  disposable full-schema project `/private/tmp/pantopus-stream2-native-r1` with the
+  worktree backend on 18142. Code branches `codex/home-*`, one PR each, never merged by
+  the agent. Live status sections go to the TOP of `docs/workstreams/02-home-household.md`
+  on docs branch `codex/stream2-home-docs-20260922` (worktree
+  `/private/tmp/pantopus-stream2-docs`, its own docs PR). Private resume note:
+  `/private/tmp/pantopus-workstream-home/.stream2-verification/RESUME-2026-09-22.md`.
+- **Stream 3** runs as a background agent in
+  `/private/tmp/pantopus-workstream-accounts-social` on the retained runtime (API 18130,
+  Next 18131 at `stream3-auth.localhost`, Supabase `pantopus-stream3-block-r1` 64531–37,
+  Mailpit 64535/36, simulator `0AE16FA0-E244-414F-86C8-24893BDFD979`, emulator-5554 AVD
+  `Pantopus_Stream3_Accounts_R3`, fixtures Bob/Dana/Evan). Scope, in order: installed
+  iOS+Android N03/N04/N01, then A05 native sweep, A03 local media, N05 direct worker
+  reminder delivery, A02/A01 remainders, A04/N02 boundary notes. Code branches
+  `codex/stream3-*`, one PR each, never merged by the agent. Status sections are APPENDED
+  to `docs/workstreams/03-accounts-social.md` on docs branch
+  `codex/stream3-social-docs-20260922` (worktree `/private/tmp/pantopus-stream3-docs`).
+  Private resume note: `/private/tmp/pantopus-stream3-20260920-r1/RESUME-2026-09-22.md`.
+- Rules in force for both agents: reproduce on the real app before changing code; smallest
+  repair inside the existing implementation; no redesign, no unit tests; every milestone
+  committed and pushed before the next; one heavy native build at a time; only owned
+  fixtures/devices/containers; evidence bundles under
+  `~/skinny-pantopus/.pantopus-recovery/audits/20260922-stream{2,3}-<slug>-r1/` with
+  `MANIFEST.json`; founder/provider/hosted/physical-device boundaries recorded, never
+  blocking. Founder direction: every owned row must be verified from the real installed
+  iOS and Android apps, not only web.
+- How to take over: `gh pr list --state open` for `codex/home-*`, `codex/stream3-*`,
+  `codex/stream2-home-docs-20260922`, `codex/stream3-social-docs-20260922`; read the two
+  RESUME notes and the newest 02/03 sections; check `list_sessions` for a still-running
+  coordinator or agent before touching Stream 1, the hub, or the stream runtimes.
+
 ## September 22 — peer PR review: 149/151/154 approved pending refreshed CI; 152 blocked
 
 Coordinator reviewed the four PRs opened while Stream1 ran the native journeys.

@@ -1,5 +1,16 @@
 # Pantopus project handoff
 
+## September 22 07:20 UTC — parallel Stream 2/3 resume session
+
+Streams 2 and 3 are being driven by background agents from a second session while the
+original coordinator session continues Stream 1 and all merges; the division of work, the
+branches, docs branches, runtimes, devices, resume notes and take-over steps are recorded
+at the top of [the coordination guide](workstreams/README.md). PR159 reconciles the P01
+bounded-milestone checkmark with the unchanged 8-of-80 closed-row count. Founder direction
+on this date: every backlog row must be verified from the real installed iOS and Android
+apps (simulator/emulator) as well as web, all code committed and pushed at every milestone,
+and all status recorded in the live stream files before a milestone is called done.
+
 ## Current Stream1 publication and verification limits
 
 Paid `codex/paid-gig-integration` is clean/pushed at
