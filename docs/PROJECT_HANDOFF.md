@@ -35,9 +35,9 @@ untouched; duplicate PR158 was already closed. This does not close any acceptanc
 Runtime: retained Stream1 wallet-read-r1 SQL64562/API64561 remains up, ledger79; exact
 P10 scale fixtures are cleaned to zero and18132/18133 are free. Peer runtimes, devices
 and retained fixtures belong to their streams. One heavy native build at a time; the
-coordinator reassigned the slot to Stream2 after confirming no active build/compiler
-process (only an idle Gradle daemon); Stream3 must request a new grant before its next
-native invocation. No simultaneous build is authorized. Private Stream1 continuation:
+coordinator granted the slot to Stream3 after Stream2 released its focused checks
+(no active xcodebuild/GradleMain; idle Gradle daemon96732 retained). Stream3 must check
+processes before each invocation and notify release. No simultaneous build is authorized. Private Stream1 continuation:
 `/private/tmp/pantopus-stream1-wallet-read-r1/RESUME-2026-09-22.md`.
 
 Next: finish/review current CI repairs, serialize code merges on current heads, publish

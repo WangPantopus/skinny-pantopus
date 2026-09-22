@@ -47,7 +47,11 @@ migration policy pass. Reuse the prior installed P10 checkout→expiry→Resume/
 evidence (all20 hashes verified) and current master's passed complete-schema replay.
 
 Evidence: owner `.pantopus-recovery/audits/20260922-stream1-p10-workload-r1/`,10 files;
-MANIFEST SHA256 `37b2f197aa280c6c8475d489ae2fa608e89ed33c3423925c766b7e5d86ffbd80`.
+Capacity extension:10,000 durable attempts plus one later legacy bid; first pass47.6s
+with1 guarded update, repeat81.0s with0 writes. All durable attempts retained. These
+are local timing observations, not hosted throughput guarantees.
+
+MANIFEST SHA256 `6ae2bfc722dcfe2dcde596f535990e596105524da6eb7747eebc451198184487`.
 Scale fixtures are direct synthetic SQL; response controls are labelled loopback
 transport injections. No provider calls, new native acceptance, hosted throughput or
 P10 row closure. Memory/very-large-backlog throughput, provider operations at volume,
