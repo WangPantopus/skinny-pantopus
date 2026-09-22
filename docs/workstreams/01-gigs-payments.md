@@ -1,5 +1,40 @@
 # Stream 1 — Gigs and payments
 
+## September22 — populated Home/payment upgrade preservation verified
+
+No application source changed. Two exact merged Home forwards absent from the retained payment
+runtime were applied to an owned scratch copy:20260921010000 and20260922010000. All15,232 rows
+across387 public/auth/storage/ledger tables retained identical fingerprints, including five
+payments, wallet income/settlement, partial refund, cooling-off/disputed obligations, six package
+statuses and private document/file metadata. Catalog changes were exactly the Home settings
+function and package status constraint; other functions, ACLs, RLS, columns and triggers persisted.
+The existing Home settings and Home-to-gig publication SQL workflows passed and rolled back.
+
+[Ten-file evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-combined-home-upgrade-r1/RESULT.md),
+MANIFEST07796b3323983c6c928a4f4e277872e60566f6c7a9e1acb5e20219ccda38e47a.
+Private-copy restore required original GraphQL wrapper and PostGIS ACL restoration; all387
+baseline fingerprints matched. One Refund CHECK spelling difference was semantically equal
+for five valid statuses, invalid andNULL. These local restore mechanics changed no app/hosted
+schema or grant. The22 retained paid bodies match merged source;222 differs by one comment only.
+The ledger84 was preserved throughout. Synthetic identities/provider references/file metadata;
+no real provider call or object-byte acceptance. This bounded rehearsal does not close G03/G04
+or establish canonical populated/hosted ledger adoption. Remaining190 integration still matters.
+
+Cleanup dropped only the new owned scratch database and all its fixtures. Original retained
+postgres still matches all387 fingerprints and ledger84; existing containers remain up. No
+API/browser/native runtime started. Raw dump/operator logs remain private and outside evidence.
+Next root boundary: source review of actual booking cancellation/refund failure recovery, which
+is not covered by the accepted booking receipt/account-link journeys. No app edit or new booking
+fixture yet. Stream2 holds the native slot for192; Stream3 has published195 as a one-file
+current-master repair and continues independent local work.
+
+PR184 merged958f6a411 after CI35762588714;185 merged96356ea80 after CI35763379470.186 now
+933b60326 runs freshCI35764010625. Current-master963 aggregate35763998922 still runs; prior
+183/184 master aggregates were cancelled by subsequent integrations, not accepted as green.
+Paid integration retains previously accepteda460. Queue186→187→188→189→190→191→192(review)
+→193→194→195; docs161/170/174 last. Whole-row count9closed/71partial-open unchanged.
+
+
 ## September 22, 17:44 UTC — closed PR audit and integration checkpoint
 
 The founder asked whether closing PRs discarded or duplicated earlier work. The complete

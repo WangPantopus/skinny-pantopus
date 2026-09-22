@@ -1,5 +1,8 @@
 # Three-stream coordination
 
+Current checkpoint: PR184/185 merged after exact-head full checks;186933b60326 runs freshCI35764010625. Currentmaster963 aggregate remains pending. Root's populated two-Home-forward rehearsal preserved15,232 rows across387 tables and existing financial/document records; two affected SQL workflows passed, scratch fixtures removed, original ledger84 and all table fingerprints unchanged. No G03/G04 closure or hosted adoption. Root source-reviewing booking cancellation recovery; no active API/browser. Stream2 owns native slot for192; Stream3's195 now has only its profile repair. Details/evidence in newest01 section;9closed/71partial-open unchanged.
+
+
 ## Native slot update — September22, 17:50 UTC
 
 Stream3 explicitly released the slot after N02 HTTP500/retry and N03 profile-block reopen
