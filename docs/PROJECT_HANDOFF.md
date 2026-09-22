@@ -1,5 +1,52 @@
 # Pantopus project handoff
 
+## CURRENT RESUME POINT — September 22, 2026, 20:00 UTC
+
+The founder requested that all three streams summarize **all implemented fixes, verification, evidence, cleanup and next actions** so another agent can resume without losing or repeating work. That consolidation is now the active documentation milestone. These current summaries supersede older chronological checkpoints; original reports/history remain preserved.
+
+Read the current summary at the top of each existing status file:
+
+- [Stream1 — payments, gigs and coordinator](workstreams/01-gigs-payments.md): complete grouped repair/evidence history, current queue,30 owned/shared row dispositions, Stripe TEST cleanup and ledger preservation.
+- [Stream2 — Home and household](workstreams/02-home-household.md): recovered published handoff, all40 Home rows, earlier settings/privacy/member/share repairs plus native bills/packages/guest/Emergency work, exact APK/CI/cleanup and runtime patch.
+- [Stream3 — accounts, social and notifications](workstreams/03-accounts-social.md): grouped web/native/auth/scheduling/social work,10 N/A row dispositions, provider/device limits, exact source/APK/evidence and prerequisites.
+
+**Acceptance count remains9 closed /71 partial-open out of80.** Closed: H01–H06,R01–R02,G02. P01 is a completed bounded tip-reservation milestone and is not counted as a whole closed row. The existing [80-row backlog](REMAINING_WORK_2026-09-11.md) remains authoritative; PRs, checks and partial journeys are different units, so there is no defensible percentage of total functionality inferred from them. This documentation pass closes no acceptance row.
+
+### Verified Git / integration snapshot
+
+| Item | Current source / evidence | Next action |
+|---|---|---|
+| Master | `2048d971396a4a2e83e4d61bb612b395760cf97c`, PR191 merged;189/190/191 exact-head CI passed | Recheck remote and aggregate master CI; never infer aggregate success from canceled older runs. |
+| PR192 | `ea044ebea7aedfae5c939e65ac1bccd841fc9e47`; CI35776302859 native jobs pending. Preserves both accepted Edit and Delete; original installed source `ee69cbd8d` retained. | Finish fresh CI, then merge reviewed head. No repeat native build/journey needed for unchanged preserved behavior. |
+| PR193 | `877ad94f6802227bc02f654d26a617203874227c`, CI35759729609 passed; booking payment wording/notice destination | Update after192; require fresh exact-head CI. |
+| PR194 | `8b2bd6e05f871d0f9ac501601313cece64abaa8e`, CI35761158118 passed; registration return | Update after193; require fresh exact-head CI. |
+| PR195 | `3b374454ad07060cf5dcaa1ce02fc48b3be4c88e`, CI35768401037 passed; Android Local block state on reopen | Update after194; preserve Persona/Relationship policy separation. |
+| PR196 | `3f82ae4786362a31069539080bff28f603e68f2d`, CI35771063543 passed; booking atomic cancellation/recovery and stale-capture guard | Update after195; public231 must follow230 without rewriting applied history. |
+| Docs161/170/174 | Open. Home summary through4d33f5f53 is incorporated in live02; social summary is in live03; full history preserved. | Integrate docs last, preserving the current summaries and all original evidence/history. PR46 remains untouched. |
+
+### Runtime, evidence and source preservation
+
+The single live hub is `/Users/yingpengwang/pantopus-coordination`, branch `codex/workstream-coordination` (PR174). Application worktrees, owners and current reservations are in the [coordination summary](workstreams/README.md). Local main `/Users/yingpengwang/skinny-pantopus` remains on stale master69be3c11d with unrelated user work; do not reset or clean it. Current remote state must be refreshed before the next merge.
+
+Stream1 API18132/Next18133/browser are stopped; all seven latest TEST intents canceled/refunded and owned SQL/auth fixtures zero. Retained SQL64562/PostgREST64561 has ledger88 including private prototypes; preserve every applied row and archived SQL. Stream2 API18143/LAN18142 and SQL64554/PostgREST64553 remain retained with59-row ledger plus a documented noncanonical boost overlay; preserve the backend's local accepted Emergency route patch and existing synthetic fixtures. Stream3 API18130/Next18131 are stopped, SQL64532/PostgREST64531 retained. Stream2's published handoff releases the heavy native slot; it is **unassigned**, and no new build is part of this handoff.
+
+Coordinator independently validated96 existing Stream1/Stream2/latest Stream3 manifests and2,084 listed file hashes; all matched. This checks evidence integrity, not fresh product acceptance. Latest PR192 coordinator bundle has12 files, MANIFEST9993d82400671c7a5249ac0e8cb159a5c303cfda2b4ba013b663212226ffa5d0. Its earlier claimed mirror was missing at the first check; Stream2 subsequently published16 files at the original path, MANIFEST67224abeddb3f92194dedb785f283bd8b4f4f961e696eee42e710ddf13f466ed. Both are preserved, with exact source/limits in live02. Task replies returning no displayed output did not mean that pushed work was absent.
+
+The closed-PR audit found no discarded application changes:171/172 were integrated through164–168,38–42 through43;159 and remaining158 documentation are preserved in still-open174/170. Do not recreate their code or repeat the audit. All credentials, device tokens, raw operator logs and database archives remain private outside Git/chat.
+
+### Resume order and boundaries
+
+Finish the exact-head integration queue above, reconcile final master/ordered migrations and publish docs. Then continue one concrete unresolved criterion per existing stream, preserving unchanged accepted journeys and all existing designs. No new unit tests/coverage target, speculative replacement implementation or parallel tracker. A stale open row alone is not a missing feature.
+
+Existing decisions/access boundaries remain explicit in the stream tables: P04/P05 fee payer/recipient, issue/bill/package attachment contract and member Issues entry point, Persona personal-block policy, daily-agenda delivery policy, activated Auth/address/storage/Connect providers, release-candidate devices/push and hosted deployment. N02 means physical Android acceptance; A04 means address/Smarty/geography, while OAuth is A01. Do not broaden or misassign these gates; continue independent local cases while awaiting genuine prerequisites.
+
+---
+
+## Historical checkpoints and original handoff — preserved
+
+The following “current”, “active”, “pending”, runtime and next-step paragraphs describe their dated snapshots. They are not current reservations or permission to repeat work. The resume point above and live status summaries take precedence.
+
+
 ## Current coordinator checkpoint — September22, 19:05 UTC
 
 PR189 merged6bec1e878 after exact073f0806a fullCI35766200401. PR190 integration7a555c92e

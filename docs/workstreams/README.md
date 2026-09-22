@@ -1,5 +1,53 @@
 # Three-stream coordination
 
+## CURRENT RESUME POINT — September 22, 2026, 20:00 UTC
+
+The founder requested that all three streams summarize **all implemented fixes, verification, evidence, cleanup and next actions** so another agent can resume without losing or repeating work. That consolidation is now the active documentation milestone. These current summaries supersede older chronological checkpoints; original reports/history remain preserved.
+
+Read the current summary at the top of each existing status file:
+
+- [Stream1 current summary](01-gigs-payments.md), [Stream2 current summary](02-home-household.md), [Stream3 current summary](03-accounts-social.md).
+- [Shared handoff](../PROJECT_HANDOFF.md), [authoritative80-row backlog](../REMAINING_WORK_2026-09-11.md), [verification-first rules and preserved reports](../VERIFICATION_FIRST_2026-09-13.md).
+
+### Single live location and existing owners
+
+Live hub: `/Users/yingpengwang/pantopus-coordination`, `codex/workstream-coordination`, PR174. Stream files here are live; supplemental docs161/170 retain history and must not overwrite current summaries during merge. No new tasks, agents, tracking documents or accepted-journey reruns were needed for consolidation.
+
+| Existing task / owner | Application checkout and source | Current owned runtime |
+|---|---|---|
+| Stream1/coordinator `01a0c0d1-0703-70c3-b842-6d01bc8ca48b` | `/private/tmp/pantopus-paid-gig-integration`, `codex/booking-cancellation-recovery`,3f82ae4786 clean/pushed. Separate PR192 integration checkout detachedea044ebea; PR190 checkout7a555c92e preserved. | API18132/Next18133/browser stopped. Retain SQL64562/PostgREST64561 ledger88; Stream1 simulatorC2BCF36A… and own AVD. |
+| Stream2/Home `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` | `/private/tmp/pantopus-workstream-home`, `codex/native-emergency-edit-20260922`,ee69cbd8d; untracked Next cache preserved. Docs161 at4d33f5f53 incorporated into live02. Original checkout remains behind integration intentionally. | API18143/LAN18142, SQL64554/PostgREST64553 retained. Backend detachedcc885ab23 has accepted local home.js patch/backup; preserve. Android5556/iOS6F914A30…; physical iPhone unavailable4016. |
+| Stream3/accounts-social `01a0a824-301b-74e3-a1d9-b205714ed7a1` | `/private/tmp/pantopus-workstream-accounts-social`, local/stream3-ios-integration b956a0076; existing unrelated web edits preserved. Android `/private/tmp/pantopus-stream3-android` clean3b374454a. | API18130/Next18131 stopped; SQL64532/PostgREST64531 and Mailpit64535/36 retained. Android5554/iOS0AE16FA0… preserved. |
+
+**Heavy native slot: unassigned.** Stream2 released it in its published handoff. Do not infer a Stream3 N03 grant or launch a build during this documentation task. Before any later build/install, coordinator records the owner, actual process check and resource reservation; idle daemons are not permission to kill caches or peer processes.
+
+One writer per application worktree. Stream1 owns P/G/O/L and shared integration; Stream2 H/R/I/D/F/M; Stream3 N/A; U checks accompany each. Coordinator owns shared handoff/backlog/README and merges. Preserve source/fixtures, compare existing and archived implementations first, reproduce before a minimal repair, and preserve all visual/navigation designs. No new unit tests or unit coverage target.
+
+### Current integration order
+
+| Item | Current source / evidence | Next action |
+|---|---|---|
+| Master | `2048d971396a4a2e83e4d61bb612b395760cf97c`, PR191 merged;189/190/191 exact-head CI passed | Recheck remote and aggregate master CI; never infer aggregate success from canceled older runs. |
+| PR192 | `ea044ebea7aedfae5c939e65ac1bccd841fc9e47`; CI35776302859 native jobs pending. Preserves both accepted Edit and Delete; original installed source `ee69cbd8d` retained. | Finish fresh CI, then merge reviewed head. No repeat native build/journey needed for unchanged preserved behavior. |
+| PR193 | `877ad94f6802227bc02f654d26a617203874227c`, CI35759729609 passed; booking payment wording/notice destination | Update after192; require fresh exact-head CI. |
+| PR194 | `8b2bd6e05f871d0f9ac501601313cece64abaa8e`, CI35761158118 passed; registration return | Update after193; require fresh exact-head CI. |
+| PR195 | `3b374454ad07060cf5dcaa1ce02fc48b3be4c88e`, CI35768401037 passed; Android Local block state on reopen | Update after194; preserve Persona/Relationship policy separation. |
+| PR196 | `3f82ae4786362a31069539080bff28f603e68f2d`, CI35771063543 passed; booking atomic cancellation/recovery and stale-capture guard | Update after195; public231 must follow230 without rewriting applied history. |
+| Docs161/170/174 | Open. Home summary through4d33f5f53 is incorporated in live02; social summary is in live03; full history preserved. | Integrate docs last, preserving the current summaries and all original evidence/history. PR46 remains untouched. |
+
+### Resume safely
+
+Each current stream summary contains completed code groups, precise source/CI, existing evidence paths and hashes, row-specific open criteria, cleanup and next action. Coordinator checked96 manifests/2,084 listed hashes without repeating product journeys. Home's pushed summary existed despite empty task replies and is now incorporated; use it instead of recreating work. The all-app count is9 closed/71 partial-open; no new closure from this handoff.
+
+Do not overwrite applied ledger rows, promote private prototype histories into canonical migrations, clear untracked user work, reset dirty runtime patches, or reuse another stream's ports/device/fixtures. Refresh exact Git/PR/CI state before acting; read private operational notes without exposing credentials or raw logs. Accepted unchanged evidence is reusable. Skipped CI jobs and unavailable provider/device boundaries remain explicit; no silent assumption of end-to-end success.
+
+The original working agreement and historical grants remain below for context. Their dated branch/slot/port snapshots are superseded by this summary, while preservation and single-writer rules continue to apply.
+
+---
+
+## Historical coordination and grants — preserved
+
+
 ## Current coordinator checkpoint — September22, 19:05 UTC
 
 PR189 merged6bec1e878 after exact073f0806a fullCI35766200401. PR190 integration7a555c92e
