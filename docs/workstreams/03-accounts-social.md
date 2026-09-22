@@ -3878,3 +3878,18 @@ non-fatal hub `chat.local_profile_identity_lookup_error` remains a local schema 
 
 The durable private bundle now has 166 files; MANIFEST SHA-256 is
 `f1996b9a0d3b3d284c73eab0f643bee3b484927daf43c85e9c4655bcca74ba00`.
+
+## PR168 description and N03 Android boundary reconciliation (2026-09-22)
+
+PR [#168](https://github.com/WangPantopus/skinny-pantopus/pull/168) now describes the final
+implementation and current evidence rather than the retired founder-stop/ktlint-failure state.
+The body records the existing handshake 404 → plain-follow fallback, the blocked-profile Follow
+visibility guard, the blocked-chat refusal banner, the extracted complexity helper and ktlint
+repair, retained installed APK SHA `83cc0db08992e83dd1faa87a7baacdf582624a3e847f965f6361ab5fdd2cdf93`,
+and current CI run `35746647258`. It explicitly preserves the unverified local-neighbor
+Follow-row-hide branch: the installed Persona fixture has no local-home residency context, so its
+Persona Follow affordance remains a distinct scope and is not claimed as local-neighbor evidence.
+
+The current PR CI has Detect changes, deployment/migration safeguards and complete schema replay/lint
+passing; Android lint/assemble and emulator checks are still running. No new source, build, schema
+or unit-test work was performed during this documentation update.
