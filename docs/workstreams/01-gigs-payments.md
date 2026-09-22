@@ -1,5 +1,44 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — P02 natural >24h provider discovery accepted (bounded web path)
+
+Paid53e738cfc unchanged (bindings for gigTipProof/stripeService/pays/TipModal/
+CompletionFlow/tip migrations in the audit). Runtime: retained owned
+pantopus-stream1-wallet-read-r1 (PostgREST64561/SQL64562, paid chain present), private
+API18132 (real gigs/pays routers, real stripeService, real Stripe TEST read-only with
+writes refused), unchanged Next18133, built-in browser at emulated1280x900. Fixture
+restored the app's own September20 durable originals for requests0b3bec81 (500c) and
+61d78415 (50c) via reserve_gig_tip_original plus one privileged restore of the audited
+provider_started_at/provider_params byte-identical, intent id absent (lost create
+reply); no clock moved. The intents were27.3h/27.1h old at run time; customer
+cus_VIU8… is deleted at Stripe yet still lists them.
+
+Real UI: fresh signed-in browser on gig0101 reopened the TipModal from
+preview.activeRequestId (Retry same tip/Cancel tip). Retry→POST/tip200 (574ms):
+claim→paymentIntents.list customer created.gte=provider_started_at−24h returned4→
+matched pi_3UHtAF4ZIe1twFvL1hOr5aRa by tip_request_id→intent+charge retrieve→record:
+payment refunded_full, state succeeded, receipt bound, payment_succeeded_at
+2026-09-20T22:31:31Z. UI showed the existing refund-history copy and Tip recorded.
+No tip_received notice, by the existing captured_hold-only trigger. On gig0104:
+injected list connection failure→POST202, state pending, Retry retained, no fake
+success; lost committed reply plus double-click→exactly one POST, canceled intent
+pi_3UHtP7… recorded (canceled/0c receipt), UI "The tip result is unknown. Keep and check
+the same request."; stale retry→200 in5ms via reserve read only, modal closed on
+canceled; reloads reopened no modal and made no provider call. Worker actor GETs on
+the owner's request/preview returned403 TIP_FORBIDDEN, unauthenticated401. Totals:3
+POST/tip,5 Stripe reads,0 writes,0 errors. release_gig_tip_original LEASE_LOST after
+record is the existing caught benign path.
+
+Limits: synthetic identity/ancillary feeds, built-in browser only, fixtures2/3 not
+replayed (same path), no native/hosted/Connect/live-mode, canceled toast not captured,
+historical transfer/reversal untouched. Cleanup: owned rows0 (SIGTERM cleanup and direct
+recount), API/Next stopped, ports18132/18133 free, private dist dir removed, tsconfig
+auto-edit reverted, worktree clean, retained containers untouched, Stripe intents
+unchanged, tab closed/viewport reset. Owner audit20260922-stream1-tip-age-discovery-r1:
+22 files, MANIFEST8a0530095c1ed0877bb758b231e63a5c3c0436534e1cb045e5d8c3b78fac7039.
+Coordination bookkeeping (CI35607497359 SUCCESS, PR143/144 merges, grants) is in the
+[live guide](README.md). P03 installed native tips is the next Stream1 boundary.
+
 ## Coordinator package baseline assignment
 
 Reviewed12 package-source artifacts and54 Git bindings. Stream2 has one actual UI
