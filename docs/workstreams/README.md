@@ -1,5 +1,41 @@
 # Three-stream coordination
 
+## Current coordinator checkpoint — September22, 19:05 UTC
+
+PR189 merged6bec1e878 after exact073f0806a fullCI35766200401. PR190 integration7a555c92e
+retains tip and won-dispute worker guards;128 existing regressions pass. Migration guard
+caught225 sorting behind merged226; public230 preserves the original225 SQL/ledger and
+accepts its exact prior transformation. RealSQL preservation passed; freshCI35771059661 runs.
+Queue190→191→192→193→194→195→196, then docs161/170/174;46 untouched.
+
+PR1963f82ae478 is published with real booking cancellation/refund recovery and capture-race
+repairs. Seven StripeTEST bookings covered database rollback, pending recovery, manual worker,
+captured refund, both approval/cancel race orderings, forbidden actor/concurrent retry and lost
+reply.107 existing checks pass; no new unit tests. FullCI35771063543 runs.31-file evidence
+MANIFEST76e68a5cf728e489b74ed6b5a6d45bbe401c125ab14bbddc911de1bca1603d86.
+All owned provider/SQL/auth fixtures cleaned; API18132/Next18133 stopped and Chrome closed.
+Retain ledger88 unchanged: original84 plus private228/229, public230/231; earlier224 remains
+as previously archived. Public231 matches the tested cancellation function exactly. No
+hosted deployment, natural scheduler delivery or whole-row closure is claimed.
+
+Coordinator recovered Stream2's completed11-file ee69cbd8d preservation evidence and copied
+it unchanged to durable20260922-stream2-native-emergency-edit-preservation-r1; all hashes
+verified, MANIFEST224096ef2d8be6fc42133397140131aef8f663eb7c8e0c58c0170d96e6e4521e.
+Installed title-only preservation,403/retry, malformed type and wrong id/home retain the form;
+coordinator independently confirmed HomeEmergency/override/audit counts0.192 fullCI35764090022
+passed. Its prior bundle claim was missing; this recovered bundle is the actual durable owner.
+Last four Stream2 follow-up turns completed with no output; no new progress/slot release or
+40-row accounting is inferred. Existing backend/LAN runtime is preserved. Hold192 for final
+handoff accounting; the completed journeys must not be rerun.
+
+Stream3's187-file bundle hashes pass, MANIFEST3f0a7bac2613d80a2a6d314e1b8eaa51c5671b4a412fc071aec989fc3a3edb47.
+Android cold-process session/profile200 and logout200 are accepted within local scope;
+portfolio chooser reaches actual upload500 due invalid storage credentials, no partial File.
+iOS installed destination remains a precise UI-control boundary.1953b374454a freshCI35768401037
+waits Android lint/test/assemble. Stream3 continues10-row reconciliation independently.
+Count remains9closed/71partial-open; P01 is a separate bounded milestone.
+
+
 ## Active cancellation repair — September22, 18:30 UTC
 
 Actual Chrome cancellation under a45-second refund-queue SELECT denial returned200 and a

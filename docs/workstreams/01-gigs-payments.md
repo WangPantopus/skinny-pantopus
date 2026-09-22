@@ -1,5 +1,73 @@
 # Stream 1 — Gigs and payments
 
+## Current coordinator checkpoint — September22, 19:05 UTC
+
+PR189 merged6bec1e878 after exact073f0806a fullCI35766200401. PR190 integration7a555c92e
+retains tip and won-dispute worker guards;128 existing regressions pass. Migration guard
+caught225 sorting behind merged226; public230 preserves the original225 SQL/ledger and
+accepts its exact prior transformation. RealSQL preservation passed; freshCI35771059661 runs.
+Queue190→191→192→193→194→195→196, then docs161/170/174;46 untouched.
+
+PR1963f82ae478 is published with real booking cancellation/refund recovery and capture-race
+repairs. Seven StripeTEST bookings covered database rollback, pending recovery, manual worker,
+captured refund, both approval/cancel race orderings, forbidden actor/concurrent retry and lost
+reply.107 existing checks pass; no new unit tests. FullCI35771063543 runs.31-file evidence
+MANIFEST76e68a5cf728e489b74ed6b5a6d45bbe401c125ab14bbddc911de1bca1603d86.
+All owned provider/SQL/auth fixtures cleaned; API18132/Next18133 stopped and Chrome closed.
+Retain ledger88 unchanged: original84 plus private228/229, public230/231; earlier224 remains
+as previously archived. Public231 matches the tested cancellation function exactly. No
+hosted deployment, natural scheduler delivery or whole-row closure is claimed.
+
+Coordinator recovered Stream2's completed11-file ee69cbd8d preservation evidence and copied
+it unchanged to durable20260922-stream2-native-emergency-edit-preservation-r1; all hashes
+verified, MANIFEST224096ef2d8be6fc42133397140131aef8f663eb7c8e0c58c0170d96e6e4521e.
+Installed title-only preservation,403/retry, malformed type and wrong id/home retain the form;
+coordinator independently confirmed HomeEmergency/override/audit counts0.192 fullCI35764090022
+passed. Its prior bundle claim was missing; this recovered bundle is the actual durable owner.
+Last four Stream2 follow-up turns completed with no output; no new progress/slot release or
+40-row accounting is inferred. Existing backend/LAN runtime is preserved. Hold192 for final
+handoff accounting; the completed journeys must not be rerun.
+
+Stream3's187-file bundle hashes pass, MANIFEST3f0a7bac2613d80a2a6d314e1b8eaa51c5671b4a412fc071aec989fc3a3edb47.
+Android cold-process session/profile200 and logout200 are accepted within local scope;
+portfolio chooser reaches actual upload500 due invalid storage credentials, no partial File.
+iOS installed destination remains a precise UI-control boundary.1953b374454a freshCI35768401037
+waits Android lint/test/assemble. Stream3 continues10-row reconciliation independently.
+Count remains9closed/71partial-open; P01 is a separate bounded milestone.
+
+
+## Booking cancellation and integration evidence — September22
+
+[PR196](https://github.com/WangPantopus/skinny-pantopus/pull/196) extends the existing service,
+public API, Cancel/Manage screens and non-gig capture preparation. No new table/column/queue
+or parallel service; one new service-only SQL transaction wrapper is necessary to atomically
+reserve the existing refund and cancel the booking. The primary reproduced queue-read failure
+returned200 with no request and a held1250 authorization. A second controlled stale host
+approval captured after release reservation; the minimal capture CAS prevents it. Actual
+reverse ordering stays retryable, then refunds after capture. A lost success reply recovers
+through GET. Legacy inconsistent rows display needs-review without inventing policy.
+
+[31-file cancellation evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-booking-cancellation-r1/RESULT.md),
+MANIFEST76e68a5cf728e489b74ed6b5a6d45bbe401c125ab14bbddc911de1bca1603d86.
+A–D used real Chrome checkout; E–G API-created race fixtures reused that unchanged checkout
+proof and actual StripeTEST pm_card_visa, then real Chrome cancellation. Approval was API;
+unchanged host UI proof is reused from193. Natural scheduler, native booking, decline/no-show,
+all policy permutations and package/cohost recovery remain unverified by this bundle.
+
+Local migration check initially caught the missing compatibility declaration after private228
+had already applied.228 was archived exactly; public229 added the declaration with identical
+pg_get_functiondef. Subsequent serial integration required tip230 and cancellation231;
+all applied versions/SQL remain intact, ledger88, final231 is byte-identical to229. This is
+forward-only candidate promotion, not a rewrite of applied history. The original84 rows remain
+unchanged. Fresh replay/current-head CI are required before integration. Rollout migration→API→web.
+
+[PR190 preserved integration evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-tip-wallet-delivery-r1/RESULT.md)
+now contains24 files, MANIFESTccfad1373925aa234fa77d615071789ecde7fe9a7f28c205b22b673f8b1ce7f6.
+The one worker conflict retains both protected tip states and won-dispute allowance.128 existing
+regressions and current-base migration guard pass.230 checked both exact old/transformed function
+branches in real PostgreSQL, preserving all86 prior rows when advancing to87;231 then to88.
+No accepted payment journey was rerun just for this merge.
+
 ## Active cancellation repair — September22, 18:30 UTC
 
 Actual Chrome cancellation under a45-second refund-queue SELECT denial returned200 and a
