@@ -242,6 +242,7 @@ class PublicProfileViewModel
          * user-scoped mutation must use this, never [routeIdentifier].
          */
         private var userId: String = routeIdentifier
+        private var profileKind: PublicProfileKind = PublicProfileKind.Persona
 
         private val _state = MutableStateFlow<PublicProfileUiState>(PublicProfileUiState.Loading)
         val state: StateFlow<PublicProfileUiState> = _state.asStateFlow()
@@ -631,25 +632,30 @@ class PublicProfileViewModel
 
             // Personal UserBlock rows are deliberately distinct from the
             // Relationship graph: GET /:id/relationship reports only the
-            // latter. Resolve the existing personal block list first so a
-            // fresh profile navigation cannot restore Follow/Connect for a
-            // user this account has already blocked. A failed read fails
-            // closed by leaving the profile non-actionable; it must never
-            // turn an unavailable authorization check into an affordance.
-            when (val blockedResult = blocks.blocked()) {
-                is NetworkResult.Success -> {
-                    if (blockedResult.data.blocked.any { it.userId == profileId }) {
+            // latter. The local-neighbor Follow/Connect row is the scope that
+            // uses personal block visibility; Persona and Relationship
+            // affordances retain their established independent policy.
+            if (profileKind == PublicProfileKind.Local) {
+                // Resolve the existing personal block list first so a fresh
+                // profile navigation cannot restore Follow/Connect for a
+                // user this account has already blocked. A failed read fails
+                // closed by leaving the profile non-actionable; it must never
+                // turn an unavailable authorization check into an affordance.
+                when (val blockedResult = blocks.blocked()) {
+                    is NetworkResult.Success -> {
+                        if (blockedResult.data.blocked.any { it.userId == profileId }) {
+                            _canFollow.value = false
+                            _isFollowing.value = false
+                            _connection.value = ProfileConnection.Blocked
+                            return
+                        }
+                    }
+                    is NetworkResult.Failure -> {
                         _canFollow.value = false
                         _isFollowing.value = false
-                        _connection.value = ProfileConnection.Blocked
+                        _toastMessage.value = "Couldn't verify block status. Actions are unavailable."
                         return
                     }
-                }
-                is NetworkResult.Failure -> {
-                    _canFollow.value = false
-                    _isFollowing.value = false
-                    _toastMessage.value = "Couldn't verify block status. Actions are unavailable."
-                    return
                 }
             }
 
@@ -680,6 +686,7 @@ class PublicProfileViewModel
                     val profile = result.data
                     userId = profile.id
                     val kind = derivedKind(profile)
+                    profileKind = kind
                     // A21.2 — the Local archetype renders a real neighbourhood
                     // post feed, so pull the author's posts the way the RN
                     // `PostsTab` does (`GET /api/posts/user/:id`). Persona
