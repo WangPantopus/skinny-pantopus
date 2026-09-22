@@ -1,5 +1,18 @@
 # Stream 1 — Gigs and payments
 
+## September22 — consolidated provider cost/activation draft
+
+Existing [release checklist](../release/prod-config-checklist.md) updated in hubce56569b9 with
+current official USD pricing, current integration paths, partial base$70/month or$116/month
+equivalent with the displayed Smarty annual option, and explicit excludedAWS/usage/recovery
+costs. No purchase/activation or full L01closure. Three-file durable provider-cost-plan-r1
+MANIFEST `6642347a4e0f16d61ccfd6e71611ca42c12f053b5ca7a10c3b3c1a223db7659c` binds source, budget arithmetic and limits. All80-row counts unchanged.
+Actualaccount entitlements, exactAWS sizing/traffic andSmarty allowance, recovery objective,
+geography/caps and founder policies remain required before the combined activation review.
+MailboxSMS placeholder is a source-only M lead sent to Stream2; no recipient contacted.
+No runtime changes; Stream1appclean/API+Nextstopped/retainedledger84. Queue177iOSCIpending.
+
+
 ## September22 — tip wallet release delivery completed; PR190
 
 Branch `codex/tip-wallet-release-delivery`, `6c49692d690249568d8a8036c5d9a23dd6883194`,

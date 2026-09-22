@@ -1,5 +1,7 @@
 # Three-stream coordination
 
+Provider preparation2026-09-22: current consolidated L01 pricing/activation draft is in [the existing release checklist](../release/prod-config-checklist.md). No purchases/activation; exactAWS/entitlement/policy components remain. See newest Stream1 checkpoint; counts8closed/72partial-open unchanged.
+
 ## Current coordinator checkpoint — September 22, 16:13 UTC
 
 PR1906c49692d6 completes bounded tip wallet release delivery: fresh actual TEST/web/API/SQL,

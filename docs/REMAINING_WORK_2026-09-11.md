@@ -252,7 +252,7 @@ limits remain. See live01/03 for source-bound evidence and next actions.
 
 ## 13. Final paid bundle and pilot
 
-- [ ] L01 **Launch:** Assemble all needed paid services/subscriptions/provider activation and costs into one final launch-preparation bundle. Do not activate services piecemeal during feature work.
+- [ ] L01 **Launch:** Assemble all needed paid services/subscriptions/provider activation and costs into one final launch-preparation bundle. Do not activate services piecemeal during feature work. September22: existing [production checklist](release/prod-config-checklist.md) now holds the consolidated source/pricing draft and explicit unquoted components; no purchase/activation. Exact account entitlements, sizing/traffic/allowance quotes and policy decisions remain before a final priced approval.
 - [ ] L02 **Launch:** Complete the paid/provider scenarios that depend on that approved bundle and run the final build-specific Home/Pulse/Beacon acceptance matrix.
 - [ ] L03 **Launch:** Perform the approved cutover, verify real post-deployment behavior and preserve rollback capability.
 - [ ] L04 **Launch:** Run a small consenting pilot, fix observed usability/reliability problems, and measure real first value/voluntary returns without collecting unnecessary private content. Engineering checks cannot establish product-market fit.
