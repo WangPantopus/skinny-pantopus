@@ -1,5 +1,30 @@
 # Pantopus project handoff
 
+## Active cancellation repair — September22, 18:30 UTC
+
+Actual Chrome cancellation under a45-second refund-queue SELECT denial returned200 and a
+terminal success page while TEST1250 remained authorized and no refund request existed.
+Reload offered no recovery. Exact original grant restored; reproduction.json/provider/SQL
+receipts retained privately under stream1-booking-cancel-r1. Normal A release passed.
+
+Root candidate extends existing booking service/public route/refund orchestration and web
+cancel/manage screens. Forward20260922022800 atomically reserves the existing refund request
+with Booking cancellation and a frozen decision in existing Payment metadata; no new table,
+column, screen, service or unit test. Applied only to retained owned SQL64562: ledger84→85,
+all84 prior rows exact, anon/authenticated execution denied and service_role allowed.
+Source SHA2561f04aee96c7a34586d1f6b6d91b88430d5fab3c3d8d6ce4223af2f3596550d3b.
+Candidate remains uncommitted and NOT accepted.64 existing relevant checks and web typecheck
+pass; real fresh transaction-failure/provider-failure/retry/worker verification is underway.
+Legacy B now truthfully displays payment-needs-review; no historic cancellation policy is
+invented. B's real held TEST authorization still needs explicit cleanup. API restarted at
+owned PID/session72039, Next50617, Chrome257777434 active. No fault currently active.
+
+PR188 merged715d62fed after exact e18fab7ae CI35765718055.189073f0806a runs fresh
+CI35766200401.192 remains held for installed preservation;195 Android lint/test/assemble
+failed35763514679 and its owner is assigned the exact-job repair. Stream2 retains native slot.
+No whole-row closure;9closed/71partial-open. Prior checkpoint/runtime paragraphs are history.
+
+
 ## Current checkpoint — September 22, 18:15 UTC
 
 PR186 merged d845ed22d after fresh CI35764010625; PR187 merged 7c4a2702f after
