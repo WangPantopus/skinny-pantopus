@@ -1,5 +1,30 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — P09 installed iOS refund and hold release (bounded native acceptance)
+
+Fresh runtime-p08-native.cjs (GIG_COMPLETION_BUCKET set), fixtures f9200390, iOS owner
+C2BCF36A + Android worker Pantopus_Stream1_Start_R2 (tokens retained, no re-login). Setup:
+Accept→4242→finalize-accept200 (authorized1250), Android start200, Android photo delivery
+(two409 from an orphaned completion File row of the previous run — same gig/user/bytes id,
+"Retain completion file cleanup records" protection, removed as supabase_admin under
+replica mode — then upload201/mark-completed200), iOS back+deep link→Confirm completion→
+complete200→captured_hold1250. Refunds and hold releases→Request a refund→5.00→Continue→
+"Submit this refund request?"→Request refund→POST refund200, Stripe re_…KVO1u00 500,
+Refund row succeeded, Payment refunded_partial500, History "$5.00 refund completed…".
+Lost committed reply on the second5.00: server committed (re_…qpvSpqi, refunded1000,
+two Refund rows) while the reply was destroyed; UI "The result is not confirmed. Check
+status to recover this request."→Check status→GET refunds200→History shows both refunds,
+refundCalls[500,500] only. With5.00 retained and $2.50 remaining, Continue disabled.
+Gig detail shows Partially Refunded. Gig0102: Accept→4242→authorized750 ("Authorization
+hold $7.50")→Release authorization hold→Continue→"Release this authorization hold?"→
+Release hold→POST refund200→intent pi_…17W8VMg7 canceled, Payment canceled, gig assigned,
+History "$7.50 authorization hold released. No captured charge was refunded."
+Limits: synthetic identity/Connect, local bucket, no socket push (deep link does not
+refetch an already-open detail), toasts not captured, remaining250 refunded by cleanup,
+no dispute/3DS/transfer job this round. Cleanup: re_…jx9SqOL250 (charge fully refunded
+1250), customer deleted, owned rows0 incl. File, bucket removed, API/devices stopped,
+worktree clean. Owner audit20260922-stream1-p09-native-r1 MANIFEST46227a8c58c06f44198bba35a796b019ee5e2ebab7f759196303d29881a07c70.
+
 ## September 22 — P08 installed iOS+Android paid-gig journey (bounded native acceptance)
 
 Harness runtime-p08-native.cjs (adapted accepted wallet-release harness; Bearer→fixture

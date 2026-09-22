@@ -1,5 +1,25 @@
 # Three-stream coordination
 
+## September 22 — P09 installed iOS refund / hold-release journey accepted (bounded)
+
+Same native harness and both installed clients re-ran the paid journey to capture, then
+exercised the existing owner Refunds and hold releases sheet against real Stripe TEST:
+partial $5.00 refund (real refund, Refund row, refunded_partial, History copy); a second
+$5.00 request with the committed reply lost showed "The result is not confirmed. Check
+status to recover this request." and Check status recovered both refunds with no
+duplicate provider call; an over-limit amount (5.00 with $2.50 remaining) disables
+Continue; gig 0102 Accept→authorize→Release authorization hold cancelled the real intent,
+Payment canceled, gig stays assigned per the dialog copy. One fixture remnant surfaced:
+an orphaned completion File row from the earlier run's Gig delete made the deterministic
+proof-file reserve return 409 (UI "Couldn't send your proof…", draft kept); removed under
+replica mode and the harness cleanup now deletes owned File rows. Not a reproduced
+production defect; recorded as a source observation for retries with identical proof
+bytes after a failed/soft-deleted file. Limits: synthetic identity/Connect, local Storage
+bucket, no socket push, no dispute/3DS, remaining $2.50 refunded by cleanup. Cleanup: full
+refund of the capture, release intent canceled, customer deleted, owned rows0, bucket
+removed, devices stopped. Owner audit20260922-stream1-p09-native-r1 (66 files),
+MANIFEST46227a8c58c06f44198bba35a796b019ee5e2ebab7f759196303d29881a07c70. Master CI on d2c2ea62c still queued/running; paid adoption waits for it.
+
 ## September 22 — P08 installed iOS+Android paid-gig journey accepted (bounded); PR145 merged
 
 Stream3 PR145 (unverified-login403 feedback, reviewed with its a01-fix-verification
