@@ -7,7 +7,8 @@ import com.squareup.moshi.JsonClass
  * DTOs for the Home Emergency info endpoints under
  * `backend/routes/home.js`:
  *  - GET  /api/homes/:id/emergencies (line 5406)
- *  - POST /api/homes/:id/emergencies (line 5442)
+ *  - POST /api/homes/:id/emergencies
+ *  - PUT  /api/homes/:id/emergencies/:emergencyId
  *
  * Backend `HomeEmergency.type` is one of nine constants:
  *   shutoff_water · shutoff_gas · shutoff_electric · breaker_map ·
@@ -42,7 +43,7 @@ data class GetHomeEmergenciesResponse(
     val emergencies: List<HomeEmergencyDto>,
 )
 
-/** `POST /api/homes/:id/emergencies` body. */
+/** `POST`/`PUT` emergency body. */
 @JsonClass(generateAdapter = true)
 data class CreateEmergencyRequest(
     val type: String,
@@ -51,8 +52,14 @@ data class CreateEmergencyRequest(
     val details: Map<String, String>? = null,
 )
 
-/** `POST /api/homes/:id/emergencies` envelope. */
+/** `POST`/`PUT` emergency envelope. */
 @JsonClass(generateAdapter = true)
 data class CreateEmergencyResponse(
     val emergency: HomeEmergencyDto,
+)
+
+/** Envelope for `DELETE /api/homes/:id/emergencies/:emergencyId`. */
+@JsonClass(generateAdapter = true)
+data class DeleteEmergencyResponse(
+    val message: String? = null,
 )

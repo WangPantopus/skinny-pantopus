@@ -42,6 +42,17 @@ class PrivacyHandshakeRepository
             body: FollowPreferencesBody,
         ): NetworkResult<FollowPreferencesResponse> = safeApiCall { api.updatePreferences(personaId, body) }
 
+        /** Plain follow (no handshake body) for when the handshake routes are flag-gated off. */
+        suspend fun plainFollow(personaId: String): NetworkResult<HandshakeSubmitResponse> =
+            safeApiCall {
+                val response = api.plainFollow(personaId)
+                if (response.isSuccessful) {
+                    response.body() ?: HandshakeSubmitResponse()
+                } else {
+                    throw retrofit2.HttpException(response)
+                }
+            }
+
         /** Returns either the success payload or a typed [HandshakeError]. */
         suspend fun submit(
             personaId: String,

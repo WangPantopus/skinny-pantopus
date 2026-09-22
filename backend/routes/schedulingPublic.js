@@ -414,6 +414,7 @@ router.get('/booking/:token', previewLimiter, asyncHandler(async (req, res) => {
       policy_snapshot: booking.policy_snapshot || null,
     },
     actions: bookingActionState(booking, eventType, payment ? payment.amount_total : null),
+    cancellation_payment: await payments.cancellationPayment(booking),
     payment,
     eventType: eventType ? publicEventTypeView(eventType) : null,
     page: page ? { ...publicPageView(page), cancellation_policy: page.cancellation_policy || null } : null,
@@ -480,7 +481,7 @@ router.post('/booking/:token/cancel', bookingWriteLimiter, validate(tokenCancelS
   if (!ctx) return res.status(404).json({ error: 'NOT_FOUND' });
   try {
     const updated = await bookingService.cancelBooking(ctx.booking.id, ctx.booking.invitee_user_id, req.body.reason, 'invitee');
-    res.json({ booking: { id: updated.id, status: updated.status } });
+    res.json({ booking: { id: updated.id, status: updated.status }, cancellation_payment: updated.cancellation_payment });
   } catch (err) {
     if (err.statusCode) return res.status(err.statusCode).json({ error: err.code || 'ERROR', message: err.message });
     throw err;

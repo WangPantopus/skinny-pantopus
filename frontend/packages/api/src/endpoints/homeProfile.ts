@@ -118,9 +118,17 @@ export async function createHomeBill(homeId: string, data: {
 }
 
 export async function updateHomeBill(homeId: string, billId: string, data: Partial<{
+  bill_type: string;
+  provider_name: string;
   status: string;
   paid_at: string;
+  paid_by: string;
   amount: number;
+  currency: string;
+  period_start: string;
+  period_end: string;
+  due_date: string;
+  details: Record<string, unknown>;
 }>) {
   return put<{ bill: any }>(`/api/homes/${homeId}/bills/${billId}`, data);
 }
@@ -280,6 +288,14 @@ export async function createHomeEmergency(
   data: { type: HomeEmergencyType; label: string; location?: string | null; details?: Record<string, string> },
 ) {
   return post<{ emergency: any }>(`/api/homes/${homeId}/emergencies`, data);
+}
+
+export async function updateHomeEmergency(
+  homeId: string,
+  emergencyId: string,
+  data: { type: HomeEmergencyType; label: string; location?: string | null; details?: Record<string, string> },
+) {
+  return put<{ emergency: any }>(`/api/homes/${homeId}/emergencies/${emergencyId}`, data);
 }
 
 export async function deleteHomeEmergency(homeId: string, emergencyId: string) {

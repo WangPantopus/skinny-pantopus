@@ -5,7 +5,7 @@
 // blocks with a fallback when cancelling online isn't allowed. Confirms via
 // cancelByToken and lands on the first-class "cancelled" state.
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronLeft, XCircle, MessageCircle } from "lucide-react";
 import clsx from "clsx";
@@ -64,13 +64,16 @@ export default function CancelFlow({ token }: { token: string }) {
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [cancelled, setCancelled] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const generation = useRef(0);
 
   useEffect(() => {
     let cancelledReq = false;
+    generation.current += 1;
     setView(null);
     setLoadError(null);
+    setActionError(null);
+    setSubmitting(false);
     publicBooking
       .getBookingByToken(token)
       .then((res) => {
@@ -86,6 +89,7 @@ export default function CancelFlow({ token }: { token: string }) {
       });
     return () => {
       cancelledReq = true;
+      generation.current += 1;
     };
   }, [token, reloadKey]);
 
@@ -119,20 +123,90 @@ export default function CancelFlow({ token }: { token: string }) {
   }
 
   const { booking, actions, eventType, page, payment } = view;
+  const submit = async () => {
+    if (submitting) return;
+    const requestGeneration = generation.current;
+    setSubmitting(true);
+    setActionError(null);
+    try {
+      const result = await publicBooking.cancelByToken(token, {
+        reason: reason.trim() || null,
+      });
+      if (requestGeneration !== generation.current) return;
+      if (
+        result.booking.id !== booking.id ||
+        result.booking.status !== "cancelled"
+      ) {
+        throw new Error(
+          "Cancellation could not be confirmed. Check your booking and retry.",
+        );
+      }
+      setView({
+        ...view,
+        booking: { ...booking, status: "cancelled" },
+        cancellation_payment: result.cancellation_payment,
+      });
+    } catch (err) {
+      if (requestGeneration !== generation.current) return;
+      setActionError(decodeError(err).message);
+      // A lost reply can follow a committed cancellation. Read the same booking
+      // before offering another cancel; GET never starts a provider operation.
+      try {
+        const current = await publicBooking.getBookingByToken(token);
+        if (
+          requestGeneration === generation.current &&
+          current.booking.id === booking.id
+        )
+          setView(current);
+      } catch {
+        /* Keep the original actionable error and draft. */
+      }
+    } finally {
+      if (requestGeneration === generation.current) setSubmitting(false);
+    }
+  };
 
-  if (
-    booking.status === "cancelled" ||
-    booking.status === "declined" ||
-    cancelled
-  ) {
+  if (booking.status === "cancelled" || booking.status === "declined") {
+    const outcome = view.cancellation_payment;
+    const needsAttention =
+      outcome && !["succeeded", "not_required"].includes(outcome.status);
     return (
       <StateRouter
         state="cancelled"
         pillar={pillar}
+        message={outcome?.message}
         bookAgainHref={
-          page ? buildBookingPagePath(page.slug) : buildBookingManagePath(token)
+          needsAttention
+            ? null
+            : page
+              ? buildBookingPagePath(page.slug)
+              : buildBookingManagePath(token)
         }
-      />
+      >
+        {needsAttention && (
+          <div className="space-y-2.5">
+            {actionError && (
+              <p className="text-xs text-app-error" role="alert">
+                {actionError}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={
+                outcome.can_retry ? submit : () => setReloadKey((k) => k + 1)
+              }
+              disabled={submitting}
+              className="text-sm font-semibold text-app-text-secondary underline hover:text-app-text disabled:opacity-60"
+            >
+              {submitting
+                ? "Checking payment…"
+                : outcome.can_retry
+                  ? "Retry payment recovery"
+                  : "Check payment status"}
+            </button>
+          </div>
+        )}
+      </StateRouter>
     );
   }
 
@@ -155,21 +229,6 @@ export default function CancelFlow({ token }: { token: string }) {
     refundCents && refundCents > 0
       ? `Cancel and refund ${money(refundCents, currency)}`
       : "Cancel booking";
-
-  const submit = async () => {
-    setSubmitting(true);
-    setActionError(null);
-    try {
-      await publicBooking.cancelByToken(token, {
-        reason: reason.trim() || null,
-      });
-      setCancelled(true);
-    } catch (err) {
-      setActionError(decodeError(err).message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   return (
     <FlowShell>

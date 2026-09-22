@@ -1087,9 +1087,14 @@ class StripeService {
         if ((payment.capture_attempts || 0) >= MAX_CAPTURE_ATTEMPTS) {
           throw Object.assign(new Error('Capture attempt limit reached'), { code: 'capture_attempts_exhausted' });
         }
-        const { error } = await supabaseAdmin.from('Payment').update({ capture_attempts: (payment.capture_attempts || 0) + 1 })
-          .eq('id', payment.id);
-        if (error) throw new Error('Could not prepare capture');
+        // A cancellation can reserve its refund while the provider read above
+        // is in flight. Claim only the state we read; the existing refund
+        // reservation rejects a hold release once a capture attempt is saved.
+        const { data: prepared, error } = await supabaseAdmin.from('Payment')
+          .update({ capture_attempts: (payment.capture_attempts || 0) + 1, payment_status: PAYMENT_STATES.CAPTURE_PENDING })
+          .eq('id', payment.id).eq('payment_status', payment.payment_status)
+          .eq('capture_attempts', payment.capture_attempts || 0).select('id').maybeSingle();
+        if (error || !prepared) throw conflict('Payment changed before capture. Check its status and retry.');
       }
       try {
         intent = await stripe.paymentIntents.capture(payment.stripe_payment_intent_id, {}, {

@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.homes.emergency
 
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.data.api.models.homes.DeleteEmergencyResponse
 import app.pantopus.android.data.api.models.homes.GetHomeEmergenciesResponse
 import app.pantopus.android.data.api.models.homes.HomeEmergencyDto
 import app.pantopus.android.data.api.net.NetworkError
@@ -196,6 +197,8 @@ class EmergencyInfoDetailViewModelTest {
                             ),
                     ),
                 )
+            coEvery { repo.deleteHomeEmergency("home-1", "e-1") } returns
+                NetworkResult.Success(DeleteEmergencyResponse(message = "Emergency info deleted"))
             val vm = makeVm()
             vm.load()
             vm.showDeleteConfirm()

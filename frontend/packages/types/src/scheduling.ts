@@ -620,6 +620,18 @@ export interface BookingManageView {
   booking: ManageBookingRow;
   actions: BookingManageActions;
   payment: BookingPayment | null;
+  cancellation_payment?: {
+    status:
+      | "pending"
+      | "succeeded"
+      | "not_required"
+      | "unavailable"
+      | "needs_review";
+    operation?: "release" | "refund";
+    amount_cents?: number;
+    can_retry: boolean;
+    message: string;
+  } | null;
   eventType: PublicEventType | null;
   page:
     | (PublicPageView & { cancellation_policy: CancellationPolicyValue | null })

@@ -139,11 +139,14 @@ class BillDecimalAdapter {
             }
         }
 
+    // Moshi hands this adapter the raw property value, so a request whose
+    // optional amount is absent (Mark paid, Remove) arrived here as null and
+    // failed before any HTTP call with "Received an unexpected response."
     @ToJson
     fun toJson(
         writer: com.squareup.moshi.JsonWriter,
-        value: BigDecimal,
+        value: BigDecimal?,
     ) {
-        writer.value(value)
+        if (value == null) writer.nullValue() else writer.value(value)
     }
 }

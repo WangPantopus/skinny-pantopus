@@ -2598,6 +2598,30 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
       mailPrefs = await getOrCreateMailPreferences(userId);
     }
 
+    // Keep the PATCH receipt compatible with the canonical GET profile
+    // projection consumed by native clients. The edited-user receipt above
+    // historically omitted account metadata, skills and residency, which
+    // made an otherwise successful 200 response fail native decoding.
+    const [skillsResult, residency] = await Promise.all([
+      supabaseAdmin
+        .from('UserSkill')
+        .select('skill_name')
+        .eq('user_id', userId)
+        .order('display_order', { ascending: true }),
+      getPublicResidencySummary(userId, req.user?.id || null),
+    ]);
+    if (skillsResult.error) {
+      logger.warn('Profile updated but skills readback is unavailable', {
+        userId,
+        error: skillsResult.error.message,
+      });
+      return res.status(503).json({
+        code: 'PROFILE_READBACK_UNAVAILABLE',
+        error: 'Profile updated, but some profile details are temporarily unavailable. Please retry.',
+      });
+    }
+    const userSkills = skillsResult.data || [];
+
     logger.info('Profile updated', { userId });
 
     res.json({
@@ -2616,11 +2640,20 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
         state: userData.state,
         zipcode: userData.zipcode,
         dateOfBirth: userData.date_of_birth,
-
-        // NEW
         bio: userData.bio,
         tagline: userData.tagline,
         socialLinks: userData.social_links || {},
+        accountType: userData.account_type,
+        role: userData.role,
+        verified: userData.verified,
+        residency,
+        avatar_url: userData.avatar_url || null,
+        profile_picture_url: userData.profile_picture_url || null,
+        profilePicture: userData.profile_picture_url || null,
+        skills: userSkills.map(s => s.skill_name),
+        average_rating: userData.average_rating || 0,
+        gigs_posted: userData.gigs_posted || 0,
+        gigs_completed: userData.gigs_completed || 0,
         profileVisibility: userData.profile_visibility || 'public',
         profile_visibility: userData.profile_visibility || 'public',
         showEmail: userData.show_email || false,
@@ -2636,7 +2669,7 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
           showEmail: userData.show_email || false,
           showPhone: userData.show_phone || false,
         },
-
+        createdAt: userData.created_at,
         updatedAt: userData.updated_at,
       },
     });
@@ -4041,7 +4074,12 @@ router.post('/:id/follow', verifyToken, async (req, res) => {
     }
 
     const visibility = require('../utils/visibilityPolicy');
+    const blockService = require('../services/blockService');
     if (await visibility.isBlocked(followerId, followingId)) {
+      return res.status(403).json({ error: 'Cannot follow this user' });
+    }
+    // Profile blocks (UserBlock) refuse follows in both directions, like messaging.
+    if (await blockService.isBlocked(followerId, followingId)) {
       return res.status(403).json({ error: 'Cannot follow this user' });
     }
 
@@ -4074,6 +4112,7 @@ router.post('/:id/follow', verifyToken, async (req, res) => {
 
     res.status(200).json({ message: `You are now following ${user.username}`, following: true });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Follow error', { error: err.message });
     res.status(500).json({ error: 'Failed to follow user' });
   }

@@ -12,6 +12,7 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const stripeService = require('../../stripe/stripeService');
+const refunds = require('../paymentRefundService');
 
 /** Does this event type require payment at booking time? */
 function isPriced(eventType) {
@@ -142,10 +143,83 @@ async function refundForBooking({ booking, initiatedBy, reason = 'booking_cancel
   }
 }
 
+/** Cancel and reserve the existing refund together, before any provider effect. */
+async function cancelPaidBooking({ booking, initiatedBy, reason }) {
+  const { data: payment, error } = await supabaseAdmin.from('Payment').select('*')
+    .eq('id', booking.payment_id).maybeSingle();
+  if (error || !payment) throw Object.assign(new Error('Payment details are unavailable. Your booking has not been cancelled. Please retry.'), { statusCode: 503, code: 'CANCEL_PAYMENT_UNAVAILABLE' });
+  const decidedAt = new Date();
+  const policyAmount = computeRefundCents({ policy: booking.policy_snapshot || {}, amountTotal: payment.amount_total,
+    startAtMs: Date.parse(booking.start_at), nowMs: decidedAt.getTime() });
+  const amount = Math.max(0, policyAmount - (payment.refunded_amount || 0));
+  const { data, error: saveError } = await supabaseAdmin.rpc('cancel_booking_with_refund', {
+    p_booking_id: booking.id, p_actor_id: initiatedBy || null, p_reason: reason || null,
+    p_expected_updated_at: booking.updated_at, p_payment_id: payment.id,
+    p_expected_payment: refunds.snapshot(payment), p_refund_amount: amount, p_decided_at: decidedAt.toISOString(),
+  });
+  if (saveError || !data?.booking || data.error) {
+    throw Object.assign(new Error('Cancellation could not be confirmed. Check your booking and retry.'), { statusCode: 503, code: 'CANCEL_SAVE_UNAVAILABLE' });
+  }
+  return data;
+}
+
+/** Read-only public projection; a manage-page GET must never contact Stripe. */
+async function cancellationPayment(booking, retry = false) {
+  if (!booking.payment_id || !['cancelled', 'declined'].includes(booking.status)) return null;
+  const unavailable = { status: 'unavailable', can_retry: false,
+    message: 'Your booking is cancelled. Payment status is temporarily unavailable. Check again before booking another appointment.' };
+  try {
+    const { data: payment, error } = await supabaseAdmin.from('Payment').select('id, payment_status, amount_total, refunded_amount, metadata')
+      .eq('id', booking.payment_id).maybeSingle();
+    if (error || !payment) return unavailable;
+    const decision = payment.metadata?.booking_cancellation;
+    if (decision?.booking_id === booking.id && decision.refund_amount_cents === 0) {
+      if (['authorized', 'authorize_pending', 'capture_pending'].includes(payment.payment_status)) {
+        return { status: 'needs_review', can_retry: false, message: 'Your booking is cancelled. The cancellation policy has no refund, but a payment authorization is still unresolved. Contact the host or Pantopus support.' };
+      }
+      return { status: 'not_required', can_retry: false, message: 'Your booking is cancelled. No additional refund is due under the cancellation policy.' };
+    }
+    const { data: requests, error: readError } = await supabaseAdmin.from('PaymentRefundRequest').select('*')
+      .eq('payment_id', payment.id).eq('actor_mode', 'policy').order('created_at', { ascending: false });
+    if (readError) return unavailable;
+    let request = (requests || []).find(r => r.id === decision?.request_id && decision?.booking_id === booking.id);
+    if (retry && request && ['pending', 'requires_action'].includes(request.status)) {
+      try { await refunds.recoverRequest(request); }
+      catch (err) { logger.warn('[schedulingPaymentsService] cancellation payment remains pending', { bookingId: booking.id, code: err.code }); }
+      return cancellationPayment(booking);
+    }
+    // Preserve verified legacy successes, but do not invent a missing historic
+    // cancellation time/amount or create another operation from today's policy.
+    if (!request && payment.payment_status === 'canceled') {
+      return { status: 'succeeded', operation: 'release', can_retry: false, message: 'Your booking is cancelled. The payment authorization was released; no payment was captured.' };
+    }
+    if (!request && ['refunded', 'refunded_full'].includes(payment.payment_status)) {
+      return { status: 'succeeded', operation: 'refund', can_retry: false, message: 'Your booking is cancelled. Your payment was refunded. Your bank may take time to show it.' };
+    }
+    if (!request) return { status: 'needs_review', can_retry: false,
+      message: 'Your booking is cancelled, but its payment needs review. Contact the host or Pantopus support before booking another appointment.' };
+    const release = request.operation === 'release';
+    const pending = ['pending', 'requires_action'].includes(request.status);
+    const message = request.status === 'succeeded'
+      ? (release ? 'Your booking is cancelled. The payment authorization was released; no payment was captured.'
+        : 'Your booking is cancelled. Your refund was confirmed. Your bank may take time to show it.')
+      : pending ? (release ? 'Your booking is cancelled. Releasing the payment authorization is still pending. We will keep checking; you can also retry here.'
+        : 'Your booking is cancelled. Your refund is still pending. We will keep checking; you can also retry here.')
+        : 'Your booking is cancelled, but its payment needs review. Contact the host or Pantopus support.';
+    return { status: request.status === 'succeeded' ? 'succeeded' : pending ? 'pending' : 'needs_review',
+      operation: request.operation, amount_cents: request.amount_cents, can_retry: pending, message };
+  } catch (err) {
+    logger.warn('[schedulingPaymentsService] cancellation payment lookup unavailable', { bookingId: booking.id, code: err.code });
+    return unavailable;
+  }
+}
+
 module.exports = {
   isPriced,
   createPaymentForBooking,
   captureForBooking,
   refundForBooking,
   computeRefundCents,
+  cancelPaidBooking,
+  cancellationPayment,
 };

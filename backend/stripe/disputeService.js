@@ -26,12 +26,13 @@ const logger = require('../utils/logger');
  */
 async function gatherEvidence(paymentId) {
   // ─── Fetch core records ───
-  const { data: payment } = await supabaseAdmin
+  const { data: payment, error: paymentError } = await supabaseAdmin
     .from('Payment')
     .select('*')
     .eq('id', paymentId)
     .single();
 
+  if (paymentError) throw new Error(`Unable to load dispute payment: ${paymentError.message}`);
   if (!payment) throw new Error(`Payment not found: ${paymentId}`);
   if (!payment.dispute_id) throw new Error('Payment has no associated dispute');
 
@@ -49,45 +50,45 @@ async function gatherEvidence(paymentId) {
             worker_completed_at, owner_confirmed_at,
             completion_note, completion_photos, completion_checklist,
             owner_confirmation_note, owner_satisfaction,
-            location, address, scheduled_start,
+            scheduled_start,
             cancellation_policy
           `)
           .eq('id', gigId)
-          .single()
+          .maybeSingle()
       : { data: null },
 
     // Accepted bid
     gigId
       ? supabaseAdmin
           .from('GigBid')
-          .select('id, user_id, amount, message, status, created_at')
+          .select('id, user_id, bid_amount, message, status, created_at')
           .eq('gig_id', gigId)
           .eq('status', 'accepted')
-          .single()
+          .maybeSingle()
       : { data: null },
 
     // Payer (requester) info
     supabaseAdmin
       .from('User')
-      .select('id, username, full_name, email, created_at')
+      .select('id, username, name, email, created_at')
       .eq('id', payment.payer_id)
-      .single(),
+      .maybeSingle(),
 
     // Payee (provider) info
     supabaseAdmin
       .from('User')
-      .select('id, username, full_name, email, created_at')
+      .select('id, username, name, email, created_at')
       .eq('id', payment.payee_id)
-      .single(),
+      .maybeSingle(),
 
     // Review (if any)
     gigId
       ? supabaseAdmin
           .from('Review')
-          .select('id, rating, content, created_at')
+          .select('id, rating, comment, created_at')
           .eq('gig_id', gigId)
           .limit(1)
-          .single()
+          .maybeSingle()
       : { data: null },
 
     // Chat messages (last 50 between the parties in the gig chat)
@@ -97,9 +98,16 @@ async function gatherEvidence(paymentId) {
           .select('id')
           .eq('gig_id', gigId)
           .eq('type', 'gig')
-          .single()
+          .maybeSingle()
       : { data: null },
   ]);
+
+  for (const [record, result] of Object.entries({
+    gig: gigResult, bid: bidResult, payer: payerResult, payee: payeeResult,
+    review: reviewResult, chat: chatResult,
+  })) {
+    if (result.error) throw new Error(`Unable to load dispute ${record}: ${result.error.message}`);
+  }
 
   const gig = gigResult.data;
   const bid = bidResult.data;
@@ -110,13 +118,18 @@ async function gatherEvidence(paymentId) {
   // Fetch chat messages if chat room exists
   let chatMessages = [];
   if (chatResult.data?.id) {
-    const { data: messages } = await supabaseAdmin
-      .from('Message')
-      .select('id, sender_id, content, created_at')
+    const { data: messages, error: messagesError } = await supabaseAdmin
+      .from('ChatMessage')
+      .select('id, user_id, message, created_at')
       .eq('room_id', chatResult.data.id)
-      .order('created_at', { ascending: true })
+      .eq('deleted', false)
+      .eq('type', 'text')
+      .in('user_id', [payment.payer_id, payment.payee_id].filter(Boolean))
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(50);
-    chatMessages = messages || [];
+    if (messagesError) throw new Error(`Unable to load dispute messages: ${messagesError.message}`);
+    chatMessages = (messages || []).reverse();
   }
 
   return {
@@ -137,17 +150,17 @@ async function gatherEvidence(paymentId) {
  * @returns {object} Stripe dispute evidence fields
  */
 function buildStripeEvidence(evidence) {
-  const { payment, gig, bid, payer, payee, review, chatMessages } = evidence;
+  const { payment, gig, bid, payer, review, chatMessages } = evidence;
 
   const stripeEvidence = {};
+  const currency = (payment.currency || 'USD').toUpperCase();
 
   // ─── Product / Service Description ───
   if (gig) {
     const parts = [
       `Service: "${gig.title}"`,
       gig.description ? `Description: ${gig.description.substring(0, 500)}` : null,
-      gig.price ? `Agreed price: $${(gig.price / 100).toFixed(2)}` : null,
-      gig.address ? `Service location: ${gig.address}` : null,
+      `Agreed price: ${currency} ${Number(bid?.bid_amount ?? payment.amount_subtotal / 100).toFixed(2)}`,
     ].filter(Boolean);
 
     stripeEvidence.product_description = parts.join('\n');
@@ -188,10 +201,7 @@ function buildStripeEvidence(evidence) {
   }
   if (gig?.completion_photos?.length > 0) {
     docParts.push(`Worker submitted ${gig.completion_photos.length} photo(s) as proof of work.`);
-    // Include photo URLs (Stripe accepts URL evidence)
-    gig.completion_photos.forEach((url, i) => {
-      docParts.push(`Photo ${i + 1}: ${url}`);
-    });
+    // Private completion files are references, not files uploaded to Stripe.
   }
   if (gig?.completion_checklist?.length > 0) {
     const completedItems = gig.completion_checklist.filter(item => item.done).length;
@@ -209,44 +219,29 @@ function buildStripeEvidence(evidence) {
   // Review
   if (review) {
     docParts.push(`\nPost-gig review: ${review.rating}/5 stars`);
-    if (review.content) {
-      docParts.push(`Review text: "${review.content.substring(0, 300)}"`);
+    if (review.comment) {
+      docParts.push(`Review text: "${review.comment.substring(0, 300)}"`);
     }
   }
 
-  if (docParts.length > 0) {
-    stripeEvidence.service_documentation = docParts.join('\n');
-  }
-
   // ─── Customer Communication ───
+  let chatLog = '';
   if (chatMessages.length > 0) {
-    const chatLog = chatMessages
+    chatLog = chatMessages
       .map(msg => {
-        const sender = msg.sender_id === payment.payer_id ? 'Requester' : 'Provider';
+        const sender = msg.user_id === payment.payer_id ? 'Requester' : 'Provider';
         const time = new Date(msg.created_at).toISOString();
-        const content = (msg.content || '').substring(0, 200);
+        const content = (msg.message || '').substring(0, 200);
         return `[${time}] ${sender}: ${content}`;
       })
       .join('\n');
-
-    stripeEvidence.customer_communication = chatLog.substring(0, 20000); // Stripe limit
   }
 
   // ─── Customer Info ───
   if (payer) {
-    stripeEvidence.customer_name = payer.full_name || payer.username;
+    stripeEvidence.customer_name = payer.name || payer.username;
     stripeEvidence.customer_email_address = payer.email;
   }
-
-  // ─── Shipping / Service Address ───
-  // Useful for "fraudulent" disputes — proves the service was at a real address
-  if (gig?.address) {
-    stripeEvidence.shipping_address = gig.address;
-  }
-
-  // ─── Billing Address ───
-  // If we have the payer's address (from Home profile), add it
-  // This strengthens evidence against "I didn't authorize this" claims
 
   // ─── Uncategorized Text ───
   // A catch-all for additional context
@@ -255,7 +250,7 @@ function buildStripeEvidence(evidence) {
   uncategorized.push(`Payment ID: ${payment.id}`);
   if (gig) uncategorized.push(`Gig ID: ${gig.id}`);
   if (bid) {
-    uncategorized.push(`Bid amount: $${(bid.amount / 100).toFixed(2)}`);
+    uncategorized.push(`Bid amount: ${currency} ${Number(bid.bid_amount).toFixed(2)}`);
     uncategorized.push(`Bid placed: ${new Date(bid.created_at).toISOString()}`);
     if (bid.message) uncategorized.push(`Bid message: "${bid.message.substring(0, 200)}"`);
   }
@@ -267,6 +262,11 @@ function buildStripeEvidence(evidence) {
     uncategorized.push(`Payment captured: ${new Date(payment.captured_at).toISOString()}`);
   }
 
+  // Stripe's service_documentation/customer_communication fields require uploaded
+  // file IDs. Keep narrative text in the supported text field, within its limit.
+  // Bound each section so long completion notes cannot crowd out the conversation.
+  if (docParts.length) uncategorized.push(docParts.join('\n').substring(0, 5000));
+  if (chatLog) uncategorized.push(`Customer communication:\n${chatLog}`);
   stripeEvidence.uncategorized_text = uncategorized.join('\n').substring(0, 20000);
 
   return stripeEvidence;

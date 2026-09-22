@@ -546,6 +546,18 @@ final class DeepLinkRouter {
         }
     }
 
+    /// Server notification links are web paths. The `new_follower` link is
+    /// the web's canonical profile URL `/<username>`, which has no native
+    /// route (unknown paths are deliberately discarded); rewrite just that
+    /// type to the native short profile form `/u/<username>`.
+    nonisolated static func notificationPath(type: String?, link: String?) -> String? {
+        guard type == "new_follower", let link else { return link }
+        let trimmed = link.hasPrefix("/") ? String(link.dropFirst()) : link
+        let segments = trimmed.split(separator: "/", omittingEmptySubsequences: true)
+        guard segments.count == 1, !trimmed.contains("?"), !trimmed.hasPrefix("@") else { return link }
+        return "/u/" + trimmed
+    }
+
     private func routeSegments(for url: URL) -> [String] {
         var segments = url.pathComponents.filter { $0 != "/" }
         if url.scheme != "http", url.scheme != "https",
