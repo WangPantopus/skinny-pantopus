@@ -4347,3 +4347,38 @@ because the draft is preserved, the failure is visible and continuation is block
 `a04-address-ui-evidence-20260922/{form-before.xml,after-unavailable.xml,after-retry.xml,after-unavailable.png,after-retry.png}`.
 The durable private bundle now contains 198 files with MANIFEST SHA-256
 `1fa796d1b6f08e89b549f0aadf0f6986241fbd511184ff2825dc889071957f26`.
+
+## Minimal prerequisites for the remaining open criteria (2026-09-22)
+
+No further local variant is justified after the accepted A04 unavailable UI/retry pass. The next
+agent should start only when the corresponding capability is present:
+
+- **N01:** a release-candidate build on the target platforms, an authorized notification provider
+  fixture with token rotation, and physical-device access for foreground/background/cold-start and
+  permission-continuation evidence.
+- **N02:** a physical Android device and release build capable of receiving the authorized
+  notification fixture; emulator evidence cannot substitute for this row.
+- **N03:** an assigned release-candidate native build slot with final Pulse/Beacon flags and
+  disposable address-free identities/posts/replies so the complete discovery → follow → eligible
+  post → reply return → mute/unfollow → private/public identity sequence can be exercised.
+- **N04:** a moderation owner who can provide the final release flags, moderation processing
+  disposition and any approved socket/provider fixture needed beyond the recorded local HTTP/SQL
+  and installed Android safety paths.
+- **N05:** a product owner must define the daily-agenda producer, recipient/channel, exact-once
+  timing, authorized destination and retry policy; then an assigned scheduler/provider runtime is
+  required. A saved preference cannot supply those missing semantics.
+- **A01:** authorized Apple/Google OAuth client credentials, redirect origins and consent/callback
+  environments, plus provider failure/cancellation controls for returning to a protected original
+  destination.
+- **A02:** approved provider revocation/expiry controls and at least the required client/device
+  combinations for keychain/session retirement; controlled local login cannot prove them.
+- **A03:** shared storage owner approval plus valid isolated S3/CloudFront credentials, bucket,
+  quota/lifecycle and cleanup fixture for hosted byte upload/preview/replacement/deletion.
+- **A04:** activated Smarty/geography/unit provider credentials or a free approved provider fixture
+  that yields real candidate/disambiguation outcomes. The legitimate-unavailable response and
+  installed retry/draft behavior are already accepted locally.
+- **A05:** route ownership and authorized fixtures for Marketplace, subscription, booking, wallet,
+  mail/search-adjacent and Home/payment actions; Stream 3 should not duplicate those owners' audits.
+
+These are capability prerequisites, not new backlog rows. No provider activation, purchase, schema
+change, design change or unit-test file was added.
