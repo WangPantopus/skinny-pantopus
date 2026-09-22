@@ -402,8 +402,20 @@ export default function ManageBookingPanel({ token }: { token: string }) {
                 This booking was cancelled
               </p>
               <p className="mt-0.5 text-[11px] leading-[15px] text-app-error">
-                The slot was released. Nothing further is owed.
+                {view.cancellation_payment?.message ||
+                  "This time is no longer reserved."}
               </p>
+              {view.cancellation_payment &&
+                !["succeeded", "not_required"].includes(
+                  view.cancellation_payment.status,
+                ) && (
+                  <Link
+                    href={`${managePath}/cancel`}
+                    className="mt-2 inline-flex text-[12px] font-bold underline"
+                  >
+                    Check payment recovery
+                  </Link>
+                )}
               {page?.slug && (
                 <Link
                   href={buildBookingPagePath(page.slug)}

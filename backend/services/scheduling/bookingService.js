@@ -500,21 +500,27 @@ async function declineBooking(bookingId, actorUserId, reason) {
 async function cancelBooking(bookingId, actorUserId, reason, actorRole = 'host') {
   const ctx = await getBookingContext(bookingId);
   if (!ctx) throw new BookingError('Booking not found.', 404, 'NOT_FOUND');
+  if (ctx.booking.status === 'cancelled') {
+    return { ...ctx.booking, cancellation_payment: await payments.cancellationPayment(ctx.booking, true) };
+  }
   assertTransition(ctx.booking, ['pending', 'confirmed'], 'cancel');
   if (actorRole === 'invitee' && ctx.eventType && ctx.eventType.allow_invitee_cancel === false) {
     throw new BookingError('This booking cannot be cancelled by the guest.', 403, 'INVITEE_CANCEL_DISABLED');
   }
-  const updated = await transitionBooking(bookingId, ['pending', 'confirmed'], {
+  const result = ctx.booking.payment_id
+    ? await payments.cancelPaidBooking({ booking: ctx.booking, initiatedBy: actorUserId, reason })
+    : { booking: await transitionBooking(bookingId, ['pending', 'confirmed'], {
     status: 'cancelled', cancel_reason: reason || null, cancelled_by: actorUserId || null,
     ics_sequence: (ctx.booking.ics_sequence || 0) + 1, // iTIP CANCEL must outrank prior REQUESTs
-  });
+    }), transitioned: true };
+  const updated = result.booking;
   if (!updated) throw new BookingError('Cannot cancel: the booking already reached a terminal state.', 409, 'BAD_STATE');
-  await syncCohostSiblings(bookingId, { status: 'cancelled' });
-  // Winner-only side effects — a concurrent cancel/decline can no longer refund twice.
-  if (ctx.booking.payment_id) await payments.refundForBooking({ booking: ctx.booking, initiatedBy: actorUserId, reason: 'booking_cancelled' });
-  if (ctx.booking.package_credit_id) await packages.restoreForBooking(ctx.booking);
-  await notify.notifyBookingEvent({ booking: updated, eventType: ctx.eventType, page: ctx.page, kind: 'cancelled' });
-  return updated;
+  if (result.transitioned) {
+    await syncCohostSiblings(bookingId, { status: 'cancelled' });
+    if (ctx.booking.package_credit_id) await packages.restoreForBooking(ctx.booking);
+    await notify.notifyBookingEvent({ booking: updated, eventType: ctx.eventType, page: ctx.page, kind: 'cancelled' });
+  }
+  return { ...updated, cancellation_payment: await payments.cancellationPayment(updated, true) };
 }
 
 /**

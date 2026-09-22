@@ -124,10 +124,10 @@ export function cancelByToken(
   token: string,
   body?: { reason?: string | null },
 ) {
-  return post<{ booking: Pick<Booking, "id" | "status"> }>(
-    `${PUBLIC}/booking/${encodeURIComponent(token)}/cancel`,
-    body || {},
-  );
+  return post<{
+    booking: Pick<Booking, "id" | "status">;
+    cancellation_payment?: BookingManageView["cancellation_payment"];
+  }>(`${PUBLIC}/booking/${encodeURIComponent(token)}/cancel`, body || {});
 }
 
 /** One-click unsubscribe from reminder emails (transactional confirmations still sent). */
