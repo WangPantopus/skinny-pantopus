@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import StripePaymentSheet
 import SwiftUI
 
 @main
@@ -46,6 +47,7 @@ struct PantopusApp: App {
                 // `DeepLinkRouter.shared.pending` and dispatches to the right
                 // tab/stack, so cold-start links resolve once the root appears.
                 .onOpenURL { url in
+                    guard !StripeAPI.handleURLCallback(with: url) else { return }
                     guard !AuthManager.isOAuthCallback(url) else { return }
                     DeepLinkRouter.shared.handle(url: url)
                 }
