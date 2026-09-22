@@ -550,7 +550,7 @@ final class DeepLinkRouter {
     /// the web's canonical profile URL `/<username>`, which has no native
     /// route (unknown paths are deliberately discarded); rewrite just that
     /// type to the native short profile form `/u/<username>`.
-    static func notificationPath(type: String?, link: String?) -> String? {
+    nonisolated static func notificationPath(type: String?, link: String?) -> String? {
         guard type == "new_follower", let link else { return link }
         let trimmed = link.hasPrefix("/") ? String(link.dropFirst()) : link
         let segments = trimmed.split(separator: "/", omittingEmptySubsequences: true)
