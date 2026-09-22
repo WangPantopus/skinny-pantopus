@@ -3560,3 +3560,54 @@ A fresh iOS profile save was attempted against the retained installed simulator,
 state is the existing security sign-out screen and the Device Hub control surface timed out; no
 valid iOS save claim is made. The Android installed-screen and real API/SQL evidence above remain
 the supported native E2E result for this backend-only contract repair.
+
+## N02 native saved notifications — installed Android list/filter read pass (2026-09-22)
+
+The retained installed Android app was relaunched against the owned local API at 18130 with the
+existing Auth Bob session. The real **Notifications** screen loaded through HTTP GET 200s and
+rendered the existing All/Unread/Read tabs, **Mark all read** action, and notification cards.
+The initial tab counts were All 11, Unread 7, Read 4. Selecting Unread showed count 7; selecting
+Read showed count 4. No mark-read/delete action was tapped. Settings → Log out completed through
+the actual screen; the final API log recorded the session revoked and subsequent unauthenticated
+hub request. Evidence: `n02-android-ui-20260922.json`, `unread.xml`, `read.xml`, and
+`read-filter.png`.
+
+SQL before/after remained unchanged: Notification total 20, Bob unread 7, Bob PushToken rows 0,
+and Bob UserNotificationPreferences rows 0. The emulator's Firebase provider logged its existing
+invalid-local-API-key warning; this is an emulator/provider boundary, not FCM delivery evidence.
+Implementation and installed-screen local E2E pass for list/filter/logout; no application source
+changed and no unit tests were added. Physical Android, APNs/FCM provider delivery, token
+registration/rotation, and cold-start/foreground/background provider delivery remain unverified.
+The durable bundle now has 135 files; MANIFEST SHA-256 is
+`bc8dadc5cee6c2b301beec356935cef14a9c7cacadef96620badf9290a41da3c`.
+
+## Current ordered boundary accounting after native N02 pass (2026-09-22)
+
+- **N01:** retained web/native route and local notification records are covered by existing
+  evidence plus the N02 Android read pass; provider-delivered foreground/background/cold-start,
+  token rotation and physical-device acceptance still require APNs/FCM-capable credentials or
+  hardware. No local repair is indicated.
+- **N02:** web/API/SQL read/filter and installed Android list/filter/logout are now bound. Mark-all
+  mutation, provider delivery and physical-device behavior remain intentionally unexercised.
+- **N03:** local discovery/follow/post/reply/mute and identity-scope evidence is retained; remaining
+  release-flag/provider freshness and old-link/access-change cases need a current fixture or an
+  owner decision before changing policy. Existing Persona and UserBlock scopes remain distinct.
+- **N04:** block/unblock, blocked DM, report, access/error/cache paths and installed Android safety
+  checks are recorded; hosted moderation/provider review and any cross-stream schema/FK repair
+  remain coordinator/shared-owner work.
+- **N05:** reminder/pause/retry evidence and the real daily-agenda preference save are recorded;
+  the current source has no daily-agenda delivery consumer, so no delivery claim is possible
+  without an established scheduler/policy owner. Saved schedule alone remains insufficient.
+- **A01–A02:** signup/verification/recovery, refresh/logout/revocation/account switching and
+  protected-data retirement use accepted evidence; external OAuth/provider consent and physical
+  device boundaries remain unavailable locally. No shared auth edit is proposed.
+- **A03–A04:** local storage reads/quota and provider capability boundaries are recorded; hosted
+  S3/CloudFront, external OAuth/address providers and production activation require provider/shared
+  ownership. No activation or migration was performed.
+- **A05:** profile report/search/edit and installed Android profile save are verified; mailbox
+  preferences remains an existing route-order issue owned outside this stream, audience remains
+  feature-flag gated, and Home/payment/booking/wallet findings route to their owners. No duplicate
+  replacement implementation is authorized.
+
+This accounting separates implementation, local UI/API/SQL E2E, CI, and external-provider/device
+boundaries. It is not a whole-stream completion claim.
