@@ -133,8 +133,9 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     /// Handle taps on notifications — route to the relevant deep link.
     nonisolated func userNotificationCenter(
         _: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping @Sendable () -> Void
+    ) {
         // The backend attaches the destination under `link` (the unified
         // notification payload key — see backend pushService); older Expo
         // payloads used `deepLink`. Read both so a tap routes regardless of
@@ -149,10 +150,17 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             // from `type` + `briefingKind` + `briefingDeliveryId`.
             ?? DeepLinkRouter.pushFallbackPath(userInfo: userInfo)
         logger.info("Notification tapped")
-        if let deepLink, !deepLink.isEmpty {
-            // `link` is a path like `/chat/42`; handle(path:) normalises it
-            // to the pantopus:// scheme, matching the Android dispatcher.
-            await MainActor.run { DeepLinkRouter.shared.handle(path: deepLink) }
+        // Route and complete on the main actor. The async delegate variant
+        // completed on a background executor, and UIKit's state-restoration
+        // snapshot taken on completion asserts main-thread — a background
+        // (HOME) banner tap crashed the app with SIGABRT (2026-09-22).
+        Task { @MainActor in
+            if let deepLink, !deepLink.isEmpty {
+                // `link` is a path like `/chat/42`; handle(path:) normalises it
+                // to the pantopus:// scheme, matching the Android dispatcher.
+                DeepLinkRouter.shared.handle(path: deepLink)
+            }
+            completionHandler()
         }
     }
 }

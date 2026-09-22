@@ -64,6 +64,7 @@ class HomeSettingsViewModelTest {
         address: String? = "14 Elm Park Lane",
         city: String? = "Oakland",
         homeType: String? = "single_family",
+        ownershipStatus: String? = null,
         isPendingOwner: Boolean = false,
         pendingClaimId: String? = null,
     ) = HomeDetail(
@@ -81,6 +82,7 @@ class HomeSettingsViewModelTest {
         location = null,
         isPendingOwner = isPendingOwner,
         pendingClaimId = pendingClaimId,
+        ownershipStatus = ownershipStatus,
     )
 
     private fun occupants(
@@ -156,7 +158,10 @@ class HomeSettingsViewModelTest {
 
     @Test
     fun established_home_carries_success_verified_chip() {
-        val vm = makeVm()
+        val vm =
+            makeVm(
+                detail = NetworkResult.Success(HomeDetailResponse(homeDetail(ownershipStatus = "verified"))),
+            )
         vm.load()
         val address = loadedGroups(vm).first { it.id == "homeIdentity" }.rows.first { it.id == "address" }
         val control = address.control as RowControl.ChipStatus
