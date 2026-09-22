@@ -3676,3 +3676,44 @@ routes owned by their respective streams.
 
 This remains a bounded Stream 3 accounting, not a whole-app completion claim. Unit-test coverage
 is intentionally excluded from completion percentages and no new unit tests were written.
+
+## N03 old Beacon link after handle access change — focused repair and browser regression (2026-09-22)
+
+A current owned fixture was used instead of closing this case from the historical old-link note.
+The existing Beacon owner changed `stream3-local-r3` to disposable `stream3-old-link-r1` through
+`PATCH /api/personas/:id`; the real API immediately returned 404 for the old handle and 200 for
+the new handle, including the current posts route. The real IAB browser initially reproduced a
+concrete stale-page defect: `/persona/stream3-local-r3` still rendered the previous Beacon after
+reload because `fetchPublicPersona` shared the public-share `revalidate: 60` cache. This was an
+actual server/UI cache result, not a mocked response.
+
+The smallest repair is PR [#186](https://github.com/WangPantopus/skinny-pantopus/pull/186),
+commit `f941c3bb4`, from current `origin/master` `2b7378aa4`. It adds an opt-in `noStore` fetch
+option in the existing `publicShare` helper and applies it only to `fetchPublicPersona`; all
+other public-share fetches, page layout, visual treatment, navigation and the existing 404 page
+remain unchanged. After the repair, the same IAB old URL rendered the existing 404 page, while
+the current URL rendered the existing Beacon screen with `@stream3-old-link-r1`. The owner then
+restored the original handle through the existing PATCH route; the original URL rendered the
+existing Beacon screen again and the disposable URL returned 404. API and SQL cleanup confirmed
+the original persona handle, audience identity handle and follower count were restored. No new
+fixture rows, schema, provider, native screen or unit test was added.
+
+Focused verification: real GoTrue owner/fan login, HTTP 200/404 routes, PostgREST/SQL persisted
+handle and identity reads, real IAB AX snapshots for stale 404/current Beacon/restored Beacon,
+`pnpm --filter @pantopus/web type-check` exit 0 and `git diff --check` exit 0. Evidence:
+`n03-old-link-access-change-20260922.json`, `n03-old-link-ui-20260922.json`, and
+`n03-ui-cleanup-20260922.json`. The durable bundle now has 143 files; MANIFEST SHA-256 is
+`cfee70e780cd8f0a70808577ce29a58d5fc77985959fdd0f7f1e6218ce9e5a4f`.
+
+The real browser/API case verifies old-link invalidation after an authorized handle change and
+exact restoration. It does not establish native/provider delivery or decide suspension/deletion
+policy. PR review/CI and coordinator integration remain separate; the standalone PR is attached
+for review and must not be merged independently here.
+
+## Current N03 disposition after old-link pass
+
+N03 now has a current web/API/SQL old-link/access-change regression and focused repair in review;
+retained follow/unfollow, posting, reply, mute, identity-scope and restricted-post evidence still
+applies within its recorded limits. Release/provider freshness, installed-native discovery/reply,
+and product decisions for suspension/deletion remain unverified or policy-owned. No unit-test
+coverage is claimed or required for this functional estimate.
