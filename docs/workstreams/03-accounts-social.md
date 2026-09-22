@@ -4113,3 +4113,28 @@ separate from APNs delivery and separate from Android/web evidence. Evidence:
 
 The private durable bundle now contains 184 files; refreshed MANIFEST SHA-256 is
 `30fd45250bd87efe01dfb803d3c8635f771f75e1df04faf0e6107bd7b9ef99ed`.
+
+
+## A02 installed Android cold-process/session recovery (2026-09-22 addendum)
+
+I reused the installed Android build and the existing Bob fixture for the one locally actionable
+A02 boundary that remained distinct from the accepted web natural-expiry, synthetic retry and
+two-context remote sign-out evidence. A real Android login (`POST /api/users/login` 200) opened the
+existing hub with Auth, Notifications, Menu and setup cards. I then force-stopped the app process
+and relaunched the existing `MainActivity` without clearing app data or touching the database.
+
+The socket disconnected at 18:50:36.850Z. On cold relaunch the API received no second login; instead
+`GET /api/users/profile` 200 at 18:50:40.344Z was followed by a new socket session and the normal
+hub/chat/discovery/notification reads. The installed app first showed its existing notification
+permission prompt; tapping the existing **Don’t allow** control returned to the authenticated hub
+showing Auth, Notifications, Menu and the existing setup cards. This binds local process retirement
+→ protected session restoration → real UI/API continuity. Settings → Log out then returned Sign in,
+`POST /api/users/logout` 200, the follow-up hub request was no-token/401, and the API stopped
+cleanly. No source, schema, provider, design or unit-test change was made.
+
+Evidence: `a02-android-cold-process-recovery-20260922.json`, `a02-cold-before.xml`, and
+`a02-cold-after.xml`. The post-permission hub XML was not retained separately; the visible state
+and API receipts are recorded honestly. This does not claim physical keychain failure, provider
+revocation, APNs/FCM delivery or hosted OAuth behavior. The durable private bundle now contains
+187 files; refreshed MANIFEST SHA-256 is
+`3f0a7bac2613d80a2a6d314e1b8eaa51c5671b4a412fc071aec989fc3a3edb47`.
