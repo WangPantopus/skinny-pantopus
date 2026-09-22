@@ -1093,3 +1093,25 @@ Coordinator reacquired same SQL64552/API64551 and web[::1]:18141/API18142 for St
   with accepted PR175 commit `501caf65a` applied (`cc885ab23`), without changing
   the native fixture rows. Backend and proxy health both return 200 through
   `127.0.0.1:18143` and `192.168.0.176:18142`.
+
+## Corrected device runtime build — September22
+
+- Rechecked the build artifact before physical installation and found the
+  ignored build environment still embedded the retired `192.168.0.176:8000`
+  port. The disposable backend/proxy for this handoff is `192.168.0.176:18142`,
+  so the build-only `.env` was corrected and the project regenerated. No
+  application source, screen, service or schema file changed.
+- Rebuilt the generic signed `iphoneos` Debug artifact from native head
+  `4cca0a681`. The artifact at
+  `/private/tmp/pantopus-stream2-ios-latest/.stream2-device-dd/Build/Products/Debug-iphoneos/Pantopus.app`
+  now embeds `http://192.168.0.176:18142`, passes `codesign --verify --deep
+  --strict`, and remains `app.pantopus.ios` signed by team `6UYZBA546R`.
+- A real install attempt with `xcrun devicectl device install app` was rejected
+  by CoreDevice error 4016 because the paired iPhone is still `unavailable` and
+  cannot provide trusted connectivity, power assertion and developer services.
+  No install or launch is claimed. Once the phone is unlocked and reconnects,
+  this corrected artifact is ready for the install/launch retry.
+- Backend health remains 200 through both `127.0.0.1:18143` and
+  `192.168.0.176:18142`; the owner token also returned 200 for the existing
+  Home `/me`, documents, guest-passes, tasks and issues routes with zero
+  fixture rows. No fixture rows or peer resources were changed.
