@@ -1,5 +1,23 @@
 # Three-stream coordination
 
+## September 22 — P03 installed iOS aged tip discovery accepted (bounded); manifest updated
+
+Supported simulator control is now available headlessly (screenshot/tap/text on owned
+C2BCF36A while Simulator.app is still absent under Xcode27), so Stream1 ran the same
+aged-discovery harness against the installed a65411758 candidate (binaries byte-equal to
+September20 provenance): fixtures2/3 (1000c/2000c refunded Stripe TEST intents,27h old)
+through the real installed GigDetail→Send a tip→Continue original tip→real routes→real
+Stripe TEST reads→SQL. Success, injected provider failure, lost committed reply with two
+rapid taps (exactly one POST), device-retained-original recovery and post-terminal
+reopen all behaved as designed; zero provider writes. Cancel-tip natively, toasts,
+physical device, Android, hosted/Connect/live remain limits. Owner audit
+20260922-stream1-tip-age-discovery-r1 now40 files, MANIFEST
+0b162fcf2d6d8494cca4ba7378e5234c187187f0e6f454fd09dc94e8d90159d2 (supersedes8a053009).
+Owned simulator shut down after the run; EB5AD759 untouched (Stream2). Documentation146
+merged5d398aaeb; its master CI is running and paid adoption of708b0a931/5d398aaeb waits
+for it. Native Android tips remain the open P03 remainder; P04 no-show/cancellation-fee
+still needs the founder's payer/recipient decision.
+
 ## September 22 — coordinator resumed; P02 >24h discovery accepted on web; PR143/144 merged
 
 Stream1 coordinator resumed in a new session (prior coordinator session idle since
