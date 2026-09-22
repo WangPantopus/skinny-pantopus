@@ -6,7 +6,6 @@ const crypto = require('crypto');
 const { randomBytes } = crypto;
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
-const blockService = require('../services/blockService');
 const { signUp, signIn } = require('../config/auth');
 const rateLimit = require('express-rate-limit');
 const verifyToken = require('../middleware/verifyToken');
@@ -4042,6 +4041,7 @@ router.post('/:id/follow', verifyToken, async (req, res) => {
     }
 
     const visibility = require('../utils/visibilityPolicy');
+    const blockService = require('../services/blockService');
     if (await visibility.isBlocked(followerId, followingId)) {
       return res.status(403).json({ error: 'Cannot follow this user' });
     }
