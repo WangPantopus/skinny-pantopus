@@ -1282,7 +1282,7 @@ async function handleDisputeClosed(dispute) {
         refunded_amount: dispute.amount,
       });
     } catch (transErr) {
-      await supabaseAdmin
+      const { error: updateError } = await supabaseAdmin
         .from('Payment')
         .update({
           payment_status: PAYMENT_STATES.REFUNDED_FULL,
@@ -1290,7 +1290,20 @@ async function handleDisputeClosed(dispute) {
           refunded_amount: dispute.amount,
           updated_at: nowIso,
         })
-        .eq('id', payment.id);
+        .eq('id', payment.id)
+        .select('id')
+        .single();
+      if (updateError) throw new Error('Lost dispute payment update failed');
+    }
+
+    // The same locked, idempotent recovery used by refunds also covers income
+    // already released to a wallet. It records debt if funds cannot be debited.
+    // Do not acknowledge the event until this accounting is durable.
+    const { data: recovery, error: recoveryError } = await supabaseAdmin.rpc(
+      'settle_payment_refund_wallet', { p_payment_id: payment.id }
+    );
+    if (recoveryError || !recovery || recovery.error) {
+      throw new Error('Lost dispute wallet recovery failed');
     }
 
     // If we already paid the provider, they now owe us

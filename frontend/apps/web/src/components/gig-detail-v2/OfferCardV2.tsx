@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { formatPrice } from '@pantopus/ui-utils';
 import TrustCapsule from './TrustCapsule';
 
 interface OfferCardV2Props {
@@ -16,7 +17,7 @@ export default function OfferCardV2({ offer, onAccept, onDecline }: OfferCardV2P
   const isRecommended = offer.is_recommended || offer.match_rank === 1;
   const displayName = user.first_name
     ? `${user.first_name} ${user.last_name || ''}`.trim()
-    : user.name || user.username || 'Helper';
+    : user.displayName || user.name || user.username || 'Helper';
 
   return (
     <div
@@ -47,7 +48,7 @@ export default function OfferCardV2({ offer, onAccept, onDecline }: OfferCardV2P
           <span className="font-semibold text-app-text truncate">{displayName}</span>
         </div>
         <span className="text-lg font-bold text-app-text flex-shrink-0">
-          ${Number(offer.amount || offer.price || 0).toFixed(0)}
+          {formatPrice(Number(offer.amount ?? offer.price ?? offer.bid_amount ?? 0))}
         </span>
       </div>
 
