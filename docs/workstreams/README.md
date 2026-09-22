@@ -1,6 +1,6 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — September 22, 2026, 22:45 UTC
+## CURRENT RESUME POINT — September 22, 2026, 22:55 UTC
 
 The coordinator role moved at about 21:05 UTC to the Claude Code session "Pantopus Stream 1 coordinator handoff" (Stream 1 developer + coordinator). Before any writing it verified that the previous Codex coordinator thread `01a0c897-33be-7011-b55b-b82291ba9fd2` had completed at 20:35 UTC, and that the Stream 2 (`01a0c0d4-2278-71d3-bc23-a9d789d2afeb`) and Stream 3 (`01a0a824-301b-74e3-a1d9-b205714ed7a1`) Codex tasks had been `task_complete` since 20:07/20:15 UTC. **The coordinator cannot message Codex tasks.** The founder relays the peer assignments below, or authorizes the coordinator to act for those streams. No duplicate agent was started for a peer worktree. The 20:00 UTC consolidation is preserved below as history.
 
@@ -28,13 +28,23 @@ All three run on APK `db303e5bbe782a089715f8b91808b4f37c5fa3c96841edb37d23f8ac29
   - A credential without `sessionId` makes Accept a silent no-op. Check whether the server returns one for unbound sessions.
   - A refund retry inside the one-minute lease returns "pending" without explaining the wait.
   - The tip-limit message is generic.
-- Rows: P03 and P09 stay partial. P03's remainder is unavailable local-storage recovery. P09's remainder is historical Connect reversal and broader close/release. Count unchanged.
+- **P06 Android dispute (22:20–22:33)** — audit `20260922-stream1-p06-android-dispute-r1`, MANIFEST `58aff8a5a1001c9c9fe8154a138b3721f7c37d3231b35cd4abe1a961a16b3e73`. Stripe's immediate-dispute TEST card reproduces the documented capture-proof boundary (`stripeService.js:1109-1113`, deferred by `0654e856e`):
+  - Confirm completion returns 409 "Captured charge needs reconciliation" and the Payment stays `capture_pending`; the dispute is recorded but not frozen.
+  - The payer sees Authorized/Capturing, not the dispute; refund returns 409 DISPUTED.
+  - A won dispute restores `captured_hold` without `captured_at`.
+  - Settlement refuses payout even after 48h, so money is safe but stuck.
+  - **Founder/design decision needed**: record the capture and apply the existing dispute freeze, or build operator reconciliation. No code change was made.
+- Rows: P03, P06 and P09 stay partial.
+  - P03: iOS native tips and unavailable local-storage recovery.
+  - P06: the capture-proof decision, normal-path native presentation, and Connect/hosted operation.
+  - P09: historical Connect reversal and broader close/release.
+  - The count is unchanged.
 
 ### Owners, checkouts and reservations
 
 | Stream | Application checkout | Runtime / devices | Next |
 |---|---|---|---|
-| 1 + coordinator (Claude) | `/private/tmp/pantopus-paid-gig-integration` on local `codex/stream1-verification-20260922` at final master `b36d379b2` (clean, no commits). Coordinator checkout `/private/tmp/pantopus-pr192-integration` detached at `094ed5826` is the APK source (ignored build outputs/backend deps only). The historical `codex/paid-gig-integration` ref is preserved. | No API/Next running. Retained SQL64562/PostgREST64561 ledger88. `emulator-5558` keeps the P09/P03 APK with app data cleared; iOS `C2BCF36A…` idle. Heavy slot **unassigned**; Stream 3 has the next claim. | Next Stream 1 criterion: P06 native dispute presentation, or the P08 native denial/lost/stale cases, after confirming the existing native dispute UI. |
+| 1 + coordinator (Claude) | `/private/tmp/pantopus-paid-gig-integration` on local `codex/stream1-verification-20260922` at final master `b36d379b2` (clean, no commits). Coordinator checkout `/private/tmp/pantopus-pr192-integration` detached at `094ed5826` is the APK source (ignored build outputs/backend deps only). The historical `codex/paid-gig-integration` ref is preserved. | No API/Next running. Retained SQL64562/PostgREST64561 ledger88. `emulator-5558` keeps the P09/P03 APK with app data cleared; iOS `C2BCF36A…` idle. Heavy slot **unassigned**; Stream 3 has the next claim. | Next Stream 1 criterion: the P08 remaining native role/lost/stale/account-lifetime cases, or iOS native tips (P03). The P06 capture-proof boundary waits on a design decision. |
 | 2 Home (Codex `01a0c0d4…`, idle) | `/private/tmp/pantopus-workstream-home` at `ee69cbd8d` (now merged through PR192). When starting R06 the owner moves to a fresh branch from master, preserving `.next-stream2`. | API18143/LAN18142 retained; its `home.js` runtime patch is **identical** to merged PR192 (47 added lines), so adopt master at the next restart and keep the backup. `:8000` from the Home worktree is the founder device backend. SQL64554/PostgREST64553, emulator-5556, iOS `6F914A30…`. | **R06**, below. |
 | 3 Accounts/social (Codex `01a0a824…`, idle) | iOS `/private/tmp/pantopus-workstream-accounts-social` `b956a0076` (preserve `publicShare.ts`/tsconfig edits, `.next-stream3`). Android `/private/tmp/pantopus-stream3-android` fast-forwarded by the coordinator to merged `7f557a006` (clean). | SQL64532/PostgREST64531, Mailpit64535/36. **Correction:** Next `[::1]:18131` is running (pid 15494 from the Stream 3 worktree), contrary to the 20:00 note; left untouched. iOS `0AE16FA0…`, emulator-5554. | **iOS parity of PR195**, below. Gets the heavy slot next. |
 
