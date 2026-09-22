@@ -1,5 +1,32 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — P03 installed iOS tips: aged discovery accepted on the owned simulator
+
+Installed candidate a65411758 on C2BCF36A (PantopusAPIBaseURL127.0.0.1:18132; hashes
+3ce39139…/1b750276… unchanged) driven with simctl launch/openurl plus the supported
+control tool. Harness runtime-p02-native.cjs adds only synthetic /api/users/refresh and
+/api/auth/devices/register handlers and Bearer→fixture-actor mapping; real gigs/pays
+routers, real stripeService, real Stripe TEST reads, writes refused. Fixtures2 (gig0102,
+1000c, pi_3UHtJa…) and3 (gig0103,2000c, pi_3UHtLn…) restored from the September20 audit
+exactly as the web run. Existing login form with the owner fixture; keychain "Welcome
+back" card from an earlier fixture dismissed via Not you?.
+
+Gig0102: Send a tip reopened the server-side original (locked10.00, Continue original
+tip/Cancel tip). Continue→POST/tip200 544ms: list by customer→match by tip_request_id→
+intent+charge retrieve→record refunded_full/succeeded, receipt bound,
+payment_succeeded_at2026-09-20T22:35:34Z; sheet dismissed; reopen showed a fresh form
+(preview only). Gig0103: injected list failure→POST202 pending, sheet dismissed, reopen
+still offered Continue with locked20.00; lost committed reply plus two rapid taps→exactly
+one POST (200 body captured, socket destroyed), refunded_full recorded; reopen used the
+device-retained original (GET tip-requests only, no preview/provider call) and showed
+the existing payment-record copy with send disabled. Totals3 POST/tip,7 Stripe reads,0
+writes,0 errors,0 notices. Limits: toasts not captured, synthetic identity/device
+registration, simulator only, no cancel-tip natively, no Android/physical/hosted/Connect.
+Cleanup: owned rows0 (harness and direct recount), API stopped/port free, app terminated,
+owned simulator shut down, Stripe intents unchanged, worktree clean. Evidence in owner
+audit20260922-stream1-tip-age-discovery-r1 (evidence-native/, source/ios-installed-
+binding.txt), MANIFEST0b162fcf2d6d8494cca4ba7378e5234c187187f0e6f454fd09dc94e8d90159d2.
+
 ## September 22 — P02 natural >24h provider discovery accepted (bounded web path)
 
 Paid53e738cfc unchanged (bindings for gigTipProof/stripeService/pays/TipModal/
