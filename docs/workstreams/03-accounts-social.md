@@ -3147,3 +3147,47 @@ reset-after-evan,reset-final-evan,reset-result,fix-verification,cleanup}.json; d
 MANIFEST **60ed88d5f44ce6c0caf08f900cc2e2c419bf14a108a581fa007a5de13ef55a2f**.
 Next: PR145 CI/review; remaining A01 limits are providers disabled, expired tokens,
 delivery outage and native clients.
+
+
+## Native iOS/Android accounts journeys — verified; three more repairs (PR149/151/152)
+
+User directed full native coverage. Built Debug iOS (xcodebuild, worktree .env API/SOCKET
+127.0.0.1:18130) on owned simulator Pantopus Stream3 Social R2 (erased twice: unknown r2
+passcode, then clean push-fix check) and Debug Android (gradlew assembleDebug, .env
+10.0.2.2:18130; first daemon died at host load 170, retry 10m51s) on new owned emulator
+Pantopus_Stream3_Accounts_R3 (android-34 arm64). Retained API restarted twice from the
+exact recipe to load repairs (50622→80982); Next 36139/DB retained. Evidence in
+native-accounts-result.json (27 journeys) and screenshots; durable719
+MANIFEST **51cbc2a6b4f725468b12f183c46766652519c1521c297a654a88c830d9b7478b**.
+
+Verified natively (real API/SQL/GoTrue audit for each): iOS/Android login with device
+registration (iOS trusted, emulator unverified), wrong password 401 messages, OAuth Apple
+start→consent→cancel, Devices screens (iOS gated by device-owner prompt; simulator accepts
+any passcode), remove orphaned device (wrong step-up → password_failed/device retained;
+correct → DELETE device, session device_revoked), sign-out-others from iOS and from Android
+retiring the web client (401s→refresh 401→login redirect), web revoke retiring iOS and
+Android via socket kick (kicked:1 then kicked:2, both refresh_refused within 200ms,
+"You were signed out for security" + account hint), forgot/reset on both (deep link
+pantopus://auth/reset-password, mismatch/no request, success revokes all others with
+password_reset, fixture password restored by the iOS reset), Android native sign-up →
+unverified login 403 + Resend (PR145 natively), Android notification preferences toggle
+PUT /api/hub/preferences persisted and restored, Blocked users empty state, Settings
+logout on both, iOS cold-start resume, simctl push foreground banner.
+
+Defects reproduced and repaired (smallest existing-code changes, each verified on rebuilt/
+restarted runtime): PR149 iOS posted the APNs token before any sign-in → 401 → first-ever
+login screen said "Your session has expired" (defer until signedIn; token now saved by the
+post-login device registration). PR151 resent verification links are magiclink tokens but
+native clients post type=signup → "Link expired" in-app (verify-email retries the hashed
+token with the alternate purpose; Android verified from the resent token). PR152 after a
+deliberate iOS Log out a racing GET /api/hub with no token hit endSession(.expired) → the
+login screen claimed expiry (reason published only when a session actually ended).
+One Android ANR occurred only during host load 74–170 with an idle main thread afterwards
+and never recurred at load <10; a stale system ANR window needed an emulator reboot.
+
+Limits: no APNs/FCM provider delivery (simctl push only), no Face ID enrolment path, no
+physical devices, providers disabled, Lockdown (sign out everywhere) and native account
+deletion not exercised, retained DB lacks LocalProfile.verified_resident (chat identity
+warning only). Cleanup: Hank and Evan's test preference row deleted (auth.users 3/User 3,
+Evan active sessions 0); natural revoked sessions/devices/push tokens and Mailpit retained;
+simulator/emulator apps left installed and signed out; web tab closed. No new unit tests.
