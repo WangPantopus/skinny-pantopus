@@ -1,5 +1,20 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — P10 durable checkout vs. expiry worker; master re-adopted into paid
+
+Bounded P10: real iOS accept created intent pi_…1st1pj7l (requires_payment_method), bid
+pending_payment expiring07:29:48Z; app terminated mid-sheet (no abort). Worker
+expirePendingPaymentBids at07:20:47Z and07:30:05Z: no change, 0 cancels — the job skips
+bids whose GigPaymentAcceptance attempt is initializing/pending/canceling (durable
+checkout), and only reverts legacy bids without an attempt; stale initializing attempts
+belong to reconcileGigAcceptance, authorize_pending bookings to
+expireUncapturedAuthorizations. Reopened gig showed Resume payment / Cancel payment setup;
+Cancel→abort-accept200→intent canceled, attempt/payment canceled, bid pending, gig open.
+Cleanup: customer deleted, owned rows0, bucket absent, API/simulator stopped. Owner audit
+20260922-stream1-p10-worker-r1 (20 files) MANIFEST17630656c1c5981799b1ee307eaf7f9cf4295f86164804526d6800874abb4f39.
+Paid: merged master c1280e078 (PR149/154/151/152 code) as2d238f0b4; no new migrations,
+`check-migrations` passes against origin/master; pushed, exact CI pending at publication.
+
 ## September 22 — coordinator review of peer PRs 149/151/152/154
 
 Reviewed diffs, descriptions and CI. 149 (iOS push registration deferred until signed in),
