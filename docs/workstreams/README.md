@@ -8,13 +8,14 @@ as `69be3c11dc8520aed91228570460487d5579c82d` and PR34 is also marked merged. PR
 untouched; duplicate PR158 was already closed. This does not close any acceptance row.
 
 - **Master / Stream 1:** exact master CI [35714120974](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35714120974)
-  is still running native checks; backend, web, migration safeguards and complete schema
-  replay/lint/contracts passed. Paid branch `codex/paid-gig-integration` was cleanly
-  rebased and pushed to `69be3c11d`, with no tree differences or migration renames.
-  Migration policy passes against that exact master. New one-file P10 repair
+  passed all checks, including all native jobs. Paid branch was rebased first to
+  `69be3c11d`, then fast-forwarded/pushed to `662ab04b5` after the one-file P10 repair
   [PR173](https://github.com/WangPantopus/skinny-pantopus/pull/173),
   `codex/p10-expired-bid-pagination` at `9f1d1db824bffdbff3dfe0a1cd406a7565ff0451`,
-  runs in the same paid worktree; its exact CI35715834339 passes all applicable checks.
+  passed exact CI35715834339 and merged as `662ab04b5713256cd27d8a4d4de838d8bcd8747e`.
+  The paid worktree is clean on `codex/paid-gig-integration`; migration policy passes.
+  Later merged-master CI is observed separately; initial paid integration is accepted
+  only within its recorded scope.
 - **Stream 2:** existing task `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` resumed. PR160
   rebased onto `69be3c11d`; existing regressions exposed historical `cancelled` receipt/
   list compatibility and a settings fixture that lacked explicit verification. Minimal

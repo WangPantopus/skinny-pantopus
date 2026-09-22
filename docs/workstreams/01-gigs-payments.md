@@ -1,5 +1,26 @@
 # Stream 1 — Gigs and payments
 
+## September22 — retained ledger and native-control boundaries
+
+Read-only G03/G04/O01 reconciliation at master662ab04b5: source has81 runnable SQL
+migrations; owned wallet-read-r1 has79 applied versions.57 retained files match current
+names and bytes,21 paid files are byte-identical under newer names, and the22nd differs
+only by one deployment-order comment. Two later Home migrations (atomic settings profile
+and package in_transit) are absent. The79-entry payment evidence is preserved with that
+exact boundary; current-master canonical CI replay does not establish populated adoption.
+No ledger/schema was changed. Do not blindly push the renamed chain or rewrite history;
+use a reviewed canonical environment/adoption plan for combined current-master journeys.
+Owner bundle `.pantopus-recovery/audits/20260922-stream1-ledger-reconciliation-r1/`,2 files;
+MANIFEST `eb71401e1159060c07675161a46adfa20d66e8bc9c09511b230f60cf83af4370`.
+
+Native UI capability: active Xcode27 has DeviceHub.app rather than Simulator.app.
+CUA bindings to DeviceHub by ID, verified path and Xcode developer-tool launcher all
+time out; Xcode accessibility responds. No device reset or peer device change. Task-local
+official Maestro2.10.0 archive checksum verified and CLI help works (analytics disabled),
+but no driver invocation or new UI acceptance occurred. Native3DS/dispute and other new
+iOS interaction acceptance remain unverified; existing accepted evidence is preserved.
+No new fixtures, tables, application files or tests. Retained SQL64562/API64561 stays up.
+
 ## September 22 — read-only release app-link boundary (O04/O05/N01)
 
 The current public `.com` apex and www hosts return both association files with HTTP
@@ -30,7 +51,7 @@ Branch `codex/p10-expired-bid-pagination`, source
 `9f1d1db824bffdbff3dfe0a1cd406a7565ff0451`, [PR173](https://github.com/WangPantopus/skinny-pantopus/pull/173).
 Paid integration was first rebased/pushed to master69be3c11d (PR47 and34 merged by the
 founder); the new repair starts from that master in the existing paid worktree.
-Changed path: `backend/jobs/expirePendingPaymentBids.js` only. Exact CI35715834339 passes all applicable checks. No new application file, table, migration, service, screen or unit test.
+Changed path: `backend/jobs/expirePendingPaymentBids.js` only. Exact CI35715834339 passes all applicable checks. PR173 merged as662ab04b5 after initial master69be3c11 CI35714120974 completed fully green; paid integration adopted/pushed662ab04b5 with migration policy passing. No new application file, table, migration, service, screen or unit test.
 
 Reproduced with actual job/SDK/PostgREST/SQL:1000 retained durable attempts fill the
 server's1000-row page; a later expired legacy bid remains pending_payment after two
@@ -46,7 +67,7 @@ on the next clean run. Existing paidGigPaymentProof:87/87; syntax, diff and actu
 migration policy pass. Reuse the prior installed P10 checkout→expiry→Resume/Cancel
 evidence (all20 hashes verified) and current master's passed complete-schema replay.
 
-Evidence: owner `.pantopus-recovery/audits/20260922-stream1-p10-workload-r1/`,10 files;
+Evidence: owner `.pantopus-recovery/audits/20260922-stream1-p10-workload-r1/`,11 files;
 Capacity extension:10,000 durable attempts plus one later legacy bid; first pass47.6s
 with1 guarded update, repeat81.0s with0 writes. All durable attempts retained. These
 are local timing observations, not hosted throughput guarantees.

@@ -13,10 +13,11 @@ separate documentation branch; the live hub is in the neutral coordination
 worktree. This document remains the authoritative backlog. First bounded
 milestones: P04 Start Work (Stream 1), M02 browser guest passes (Stream 2), and
 N04 personal blocking/direct messages (Stream 3). Discovery closes no rows.
-September22: the founder merged PR47 and PR34; current master is `69be3c11d`.
-The payment integration is now on master, while its broader acceptance and exact
-master native CI remain open. PR173 repairs a reproduced P10 expiry pagination
-defect; bounded proof and limits are in Stream1 status. No closed-row count changes.
+September22: the founder merged PR47 and PR34 as `69be3c11d`; its full CI passed.
+PR173 then merged as `662ab04b5`, repairing reproduced P10 expiry pagination.
+The payment integration is on master with broader acceptance still open. Bounded
+10,001-bid proof, retained-ledger and native-control limits are in Stream1 status.
+No closed-row count changes.
 
 The current handoff supersedes historical PR state below; source-specific paid
 candidate evidence is linked there and does not establish master acceptance.
