@@ -1,5 +1,81 @@
 # Three-stream coordination
 
+## September 22 — coordinator resumed; P02 >24h discovery accepted on web; PR143/144 merged
+
+Stream1 coordinator resumed in a new session (prior coordinator session idle since
+06:55 PDT; Stream2/3 handoffs waiting). Paid53e738cfc exact CI35607497359 completed
+SUCCESS in full (previously recorded as running). PR143 (Stream3 A02 two-context
+remote sign-out + A01 proposal) reviewed: 707 durable hashes verified, merged
+2201ceabd. PR144 (Stream2 package edit permissions repair; 33/33 hashes verified,
+CI35676049112) then received the founder's In Transit decision (migration
+20260922010000 strict superset, PUT status400, control gating) with CI on
+d4f33b930 green; merged 708b0a931 after branch update. Master CI35678148827 on
+708b0a931 is running; paid adoption waits for it. PR34/47 remain drafts, 46 separate.
+
+Stream1 P02: the four owned Stripe TEST tip intents (2026-09-20 22:24–22:40 UTC) are
+now 27h old, so the natural >24h cold discovery that the 07:17 UTC receipt could not
+prove was run through the real web UI on the retained owned wallet-read-r1 stack:
+fresh browser reopened the aged originals, Retry same tip discovered the real
+succeeded (fully refunded) and canceled intents by customer list with the −24h
+window, recorded refunded_full/canceled receipts, zero provider writes; injected
+provider failure, lost committed reply, duplicate tap, stale retry, reload and
+worker-permission 403 all behaved as designed. Details/limits in
+[Stream1](01-gigs-payments.md); owner audit20260922-stream1-tip-age-discovery-r1
+(22 files, MANIFEST 8a0530095c1ed0877bb758b231e63a5c3c0436534e1cb045e5d8c3b78fac7039).
+No app edit/new test. P02 stays open only for hosted/L01 provider boundaries.
+
+Stream2 next (after master708b0a931): D02 browser media-discard baseline on the same
+owned18141/18142/64550–59 runtime and current master source. Reproduce in the actual
+issue/bill/package panels whether attached media is discarded or a write error is
+silently swallowed: one synthetic record each, real routes/SQL/storage or its explicit
+local limit, exact before/after state, no repair until reproduced; hand off the smallest
+existing-handler proposal. Exact child-first cleanup; preserve ledger56/approved
+migrations. The Home iPhone17 simulator EB5AD759 and backend8000 Stream2 started for
+the founder's device session remain Stream2-owned: shut both down when the founder is
+done; Stream1 will not touch them. No native acceptance claim from that build.
+
+Stream3 grant: A01 signup/verification/reset proposal (durable708 f967e080) is granted
+as written: exactly one synthetic stream3-auth-r3-*@example.com created only through
+the real register form and deleted at cleanup; Evan d3671605 as reset target with the
+recorded password restored by a second real reset; retained Mailpit64535/36 as the only
+mail sink; journeys as proposed (success, duplicate400, pre-verification login, consumed
+link reuse/resend, reset success/old-password failure, consumed reset reuse, unknown
+email). No provider/hosted mail, limiter exhaustion, lost-response hook, clock/config
+change or app edit; expired-token cases stay a recorded limit. Retained36126/36139/DB
+only; record exact GoTrue/User/session/mail rows before and after and clean exactly.
+
+Stream1 next: adopt master708b0a931 into paid after its CI, then P03 installed native
+tips on owned simulator C2BCF36A via headless simctl plus the supported simulator
+control tool (Simulator.app is still absent under Xcode27; EB5AD759 is Stream2's).
+
+## Stream2 D01 package-edit entry baseline assignment
+
+Coordinator verified12 source artifacts (manifest61d14626),54 Git bindings with53
+present/one historicalmissing. All six compared dashboard variants give existing
+clickable Deliveries rows a no-op callback. Existing package-aware panel opener,
+editpanel/savehandler/SDK PUT/permissionroute/HomePackage contract already exist.
+This is a source lead, not yet an observed UIdefect; no replacement is justified.
+
+Assign one baseline on Stream2 owned18141/18142/64550–59/retainedledger56, current
+source rebound before runtime. Reuse existing ownedfixture/syntheticidentity only;
+relevant packageGET/POST/currentauthority/readprojection must run actual existing
+routes/services/SQL, including truly emptyGET200 and rendered createdrow. Label
+unrelated scaffoldcollections; do not synthesize the package list/editor result.
+Existing TrackPackage UI creates exactly one clearly synthetic expected package
+(description/carrier only; no media/tracking/provider). Record real201/fullrow and
+unrelatedfullstate. ExpandDeliveries and click that exact row once; capture actual
+panel/URL/controls/requests/fullstate. If editor opens, record then close unsaved.
+No PUT/status/pickup/repeatedcreate/fault or applicationedit is assigned. InTransit
+schema/read-filter mismatch is a separate later requirement, not part of this repair.
+
+Clean exact newlycreatedpackage and ownedbasefixture child-before-parent; verify
+allcounts0/fullunrelatedstate/RPCprovenance/ledger56 unchanged. Close newtab/ownAPI/
+Next/fivecontainers and releaseports; preserve otherdata/caches/devices/peers.
+No new appfile/helper/table/migration/design/unit test. Hand off reproduced outcome
+and smallest existing-opener wiring proposal only if rowno-op actually occurs.
+Reuse accepted dashboard-read/current-authority/panel-retirement evidence within
+source/runtime limits; no guest/member/Settings journey replay.
+
 ## Current paid head fixed; one A02 browser reconnect retry
 
 Paid53e738cfc is published, CI35607497359 safeguards/freshschema replay pass; fullCI
