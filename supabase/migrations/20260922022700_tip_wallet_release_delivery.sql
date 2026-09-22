@@ -3,12 +3,16 @@
 -- A forward migration is necessary because the existing applied functions only
 -- admit gig_payment. Reuse their locks, proof, refund fencing and delivery leases;
 -- do not create a parallel outbox or rewrite applied migration history.
+-- Target the inner implementation retained by 20900; its public wrapper must
+-- keep the Gig→Payment stop fence. This unmerged candidate was renumbered from
+-- 22400 after fresh-schema CI exposed the wrong target. An exact prior delivery
+-- transformation is accepted for retained candidate databases; unknown shapes fail.
 SET LOCAL lock_timeout='5s';
 
 DO $migration$
 DECLARE definition text; replacement record;
 BEGIN
- definition:=pg_get_functiondef('public.settle_paid_gig_wallet_income(uuid,jsonb)'::regprocedure);
+ definition:=pg_get_functiondef('public.settle_paid_gig_wallet_income_before_stop_fence(uuid,jsonb)'::regprocedure);
  FOR replacement IN SELECT * FROM (VALUES
   ($old$p.payment_type IS DISTINCT FROM 'gig_payment'$old$,
    $new$(p.payment_type IS NULL OR p.payment_type NOT IN ('gig_payment','tip'))$new$),
@@ -52,10 +56,11 @@ BEGIN
     AND (p.payment_type='tip' OR payment_id=p.id))$new$)
  ) AS replacements(old_text,new_text)
  LOOP
-  IF position(replacement.old_text IN definition)=0 THEN
+  IF position(replacement.old_text IN definition)>0 THEN
+   definition:=replace(definition,replacement.old_text,replacement.new_text);
+  ELSIF position(replacement.new_text IN definition)=0 THEN
    RAISE EXCEPTION 'Tip wallet delivery source differs from the reviewed function';
   END IF;
-  definition:=replace(definition,replacement.old_text,replacement.new_text);
  END LOOP;
  EXECUTE definition;
 END
