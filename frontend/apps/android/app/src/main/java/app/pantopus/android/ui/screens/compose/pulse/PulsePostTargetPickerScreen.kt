@@ -2,6 +2,11 @@
 
 package app.pantopus.android.ui.screens.compose.pulse
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,6 +31,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -36,6 +42,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
@@ -63,6 +70,32 @@ fun PulsePostTargetPickerScreen(
     var expandedBusinesses by remember { mutableStateOf(false) }
     var locationError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // "Current Location" needs the runtime permission before the fused
+    // provider will answer; without this the row only ever showed "Check
+    // permissions" and never asked (mirrors PlacePickerSheet).
+    fun selectCurrentLocation() {
+        scope.launch {
+            locationError = null
+            val target = viewModel.selectCurrentLocation()
+            if (target != null) {
+                onSelect(target)
+            } else {
+                locationError = "Could not get your location. Check permissions and try again."
+            }
+        }
+    }
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions(),
+        ) { results ->
+            if (results.values.any { it }) {
+                selectCurrentLocation()
+            } else {
+                locationError = "Could not get your location. Check permissions and try again."
+            }
+        }
 
     LaunchedEffect(Unit) { viewModel.load() }
 
@@ -119,14 +152,10 @@ fun PulsePostTargetPickerScreen(
                             isLoading = isLocating,
                             tag = "pulseTarget_currentLocation",
                         ) {
-                            scope.launch {
-                                locationError = null
-                                val target = viewModel.selectCurrentLocation()
-                                if (target != null) {
-                                    onSelect(target)
-                                } else {
-                                    locationError = "Could not get your location. Check permissions and try again."
-                                }
+                            if (hasLocationPermission(context)) {
+                                selectCurrentLocation()
+                            } else {
+                                permissionLauncher.launch(LOCATION_PERMISSIONS)
                             }
                         }
                         locationError?.let { msg ->
@@ -485,3 +514,13 @@ private fun TargetPickerSkeleton() {
         Shimmer(width = 340.dp, height = 72.dp, cornerRadius = Radii.lg)
     }
 }
+
+private val LOCATION_PERMISSIONS =
+    arrayOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+    )
+
+private fun hasLocationPermission(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED

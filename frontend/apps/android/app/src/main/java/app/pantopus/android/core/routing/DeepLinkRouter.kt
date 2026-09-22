@@ -720,9 +720,21 @@ object DeepLinkRouter {
                 } else {
                     Destination.Unknown(raw)
                 }
-            else -> Destination.Unknown(raw)
+            else ->
+                // A bare single segment is the web's canonical profile URL
+                // (`/[username]`, e.g. the `new_follower` notification link);
+                // resolve it like `pantopus://u/:username`.
+                if (segments.size == 1 && isUsernameSegment(first)) {
+                    Destination.User(first)
+                } else {
+                    Destination.Unknown(raw)
+                }
         }
     }
+
+    /** Usernames are letters, digits, dots, dashes and underscores; anything else stays Unknown. */
+    private fun isUsernameSegment(segment: String): Boolean =
+        segment.length in 1..64 && segment.all { it.isLetterOrDigit() || it == '.' || it == '-' || it == '_' }
 
     /**
      * Pure string plumbing for incoming links. Nothing here touches
