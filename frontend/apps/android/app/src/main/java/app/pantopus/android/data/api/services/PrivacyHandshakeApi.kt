@@ -52,6 +52,17 @@ interface PrivacyHandshakeApi {
     /** `POST /api/personas/:id/follow` — handshake submit.
      *  `Response<HandshakeSubmitResponse>` so the repository can
      *  surface 400/409 codes via the error body. */
+
+    /**
+     * Plain follow without the handshake schema — the same route the web
+     * profile uses when the `audience_profile` flag is off (the backend only
+     * enters handshake mode when `acknowledged_platform_trust` is in the body).
+     */
+    @POST("api/personas/{id}/follow")
+    suspend fun plainFollow(
+        @Path("id") personaId: String,
+    ): Response<HandshakeSubmitResponse>
+
     @POST("api/personas/{id}/follow")
     suspend fun submit(
         @Path("id") personaId: String,

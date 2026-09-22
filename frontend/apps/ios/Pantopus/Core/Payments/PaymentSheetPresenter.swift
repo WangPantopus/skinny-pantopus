@@ -90,6 +90,7 @@ public final class StripePaymentSheetPresenter: PaymentSheetPresenting {
     private func makeConfiguration(customer: String, ephemeralKey: String) -> PaymentSheet.Configuration {
         var configuration = PaymentSheet.Configuration()
         configuration.merchantDisplayName = merchantDisplayName
+        configuration.returnURL = "pantopus://stripe-redirect"
         // The customer + ephemeral key let PaymentSheet show saved cards and
         // save new ones. They're best-effort for one-off checkouts (3B): when
         // the backend couldn't mint a key we still collect a card against the
