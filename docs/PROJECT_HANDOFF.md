@@ -18,13 +18,16 @@ real client/API/SQL success, failure, recovery and edge-case verification, with 
 tests or coverage target. Preserve designs and accepted evidence.
 
 PR177 merged `50b1ee8d7` after CI35751227114; PR179 merged `1313ea68b` after CI35755064344;
-PR180 merged `fc29902ca` after CI35755564437. PR182 `7b6ddc651` awaits final schema check in
-CI35756333346. Continue the serial queue and keep docs161/170/174 last.
+PR180 merged `fc29902ca` after CI35755564437. PR182 merged `a460fd5d1` after full
+CI35756333346. PR183 `990d05e9d` now runs fresh CI. PR191/192 are published for coordinator
+review after190; docs161/170/174 remain last. Current master aggregate CI is pending.
 
 Booking verification reached real Chrome checkout, actual TEST1250 authorization, real host
 Approve200/capture and confirmed SQL. Controlled maturity plus the existing worker credited
 1063 to the host wallet. Reproduced: confirmation said Payment received before capture;
-payer release notice says a gig and points to /gigs/null. No application repair yet. IAB's
+payer release notice says a gig and points to /gigs/null, which returns realAPI404/Gig not found.
+Candidate branch codex/booking-payment-receipt now repairs status wording and the booking
+notification destination in three existing files; verification is underway. IAB's
 blank Stripe frame is a separate browser boundary; Chrome card checkout succeeded. Owned
 f9220539 provider objects, two bookings and three synthetic identities are still retained
 for repair verification/explicit cleanup; ledger84 unchanged. API18132/Next18133 and two

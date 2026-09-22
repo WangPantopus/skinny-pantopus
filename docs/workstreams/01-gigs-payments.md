@@ -18,17 +18,67 @@ real client/API/SQL success, failure, recovery and edge-case verification, with 
 tests or coverage target. Preserve designs and accepted evidence.
 
 PR177 merged `50b1ee8d7` after CI35751227114; PR179 merged `1313ea68b` after CI35755064344;
-PR180 merged `fc29902ca` after CI35755564437. PR182 `7b6ddc651` awaits final schema check in
-CI35756333346. Continue the serial queue and keep docs161/170/174 last.
+PR180 merged `fc29902ca` after CI35755564437. PR182 merged `a460fd5d1` after full
+CI35756333346. PR183 `990d05e9d` now runs fresh CI. PR191/192 are published for coordinator
+review after190; docs161/170/174 remain last. Current master aggregate CI is pending.
 
 Booking verification reached real Chrome checkout, actual TEST1250 authorization, real host
 Approve200/capture and confirmed SQL. Controlled maturity plus the existing worker credited
 1063 to the host wallet. Reproduced: confirmation said Payment received before capture;
-payer release notice says a gig and points to /gigs/null. No application repair yet. IAB's
+payer release notice says a gig and points to /gigs/null, which returns realAPI404/Gig not found.
+Candidate branch codex/booking-payment-receipt now repairs status wording and the booking
+notification destination in three existing files; verification is underway. IAB's
 blank Stripe frame is a separate browser boundary; Chrome card checkout succeeded. Owned
 f9220539 provider objects, two bookings and three synthetic identities are still retained
 for repair verification/explicit cleanup; ledger84 unchanged. API18132/Next18133 and two
 owned browser tabs are active. No native build. Earlier runtime/count checkpoints are history.
+
+
+
+## September 22 — Stream1 row reconciliation against current evidence
+
+This accounting uses the original row criteria and accepted bundles already linked below.
+Current count remains 9 closed/71 partial-open. G02 is the sole newly closed row in this
+reconciliation; the founder performed its integration. P01 is a completed bounded milestone.
+The remaining cells name concrete missing evidence or decisions; an untested case is not a
+reproduced defect. No extra hardware/provider requirement is imposed on a source-only row.
+
+| Row | Accepted work to preserve | Exact remaining boundary / disposition |
+|---|---|---|
+| P01 | Original tip reservation, immutable provider parameters, route/SQL recovery | Completed reservation milestone; original report explicitly assigns broader real-provider acceptance to P02/L01. Preserve the founder's instruction not to count this milestone as whole-row closure. |
+| P02 | Actual TEST original recovery, decline/retry, browser 3DS/cancel, naturally aged >24h discovery on all three clients | Historical reconciliation beyond the restored owned examples and hosted provider operation remain unverified. Cold discovery is complete and must not be repeated from the old note. |
+| P03 | Installed iOS/Android aged recovery, provider failure, lost reply, duplicate tap and stale retry; browser actual TEST checkout | Native tip creation/cancellation/3DS and unavailable local-storage recovery remain separate from paid-bid PaymentSheet acceptance. Locally actionable when supported device control is available. |
+| P04 | Start Work, completion/reopen/owner capture, immutable displayed terms; actual TEST paid workflow | No-show/cancellation-fee payer and recipient policy is a founder decision. Do not invent or silently waive fees. |
+| P05 | Zero-fee unstarted stop and held-money recovery | Explicit fee/residual policy and its execution remain undecided; no code change is authorized by the empty checkbox alone. |
+| P06 | Actual TEST dispute evidence, won/lost outcomes before and after wallet income, debt/proof controls and recovery | Native dispute presentation/actions; historical real Connect transfer/reversal and hosted support/debt operation. Local native presentation is distinct from unavailable Connect credentials. |
+| P07 | Paid-gig atomic wallet delivery; reviewed tip atomic-delivery repair190 | Booking receipt and release destination defects are reproduced and under repair. Booking delivery failure/recovery and support handling of retained unknown operations remain beyond this normal-delivery proof. |
+| P08 | Installed iOS poster/Android worker actual TEST bid→authorization→proof upload→capture→wallet; browser journey | Exact native notification return and remaining role/client-specific denial/lost/stale/account-lifetime cases; local Storage is not hosted S3 and synthetic Connect is not bank payout. |
+| P09 | Browser actual TEST refunds/stops; installed iOS partial refund, lost reply recovery, over-limit guard and hold release | Android payer refund controls, native dispute/3DS where applicable, post-refund wallet release and historical transfer reversal. An Android worker participating in setup is not Android payer refund acceptance. |
+| P10 | 10,001-bid expiry/pagination, retained durable checkout behavior, completion-original retention and cleanup recovery | Production workload/capacity and provider delivery remain; bounded local workload checks must not be repeated just because production is unavailable. |
+| G01 | PR32/34/47 merged; reviewed repairs integrating serially | Remaining reviewed repair queue and original Home/payment acceptance; merge count is not feature acceptance. |
+| G02 | Both original payment heads/merge are master ancestors; main index clean, unrelated work preserved | Closed with the dedicated Git evidence bundle. |
+| G03 | Combined master source now81 SQL files, through22200; constituent PR schema replay passes | Finish integration of reserved forward223/225/226/227 and recheck ordered source; old59-version inventory is retired. |
+| G04 | Multiple complete clean-schema CI replays and source-bound local populated controls | Final combined populated upgrade/deletion-dependency preservation after the queued forwards; retained candidate224 ledger is explicitly noncanonical. |
+| G05 | Each merged PR passed its own exact-head CI | Current aggregate master CI plus final remaining PR heads. Earlier master runs canceled by subsequent merges are not aggregate acceptance. |
+| O01 | Local ledger inventories and preserved migration history | Named hosted environments and their actual ledgers/adoption plans; no historical ledger rewrite. |
+| O02 | Bounded owned database restore plus independent local object-byte recovery | Recovery from the actual external file store, production backups and approved recovery objectives. Local bytes do not establish hosted recoverability. |
+| O03 | Repository config/secret inventory and local contracts | Actual hosted Auth/Storage/queue/provider configuration and least-privilege checks for the release candidate. |
+| O04 | Source/build/flags recorded per accepted milestone | One final cross-client release manifest after integration, including geography and actual deployed worker/schema versions. Can prepare locally; deployed drift needs environment access. |
+| O05 | Existing deployment/support/runbook artifacts | Validate exact production routing, certificates, observability, rollback and post-deploy procedure; actual cutover remains a later concrete approval. |
+| O06 | Existing debug builds and bounded worker/retention proofs | Distribution signing/store builds and production APNs/FCM plus deployment-sized capacity. Debug simulator success is not store delivery. |
+| L01 | Consolidated source/pricing/activation draft in existing release checklist | Account entitlements, AWS sizing/traffic, vendor allowances and founder policy inputs before final priced review. No services purchased. |
+| L02 | Local real-provider TEST subjourneys | Approved-provider scenarios and final release-specific Home/Pulse/Beacon matrix after that bundle. |
+| L03 | No production cutover claimed | Approved deployment, actual post-deploy checks and rollback readiness. |
+| L04 | No pilot/product-market fit claim | Consenting users, pilot outcomes and fixes from real usage after readiness. |
+| U01 | Accepted unit/invitation identity repairs | Personal residency-card distinctions, narrow member/badge/chat overlap, verification wording and long activity identities. These need current rendered evidence. |
+| U02 | Workflow-level visual checks only | Remaining reachable-screen large text/zoom/keyboard/screen-reader/contrast/dark-mode matrix. Most is locally actionable; no blanket provider gate. |
+| U03 | Recorded per-workflow error/retry/duplicate/cancel/lost-reply checks | Apply missing cases to each actual affected client; current booking receipt/notice failure is concrete. No claim of all-app edge-case coverage. |
+| U04 | Accepted Home/account-switch and session lifetimes | Remaining multi-client foreground/background/cold-process and concurrent-account journeys. Physical-provider receipt is only one separate boundary. |
+| U05 | Existing screen and action catalogs | Final integrated release-build inventory on all three clients after repair integration; keep every unfinished reachable action explicit. |
+
+Next: complete the current booking repair and evidence cleanup, review peers' corresponding
+row reconciliation, and continue the serial PR queue. Do not reopen accepted journeys merely
+to create activity, and do not relabel unresolved whole rows as complete for a higher count.
 
 
 ## Active coordinator checkpoint — September 22, booking verification
