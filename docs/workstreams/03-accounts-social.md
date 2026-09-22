@@ -2991,3 +2991,34 @@ interruption, not product failure or remote-revocation acceptance. Context4→2
 identity/retry scope needs coordinatorreconciliation; actual two-context isolation
 unverified. Safe remote-browser-before/abort artifacts; durable697
 MANIFEST **622e0f021ff1778933d0089cb65905867e8c23862bf94909c8dd569df1891eeb**. No tests/appedit/runtime restart.
+
+
+## A02 reconnect retry — runtime restored, second browser context unavailable
+
+README "one A02 browser reconnect retry" followed on a new Claude session (harness
+changed from Codex). Documented retainedAPI48548/80449 andNext42165/42493 were absent
+at start: no18130/18131 listener, PIDs gone, hostuptime1d3h (no reboot); retained
+Supabase stream3-block-r1 64531–37 andSMTP64535 still running. Only the owned API/Next
+were restarted from the exact previously captured private launch files (identical
+executable/argv/cwd/22-key env, original hook sha d7c8b953 unchanged, all21 fault
+trigger paths absent), Next with NEXT_DIST_DIR=.next-stream3 on stream3-auth.localhost
+18131; login page200. This is restoration from identical inputs, not continuity of the
+prior processes. No app edit/env mutation/DB write; local287058421 source fixed.
+
+Evan recheck after restart (a02-retry-before.json): appUnrevoked0/total27, GoTrue0,
+devices0, resumeGrants0, prefs0; appSessions/GoTrue/prefs byte-equal to remote-browser-
+abort.json; only two /api/health404 liveness probes in authHTTP since restart.
+
+Second context: Claude in Chrome list_connected_browsers returned [] initially and on
+the one bounded retry; tabs_context reported extension not connected, no tab group, no
+owned target tab. Google Chrome process57357 runs but no extension instance is signed
+in to this account. Prior Codex IAB1/Chrome4→2 identities are not addressable here.
+Per grant: no tab creation, profile/alternate browser/extension install, cookie edit,
+IAB login or credentials. Built-in browser pane left closed. Capability boundary, not
+product failure; distinct-session/A step-up/B retirement scope untouched.
+
+Artifacts a02-retry-before/runtime-restore/browser-boundary.json; durable700
+MANIFEST **8ce0a2ffb4d2fa98f9112c91c833a4b1c962d3863cb36b1690d63b3e1709ed65**.
+Next: user/coordinator provides a connected Claude in Chrome extension (or another
+supported second context); then Chrome target tab first, then IAB tab, per grant.
+Runtime36126(API)/36139(Next) retained for that retry. No tests/app edit.
