@@ -1,5 +1,18 @@
 # Pantopus project handoff
 
+## Current coordinator checkpoint — September 22, 13:50 UTC
+
+PR165 merged39492cd52 after full fresh CI35732209909; PR181 merged2b7378aa4
+after fresh CI35735581542. Current master2b7378aa4; aggregate merged-master checks
+pending. Queue166→167→168→177→179→180→182, then the active dispute repair;
+docs161/170/174 last, verify-only171/172 never merge. Current Stream1 branch
+codex/dispute-evidence-contract has one focused existing-service repair in verification;
+API18132/Next18133 and owned real Stripe TEST dispute fixture are active. Stream3
+released the heavy build slot. See the newest Stream1 section for exact source,
+evidence, provider cleanup requirements and native-control limits. Eight closed/72
+partial-open counts remain. The older runtime and merge snapshots below are historical.
+
+
 ## START HERE — September 22, coordinator resumed after the paid merge
 
 The founder resumed all three existing streams and requested current-master adoption.

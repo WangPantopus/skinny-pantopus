@@ -1,5 +1,46 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — notification and migration guard integrated; dispute verification active
+
+PR165 merged39492cd52ed4949ff6c01acdf5d41e92153e9466 after exact
+f8079b1f1/CI35732209909 passed, including all three iOS simulator jobs. PR181 merged
+2b7378aa474a26b67ea6f9dba61ad97105aa7c0b after current47ec9205c/CI35735581542 passed.
+Their PR bodies now describe final behavior and verification limits. Next166 has a
+current-master update requested; remaining queue166→167→168→177→179→180→182,
+then new dispute repair and docs161/170/174. Verify-only171/172 never merge.
+Merged-master checks remain required; the preceding715 aggregate was still running
+before these merges and is not recorded as passed.
+
+Current application branch codex/dispute-evidence-contract starts from715ccd8c0,
+with a focused uncommitted change in existing backend/stripe/disputeService.js.
+Real Stripe TEST1250 charge generated a dispute; unchanged provider event locally
+signed/forwarded through the actual webhook returned200 and persisted disputed plus
+two notices. Web History changed captured_hold→disputed. Baseline evidence silently
+omitted Gig/Bid/User/Review/Chat due to nonexistent schema names; canonical-only reader
+then reproduced Stripe's rejection of narrative text used as a file-upload ID.
+Candidate corrects existing names, uses the supported bounded narrative field, preserves
+money units, and excludes deleted/system/third-party messages. Actual saved TEST draft
+contains the two-party conversation, completion and review with no final submission.
+Actual SQL permission refusal returns500 with provider evidence/payment unchanged;
+restored ACL retry200. Optional-row/missing-payment controls and52-message latest50/
+17340-character provider draft pass. Eight existing webhook regressions pass. New PR,
+CI, durable sanitized bundle and final provider/SQL cleanup are still pending.
+
+Runtime is ACTIVE: Stream1 API18132 and Next18133, owned retained SQL64562/API64561;
+f9220530 synthetic dispute fixtures and one real Stripe TEST dispute/customer remain.
+Private runtime/cleanup instructions are in /private/tmp/pantopus-stream1-dispute-r1
+and coordinator private RESUME. Resolve the owned TEST dispute before refund/cleanup;
+no live/provider-hosted acceptance. CUA tab3 is logged in on web History; native apps
+remain terminated on retained C2/5558. CUA's Simulator rejection leaves native dispute
+unverified; alternate-driver user question remains pending. Stream3 released heavy
+build grant; no heavy build is reserved. Peer resources remain untouched.
+
+PR182 is reviewed as backend-only canonical profile PATCH repair and has green
+CI35734436958. The131-file Stream3 MANIFEST1ed1182466b240fab36ecc6b2bd4a0eb92b2b4706c339174b7fd4ef29ff982fc
+was independently verified, including populated-skill preservation and cleanup;
+newer peer N02 evidence is pending coordinator verification. No backlog row closes.
+
+
 ## September 22 — prior completion-file retention recovered and cleaned
 
 The pre-existing04:02UTC tombstone discovered by the price audit was the sole actual
