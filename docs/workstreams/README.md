@@ -29,11 +29,15 @@ Last four Stream2 follow-up turns completed with no output; no new progress/slot
 40-row accounting is inferred. Existing backend/LAN runtime is preserved. 192 is accepted within its recorded preservation scope and remains queued after191;
 its completed journeys must not be rerun. Outstanding row accounting does not block this repair.
 
-Stream3's187-file bundle hashes pass, MANIFEST3f0a7bac2613d80a2a6d314e1b8eaa51c5671b4a412fc071aec989fc3a3edb47.
+Stream3's191-file bundle hashes pass, MANIFESTf72d89f805e0592d0a7d967e2ed1afb121dfe10ad81212543b2c2efc4f892107.
+Installed profile readback503 preserves2 unsaved; restored grant/retry200 shows saved;
+exact cleanup/logout/API stop recorded and XMLs independently checked.
 Android cold-process session/profile200 and logout200 are accepted within local scope;
 portfolio chooser reaches actual upload500 due invalid storage credentials, no partial File.
-iOS installed destination remains a precise UI-control boundary.1953b374454a freshCI35768401037
-waits Android lint/test/assemble. Stream3 continues10-row reconciliation independently.
+iOS installed destination remains a precise UI-control boundary.1953b374454a fullCI35768401037
+passes; remains queued after194. Stream3 must correct its row mapping: N02 is physical
+Android acceptance and A04 is address/Smarty coverage, not OAuth. Accepted workflow evidence
+remains valid; its mapping must follow the exact authoritative backlog before closure.
 Count remains9closed/71partial-open; P01 is a separate bounded milestone.
 
 
