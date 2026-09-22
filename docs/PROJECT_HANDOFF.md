@@ -1,13 +1,13 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — September 22, 2026, 22:30 UTC
+## CURRENT RESUME POINT — September 22, 2026, 22:45 UTC
 
-A Claude Code coordinator session ("Pantopus Stream 1 coordinator handoff") took over Stream 1 and coordination at about 21:05 UTC. The previous Codex coordinator thread (`01a0c897…`) finished at 20:35 UTC; the Stream 2/3 Codex tasks have been idle since 20:07/20:15 UTC. The [coordination summary](workstreams/README.md) records the owners, checkouts, reservations and **the two peer assignments the founder relays**, because this coordinator cannot message Codex tasks.
+A Claude Code coordinator session ("Pantopus Stream 1 coordinator handoff") took over Stream 1 and coordination at about 21:05 UTC. The previous Codex coordinator thread (`01a0c897…`) finished at 20:35 UTC; the Stream 2/3 Codex tasks have been idle since 20:07/20:15 UTC. The [coordination summary](workstreams/README.md) records the exact heads, owners, checkouts, reservations and **the two peer assignments the founder relays**, because this coordinator cannot message Codex tasks.
 
-- **Integration:** PR192 → `37cb6d216`, PR193 → `6f7c700e6`, PR194 → `094ed5826` merged serially, each at a fresh exact-head CI (the 194 import conflict was resolved by keeping both imports). PR195 fresh CI is running on `7f557a0069`; PR196 follows. Docs PR161/170 are merged into the hub branch, so PR174 lands all three last without losing the PR170 `native-social-r1` history or the newer summaries.
-- **Master CI:** the `2048d971` push failed only in iOS iPhone 16 `CeremonialMailViewModelTests.testContinueFromDecideAdvancesToVerify` (a timeout that passed on the two other simulators). Later runs were superseded by queue merges. Final-master aggregate CI is still to be recorded.
-- **Next bounded work:** Stream 1 holds the heavy native slot for **P09 Android payer refund controls**: partial refund, lost reply → Check status, over-limit guard and hold release on the installed Android app as the payer, plus post-refund wallet release, with real Stripe TEST. Stream 2: **R06 residency letters** issue/view/public-verify/revoke across web/iOS/Android. Stream 3: **iOS parity of the PR195 personal-block reopen defect** (iOS `loadRelationship` reads only `/relationship` and fails open).
-- **Runtime corrections:** Stream 3's Next 18131 is running (pid 15494), contrary to the 20:00 note. Stream 2's retained `home.js` runtime patch is byte-identical in its additions to merged PR192.
+- **Integration queue complete:** PR192 → `37cb6d216`, PR193 → `6f7c700e6`, PR194 → `094ed5826`, PR195 → `86f63a0ea`, PR196 → **`b36d379b2`** (final master), merged serially, each at a fresh exact-head CI. Canonical migrations end public230 → public231 with no history rewrite. Docs PR161/170 are merged into the hub and land with PR174.
+- **Master merges do not deploy:** in Deploy Backend run `35789209741` every build, migration and deploy step was skipped, because backend deployment is disabled. Final-master aggregate CI is run `35791178691`. The only earlier master failure was the iOS iPhone 16 `CeremonialMail` timeout, which passed on the other simulators.
+- **Stream 1 evidence since takeover** (installed Android, real Stripe TEST, cleanup verified): P09 Android payer refunds, lost reply, over-limit, hold release and the refund-aware wallet release (213 of 1063) in `20260922-stream1-p09-android-r1`; P09 provider-down, provider-lost (no duplicate) and non-payer denial in `…-p09-android-faults-r1`; P03 native tip create, cancel, 3DS success/failure recovery and limit in `20260922-stream1-p03-android-tip-r1`. Harness gaps were fixed inside the bundles; UX observations are recorded as proposals. P03/P09 stay partial.
+- **Next:** Stream 2 **R06 residency letters**; Stream 3 **iOS parity of the PR195 personal-block reopen defect** (next heavy-slot holder); Stream 1 P06 native dispute presentation or the P08 remaining native cases. Runtime correction: Stream 3's Next 18131 is running (pid 15494). Stream 2's `home.js` runtime patch is identical to merged PR192.
 - **Count unchanged:** 9 closed / 71 partial-open of 80; P01 remains a bounded milestone. Decisions and access boundaries are unchanged: P04/P05 fee policy, the attachment contract and member Issues entry point, Persona personal-block policy, the daily-agenda policy, activated providers, physical devices/push and hosted deployment.
 
 ---
@@ -16,7 +16,7 @@ A Claude Code coordinator session ("Pantopus Stream 1 coordinator handoff") took
 
 The following “current”, “active”, “pending”, runtime and next-step paragraphs describe their dated snapshots. They are not current reservations or permission to repeat work. The resume point above and live status summaries take precedence.
 
-## Consolidation checkpoint — September 22, 2026, 20:00 UTC (superseded by the 22:30 UTC current resume point)
+## Consolidation checkpoint — September 22, 2026, 20:00 UTC (superseded by the current resume point above)
 
 The founder requested that all three streams summarize **all implemented fixes, verification, evidence, cleanup and next actions** so another agent can resume without losing or repeating work. That consolidation is now the active documentation milestone. These current summaries supersede older chronological checkpoints; original reports/history remain preserved.
 

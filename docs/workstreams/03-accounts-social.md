@@ -16,11 +16,10 @@ closure claim; it is ready for coordinator integration review with the explicit 
 - **Live coordination worktree:** `/Users/yingpengwang/pantopus-coordination`, branch
   `codex/workstream-coordination`; this file is the only live Stream 3 status location. The
   current status commits are pushed to `origin/codex/workstream-coordination`.
-- **PR195:** [open](https://github.com/WangPantopus/skinny-pantopus/pull/195), head
-  `3b374454ad07060cf5dcaa1ce02fc48b3be4c88e`, coordinator merge pending. Exact-head CI run
-  `35768401037` is green for Android lint/test/assemble, Android emulator tests, database replay/
-  lint, safeguards and aggregate CI OK; backend/web/iOS/seeder jobs were skipped by change
-  detection. No merge was performed by Stream 3.
+- **PR195:** [merged](https://github.com/WangPantopus/skinny-pantopus/pull/195) by the coordinator at 22:05 UTC as
+  `86f63a0eaf70dfc808950649aae34ef45015c985` after update to `7f557a0069` and fresh exact-head CI `35786420151`
+  (Android lint/test/assemble, emulator tests, schema replay and aggregate CI OK). The earlier head
+  `3b374454a` CI `35768401037` also passed. The Android worktree was fast-forwarded (clean) to `7f557a006`.
 - **Merged scoped repairs:** PR163 → `e5335f584dd99f82e7c66a3974b04400098f0c0c`; PR168 →
   `b30e0d395`; PR178 mailbox route order → `715ccd8c0`; PR182 profile PATCH contract → merged
   remotely at head `7b6ddc6516769e02d12b6eff37f52fb0d326455e` on 2026-09-22. The older PR182
@@ -113,8 +112,10 @@ these functional/evidence estimates and no new unit tests were written.
 
 ## Next actions and explicit non-actions
 
-Coordinator may merge/refresh PR195 after its queue, then assign a release-candidate native slot or
-provide the physical device/provider/policy/route ownership needed by an open row. The next agent may
+PR195 is merged (`86f63a0ea`). **Assigned next (coordinator, 22:45 UTC): iOS parity of the PR195 defect.** iOS
+`PublicProfileViewModel.loadRelationship(id:)` reads only `/relationship` and leaves `canFollow` true on error.
+Reproduce on installed iOS `0AE16FA0` first, then mirror PR195 minimally (Local scope only) only if it reproduces. The heavy
+native slot goes to Stream 3 next; details are in the coordination summary's current resume point. The next agent may
 use the exact prerequisites in the final section below, preserve accepted reports, and repair only a
 reproduced defect in the existing caller/endpoint/service contract. Do **not** rerun the accepted
 PR163 cache journey, PR168 Detekt repair, PR195 local block/read-fault journey, N01 local/emulator

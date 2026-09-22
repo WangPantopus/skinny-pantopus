@@ -1,28 +1,42 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — September 22, 2026, 22:30 UTC
+## CURRENT RESUME POINT — September 22, 2026, 22:45 UTC
 
-The coordinator role moved at about 21:05 UTC to the Claude Code session "Pantopus Stream 1 coordinator handoff" (Stream 1 developer + coordinator). Before any writing it verified that the previous Codex coordinator thread `01a0c897-33be-7011-b55b-b82291ba9fd2` had completed at 20:35 UTC, and that the Stream 2 (`01a0c0d4-2278-71d3-bc23-a9d789d2afeb`) and Stream 3 (`01a0a824-301b-74e3-a1d9-b205714ed7a1`) Codex tasks had been `task_complete` since 20:07/20:15 UTC. The 20:00 UTC consolidation is preserved below as history. **The coordinator cannot message Codex tasks.** The founder relays the peer assignments in this section, or authorizes the coordinator to act for those streams. No duplicate agent was started for a peer worktree.
+The coordinator role moved at about 21:05 UTC to the Claude Code session "Pantopus Stream 1 coordinator handoff" (Stream 1 developer + coordinator). Before any writing it verified that the previous Codex coordinator thread `01a0c897-33be-7011-b55b-b82291ba9fd2` had completed at 20:35 UTC, and that the Stream 2 (`01a0c0d4-2278-71d3-bc23-a9d789d2afeb`) and Stream 3 (`01a0a824-301b-74e3-a1d9-b205714ed7a1`) Codex tasks had been `task_complete` since 20:07/20:15 UTC. **The coordinator cannot message Codex tasks.** The founder relays the peer assignments below, or authorizes the coordinator to act for those streams. No duplicate agent was started for a peer worktree. The 20:00 UTC consolidation is preserved below as history.
 
-### Integration state (refresh before acting)
+### Integration queue — complete
 
-| Item | Exact source / CI | State |
+| PR | Exact merged head / fresh CI | Merge commit |
 |---|---|---|
-| PR192 Emergency edit | `ea044ebea7` exact CI `35776302859` (all jobs incl. Android) | **Merged** `37cb6d2167b1a59e7e77406feda59ca97873927c` |
-| PR193 booking receipt/notice | updated `4d38c43ec4`, fresh CI `35785266136` | **Merged** `6f7c700e6cfefa8fd070b74b354160b921e80b68` |
-| PR194 registration return | `e8ccf56e51`: the coordinator merged master and resolved the one `ConfirmedView.tsx` import conflict by keeping both imports; fresh CI `35785918190` | **Merged** `094ed5826bcfd36a6f956984103e861e484dbd93` |
-| PR195 Android Local block state | updated `7f557a0069`, fresh CI `35786420151` | Pending CI, then merge |
-| PR196 booking cancellation/refund | `3f82ae4786`; update after 195; public `20260922023100` still sorts after master's newest `…023000` | Queued |
-| Docs 161/170 → 174 | The hub merged 161 (`1a9317245`; only three superseded summary lines are not carried) and 170 (`815b6e495`; its 117-line `native-social-r1` history is appended verbatim to 03). | Land through PR174 last. GitHub marks 161/170 merged once their heads are master ancestors. |
-| Master aggregate CI | The `2048d971` push failed only in iOS iPhone 16 `CeremonialMailViewModelTests.testContinueFromDecideAdvancesToVerify` (timeout; it passed on iPhone 16 Pro/SE in the same run). Later master runs were superseded by queue merges. | Judge the final master run after 196. Never infer success from a cancelled run. |
+| 192 Emergency edit | `ea044ebea7` / `35776302859` (all jobs incl. Android) | `37cb6d2167b1a59e7e77406feda59ca97873927c` |
+| 193 booking receipt/notice | `4d38c43ec4` / `35785266136` | `6f7c700e6cfefa8fd070b74b354160b921e80b68` |
+| 194 registration return | `e8ccf56e51` / `35785918190`. The coordinator resolved the single `ConfirmedView.tsx` import conflict by keeping both imports. | `094ed5826bcfd36a6f956984103e861e484dbd93` |
+| 195 Android Local block state | `7f557a0069` / `35786420151` | `86f63a0eaf70dfc808950649aae34ef45015c985` |
+| 196 booking cancellation/refund | `46330f275a` / `35790106402`; PR193 labels already cover its `capture_pending`/`refund_pending` states | **`b36d379b2362cd35b2a15d86892400796304b46e`** (final master) |
+
+Final canonical migrations end `20260922023000` (public230) → `20260922023100` (public231). Applied history was not rewritten; retained prototype ledgers are untouched. Docs PR161 (`1a9317245`, only three superseded summary lines not carried) and PR170 (`815b6e495`, 117-line `native-social-r1` history appended verbatim) are merged into this hub branch and land with PR174. **Master merges do not deploy:** in Deploy Backend run `35789209741`, the check passed and every build, migration and deploy step was skipped (backend deployment disabled). Aggregate CI for final master is run `35791178691`. The earlier `2048d971` push failed only in the iOS iPhone 16 `CeremonialMailViewModelTests.testContinueFromDecideAdvancesToVerify` timeout, which passed on iPhone 16 Pro/SE in the same run.
+
+### Stream 1 milestones since takeover (heavy native slot released at 22:13 UTC)
+
+All three run on APK `db303e5bbe782a089715f8b91808b4f37c5fa3c96841edb37d23f8ac29365077` (master `094ed5826`; later merges touch no gig refund/tip path), the owned `emulator-5558`, real Stripe TEST and the retained wallet-read-r1 candidate ledger (88 rows, unchanged). Cleanup was independently verified (TEST intents refunded/canceled, customers deleted, owned SQL rows 0):
+
+- **P09 Android payer** — audit `20260922-stream1-p09-android-r1`, MANIFEST `670186c9170493fa9b2caf7e72c6d6136c58a13f64508aea7b124d8decaed5e9`. Covers: authorization, owner capture, partial refund, lost committed reply → Check status (no duplicate), disabled over-limit Continue and hold release. Post-refund wallet release credited exactly the refund-aware 213 of 1063.
+- **P09 Android refund failures/denial** — audit `20260922-stream1-p09-android-faults-r1`, MANIFEST `7a38ecf7a58fb0897e8a81ddb0e4984695a8cd2d0db63de980484ff96c6d4fce`. Covers: provider down → one refund after the one-minute lease; provider-created refund with lost reply → adopted on retry with no second create; worker/stranger 403 with no worker controls.
+- **P03 Android native tips** — audit `20260922-stream1-p03-android-tip-r1`, MANIFEST `f81b0244a24f64dfc610e02d55ea3beb399f29bbddd4d627dd0f7ff1457237ec`. Covers: new-card tip, sheet-dismiss pending → Cancel tip, 3DS success, 3DS failure → recovery on the same intent, and the three-tip limit.
+- Harness gaps found and fixed inside the bundles (not app defects): the Android bid panel needs the real `offersV2` router, and Android paid-bid admission needs the login `sessionId` that the real bearer login returns.
+- Observations (UX proposals, no reproduced production failure):
+  - A credential without `sessionId` makes Accept a silent no-op. Check whether the server returns one for unbound sessions.
+  - A refund retry inside the one-minute lease returns "pending" without explaining the wait.
+  - The tip-limit message is generic.
+- Rows: P03 and P09 stay partial. P03's remainder is unavailable local-storage recovery. P09's remainder is historical Connect reversal and broader close/release. Count unchanged.
 
 ### Owners, checkouts and reservations
 
-| Stream | Application checkout | Runtime / devices | Current assignment |
+| Stream | Application checkout | Runtime / devices | Next |
 |---|---|---|---|
-| 1 + coordinator (Claude) | `/private/tmp/pantopus-paid-gig-integration` on `codex/booking-cancellation-recovery` `3f82ae4786` until PR196 merges. After that it moves to a fresh branch from final master. The coordinator checkout `/private/tmp/pantopus-pr192-integration` is detached at master `094ed5826` for the P09 APK build. | **Heavy native slot: Stream 1** (P09 Android APK, then journey). Retained SQL64562/PostgREST64561 ledger88 (candidate ledger: the same payment migrations under pre-renumbering versions; it lacks only the Home `20260921010000`/`20260922010000`). AVD `Pantopus_Stream1_Start_R2` = `emulator-5558`, iOS `C2BCF36A…`. | **P09 Android payer refund controls**. Detail is in 01. |
-| 2 Home (Codex `01a0c0d4…`, idle) | `/private/tmp/pantopus-workstream-home` `ee69cbd8d` (merged via PR192; the source commit is now in master history). Preserve `.next-stream2`. | API18143/LAN18142 retained. Its `stream2-backend-latest` route patch is **identical** to merged PR192 `backend/routes/home.js` (47 added lines match), so the runtime already runs accepted code and can adopt master at its next restart; keep the backup. `:8000` from the Home worktree remains the founder device backend. SQL64554/PostgREST64553, emulator-5556, iOS `6F914A30…`. | **R06 residency letters**, below. |
-| 3 Accounts/social (Codex `01a0a824…`, idle) | `/private/tmp/pantopus-workstream-accounts-social` `b956a0076` (preserve `publicShare.ts`/tsconfig edits, `.next-stream3`); Android `/private/tmp/pantopus-stream3-android` `3b374454a` (PR195 head moved remotely to `7f557a0069` by update-branch; local checkout clean, not yet fast-forwarded). | SQL64532/PostgREST64531, Mailpit64535/36. **Correction:** Next `[::1]:18131` is running (pid 15494 `next-server` from the Stream 3 worktree, about 11 h), although the 20:00 summary said it was stopped. Left untouched for Stream 3. iOS `0AE16FA0…`, emulator-5554. | **iOS parity of the PR195 personal-block defect**, below. The heavy slot goes to Stream 3 when Stream 1 releases it. |
+| 1 + coordinator (Claude) | `/private/tmp/pantopus-paid-gig-integration` on local `codex/stream1-verification-20260922` at final master `b36d379b2` (clean, no commits). Coordinator checkout `/private/tmp/pantopus-pr192-integration` detached at `094ed5826` is the APK source (ignored build outputs/backend deps only). The historical `codex/paid-gig-integration` ref is preserved. | No API/Next running. Retained SQL64562/PostgREST64561 ledger88. `emulator-5558` keeps the P09/P03 APK with app data cleared; iOS `C2BCF36A…` idle. Heavy slot **unassigned**; Stream 3 has the next claim. | Next Stream 1 criterion: P06 native dispute presentation, or the P08 native denial/lost/stale cases, after confirming the existing native dispute UI. |
+| 2 Home (Codex `01a0c0d4…`, idle) | `/private/tmp/pantopus-workstream-home` at `ee69cbd8d` (now merged through PR192). When starting R06 the owner moves to a fresh branch from master, preserving `.next-stream2`. | API18143/LAN18142 retained; its `home.js` runtime patch is **identical** to merged PR192 (47 added lines), so adopt master at the next restart and keep the backup. `:8000` from the Home worktree is the founder device backend. SQL64554/PostgREST64553, emulator-5556, iOS `6F914A30…`. | **R06**, below. |
+| 3 Accounts/social (Codex `01a0a824…`, idle) | iOS `/private/tmp/pantopus-workstream-accounts-social` `b956a0076` (preserve `publicShare.ts`/tsconfig edits, `.next-stream3`). Android `/private/tmp/pantopus-stream3-android` fast-forwarded by the coordinator to merged `7f557a006` (clean). | SQL64532/PostgREST64531, Mailpit64535/36. **Correction:** Next `[::1]:18131` is running (pid 15494 from the Stream 3 worktree), contrary to the 20:00 note; left untouched. iOS `0AE16FA0…`, emulator-5554. | **iOS parity of PR195**, below. Gets the heavy slot next. |
 
 ### Peer assignments (existing tasks; founder relays)
 
@@ -32,13 +46,13 @@ The coordinator role moved at about 21:05 UTC to the Claude Code session "Pantop
 
 ### Unchanged rules
 
-One writer per application worktree. The coordinator owns shared status, the backlog and merges. Preserve designs, fixtures, retained ledgers and runtime patches. No new unit tests, trackers or speculative rebuilds. The count stays **9 closed / 71 partial-open**; nothing in this checkpoint closes a row.
+One writer per application worktree. The coordinator owns shared status, the backlog and merges. Preserve designs, fixtures, retained ledgers and runtime patches. No new unit tests, trackers or speculative rebuilds. The count stays **9 closed / 71 partial-open**; nothing since the takeover closes a whole row.
 
 ---
 
 ## Historical coordination and grants — preserved
 
-## Consolidation checkpoint — September 22, 2026, 20:00 UTC (superseded by the 22:30 UTC current resume point)
+## Consolidation checkpoint — September 22, 2026, 20:00 UTC (superseded by the current resume point above)
 
 The founder requested that all three streams summarize **all implemented fixes, verification, evidence, cleanup and next actions** so another agent can resume without losing or repeating work. That consolidation is now the active documentation milestone. These current summaries supersede older chronological checkpoints; original reports/history remain preserved.
 
