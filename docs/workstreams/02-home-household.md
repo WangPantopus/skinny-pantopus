@@ -1121,11 +1121,17 @@ Coordinator reacquired same SQL64552/API64551 and web[::1]:18141/API18142 for St
 - The redacted PR176 bundle is retained at
   `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-pr176-home-leave-r1/`.
   Its `MANIFEST.json` SHA256 is
-  `d6f5520076f56d99950abd23583a1dc4532b1140374fc4b7432129b1e426d195`.
+  `753f7626e155727c71da8dd254b3b9fec4e03c09e77b9b772c01e21c38d69c0e`.
   It contains the reproduced `/detach` failures, the real Settings
-  `/move-out` receipt, the one-line source diff, validation receipt and exact
-  byte-equal occupancy/notification/audit cleanup. No token, password or raw
-  proxy body is included.
+  `/move-out` receipt, explicit before/after/restored `is_active`,
+  `verification_status` and `can_manage_tasks` fields, the one-line source
+  diff and validation receipt. The accepted journey generated exactly one
+  `member_moved_out` Notification and one HomeAuditLog row; both were deleted
+  after the probe. A later retained-runtime check found three additional
+  matching synthetic notifications and no matching audit rows; those three
+  were deleted by exact home/member metadata, leaving zero matching rows. The
+  bundle does not claim byte-equality for untouched full-row fields. No token,
+  password or raw proxy body is included.
 - The redacted PR178 bundle is retained at
   `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-pr178-mailbox-preferences-r1/`.
   Its `MANIFEST.json` SHA256 is
