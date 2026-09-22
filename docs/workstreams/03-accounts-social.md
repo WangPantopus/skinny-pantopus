@@ -3100,3 +3100,114 @@ response hook in this milestone. Detailed a01-signup-reset-source-proposal.json;
 MANIFEST **f967e080959dde6c0e05f6b89f6275b651576cbb218712ee9b7f5d30d327cb01**.
 Coordinator fixture/account-creation grant required before runtime. Runtime36126/36139
 and signed-out state retained; no app edit/new test.
+
+
+## A01 signup verification and reset completion — verified; unverified-login repair PR145
+
+User granted the A01 runtime scope directly. Built-in pane tab only (UA Claude/2.2553.1),
+retained API/Next/DB, real Mailpit 64535/64536. Signup: real /register form for new owned
+stream3-auth-r3-frank@example.com→POST/api/users/register201 01:55:35→/verify-email-sent;
+auth.users unconfirmed, User.verified false; Mailpit "Confirm your email for Pantopus"
+with /verify-email?token_hash link (token never exported). Login before verification with
+correct credentials→POST/api/users/login401 and "Invalid email or password" while API log
+recorded GoTrue "Email not confirmed": REPRODUCED DEFECT — users.js mapped every
+signInWithPassword error to the generic401, leaving its own 403 "Please verify your email
+before signing in."/needsVerification branch unreachable. Verify link→verify-email200
+01:57:21→login page; email_confirmed_at set, verified true, GoTrue/app sessions0 (verifyOtp
+session dropped). Consumed link reuse→400 "Invalid or expired verification link/code" +
+Resend; resend for verified account→200 enumeration-safe message, API skipped, no mail.
+Verified login200→/app/place; logout200. Duplicate signup→400 "A user with this email
+address has already been registered" visible, no new rows.
+
+Reset (Evan d3671605, zero sessions): forgot-password200→recovery_sent_at, GoTrue audit
+user_recovery_requested, Mailpit "Reset your Pantopus password"; unknown email→same message,
+no mail. Reset page client checks "Passwords do not match."/"Password must be at least 12
+characters." without network. Reset200 02:01:16→login page; GoTrue audit login/
+user_updated_password/user_modified/logout (scoped recovery session removed), AuthSession
+rows byte-equal, prefs/devices/grants unchanged, "All devices were signed out" notice mailed.
+Old password401, new password200→/app/place, logout200. Consumed token reuse→400 "Invalid or
+expired reset token". Fixture password restored by a second real forgot/reset; original
+credential login200 then logout. Expired-token/SMTP-outage/limiter-exhaustion not exercised.
+
+Repair: smallest existing-route change on codex/stream3-unverified-login-feedback
+(932bfc227, PR145 https://github.com/WangPantopus/skinny-pantopus/pull/145): in the existing
+authError branch map /email not confirmed/i to the existing 403 needsVerification response
+(9 lines added). API restarted from the exact captured recipe (36126→50622). Fresh unverified
+stream3-auth-r3-grace@example.com→login403 with "Please verify your email before signing in."
+and the login page's existing Resend control; resend200 mailed "Your Pantopus verification
+link"; verified account wrong password still401 generic, no resend control. Existing
+tests/authDpop + authUsersHooks 127 passed; node --check clean; no eslint config in backend;
+no new unit tests. Next dev rewrote web tsconfig include for .next-stream3 (unstaged).
+
+Cleanup: Frank/Grace AuthSession/User/auth.users rows deleted in one transaction (auth.users
+3/User3/orphan0); Evan active0/GoTrue0, two natural revoked login rows retained; Mailpit19
+natural messages retained; pane tab closed/viewport reset; runtime50622/36139+DB retained.
+Artifacts a01-{before-evan,signup-mail,signup-result,reset-before-evan,reset-mail,
+reset-after-evan,reset-final-evan,reset-result,fix-verification,cleanup}.json; durable718
+MANIFEST **60ed88d5f44ce6c0caf08f900cc2e2c419bf14a108a581fa007a5de13ef55a2f**.
+Next: PR145 CI/review; remaining A01 limits are providers disabled, expired tokens,
+delivery outage and native clients.
+
+
+## Native iOS/Android accounts journeys — verified; three more repairs (PR149/151/152)
+
+User directed full native coverage. Built Debug iOS (xcodebuild, worktree .env API/SOCKET
+127.0.0.1:18130) on owned simulator Pantopus Stream3 Social R2 (erased twice: unknown r2
+passcode, then clean push-fix check) and Debug Android (gradlew assembleDebug, .env
+10.0.2.2:18130; first daemon died at host load 170, retry 10m51s) on new owned emulator
+Pantopus_Stream3_Accounts_R3 (android-34 arm64). Retained API restarted twice from the
+exact recipe to load repairs (50622→80982); Next 36139/DB retained. Evidence in
+native-accounts-result.json (27 journeys) and screenshots; durable719
+MANIFEST **51cbc2a6b4f725468b12f183c46766652519c1521c297a654a88c830d9b7478b**.
+
+Verified natively (real API/SQL/GoTrue audit for each): iOS/Android login with device
+registration (iOS trusted, emulator unverified), wrong password 401 messages, OAuth Apple
+start→consent→cancel, Devices screens (iOS gated by device-owner prompt; simulator accepts
+any passcode), remove orphaned device (wrong step-up → password_failed/device retained;
+correct → DELETE device, session device_revoked), sign-out-others from iOS and from Android
+retiring the web client (401s→refresh 401→login redirect), web revoke retiring iOS and
+Android via socket kick (kicked:1 then kicked:2, both refresh_refused within 200ms,
+"You were signed out for security" + account hint), forgot/reset on both (deep link
+pantopus://auth/reset-password, mismatch/no request, success revokes all others with
+password_reset, fixture password restored by the iOS reset), Android native sign-up →
+unverified login 403 + Resend (PR145 natively), Android notification preferences toggle
+PUT /api/hub/preferences persisted and restored, Blocked users empty state, Settings
+logout on both, iOS cold-start resume, simctl push foreground banner.
+
+Defects reproduced and repaired (smallest existing-code changes, each verified on rebuilt/
+restarted runtime): PR149 iOS posted the APNs token before any sign-in → 401 → first-ever
+login screen said "Your session has expired" (defer until signedIn; token now saved by the
+post-login device registration). PR151 resent verification links are magiclink tokens but
+native clients post type=signup → "Link expired" in-app (verify-email retries the hashed
+token with the alternate purpose; Android verified from the resent token). PR152 after a
+deliberate iOS Log out a racing GET /api/hub with no token hit endSession(.expired) → the
+login screen claimed expiry (reason published only when a session actually ended).
+One Android ANR occurred only during host load 74–170 with an idle main thread afterwards
+and never recurred at load <10; a stale system ANR window needed an emulator reboot.
+
+Limits: no APNs/FCM provider delivery (simctl push only), no Face ID enrolment path, no
+physical devices, providers disabled, Lockdown (sign out everywhere) and native account
+deletion not exercised, retained DB lacks LocalProfile.verified_resident (chat identity
+warning only). Cleanup: Hank and Evan's test preference row deleted (auth.users 3/User 3,
+Evan active sessions 0); natural revoked sessions/devices/push tokens and Mailpit retained;
+simulator/emulator apps left installed and signed out; web tab closed. No new unit tests.
+
+Addendum: Android Lockdown verified — Devices→Lockdown→dialog→password step-up→POST step-up
+200→POST /api/auth/sessions/revoke-all 200 (sockets disconnected); own session revoked reason
+lockdown, Evan active sessions 0/45, remembered devices 0/4 active, GoTrue 0; app on login with
+account hint, no banner. A second emulator ANR (6.5s input timeout at host load ≈13 while
+system_server itself skipped 36/88 frames) is recorded as emulator starvation, not an app
+defect; a dedicated Android performance pass on a quiet host is recommended. Native account
+deletion left unexercised to preserve fixtures. Durable719 MANIFEST
+**dd5a17bb716623447c3a4e44998e00ae298538c3e3f7759f6c46100bb35e7a42**.
+
+Addendum 2: iOS Lockdown verified — popover confirm → password step-up → revoke-all; own session revoked reason lockdown, active sessions 0, devices 0/4, GoTrue 0; login shows "You were signed out for security" + hint. Durable719 MANIFEST **7d6a3522a978b020ef1cd4c6f4098713688fbfbe13f3483dd16dad52540abf2d**.
+
+Addendum 3: PR152 first commit failed two existing iOS unit tests on CI (terminal-401 contract); replaced by a deliberate-sign-out flag (72ec734db), both suites 41/41 locally, rebuilt app re-verified: Settings→Log out with the same racing no-token 401 shows only the account hint. Durable719 MANIFEST **09b2c346c28031033c2943bacfb85ae7ae54b5cba4bef232df18b039b210971c**.
+
+Coordinator note follow-up: PR152 was repaired as directed (suppress the reason only for
+the app's own sign-out): AuthManager remembers a deliberate local sign-out, the next login
+clears it, and the terminal 401 handler ignores a 401 while it is set and state is
+signedOut; endSession is unchanged. AuthManagerTests + DeepLinkRouterSessionReturnTests
+41/41 locally, PR152 CI green on 72ec734db (all three simulators). Stream3 accounts scope
+for this session is complete; awaiting merges of PR149/151/152 and the next assignment.
