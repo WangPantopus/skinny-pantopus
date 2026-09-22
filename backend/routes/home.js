@@ -3086,6 +3086,11 @@ router.put('/:id/packages/:packageId', verifyToken, async (req, res) => {
     }
 
     const allowed = ['status', 'delivered_at', 'picked_up_by', 'carrier', 'tracking_number', 'description', 'delivery_instructions', 'expected_at'];
+    // Mirrors HomePackage_status_chk so an unsupported status is a 400, not a 500.
+    const statuses = ['expected', 'in_transit', 'out_for_delivery', 'delivered', 'picked_up', 'lost', 'returned'];
+    if (req.body.status !== undefined && !statuses.includes(req.body.status)) {
+      return res.status(400).json({ error: 'Invalid package status' });
+    }
     const updates = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) updates[key] = req.body[key];

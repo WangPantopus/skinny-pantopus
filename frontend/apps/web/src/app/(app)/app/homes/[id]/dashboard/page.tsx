@@ -298,6 +298,13 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
 
   // ── Package handlers ──
 
+  // Mirrors the HomePackage update policy: managers edit any visible package;
+  // editors only the packages they created. Gates row opening and Pick Up.
+  const canEditPackage = useCallback(
+    (pkg: Record<string, any>) => can('packages.manage') || (can('packages.edit') && pkg.created_by === currentUserId),
+    [can, currentUserId]
+  );
+
   const handlePackageSave = useCallback(
     async (data: Record<string, any>) => {
       const mediaFiles: File[] | undefined = data._mediaFiles;
@@ -432,11 +439,9 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
           onAddBill={() => openBillPanel()}
           onMarkBillPaid={handleBillMarkPaid}
           onAddPackage={() => openPackagePanel()}
-          onPackageClick={(pkg: Record<string, any>) => {
-            // Mirrors the HomePackage update policy: managers edit any visible
-            // package; editors only the packages they created.
-            if (can('packages.manage') || (can('packages.edit') && pkg.created_by === currentUserId)) openPackagePanel(pkg);
-          }}
+          canAddPackage={can('packages.edit') || can('packages.manage')}
+          canEditPackage={canEditPackage}
+          onPackageClick={(pkg: Record<string, any>) => { if (canEditPackage(pkg)) openPackagePanel(pkg); }}
           onMarkPackagePickedUp={handlePackageMarkPickedUp}
           onInviteMember={openInviteModal}
           onSecretsChange={(s: Record<string, any>[]) => setSecrets(() => s)}
@@ -534,6 +539,8 @@ function DashboardTab({
   onAddBill,
   onMarkBillPaid,
   onAddPackage,
+  canAddPackage,
+  canEditPackage,
   onPackageClick,
   onMarkPackagePickedUp,
   onInviteMember,
@@ -577,6 +584,8 @@ function DashboardTab({
   onAddBill: () => void;
   onMarkBillPaid: (billId: string) => void;
   onAddPackage: () => void;
+  canAddPackage: boolean;
+  canEditPackage: (pkg: Record<string, any>) => boolean;
   onPackageClick: (pkg: Record<string, any>) => void;
   onMarkPackagePickedUp: (pkgId: string) => void;
   onInviteMember: () => void;
@@ -660,6 +669,8 @@ function DashboardTab({
             packages={packages}
             homeId={homeId}
             onAddPackage={onAddPackage}
+            canAddPackage={canAddPackage}
+            canEditPackage={canEditPackage}
             onMarkPickedUp={onMarkPackagePickedUp}
             onPackageClick={onPackageClick}
             onBack={onBack}
