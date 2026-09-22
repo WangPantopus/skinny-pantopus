@@ -1,3 +1,15 @@
+## September 22 native Emergency form dismissal — focused repair verified, PR191
+
+The retained Android owner flow reproduced a second Emergency contract failure after a successful Save: Home dashboard → Home health **Add contact** → Emergency info → Add info → valid Other entry. The existing `AddEmergencyInfoFormScreen` acknowledged `state.shouldDismiss` before its 400 ms delay, cancelling its own effect before `onClose()` ran. Two Save attempts therefore produced two real POSTs and two identical `HomeEmergency` rows while the form remained open (SQL 0 → 2). Source comparison found no alternate Emergency implementation; the accepted Guest form repair `83f507457` already uses delay before acknowledgement.
+
+PR191 (`codex/native-emergency-dismiss-20260922`, commit `016a77b3e`) makes the one-line in-place repair: wait the existing 400 ms, acknowledge dismissal, then invoke the existing close callback. No layout, styling, navigation destination, route, service, schema, migration or test file changed.
+
+The repaired app was rebuilt with `./gradlew :app:assembleDebug --no-daemon` (BUILD SUCCESSFUL, 2m44s; 43 tasks), installed on retained `emulator-5556`, APK SHA256 `f4c70c6868d612b1dd7d0a996cf4081f975a98a856152d2a3b49ddc73d0657ff`. A real owner Save for `Stream2 dismiss fixed` / `Dismiss test detail` returned to the existing list with **All 1 / Contacts 1**, and SQL showed exactly one row. The earlier duplicate rows and this repaired synthetic row were deleted by exact id; final `HomeEmergency=0` and `HomeAuditLog=0`, with loopback/LAN backend health 200.
+
+The same installed journey also observed the existing Emergency **Edit** path: it opened the seeded form but returned to unchanged detail with no PUT request or SQL change because the backend has no `PUT /api/homes/:id/emergencies/:emergencyId` route. That remains a separate explicit contract gap; PR191 does not claim or repair it.
+
+Durable sanitized evidence is `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream2-native-emergency-dismiss-r1/`, MANIFEST SHA256 `0eddbb79b71f81217caaaa67f8c4ed4eb8f74b77879dd0ff1a1e2abe7566819c`. PR191 CI is pending; no native build is active and the heavy slot is released.
+
 ## September 22 native Emergency Info DELETE — focused repair verified end to end
 
 The retained Android owner flow reproduced a concrete persistence defect in the existing Emergency Info screen: Home dashboard → Emergency info → row → Delete → confirmation → Delete returned to the list, but the original `EmergencyInfoDetailViewModel.confirmDelete` only toggled local Compose state. Two real synthetic `HomeEmergency` rows remained in SQL. Source comparison found the existing backend `DELETE /api/homes/:id/emergencies/:emergencyId` route in `backend/routes/home.js` (home-management authorization, row-scoped delete, 200/404 behavior), but no Android Retrofit or repository binding in current, archived, or open refs.
