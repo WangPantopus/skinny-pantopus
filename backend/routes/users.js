@@ -2610,6 +2610,16 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
         .order('display_order', { ascending: true }),
       getPublicResidencySummary(userId, req.user?.id || null),
     ]);
+    if (skillsResult.error) {
+      logger.warn('Profile updated but skills readback is unavailable', {
+        userId,
+        error: skillsResult.error.message,
+      });
+      return res.status(503).json({
+        code: 'PROFILE_READBACK_UNAVAILABLE',
+        error: 'Profile updated, but some profile details are temporarily unavailable. Please retry.',
+      });
+    }
     const userSkills = skillsResult.data || [];
 
     logger.info('Profile updated', { userId });
