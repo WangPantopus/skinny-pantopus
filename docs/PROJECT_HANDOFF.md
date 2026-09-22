@@ -1,5 +1,59 @@
 # Pantopus project handoff
 
+## START HERE — state as of 2026-09-22 09:15 UTC (Stream 1 coordinator session ended)
+
+**Where things are.** Master `85399bedd`. Paid branch `codex/paid-gig-integration` head
+`2d238f0b4` (contains all of master's code; master is ahead by docs only), exact CI
+35704596028 fully green. PR47 was marked *ready for review* by the founder on
+2026-09-22 06:30 UTC; merging it is the founder's decision. PR34 stays draft (older
+migration filenames, conflicting). PR46 is a separate founder PR. No other PRs open.
+
+**How to resume without duplicating work.**
+1. Read the top of [docs/workstreams/README.md](workstreams/README.md) (newest section
+   first) — every review, grant, merge and acceptance since 2026-09-15 is there.
+2. Stream status files: [01-gigs-payments](workstreams/01-gigs-payments.md),
+   [02-home-household](workstreams/02-home-household.md),
+   [03-accounts-social](workstreams/03-accounts-social.md). Newest section at the top
+   (03 appends at the bottom).
+3. Durable evidence bundles with hash manifests live in the main checkout under
+   `.pantopus-recovery/audits/<date>-<stream>-<slug>-rN/`; each has a `result.md`.
+   Today's Stream 1 bundles: `20260922-stream1-tip-age-discovery-r1`,
+   `20260922-stream1-p08-native-r1`, `20260922-stream1-p09-native-r1`,
+   `20260922-stream1-p10-worker-r1` (harness scripts included; re-runnable against the
+   retained `pantopus-stream1-wallet-read-r1` Supabase stack, PostgREST 64561 / SQL 64562,
+   keys in `/private/tmp/pantopus-stream1-wallet-read-r1/.keys.env`).
+4. Shared docs are published only from the neutral coordination worktree
+   (`~/pantopus-coordination`, branch `codex/workstream-coordination`) via a PR to master,
+   then master is merged into the paid branch. Feature branches must not edit
+   `docs/workstreams/*`, this file or the backlog.
+5. Branch protection requires PR heads to be up to date with master: every master merge
+   (even docs) makes other open PRs BEHIND and forces `gh pr update-branch` plus a full
+   CI rerun (~40 min). Merge code PRs one at a time; publish docs last.
+6. After merging master into the paid branch, run
+   `MIGRATION_BASE_SHA=$(git rev-parse origin/master) node scripts/db/check-migrations.cjs`;
+   if master gained a newer migration, `git mv` the 22 unmerged paid migrations after it
+   (done twice already: now `20260922020100–022200`) and update
+   `backend/contracts/gig-tip-contract.md`.
+
+**Accepted today (real UI → real routes → real Stripe TEST → SQL; no app code, no new
+unit tests).** P02 natural >24h cold tip discovery on web, iOS and Android; P03 installed
+native tips (iOS and Android) incl. provider failure, lost reply, duplicate tap, stale
+retry; P08 installed poster/worker paid-gig journey (authorize, start, photo-proof
+completion via real files route, confirm/capture, wallet release, cancel/decline abort);
+P09 installed refunds (partial, lost-reply recovery, over-limit validation, hold release);
+P10 bounded worker check (durable checkout never swept by the expiry timer; Resume /
+Cancel controls release the real intent). Peer merges: PR143/144/145/149/151/152/154.
+
+**Still open (Stream 1).** P04/P05 cancellation-fee payer/recipient policy — needs the
+founder's decision before any code. P10 workload/retention (stale durable checkouts keep
+uncaptured intents until the owner acts; worker capacity, notification volume, fixture
+retention). Native dispute and 3DS. Hosted S3 / Connect / live-mode / physical devices.
+Known flaky iOS CI tests (passed on rerun, no code change): TokenAcceptViewModelTests.
+testLeasePreviewDenialOrFailureNeverShowsAnOffer, HomeTaskMediaViewModelTests.
+testDelayedDownloadCannotRestorePreviewAfterLeaving.
+
+**Do not redo.** Everything above is already verified and recorded; start from the
+"Still open" list or from a new stream assignment in the live README.
 ## September 22 07:20 UTC — parallel Stream 2/3 resume session
 
 Streams 2 and 3 are being driven by background agents from a second session while the

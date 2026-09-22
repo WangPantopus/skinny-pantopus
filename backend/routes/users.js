@@ -3583,7 +3583,18 @@ router.post('/verify-email', validate(verifyEmailSchema), async (req, res) => {
     }
 
     const authClient = createAuthClient();
-    const { data, error } = await authClient.auth.verifyOtp(verifyPayload);
+    let { data, error } = await authClient.auth.verifyOtp(verifyPayload);
+    // Resent links are minted as `magiclink` (see /resend-verification) while
+    // the original sign-up link is `signup`; native clients only know the
+    // hashed token, so accept either purpose for a hashed token.
+    if (error && tokenHash && (type === 'signup' || type === 'magiclink')) {
+      const alternateType = type === 'signup' ? 'magiclink' : 'signup';
+      const retry = await authClient.auth.verifyOtp({ type: alternateType, token_hash: tokenHash });
+      if (!retry.error) {
+        logger.info('Email verification accepted with alternate link type', { type, alternateType });
+        ({ data, error } = retry);
+      }
+    }
     if (error) {
       logger.warn('Email verification failed', {
         error: error.message,

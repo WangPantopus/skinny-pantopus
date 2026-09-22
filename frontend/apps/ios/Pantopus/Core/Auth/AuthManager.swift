@@ -143,6 +143,10 @@ final class AuthManager {
     /// security" instead of a generic message; cleared on the next
     /// successful sign-in / resume. `nil` after a user-initiated sign-out.
     private(set) var sessionEndReason: SessionEndReason?
+    /// Set by a deliberate local sign-out and cleared by the next sign-in.
+    /// A request that raced the sign-out may still 401; that 401 must not
+    /// end (and label) a session the user just ended themselves.
+    var didSignOutDeliberately = false
 
     /// Server session id (`AuthSession.id`) of the live session.
     private(set) var sessionId: String?
@@ -348,6 +352,7 @@ final class AuthManager {
         installMarker.commit(installId: pendingInstallId ?? installMarker.installIdForDescriptor(store: store), store: store)
         pendingInstallId = nil
         sessionEndReason = nil
+        didSignOutDeliberately = false
         // Both interactive entry points (email/password + OAuth callback)
         // funnel through here; `restoreSession()` deliberately does not.
         lastInteractiveSignInAt = now()
@@ -534,6 +539,11 @@ final class AuthManager {
     /// silent refresh has already failed. Clears the session, keeping the
     /// display hint, and publishes the reason the refresh reported.
     func handleUnauthorized() async {
+        if didSignOutDeliberately, case .signedOut = state {
+            lastRefreshRejection = nil
+            logger.info("Ignoring 401 that raced a deliberate sign-out")
+            return
+        }
         let reason = lastRefreshRejection ?? .expired
         lastRefreshRejection = nil
         logger.warning("Handling 401 after failed refresh — ending session", metadata: ["code": .string(reason.rawValue)])

@@ -1,5 +1,34 @@
 # Three-stream coordination
 
+## September 22 — peer PRs 149/151/152/154 merged; P10 durable-checkout worker check; PR47 ready for review
+
+All four peer PRs are merged after branch updates and fresh required checks: PR149
+(8e04c4db9), PR154 (b56fad654), PR151 (b936f8318), PR152 (c1280e078, repaired by Stream3
+with a deliberate-sign-out flag: AuthManager remembers the app's own sign-out, ignores the
+racing 401 while signed out, and the next sign-in clears it; both previously failing
+suites pass). Branch protection requires each head to be up to date with master, so
+merges were serialized; two unrelated simulator flakes appeared on the way
+(TokenAcceptViewModelTests.testLeasePreviewDenialOrFailureNeverShowsAnOffer on iPhone16Pro,
+HomeTaskMediaViewModelTests.testDelayedDownloadCannotRestorePreviewAfterLeaving on iPhoneSE)
+and passed on rerun without code change; recorded, not repaired.
+
+Stream1 P10 bounded worker check (owner audit20260922-stream1-p10-worker-r1, MANIFEST
+17630656c1c5981799b1ee307eaf7f9cf4295f86164804526d6800874abb4f39): an iOS checkout abandoned with the PaymentSheet open
+left a real requires_payment_method intent and a pending_payment bid with a 10-minute
+expiry; expirePendingPaymentBids run before and after the natural expiry made no change,
+by its documented rule that durable acceptance attempts are never discarded by a timer;
+reopening the gig offered the existing Resume payment / Cancel payment setup controls and
+Cancel released the real intent (canceled), attempt/payment canceled, bid pending. No
+defect. Remaining P10 scope: workload/retention (stale durable attempts keep uncaptured
+intents until the owner acts or the provider expires them), worker capacity/retry limits
+under load, notification volume, fixture retention.
+
+The founder marked PR47 ready for review (06:30 UTC) and updated its branch from GitHub;
+paid then re-adopted master c1280e078 as2d238f0b4 (no new migrations; policy check passes)
+and its exact CI is running. Remaining Stream1 scope before PR47 can be called complete:
+P04/P05 cancellation-fee payer/recipient decision (founder), native dispute/3DS, P10
+workload/retention, hosted/Connect/live boundaries. PR34 stays draft with older migration
+names; PR46 separate.
 ## September 22 07:20 UTC — second session resumed Streams 2 and 3 in parallel (START HERE if taking over)
 
 A second Claude session (cwd `~/skinny-pantopus`) resumed the backlog while the
