@@ -1,21 +1,42 @@
 # Stream 1 — Gigs and payments
 
-## September 22 — current web offer-card verification
+## September 22 — web offer amount and fallback identity repaired; PR180
 
-Paid integration adopted/pushed0b1a26cc1 (PR175 merge), exact tree equal to accepted
-PR1755c5c91b9d/CI35728607795; merged-master35729253722 still runs. Migration policy passes
-using existing Node20.20.0. Current repair branch codex/web-offer-price-precision starts
-from that master. Baseline actual web ranked12.50→13; forced v2 failure invokes real
-legacy bids but renders0/Helper despite canonical bid_amount12.50/bidder.displayName.
-Existing card now reuses formatPrice and safe displayName; candidate fallback shows
-Tip Worker R1/$12.50. Further verification, cleanup and publication remain in progress.
-No new file/schema/unit test or visual redesign. API18132 loaded PR179924ac3299 before
-frontend checkout change; this is a paired-runtime dependency, not master-only evidence.
-Own SQL64562/API64561 ledger79 retained; f9200390 fixtures active, Next18133/browser
-active, native apps terminated. Stream3 holds heavy native grant; peers untouched.
-Private continuation: /private/tmp/pantopus-stream1-offer-price-r1/; coordinator RESUME
-remains in wallet-read-r1. No row closes.
+Branch `codex/web-offer-price-precision`, exact `09a878d384d0abc033fccdc6b8c6f3ca7c7129a5`,
+[PR180](https://github.com/WangPantopus/skinny-pantopus/pull/180), starts from adopted
+master0b1a26cc1. Paid integration was pushed there after tree equality with accepted
+PR1755c5c91b9d and migration policy passed (Node20.20.0); merged-master CI still running
+at adoption. Actual web baseline: ranked bid12.50 rendered13; v2-only503 invoked real
+legacy bids but showed0/Helper despite canonical bid_amount12.50/safe bidder.displayName.
+Current/archived/all-ref comparison found the same card. Smallest repair: existing
+OfferCardV2 reuses formatPrice and safe displayName, three added/two removed lines.
+No new application file, schema, unit test, layout or navigation change.
 
+Actual CUA web → SDK → existing API/PostgREST/SQL now shows Tip Worker R1/$12.50 on both
+ranked/fallback paths, plus12→$12 and0→$0. Final touched full GigBid row including
+microsecond timestamps restored exactly; six collection projections match by stable id.
+No accept/decline, payment/provider object or unintended writes. Existing99 checkout/
+entrypoint regressions, web type gate0 errors and scoped lint0 errors/2 existing warnings
+pass. Exact [CI35730870955](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35730870955)
+passes; native/backend jobs skipped by changed paths. Integrate PR179 before180: API18132
+loaded179924ac3299 before frontend checkout changed. This paired runtime is explicit.
+
+Durable owner `.pantopus-recovery/audits/20260922-stream1-offer-card-r1/`,10files;
+MANIFEST `109eb987ba8896e22c4a39db3150863f40a681634380952bee62816020e087c1`.
+All hashes verified. Actual Settings logout200→/login, tab2 closed; API18132/Next18133
+stopped, generated tsconfig/cache removed, application worktree clean. Exact fixture
+IDs/foreign-key counts0 across12tables, ledger79 retained. A broad substring scan found
+one pre-existing detached completion File from04:02UTC with null user/gig keys and
+pending storage cleanup; preserved for separate existing cleanup-contract review.
+This price milestone created no files; zero fixture FK counts are not zero historical
+metadata. Native apps remain terminated, devices retained; Stream3 owns heavy build grant.
+
+Synthetic identity/session/Connect and unrelated ancillary collections; socket/push/email
+unavailable. No new native/hosted/physical/account/lifecycle/concurrency acceptance or row
+closure. Initial local chunk-load hydration recovered on fresh reload; no auth app change.
+Coordinator merged176 as95016cdbb after fresh CI35729368796 and reviewed7-file bundle;
+178 current-master update requested next. Continue retention/native dispute and serial
+integration. PR body and private RESUME current.
 
 ## September 22 — ranked offers reader repaired; PR179
 

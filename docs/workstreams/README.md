@@ -13,13 +13,15 @@ PR158 was already closed, and PR159's reconciliation is incorporated into this l
   job rerun passed on unchanged source. Master3b4404ed3 CI35724702512 passed. PR160
   merged as `6e24aef59` after current4cca0a CI35724788993 passed all checks. Its previous
   exact ede5b72b full CI35719644248 passed. PR175 merged0b1a26cc1 after exact
-  5c5c91b9d CI35728607795 passed. Serial code order:176 →178 →165 →166
-  →167 →168 →177 →179; update each branch and require fresh checks. Docs161/170/174 last;
+  5c5c91b9d CI35728607795 passed. PR176 merged95016cdbb after fresh CI35729368796 and reviewed cleanup.
+  Serial code order:178 →165 →166
+  →167 →168 →177 →179 →180; update each branch and require fresh checks. Docs161/170/174 last;
   verify-only171/172 never merge, close after their fixes land.
 - **Stream 1:** paid integration adopted/pushed `0b1a26cc1`; its tree exactly matches
   accepted PR1755c5c91b9d, merged-master CI35729253722 still runs, migration policy passed.
-  Paid worktree holds `codex/web-offer-price-precision` from that master; the existing card
-  repair is in verification. PR179 at924ac3299 remains ready. Ranked offers return200 on both native apps and web;
+  Paid worktree is clean at `codex/web-offer-price-precision`09a878d38, PR180;
+  real ranked/fallback web amounts and identity now correct,99existing tests and
+  CI35730870955 pass.10-file MANIFEST109eb987ba8896e22c4a39db3150863f40a681634380952bee62816020e087c1. PR179 at924ac3299 remains ready. Ranked offers return200 on both native apps and web;
   15 existing scoring tests and CI35728227377 pass, 12-file manifest
   `d6e38fbfba28f4a1f4914e5bd41ac8b4ef1ceef53842badac122e56a3c67fcf1`.
   PR177ad20c667d remains ready in the queue. Installed iOS failed/successful3DS now returns automatically;
@@ -29,10 +31,11 @@ PR158 was already closed, and PR159's reconciliation is incorporated into this l
   `2560b7c78a9971316680390b8225b120e00f427c2f8cc52f9ab100a90659b9de`.
   Earlier P10 workload, local O02 recovery, ledger and release-link evidence is retained.
 - **Stream 2:** existing task `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` continues Home
-  native verification; PR160/175 are merged. PR1767a9e2ba7c passes fresh CI35729368796.
-  Merge awaits its durable occupancy/task/notice/audit restoration evidence.
+  native verification; PR160/175/176 are merged. Seven-file176 durable evidence verified;
+  changed occupancy fields restored, generated audit/notice and3later matching notices removed.
   PR1789ff513826 moves unchanged mailbox GET/PATCH preferences before generic /:id;
-  its durable evidence handoff and current-master update remain with Stream2;
+  its4-file durable evidence is verified, current-master refresh requested; full preference
+  snapshot equality is peer-reported, coordinator requested concrete hashes or narrower claim;
   no current frontend preferences caller or UI edit is assumed. Docs161/private RESUME
   remain its reporting locations; preserve its owned runtime and fixtures.
 - **Stream 3:** existing task `01a0a824-301b-74e3-a1d9-b205714ed7a1` finished native
@@ -48,17 +51,16 @@ PR158 was already closed, and PR159's reconciliation is incorporated into this l
 
 Runtime: retained Stream1 SQL64562/API64561 stays up, ledger79. Native3DS owned SQL
 fixtures from that milestone are zero; all test intents canceled/customers deleted.
-Current price check uses own disposable f9200390 rows on API18132/Next18133;
-zero payment objects, browser active. API loaded PR179 before the frontend branch switch:
-that dependency is explicit. Stream1 native apps terminated; C2BCF36A/emulator5558 retained.
+Price-check exact fixtures are now0; API18132/Next18133 stopped, browser logged out/closed.
+A pre-existing detached04:02UTC completion File retains pending cleanup; see01 boundary.
+Stream1 native apps terminated; C2BCF36A/emulator5558 retained.
 Stream3 holds the exclusive heavy native build grant for A05 if artifact review requires it;
 release promptly if unused or after build. Coordinator stopped only its retained Maestro
 xcodebuild driver on C2 and verified no xcodebuild before issuing this grant. Peer devices, databases and processes remain owned
 by their streams. Private coordinator continuation:
 `/private/tmp/pantopus-stream1-wallet-read-r1/RESUME-2026-09-22.md`.
 
-Next: repair the reproduced web bid12.50→13 rounding in existing OfferCardV2, then
-native dispute/remaining P10 and provider boundaries;
+Next: existing completion-file retention and native dispute/remaining P10/provider boundaries;
 continue peer row orders and serial merges. Hosted/Connect/live, physical-device,
 production recovery and release association/configuration remain unverified. P04/P05
 fee payer/recipient and the recorded founder decisions remain unresolved.
