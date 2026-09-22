@@ -26,6 +26,7 @@ const {
 } = require('../services/notificationService');
 const { submitDisputeEvidence } = require('./disputeService');
 const stripeService = require('./stripeService');
+const walletSettlement = require('../services/walletSettlementService');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const {
   getAudienceIdentityById,
@@ -1221,10 +1222,11 @@ async function handleDisputeClosed(dispute) {
     });
 
     // Determine what state to restore to
-    // If transfer was already done, go back to transferred
+    // If a transfer or verified wallet credit was already done, restore it.
     // If not, go back to captured_hold so the transfer job picks it up
     let restoreState = PAYMENT_STATES.CAPTURED_HOLD;
-    if (payment.stripe_transfer_id) {
+    if (payment.stripe_transfer_id
+      || (await walletSettlement.readProjection(payment)).payee_release_status === 'wallet_credited') {
       restoreState = PAYMENT_STATES.TRANSFERRED;
     }
 
@@ -1235,14 +1237,28 @@ async function handleDisputeClosed(dispute) {
       });
     } catch (transErr) {
       // Direct update fallback
-      await supabaseAdmin
+      const { error: updateError } = await supabaseAdmin
         .from('Payment')
         .update({
           payment_status: restoreState,
           dispute_status: 'won',
           updated_at: nowIso,
         })
-        .eq('id', payment.id);
+        .eq('id', payment.id)
+        .select('id')
+        .single();
+      if (updateError) throw new Error('Won dispute payment update failed');
+    }
+
+    // A redelivered event can take the fallback after Payment already changed.
+    // Keep the current gig's mirror consistent before acknowledging that retry.
+    if (payment.gig_id) {
+      const { error: gigError } = await supabaseAdmin
+        .from('Gig')
+        .update({ payment_status: restoreState, updated_at: nowIso })
+        .eq('id', payment.gig_id)
+        .eq('payment_id', payment.id);
+      if (gigError) throw new Error('Won dispute gig update failed');
     }
 
     // Notify both parties — dispute won
