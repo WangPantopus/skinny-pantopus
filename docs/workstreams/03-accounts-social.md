@@ -4217,3 +4217,31 @@ complete schema replay/lint, change detection and the aggregate **CI OK** job. B
 seeder jobs were correctly skipped by change detection because this PR contains the focused Android
 production repair only. The earlier exact-head failure was superseded by this scoped Local-profile
 guard repair; no merge was performed here. Coordinator review/merge remains the integration boundary.
+
+## Authoritative N02/A04 row mapping correction (2026-09-22)
+
+The authoritative backlog in `docs/REMAINING_WORK_2026-09-11.md` defines **N02** as:
+“Physical Android notification/device acceptance remains unverified; emulator delivery is not
+hardware acceptance. No physical Android is currently available in the recorded setup.” The
+installed Android/emulator notification journeys and the induced HTTP-5xx rollback/retry remain
+valid emulator/local evidence, but they do not close that physical-device criterion. This row has
+no additional iOS or provider requirement in the authoritative wording, so those are not counted
+as N02 gaps here.
+
+The same backlog defines **A04** as: “Remaining address/provider coverage, including activated
+Smarty scenarios, geography/unit disambiguation and legitimate unavailable responses. Prepare
+what is possible on existing/free capacity first.” OAuth consent/callback belongs to **A01** and
+is removed from the A04 accounting. A bounded real local A04 route pass used the existing
+`POST /api/v1/address/validate` and `POST /api/v1/address/validate/unit` handlers with real Auth
+Bob bearer sessions and providers intentionally absent/disabled in the retained local
+configuration. Full validation returned HTTP 200 with `ADDRESS_VALIDATION_UNAVAILABLE`,
+`SERVICE_ERROR`, confidence 0 and `manual_review`; a temporary isolated multi-unit
+`HomeAddress` fixture (`missing_secondary_flag=true`) plus unit `2B` returned HTTP 200 with
+`ADDRESS_REVALIDATION_UNAVAILABLE` and the same explicit unavailable/manual-review verdict. Both
+sessions logged out HTTP 200; the temporary address was deleted (zero rows, no Home or
+AddressClaim), and the API stopped. No provider activation, purchase, successful external
+Smarty/geography result or schema/application change was made.
+
+Evidence: `a04-address-unavailable-20260922.json`; the raw local API log remains operational only.
+The durable private bundle now contains 192 files with MANIFEST SHA-256
+`758a5f48e9757539b69863d1bf043724573c3724acc0ccf1f62094c51a814b1a`.
