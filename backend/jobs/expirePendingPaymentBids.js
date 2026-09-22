@@ -12,16 +12,30 @@ const stripeService = require('../stripe/stripeService');
 async function expirePendingPaymentBids() {
   const now = new Date().toISOString();
 
-  const { data: staleBids, error } = await supabaseAdmin
-    .from('GigBid')
-    .select('id, pending_payment_intent_id')
-    .eq('status', 'pending_payment')
-    .not('pending_payment_expires_at', 'is', null)
-    .lt('pending_payment_expires_at', now);
-
-  if (error) {
-    logger.error('[expirePendingPaymentBids] Failed to query stale bids', { error: error.message });
-    return;
+  const staleBids = [];
+  const pageSize = 500;
+  let afterId = null;
+  // Durable checkouts remain in this result set. Read beyond PostgREST's row
+  // cap so a full page of retained attempts cannot starve later legacy bids.
+  // A stable ID cursor also avoids skipping rows if another worker reverts bids.
+  while (true) {
+    let query = supabaseAdmin
+      .from('GigBid')
+      .select('id, pending_payment_intent_id')
+      .eq('status', 'pending_payment')
+      .not('pending_payment_expires_at', 'is', null)
+      .lt('pending_payment_expires_at', now)
+      .order('id')
+      .limit(pageSize);
+    if (afterId) query = query.gt('id', afterId);
+    const { data, error } = await query;
+    if (error || !Array.isArray(data)) {
+      logger.error('[expirePendingPaymentBids] Failed to query stale bids', { error: error?.message || 'Missing bid page' });
+      return;
+    }
+    staleBids.push(...data);
+    if (data.length < pageSize) break;
+    afterId = data[data.length - 1].id;
   }
 
   if (!staleBids || staleBids.length === 0) return;
