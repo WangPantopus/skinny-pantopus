@@ -5,7 +5,7 @@ This section is the takeover point for another agent. It consolidates existing r
 **Source and integration boundary**
 
 - The original application worktree is `/private/tmp/pantopus-workstream-home`, branch `codex/native-emergency-edit-20260922`, HEAD `ee69cbd8d74367a22fbdfa4d9c4c306d3c662eb3`. It is intentionally unchanged and is 46 commits behind the coordinator's isolated PR192 integration head `ea044ebea7aedfae5c939e65ac1bccd841fc9e47` in `/private/tmp/pantopus-pr192-integration`; do not pull, reset, merge, or re-verify there unless the coordinator assigns that integration checkout.
-- PR192's original exact-head CI `35764090022` is green. The current integration head has fresh CI `35776302859` in progress (Android lint/test/assemble and instrumented are the remaining jobs at the coordinator snapshot; web has passed); do not call the integration head green until that run completes. The integration preserves the accepted Emergency Edit and Delete behavior after conflict resolution. PR192 remains open for coordinator review.
+- **PR192 merged** at 21:12 UTC as `37cb6d2167b1a59e7e77406feda59ca97873927c` after its fresh exact-head CI `35776302859` passed on `ea044ebea7` (all jobs, including Android lint/test/assemble and instrumented). It preserves the accepted Emergency Edit and Delete behavior. The original checkout at `ee69cbd8d` and its installed APK remain the evidence source; that commit is now in master history. The retained `stream2-backend-latest` route patch is identical to the merged route (all 47 added lines match), so the runtime can adopt master at its next restart; keep the backup.
 - The sole live status is this file in `/Users/yingpengwang/pantopus-coordination` on `codex/workstream-coordination` (PR174). Coordinator incorporated the complete preserved PR161 status through `4d33f5f5314581b6561efc43089e86822913bb98`; that supplemental docs branch remains open, not a second live tracker. Coordinator owns merge/disposition and shared backlog updates.
 
 **Completed Stream 2 code and contract changes**
@@ -33,9 +33,9 @@ The existing inventory is exactly H01–H08, R01–R06, I01–I07, D01–D10, F0
 
 **Precise next actions / no-repeat instructions**
 
-1. Coordinator: finish reviewing the isolated PR192 integration and wait for fresh CI `35776302859`; then decide merge/disposition. Reuse the recorded `ee69cbd8d` installed evidence and durable bundle; do not rerun Emergency Edit/Delete, guest-pass, bill, package, Leave Home or mailbox journeys.
+1. Done: the coordinator merged PR192 (`37cb6d216`). Reuse the recorded `ee69cbd8d` installed evidence and the durable bundle; do not rerun Emergency Edit/Delete, guest-pass, bill, package, Leave Home or mailbox journeys.
 2. If the physical iPhone becomes available, install the existing signed `.app` against LAN `18142` without rebuilding; until then, physical-device acceptance remains unverified.
-3. Continue only the next explicitly assigned row from the existing 40-row table. Preserve all current runtime/fixture cleanup and use only the live docs status file for further reporting.
+3. **Next assigned row: R06 residency letters** (issue, view, public verification, revoke and denial across web/iOS/Android). The exact criterion, existing implementation and resources are in the coordination summary's current resume point. Preserve all current runtime/fixture cleanup and use only the live docs status file for further reporting.
 
 
 **Earlier implementation groups preserved in this handoff**
