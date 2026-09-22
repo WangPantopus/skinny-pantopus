@@ -1,5 +1,47 @@
 # Three-stream coordination
 
+## September 22 — peer PR review: 149/151/154 approved pending refreshed CI; 152 blocked
+
+Coordinator reviewed the four PRs opened while Stream1 ran the native journeys.
+- PR149 (Stream3, iOS APIClient +8): skip the APNs registration POST until signed in and
+  keep the token for the existing post-login device registration. Minimal, matches the
+  fresh-install 401→"session expired" reproduction. Approved; branch updated to master,
+  fresh CI running, merge when CI OK.
+- PR151 (Stream3, users.js +12/−1): /verify-email retries a hashed token with the
+  alternate purpose (signup↔magiclink) so resent links opened from native deep links
+  verify. Minimal, web unchanged, invalid tokens still 400. Approved; merge after PR149.
+- PR154 (Stream2, native packages, 4 files): iOS list reload on reappearance, Mark picked
+  up enabled for delivered packages on both platforms, iOS Remove closes only after a
+  confirmed write, Android clears the stale error on success. Approved; branch updated,
+  fresh CI running, merge when CI OK. It edits docs/workstreams/02 on the feature branch:
+  merge order handles it this time, but the rule stands (status edits belong in the hub).
+- PR152 (Stream3, AuthManager+Session +6/−1): **blocked**. Its CI fails two existing iOS
+  regressions on every simulator: AuthManagerTests.testHandleUnauthorizedTransitionsToSignedOut
+  expects a plain 401 with no local token to publish sessionEndReason .expired, and
+  DeepLinkRouterSessionReturnTests.testOriginalAccountReplaysAfterServerRejectionAndConcurrentTeardown
+  expects endSession(reason) called after a concurrent teardown to still publish the
+  reason (accepted session-return contract). Gating the reason on "had a local token"
+  breaks both accepted behaviours. Stream3: reproduce the deliberate-sign-out race and
+  repair it without changing those contracts (for example suppress the reason only while
+  the app's own logout is in flight, or let logout clear the reason it just caused), then
+  push to the same PR; no new tests, existing suites must pass. Not merged.
+
+## September 22 — paid81fa83103 adopted master111580dfa; exact full CI green
+
+Paid `codex/paid-gig-integration` merged master111580dfa (PR142–PR153: Home package
+permissions and In Transit migration20260922010000, Stream3 unverified-login403, all
+coordinator docs) as ac26fdf1a, then renamed the22 still-unmerged paid migrations
+20260921020100–022200→20260922020100–022200 in unchanged order with identical bytes
+(gig-tip contract reference follows; policy check against origin/master passes,72
+infrastructure tests,67 SQL wrappers) as81fa83103. Exact CI35686792990 completed SUCCESS
+on every job (backend, Docker, web lint/typecheck/Jest, web E2E, complete schema replay/
+lint, migration safeguards, Android lint/test/assemble and instrumented tests, iOS lint/
+build and three simulators; Seeder skipped by change detection). PR47 is MERGEABLE and
+stays draft; PR34 keeps the older names and stays draft;46 separate. No application or
+unit-test change in this batch. Stream1 P02/P03/P08/P09 native acceptances published above;
+remaining Stream1 scope: P10 workload checks, P04/P05 fee policy pending the founder's
+payer/recipient decision, native dispute/3DS and hosted/Connect/live boundaries.
+
 ## September 22 — P09 installed iOS refund / hold-release journey accepted (bounded)
 
 Same native harness and both installed clients re-ran the paid journey to capture, then
