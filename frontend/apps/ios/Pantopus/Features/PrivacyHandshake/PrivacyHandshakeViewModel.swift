@@ -52,15 +52,33 @@ public final class PrivacyHandshakeViewModel: WizardModel {
             }
             let tiersResp: PersonaTiersResponse =
                 try await api.request(PrivacyHandshakeEndpoints.tiers(handle: personaHandle))
-            let suggestion: FanHandleSuggestionResponse =
-                try await api.request(PrivacyHandshakeEndpoints.fanHandleSuggestion(handle: personaHandle))
+            // The suggestion route sits behind the `audience_profile` flag and
+            // answers 404 when it is off (the release default). Web falls back
+            // to the plain follow route from the profile; do the same here
+            // instead of dead-ending on "Couldn't open the handshake".
+            var handshakeUnavailable = false
+            var suggestion = FanHandleSuggestionResponse(suggestion: nil, locked: nil, identity: nil)
+            do {
+                suggestion = try await api.request(PrivacyHandshakeEndpoints.fanHandleSuggestion(handle: personaHandle))
+            } catch let error as APIError where Self.isNotFound(error) {
+                handshakeUnavailable = true
+            }
             let followStatus: FollowStatusResponse =
                 try await api.request(PrivacyHandshakeEndpoints.followStatus(personaId: persona.id))
 
             let preview = Self.previewFrom(persona: persona)
             let tierOptions = tiersResp.tiers.map(Self.option)
-            let isMember = followStatus.following == true
+            var isMember = followStatus.following == true
                 || (followStatus.status ?? "") == "active"
+            var followedWithoutHandshake = false
+            if handshakeUnavailable, !isMember {
+                _ = try await api.request(
+                    PrivacyHandshakeEndpoints.plainFollow(personaId: persona.id),
+                    as: EmptyResponse.self
+                )
+                isMember = true
+                followedWithoutHandshake = true
+            }
             let initialHandle = HandshakeHandleState(
                 value: suggestion.suggestion ?? "",
                 locked: suggestion.locked ?? false
@@ -71,7 +89,7 @@ public final class PrivacyHandshakeViewModel: WizardModel {
             let content = HandshakeReadyContent(
                 persona: preview,
                 tierOptions: tierOptions,
-                step: isMember ? .alreadyMember : .handleEntry,
+                step: followedWithoutHandshake ? .completedFree : (isMember ? .alreadyMember : .handleEntry),
                 handle: initialHandle,
                 selectedTierRank: defaultRank
             )
@@ -315,6 +333,12 @@ public final class PrivacyHandshakeViewModel: WizardModel {
                 handleSubmitError(error)
             }
         }
+    }
+
+    private static func isNotFound(_ error: APIError) -> Bool {
+        if case .notFound = error { return true }
+        if case let .clientError(status, _) = error, status == 404 { return true }
+        return false
     }
 
     private func handleSubmitError(_ error: any Error) {
