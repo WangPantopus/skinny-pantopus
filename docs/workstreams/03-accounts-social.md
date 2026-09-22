@@ -4207,3 +4207,13 @@ The durable private bundle now contains 191 files with MANIFEST SHA-256
 `f72d89f805e0592d0a7d967e2ed1afb121dfe10ad81212543b2c2efc4f892107`. No unit-test coverage is
 claimed or required; implementation, local UI/API/SQL behavior, CI, merge, and external provider
 boundaries remain separately reported.
+
+## PR195 exact-head CI completion (2026-09-22 addendum)
+
+The fresh current-master CI run `35768401037` for PR [#195](https://github.com/WangPantopus/skinny-pantopus/pull/195)
+completed successfully at head `3b374454ad07060cf5dcaa1ce02fc48b3be4c88e`. Android **Lint, test,
+assemble** and **Instrumented tests (emulator)** are SUCCESS, as are deployment/migration safeguards,
+complete schema replay/lint, change detection and the aggregate **CI OK** job. Backend, web, iOS and
+seeder jobs were correctly skipped by change detection because this PR contains the focused Android
+production repair only. The earlier exact-head failure was superseded by this scoped Local-profile
+guard repair; no merge was performed here. Coordinator review/merge remains the integration boundary.
