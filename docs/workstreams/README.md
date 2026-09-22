@@ -1,4 +1,20 @@
 # Three-stream coordination
+
+## Current checkpoint — September 22, 17:44 UTC
+
+PR closure audit verifies that171/172 reused fixes already merged through164–168;38–42
+were incorporated through43.159's full history and158's documentation are preserved in open
+replacement PRs174/170; those documents are not yet merged. All nine current closed-without-
+merge PRs were checked, with no discarded application changes found. Exact descriptions and
+replacement links are corrected; see the newest Stream1 section for evidence and process limits.
+
+PR183 merged3e8d11dfd after exact-head full CI35757736325.184's update is requested; fresh-head
+CI is required. Paid integration is pushed at previously acceptedmastera460, fullCI35757725186
+and migration guard passed. PR194 fullCI35761158118 passed;193/194 remain queued for integration.
+Stream1 has no API/Next/browser/native runtime; all booking fixtures cleaned, ledger84 unchanged.
+Stream3 owns the native slot;192 remains held for preservation review. Docs161/170/174 last;
+9closed/71partial-open unchanged. Earlier runtime snapshots below are historical.
+
 Current September22 checkpoint: PR193 passed fullCI35759729609; PR1948b2bd6e05 is published with real free-booking → registration → existing-account → saved-booking proof, exact cleanup and freshCI35761158118 running. Stream1 now has no API/Next/browser runtime; ledger84 retained unchanged. Queue183 waits only Android lint/test/assemble.192 remains held for data-preservation review. See newest Stream1 status for evidence and limits; count9closed/71partial-open unchanged.
 
 Current runtime override, September22 17:20UTC: Stream1 uses only API18132/Next18133 and IAB13 for owned free-booking signup fixturef9220540, provider creation forbidden. Branchcodex/booking-account-continuation frommastera460; no application change yet. The receipt links to /signup while the existing auth route is/register; actual link verification underway. Previous193 paid fixtures remain cleaned. Stream3 retains heavy-native slot.

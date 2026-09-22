@@ -1,4 +1,42 @@
 # Stream 1 — Gigs and payments
+
+## September 22, 17:44 UTC — closed PR audit and integration checkpoint
+
+The founder asked whether closing PRs discarded or duplicated earlier work. The complete
+194-PR inventory contains nine closed without merge:171,172,159,158,38–42. Source/history
+checks at master a460fd5d1 establish the following:
+
+-171 reused the five original patches from merged164/165/166; all eight touched files match
+master exactly.172 reused the three application patches from merged167/168; eight files match,
+and the ninth differs only by the exact later CI helper extraction41b1c8a from168.
+-159's entire head is an ancestor of open174.158 has only a104-line documentation diff,
+preserved verbatim in open170 and174; its associated145/149/151/152 code is already merged.
+These replacement documents are still pending merge, not already published on master.
+-38–42's original heads are all ancestors of merged43 and master.
+
+No application change was discarded in those closures. The combined branches reused existing
+commits for installed testing; extra PRs added avoidable review overhead. Empty descriptions
+on171/172/158 and broad closure comments obscured the mappings. Descriptions now state the
+exact replacements and pending-documentation distinction. This audit does not establish that
+all historical investigation was efficient. Do not create another verification-only PR when
+a retained build/branch can be referenced from the existing fix PRs. Continue original evidence
+reuse and smallest-repair rules; no accepted journey was rerun for this history audit.
+
+[Three-file audit](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-pr-closure-review-r1/RESULT.md),
+MANIFEST d590109a8ecd6d740f98d0449f6e4c6c0c5b0a4a59687c8f351b4ca2d3fe508d.
+
+PR183 exact990d05e9d passed full CI35757736325 and merged as3e8d11dfdf76c8322634761e7322643abf2d8368.
+PR184 update was requested with expectedb0986380b; await its new head and fresh checks before
+merging. Prior mastera460 full CI35757725186 passed; paid integration was fast-forwarded and
+pushed toa460 after the migration-policy check. Newly merged183 master CI is not yet accepted.
+PR194 exact8b2bd6e05 passed full CI35761158118; its final11-file evidence MANIFEST is
+a5c386aa6031375973032b4526a2b92350f6fad5bdd7789d2f80a87b22869cb3. PR193 remains full-green; both await serial integration.
+Stream1 branchcodex/booking-account-continuation remains clean/pushed. All owned booking
+fixtures/tabs/API/Next are cleaned; retained ledger84 unchanged. No native slot held by Stream1.
+Stream3's N03 native reservation remains active;192 remains held for data-preservation review.
+Next:184→185→186→187→188→189→190→191→192(review hold)→193→194; docs161/170/174 last.
+Existing row count9closed/71partial-open unchanged; peer row reconciliations remain pending.
+
 Current runtime override, September22 17:20UTC: Stream1 uses only API18132/Next18133 and IAB13 for owned free-booking signup fixturef9220540, provider creation forbidden. Branchcodex/booking-account-continuation frommastera460; no application change yet. The receipt links to /signup while the existing auth route is/register; actual link verification underway. Previous193 paid fixtures remain cleaned. Stream3 retains heavy-native slot.
 
 
@@ -6,8 +44,7 @@ Current runtime override, September22 17:20UTC: Stream1 uses only API18132/Next1
 
 Branch `codex/booking-account-continuation`, `8b2bd6e05f871d0f9ac501601313cece64abaa8e`,
 [PR194](https://github.com/WangPantopus/skinny-pantopus/pull/194), based on master `a460fd5d1`.
-[CI35761158118](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35761158118) is
-running. Only `ConfirmedView.tsx` changes: import the existing authPageHref helper and use the
+[CI35761158118](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35761158118) passed. Only `ConfirmedView.tsx` changes: import the existing authPageHref helper and use the
 existing registration route with My bookings as the return destination. No new tests/design.
 
 Actual anonymous free-booking UI → POST201/confirmed SQL → Create an account led to /signup,
@@ -18,8 +55,8 @@ shows the confirmed appointment. Selected booking state is unchanged; no payment
 Web typecheck has zero errors; focused lint/diff checks pass. No registration submission,
 password change, terms acceptance, verification email, OAuth or full A01/A05/U closure claim.
 
-[10-file evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-booking-account-continuation-r1/RESULT.md),
-MANIFEST `5205345ad9a5b7a23474d68f60a14a10d9f7b6210f4428b7b1c8ea44be2a657b`.
+[11-file evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-booking-account-continuation-r1/RESULT.md),
+MANIFEST `a5c386aa6031375973032b4526a2b92350f6fad5bdd7789d2f80a87b22869cb3`.
 All16 owned SQL checks and auth users0; retained ledger84 unchanged. No provider objects.
 Settings logout reached/login; IAB13 closed; API18132/Next18133 stopped and owned Next artifacts
 cleaned. App branch clean/pushed. The initial ancillary username200 is excluded from canonical
