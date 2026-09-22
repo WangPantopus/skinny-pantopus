@@ -1,6 +1,20 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — September 22, 2026, 23:10 UTC
+## CURRENT RESUME POINT — September 22, 2026, 23:50 UTC
+
+### Operating model from 23:50 UTC — founder direction: "resume all work, all 3 streams"
+
+The founder asked this Claude coordinator session to run **all three streams** and finish every locally actionable criterion with real simulator/emulator verification.
+- **Streams 2 and 3** are now run by Claude background agents, not the idle Codex tasks `01a0c0d4…`/`01a0a824…`. **Do not resume those Codex tasks on these worktrees** unless the founder reassigns them.
+- Each agent writes only its own new work checkout, runtime, devices and evidence bundles. The agents do **not** edit or commit this hub. The coordinator integrates status here, reviews every PR and merges serially after exact-head CI.
+- **One heavy native build at a time across all streams:** `/private/tmp/pantopus-tools/heavy-slot.sh acquire "<stream>: <purpose>"`, then `release` right after the build and install.
+- Shared Android UI helper: `ANDROID_SERIAL=<own emulator> /private/tmp/pantopus-tools/aui.py dump|tap|has|shot`.
+- Device/port ownership is unchanged:
+  - Stream 1: `emulator-5558`, `C2BCF36A…`, ports 18132/18133, SQL 64562.
+  - Stream 2: `emulator-5556`, `6F914A30…`, ports 18143/18142 (+18144–18149 for new runs), SQL 64554.
+  - Stream 3: `emulator-5554`, `0AE16FA0…`, ports 18130/18131 (+18134–18139), SQL 64532, Mailpit 64535/36.
+  - `iPhone 17 EB5AD759` and `:8000` stay the founder device session; do not touch them.
+
 
 The coordinator role moved at about 21:05 UTC to the Claude Code session "Pantopus Stream 1 coordinator handoff" (Stream 1 developer + coordinator). Before any writing it verified that the previous Codex coordinator thread `01a0c897-33be-7011-b55b-b82291ba9fd2` had completed at 20:35 UTC, and that the Stream 2 (`01a0c0d4-2278-71d3-bc23-a9d789d2afeb`) and Stream 3 (`01a0a824-301b-74e3-a1d9-b205714ed7a1`) Codex tasks had been `task_complete` since 20:07/20:15 UTC. **The coordinator cannot message Codex tasks.** The founder relays the peer assignments below, or authorizes the coordinator to act for those streams. No duplicate agent was started for a peer worktree. The 20:00 UTC consolidation is preserved below as history.
 
