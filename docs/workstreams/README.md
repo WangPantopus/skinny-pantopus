@@ -1,5 +1,25 @@
 # Three-stream coordination
 
+## September 22 — P08 installed iOS+Android paid-gig journey accepted (bounded); PR145 merged
+
+Stream3 PR145 (unverified-login403 feedback, reviewed with its a01-fix-verification
+receipt, CI green) merged57d6beb7d after a branch update. Stream1 then ran the accepted
+September21 wallet-release harness against both installed clients on the retained
+wallet-read-r1 stack with real Stripe TEST: iOS poster Accept→real PaymentSheet4242→
+finalize-accept (authorized1250c, intent requires_capture); Android worker deep link→
+Start task200; Android photo-proof delivery through the real files router (real File row
+and Storage object in an owned private bucket; the earlier shim path and a missing
+GIG_COMPLETION_BUCKET produced400/503 with the existing "Couldn't send your proof" copy
+and a kept draft); iOS Confirm completion→captured_hold1250/1063/187; owned cooling-off
+advance→existing processPendingTransfers→wallet_credited, WalletTransaction1063,
+Android wallet shows$10.63 available and the cleared income row; gig0102 cancel-before-
+pay and declined-card→abort both released their real intents (canceled) and reopened
+the bid. Synthetic identity/Connect, local Storage bucket for hosted S3, no socket push,
+emulator/simulator only. Cleanup: real refund of the1250 capture, both750 intents
+canceled, customer deleted, owned rows0, bucket removed, devices shut down. Owner audit
+20260922-stream1-p08-native-r1 (84 files,42 screens), MANIFEST5590f05258babb98d27b2fd420382154a68e5405f9e8a5a21e8bdef98ee1b76c.
+Paid adoption of master57d6beb7d waits for its running CI. PR34/47 remain drafts.
+
 ## September 22 — P03 installed Android aged tip discovery accepted (bounded); Android control recipe
 
 Owned AVD Pantopus_Stream1_Start_R2 now runs headless (-no-window, ports5568/5569) and is

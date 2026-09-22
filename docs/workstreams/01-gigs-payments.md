@@ -1,5 +1,33 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — P08 installed iOS+Android paid-gig journey (bounded native acceptance)
+
+Harness runtime-p08-native.cjs (adapted accepted wallet-release harness; Bearer→fixture
+actor, synthetic refresh/device-register handlers, real files router + owned private
+Storage bucket via GIG_COMPLETION_BUCKET). Fixture f9200390: owner iOS C2BCF36A candidate
+a65411758, worker Android Pantopus_Stream1_Start_R2 app.pantopus.android.debug.
+Journey: iOS Accept$12.50→accept200 (real customer/intent, manual capture)→PaymentSheet
+TEST4242→Pay→finalize-accept200→gig assigned/bid accepted/Payment authorized1250c; Android
+Start task→start200→in_progress, notices bid_accepted/gig_started; Android Mark as
+delivered: shim upload→mark-completed400 "Choose proof files uploaded by you" and real
+route without bucket→upload503, both surfaced as "Couldn't send your proof…" with the
+draft kept; with the bucket: upload201 (File gig_attachment/gig_completion completed,
+storage object)→mark-completed200→completed, completion_photos private reference,
+"Delivery confirmed · Proof sent · 1 photo"; iOS refreshed via deep link (no socket in the
+harness)→Confirm completion→complete200→captured_hold1250 (to_payee1063, fee187),
+cooling_off+48h, intent succeeded/captured, UI Payment Captured $1.87 fee; cooling-off
+advanced on the owned row→processPendingTransfers→wallet_credited, WalletTransaction
+gig_income1063 completed, Wallet1063, notices payout_sent/payment_completed; Android
+wallet $10.63 available / income row Cleared / Set up payouts. Gig0102: Accept→intent750→
+close sheet→abort-accept200→intent canceled, bid pending; Accept→new intent→4000…0002→
+"Your card was declined." (retry kept)→close→abort-accept200→second intent canceled, gig
+open. Errors: only expected fake-Connect lookups. Limits: synthetic identity/Connect
+(no payout/transfer), local bucket stands in for hosted S3, no socket push, toasts not
+captured, emulator/simulator only, cooling-off advanced by SQL, no native3DS/partial
+refund/dispute here. Cleanup: refund re_3UIK7g… of the1250 capture, both750 intents
+canceled, customer deleted, owned rows0, File rows0, bucket emptied/deleted, API/devices
+stopped, worktree clean. Owner audit20260922-stream1-p08-native-r1 MANIFEST5590f05258babb98d27b2fd420382154a68e5405f9e8a5a21e8bdef98ee1b76c.
+
 ## September 22 — P03 installed Android tips: aged discovery accepted on the owned AVD
 
 Same harness as the web/iOS runs (fixtures1/4 restored again after the web cleanup).
