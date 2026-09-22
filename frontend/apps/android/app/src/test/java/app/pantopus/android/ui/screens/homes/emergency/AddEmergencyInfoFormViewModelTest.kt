@@ -37,7 +37,7 @@ import java.time.Instant
  *  - details map composes the severity / verified-by keys the detail
  *    surface reads
  *  - submit POSTs in create mode and calls `onCreated`
- *  - edit mode commits locally and surfaces the new draft to
+ *  - edit mode commits the server response and surfaces the new draft to
  *    `onUpdated`
  *  - every category × severity round-trip is stable (the snapshot
  *    equivalent — we can't generate iOS PNGs here, but the projection
@@ -221,7 +221,7 @@ class AddEmergencyInfoFormViewModelTest {
         }
 
     @Test
-    fun editModeCommitsLocallyAndSurfacesDraft() =
+    fun editModeCommitsServerDraftAndSurfacesIt() =
         runTest {
             var captured: EmergencyFormDraft? = null
             val seed =
@@ -236,6 +236,22 @@ class AddEmergencyInfoFormViewModelTest {
                 )
             val vm = makeVm(editDraft = seed, onUpdated = { captured = it })
             vm.setSeverity(EmergencySeverity.Critical)
+            coEvery { homesRepo.updateHomeEmergency(any(), any(), any()) } returns
+                NetworkResult.Success(
+                    CreateEmergencyResponse(
+                        emergency =
+                            HomeEmergencyDto(
+                                id = "e-1",
+                                homeId = "home-1",
+                                type = "medical_condition",
+                                label = "Asthma",
+                                location = null,
+                                details = mapOf("severity" to "critical", "detail" to "Inhaler in go-bag."),
+                                createdAt = null,
+                                updatedAt = null,
+                            ),
+                    ),
+                )
             vm.submit()
             assertEquals(EmergencySeverity.Critical, captured?.severity)
             assertTrue(vm.state.value.shouldDismiss)
