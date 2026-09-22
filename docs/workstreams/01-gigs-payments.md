@@ -1,13 +1,36 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — read-only release app-link boundary (O04/O05/N01)
+
+The current public `.com` apex and www hosts return both association files with HTTP
+200, JSON content types and no redirect. Their AASA still lists only the legacy
+`6UYZBA546R.com.pantopus.app`; current source already includes native
+`6UYZBA546R.app.pantopus.ios`. The deployed file is therefore behind the repository.
+Published and repository Android assetlinks both list only `com.pantopus.app`, while
+the native app uses `app.pantopus.android`. Its actual distribution certificate must
+be verified before adding that package; do not reuse the Expo fingerprint by guess.
+
+`pantopus.app`, its www host, and the configured native Release/Staging API defaults
+`api.pantopus.app` / `staging.api.pantopus.app` do not resolve from this Mac. Build
+secrets can override source defaults: this does not establish a signed binary's
+effective URL. The June static readiness report was treated as historical, not as
+a live result. No hosted setting, DNS, source or provider activation was changed.
+
+Owner evidence: `.pantopus-recovery/audits/20260922-stream1-release-links-r1/`,
+3 files; MANIFEST SHA256
+`397f4e5614019f880136ccc51eba4dc4f7455fd05c02ba7de97301c9c7badf6f`.
+This is source/public HTTPS/DNS evidence, not installed-device association acceptance.
+No fixtures or runtime created. Remaining boundary: reviewed hosted deployment, native
+release signing/certificate evidence, exact binary configuration, and installed-device
+link verification. Routed to Stream3 as a reusable N01 boundary; no acceptance row closes.
+
 ## September 22 — current-master rebase and P10 expiry pagination repair
 
 Branch `codex/p10-expired-bid-pagination`, source
 `9f1d1db824bffdbff3dfe0a1cd406a7565ff0451`, [PR173](https://github.com/WangPantopus/skinny-pantopus/pull/173).
 Paid integration was first rebased/pushed to master69be3c11d (PR47 and34 merged by the
 founder); the new repair starts from that master in the existing paid worktree.
-Changed path: `backend/jobs/expirePendingPaymentBids.js` only. Exact CI35715834339 is
-pending. No new application file, table, migration, service, screen or unit test.
+Changed path: `backend/jobs/expirePendingPaymentBids.js` only. Exact CI35715834339 passes all applicable checks. No new application file, table, migration, service, screen or unit test.
 
 Reproduced with actual job/SDK/PostgREST/SQL:1000 retained durable attempts fill the
 server's1000-row page; a later expired legacy bid remains pending_payment after two

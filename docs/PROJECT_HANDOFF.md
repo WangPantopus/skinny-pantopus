@@ -14,7 +14,7 @@ untouched; duplicate PR158 was already closed. This does not close any acceptanc
   Migration policy passes against that exact master. New one-file P10 repair
   [PR173](https://github.com/WangPantopus/skinny-pantopus/pull/173),
   `codex/p10-expired-bid-pagination` at `9f1d1db824bffdbff3dfe0a1cd406a7565ff0451`,
-  runs in the same paid worktree; its exact CI35715834339 is pending.
+  runs in the same paid worktree; its exact CI35715834339 passes all applicable checks.
 - **Stream 2:** existing task `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` resumed. PR160
   rebased onto `69be3c11d`; existing regressions exposed historical `cancelled` receipt/
   list compatibility and a settings fixture that lacked explicit verification. Minimal
@@ -35,8 +35,9 @@ untouched; duplicate PR158 was already closed. This does not close any acceptanc
 Runtime: retained Stream1 wallet-read-r1 SQL64562/API64561 remains up, ledger79; exact
 P10 scale fixtures are cleaned to zero and18132/18133 are free. Peer runtimes, devices
 and retained fixtures belong to their streams. One heavy native build at a time; the
-coordinator granted Stream3 the first slot and requested release to waiting Stream2.
-No simultaneous build is authorized. Private Stream1 continuation:
+coordinator reassigned the slot to Stream2 after confirming no active build/compiler
+process (only an idle Gradle daemon); Stream3 must request a new grant before its next
+native invocation. No simultaneous build is authorized. Private Stream1 continuation:
 `/private/tmp/pantopus-stream1-wallet-read-r1/RESUME-2026-09-22.md`.
 
 Next: finish/review current CI repairs, serialize code merges on current heads, publish
