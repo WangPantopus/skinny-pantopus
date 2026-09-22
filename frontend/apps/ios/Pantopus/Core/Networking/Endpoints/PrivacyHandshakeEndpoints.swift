@@ -51,6 +51,14 @@ public enum PrivacyHandshakeEndpoints {
         Endpoint(method: .post, path: "/api/personas/\(personaId)/follow", body: body)
     }
 
+    /// Plain follow without the handshake schema — the same route the web
+    /// profile uses when the `audience_profile` flag is off (the backend
+    /// only enters handshake mode when `acknowledged_platform_trust` is
+    /// present in the body).
+    public static func plainFollow(personaId: String) -> Endpoint {
+        Endpoint(method: .post, path: "/api/personas/\(personaId)/follow")
+    }
+
     /// `PATCH /api/personas/:id/follow/preferences` — notification
     /// level / muted state after a successful free follow. Route
     /// `backend/routes/personas.js:1743`.
