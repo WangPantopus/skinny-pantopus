@@ -220,7 +220,9 @@ open class HomesRepository
             emergencyId: String,
             request: CreateEmergencyRequest,
         ): NetworkResult<CreateEmergencyResponse> =
-            safeApiCall { api.updateHomeEmergency(homeId, emergencyId, request) }
+            safeApiCall {
+                api.updateHomeEmergency(homeId, emergencyId, request)
+            }
 
         // ─── Documents (T6.4b / P17) ──────────────────────────────
 
