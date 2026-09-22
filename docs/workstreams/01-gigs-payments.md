@@ -1,5 +1,43 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — booking payment receipt and destination repair published
+
+Branch `codex/booking-payment-receipt`, commit `877ad94f6802227bc02f654d26a617203874227c`,
+[PR193](https://github.com/WangPantopus/skinny-pantopus/pull/193), based on master `a460fd5d1`.
+[CI35759729609](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35759729609) is
+queued; this is not yet an accepted final-CI milestone. The application worktree is clean/pushed.
+
+Reproduced in the real booking journey: the receipt said “Payment received” for an uncaptured
+Stripe authorization, and the release notification led to `/gigs/null` and a real 404. Three
+existing files repair the receipt's status wording and booking-aware release metadata/destination:
+`ConfirmedView.tsx`, `PaymentStatusBadge.tsx`, and `processPendingTransfers.js`. No design,
+new unit test, screen, service, table or migration. Existing source and286 refs were compared.
+
+Fresh Chrome/Stripe TEST card authorization showed Authorizing, then Authorized after the actual
+owned event was forwarded through the local real webhook. Host Approve captured $12.50. Two
+real release-worker runs after controlled maturity produced one $10.63 income and two notices.
+The payer tapped Booking payment complete, reached My bookings with HTTP200 and the confirmed
+appointment, and its SQL read state changed once. The final receipt showed Payment received
+after actual capture. All40 relevant existing backend checks, web zero-error typecheck, focused
+lint, syntax and diff checks passed. This does not close the full P07/A05/U rows.
+
+[Durable evidence](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-booking-payment-receipt-r1/RESULT.md):
+20 files, MANIFEST `a117ee055abf0772bdd10dbae603f259e9ad1ecfb8b62f4010f3a8ad5d8bec4e`.
+Limits: synthetic sign-in/page/availability, local forwarding of an actual TEST event, controlled
+maturity, no native booking-notification, hosted mail/push, bank/Connect/live or atomic booking
+notice-failure/recovery acceptance. IAB's Stripe frame stayed blank; Chrome checkout worked.
+All16 owned SQL cleanup checks and auth users are zero. Two captured TEST charges fully refunded,
+unused intent canceled and test customer deleted. Full retained84-row ledger unchanged. Both
+browser sessions logged out/tabs closed; API18132/Next18133 stopped, owned cache removed and
+generated tsconfig restored. Private RESUME and PR body updated; raw logs/secrets remain private.
+
+Next: await193 exact-head CI, continue the serial queue at183, and finish peer row reconciliation.
+PR191's six evidence hashes and one-file diff are reviewed. PR192 remains pending a focused
+untouched-location/detail preservation and malformed-readback review. Stream3 owns the single
+heavy native slot for reproduced N03 Follow reappearing on a fresh blocked-profile open.
+Current official inventory remains9 closed/71 partial-open; P01 is a separate bounded milestone.
+
+
 ## Current reconciliation — September 22
 
 The founder requested an accurate account of days of work after the closed count remained

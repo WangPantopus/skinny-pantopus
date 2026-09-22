@@ -1,5 +1,29 @@
 # Three-stream coordination
 
+## Current coordinator checkpoint — September 22, 17:18 UTC
+
+Booking PR193 `877ad94f6` is published; real Chrome/Stripe TEST/host approval/worker/web
+notification/SQL verification and exact cleanup passed. Required CI35759729609 is queued.
+Three existing files fix uncaptured “Payment received” wording and the `/gigs/null` booking
+release link.20-file evidence MANIFEST `a117ee055abf0772bdd10dbae603f259e9ad1ecfb8b62f4010f3a8ad5d8bec4e`;
+full details and limits are in Stream1 status. No whole-row closure. API18132/Next18133 and
+owned tabs are stopped/closed; retain ledger84 unchanged. Stream1 app is clean/pushed.
+
+PR182 merged as `a460fd5d1`; PR183 `990d05e9d` still runs fresh Android checks. Continue
+184→185→186→187→188→189→190→191→192→193 after each predecessor, with192 held for
+its precise data-preservation review. Stream3 holds the sole heavy native slot for the new
+reproduced N03 reopen defect. Stream2/3 row accounting is underway. Stream1's25 P/G/O/L rows
+and5 U rows are reconciled in the existing status file. Count9 closed/71 partial-open;
+P01 remains a separate bounded milestone. Docs161/170/174 remain last.
+
+
+## Active native reservation — September 22, 17:13 UTC
+
+Stream3 owns one focused Android assemble/install for the reproduced N03 local-neighbor
+block state lost on fresh reopen. Existing fixtures/device only; no schema or redesign.
+Stream2 continues PR192 preservation review and accounting without another native build.
+Stream1 uses only its web/API/SQL booking runtime. Release the slot explicitly when done.
+
 ## Current reconciliation — September 22
 
 The founder requested an accurate account of days of work after the closed count remained
