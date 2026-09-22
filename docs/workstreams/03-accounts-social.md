@@ -3100,3 +3100,50 @@ response hook in this milestone. Detailed a01-signup-reset-source-proposal.json;
 MANIFEST **f967e080959dde6c0e05f6b89f6275b651576cbb218712ee9b7f5d30d327cb01**.
 Coordinator fixture/account-creation grant required before runtime. Runtime36126/36139
 and signed-out state retained; no app edit/new test.
+
+
+## A01 signup verification and reset completion — verified; unverified-login repair PR145
+
+User granted the A01 runtime scope directly. Built-in pane tab only (UA Claude/2.2553.1),
+retained API/Next/DB, real Mailpit 64535/64536. Signup: real /register form for new owned
+stream3-auth-r3-frank@example.com→POST/api/users/register201 01:55:35→/verify-email-sent;
+auth.users unconfirmed, User.verified false; Mailpit "Confirm your email for Pantopus"
+with /verify-email?token_hash link (token never exported). Login before verification with
+correct credentials→POST/api/users/login401 and "Invalid email or password" while API log
+recorded GoTrue "Email not confirmed": REPRODUCED DEFECT — users.js mapped every
+signInWithPassword error to the generic401, leaving its own 403 "Please verify your email
+before signing in."/needsVerification branch unreachable. Verify link→verify-email200
+01:57:21→login page; email_confirmed_at set, verified true, GoTrue/app sessions0 (verifyOtp
+session dropped). Consumed link reuse→400 "Invalid or expired verification link/code" +
+Resend; resend for verified account→200 enumeration-safe message, API skipped, no mail.
+Verified login200→/app/place; logout200. Duplicate signup→400 "A user with this email
+address has already been registered" visible, no new rows.
+
+Reset (Evan d3671605, zero sessions): forgot-password200→recovery_sent_at, GoTrue audit
+user_recovery_requested, Mailpit "Reset your Pantopus password"; unknown email→same message,
+no mail. Reset page client checks "Passwords do not match."/"Password must be at least 12
+characters." without network. Reset200 02:01:16→login page; GoTrue audit login/
+user_updated_password/user_modified/logout (scoped recovery session removed), AuthSession
+rows byte-equal, prefs/devices/grants unchanged, "All devices were signed out" notice mailed.
+Old password401, new password200→/app/place, logout200. Consumed token reuse→400 "Invalid or
+expired reset token". Fixture password restored by a second real forgot/reset; original
+credential login200 then logout. Expired-token/SMTP-outage/limiter-exhaustion not exercised.
+
+Repair: smallest existing-route change on codex/stream3-unverified-login-feedback
+(932bfc227, PR145 https://github.com/WangPantopus/skinny-pantopus/pull/145): in the existing
+authError branch map /email not confirmed/i to the existing 403 needsVerification response
+(9 lines added). API restarted from the exact captured recipe (36126→50622). Fresh unverified
+stream3-auth-r3-grace@example.com→login403 with "Please verify your email before signing in."
+and the login page's existing Resend control; resend200 mailed "Your Pantopus verification
+link"; verified account wrong password still401 generic, no resend control. Existing
+tests/authDpop + authUsersHooks 127 passed; node --check clean; no eslint config in backend;
+no new unit tests. Next dev rewrote web tsconfig include for .next-stream3 (unstaged).
+
+Cleanup: Frank/Grace AuthSession/User/auth.users rows deleted in one transaction (auth.users
+3/User3/orphan0); Evan active0/GoTrue0, two natural revoked login rows retained; Mailpit19
+natural messages retained; pane tab closed/viewport reset; runtime50622/36139+DB retained.
+Artifacts a01-{before-evan,signup-mail,signup-result,reset-before-evan,reset-mail,
+reset-after-evan,reset-final-evan,reset-result,fix-verification,cleanup}.json; durable718
+MANIFEST **60ed88d5f44ce6c0caf08f900cc2e2c419bf14a108a581fa007a5de13ef55a2f**.
+Next: PR145 CI/review; remaining A01 limits are providers disabled, expired tokens,
+delivery outage and native clients.
