@@ -29,15 +29,18 @@ Last four Stream2 follow-up turns completed with no output; no new progress/slot
 40-row accounting is inferred. Existing backend/LAN runtime is preserved. 192 is accepted within its recorded preservation scope and remains queued after191;
 its completed journeys must not be rerun. Outstanding row accounting does not block this repair.
 
-Stream3's191-file bundle hashes pass, MANIFESTf72d89f805e0592d0a7d967e2ed1afb121dfe10ad81212543b2c2efc4f892107.
+Stream3's192-file bundle hashes pass, MANIFEST758a5f48e9757539b69863d1bf043724573c3724acc0ccf1f62094c51a814b1a.
+A04 real Auth/HTTP/SQL now verifies provider-unavailable full/unit-address results and cleanup;
+UI and successful external geography/unit disambiguation are not claimed.
 Installed profile readback503 preserves2 unsaved; restored grant/retry200 shows saved;
 exact cleanup/logout/API stop recorded and XMLs independently checked.
 Android cold-process session/profile200 and logout200 are accepted within local scope;
 portfolio chooser reaches actual upload500 due invalid storage credentials, no partial File.
 iOS installed destination remains a precise UI-control boundary.1953b374454a fullCI35768401037
-passes; remains queued after194. Stream3 must correct its row mapping: N02 is physical
-Android acceptance and A04 is address/Smarty coverage, not OAuth. Accepted workflow evidence
-remains valid; its mapping must follow the exact authoritative backlog before closure.
+passes; remains queued after194. Stream3 corrected its authoritative mapping: N02 is physical
+Android acceptance and A04 is address/Smarty coverage; OAuth belongs toA01. The older current
+table still needs the same correction. Next bounded task is the existing address UI under
+provider unavailability, reusing Home evidence and preserving its ownership.
 Count remains9closed/71partial-open; P01 is a separate bounded milestone.
 
 
