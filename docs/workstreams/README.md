@@ -1,6 +1,44 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — September 22, 2026, 20:00 UTC
+## CURRENT RESUME POINT — September 22, 2026, 22:30 UTC
+
+The coordinator role moved at about 21:05 UTC to the Claude Code session "Pantopus Stream 1 coordinator handoff" (Stream 1 developer + coordinator). Before any writing it verified that the previous Codex coordinator thread `01a0c897-33be-7011-b55b-b82291ba9fd2` had completed at 20:35 UTC, and that the Stream 2 (`01a0c0d4-2278-71d3-bc23-a9d789d2afeb`) and Stream 3 (`01a0a824-301b-74e3-a1d9-b205714ed7a1`) Codex tasks had been `task_complete` since 20:07/20:15 UTC. The 20:00 UTC consolidation is preserved below as history. **The coordinator cannot message Codex tasks.** The founder relays the peer assignments in this section, or authorizes the coordinator to act for those streams. No duplicate agent was started for a peer worktree.
+
+### Integration state (refresh before acting)
+
+| Item | Exact source / CI | State |
+|---|---|---|
+| PR192 Emergency edit | `ea044ebea7` exact CI `35776302859` (all jobs incl. Android) | **Merged** `37cb6d2167b1a59e7e77406feda59ca97873927c` |
+| PR193 booking receipt/notice | updated `4d38c43ec4`, fresh CI `35785266136` | **Merged** `6f7c700e6cfefa8fd070b74b354160b921e80b68` |
+| PR194 registration return | `e8ccf56e51`: the coordinator merged master and resolved the one `ConfirmedView.tsx` import conflict by keeping both imports; fresh CI `35785918190` | **Merged** `094ed5826bcfd36a6f956984103e861e484dbd93` |
+| PR195 Android Local block state | updated `7f557a0069`, fresh CI `35786420151` | Pending CI, then merge |
+| PR196 booking cancellation/refund | `3f82ae4786`; update after 195; public `20260922023100` still sorts after master's newest `…023000` | Queued |
+| Docs 161/170 → 174 | The hub merged 161 (`1a9317245`; only three superseded summary lines are not carried) and 170 (`815b6e495`; its 117-line `native-social-r1` history is appended verbatim to 03). | Land through PR174 last. GitHub marks 161/170 merged once their heads are master ancestors. |
+| Master aggregate CI | The `2048d971` push failed only in iOS iPhone 16 `CeremonialMailViewModelTests.testContinueFromDecideAdvancesToVerify` (timeout; it passed on iPhone 16 Pro/SE in the same run). Later master runs were superseded by queue merges. | Judge the final master run after 196. Never infer success from a cancelled run. |
+
+### Owners, checkouts and reservations
+
+| Stream | Application checkout | Runtime / devices | Current assignment |
+|---|---|---|---|
+| 1 + coordinator (Claude) | `/private/tmp/pantopus-paid-gig-integration` on `codex/booking-cancellation-recovery` `3f82ae4786` until PR196 merges. After that it moves to a fresh branch from final master. The coordinator checkout `/private/tmp/pantopus-pr192-integration` is detached at master `094ed5826` for the P09 APK build. | **Heavy native slot: Stream 1** (P09 Android APK, then journey). Retained SQL64562/PostgREST64561 ledger88 (candidate ledger: the same payment migrations under pre-renumbering versions; it lacks only the Home `20260921010000`/`20260922010000`). AVD `Pantopus_Stream1_Start_R2` = `emulator-5558`, iOS `C2BCF36A…`. | **P09 Android payer refund controls**. Detail is in 01. |
+| 2 Home (Codex `01a0c0d4…`, idle) | `/private/tmp/pantopus-workstream-home` `ee69cbd8d` (merged via PR192; the source commit is now in master history). Preserve `.next-stream2`. | API18143/LAN18142 retained. Its `stream2-backend-latest` route patch is **identical** to merged PR192 `backend/routes/home.js` (47 added lines match), so the runtime already runs accepted code and can adopt master at its next restart; keep the backup. `:8000` from the Home worktree remains the founder device backend. SQL64554/PostgREST64553, emulator-5556, iOS `6F914A30…`. | **R06 residency letters**, below. |
+| 3 Accounts/social (Codex `01a0a824…`, idle) | `/private/tmp/pantopus-workstream-accounts-social` `b956a0076` (preserve `publicShare.ts`/tsconfig edits, `.next-stream3`); Android `/private/tmp/pantopus-stream3-android` `3b374454a` (PR195 head moved remotely to `7f557a0069` by update-branch; local checkout clean, not yet fast-forwarded). | SQL64532/PostgREST64531, Mailpit64535/36. **Correction:** Next `[::1]:18131` is running (pid 15494 `next-server` from the Stream 3 worktree, about 11 h), although the 20:00 summary said it was stopped. Left untouched for Stream 3. iOS `0AE16FA0…`, emulator-5554. | **iOS parity of the PR195 personal-block defect**, below. The heavy slot goes to Stream 3 when Stream 1 releases it. |
+
+### Peer assignments (existing tasks; founder relays)
+
+**Stream 2: R06, residency letters.** Backlog criterion: "Residency passes/letters are separate from household admission: verify issue, view, revoke and public-verification access independently." Existing implementation: `backend/routes/residencyLetters.js` mounted at `/api/homes` (`POST/GET /:id/residency-letters`, `GET …/:letterId/pdf`, `POST …/:letterId/revoke`), public check `GET /api/public/residency-letters/:code` (`backend/routes/public.js:730`), `backend/services/residencyLetterService.js`, legacy migrations 157/189, web Identity → Residency letter controls, iOS `ResidencyLettersEndpoints.swift`, Android `ResidencyLettersApi.kt`/`ResidencyLetterDtos.kt`. Reuse PR45 (merged 2026-09-14) expiry projection/labels and its Chrome evidence; do not repeat expiry-label checks. Remaining work: real web UI→API→SQL issue by an authorized member; view/download; public verification by code showing only the intended fields; revoke; the public check then showing revoked/invalid; denial for non-members, removed members and unauthorized roles; letter issue/revoke not changing household admission, and admission changes not silently validating letters. Then the installed Android/iOS callers on the retained devices. Repair only a reproduced defect, in place. Hand off with a durable bundle plus manifest, an in-place update to row R06 in live 02, and a PR only for a repair. The coordinator merges.
+
+**Stream 3: iOS parity of the PR195 defect (N04/N03).** PR195 fixed Android only. iOS `frontend/apps/ios/Pantopus/Features/Profile/PublicProfileViewModel.swift` `loadRelationship(id:)` (about line 630 on master) reads only `GET /api/users/:id/relationship`, which excludes personal `UserBlock` rows (`GET /api/users/blocked`, `backend/routes/blocks.js:138`). On a read error it leaves `canFollow` true. Remaining work: on installed iOS `0AE16FA0`, after a personal block from a Local-profile neighbor, a fresh profile open must not restore Follow/Connect, unblock must restore them, and a failed blocked-list read must fail closed. Also check the web public profile reopen. Reuse the PR195 fixture recipe (Home `2ca4bc33…`, Bob owner/Evan member, LocalProfile overlay) and its Android evidence; do not rerun Android. If reproduced, mirror PR195 minimally: Local scope only, Persona/Relationship policy separation preserved, no layout change, no new tests. The iOS build needs the heavy slot after Stream 1 releases it. Hand off with a PR, a bundle and an update to live 03.
+
+### Unchanged rules
+
+One writer per application worktree. The coordinator owns shared status, the backlog and merges. Preserve designs, fixtures, retained ledgers and runtime patches. No new unit tests, trackers or speculative rebuilds. The count stays **9 closed / 71 partial-open**; nothing in this checkpoint closes a row.
+
+---
+
+## Historical coordination and grants — preserved
+
+## Consolidation checkpoint — September 22, 2026, 20:00 UTC (superseded by the 22:30 UTC current resume point)
 
 The founder requested that all three streams summarize **all implemented fixes, verification, evidence, cleanup and next actions** so another agent can resume without losing or repeating work. That consolidation is now the active documentation milestone. These current summaries supersede older chronological checkpoints; original reports/history remain preserved.
 
@@ -42,11 +80,6 @@ Each current stream summary contains completed code groups, precise source/CI, e
 Do not overwrite applied ledger rows, promote private prototype histories into canonical migrations, clear untracked user work, reset dirty runtime patches, or reuse another stream's ports/device/fixtures. Refresh exact Git/PR/CI state before acting; read private operational notes without exposing credentials or raw logs. Accepted unchanged evidence is reusable. Skipped CI jobs and unavailable provider/device boundaries remain explicit; no silent assumption of end-to-end success.
 
 The original working agreement and historical grants remain below for context. Their dated branch/slot/port snapshots are superseded by this summary, while preservation and single-writer rules continue to apply.
-
----
-
-## Historical coordination and grants — preserved
-
 
 ## Current coordinator checkpoint — September22, 19:05 UTC
 

@@ -1,6 +1,22 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — September 22, 2026, 20:00 UTC
+## CURRENT RESUME POINT — September 22, 2026, 22:30 UTC
+
+A Claude Code coordinator session ("Pantopus Stream 1 coordinator handoff") took over Stream 1 and coordination at about 21:05 UTC. The previous Codex coordinator thread (`01a0c897…`) finished at 20:35 UTC; the Stream 2/3 Codex tasks have been idle since 20:07/20:15 UTC. The [coordination summary](workstreams/README.md) records the owners, checkouts, reservations and **the two peer assignments the founder relays**, because this coordinator cannot message Codex tasks.
+
+- **Integration:** PR192 → `37cb6d216`, PR193 → `6f7c700e6`, PR194 → `094ed5826` merged serially, each at a fresh exact-head CI (the 194 import conflict was resolved by keeping both imports). PR195 fresh CI is running on `7f557a0069`; PR196 follows. Docs PR161/170 are merged into the hub branch, so PR174 lands all three last without losing the PR170 `native-social-r1` history or the newer summaries.
+- **Master CI:** the `2048d971` push failed only in iOS iPhone 16 `CeremonialMailViewModelTests.testContinueFromDecideAdvancesToVerify` (a timeout that passed on the two other simulators). Later runs were superseded by queue merges. Final-master aggregate CI is still to be recorded.
+- **Next bounded work:** Stream 1 holds the heavy native slot for **P09 Android payer refund controls**: partial refund, lost reply → Check status, over-limit guard and hold release on the installed Android app as the payer, plus post-refund wallet release, with real Stripe TEST. Stream 2: **R06 residency letters** issue/view/public-verify/revoke across web/iOS/Android. Stream 3: **iOS parity of the PR195 personal-block reopen defect** (iOS `loadRelationship` reads only `/relationship` and fails open).
+- **Runtime corrections:** Stream 3's Next 18131 is running (pid 15494), contrary to the 20:00 note. Stream 2's retained `home.js` runtime patch is byte-identical in its additions to merged PR192.
+- **Count unchanged:** 9 closed / 71 partial-open of 80; P01 remains a bounded milestone. Decisions and access boundaries are unchanged: P04/P05 fee policy, the attachment contract and member Issues entry point, Persona personal-block policy, the daily-agenda policy, activated providers, physical devices/push and hosted deployment.
+
+---
+
+## Historical checkpoints and original handoff — preserved
+
+The following “current”, “active”, “pending”, runtime and next-step paragraphs describe their dated snapshots. They are not current reservations or permission to repeat work. The resume point above and live status summaries take precedence.
+
+## Consolidation checkpoint — September 22, 2026, 20:00 UTC (superseded by the 22:30 UTC current resume point)
 
 The founder requested that all three streams summarize **all implemented fixes, verification, evidence, cleanup and next actions** so another agent can resume without losing or repeating work. That consolidation is now the active documentation milestone. These current summaries supersede older chronological checkpoints; original reports/history remain preserved.
 
@@ -39,13 +55,6 @@ The closed-PR audit found no discarded application changes:171/172 were integrat
 Finish the exact-head integration queue above, reconcile final master/ordered migrations and publish docs. Then continue one concrete unresolved criterion per existing stream, preserving unchanged accepted journeys and all existing designs. No new unit tests/coverage target, speculative replacement implementation or parallel tracker. A stale open row alone is not a missing feature.
 
 Existing decisions/access boundaries remain explicit in the stream tables: P04/P05 fee payer/recipient, issue/bill/package attachment contract and member Issues entry point, Persona personal-block policy, daily-agenda delivery policy, activated Auth/address/storage/Connect providers, release-candidate devices/push and hosted deployment. N02 means physical Android acceptance; A04 means address/Smarty/geography, while OAuth is A01. Do not broaden or misassign these gates; continue independent local cases while awaiting genuine prerequisites.
-
----
-
-## Historical checkpoints and original handoff — preserved
-
-The following “current”, “active”, “pending”, runtime and next-step paragraphs describe their dated snapshots. They are not current reservations or permission to repeat work. The resume point above and live status summaries take precedence.
-
 
 ## Current coordinator checkpoint — September22, 19:05 UTC
 
