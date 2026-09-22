@@ -107,6 +107,17 @@ function canTransition(fromState, toState) {
   return allowed.includes(toState);
 }
 
+function matchPaymentSnapshot(query, payment) {
+  // A provider check may outlive a local edit. Bind its complete financial
+  // identity and status in the same query that reads or changes the row.
+  for (const field of ['id', 'payer_id', 'payee_id', 'gig_id', 'payment_type', 'payment_status',
+    'stripe_customer_id', 'stripe_payment_intent_id', 'amount_total', 'amount_subtotal',
+    'amount_platform_fee', 'amount_to_payee', 'amount_processing_fee', 'tip_amount', 'currency']) {
+    query = payment[field] == null ? query.is(field, null) : query.eq(field, payment[field]);
+  }
+  return query;
+}
+
 /**
  * Transition a payment to a new state.
  * Validates the transition, updates the Payment record, and syncs
@@ -115,10 +126,12 @@ function canTransition(fromState, toState) {
  * @param {string} paymentId - Payment UUID
  * @param {string} newStatus - Target payment state
  * @param {object} extraUpdates - Additional columns to update on Payment
+ * @param {object|null} expectedPayment - Original financial snapshot to bind atomically
  * @returns {object} Updated payment record
  * @throws {Error} If transition is invalid or payment not found
  */
-async function transitionPaymentStatus(paymentId, newStatus, extraUpdates = {}) {
+async function transitionPaymentStatus(paymentId, newStatus, extraUpdates = {}, expectedPayment = null) {
+  if (expectedPayment && expectedPayment.id !== paymentId) throw new Error('Payment identity changed');
   // Fetch current payment
   const { data: payment, error: fetchErr } = await supabaseAdmin
     .from('Payment')
@@ -146,21 +159,22 @@ async function transitionPaymentStatus(paymentId, newStatus, extraUpdates = {}) 
     ...extraUpdates,
   };
 
-  const { data: updated, error: updateErr } = await supabaseAdmin
+  let updateQuery = supabaseAdmin
     .from('Payment')
     .update(updateData)
     .eq('id', paymentId)
-    .select()
-    .single();
+    .eq('payment_status', currentStatus);
+  if (expectedPayment) updateQuery = matchPaymentSnapshot(updateQuery, expectedPayment);
+  const { data: updated, error: updateErr } = await updateQuery.select().single();
 
-  if (updateErr) {
+  if (updateErr || !updated) {
     logger.error('Failed to transition payment status', {
       paymentId,
       from: currentStatus,
       to: newStatus,
-      error: updateErr.message,
+      error: updateErr?.message || 'Concurrent payment transition',
     });
-    throw new Error(`Failed to update payment: ${updateErr.message}`);
+    throw new Error(`Failed to update payment: ${updateErr?.message || 'Concurrent payment transition'}`);
   }
 
   // Sync denormalized status on Gig
@@ -171,7 +185,8 @@ async function transitionPaymentStatus(paymentId, newStatus, extraUpdates = {}) 
         payment_status: newStatus,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', payment.gig_id);
+      .eq('id', payment.gig_id)
+      .eq('payment_id', paymentId);
   }
 
   logger.info('Payment status transitioned', {
@@ -278,5 +293,6 @@ module.exports = {
   VALID_TRANSITIONS,
   canTransition,
   transitionPaymentStatus,
+  matchPaymentSnapshot,
   getPaymentStateInfo,
 };

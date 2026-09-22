@@ -30,6 +30,7 @@ class FilesRepository
             bytes: ByteArray,
             fileType: String,
             visibility: String = "private",
+            gigId: String? = null,
         ): NetworkResult<FileUploadResponse> =
             safeApiCall {
                 val filePart =
@@ -43,6 +44,7 @@ class FilesRepository
                     file = filePart,
                     fileType = fileType.toRequestBody(plain),
                     visibility = visibility.toRequestBody(plain),
+                    gigId = gigId?.toRequestBody(plain),
                 )
             }
     }

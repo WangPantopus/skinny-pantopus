@@ -17,17 +17,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.offers.BidDto
+import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutHost
 import app.pantopus.android.ui.screens.my_bids.EditBidSheetContent
 import app.pantopus.android.ui.screens.my_bids.EditBidSheetTarget
 import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
@@ -64,10 +65,13 @@ fun GigDetailScreen(
     viewModel: GigDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val tipStatus by viewModel.tipStatus.collectAsStateWithLifecycle()
+    val tipScope = rememberCoroutineScope()
+    val tipRecovery = remember(viewModel, tipScope) { viewModel.createTipRecovery(tipScope) }
+    val tipStatus by tipRecovery.status.collectAsStateWithLifecycle()
+    val tipState by tipRecovery.state.collectAsStateWithLifecycle()
     val saved by viewModel.saved.collectAsStateWithLifecycle()
     val cancelPreview by viewModel.cancelPreview.collectAsStateWithLifecycle()
-    val cancelPreviewLoading by viewModel.cancelPreviewLoading.collectAsStateWithLifecycle()
+    val stopState by viewModel.taskStop.state.collectAsStateWithLifecycle()
     // Bidder side — the viewer's own live bid, if any.
     val viewerBid by viewModel.viewerBid.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -75,25 +79,41 @@ fun GigDetailScreen(
     var deliveryTarget by remember { mutableStateOf<DeliveryProofTarget?>(null) }
     var showTipSheet by remember { mutableStateOf(false) }
     var showReportSheet by remember { mutableStateOf(false) }
-    var showCancelSheet by remember { mutableStateOf(false) }
     var showRescheduleSheet by remember { mutableStateOf(false) }
-    // Poster's pre-start "Replace worker" confirm (`POST /reopen-bidding`).
-    var showReplaceWorkerConfirm by remember { mutableStateOf(false) }
-    // Poster's "Close Gig" confirm on a still-open task (`DELETE /api/gigs/:id`).
-    var showCloseTaskConfirm by remember { mutableStateOf(false) }
     var toastText by remember { mutableStateOf<String?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val deliverySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val tipSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val reportSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val cancelSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val rescheduleSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Block 3D — Stripe PaymentSheet for tipping (created in composition).
-    val paymentSheet =
-        rememberPaymentSheet { result ->
-            viewModel.onTipOutcome(StripePaymentSheets.checkoutOutcome(result))
+    tipState.presentation?.let { original ->
+        key(original.token) {
+            val tipPaymentSheet =
+                rememberPaymentSheet { result ->
+                    tipRecovery.onOutcome(original.token, StripePaymentSheets.checkoutOutcome(result))
+                }
+            LaunchedEffect(original.token) {
+                val params = tipRecovery.claimSheet(original.token) ?: return@LaunchedEffect
+                showTipSheet = false
+                tipPaymentSheet.presentWithPaymentIntent(
+                    paymentIntentClientSecret = params.clientSecret.orEmpty(),
+                    configuration =
+                        StripePaymentSheets.paymentConfiguration(
+                            context,
+                            params.customer,
+                            params.ephemeralKey,
+                            params.publishableKey,
+                        ),
+                )
+            }
         }
+    }
+    LaunchedEffect(tipRecovery) { tipRecovery.prepare(retainedOnly = true) }
+    LaunchedEffect(tipState.invalidated) { if (tipState.invalidated) showTipSheet = false }
+    DisposableEffect(tipRecovery) {
+        onDispose { tipRecovery.retire() }
+    }
 
     // Phase 5 — second PaymentSheet for accept-bid / instant-accept checkouts.
     val lifecyclePaymentSheet =
@@ -101,30 +121,19 @@ fun GigDetailScreen(
             viewModel.onLifecycleCheckoutOutcome(StripePaymentSheets.checkoutOutcome(result))
         }
 
+    GigBidCheckoutHost(viewModel.bidCheckout)
+    app.pantopus.android.ui.screens.gigs.refunds.GigRefundSheet(viewModel.refunds)
+    app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationHost(viewModel.assignedAuthorization)
+    app.pantopus.android.ui.screens.gigs.stop.GigStopSheet(
+        viewModel.taskStop,
+        onReschedule = if (viewModel.viewerIsOwner() && cancelPreview?.canReschedule == true) ({ showRescheduleSheet = true }) else null,
+    )
+
     LaunchedEffect(Unit) { viewModel.load() }
     // Phase 5 — join the gig:<id> realtime room while the screen is visible.
     DisposableEffect(Unit) {
         viewModel.joinRealtime()
         onDispose { viewModel.leaveRealtime() }
-    }
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { event ->
-            when (event) {
-                is GigTipEvent.PresentTipSheet -> {
-                    showTipSheet = false
-                    paymentSheet.presentWithPaymentIntent(
-                        paymentIntentClientSecret = event.params.clientSecret.orEmpty(),
-                        configuration =
-                            StripePaymentSheets.paymentConfiguration(
-                                context = context,
-                                customerId = event.params.customer,
-                                ephemeralKey = event.params.ephemeralKey,
-                                publishableKey = event.params.publishableKey,
-                            ),
-                    )
-                }
-            }
-        }
     }
     LaunchedEffect(Unit) {
         viewModel.lifecycleEvents.collect { event ->
@@ -162,7 +171,12 @@ fun GigDetailScreen(
     }
     // Tip success → toast (PaymentSheet itself surfaces decline / SCA errors).
     LaunchedEffect(tipStatus) {
-        if (tipStatus is TipStatus.Succeeded) toastText = "Tip sent — thank you!"
+        when (val status = tipStatus) {
+            TipStatus.Succeeded -> toastText = "Tip sent — thank you!"
+            TipStatus.Canceled -> toastText = "The original tip is canceled with no charge."
+            is TipStatus.Failed -> toastText = status.message
+            else -> Unit
+        }
     }
 
     val openChat: () -> Unit = { viewModel.openGigChat() }
@@ -216,18 +230,26 @@ fun GigDetailScreen(
                     ContentDetailOverflowItem(
                         label = "Replace worker",
                         testTag = "gigDetail.replaceWorker",
-                        onClick = { showReplaceWorkerConfirm = true },
+                        onClick = { viewModel.openTaskStop("reopen_bidding") },
                     ),
                 )
             }
-            // RN branches on status: an open gig is *closed* (deleted, no
-            // fee), anything live is *cancelled* (`gig/[id].tsx:412`).
+            if (stopState.recoveryAvailable) {
+                add(
+                    ContentDetailOverflowItem(
+                        label = "Task action status",
+                        testTag = "gigDetail.stopRecovery",
+                        onClick = { viewModel.openTaskStopRecovery() },
+                    ),
+                )
+            }
+            // Open and assigned actions share the same durable stop gateway.
             if (viewModel.canCloseTask()) {
                 add(
                     ContentDetailOverflowItem(
                         label = "Close task",
                         testTag = "gigDetail.close",
-                        onClick = { showCloseTaskConfirm = true },
+                        onClick = { viewModel.openTaskStop("close") },
                     ),
                 )
             }
@@ -236,24 +258,28 @@ fun GigDetailScreen(
                     ContentDetailOverflowItem(
                         label = "Cancel task",
                         testTag = "gigDetail.cancel",
-                        onClick = {
-                            viewModel.requestCancelPreview()
-                            showCancelSheet = true
-                        },
+                        onClick = { viewModel.openTaskStop("cancel") },
                     ),
                 )
             }
         }
 
+    LaunchedEffect(stopState.recoveryError) { stopState.recoveryError?.let { toastText = it } }
+
+    // Retained originals keep the existing tip action reachable even if task terms changed.
+    val detailState = tipRecoveryDetailState(state, tipState)
     ContentDetailShell(
-        state = state,
+        state = detailState,
         onBack = onBack,
         onPrimaryAction = {
             val gig = (state as? ContentDetailUiState.Loaded)?.content?.hero
             when {
-                (state as? ContentDetailUiState.Loaded)?.content?.dock?.primary?.enabled != true -> Unit
+                (detailState as? ContentDetailUiState.Loaded)?.content?.dock?.primary?.enabled != true -> Unit
                 // Poster on a completed gig → Send-a-tip sheet (Block 3D).
-                viewModel.canTip() -> showTipSheet = true
+                viewModel.canTip() || tipState.originalAmount != null -> {
+                    showTipSheet = true
+                    tipRecovery.prepare()
+                }
                 // Assigned worker on an in-progress task → Delivery Proof sheet.
                 viewModel.canMarkDelivered() ->
                     deliveryTarget =
@@ -312,65 +338,6 @@ fun GigDetailScreen(
         Box(modifier = Modifier.size(0.dp).testTag("gigDetail.instantAccept"))
     }
 
-    // Poster's "Replace worker" confirm. Not a cancellation: the hold is
-    // released and the task goes straight back out for bids, so the copy
-    // spells both consequences out before the destructive tap.
-    if (showReplaceWorkerConfirm) {
-        AlertDialog(
-            onDismissRequest = { showReplaceWorkerConfirm = false },
-            title = { Text("Replace Worker") },
-            text = {
-                Text(
-                    "This will unassign the current worker, release any payment hold, " +
-                        "and reopen the task for bids. Use this only before work starts.",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showReplaceWorkerConfirm = false
-                        viewModel.replaceWorker()
-                    },
-                    modifier = Modifier.testTag("gigDetail.replaceWorkerConfirm"),
-                ) {
-                    Text("Replace Worker", color = PantopusColors.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showReplaceWorkerConfirm = false }) { Text("Keep worker") }
-            },
-        )
-    }
-
-    // Poster closes a still-open task. RN copy verbatim
-    // (`gig/[id].tsx:414`); the row is deleted, so we pop back on success.
-    if (showCloseTaskConfirm) {
-        AlertDialog(
-            onDismissRequest = { showCloseTaskConfirm = false },
-            title = { Text("Close Gig") },
-            text = {
-                Text(
-                    "Are you sure you want to close this gig? " +
-                        "It will be removed and this cannot be undone.",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showCloseTaskConfirm = false
-                        viewModel.closeGig { closed -> if (closed) onBack() }
-                    },
-                    modifier = Modifier.testTag("gigDetail.closeConfirm"),
-                ) {
-                    Text("Close Gig", color = PantopusColors.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCloseTaskConfirm = false }) { Text("Keep Open") }
-            },
-        )
-    }
-
     if (showReportSheet) {
         ModalBottomSheet(
             onDismissRequest = { showReportSheet = false },
@@ -383,35 +350,6 @@ fun GigDetailScreen(
                     }
                 },
                 onCancel = { showReportSheet = false },
-            )
-        }
-    }
-
-    if (showCancelSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showCancelSheet = false },
-            sheetState = cancelSheetState,
-        ) {
-            GigCancelSheetContent(
-                preview = cancelPreview,
-                previewLoading = cancelPreviewLoading,
-                onConfirm = { reason ->
-                    viewModel.confirmCancel(reason) { ok ->
-                        if (ok) showCancelSheet = false
-                    }
-                },
-                onCancel = { showCancelSheet = false },
-                // P6b — only the poster reaches this sheet (canCancelTask),
-                // so `can_reschedule` alone gates the secondary path.
-                onReschedule =
-                    if (viewModel.viewerIsOwner()) {
-                        {
-                            showCancelSheet = false
-                            showRescheduleSheet = true
-                        }
-                    } else {
-                        null
-                    },
             )
         }
     }
@@ -491,17 +429,24 @@ fun GigDetailScreen(
     val delivery = deliveryTarget
     if (delivery != null) {
         ModalBottomSheet(
-            onDismissRequest = { deliveryTarget = null },
+            onDismissRequest = {
+                viewModel.retireDeliveryProof()
+                deliveryTarget = null
+            },
             sheetState = deliverySheetState,
         ) {
             DeliveryProofSheet(
                 target = delivery,
                 onSubmit = { photos, note ->
                     suspendCancellableCoroutine<Boolean> { cont ->
-                        viewModel.submitDeliveryProof(photos, note) { result -> cont.resume(result) }
+                        cont.invokeOnCancellation { viewModel.retireDeliveryProof() }
+                        viewModel.submitDeliveryProof(photos, note) { result -> if (cont.isActive) cont.resume(result) }
                     }
                 },
-                onDismiss = { deliveryTarget = null },
+                onDismiss = {
+                    viewModel.retireDeliveryProof()
+                    deliveryTarget = null
+                },
             )
         }
     }
@@ -512,12 +457,15 @@ fun GigDetailScreen(
             sheetState = tipSheetState,
         ) {
             TipAmountSheet(
-                sending = tipStatus is TipStatus.Sending,
+                recovery = tipState,
                 onSelect = { cents ->
                     showTipSheet = false
-                    viewModel.sendTip(cents)
+                    tipRecovery.send(cents, viewModel.gigSnapshot())
                 },
-                onCancel = { showTipSheet = false },
+                onCancel = {
+                    showTipSheet = false
+                    if (tipState.canCancel) tipRecovery.cancel()
+                },
             )
         }
     }
@@ -597,20 +545,18 @@ private fun GigSaveToggle(
 
 /** Send-a-tip amount picker (Block 3D). Preset amounts in cents. */
 @Composable
-private fun TipAmountSheet(
-    sending: Boolean,
+internal fun TipAmountSheet(
+    recovery: GigTipState,
     onSelect: (Int) -> Unit,
     onCancel: () -> Unit,
 ) {
+    val sending = recovery.busy || recovery.invalidated
     var customAmount by remember { mutableStateOf("") }
-    val customCents =
-        customAmount
-            .trim()
-            .replace("$", "")
-            .replace(",", "")
-            .toDoubleOrNull()
-            ?.takeIf { it >= 0.5 }
-            ?.let { kotlin.math.round(it * 100).toInt().coerceAtLeast(50) }
+    LaunchedEffect(recovery.originalAmount) {
+        customAmount = recovery.originalAmount?.let { String.format(java.util.Locale.US, "%.2f", it / 100.0) }.orEmpty()
+    }
+    val customCents = recovery.originalAmount ?: tipAmountCents(customAmount)
+    val canSubmit = customCents != null && !sending && (recovery.canChoose || recovery.canContinue)
     Column(
         modifier =
             Modifier
@@ -628,7 +574,7 @@ private fun TipAmountSheet(
         )
         Text(text = "Send a tip", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
         Text(
-            text = "100% goes to your helper. Charged to your card via Stripe.",
+            text = recovery.message,
             fontSize = 13.sp,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,
@@ -645,7 +591,7 @@ private fun TipAmountSheet(
                             .heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(Radii.lg))
                             .background(PantopusColors.primary50)
-                            .clickable(enabled = !sending) { onSelect(cents) }
+                            .clickable(enabled = recovery.canChoose && !sending) { onSelect(cents) }
                             .testTag("tip.amount.$cents"),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -688,7 +634,7 @@ private fun TipAmountSheet(
                 BasicTextField(
                     value = customAmount,
                     onValueChange = { customAmount = it },
-                    enabled = !sending,
+                    enabled = recovery.canChoose && !sending,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     textStyle =
@@ -723,24 +669,24 @@ private fun TipAmountSheet(
                     .heightIn(min = 46.dp)
                     .clip(RoundedCornerShape(Radii.lg))
                     .background(
-                        if (customCents == null || sending) {
+                        if (!canSubmit) {
                             PantopusColors.appSurfaceSunken
                         } else {
                             PantopusColors.primary600
                         },
                     )
-                    .clickable(enabled = customCents != null && !sending) {
+                    .clickable(enabled = canSubmit) {
                         customCents?.let(onSelect)
                     }
                     .testTag("tip.amount.customSubmit"),
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "Send custom tip",
+                text = if (recovery.originalAmount != null) recovery.actionTitle else "Send custom tip",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color =
-                    if (customCents == null || sending) {
+                    if (!canSubmit) {
                         PantopusColors.appTextMuted
                     } else {
                         PantopusColors.appTextInverse
@@ -748,11 +694,11 @@ private fun TipAmountSheet(
             )
         }
         Text(
-            text = "Not now",
+            text = if (recovery.canCancel) "Cancel tip" else "Not now",
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             color = PantopusColors.appTextSecondary,
-            modifier = Modifier.clickable(onClick = onCancel),
+            modifier = Modifier.clickable(enabled = !sending, onClick = onCancel),
         )
     }
 }

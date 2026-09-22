@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
+const blockService = require('../services/blockService');
 const verifyToken = require('../middleware/verifyToken');
 const optionalAuth = require('../middleware/optionalAuth');
 const validate = require('../middleware/validate');
@@ -508,8 +509,11 @@ function serializeCommentForViewer(comment, audienceAuthor, viewerUserId) {
 }
 
 async function serializeCommentsForViewer(comments, post, viewerUserId, preparedAuthors) {
-  const authors = preparedAuthors ?? await loadPersonaCommentAuthors(post, comments.map((comment) => comment.user_id));
-  return comments.map((comment) => serializeCommentForViewer(comment,
+  // Comments from users blocked by / blocking the viewer are never shown to them.
+  const blocked = viewerUserId ? await blockService.blockedUserIds(viewerUserId) : new Set();
+  const visible = blocked.size ? comments.filter((comment) => !blocked.has(comment.user_id)) : comments;
+  const authors = preparedAuthors ?? await loadPersonaCommentAuthors(post, visible.map((comment) => comment.user_id));
+  return visible.map((comment) => serializeCommentForViewer(comment,
     authors ? authors.get(comment.user_id) || { id: '', displayName: 'Fan', href: null } : null,
     viewerUserId));
 }
@@ -584,6 +588,8 @@ async function hasExternalShare(postId) {
 
 const canViewPost = async (post, userId) => {
   if (post.user_id === userId) return true;
+  // Profile blocks (UserBlock) hide posts in both directions, like messaging.
+  if (userId && post.user_id && await blockService.isBlocked(post.user_id, userId)) return false;
   if (post.identity_context_type === 'persona'
       && (post.archived_at || post.status === 'removed'
         || (post.post_metadata?.broadcast_status != null

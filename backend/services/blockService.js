@@ -75,4 +75,27 @@ function invalidateBlockCache(userId1, userId2) {
   cache.delete(key);
 }
 
-module.exports = { isBlocked, invalidateBlockCache, blockCheckUnavailable };
+/**
+ * Every counterpart the user has blocked or is blocked by (UserBlock, both
+ * directions). Same unavailable contract as isBlocked: a failed read throws
+ * rather than reporting "nobody blocked".
+ */
+async function blockedUserIds(userId) {
+  if (!userId) return new Set();
+  const { data, error } = await supabaseAdmin
+    .from('UserBlock')
+    .select('blocker_user_id, blocked_user_id')
+    .or(`blocker_user_id.eq.${userId},blocked_user_id.eq.${userId}`);
+  if (error || !Array.isArray(data)) {
+    logger.warn('blockService.blockedUserIds unavailable', { userId, error: error?.message });
+    throw blockCheckUnavailable();
+  }
+  const ids = new Set();
+  for (const row of data) {
+    ids.add(String(row.blocker_user_id) === String(userId) ? row.blocked_user_id : row.blocker_user_id);
+  }
+  ids.delete(userId);
+  return ids;
+}
+
+module.exports = { isBlocked, blockedUserIds, invalidateBlockCache, blockCheckUnavailable };

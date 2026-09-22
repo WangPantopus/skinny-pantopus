@@ -1474,28 +1474,28 @@ public struct YouTabRoot: View {
             MyTasksView(
                 viewModel: MyTasksViewModel(
                     onOpenTask: { dto in
-                        Task { @MainActor in path.append(.gigDetail(gigId: dto.id)) }
+                        path.append(.gigDetail(gigId: dto.id))
                     },
                     onOpenBids: { dto in
                         // Gig detail's "Manage bids" sheet renders the
                         // full bid list — the dedicated bids surface
                         // lands with T2.3.
-                        Task { @MainActor in path.append(.gigDetail(gigId: dto.id)) }
+                        path.append(.gigDetail(gigId: dto.id))
                     },
                     onEditTask: { dto in
-                        Task { @MainActor in path.append(.editGig(gigId: dto.id)) }
+                        path.append(.editGig(gigId: dto.id))
                     },
                     onMessageWorker: { dto in
-                        Task { @MainActor in path.append(.gigDetail(gigId: dto.id)) }
+                        path.append(.gigDetail(gigId: dto.id))
                     },
                     onLeaveReview: { dto in
-                        Task { @MainActor in path.append(.gigDetail(gigId: dto.id)) }
+                        path.append(.gigDetail(gigId: dto.id))
                     },
                     onPostTask: {
-                        Task { @MainActor in path.append(.composeTask) }
+                        path.append(.composeTask)
                     },
                     onRepost: { _ in
-                        Task { @MainActor in path.append(.composeTask) }
+                        path.append(.composeTask)
                     }
                 )
             )

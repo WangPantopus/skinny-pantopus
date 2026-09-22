@@ -1,26 +1,35 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Lock } from 'lucide-react';
 import { useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js';
 import { payments } from '@pantopus/api';
 const { completePaymentSetup } = payments;
 
 interface GigPaymentSetupProps {
+  /** Reuse this confirmation UI for a separately charged original tip. */
+  intentPurpose?: 'gig' | 'tip';
+  tipRequestId?: string;
   /** The clientSecret from the backend (PaymentIntent or SetupIntent). */
   clientSecret: string;
   /** Whether this is a SetupIntent (save card) vs PaymentIntent (authorize now). */
   isSetupIntent: boolean;
   /** Gig ID for the payment setup flow. */
   gigId: string;
+  /** Exact selected bid, retained across a provider redirect. */
+  bidId?: string;
   /** Amount in cents (for display). */
   amount: number;
   /** Called on success. */
-  onSuccess: () => void;
+  onSuccess: () => void | Promise<void>;
   /** Called on error. */
   onError?: (error: string) => void;
   /** Called to close the modal/flow. */
-  onClose: () => void;
+  onClose: () => void | Promise<void>;
+  /** Retained SDK callbacks must still belong to the opening payment session. */
+  isCurrent?: () => boolean;
+  /** Verify the opening server session and operation immediately before SDK submission. */
+  beforeConfirm?: () => Promise<boolean>;
 }
 
 /**
@@ -33,40 +42,56 @@ interface GigPaymentSetupProps {
  * Must be wrapped in <StripeProvider clientSecret={...}>.
  */
 export default function GigPaymentSetup({
+  intentPurpose = 'gig',
+  tipRequestId,
   isSetupIntent,
   gigId,
+  bidId,
   amount,
   onSuccess,
   onError,
   onClose,
+  isCurrent,
+  beforeConfirm,
 }: GigPaymentSetupProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [processing, setProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const submitting = useRef(false);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
+      if (submitting.current || (isCurrent && !isCurrent())) return;
 
+      if (intentPurpose === 'tip' && (!tipRequestId || !beforeConfirm || !isCurrent)) {
+        setErrorMessage('Reopen the original tip before confirming payment.');
+        return;
+      }
       if (!stripe || !elements) {
         setErrorMessage('Payment system is loading. Please wait...');
         return;
       }
 
+      submitting.current = true;
       setProcessing(true);
       setErrorMessage(null);
 
       try {
+        if (beforeConfirm && !await beforeConfirm()) return;
+        if (isCurrent && !isCurrent()) return;
         if (isSetupIntent) {
           // ─── SetupIntent flow: save card for future authorization ───
           const { error: setupError } = await stripe.confirmSetup({
             elements,
             confirmParams: {
-              return_url: `${window.location.origin}/app/gigs/${gigId}?payment=setup_complete`,
+              return_url: `${window.location.origin}/app/gigs/${encodeURIComponent(gigId)}?payment=setup_complete${bidId ? `&bid=${encodeURIComponent(bidId)}` : ''}`,
             },
             redirect: 'if_required',
           });
+
+          if (isCurrent && !isCurrent()) return;
 
           if (setupError) {
             setErrorMessage(setupError.message || 'Failed to save your card.');
@@ -82,35 +107,41 @@ export default function GigPaymentSetup({
             // Non-critical — webhook will handle it
           }
 
-          onSuccess();
+          await onSuccess();
         } else {
           // ─── PaymentIntent flow: authorize payment hold now ───
           const { error: confirmError } = await stripe.confirmPayment({
             elements,
             confirmParams: {
-              return_url: `${window.location.origin}/app/gigs/${gigId}?payment=authorized`,
+              return_url: intentPurpose === 'tip'
+                ? `${window.location.origin}/app/gigs/${encodeURIComponent(gigId)}?tip_request=${encodeURIComponent(tipRequestId!)}`
+                : `${window.location.origin}/app/gigs/${encodeURIComponent(gigId)}?payment=authorized${bidId ? `&bid=${encodeURIComponent(bidId)}` : ''}`,
             },
             redirect: 'if_required',
           });
 
+          if (isCurrent && !isCurrent()) return;
+
           if (confirmError) {
-            setErrorMessage(confirmError.message || 'Payment authorization failed.');
+            setErrorMessage(confirmError.message || (intentPurpose === 'tip' ? 'Tip confirmation failed.' : 'Payment authorization failed.'));
             onError?.(confirmError.message || 'Authorization failed');
             setProcessing(false);
             return;
           }
 
-          onSuccess();
+          await onSuccess();
         }
       } catch (err: unknown) {
+        if (isCurrent && !isCurrent()) return;
         const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
         setErrorMessage(message);
         onError?.(message);
       } finally {
+        submitting.current = false;
         setProcessing(false);
       }
     },
-    [stripe, elements, isSetupIntent, gigId, onSuccess, onError]
+    [stripe, elements, isSetupIntent, gigId, bidId, onSuccess, onError, isCurrent, beforeConfirm, intentPurpose, tipRequestId]
   );
 
   const amountFormatted = `$${(amount / 100).toFixed(2)}`;
@@ -122,7 +153,7 @@ export default function GigPaymentSetup({
         <div className="p-6 border-b border-app-border-subtle">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-app-text">
-              {isSetupIntent ? 'Save Payment Method' : 'Authorize Payment'}
+              {intentPurpose === 'tip' ? 'Confirm Tip' : isSetupIntent ? 'Save Payment Method' : 'Authorize Payment'}
             </h2>
             <button
               onClick={onClose}
@@ -137,7 +168,12 @@ export default function GigPaymentSetup({
 
           {/* Info banner */}
           <div className="mt-3 p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
-            {isSetupIntent ? (
+            {intentPurpose === 'tip' ? (
+              <>
+                <p className="font-medium">Confirm your {amountFormatted} tip.</p>
+                <p className="mt-1 text-blue-600">Your card will be charged when you confirm. The full tip goes to the worker.</p>
+              </>
+            ) : isSetupIntent ? (
               <>
                 <p className="font-medium">Your card will be saved securely.</p>
                 <p className="mt-1 text-blue-600">
@@ -198,7 +234,7 @@ export default function GigPaymentSetup({
               ) : isSetupIntent ? (
                 'Save Card'
               ) : (
-                `Authorize ${amountFormatted}`
+                `${intentPurpose === 'tip' ? 'Confirm tip' : 'Authorize'} ${amountFormatted}`
               )}
             </button>
           </div>

@@ -3,17 +3,22 @@
 package app.pantopus.android.ui.screens.mailbox.mail_detail
 
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.data.api.models.gigs.GigBidAcceptResponse
+import app.pantopus.android.data.api.models.gigs.GigBidDto
 import app.pantopus.android.data.api.models.mailbox.MailDetail
 import app.pantopus.android.data.api.models.mailbox.MailDetailResponse
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.mailbox.MailboxDocumentRepository
 import app.pantopus.android.data.mailbox.MailboxPackageRepository
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.data.mailbox.MailboxVaultRepository
+import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
 import app.pantopus.android.ui.screens.mailbox.item_detail.PackageDeliveryStatus
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -62,6 +67,7 @@ class CeremonialVariantsProjectionTest {
             packageRepo = packageRepo,
             documentRepo = documentRepo,
             savedStateHandle = SavedStateHandle(mapOf(MAIL_DETAIL_MAIL_ID_KEY to "m1")),
+            checkoutIdentities = gigIdentityFixture(),
         )
 
     private fun makeDetail(
@@ -146,6 +152,43 @@ class CeremonialVariantsProjectionTest {
         }
 
     // ─── Gig ──────────────────────────────────────────────────
+
+    @Test
+    fun paid_mail_acceptance_does_not_flip_until_exact_finalization_receipt() =
+        runTest {
+            val payload =
+                mapOf(
+                    "gig_id" to "g1",
+                    "bid_id" to "b1",
+                    "bid_status" to "pending_payment",
+                    "bidder" to mapOf("name" to "Neighbor"),
+                    "bid" to mapOf("amount" to 12),
+                    "post" to mapOf("title" to "Task"),
+                )
+            coEvery { repo.detail("m1") } returns
+                NetworkResult.Success(
+                    MailDetailResponse(mail = makeDetail(category = MailItemCategory.Gig, objectPayload = payload)),
+                )
+            coEvery { gigsRepo.acceptBid("g1", "b1") } returns
+                NetworkResult.Success(
+                    GigBidAcceptResponse(
+                        bid = GigBidDto("b1", gigId = "g1", status = "pending_payment"),
+                        amountCents = 1250, currency = "usd", authorizationReady = true, paymentStatus = "authorized",
+                    ),
+                )
+            coEvery { gigsRepo.finalizeAcceptBid("g1", "b1") } returnsMany
+                listOf(
+                    NetworkResult.Failure(NetworkError.Server(503, null)),
+                    NetworkResult.Success(GigBidAcceptResponse(bid = GigBidDto("b1", gigId = "g1", status = "accepted"))),
+                )
+            val vm = makeVm()
+            vm.load()
+            vm.acceptGigBid()
+            assertEquals(false, (vm.state.value as MailDetailUiState.Loaded).content.gigDetail?.isAccepted)
+            vm.bidCheckout.retry()
+            assertEquals(true, (vm.state.value as MailDetailUiState.Loaded).content.gigDetail?.isAccepted)
+            coVerify(exactly = 1) { gigsRepo.acceptBid("g1", "b1") }
+        }
 
     @Test
     fun gig_projection_decodes_bid_post_bidder() =

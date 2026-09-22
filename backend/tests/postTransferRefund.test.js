@@ -225,6 +225,7 @@ describe('Audit Link: Payment-Gig Sync', () => {
     }]);
     seedTable('Gig', [{
       id: gigId,
+      payment_id: paymentId,
       payment_status: PAYMENT_STATES.NONE,
     }]);
 

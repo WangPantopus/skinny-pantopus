@@ -1,6 +1,7 @@
 'use client';
 
 import Image, { type ImageProps } from 'next/image';
+import * as api from '@pantopus/api';
 import { useState, useRef, useCallback, useEffect, type ReactNode } from 'react';
 import { Image as ImageIcon, Film, FileText, Paperclip, Camera } from 'lucide-react';
 
@@ -40,6 +41,50 @@ function LocalFileImage({ file, alt, ...props }: Omit<ImageProps, 'src'> & { fil
 
   // A replaced file must never render the previous file's URL before its effect runs.
   return preview?.file === file ? <Image {...props} alt={alt} src={preview.url} /> : null;
+}
+
+/** Keep the existing proof image treatment while loading private bytes with auth. */
+export function CompletionProofImage({ reference, alt, openFull = false, anchorClassName, ...props }: Omit<ImageProps, 'src'> & {
+  reference: string; openFull?: boolean; anchorClassName?: string;
+}) {
+  const isPrivate = reference.startsWith('/api/gigs/');
+  const [preview, setPreview] = useState<{ reference: string; url: string } | null>(null);
+  const [retry, setRetry] = useState(0);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!isPrivate) return;
+    let retired = false, objectUrl: string | null = null;
+    const controller = new AbortController();
+    const token = api.getAuthToken(), origin = api.getApiBaseUrl();
+    const marker = () => { try { return localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY); } catch { return null; } };
+    const session = marker();
+    const current = () => !retired && Boolean(token) && token === api.getAuthToken() && origin === api.getApiBaseUrl() && session === marker();
+    const retire = () => {
+      retired = true; controller.abort();
+      if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
+      setPreview(null);
+    };
+    setPreview(null); setFailed(false);
+    const unsubscribe = api.onTokenChange(retire);
+    const changed = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) retire(); };
+    window.addEventListener('storage', changed);
+    void (async () => {
+      try {
+        if (!current()) return;
+        const bytes = await api.upload.downloadGigCompletionFile(reference, controller.signal);
+        if (!current()) return;
+        objectUrl = URL.createObjectURL(bytes);
+        setPreview({ reference, url: objectUrl });
+      } catch { if (current()) setFailed(true); }
+    })();
+    return () => { retire(); unsubscribe(); window.removeEventListener('storage', changed); };
+  }, [reference, isPrivate, retry]);
+  const src = isPrivate ? (preview?.reference === reference ? preview.url : null) : reference;
+  if (!src) return failed
+    ? <button type="button" className={props.className} onClick={() => setRetry(value => value + 1)}>Retry photo</button>
+    : <span className={props.className} role="img" aria-label={`${alt} loading`} />;
+  const picture = <Image {...props} alt={alt} src={src} unoptimized={isPrivate || props.unoptimized} />;
+  return openFull ? <a href={src} target="_blank" rel="noopener noreferrer" className={anchorClassName}>{picture}</a> : picture;
 }
 
 interface FileUploadProps {

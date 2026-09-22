@@ -493,6 +493,9 @@ export type {
   DecodedSchedulingError,
 } from '@pantopus/types';
 
+// Durable task stop requests and their exact receipts.
+export type { GigStopAction, GigStopFinancialAction, GigStopReason, GigStopTerms, GigStopPreview,
+  GigStopRequest, GigStopReceipt, GigStopProgress, GigStopCommand } from './endpoints/gigStop';
 export { assertHomeTaskSession, taskSessionChanged } from './taskSessionScope';
 export type { HomeTaskSessionScope } from './taskSessionScope';
 export { taskSessionHeaders } from './taskSessionScope';
@@ -503,3 +506,5 @@ export type { ClaimEvidenceSession } from './endpoints/claimEvidence';
 export * as homeMemberRemovals from './endpoints/homeMemberRemovals';
 export * as homeResidencyClaims from './endpoints/homeResidencyClaims';
 export * as homeResidencyReviewHistory from './endpoints/homeResidencyReviewHistory';
+
+export type { GigTipTerms, GigTipPreview, GigTipRequest, GigTipReceipt, GigTipCheckout, GigTipProgress, GigTipCommand } from './endpoints/payments';

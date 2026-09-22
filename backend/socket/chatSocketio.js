@@ -18,6 +18,30 @@ const authSessionService = require('../services/authSessionService');
 // Store connected users: { userId: Set<socketId> }
 const connectedUsers = new Map();
 
+// The gig room also serves public task watchers. Tracking belongs only to the
+// current owner/worker and only while their authenticated socket is subscribed.
+async function emitPrivateGigUpdate(io, gig, event, payload) {
+  if (!io?.sockets?.sockets || !gig?.id) return;
+  try {
+    const { data: current, error } = await supabaseAdmin.from('Gig')
+      .select('id, user_id, accepted_by').eq('id', gig.id).maybeSingle();
+    if (error || !current || current.user_id !== gig.user_id
+      || current.accepted_by !== gig.accepted_by) return;
+    const room = `gig:${gig.id}`;
+    for (const userId of new Set([current.user_id, current.accepted_by].filter(Boolean))) {
+      for (const socketId of connectedUsers.get(userId) || []) {
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket?.connected && socket.userId === userId && socket.rooms.has(room)) {
+          socket.emit(event, payload);
+        }
+      }
+    }
+  } catch (err) {
+    // A missed live update can be recovered by the existing status reader.
+    logger.warn('Private gig update was not delivered', { gigId: gig.id, error: err.message });
+  }
+}
+
 // ============ SESSION REVOCATION → SOCKET KICK ============
 // authSessionService emits 'session_revoked' {userId, sessionIds, reason}
 // whenever AuthSession rows are revoked (logout with proof, device removed,
@@ -751,3 +775,4 @@ module.exports = (io) => {
 // Exposed for tests / other services
 module.exports.kickRevokedSessions = kickRevokedSessions;
 module.exports.connectedUsers = connectedUsers;
+module.exports.emitPrivateGigUpdate = emitPrivateGigUpdate;

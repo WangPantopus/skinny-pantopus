@@ -18,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -36,6 +37,8 @@ import app.pantopus.android.data.api.models.gigs.RebookableGigDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigExtrasRepository
 import app.pantopus.android.ui.screens.gigs.GigsCategory
+import app.pantopus.android.ui.screens.gigs.checkout.GigCheckoutIdentity
+import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -67,11 +70,12 @@ class RebookRailViewModel
     @Inject
     constructor(
         private val repo: GigExtrasRepository,
+        private val identities: GigPaymentIdentitySource,
     ) : ViewModel() {
         sealed interface State {
             data object Loading : State
 
-            data class Loaded(val items: List<RebookableGigDto>) : State
+            data class Loaded(val items: List<RebookableGigDto>, val viewGeneration: Long = 0) : State
 
             /** Fetch failed — the rail hides itself rather than shouting. */
             data object Unavailable : State
@@ -81,21 +85,88 @@ class RebookRailViewModel
         val state: StateFlow<State> = _state.asStateFlow()
 
         private var loadedOnce = false
+        private var screenActive = true
+        private var screenGeneration = 0L
+        private var loadGeneration = 0L
+        private var scopeMarker = identities.scopeMarker()
+        private var loadedIdentity: GigCheckoutIdentity? = null
+
+        init {
+            viewModelScope.launch {
+                identities.changes.collect {
+                    if (scopeMarker != identities.scopeMarker()) {
+                        invalidate()
+                        scopeMarker = identities.scopeMarker()
+                        if (screenActive) refresh()
+                    }
+                }
+            }
+        }
+
+        private fun invalidate() {
+            screenGeneration += 1
+            loadGeneration += 1
+            loadedOnce = false
+            loadedIdentity = null
+            _state.value = State.Loading
+        }
+
+        fun retire() {
+            screenActive = false
+            invalidate()
+        }
+
+        private fun scopeIsCurrent(generation: Long): Boolean =
+            screenActive && generation == screenGeneration && scopeMarker == identities.scopeMarker()
 
         fun load() {
+            screenActive = true
+            if (scopeMarker != identities.scopeMarker()) {
+                invalidate()
+                scopeMarker = identities.scopeMarker()
+            }
             if (loadedOnce) return
             loadedOnce = true
             refresh()
         }
 
         fun refresh() {
+            if (!screenActive) return
+            if (scopeMarker != identities.scopeMarker()) {
+                invalidate()
+                scopeMarker = identities.scopeMarker()
+            }
+            val screen = screenGeneration
+            val generation = ++loadGeneration
             viewModelScope.launch {
+                val identity = identities.paymentIdentity()
+                if (!scopeIsCurrent(screen) || generation != loadGeneration) return@launch
+                if (identity == null) {
+                    loadedOnce = false
+                    _state.value = State.Unavailable
+                    return@launch
+                }
+                val result = repo.rebookable()
+                if (!scopeIsCurrent(screen)) return@launch
+                val currentIdentity = identities.paymentIdentity()
+                if (currentIdentity != identity || !scopeIsCurrent(screen) || generation != loadGeneration) return@launch
+                loadedIdentity = identity
+                loadedOnce = result is NetworkResult.Success
                 _state.value =
-                    when (val result = repo.rebookable()) {
-                        is NetworkResult.Success -> State.Loaded(result.data.rebookable)
+                    when (result) {
+                        is NetworkResult.Success -> State.Loaded(result.data.rebookable, screen)
                         is NetworkResult.Failure -> State.Unavailable
                     }
             }
+        }
+
+        fun rebook(
+            gig: RebookableGigDto,
+            generation: Long,
+            onRebook: (RebookableGigDto) -> Unit,
+        ) {
+            if (!scopeIsCurrent(generation) || loadedIdentity == null) return
+            if ((_state.value as? State.Loaded)?.items?.contains(gig) == true) onRebook(gig)
         }
 
         companion object {
@@ -149,9 +220,11 @@ fun RebookRail(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    DisposableEffect(viewModel) { onDispose { viewModel.retire() } }
+    LaunchedEffect(viewModel) { viewModel.load() }
 
-    val items = (state as? RebookRailViewModel.State.Loaded)?.items.orEmpty()
+    val loaded = state as? RebookRailViewModel.State.Loaded ?: return
+    val items = loaded.items
     if (items.isEmpty()) return
 
     Column(
@@ -171,7 +244,7 @@ fun RebookRail(
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             items.forEach { gig ->
-                RebookCard(gig = gig, onRebook = { onRebook(gig) })
+                RebookCard(gig = gig, onRebook = { viewModel.rebook(gig, loaded.viewGeneration, onRebook) })
             }
         }
     }

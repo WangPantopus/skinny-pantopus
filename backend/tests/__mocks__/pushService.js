@@ -4,6 +4,7 @@ module.exports = {
   removeToken: jest.fn().mockResolvedValue(undefined),
   removeAllTokens: jest.fn().mockResolvedValue(undefined),
   removeTokensForDevice: jest.fn().mockResolvedValue(0),
+  sendToUserWithReceipt: jest.fn().mockResolvedValue({ acceptedCount: 1, unresolvedCount: 0 }),
   sendToUser: jest.fn().mockResolvedValue(undefined),
   sendToUserExcludingDevice: jest.fn().mockResolvedValue(undefined),
   sendToDevice: jest.fn().mockResolvedValue(undefined),

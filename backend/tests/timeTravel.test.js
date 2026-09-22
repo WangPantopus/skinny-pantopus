@@ -5,8 +5,8 @@
 //     for gigs starting within 24h
 //   - authorizeUpcomingGigs auto-cancels gigs starting within 2h
 //     with failed authorization
-//   - expireUncapturedAuthorizations cancels gigs with expiring
-//     auths (not started) and flags in-progress gigs
+//   - the daily booking expiry job leaves Gig decisions to the exact
+//     provider-proof coordinator (covered by its service/SQL contracts)
 // ============================================================
 
 const { resetTables, seedTable, getTable } = require('./__mocks__/supabaseAdmin');
@@ -18,6 +18,8 @@ jest.mock('../stripe/stripeService', () => ({
   cancelAuthorization: jest.fn().mockResolvedValue({ success: true }),
 }));
 
+jest.mock('../services/legacyGigAuthorization', () => ({ recover: jest.fn() }));
+const { recover } = require('../services/legacyGigAuthorization');
 const stripeService = require('../stripe/stripeService');
 const { createNotification } = require('../services/notificationService');
 const authorizeUpcomingGigs = require('../jobs/authorizeUpcomingGigs');
@@ -26,6 +28,7 @@ const expireUncapturedAuthorizations = require('../jobs/expireUncapturedAuthoriz
 beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
+  recover.mockResolvedValue({ authorizationReady: true });
 });
 
 // ── Helpers ────────────────────────────────────────────────
@@ -68,15 +71,10 @@ describe('authorizeUpcomingGigs', () => {
 
     await authorizeUpcomingGigs();
 
-    expect(stripeService.createPaymentIntentForGig).toHaveBeenCalledTimes(1);
-    expect(stripeService.createPaymentIntentForGig).toHaveBeenCalledWith(
+    expect(recover).toHaveBeenCalledTimes(1);
+    expect(recover).toHaveBeenCalledWith(
       expect.objectContaining({
-        payerId: 'user-owner',
-        payeeId: 'user-worker',
-        amount: 10000,
-        paymentMethodId: 'pm_saved_card',
-        offSession: true,
-        existingPaymentId: paymentId,
+        gigId, scheduler: true, mode: 'resume', expectedPaymentId: paymentId,
       })
     );
   });
@@ -103,13 +101,13 @@ describe('authorizeUpcomingGigs', () => {
 
     await authorizeUpcomingGigs();
 
-    expect(stripeService.createPaymentIntentForGig).not.toHaveBeenCalled();
+    expect(recover).not.toHaveBeenCalled();
   });
 
   test('Part 1: SCA failure sends notification to requester', async () => {
-    stripeService.createPaymentIntentForGig.mockResolvedValueOnce({
-      success: false,
-      error: 'authentication_required',
+    recover.mockResolvedValueOnce({
+      authorizationReady: false,
+      recoveryState: 'action_required',
     });
 
     seedTable('Gig', [{
@@ -141,7 +139,8 @@ describe('authorizeUpcomingGigs', () => {
     );
   });
 
-  test('Part 2: auto-cancels gig starting within 2h with failed auth', async () => {
+  test('Part 2: announces only the protected cancellation receipt for a due gig', async () => {
+    recover.mockResolvedValueOnce({ cancelled: true });
     seedTable('Gig', [{
       id: 'gig-fail',
       user_id: 'user-owner',
@@ -159,14 +158,11 @@ describe('authorizeUpcomingGigs', () => {
 
     await authorizeUpcomingGigs();
 
-    // Should cancel auth
-    expect(stripeService.cancelAuthorization).toHaveBeenCalledWith('pay-fail');
-
-    // Should update gig to cancelled
-    const gig = getTable('Gig').find(g => g.id === 'gig-fail');
-    expect(gig.status).toBe('cancelled');
-    expect(gig.payment_status).toBe(PAYMENT_STATES.CANCELED);
-    expect(gig.cancellation_reason).toBe('payment_authorization_failed');
+    expect(recover).toHaveBeenCalledWith({ gigId: 'gig-fail', scheduler: true, mode: 'cancel', expectedPaymentId: 'pay-fail' });
+    expect(stripeService.cancelAuthorization).not.toHaveBeenCalled();
+    // The job never writes a guessed cancellation. The real SQL contract owns
+    // that atomic change; this fake receipt only tests dispatch/notification.
+    expect(getTable('Gig')[0].status).toBe('assigned');
 
     // Should notify both parties
     expect(createNotification).toHaveBeenCalledTimes(2);
@@ -181,114 +177,17 @@ describe('authorizeUpcomingGigs', () => {
 
 // ── expireUncapturedAuthorizations ─────────────────────────
 
-describe('expireUncapturedAuthorizations', () => {
-  test('Part 1: cancels auth + gig for assigned gig with expiring auth', async () => {
-    const paymentId = 'pay-exp-001';
-    const gigId = 'gig-exp-001';
-
-    seedTable('Payment', [{
-      id: paymentId,
-      gig_id: gigId,
-      payer_id: 'user-owner',
-      payee_id: 'user-worker',
-      amount_total: 20000,
-      payment_status: PAYMENT_STATES.AUTHORIZED,
-      authorization_expires_at: hoursFromNow(10), // Expires in 10h (within 24h window)
-    }]);
-    seedTable('Gig', [{
-      id: gigId,
-      status: 'assigned',
-      title: 'Plumbing Fix',
-      user_id: 'user-owner',
-      accepted_by: 'user-worker',
-    }]);
-
-    await expireUncapturedAuthorizations();
-
-    // Auth should be cancelled
-    expect(stripeService.cancelAuthorization).toHaveBeenCalledWith(paymentId);
-
-    // Gig should be cancelled
-    const gig = getTable('Gig').find(g => g.id === gigId);
-    expect(gig.status).toBe('cancelled');
-    expect(gig.cancellation_reason).toBe('authorization_expired');
-    expect(gig.payment_status).toBe(PAYMENT_STATES.CANCELED);
-
-    // Notifications
-    expect(createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'user-owner', type: 'gig_auto_cancelled' })
-    );
-    expect(createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'user-worker', type: 'gig_auto_cancelled' })
-    );
-  });
-
-  test('Part 1: skips auth that expires beyond 24h', async () => {
-    seedTable('Payment', [{
-      id: 'pay-ok',
-      gig_id: 'gig-ok',
-      payer_id: 'u1',
-      payee_id: 'u2',
-      amount_total: 5000,
-      payment_status: PAYMENT_STATES.AUTHORIZED,
-      authorization_expires_at: hoursFromNow(72), // Expires in 3 days — no action needed
-    }]);
-    seedTable('Gig', [{
-      id: 'gig-ok',
-      status: 'assigned',
-      user_id: 'u1',
-      accepted_by: 'u2',
-    }]);
-
-    await expireUncapturedAuthorizations();
-
-    expect(stripeService.cancelAuthorization).not.toHaveBeenCalled();
-    const gig = getTable('Gig').find(g => g.id === 'gig-ok');
-    expect(gig.status).toBe('assigned'); // unchanged
-  });
-
-  test('Part 2: flags in-progress gig with expiring auth for manual review', async () => {
-    const paymentId = 'pay-inprog';
-    const gigId = 'gig-inprog';
-
-    seedTable('Payment', [{
-      id: paymentId,
-      gig_id: gigId,
-      payer_id: 'user-owner',
-      payee_id: 'user-worker',
-      amount_total: 30000,
-      payment_status: PAYMENT_STATES.AUTHORIZED,
-      authorization_expires_at: hoursFromNow(8), // Expiring soon
-    }]);
-    seedTable('Gig', [{
-      id: gigId,
-      status: 'in_progress',
-      title: 'Kitchen Remodel',
-      user_id: 'user-owner',
-      accepted_by: 'user-worker',
-    }]);
-
-    await expireUncapturedAuthorizations();
-
-    // Should NOT cancel auth (gig is in progress)
-    expect(stripeService.cancelAuthorization).not.toHaveBeenCalled();
-
-    // Should flag for manual review
-    const payment = getTable('Payment').find(p => p.id === paymentId);
-    expect(payment.off_session_auth_required).toBe(true);
-
-    // Should send urgent notifications to both parties
-    expect(createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'user-owner',
-        type: 'payment_auth_expiring',
-      })
-    );
-    expect(createNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'user-worker',
-        type: 'payment_auth_expiring',
-      })
-    );
-  });
+describe('daily booking expiry preserves separate protected Gig recovery', () => {
+  test.each([['assigned', 10], ['assigned', 72], ['in_progress', 8]])(
+    '%s Gig with estimated deadline %sh is untouched by daily booking policy', async (status, hours) => {
+      seedTable('Payment', [{ id: 'pay-expiry', gig_id: 'gig-expiry', payment_type: 'gig_payment',
+        payment_status: PAYMENT_STATES.AUTHORIZED, authorization_expires_at: hoursFromNow(hours) }]);
+      seedTable('Gig', [{ id: 'gig-expiry', status, user_id: 'owner', accepted_by: 'worker' }]);
+      await expireUncapturedAuthorizations();
+      expect(stripeService.cancelAuthorization).not.toHaveBeenCalled();
+      expect(createNotification).not.toHaveBeenCalled();
+      expect(getTable('Gig')).toEqual([{ id: 'gig-expiry', status, user_id: 'owner', accepted_by: 'worker' }]);
+      expect(getTable('Payment')[0].payment_status).toBe(PAYMENT_STATES.AUTHORIZED);
+      expect(getTable('Payment')[0].off_session_auth_required).toBeUndefined();
+    });
 });

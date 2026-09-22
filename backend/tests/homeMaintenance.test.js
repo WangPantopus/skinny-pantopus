@@ -332,3 +332,34 @@ describe('authz — member-of-home check', () => {
     expect(write.hasAccess).toBe(false);
   });
 });
+
+
+// Actual route checks for saved/automatic completion edit compatibility.
+describe('existing maintenance completion edits over HTTP', () => {
+  const express = require('express');
+  const request = require('supertest');
+  const app = express(); app.use(express.json()); app.use('/api/homes', require('../routes/home'));
+  beforeEach(() => { seedHome(); seedOccupancy(ownerId, 'owner'); seedStandardPermissions(); });
+  const original = { id: 'original-history', home_id: homeId, task: 'Completed work',
+    status: 'completed', cost: 12.5, recurrence: 'one_time', performed_at: '2026-01-01T00:00:00Z',
+    performed_by: 'original-worker', updated_at: '2026-01-01T00:00:00Z' };
+  test.each([null, 'original-gig'])('saved completion retains its performer/time with source %s', async gigId => {
+    seedTable('HomeMaintenanceLog', [{ ...original, gig_id: gigId }]);
+    const result = await request(app).put(`/api/homes/${homeId}/maintenance/${original.id}`)
+      .set('x-test-user-id', ownerId).send({ status: 'completed', task: 'Annotated work' });
+    expect(result.status).toBe(200);
+    expect(result.body.task).toMatchObject({ task: 'Annotated work', performed_at: original.performed_at,
+      performed_by: original.performed_by, gig_id: gigId });
+  });
+  test.each([[12.5, 99], [0, null], [null, 0]])('automatic history rejects changed cost %s to %s without writing', async (cost, replacement) => {
+    seedTable('HomeMaintenanceLog', [{ ...original, cost, gig_id: 'original-gig' }]);
+    const before = structuredClone(getTable('HomeMaintenanceLog'));
+    const result = await request(app).put(`/api/homes/${homeId}/maintenance/${original.id}`)
+      .set('x-test-user-id', ownerId).send({ cost: replacement });
+    expect(result.status).toBe(409); expect(getTable('HomeMaintenanceLog')).toEqual(before);
+  });
+  test('missing scoped maintenance returns 404', async () => {
+    expect((await request(app).put(`/api/homes/${homeId}/maintenance/missing`)
+      .set('x-test-user-id', ownerId).send({ task: 'Cannot save' })).status).toBe(404);
+  });
+});

@@ -1,24 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { gigBidCheckoutUrl } from '@/components/gig-detail/GigBidCheckout';
+
+import { useEffect, useRef, useState } from 'react';
 import { Star, Medal, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
-import AuthorizationRetryBanner from '@/components/payments/AuthorizationRetryBanner';
-import StripeProvider from '@/components/payments/StripeProvider';
-import GigPaymentSetup from '@/components/payments/GigPaymentSetup';
-import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 
 type AnyObj = Record<string, any>;
-
-const formatUsd = (amount: number): string => `$${amount.toFixed(2)}`;
-const getOfferAmount = (offer: AnyObj | undefined): number | null => {
-  const raw = offer?.amount ?? offer?.bid_amount ?? null;
-  const amount = Number(raw);
-  return Number.isFinite(amount) ? amount : null;
-};
 
 /** Extended gig API methods not in base type definitions */
 interface GigsOffersApiExt {
@@ -29,6 +20,7 @@ interface GigsOffersApiExt {
 }
 
 interface OffersPanelProps {
+  actorId?: string;
   gigId: string;
   gigStatus: string;
   gigPrice: number;
@@ -40,41 +32,42 @@ interface OffersPanelProps {
   refreshKey?: number;
 }
 
-export default function OffersPanel({
+export default function OffersPanel(props: OffersPanelProps) {
+  if (!props.actorId || !props.isOwner) return null;
+  return <ScopedOffersPanel key={`${props.actorId}:${props.gigId}`} {...props} />;
+}
+
+function ScopedOffersPanel({
   gigId,
   gigStatus,
-  gigPrice,
   isOwner,
-  paymentStatus,
-  onStatusChange,
-  onOpenChat,
   refreshKey,
 }: OffersPanelProps) {
   const router = useRouter();
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const [offers, setOffers] = useState<AnyObj[]>([]);
   const [loadingOffers, setLoadingOffers] = useState(false);
   const [offersError, setOffersError] = useState<string | null>(null);
-
-  // Payment setup state (triggered by accept bid)
-  const [showPaymentSetup, setShowPaymentSetup] = useState(false);
-  const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
-  const [paymentIsSetupIntent, setPaymentIsSetupIntent] = useState(false);
-  const [pendingChatRoomId, setPendingChatRoomId] = useState<string | null>(null);
-  const [pendingAcceptBidId, setPendingAcceptBidId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOwner) return;
     void loadOffers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gigId, isOwner, refreshKey]);
+  }, [gigId, gigStatus, isOwner, refreshKey]);
 
   const loadOffers = async () => {
+    if (!mounted.current) return;
     setLoadingOffers(true);
     setOffersError(null);
 
     try {
       const gigsExt = api.gigs as unknown as GigsOffersApiExt;
       const list = await gigsExt.getGigBids?.(gigId);
+      if (!mounted.current) return;
       const bids = ((list as Record<string, any>)?.bids ?? list ?? []) as AnyObj[];
       setOffers(bids);
     } catch (e: unknown) {
@@ -86,57 +79,7 @@ export default function OffersPanel({
     }
   };
 
-  const handleAcceptBid = async (bidId: string) => {
-    const selectedOffer = offers.find((offer) => String(offer?.id) === String(bidId));
-    const amount = getOfferAmount(selectedOffer);
-    const confirmed = await confirmStore.open({
-      title: amount != null && amount > 0 ? 'Secure payment hold' : 'Accept this bid?',
-      description:
-        amount != null && amount > 0
-          ? `Your card will be authorized for ${formatUsd(amount)} as a secure hold. You will NOT be charged until you confirm the task is completed. This protects both you and the worker — think of it as a secure escrow.`
-          : 'This will assign the gig to this bidder.',
-      confirmLabel: amount != null && amount > 0 ? 'Continue to Payment' : 'Accept',
-      cancelLabel: amount != null && amount > 0 ? 'Not now' : 'Cancel',
-      variant: 'primary',
-    });
-    if (!confirmed) return;
-
-    try {
-      setOffersError(null);
-      const resp = await api.gigs.acceptBid(gigId, bidId) as Record<string, any>;
-      const payment = (resp?.payment || null) as Record<string, any> | null;
-      const clientSecret = (resp?.clientSecret || payment?.clientSecret || null) as string | null;
-      const setupIntentId = (resp?.setupIntentId || payment?.setupIntentId || null) as string | null;
-      const roomId = resp?.roomId || null;
-      const isSetup = Boolean(resp?.isSetupIntent ?? setupIntentId);
-      const requiresPaymentSetup = Boolean(resp?.requiresPaymentSetup || clientSecret);
-
-      if (requiresPaymentSetup && clientSecret) {
-        setPendingAcceptBidId(bidId);
-        setPaymentClientSecret(clientSecret);
-        setPaymentIsSetupIntent(isSetup);
-        setShowPaymentSetup(true);
-      } else {
-        // Free gig — already fully accepted
-        setPendingChatRoomId(roomId);
-        toast.success('Bid accepted! Gig assigned.');
-        onStatusChange?.();
-        await loadOffers();
-        if (roomId) router.push(`/app/chat/${roomId}`);
-      }
-    } catch (err: unknown) {
-      console.error('Accept failed:', err);
-      const errData = err && typeof err === 'object' ? (err as Record<string, any>) : null;
-      const errCode = errData?.data ? String((errData.data as Record<string, any>)?.code || '') : null;
-      if (errCode === 'payer_payment_required') {
-        setOffersError('Add a payment method to accept this bid');
-      } else if (errCode === 'pending_payment_conflict') {
-        setOffersError('This bid is already being processed. Please wait.');
-      } else {
-        setOffersError(err instanceof Error ? err.message : 'Failed to accept bid');
-      }
-    }
-  };
+  const handleAcceptBid = (bidId: string) => router.push(gigBidCheckoutUrl(gigId, bidId));
 
   const handleRejectBid = async (bidId: string) => {
     const confirmed = await confirmStore.open({
@@ -145,7 +88,7 @@ export default function OffersPanel({
       confirmLabel: 'Reject',
       variant: 'destructive',
     });
-    if (!confirmed) return;
+    if (!confirmed || !mounted.current) return;
 
     try {
       setOffersError(null);
@@ -184,7 +127,7 @@ export default function OffersPanel({
       confirmLabel: 'Withdraw',
       variant: 'destructive',
     });
-    if (!confirmed) return;
+    if (!confirmed || !mounted.current) return;
 
     try {
       setOffersError(null);
@@ -200,23 +143,8 @@ export default function OffersPanel({
 
   return (
     <>
-      {/* Authorization Retry Banner (owner only) */}
-      {paymentStatus === 'authorization_failed' && (
-        <AuthorizationRetryBanner
-          gigId={gigId}
-          onRetryClientSecret={(cs) => {
-            setPaymentClientSecret(cs);
-            setPaymentIsSetupIntent(false);
-            setShowPaymentSetup(true);
-          }}
-          onRetrySuccess={() => {
-            onStatusChange?.();
-          }}
-        />
-      )}
-
       {/* Offers list */}
-      <div className="bg-app-surface rounded-xl p-6 border border-app-border">
+      <div id="gig-offers" className="bg-app-surface rounded-xl p-6 border border-app-border">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold text-app-text">Offers</h3>
           <button
@@ -240,8 +168,10 @@ export default function OffersPanel({
           <div className="space-y-3">
             {offers.map((o) => {
               const bidder = o.bidder || {};
-              const bidderName = bidder.name || [bidder.first_name, bidder.middle_name, bidder.last_name].filter(Boolean).join(' ') || bidder.username || 'Anonymous';
-              const bidderUsername = bidder.username;
+              const bidderName = bidder.displayName || bidder.handle || 'Anonymous';
+              const bidderUsername = typeof bidder.handle === 'string' && bidder.handle
+                && !bidder.handle.startsWith('/') && bidder.href === `/${bidder.handle}`
+                ? bidder.handle : null;
 
               const statusColor: Record<string, string> = {
                 accepted: 'bg-green-100 text-green-800',
@@ -284,9 +214,9 @@ export default function OffersPanel({
                         userId={bidder?.id || null}
                         username={bidderUsername}
                         displayName={bidderName}
-                        avatarUrl={bidder?.profile_picture_url || null}
-                        city={bidder?.city || null}
-                        state={bidder?.state || null}
+                        avatarUrl={bidder?.avatarUrl || null}
+                        city={bidder?.locality?.city || null}
+                        state={bidder?.locality?.state || null}
                         textClassName="text-sm text-primary-600 hover:underline"
                       />
                     ) : (
@@ -329,6 +259,12 @@ export default function OffersPanel({
                     <p className="text-xs text-app-text-muted mt-1">
                       Expires: {new Date(o.expires_at).toLocaleString()}
                     </p>
+                  )}
+
+                  {o.status === 'pending_payment' && (
+                    <button onClick={() => handleAcceptBid(o.id)} className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 text-white">
+                      Resume payment
+                    </button>
                   )}
 
                   {/* Actions for pending bids (no prior counter or counter was declined) */}
@@ -414,58 +350,6 @@ export default function OffersPanel({
         )}
       </div>
 
-      {/* Payment Setup Modal (triggered by accept bid) */}
-      {showPaymentSetup && paymentClientSecret && (
-        <StripeProvider clientSecret={paymentClientSecret}>
-          <GigPaymentSetup
-            clientSecret={paymentClientSecret}
-            isSetupIntent={paymentIsSetupIntent}
-            gigId={gigId}
-            amount={gigPrice * 100 || 0}
-            onSuccess={async () => {
-              setShowPaymentSetup(false);
-              setPaymentClientSecret(null);
-              if (pendingAcceptBidId) {
-                try {
-                  const result = await api.gigs.finalizeAccept(gigId, pendingAcceptBidId) as Record<string, any>;
-                  const roomId = result?.roomId || null;
-                  toast.success(
-                    paymentIsSetupIntent
-                      ? 'Card saved! Payment will be authorized before the gig starts.'
-                      : 'Payment authorized! The worker can now start.'
-                  );
-                  onStatusChange?.();
-                  await loadOffers();
-                  if (roomId) router.push(`/app/chat/${roomId}`);
-                } catch (err) {
-                  console.error('Finalize accept failed:', err);
-                  toast.error('Payment authorized but failed to finalize. Please refresh.');
-                }
-              }
-              setPendingAcceptBidId(null);
-            }}
-            onError={(err) => {
-              console.error('Payment setup error:', err);
-            }}
-            onClose={async () => {
-              setShowPaymentSetup(false);
-              setPaymentClientSecret(null);
-              if (pendingAcceptBidId) {
-                try {
-                  await api.gigs.abortAccept(gigId, pendingAcceptBidId);
-                } catch (err) {
-                  // Cleanup job handles stale pending_payment bids
-                  console.error('Abort accept failed:', err);
-                }
-                toast.error('Payment is required to accept this bid. No changes were made.');
-                onStatusChange?.();
-                await loadOffers();
-              }
-              setPendingAcceptBidId(null);
-            }}
-          />
-        </StripeProvider>
-      )}
     </>
   );
 }

@@ -25,6 +25,17 @@ class GigsBrowseDtoDecodingTest {
 
     private inline fun <reified T> decode(json: String): T = checkNotNull(moshi.adapter(T::class.java).fromJson(json))
 
+    @Test fun existing_completion_review_round_trip() {
+        val json = """{"id":"g1","title":"Work","completion_review":"loaded-review"}"""
+        assertEquals("loaded-review", decode<app.pantopus.android.data.api.models.gigs.GigDto>(json).completionReview)
+        assertEquals("loaded-review", decode<app.pantopus.android.data.api.models.gigs.MyGigDto>(json).completionReview)
+        val adapter = moshi.adapter(app.pantopus.android.data.api.models.gigs.ConfirmCompletionBody::class.java)
+        assertEquals(
+            """{"expectedReview":"loaded-review"}""",
+            adapter.toJson(app.pantopus.android.data.api.models.gigs.ConfirmCompletionBody("loaded-review")),
+        )
+    }
+
     @Test fun browse_response() {
         val json = """
             {"sections":{
