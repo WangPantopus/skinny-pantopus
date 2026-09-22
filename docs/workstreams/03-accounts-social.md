@@ -3202,3 +3202,5 @@ deletion left unexercised to preserve fixtures. Durable719 MANIFEST
 **dd5a17bb716623447c3a4e44998e00ae298538c3e3f7759f6c46100bb35e7a42**.
 
 Addendum 2: iOS Lockdown verified — popover confirm → password step-up → revoke-all; own session revoked reason lockdown, active sessions 0, devices 0/4, GoTrue 0; login shows "You were signed out for security" + hint. Durable719 MANIFEST **7d6a3522a978b020ef1cd4c6f4098713688fbfbe13f3483dd16dad52540abf2d**.
+
+Addendum 3: PR152 first commit failed two existing iOS unit tests on CI (terminal-401 contract); replaced by a deliberate-sign-out flag (72ec734db), both suites 41/41 locally, rebuilt app re-verified: Settings→Log out with the same racing no-token 401 shows only the account hint. Durable719 MANIFEST **09b2c346c28031033c2943bacfb85ae7ae54b5cba4bef232df18b039b210971c**.
