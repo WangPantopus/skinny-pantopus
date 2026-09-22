@@ -3031,3 +3031,40 @@ MANIFEST **6aadada10fe3ceb6f94576bf1b2becc3bc015e808e76fef69d0d7de807862f82**.
 Next: user opens the Claude side panel in Chrome signed in as this account (or
 coordinator assigns another supported second context); then Chrome target tab first,
 then IAB tab, per grant. Runtime36126(API)/36139(Next) retained. No tests/app edit.
+
+
+## A02 remote sign-out — two-context journey completed
+
+User confirmed the extension; Claude in Chrome then reported one connected browser.
+Evan rechecked zero (a02-retry-prelogin.json equal to before). Exactly two owned tabs:
+Chrome tab257777372 (clientA) and built-in pane tab (clientB, emulated1280x900 because
+the hidden pane reports0x0). One ordinary UI login each: A POST/api/users/login200
+01:32:03→session15b7e0a8; B 01:32:52→f10f6310. Binding by real requests: server
+AuthSession.user_agent from each login equals that browser's navigator.userAgent
+(Chrome/153 vs Claude/2.2553.1 Chrome/152); A's Security page listed both with
+"This device" on the earlier one. Two app + two GoTrue sessions, devices/grants/prefs0.
+
+A existing Security "Sign out of all other devices"→password step-up modal→POST
+/api/auth/step-up200 01:34:45.811→POST/api/auth/sessions/revoke-others200 .896 (both
+Chrome UA in API log). GoTrue audit: login .770 (temporary step-up session), logout
+.803 (temporary removed), logout .879 (B). SQL: B revoked_at01:34:45.884 reason user,
+A unrevoked; GoTrue only A; 27 historical rows/prefs/devices/grants byte-equal to
+baseline. Only non-session change: auth.users.last_sign_in_at moved to the step-up
+login time. A Security re-listed "This device" only; A polls continued304.
+
+B untouched on personal Settings: its next real ~5s polls at01:34:48.763 returned401
+(unread-count/chat stats/received-offers), SDK POST/api/users/refresh401 once, no
+GoTrue token call/429, then location /login?redirectTo=%2Fapp%2Fprofile%2Fsettings with
+Sign in form only. No manual control, workaround login or timer change. No socket
+connection/event evidence captured; no socket delivery claim. Retirement proven via
+HTTP401 path only. Post-retirement layout GETs401 observed, no visible failure.
+
+Assigned cleanup: A ordinary Settings Log Out→POST/api/users/logout200→/login;
+A revoked_at01:36:14 reason logout, no refresh POST/429; final GoTrue0/app unrevoked0,
+appTotal29 (27+2 natural revoked rows retained). Both owned tabs closed, viewport
+reset, no other tab/store touched. Runtime36126/36139 and DB retained; no fault
+triggers armed; no app edit/new test. Not physical offline/native/hosted/provider.
+Artifacts a02-retry-{prelogin,after-login-a,after-login-b,bindings-pre-revoke,
+after-revoke,final,result}.json; durable707
+MANIFEST **f50472b0c2c7825c8c5aa26a6ab59085ea6ff95329d406991d15cba8a7247234**.
+Next: coordinator review; A02 open-browser gap closed within these limits.
