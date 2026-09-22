@@ -67,7 +67,10 @@ export const fetchPublicListing = cache(async (id: string): Promise<PublicFetchR
 });
 
 export const fetchPublicPost = cache(async (id: string): Promise<PublicFetchResult<any>> => {
-  const result = await fetchPublicJson<{ post: any }>(`/api/posts/${encodeURIComponent(id)}`);
+  const result = await fetchPublicJson<{ post: any }>(
+    `/api/posts/${encodeURIComponent(id)}`,
+    { noStore: true },
+  );
   return { data: result.data?.post ?? null, status: result.status };
 });
 
