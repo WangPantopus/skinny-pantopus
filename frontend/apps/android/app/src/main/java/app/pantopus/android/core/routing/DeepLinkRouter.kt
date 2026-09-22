@@ -720,21 +720,22 @@ object DeepLinkRouter {
                 } else {
                     Destination.Unknown(raw)
                 }
-            else ->
-                // A bare single segment is the web's canonical profile URL
-                // (`/[username]`, e.g. the `new_follower` notification link);
-                // resolve it like `pantopus://u/:username`.
-                if (segments.size == 1 && isUsernameSegment(first)) {
-                    Destination.User(first)
-                } else {
-                    Destination.Unknown(raw)
-                }
+            else -> Destination.Unknown(raw)
         }
     }
 
-    /** Usernames are letters, digits, dots, dashes and underscores; anything else stays Unknown. */
-    private fun isUsernameSegment(segment: String): Boolean =
-        segment.length in 1..64 && segment.all { it.isLetterOrDigit() || it == '.' || it == '-' || it == '_' }
+    /**
+     * Server notification links are web paths. The `new_follower` link is the
+     * web's canonical profile URL `/<username>`, which has no native route
+     * (unknown paths are deliberately discarded); rewrite just that type to the
+     * native short profile form `/u/<username>`.
+     */
+    fun notificationPath(type: String?, link: String?): String? {
+        if (type != "new_follower" || link == null) return link
+        val trimmed = link.removePrefix("/")
+        val single = trimmed.isNotEmpty() && !trimmed.contains('/') && !trimmed.contains('?') && !trimmed.startsWith("@")
+        return if (single) "/u/$trimmed" else link
+    }
 
     /**
      * Pure string plumbing for incoming links. Nothing here touches
