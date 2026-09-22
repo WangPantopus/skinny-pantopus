@@ -542,8 +542,21 @@ final class DeepLinkRouter {
             }
             return .unknown(url)
         default:
+            // A bare single segment is the web's canonical profile URL
+            // (`/[username]`, e.g. the `new_follower` notification link);
+            // resolve it like `pantopus://u/:username`.
+            if segments.count == 1, Self.isUsernameSegment(firstSegment) {
+                return .user(id: firstSegment)
+            }
             return .unknown(url)
         }
+    }
+
+    /// Usernames are letters, digits, dots, dashes and underscores (no
+    /// reserved punctuation), so anything else stays `.unknown`.
+    static func isUsernameSegment(_ segment: String) -> Bool {
+        guard (1...64).contains(segment.count) else { return false }
+        return segment.allSatisfy { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == "_" }
     }
 
     private func routeSegments(for url: URL) -> [String] {
