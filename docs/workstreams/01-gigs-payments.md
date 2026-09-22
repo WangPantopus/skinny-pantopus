@@ -1,5 +1,17 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — paid head81fa83103: master adoption and second migration renumbering
+
+Merge ac26fdf1a brought master111580dfa into paid (Home package permission and In Transit
+changes, Stream3 login fix, coordinator docs); the migration history guard then required
+the22 unmerged paid migrations to sort after20260922010000, so they were renamed to
+20260922020100–022200 (git mv, identical bytes, unchanged dependency order,222 refs
+checked for destination collisions) with the gig-tip contract reference updated. Local:
+`MIGRATION_BASE_SHA=origin/master node scripts/db/check-migrations.cjs` passes,
+`node --test scripts/deploy scripts/db scripts/staging` 72/72, sync-sql-contracts67
+wrappers. Exact CI35686792990 on81fa83103 fully green including fresh schema replay and
+both native suites. PR34 still carries the older filenames (draft).
+
 ## September 22 — P09 installed iOS refund and hold release (bounded native acceptance)
 
 Fresh runtime-p08-native.cjs (GIG_COMPLETION_BUCKET set), fixtures f9200390, iOS owner
