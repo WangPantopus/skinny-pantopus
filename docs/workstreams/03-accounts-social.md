@@ -3200,3 +3200,5 @@ system_server itself skipped 36/88 frames) is recorded as emulator starvation, n
 defect; a dedicated Android performance pass on a quiet host is recommended. Native account
 deletion left unexercised to preserve fixtures. Durable719 MANIFEST
 **dd5a17bb716623447c3a4e44998e00ae298538c3e3f7759f6c46100bb35e7a42**.
+
+Addendum 2: iOS Lockdown verified — popover confirm → password step-up → revoke-all; own session revoked reason lockdown, active sessions 0, devices 0/4, GoTrue 0; login shows "You were signed out for security" + hint. Durable719 MANIFEST **7d6a3522a978b020ef1cd4c6f4098713688fbfbe13f3483dd16dad52540abf2d**.
