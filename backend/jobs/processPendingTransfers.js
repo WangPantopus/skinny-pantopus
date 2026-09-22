@@ -33,7 +33,7 @@ async function reconcileWalletRelease(paymentId) {
 async function recoverStrandedTransfers() {
   const { data, error } = await supabaseAdmin.from('Payment').select('id')
     .in('payment_status', [PAYMENT_STATES.TRANSFER_SCHEDULED, PAYMENT_STATES.TRANSFER_PENDING])
-    .lte('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()).is('dispute_id', null);
+    .lte('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()).or('dispute_id.is.null,dispute_status.eq.won');
   if (error) throw new Error('Wallet release recovery is unavailable');
   for (const payment of data || []) {
     try { await reconcileWalletRelease(payment.id); }
@@ -87,7 +87,7 @@ async function processPendingTransfers() {
         .in('payment_status', [PAYMENT_STATES.CAPTURED_HOLD, PAYMENT_STATES.REFUNDED_PARTIAL, PAYMENT_STATES.REFUNDED_FULL])
         .is('transfer_completed_at', null)
         .lte('cooling_off_ends_at', nowIso)
-        .is('dispute_id', null),
+        .or('dispute_id.is.null,dispute_status.eq.won'),
       // Legacy safety-net: older captured_hold rows may have null cooling_off_ends_at.
       // Treat them as transferable once they are at least 48h old.
       supabaseAdmin
@@ -97,7 +97,7 @@ async function processPendingTransfers() {
         .is('transfer_completed_at', null)
         .is('cooling_off_ends_at', null)
         .lte('created_at', legacyCoolingFallbackIso)
-        .is('dispute_id', null),
+        .or('dispute_id.is.null,dispute_status.eq.won'),
     ]);
 
     if (standardReadyRes.error || legacyReadyRes.error) {
@@ -129,13 +129,13 @@ async function processPendingTransfers() {
         // Safety: double-check state hasn't changed (race condition guard)
         const { data: fresh } = await supabaseAdmin
           .from('Payment')
-          .select('payment_status, dispute_id')
+          .select('payment_status, dispute_id, dispute_status')
           .eq('id', payment.id)
           .single();
 
         const preciseGig = payment.payment_type === 'gig_payment';
         const admittedStates = preciseGig ? ['captured_hold', 'refunded_partial', 'refunded_full'] : ['captured_hold'];
-        if (!fresh || !admittedStates.includes(fresh.payment_status) || fresh.dispute_id) {
+        if (!fresh || !admittedStates.includes(fresh.payment_status) || (fresh.dispute_id && fresh.dispute_status !== 'won')) {
           logger.info('processPendingTransfers: skipping (state changed)', {
             paymentId: payment.id,
             currentStatus: fresh?.payment_status,

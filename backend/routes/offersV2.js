@@ -93,7 +93,7 @@ router.get('/gigs/:gigId/offers', verifyToken, async (req, res) => {
     const userIds = [...new Set(offers.map((o) => o.user_id))];
     const { data: users, error: usersErr } = await supabaseAdmin
       .from('User')
-      .select('id, username, name, first_name, last_name, profile_picture_url, verified_at, average_rating, review_count, gigs_completed, no_show_count, reliability_score')
+      .select('id, username, name, first_name, last_name, profile_picture_url, verified, average_rating, review_count, gigs_completed, no_show_count, reliability_score')
       .in('id', userIds);
 
     if (usersErr) {
@@ -127,7 +127,7 @@ router.get('/gigs/:gigId/offers', verifyToken, async (req, res) => {
           reliability_score: user.reliability_score ?? 100,
           no_show_count: user.no_show_count ?? 0,
           gigs_completed: user.gigs_completed ?? 0,
-          verified: Boolean(user.verified_at),
+          verified: user.verified === true,
         },
         // Fields needed by scoreOffers
         reliability_score: user.reliability_score ?? 100,
@@ -140,7 +140,7 @@ router.get('/gigs/:gigId/offers', verifyToken, async (req, res) => {
         // avg_response_minutes not tracked yet — use default
         avg_response_minutes: null,
         // For trust capsule
-        _user_verified: Boolean(user.verified_at),
+        _user_verified: user.verified === true,
         _user_first_name: user.first_name ?? null,
       };
     });

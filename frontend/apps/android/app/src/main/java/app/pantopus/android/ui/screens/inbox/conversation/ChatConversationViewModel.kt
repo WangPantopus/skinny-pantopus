@@ -846,6 +846,11 @@ class ChatConversationViewModel
                 is NetworkResult.Failure -> {
                     if (isPreBidLimit(result.error)) {
                         _sendLimitNotice.value = PRE_BID_LIMIT_NOTICE
+                    } else if (isSendRefused(result.error)) {
+                        // 403: the server refuses this pairing (blocked, not a
+                        // participant, or the account can't message). Retrying
+                        // cannot succeed, so say so instead of a bare "Failed to send".
+                        _sendLimitNotice.value = SEND_REFUSED_NOTICE
                     }
                     // Don't resurrect a row that a concurrent socket echo
                     // already confirmed and retired (lost-response race —
@@ -866,6 +871,11 @@ class ChatConversationViewModel
          * `code: "PRE_BID_LIMIT"` when a non-bidder exceeds the gig room's
          * pre-bid message allowance (`backend/routes/chats.js:1574`).
          */
+
+        /** A 403 refusal of the send itself (`chats.js` "Unable to message this user" / "Not a participant"). */
+        private fun isSendRefused(error: NetworkError): Boolean =
+            error is NetworkError.Forbidden || (error is NetworkError.ClientError && error.code == 403)
+
         private fun isPreBidLimit(error: NetworkError): Boolean =
             error is NetworkError.ClientError &&
                 error.code == 429 &&
@@ -2271,6 +2281,7 @@ private fun JSONObject.optStringValue(key: String): String? = optString(key).tak
 /** Banner copy for the pre-bid gig-room send limit (429 `PRE_BID_LIMIT`). */
 private const val PRE_BID_LIMIT_NOTICE =
     "Message limit reached — place a bid or wait for acceptance to keep chatting."
+private const val SEND_REFUSED_NOTICE = "You can't send messages in this conversation."
 
 /**
  * Min gap between `typing:start` emits. The backend rate-limits the event
