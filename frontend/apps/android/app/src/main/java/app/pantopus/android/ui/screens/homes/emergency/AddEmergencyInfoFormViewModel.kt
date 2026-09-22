@@ -135,7 +135,7 @@ data class EmergencyToast(
  * `AddEmergencyInfoFormViewModel`. On submit:
  *   create → `POST /api/homes/:id/emergencies` (route
  *            `backend/routes/home.js:5650`).
- *   edit   → local commit; backend has no PUT handler yet.
+ *   edit   → `PUT /api/homes/:id/emergencies/:emergencyId`.
  */
 @HiltViewModel
 class AddEmergencyInfoFormViewModel
@@ -349,25 +349,46 @@ class AddEmergencyInfoFormViewModel
         }
 
         private fun submitEdit(originalDraft: EmergencyFormDraft) {
-            // Backend has no PUT handler today — commit locally and
-            // surface the new draft to the parent navigator.
-            val current = _state.value
-            val draft =
-                EmergencyFormDraft(
-                    id = originalDraft.id,
-                    category = current.category,
-                    title = current.titleField.value.trim(),
-                    severity = current.severity,
-                    details = current.detailsField.value,
-                    verifiedByUserId = current.verifiedByUserId,
-                    lastUpdated = Instant.now(),
-                )
-            onUpdated(draft)
-            _state.update {
-                it.copy(
-                    toast = EmergencyToast("Saved.", isError = false),
-                    shouldDismiss = true,
-                )
+            _state.update { it.copy(isSaving = true) }
+            viewModelScope.launch {
+                val current = _state.value
+                val request =
+                    CreateEmergencyRequest(
+                        type = current.category.backendType,
+                        label = current.titleField.value.trim(),
+                        location = null,
+                        details = buildDetailsMap().takeIf { it.isNotEmpty() },
+                    )
+                when (val result = homesRepo.updateHomeEmergency(homeId, originalDraft.id, request)) {
+                    is NetworkResult.Success -> {
+                        val updated = EmergencyFormDraft.from(result.data.emergency)
+                        onUpdated(
+                            updated ?: EmergencyFormDraft(
+                                id = originalDraft.id,
+                                category = current.category,
+                                title = current.titleField.value.trim(),
+                                severity = current.severity,
+                                details = current.detailsField.value,
+                                verifiedByUserId = current.verifiedByUserId,
+                                lastUpdated = Instant.now(),
+                            ),
+                        )
+                        _state.update {
+                            it.copy(
+                                isSaving = false,
+                                toast = EmergencyToast("Saved.", isError = false),
+                                shouldDismiss = true,
+                            )
+                        }
+                    }
+                    is NetworkResult.Failure ->
+                        _state.update {
+                            it.copy(
+                                isSaving = false,
+                                toast = EmergencyToast(result.error.message ?: "Couldn't save.", isError = true),
+                            )
+                        }
+                }
             }
         }
 

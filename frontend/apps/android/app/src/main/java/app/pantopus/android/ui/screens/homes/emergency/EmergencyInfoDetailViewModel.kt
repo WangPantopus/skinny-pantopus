@@ -40,9 +40,9 @@ sealed interface EmergencyInfoDetailUiState {
 
 /**
  * P2.8 — Backs the Emergency Info detail. Loads the parent list and
- * finds the row by id (no GET-by-id today). Edit and delete are
- * local-only — a future patch wires PUT / DELETE once the backend
- * routes land.
+ * finds the row by id (no GET-by-id today). The detail reloads whenever
+ * the route resumes so an edit committed by the child form reflects the
+ * server row when the user returns.
  */
 @HiltViewModel
 class EmergencyInfoDetailViewModel
