@@ -1,5 +1,24 @@
 # Pantopus project handoff
 
+## Current checkpoint — September 22, 18:15 UTC
+
+PR186 merged d845ed22d after fresh CI35764010625; PR187 merged 7c4a2702f after
+fresh CI35765132114. PR188 now e18fab7ae runs CI35765718055. Current-master
+aggregate remains pending; paid integration retains previously accepted a460.
+Queue188→189→190→191→192(preservation hold)→193→194→195, then docs161/170/174.
+
+Stream1 cancellation fixture f9220541 is active on API18132/Next18133 against
+retained SQL64562/API64561, branch codex/booking-cancellation-recovery at96356ea80.
+Actual Chrome checkout and real Stripe TEST authorization followed by ordinary invitee
+cancellation passed: Booking cancelled, provider authorization cancelled, one successful
+PaymentRefundRequest release; no capture or cash-refund claim. Second failure fixture is
+not yet created; Chrome controls are intermittently timing out. No database fault or app
+repair has been applied. Existing receipt/account-link findings remain owned by193/194.
+Stream2 owns the native slot for192 preservation and malformed-response verification.
+Stream3 continues its next local boundary;195 remains its one-file current-master repair.
+Retain ledger84 and fixture/provider cleanup references privately. Count9closed/71partial-open.
+
+
 Current checkpoint: PR184/185 merged after exact-head full checks;186933b60326 runs freshCI35764010625. Currentmaster963 aggregate remains pending. Root's populated two-Home-forward rehearsal preserved15,232 rows across387 tables and existing financial/document records; two affected SQL workflows passed, scratch fixtures removed, original ledger84 and all table fingerprints unchanged. No G03/G04 closure or hosted adoption. Root source-reviewing booking cancellation recovery; no active API/browser. Stream2 owns native slot for192; Stream3's195 now has only its profile repair. Details/evidence in newest01 section;9closed/71partial-open unchanged.
 
 
