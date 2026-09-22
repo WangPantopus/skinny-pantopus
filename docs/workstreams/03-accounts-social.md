@@ -4093,3 +4093,23 @@ other block scopes unchanged. Existing class verification then passed with
 
 The private durable bundle now contains 182 files; refreshed MANIFEST SHA-256 is
 `0c14162f655e7b7ec546201eac52a4206032df56f9e3f990073f75c0a9c027ea`.
+
+
+## N02 retained iOS saved-notification destination capability check (2026-09-22 addendum)
+
+A bounded read-only check used the owned booted **Pantopus Stream3 Social R2** simulator
+`0AE16FA0-E244-414F-86C8-24893BDFD979` (iOS 26.5). `xcrun simctl listapps` confirmed the
+installed `app.pantopus.ios` build 1.0.0 (1); `xcrun simctl launch` returned process 58323 and a
+screenshot captured the actual Pantopus sign-in screen. It showed the existing security message
+**You were signed out for security. Sign in again.** and a masked remembered Auth Evan account.
+
+This check did not mutate simulator state, restart the device, build/install, inject a notification,
+or enter credentials. The current session exposes no CUA native app/accessibility surface
+(`getApp("Simulator")` is invalid), so I could enumerate/launch/capture but could not navigate the
+installed UI to a saved notification row or destination. The iOS saved-notification destination
+therefore remains explicitly unverified; this is a precise simulator-control/session boundary,
+separate from APNs delivery and separate from Android/web evidence. Evidence:
+`n02-ios-saved-notification-capability-20260922.json` and `ios-capability-20260922.png`.
+
+The private durable bundle now contains 184 files; refreshed MANIFEST SHA-256 is
+`30fd45250bd87efe01dfb803d3c8635f771f75e1df04faf0e6107bd7b9ef99ed`.
