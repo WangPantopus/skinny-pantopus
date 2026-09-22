@@ -147,10 +147,10 @@ class BillDetailViewModel
             )
         }
 
-        /** Soft-delete — backend has no DELETE for bills. */
+        /** Soft-delete — backend has no DELETE for bills; HomeBill_status_chk spells it `canceled`. */
         fun remove() {
             update(
-                UpdateBillRequest(status = "cancelled"),
+                UpdateBillRequest(status = "canceled"),
                 dismissOnSuccess = true,
             )
         }
@@ -174,8 +174,10 @@ class BillDetailViewModel
                         is NetworkResult.Success -> {
                             check(
                                 result.data.bill.id == billId && result.data.bill.homeId == homeId &&
-                                    (request.status == null || result.data.bill.status == request.status),
-                            ) { "Bill change could not be verified." }
+                                    responseStatusMatches(request, result.data.bill),
+                            ) {
+                                "Bill change could not be verified."
+                            }
                             _state.value = current.copy(bill = result.data.bill, saving = false, saveError = null)
                             onChanged()
                             if (dismissOnSuccess) onClose()
@@ -196,5 +198,13 @@ class BillDetailViewModel
                     }
                 }
             }
+        }
+
+        private fun responseStatusMatches(
+            request: UpdateBillRequest,
+            bill: BillDto,
+        ): Boolean {
+            if (request.status == null || bill.status == request.status) return true
+            return request.status == "canceled" && bill.status == "cancelled"
         }
     }

@@ -73,7 +73,7 @@ function SettingsContent() {
   const handleLeave = useCallback(async () => {
     const yes = await confirmStore.open({ title: 'Leave Home', description: 'Are you sure you want to leave? You will lose access.', confirmLabel: 'Leave', variant: 'destructive' });
     if (!yes) return;
-    try { await api.homes.detachFromHome(homeId!); router.push('/app/hub'); }
+    try { await api.homes.leaveHome(homeId!); router.push('/app/hub'); }
     catch (err: any) { toast.error(err?.message || 'Failed to leave home'); }
   }, [homeId, router]);
 
