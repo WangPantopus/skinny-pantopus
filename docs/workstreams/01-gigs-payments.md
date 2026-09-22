@@ -1,5 +1,13 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — coordinator review of peer PRs 149/151/152/154
+
+Reviewed diffs, descriptions and CI. 149 (iOS push registration deferred until signed in),
+151 (verify-email alternate purpose retry) and 154 (native package detail/list fixes)
+approved pending refreshed CI after branch updates. 152 (iOS expired-banner after logout)
+blocked: two existing iOS regressions fail (see live guide). Paid branch is unaffected by
+these merges except docs; adoption of the next master happens after the merges settle.
+
 ## September 22 — paid head81fa83103: master adoption and second migration renumbering
 
 Merge ac26fdf1a brought master111580dfa into paid (Home package permission and In Transit
