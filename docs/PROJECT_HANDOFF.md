@@ -1,5 +1,25 @@
 # Pantopus project handoff
 
+## Active coordinator checkpoint — September 22, booking verification
+
+Stream1 reserves API18132/Next18133 against its retained wallet-read-r1 SQL64562/API64561
+for owned f9220539 priced booking verification. Existing ConfirmFlow/CheckoutPanel →
+public booking route → bookingService/schedulingPaymentsService/stripeService →
+Booking/Payment is the current source trace; no application defect or repair yet.
+Synthetic fixture identity and page/availability; actual Stripe TEST only. No hosted mail/push,
+new schema or native build. Original ledger84 is snapshotted and preserved; prior tip fixtures
+remain cleaned. Stream1 API/Next process details and provider cleanup references stay private.
+
+Stream2 is assigned the reproduced single-file Emergency create dismissal repair, followed by
+existing Emergency Edit persistence: compare all refs/archives and extend the existing Home
+emergency route only if no update contract can be reused. No parallel service/table, new unit
+tests or redesign; real client/API/SQL and permission/failure/retry required. It completed an
+owned build for the dismissal candidate and is cleaning its fixture. Reserve before next build.
+PR171/172 are closed without merge; their verification branches/evidence remain preserved.
+Queue177 still awaits final iOS CI, then179→180→182→183→184→185→186→187→188→189→190;
+docs161/170/174 last. Counts8closed/72partial-open remain unchanged.
+
+
 Provider preparation2026-09-22: current consolidated L01 pricing/activation draft is in [the existing release checklist](release/prod-config-checklist.md). No purchases/activation; exactAWS/entitlement/policy components remain. See newest Stream1 checkpoint; counts8closed/72partial-open unchanged.
 
 ## Current coordinator checkpoint — September 22, 16:13 UTC
