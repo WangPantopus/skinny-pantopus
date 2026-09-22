@@ -555,7 +555,7 @@ class BillsListViewModel
                 val due = bill.dueDate?.let(::parseInstant)
                 val sevenDaysOut = now.plus(Duration.ofDays(7))
                 return when {
-                    bill.status == "cancelled" -> BillChipStatus.Cancelled
+                    bill.status == "canceled" -> BillChipStatus.Cancelled // server spelling (HomeBill_status_chk)
                     bill.status == "paid" -> BillChipStatus.Paid
                     bill.status == "scheduled" -> BillChipStatus.Scheduled
                     due?.isBefore(now) == true -> BillChipStatus.Overdue

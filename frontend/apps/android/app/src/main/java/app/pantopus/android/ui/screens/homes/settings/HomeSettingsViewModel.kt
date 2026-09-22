@@ -257,13 +257,16 @@ class HomeSettingsViewModel
                 detail.name?.takeIf { it.isNotBlank() }
                     ?: detail.address?.takeIf { it.isNotBlank() }
                     ?: "This home"
+            // The chip and footer describe this viewer's real standing: the detail
+            // payload carries their owner_status / occupancy verification and role.
+            val verified = detail.ownershipStatus == "verified" || detail.residencyStatus == "verified"
             _identity.value =
                 HomeSettingsSampleData.Identity(
                     homeName = homeName,
-                    addressChipLabel = if (isPending) "Verifying" else "Verified",
-                    addressChipTone = if (isPending) RowControl.ChipTone.Warning else RowControl.ChipTone.Success,
+                    addressChipLabel = if (isPending) "Verifying" else if (verified) "Verified" else "Unverified",
+                    addressChipTone = if (isPending || !verified) RowControl.ChipTone.Warning else RowControl.ChipTone.Success,
                 )
-            _footerCaption.value = "$homeName · ${if (isPending) "Claim pending" else "Owner"}"
+            _footerCaption.value = "$homeName · ${if (isPending) "Claim pending" else roleLabel(detail, access)}"
             subtexts =
                 RowSubtexts(
                     address = addressLine(detail),
@@ -276,6 +279,16 @@ class HomeSettingsViewModel
                     draft = if (current.isRenaming) current.draft else homeName,
                 )
             }
+        }
+
+        /** Human label for the viewer's role in this home (owner, else their role_base). */
+        private fun roleLabel(
+            detail: HomeDetail,
+            access: HomeAccessDto?,
+        ): String {
+            if (access?.isOwner == true || detail.isOwner) return "Owner"
+            val base = access?.roleBase ?: detail.roleBase ?: return "Member"
+            return base.replace('_', ' ').replaceFirstChar(Char::uppercase)
         }
 
         /**

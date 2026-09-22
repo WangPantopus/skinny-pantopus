@@ -395,7 +395,7 @@ final class BillsListViewModel: ListOfRowsDataSource {
     ///   - `dueSoon`     when due_date is within the next 7 days
     ///   - `due`         otherwise
     static func chipStatus(for bill: BillDTO, now: Date) -> BillChipStatus {
-        if bill.status == "cancelled" { return .cancelled }
+        if bill.status == "canceled" { return .cancelled } // server spelling (HomeBill_status_chk)
         if bill.status == "paid" { return .paid }
         if bill.status == "scheduled" { return .scheduled }
         if let iso = bill.dueDate, let due = parseDate(iso) {
@@ -530,7 +530,7 @@ final class BillsListViewModel: ListOfRowsDataSource {
         guard let iso, let date = parseDate(iso) else { return nil }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.timeZone = TimeZone.current
         formatter.dateFormat = "MMM d"
         return formatter.string(from: date)
     }
@@ -543,9 +543,11 @@ final class BillsListViewModel: ListOfRowsDataSource {
         let isoShort = ISO8601DateFormatter()
         isoShort.formatOptions = [.withInternetDateTime]
         if let d = isoShort.date(from: iso) { return d }
+        // A bare due_date is a calendar day; keep it in the device's calendar so
+        // the picker, review and list show the day the server stores.
         let day = DateFormatter()
         day.locale = Locale(identifier: "en_US_POSIX")
-        day.timeZone = TimeZone(secondsFromGMT: 0)
+        day.timeZone = TimeZone.current
         day.dateFormat = "yyyy-MM-dd"
         return day.date(from: iso)
     }

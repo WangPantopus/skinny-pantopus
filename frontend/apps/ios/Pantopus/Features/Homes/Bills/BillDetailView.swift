@@ -99,7 +99,8 @@ final class BillDetailViewModel {
 
     /// Soft-delete — backend has no DELETE handler for bills.
     func remove() async {
-        if await update(request: UpdateBillRequest(status: "cancelled")) {
+        // HomeBill_status_chk spells the soft-deleted status `canceled`.
+        if await update(request: UpdateBillRequest(status: "canceled")) {
             onClose()
         }
     }
