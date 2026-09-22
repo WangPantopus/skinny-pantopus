@@ -1,5 +1,49 @@
 # Three-stream coordination
 
+## START HERE — September 22, coordinator resumed after the paid merge
+
+The founder resumed all three streams and requested current-master rebases. The older
+founder STOP and draft-PR dispositions below are historical. GitHub confirms PR47 merged
+as `69be3c11dc8520aed91228570460487d5579c82d` and PR34 is also marked merged. PR46 is
+untouched; duplicate PR158 was already closed. This does not close any acceptance row.
+
+- **Master / Stream 1:** exact master CI [35714120974](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35714120974)
+  is still running native checks; backend, web, migration safeguards and complete schema
+  replay/lint/contracts passed. Paid branch `codex/paid-gig-integration` was cleanly
+  rebased and pushed to `69be3c11d`, with no tree differences or migration renames.
+  Migration policy passes against that exact master. New one-file P10 repair
+  [PR173](https://github.com/WangPantopus/skinny-pantopus/pull/173),
+  `codex/p10-expired-bid-pagination` at `9f1d1db824bffdbff3dfe0a1cd406a7565ff0451`,
+  runs in the same paid worktree; its exact CI35715834339 is pending.
+- **Stream 2:** existing task `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` resumed. PR160
+  rebased onto `69be3c11d`; existing regressions exposed historical `cancelled` receipt/
+  list compatibility and a settings fixture that lacked explicit verification. Minimal
+  repairs and a correction to that existing fixture await native checks. The production
+  UI retains explicit proof for Verified and the actual role; no false-label fallback.
+  Existing docs PR161 and private RESUME remain its reporting locations.
+- **Stream 3:** existing task `01a0a824-301b-74e3-a1d9-b205714ed7a1` resumed for PR163–168
+  CI remedies and the four unfinished Android re-verifications. Fresh remote checks
+  found failures on163,164,167,168;165/166 passed their prior heads. Verify-only171/172
+  are never for merge. Coordinator review additionally requested a real warm-feed
+  block/unblock cache reproduction before accepting163. Docs170 remains separate.
+- **Counts:** PR159's reconciliation is incorporated into the live coordination branch:
+  8 closed (H01–H06, R01–R02), 72 partial/open; P01 is a completed bounded milestone,
+  not a ninth closed row. All 234 Stream1, 149 Home and 100 social bundle file hashes
+  match their published manifests. Home manifests contain SHA256 text despite their
+  `.json` names; original evidence is preserved.
+
+Runtime: retained Stream1 wallet-read-r1 SQL64562/API64561 remains up, ledger79; exact
+P10 scale fixtures are cleaned to zero and18132/18133 are free. Peer runtimes, devices
+and retained fixtures belong to their streams. One heavy native build at a time; the
+coordinator granted Stream3 the first slot and requested release to waiting Stream2.
+No simultaneous build is authorized. Private Stream1 continuation:
+`/private/tmp/pantopus-stream1-wallet-read-r1/RESUME-2026-09-22.md`.
+
+Next: finish/review current CI repairs, serialize code merges on current heads, publish
+documentation last, then continue each existing row order. Native dispute/3DS, broader
+P10 capacity/retention, hosted/Connect/live and physical-device boundaries remain open.
+P04/P05 fee payer/recipient and the recorded founder decisions remain unresolved.
+
 ## September 22 09:30 UTC — founder STOP; exact state of the parallel Stream 2/3 session (START HERE for Streams 2 and 3)
 
 Both stream agents were stopped mid-batch on the founder's instruction. Everything is

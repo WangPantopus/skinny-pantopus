@@ -1,5 +1,41 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — current-master rebase and P10 expiry pagination repair
+
+Branch `codex/p10-expired-bid-pagination`, source
+`9f1d1db824bffdbff3dfe0a1cd406a7565ff0451`, [PR173](https://github.com/WangPantopus/skinny-pantopus/pull/173).
+Paid integration was first rebased/pushed to master69be3c11d (PR47 and34 merged by the
+founder); the new repair starts from that master in the existing paid worktree.
+Changed path: `backend/jobs/expirePendingPaymentBids.js` only. Exact CI35715834339 is
+pending. No new application file, table, migration, service, screen or unit test.
+
+Reproduced with actual job/SDK/PostgREST/SQL:1000 retained durable attempts fill the
+server's1000-row page; a later expired legacy bid remains pending_payment after two
+worker runs, with0 writes. The existing worker now reads stable-ID pages of500 before
+its unchanged durable/provider checks. Candidate reads500+500+1, reverts the legacy
+bid and preserves all1000 durable attempts. Repeat makes0 writes. Two simultaneous
+workers send two status-guarded PATCH requests and converge to the same SQL state;
+this does not prove one HTTP request or provider cancellation idempotency.
+
+One injected later-page503 is recovered by the SDK's own retry. Sustained503 exhausts
+its four attempts with0 writes; a malformed200 object also makes0 writes. Both recover
+on the next clean run. Existing paidGigPaymentProof:87/87; syntax, diff and actual-base
+migration policy pass. Reuse the prior installed P10 checkout→expiry→Resume/Cancel
+evidence (all20 hashes verified) and current master's passed complete-schema replay.
+
+Evidence: owner `.pantopus-recovery/audits/20260922-stream1-p10-workload-r1/`,10 files;
+MANIFEST SHA256 `37b2f197aa280c6c8475d489ae2fa608e89ed33c3423925c766b7e5d86ffbd80`.
+Scale fixtures are direct synthetic SQL; response controls are labelled loopback
+transport injections. No provider calls, new native acceptance, hosted throughput or
+P10 row closure. Memory/very-large-backlog throughput, provider operations at volume,
+notification volume and durable-retention policy remain open.
+
+Cleanup: exact f9220510 Gig/GigBid/GigPaymentAcceptance/User/auth.users counts0 after
+every run; ledger79 unchanged, no schema/trigger/permission edits. Retained owned
+SQL64562/API64561 stays up;18132/18133 free; no Stream1 native build/server started.
+Peer resources untouched. Private RESUME updated. Next: finish exact CI/source review
+and integrate serially, then remaining P10/native dispute/3DS acceptance.
+
 ## September 22 — P10 durable checkout vs. expiry worker; master re-adopted into paid
 
 Bounded P10: real iOS accept created intent pi_…1st1pj7l (requires_payment_method), bid
