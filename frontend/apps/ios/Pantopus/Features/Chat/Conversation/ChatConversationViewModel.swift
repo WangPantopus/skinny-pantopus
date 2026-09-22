@@ -720,6 +720,11 @@ public final class ChatConversationViewModel {
         } catch {
             if Self.isPreBidLimit(error) {
                 sendLimitNotice = "Message limit reached — place a bid or wait for acceptance to keep chatting."
+            } else if Self.isSendRefused(error) {
+                // 403: the server refuses this pairing (blocked, not a
+                // participant, or the account can't message). Retrying
+                // cannot succeed, so say so instead of a bare "Failed to send".
+                sendLimitNotice = "You can't send messages in this conversation."
             }
             // Don't resurrect a row that a concurrent socket echo already
             // confirmed and retired (lost-response race — the server
@@ -740,6 +745,14 @@ public final class ChatConversationViewModel {
     /// (`backend/routes/chats.js:1573`). The HTTP client surfaces 4xx
     /// bodies as the raw string on `APIError.clientError`, so we match
     /// the marker rather than re-decoding.
+    /// A 403 refusal of the send itself (`chats.js` "Unable to message this
+    /// user" / "Not a participant" / "cannot send messages").
+    private static func isSendRefused(_ error: any Error) -> Bool {
+        if case APIError.forbidden = error { return true }
+        if case let APIError.clientError(status, _) = error, status == 403 { return true }
+        return false
+    }
+
     private static func isPreBidLimit(_ error: any Error) -> Bool {
         guard case let APIError.clientError(status, message) = error else { return false }
         return status == 429 && (message?.contains("PRE_BID_LIMIT") ?? false)

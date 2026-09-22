@@ -16,6 +16,8 @@ function PollsContent() {
 
   const [polls, setPolls] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed read is shown as unavailable with a retry, never as an empty list.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [tab, setTab] = useState<PollTab>('active');
   const [showCreate, setShowCreate] = useState(false);
   const [votingId, setVotingId] = useState<string | null>(null);
@@ -30,8 +32,10 @@ function PollsContent() {
     if (!homeId) return;
     try {
       const res = await api.homeProfile.getHomePolls(homeId);
+      setLoadError(null);
       setPolls((res as any)?.polls || []);
-    } catch { toast.error('Failed to load polls'); }
+    } catch {
+      setLoadError('Current polls could not be loaded. Retry to check current information.'); toast.error('Failed to load polls'); }
   }, [homeId]);
 
   useEffect(() => { setLoading(true); fetchPolls().finally(() => setLoading(false)); }, [fetchPolls]);
@@ -122,6 +126,12 @@ function PollsContent() {
         </div>
       )}
 
+      {loadError ? (
+        <div className="text-center py-16">
+          <p className="text-sm text-app-text-secondary">{loadError}</p>
+          <button type="button" onClick={() => { setLoading(true); fetchPolls().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+        </div>
+      ) : (<>
       <div className="flex border-b border-app-border mb-4">
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2.5 text-sm font-medium transition ${tab === t.key ? 'text-emerald-600 border-b-2 border-emerald-600' : 'text-app-text-secondary hover:text-app-text'}`}>
@@ -191,6 +201,7 @@ function PollsContent() {
           })}
         </div>
       )}
+      </>)}
     </div>
   );
 }
