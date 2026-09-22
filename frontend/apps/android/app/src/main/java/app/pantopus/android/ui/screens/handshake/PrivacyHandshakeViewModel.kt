@@ -7,7 +7,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.audience.PersonaSummaryDto
 import app.pantopus.android.data.api.models.audience.PersonaTierDto
+import app.pantopus.android.data.api.models.handshake.FanHandleSuggestionResponse
 import app.pantopus.android.data.api.models.handshake.HandshakeBody
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.handshake.HandshakeError
 import app.pantopus.android.data.handshake.HandshakeOutcome
@@ -92,23 +94,12 @@ class PrivacyHandshakeViewModel
                         return
                     }
                 }
-            val suggestion =
-                when (val r = repository.fanHandleSuggestion(personaHandle)) {
-                    is NetworkResult.Success -> r.data
-                    is NetworkResult.Failure -> {
-                        _state.value = HandshakeUiState.Error("Couldn't open Privacy Handshake.")
-                        return
-                    }
-                }
-            val followStatus =
-                when (val r = repository.followStatus(persona.id)) {
-                    is NetworkResult.Success -> r.data
-                    is NetworkResult.Failure -> {
-                        _state.value = HandshakeUiState.Error("Couldn't open Privacy Handshake.")
-                        return
-                    }
-                }
-            val isMember = followStatus.following == true || followStatus.status == "active"
+            // The suggestion route sits behind the `audience_profile` flag and
+            // answers 404 when it is off (the release default). Web falls back to
+            // the plain follow route from the profile; do the same here instead
+            // of dead-ending on "Couldn't open Privacy Handshake".
+            val follow = fetchSuggestionAndFollow(persona.id) ?: return
+            val suggestion = follow.suggestion
             val preview = previewFrom(persona)
             val options = tiers.tiers.map(::option)
             val defaultRank =
@@ -120,7 +111,12 @@ class PrivacyHandshakeViewModel
                 HandshakeReadyContent(
                     persona = preview,
                     tierOptions = options,
-                    step = if (isMember) HandshakeStep.AlreadyMember else HandshakeStep.HandleEntry,
+                    step =
+                        when {
+                            follow.followedWithoutHandshake -> HandshakeStep.CompletedFree
+                            follow.isMember -> HandshakeStep.AlreadyMember
+                            else -> HandshakeStep.HandleEntry
+                        },
                     handle =
                         HandshakeHandleState(
                             value = suggestion.suggestion.orEmpty(),
@@ -130,6 +126,46 @@ class PrivacyHandshakeViewModel
                 )
             ready = content
             _state.value = HandshakeUiState.Ready(content)
+        }
+
+        private suspend fun fetchSuggestionAndFollow(personaId: String): HandshakeFollowResult? {
+            var handshakeUnavailable = false
+            val suggestion =
+                when (val r = repository.fanHandleSuggestion(personaHandle)) {
+                    is NetworkResult.Success -> r.data
+                    is NetworkResult.Failure -> {
+                        if (r.error is NetworkError.NotFound) {
+                            handshakeUnavailable = true
+                            FanHandleSuggestionResponse()
+                        } else {
+                            _state.value = HandshakeUiState.Error("Couldn't open Privacy Handshake.")
+                            return null
+                        }
+                    }
+                }
+            val followStatus =
+                when (val r = repository.followStatus(personaId)) {
+                    is NetworkResult.Success -> r.data
+                    is NetworkResult.Failure -> {
+                        _state.value = HandshakeUiState.Error("Couldn't open Privacy Handshake.")
+                        return null
+                    }
+                }
+            var isMember = followStatus.following == true || followStatus.status == "active"
+            var followedWithoutHandshake = false
+            if (handshakeUnavailable && !isMember) {
+                when (val r = repository.plainFollow(personaId)) {
+                    is NetworkResult.Success -> {
+                        isMember = true
+                        followedWithoutHandshake = true
+                    }
+                    is NetworkResult.Failure -> {
+                        _state.value = HandshakeUiState.Error("Couldn't follow this Public Profile right now.")
+                        return null
+                    }
+                }
+            }
+            return HandshakeFollowResult(suggestion, isMember, followedWithoutHandshake)
         }
 
         // MARK: - User actions
@@ -356,6 +392,12 @@ class PrivacyHandshakeViewModel
             ready = content
             _state.value = HandshakeUiState.Ready(content)
         }
+
+        private data class HandshakeFollowResult(
+            val suggestion: FanHandleSuggestionResponse,
+            val isMember: Boolean,
+            val followedWithoutHandshake: Boolean,
+        )
 
         companion object {
             const val HANDLE_KEY = "personaHandle"
