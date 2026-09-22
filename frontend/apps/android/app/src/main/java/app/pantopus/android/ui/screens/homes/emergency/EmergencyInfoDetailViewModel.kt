@@ -155,6 +155,8 @@ class EmergencyInfoDetailViewModel
                         } catch (_: Throwable) {
                             Instant.now()
                         },
+                    location = dto.location,
+                    rawDetails = dto.details.orEmpty(),
                 )
         }
     }

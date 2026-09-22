@@ -40,6 +40,9 @@ data class EmergencyFormDraft(
     val details: String,
     val verifiedByUserId: String?,
     val lastUpdated: Instant,
+    /** Server fields the current form does not expose but must preserve. */
+    val location: String? = null,
+    val rawDetails: Map<String, String> = emptyMap(),
 ) {
     companion object {
         /**
@@ -58,6 +61,8 @@ data class EmergencyFormDraft(
                 details = dto.details?.get("detail").orEmpty(),
                 verifiedByUserId = dto.details?.get("verified_by"),
                 lastUpdated = parseInstant(dto.updatedAt) ?: parseInstant(dto.createdAt) ?: Instant.now(),
+                location = dto.location,
+                rawDetails = dto.details.orEmpty(),
             )
         }
 
@@ -356,23 +361,26 @@ class AddEmergencyInfoFormViewModel
                     CreateEmergencyRequest(
                         type = current.category.backendType,
                         label = current.titleField.value.trim(),
-                        location = null,
-                        details = buildDetailsMap().takeIf { it.isNotEmpty() },
+                        location = originalDraft.location,
+                        details = buildEditDetailsMap(originalDraft, current).takeIf { it.isNotEmpty() },
                     )
                 when (val result = homesRepo.updateHomeEmergency(homeId, originalDraft.id, request)) {
                     is NetworkResult.Success -> {
                         val updated = EmergencyFormDraft.from(result.data.emergency)
-                        onUpdated(
-                            updated ?: EmergencyFormDraft(
-                                id = originalDraft.id,
-                                category = current.category,
-                                title = current.titleField.value.trim(),
-                                severity = current.severity,
-                                details = current.detailsField.value,
-                                verifiedByUserId = current.verifiedByUserId,
-                                lastUpdated = Instant.now(),
-                            ),
-                        )
+                        if (updated == null) {
+                            _state.update {
+                                it.copy(
+                                    isSaving = false,
+                                    toast =
+                                        EmergencyToast(
+                                            "Server returned invalid emergency info. Please try again.",
+                                            isError = true,
+                                        ),
+                                )
+                            }
+                            return@launch
+                        }
+                        onUpdated(updated)
                         _state.update {
                             it.copy(
                                 isSaving = false,
@@ -390,6 +398,30 @@ class AddEmergencyInfoFormViewModel
                         }
                 }
             }
+        }
+
+        /**
+         * Preserve keys that this form does not render. Visible fields only
+         * replace their own entries when the user changed them.
+         */
+        private fun buildEditDetailsMap(
+            originalDraft: EmergencyFormDraft,
+            current: AddEmergencyInfoUiState,
+        ): Map<String, String> {
+            val out = originalDraft.rawDetails.toMutableMap()
+            if (current.detailsField.isDirty) {
+                val detail = current.detailsField.value.trim()
+                if (detail.isEmpty()) out.remove("detail") else out["detail"] = detail
+            }
+            if (current.severity != originalDraft.severity) {
+                val severity = current.severity?.id
+                if (severity == null) out.remove("severity") else out["severity"] = severity
+            }
+            if (current.verifiedByUserId != originalDraft.verifiedByUserId) {
+                val verifiedBy = current.verifiedByUserId
+                if (verifiedBy.isNullOrEmpty()) out.remove("verified_by") else out["verified_by"] = verifiedBy
+            }
+            return out
         }
 
         private fun validateAll(): String? {
