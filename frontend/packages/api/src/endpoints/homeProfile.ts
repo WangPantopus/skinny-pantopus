@@ -441,6 +441,8 @@ export async function getHomeSettings(homeId: string) {
 }
 
 export async function updateHomeSettings(homeId: string, data: Partial<{
+  name: string | null;
+  home_type: string;
   trash_day: string;
   house_rules: string;
   local_tips: string;
