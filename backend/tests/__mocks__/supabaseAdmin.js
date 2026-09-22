@@ -321,7 +321,15 @@ function createQueryBuilder(tableName) {
     },
     eq(field, value) {
       const f = fieldFor(field);
-      filters.push((row) => row[f] === value);
+      const [column, jsonKey] = f.split('->>');
+      // This JSONB column is filtered by its serialized PostgREST value. PostgreSQL
+      // compares JSON content (including legacy JSON strings), not JS references.
+      if (column === 'urgent_details' && !jsonKey && typeof value === 'string') {
+        const expected = JSON.parse(value);
+        filters.push(row => require('node:util').isDeepStrictEqual(row[column], expected));
+      } else {
+        filters.push((row) => (jsonKey ? row[column]?.[jsonKey] : row[column]) === value);
+      }
       return builder;
     },
     ilike(field, pattern) {
@@ -736,6 +744,7 @@ const supabaseAdmin = {
   from: (tableName) => createQueryBuilder(tableName),
   rpc: async (...args) => {
     if (_rpcMock) return _rpcMock(...args);
+    if (args[0] === 'reconcile_payment_wallet_release') return require('./walletRelease')(args[1], getTable);
     // Read-only capability defaults closed in unrelated Home route fixtures.
     // Deletion/authority behavior itself is covered by real SQL contracts.
     if (args[0] === 'home_delete_eligibility') return { data: { allowed: false, deleted: false, code: 'HOME_DELETE_ACCESS_DENIED' }, error: null };

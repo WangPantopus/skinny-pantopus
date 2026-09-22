@@ -1860,6 +1860,50 @@ passes all13 applicable jobs with two path-based skips. The Android follow-up
 requires CI at its own pushed source; this earlier green run does not cover it.
 
 
+### Existing web tip-status repair
+
+September14 paid integration review traced TipModal through the existing SDK,
+pays.js tip/refresh routes, stripeService.createTipPayment/syncTipPaymentStatus
+and Payment table. The route's success flag means a PaymentIntent was created;
+the modal treated that or a client secret as paid success. Six initial React
+regressions fail on the unchanged component. Current source uses the existing
+refresh endpoint and requires a paid state from the existing service before
+calling onSuccess; any supplied provider status must also be succeeded. Unconfirmed status keeps the same
+payment ID/amount for explicit checks; it never creates another payment for a
+status retry. An unknown creation reply blocks a second creation inside this
+modal. Amount controls freeze once an attempt starts. Layout/styles are retained.
+
+A follow-up test reproduces an old paid response being applied after the task
+changes. Two more reproduce submission after cookie-session replacement and an
+old paid response being shown to a replaced session. Existing token-change events,
+origin/token/session-marker comparison and task/mount lifetime now retire those
+responses. The initial nine tests pass, with standalone TypeScript and zero-warning
+scoped ESLint. The first typecheck failed because the test used Playwright's exact
+option with Testing Library; removing that unsupported test option repairs it.
+Earlier failures remain in private integration-review-r1/paid-tip-modal-* logs.
+
+This extends one existing product file and adds one focused regression test file;
+no replacement screen, endpoint, service, table or migration. It does not complete
+tips: confirmation/3DS UI, a durable creation identity across loss/closing/reload,
+strong backend provider proof, and installed/browser/provider acceptance remain
+open. The server's pre-existing creation/reconciliation guarantees still need the
+planned tip-contract work. No provider operation ran in these mocked component
+checks. The unwired gigTipProof draft remains explicitly unaccepted. PR34 stays
+draft, including the cancellation presentation/custom-reason review and combined
+native/DB gates. Full backend and unchanged web evidence from local274bbe8cb is
+reused only for unaffected source.
+
+Tracing the existing syncTipPaymentStatus short circuit caught a compatibility
+gap in the first UI candidate: already-paid records intentionally return null
+provider status without another provider read. The candidate would have left
+those successful tips pending. That regression is reproduced, and the existing
+recorded-paid response remains accepted; supplied non-success provider status
+still cannot report success. All ten final focused tests pass. This is not a
+claim of new exact provider/charge proof—the current service's guarantees remain
+the stated limit. The proposed tip-contract document now explicitly says its
+routes/migration are unimplemented, preventing a plan from being mistaken for
+existing source or completed acceptance.
+
 ### September14 merge review and Android screenshot references
 
 The user now authorizes merging PRs that are good to merge, followed by continued
@@ -1951,6 +1995,122 @@ Deployment/migration activation remains disabled, and all prior provider,
 rollout and feature-completion limits continue to apply. Private merge proof and
 fresh PR dispositions are under integration-review-r1/home-merge-*.json.
 
+## Existing cancellation presentation restoration in the paid candidate
+
+September14 compared GigStopDialog with the existing master CancellationModal and
+its CompletionFlow caller. The recovery PR had replaced the original icon/reason
+buttons and policy/fee/header/footer presentation with a dropdown and plain text.
+Two focused regressions reproduce the missing owner/worker buttons. The existing
+GigStopDialog now reuses the original reason labels, Lucide icons, selected-state
+classes, policy pill, fee-card and header/footer styling. Current term validation,
+retained UUID/retry logic, focus management and account/task retirement stay in
+place. The displayed fee uses verified terms and never claims a fee was charged
+when the action requires review. No new product file, endpoint, migration or table.
+
+All52 rendered recovery/dialog tests pass, including the existing saved-request,
+response-loss, conflict, storage and session boundaries. Tests now select the
+restored button instead of the superseded dropdown; assertions remain active.
+Web types and scoped lint pass. The first type check caught six test-only uses of
+Playwright's exact option in Testing Library; removing the unsupported option
+preserves its already-exact string-name matching. Initial private patch commands
+used a wrong working directory and changed no source; their failed/no-op attempts
+are retained separately from the two-failure baseline and passing candidate.
+
+Chrome visually confirms the original button/icon and card styling through the
+existing dialog with a synthetic Axios preview adapter. Changed my plans becomes
+selected and enables confirmation; Keep Gig closes without submitting any task
+or provider operation. The first private fixture intercepted fetch, but this SDK
+uses Axios/XHR, so it reached the stopped local proxy and failed; the corrected
+fixture changes only the adapter. Temporary Next18119/page/tab are stopped/removed,
+and generated route output is preserved privately. This is presentation validation,
+not a browser/backend/provider cancellation journey. Evidence is private
+paid-cancellation-presentation-r1/baseline-r2.log, candidate-r3.log, types-r2/r3.log,
+lint-r1.log and browser-binding-r1.json.
+
+The restoration remains partial: the original Other explanation box is not yet
+connected to the durable contract. Its old parent never passed customReason or
+onChangeCustomReason, so it was already nonfunctional. Current stop requests retain
+an enum reason across SQL, web, iOS and Android. Do not silently discard typed
+explanations or put free text into native enum fields. Inspect existing reason
+storage and protected recovery before extending the contract; no new schema is
+justified yet. Nonzero-fee/started/provider and tip/durable-recovery gates remain
+open; original PR34 stays draft. This milestone does not authorize paid launch.
+
+
+## Existing cancellation Other explanation and private recovery
+
+September14 follow-up in the preserved paid integration candidate. The original
+CancellationModal already contained an Other text field, but its CompletionFlow
+caller did not pass the input onward. Restore that existing field and its styles
+in GigStopDialog, retaining the existing same-request/session recovery path.
+No replacement screen or cancellation table is added.
+
+The existing GigStopRequest.reason text stores `other: <original explanation>`
+and already binds it under the begin_gig_stop lock. The service presents only the
+Other category and SHA-256 fingerprint in request/status receipts. Web sends the
+text on first submission and retains it using the existing ProtectedRecoverySlot
+AES-GCM/IndexedDB implementation; its ordinary receipt storage contains only the
+fingerprint. Native request DTOs/stores retain that fingerprint so the original
+actor can retry a server-admitted request without storing or fetching free text.
+Existing enum-only native requests remain compatible.
+
+Review found that finish_gig_stop copied reason into Gig.cancellation_reason,
+which the unauthenticated task timeline exposes. The new SQL regression fails
+against the old function with “Private explanation exposed in public task
+timeline.” Forward migration20260914030000 replaces that existing function with
+one assignment change: packed Other explanations project to `other` on Gig,
+while the exact private request stays immutable. It creates no table, adds no
+column or permission, and preserves all release/refund proof and notification
+logic. Published migration20260910160000 remains byte-for-byte unchanged.
+
+Verification:
+
+- Backend65 tests and web57 rendered recovery tests pass; web types and scoped
+  lint pass. Cases include bounded/hashed input, exact retry, lost reply/reopen,
+  failed protected write preventing POST, session retirement during encryption,
+  and retired completion preserving the original recovery record.
+- Chrome uses the existing dialog/hook with real IndexedDB/WebCrypto and a
+  synthetic Axios API. First submission loses its reply; reload preserves an
+  encrypted envelope and fingerprint-only receipt. Explicit retry sends the
+  same UUID/hash/text; confirmed completion clears both records. Two synthetic
+  POSTs occur, with no actual HTTP/provider operation. The owned tab/server and
+  temporary harness are removed after source binding and result capture.
+- Android38 unit tests plus ktlint/detekt pass. Two earlier formatting failures
+  remain recorded; only argument wrapping changed. All22 focused iOS tests, SwiftLint
+  and SwiftFormat pass after one existing 401 test was found using
+  AuthManager.shared and a simulator's retained login. Its test factory now uses an existing in-memory
+  AuthManager/APIClient pair; the denial assertions and production auth behavior
+  are unchanged. The original failed run remains recorded; the new fingerprint recovery case
+  passed on both runs.
+- Real local SQL contract and generated pgTAP pass; the existing production
+  stop/refund service runner passes238 connections with a synthetic provider.
+  This covers exact private reason persistence, read projection, wrong-fingerprint
+  denial, fingerprint-only same-ID recovery, public category-only cancellation,
+  financial identity, lost acknowledgements, concurrency and reconciliation.
+- The isolated paid database copies the owned Home rehearsal, then applies the
+  nine existing paid migrations and this one forward function update. All64 SQL
+  contracts pass across recorded runs. Initial reference-defaults failure was a
+  setup gap: the old Home rehearsal contained only HomeRolePermission references.
+  Five empty reference tables were populated with the unchanged canonical
+  baseline statements, then the unchanged check passed. Application function lint
+  passes349 functions/106 trigger bindings, zero errors/eight existing warnings.
+  The source Home database is unchanged. Eight inspected synthetic fixture tables
+  contain zero aac7/aac8 rows after service cleanup and contract rollbacks.
+
+Private evidence: `paid-cancellation-explanation-r1` in the existing local audit
+root/mirror, including baseline failures, final logs, combined DB provenance and
+browser binding. DB restore first failed on auth schema ownership; the retry used
+existing local supabase_admin credentials without altering roles or privileges.
+No archive, token, private explanation or operator log is committed.
+
+Limits: no hosted migration/adoption, real Stripe operation, installed native
+explanation journey or release acceptance. The fresh combined baseline CI and
+remaining durable tip/fee/started-task/provider gates still apply to draft PR34.
+Encrypted data written just before a lost local receipt write, or superseded by a
+verified competing request, can remain as an inaccessible encrypted orphan; no
+provider request is issued before the ordinary receipt is retained. Generic
+protected-storage expiry/garbage collection remains a separate lifecycle check.
+
 ## Existing residency-letter expiry projection and labels
 
 September14 traced the existing ResidencyLetter service/table/expiry migration,
@@ -2010,6 +2170,2377 @@ all6 applicable checks/five path-based skips passed in
 [CI34885279768](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34885279768).
 Its source-specific component/browser limits continue to apply.
 
+Residency-expiry PR45 merged September14 at `e775af9ae` after all15 applicable
+checks/one path skip passed in [CI34886464860](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34886464860).
+Master exactly matched the tested a25b5df61 tree. The paid candidate now includes
+that actual master; the two documentation conflicts retain both scoped evidence
+sections and the current handoff. No application or schema conflict occurred.
+
+
+## Paid migration order after the Home merge
+
+The final combined PR34 safeguard correctly rejected nine paid migrations whose
+versions preceded the now-merged Home14020000. Earlier local check commands used
+an unsupported --base flag; the checker reads MIGRATION_BASE_SHA. With the actual
+base supplied correctly, the same nine ordering failures reproduce. The failed
+CI34892027685 and local diagnostics are retained.
+
+Move those nine still-unmerged migrations to20260914020100–20260914020900 in their
+original dependency order. Each SQL file is byte-for-byte identical under its new
+name; no table/function is duplicated, and nothing already in master changes.
+The explanation forward update14030000 stays after all of them. The existing
+combined local database already applied these identical bodies after the Home
+schema, so its64 contracts/function lint remain source-specific evidence. Fresh
+full baseline CI must verify the actual renamed tree before merging.
+
+Private `integration-review-r1/paid-migration-order-r1.json` records all old/new
+paths and SHA-256 identities. No hosted database or deployment was touched.
+
+
+## Existing tip status provider proof and guarded persistence
+
+September14 inspected existing Payment columns, POST /payments/tip, refresh route,
+StripeService.createTipPayment/syncTipPaymentStatus, callbacks, state transition
+helper and the earlier gigTipProof draft. Current creation still calls Stripe
+before inserting Payment and has no durable client request UUID. The existing
+Payment.id, financial columns and metadata can supply that future reservation;
+no competing tip table is justified by this status repair.
+
+Baseline tests reproduce14 failures/one pass for accepting mismatched or stale
+provider evidence and inferring capture time without the actual Charge. Separate
+transition regressions reproduce two failures/15 passes: the old catch path
+writes directly around a rejected transition, or reports cancellation despite a
+failed write. Existing real SQL also reproduces a dispute-state race before the
+new financial snapshot guard. The original failures remain recorded.
+
+The existing syncTipPaymentStatus now reuses readTipProof for a fresh matching
+PaymentIntent/Charge rather than trusting a supplied webhook/create object.
+It checks current mode, amount, currency, customer, payer/worker/gig metadata,
+platform fee/destination shape and actual capture. Capture time comes from the
+verified Charge. The existing state transition helper can bind the original
+financial snapshot and status in its guarded update; existing callers retain
+their original behavior when no snapshot is provided. Failed/conflicting writes
+remain unresolved; no direct fallback can overwrite them. A paid flag without
+provider identity is rejected, while an unknown pending original stays pending.
+No screen/layout/endpoint/schema is replaced or added.
+
+Validation: final78 focused tests across seven existing suites pass, including
+payment/webhook/mobile/read-path compatibility, mismatched identities, stale
+success, missing identity, failed persistence, and amount changes. The first full
+backend run passed5837 tests/16 skips; after adding the snapshot guard it passed
+5838/16 with natural exit0 and the existing open-handles warning. Only the final
+two missing-ID regressions and their bounded condition followed that full run;
+the final focused suite covers both. Final-head CI remains required.
+
+Nine scenarios run the actual StripeService/state machine against the owned
+combined PostgreSQL database via a private SQL adapter: verified success,
+stale-event/current-processing, wrong amount, wrong Charge binding, intervening
+dispute, intervening amount change, lost database acknowledgement followed by
+read recovery without another write, zero-charge cancellation, and inconsistent
+already-paid state. They use49 queries, zero provider mutations, and synthetic
+provider/notification transport. All exact synthetic users, gig and Payment are
+removed. Initial harness failures are retained: its identifier whitelist omitted
+digits in last4, and its counter initially counted attempted rather than affected
+rows. The intervening-dispute failure was a real application gap and is repaired.
+
+Private evidence is under existing-tip-provider-proof-r1 in the existing local
+audit root. No archive/credential/operator log is committed. These checks do not
+establish hosted Stripe, installed confirmation, durable creation or full tips.
+The current provider guidance also calls for reusing an existing intent and an
+idempotency key; provider keys can expire, so that alone cannot replace a durable
+local original: [Stripe PaymentIntents](https://docs.stripe.com/payments/payment-intents)
+and [idempotency](https://docs.stripe.com/api/idempotent_requests).
+
+Next: reserve the original using the existing Payment model before provider
+creation, freeze terms under a lock, and continue same-request/native/browser
+confirmation and lost-creation recovery. Preserve the original tip modal design.
+
+
+## Original tip reservation in existing Payment
+
+September14,2026. Existing source inspection found Payment already has the UUID,
+financial amounts, payer/worker/task, provider/customer IDs, timestamps and metadata.
+The current createTipPayment still contacts Stripe before inserting that row. This
+checkpoint adds the missing atomic reservation and lease functions in
+`20260914040000_gig_tip_original.sql`; it does not add a table, column, route, client
+or screen. Original Payment.id is also the request UUID. Legacy rows remain intact.
+
+The behavioral contract checks exact original identity across retries/session
+renewal, changed amount/method/provider mode/terms conflicts, personal-poster and
+confirmation/worker/Connect requirements, existing successful-tip limits, nullable
+legacy recovery, immutable fields and direct-client denial. Preparation binds the
+existing customer winner, keeps the first provider-attempt time and rejects old
+unknown outcomes after23 hours. Explicit cancellation is terminal only before any
+provider preparation; a timeout never proves no charge. Stripe documents pruning
+of [idempotency keys after at least24 hours](https://docs.stripe.com/api/idempotent_requests),
+so the23-hour cutoff is a conservative local recovery policy, not a Stripe guarantee.
+
+Verification in the owned combined database `pantopus_paid_20260914_contract`:
+
+- All65 existing/new raw SQL contracts pass; generated tip pgTAP is `ok`.
+- Eight separate-connection scenarios pass: same-ID replay, competing IDs,
+  transaction rollback, poster change, exclusive provider lease, lease expiry
+  during an observed task lock wait, frozen customer after account change, and
+  slot release only after unstarted cancellation commits. Seven scenarios exercise
+  concurrency; the customer check is sequential and the lease-expiry case also
+  verifies wall-clock revalidation. Exact synthetic fixture cleanup is zero.
+- Application-function lint passes357 functions/107 attached bindings, zero
+  errors/eight existing warnings. Migration ordering and generated wrappers pass.
+- Initial draft contract failed nullable legacy metadata recovery; the repair
+  passes. The concurrency script first failed Python parsing before any database
+  access; corrected source passed its first execution. Keep failures as evidence.
+
+Reproduction: `scripts/db/contracts/gig-tip-original.sql`, its generated wrapper,
+and `scripts/db/test-gig-tip-original-concurrency.py`. The latter requires explicit
+local PG* settings and an owned `pantopus_*_contract` database. Private evidence is
+under `existing-tip-provider-proof-r1`; credentials and database archives stay out
+of Git. These functions are not yet wired into the app. Modern provider binding,
+terminal receipts, route/session commands, original-ID client recovery, legacy
+cancellation and delivery remain open, as do hosted adoption and real provider /
+installed-client acceptance. Current screen designs are unchanged.
+
+
+## Tip service and API use the original Payment
+
+September14 working follow-up to reservation `ff51584d5`. The same unmerged
+migration now freezes the exact provider create JSON once and records matching
+pending/terminal evidence atomically in Payment. No additional table/column was
+introduced. Existing StripeService.createTipPayment reuses getOrCreateCustomer's
+existing CAS, then prepares the original before calling Stripe with a fixed key.
+Unknown create responses recover by exact-intent discovery or an explicit retry
+within the saved recovery window. Current provider proof precedes SQL receipt
+recording and transient checkout; check cannot create/confirm/cancel an intent.
+Cancellation is explicit and needs current zero-charge proof, or the durable fact
+that provider preparation never happened. Ordinary downstream refund/transfer
+states remain compatible with protected original capture identity.
+
+The existing tip POST requires original UUID, unchanged amount/method/terms and
+current actor/session. Preview and local original-read endpoints return opening
+proof. Old unscoped commands fail409 before the service; pending progress is202,
+and only terminal receipts are200. Existing refresh/webhook paths route marked
+Payments through the same original check. Modern notices reuse the existing
+Notification idempotency key; durable push delivery remains open.
+
+Evidence:86 focused backend tests/5 suites pass. The43 service tests initially
+had17 failures from the test's cross-realm structuredClone objects compared with
+Node strict equality; replacing the fake RPC copy with actual JSON transport
+semantics fixed that fixture. Actual SQL contract, service and provider semantics
+are independently covered:12 service/real-SQL scenarios pass in129 queries,
+including a first free-task tip through existing customer CAS, provider response
+loss/discovery, identical create retry parameters, transient checkout, provider and
+unstarted cancellation, lost committed/uncommitted database outcomes, concurrent
+service requests, provider amount mismatch, unknown original reads, and cancellation admitted before a delayed first submission. The
+reusable `scripts/db/test-gig-tip-original-service.cjs` uses synthetic provider and
+notice transports plus real local SQL through a bounded psql adapter; it is not
+PostgREST or real-provider acceptance. Exact synthetic cleanup is zero.
+
+All65 raw contracts pass again; function lint passes358 functions/107 bindings,
+zero errors/eight existing warnings. The first full backend run records5878 passes,
+16 skips and one `homeDocumentFiles` socket interruption. That unchanged file
+passes33 tests alone; the full repeat reports5879 passes/16 skips, with natural
+exit0. The later cancel-before-first-admission repair is covered by the final
+focused86 assertions and12 real-SQL scenarios; it follows the full run. Full current-head CI is still required for this newer
+working source. Pushed89658c9e6 completed CI34893989362 with15 successes/one path
+skip. Existing clients are still on the old tip command, so this is a partial
+backend integration, not a deployable or merge-ready feature. Keep original screen
+designs and reuse the existing SDK/confirmation components for the client update.
+
+
+## Existing web tip confirmation and protected original recovery
+
+September14 follow-up to backend410ae2767. The preexisting TipModal retained a
+created payment only in memory, did not present card confirmation, and could not
+recover an interrupted creation after restart. The existing API method, modal,
+CompletionFlow and GigPaymentSetup now use the tested original Payment protocol.
+The amount picker and card-confirmation layouts/styles are preserved. Tip copy
+accurately describes an immediate separate charge. No product screen or storage
+system is added; ProtectedRecoverySlot's existing AES-GCM/IndexedDB transactions
+now also support replacing a specifically expected revision for explicit recovery.
+
+The original amount, worker, terms and UUID are saved before POST, without SDK
+secrets or session credentials. Missing reads retain that original. Pending checks
+and explicit cancellation keep its UUID. Active-request conflicts require a
+verified read and explicit adoption guarded by the saved revision. Every receipt
+must match identity, amount, currency and charge outcome. SDK success alone does
+not publish a sent tip. Refund/dispute records lead to history information. Current
+actor/session/origin/task and storage revision guard callbacks and cleanup. The
+existing page reopens retained originals, including provider returns; query-string
+success flags are never evidence. Session changes during the page's storage read
+cannot open the old original.
+
+Final156 tests/six suites pass:45 modal/page-recovery cases, seven existing/shared
+confirmation cases, and104 existing cancellation/checkout/authorization assertions.
+TypeScript has zero diagnostics. Scoped lint:zero errors/seven existing any
+warnings and one ref-lifecycle warning. The broader cancellation page run first
+failed four tests because its old TipModal mock replaced the new named exports;
+retaining the actual helpers repairs the fixture, with all30 entry assertions
+passing. No app behavior was relaxed for that failure.
+
+Actual Chrome confirms encrypted storage with a non-extractable key, lost response
+and reload retaining one UUID/500 cents, exact retry, one matching completion and
+removal. Seven actual IndexedDB transaction checks pass; two separate browser tabs
+read one original, the second adopts it, and the first's stale revision cannot
+overwrite that adoption. Exact shared fixture cleanup passes. The private Axios
+adapter supplies synthetic API/provider outcomes, so this is not real Stripe,
+HTTP/SQL end-to-end or installed-native acceptance. Visual inspection confirms the
+existing picker layout. Both tabs and server18121 are stopped, the exact temporary
+page is removed, and Next's generated tsconfig change is restored. Source/evidence
+binding:private `existing-tip-provider-proof-r1/tip-browser-binding-r1.json`.
+Native original-request clients, legacy recovery, durable delivery and provider
+acceptance remain open. PR34 is still draft and needs final current-source CI.
+
+
+## Existing iOS tip handler and protected recovery
+
+September14 follow-up to web1b9ff598e. The old GigDetailViewModel tip handler
+reported success immediately after PaymentSheet completed, even when its optional
+status refresh failed, and lost the original across model/app lifetime. The same
+handler now uses the original tip terms/commands/receipt DTOs, with the existing
+KeychainStore and CheckoutCoordinator. Keychain reads distinguish failure from
+absence. Original amount/UUID/worker/terms are retained before POST; SDK credentials
+are transient. Current actor/session/origin, stored original and exact server
+receipt guard every continuation and cleanup. A current intent check precedes SDK
+presentation; success/error/dismissal are followed by a check of the same original.
+No SDK outcome alone reports paid. Explicit cancel needs a zero-charge receipt.
+Conflicting originals require verified explicit adoption. An existing refund or
+dispute record does not announce a new sent tip.
+
+The existing amount picker, spacing, styles and Stripe screen are retained. The
+same controls show frozen amount/recovery actions when an original is pending;
+an ineligible/read-failed opening cannot choose another amount. Existing custom
+amount parsing now rejects nonfinite/over-limit values before converting to Int.
+No new product screen, native storage mechanism or database change. One new test
+file separates recovery assertions from the existing tip test fixture, keeping
+normal static limits; it is not another app implementation.
+
+Evidence:the first compile reaches app success but test compilation fails on a
+missing try in one new assertion. Corrected source passes47 selected tests
+(18 tip plus29 existing authorization/bid-recovery). Final additional storage and
+callback checks pass21 tip tests, for50 distinct selected checks across the two
+successful runs. Eleven altered receipt bindings are also exercised inside the
+receipt-validation test. SwiftLint and SwiftFormat pass. The actual simulator
+Keychain round-trip crosses separate store instances, verifies this-device-only /
+unsynchronized attributes, and confirms exact removal. Synthetic URLProtocol and
+PaymentSheet presenters supply API/provider outcomes; this does not establish
+real provider acceptance or an installed tip UI journey. The owned simulator is
+shut down, with owner devices untouched. Source hashes and run bindings are private
+under existing-tip-provider-proof-r1/tip-ios-source-binding-r1.json. Android client
+integration, legacy recovery, durable delivery, all-platform UI/provider acceptance
+and final current-source CI remain open; PR34 remains draft.
+
+
+## Existing Android tip handler, original recovery and controls
+
+September14 source `c6b1f830e9878ee54dd30e5d83021a331d3a474b`, following iOS `b98cc283c`. The old
+GigDetail handler lost its payment ID across model/app lifetime and treated the
+SDK Paid callback as success before a best-effort status refresh. Its existing
+picker, detail screen, API/repository and GigTip source now use the same original
+request protocol as web/iOS. One narrow typed encrypted-preference adapter reuses
+Android's existing Keystore/EncryptedSharedPreferences mechanism. Existing Home,
+card-setup and refund stores have different typed scopes/records; reusing them as
+tip storage would break those contracts. No new screen, layout, table or migration.
+Three new test files cover the handler, storage failures and actual controls.
+
+The original UUID/amount/worker/terms are durably retained before POST. Reload404
+cannot authorize a replacement; a fresh opening obtains current session proof.
+Verified active conflicts require explicit compare-and-replace adoption; unrelated
+409 responses cannot offer adoption. Current actor/session/origin, stored original,
+one shared admission and a presentation-specific token guard SDK launch/callbacks.
+A receipt must match all original financial identities and clear protected storage
+successfully before reporting paid. SDK dismissal does not cancel a payment.
+Explicit cancellation needs a matching zero-charge receipt. Changed task terms
+retain the existing recovery action. Nonfinite/out-of-range input is rejected.
+
+Each screen opening owns its handler and retires its callbacks on departure.
+A retired account closes the picker and removes its former amount. Existing picker
+controls/styles remain; amounts freeze while pending, existing submit/secondary
+controls show recovery/cancellation labels. The encrypted file is excluded from
+legacy backup, cloud backup and device transfer; SDK credentials/server proof are
+not persisted. Storage read/decode/write/cleanup failure cannot act as an empty slot.
+A failed preference commit may mutate memory, so the original expected value is
+retained until a successful guarded write.
+
+Verification: R1 compiles the app and passes121 selected tests, but fails format
+and detekt checks. R2 passes124 tests after three additional amount/conflict checks;
+format passes and two remaining static findings are simplified/resolved in place.
+R3 passes124 tests, format/detekt and both APK builds. Final R4 changes only the
+screen retirement cleanup and its emulator assertion; all other R3-bound source
+is byte-identical. R4 format/detekt and both APK builds pass. Preserve those failed
+attempts; no assertions or global static settings are weakened. The124 checks
+include27 recovery,6 store,5 existing tip/detail,28 saved-task,5 stop-entry,
+24 bid-checkout and29 assigned-authorization/API tests. Eleven altered receipt
+bindings run inside one validation test.
+
+Five actual emulator checks pass on R4: frozen amount/continuation/cancel controls,
+loading lockout, preserved preset selection, retired-account amount removal, and
+real Keystore/EncryptedSharedPreferences persistence across store instances. The
+last verifies ciphertext excludes fixture identities/origin, rejects mismatched
+or retired cleanup, separates scope and removes exactly the random fixture key.
+Both installed application/test APK hashes match the candidate. This is actual
+Compose and protected storage with synthetic typed API/SDK outcomes; it does not
+establish the full installed tip journey or real Stripe/provider acceptance.
+
+Private binding `existing-tip-provider-proof-r1/tip-android-source-binding-r4.json`
+records source/product hashes; unit-r3.json and instrument-r4.log retain results.
+Owned AVD emulator-5554 is stopped with data retained, no global registration was
+created and other devices remain untouched. Build products and evidence are
+preserved privately. PR34 stays draft: legacy recovery, durable delivery,
+all-platform installed/provider acceptance and final current-head CI remain open.
+
+
+## Existing legacy tip recovery without replacement charges
+
+September14 checkpoint `e700862f1` repairs a concrete gap in the existing tip flow:
+preview returned `legacyPaymentId`, the local original read rejected it, and all
+three clients directed users to payment history without retaining/checking that
+payment. Historical rows already owned the financial identity. They are now read
+as candidates and registered only after fresh matching PaymentIntent/Charge proof
+and an unchanged full Payment snapshot under a row lock. Local reads never imply
+capture or cancellation. The same Payment.id remains both request and payment ID;
+unknown original confirmation/method remain null. Legacy originals allow check or
+explicit confirmed zero-charge cancellation, never new creation/discovery or SDK
+confirmation. A missing provider ID stays unresolved. Changed provider identity,
+amount/customer/currency/mode/metadata and stale financial snapshots fail closed.
+
+The existing original receipt transaction preserves historical successful/refunded/
+disputed/transferred states, capture/cooldown and transfer data. Uppercase historical
+currency stays stored while the response uses `usd`. Multiple historical pending
+rows can each register; preview still prevents a new charge until all resolve.
+Existing pickers, protected stores, receipt validators and session retirement guards
+are extended. New-charge eligibility still requires current confirmed terms. Native
+encoders may omit a null historical date; the route normalizes that omission before
+the legacy check/cancel boundary. A different current Charge cannot validate an
+already recorded capture.
+
+Only one new file is added: the310-line forward function/index update
+`20260914050000_gig_tip_legacy_recovery.sql`. It adds no table/column, service or
+screen. Five existing functions are extended and one exact existing-row admission
+function is added. This preserves the preceding reservation migration's rehearsal
+history. The other19 source/test files are existing implementations. No screen
+layout or design is replaced.
+
+Verification on this source:
+
+- Backend100 focused assertions across five existing suites pass:64 service/mobile/
+  read/webhook assertions plus36 critical payment-route regressions. The added cases cover historical read-only identity, resume rejection,
+  missing intent, no SDK credentials, explicit same-intent cancellation, four proof
+  mismatches, lost/uncommitted adoption replies, native null/omitted date and wrong
+  Charge rejection. The prior unchanged compatibility evidence remains available.
+- Actual StripeService plus owned PostgreSQL passes19 scenarios/176 queries.
+  Ten synthetic create calls produce nine modern intents; six historical provider
+  fixtures are pre-existing, for15 total fixture intents. Legacy cases create no
+  intent or customer. Two explicit cancellations occur (one modern, one historical).
+  Provider/notice transports remain synthetic. Exact fixture cleanup is zero.
+- All65 SQL contracts and generated pgTAP source synchronization pass. Ten
+  separate-connection cases include concurrent historical registration and an
+  observed row-lock wait where a changed amount rejects stale adoption. Exact
+  fixture cleanup is zero. Function lint checks359 functions/107 bindings with
+  zero errors/eight existing warnings. Migration ordering policy passes; complete
+  fresh-database replay remains a current-head CI gate.
+- Web53 rendered/validator assertions pass; standalone TypeScript passes. Scoped
+  lint has zero errors/one existing cleanup-ref warning. The new source is not
+  claimed as a real-browser/actual-provider journey; earlier storage mechanism
+  evidence remains bound to its unchanged implementation.
+- iOS24 focused tip tests pass in `legacy-tip-ios-r1.xcresult`; SwiftFormat/strict
+  SwiftLint pass. Android41 focused unit tests pass (30 recovery,6 protected-store,
+  5 view-model checks); format/detekt pass. Both compile their current app/test
+  source. Legacy API/provider outcomes are synthetic. No full installed historical
+  payment journey or actual Stripe acceptance is claimed.
+
+Earlier attempts remain retained: SQL R1/R2 failed due to a test-only column name
+and JSON operator grouping; R3 and complete contracts pass. Android R1 failed test
+formatting; corrected R2 passes. iOS initial static checks failed optional/style
+rules; corrected checks and the single native test run pass. Web R1/R2 did not
+start Jest because of command/bin resolution; R3 passes using the existing linked
+Jest package. No dependencies were installed and no assertion was disabled.
+
+Private source binding `existing-tip-provider-proof-r1/legacy-tip-source-binding-r1.json`
+links source hashes and run files; `legacy-tip-*` logs/results and SQL rehearsals
+are preserved alongside it and mirrored in the existing private audit directory.
+The owned iOS device is shut down, and no Android emulator or application server
+was started. No hosted migration, deployment or provider activation ran.
+
+Remaining: cold historical discovery when the current worker/confirmation has
+changed and this client has no saved original, durable tip notices, full installed/
+provider journeys and current-head CI. Existing detail gates currently hide the
+native tip entry in that cold case; fix the recovery entry without enabling a new
+charge against changed terms. Notification review found that terminal replay skips
+notice recovery, duplicate creation returns null, and the best-effort metadata
+write can use a stale Payment snapshot. The existing stored-notification receipt
+sender and scheduled wallet-delivery worker provide reusable transport/retry code;
+the wallet settlement delivery table itself requires a settlement and must not be
+repurposed for tip capture. No delivery implementation changed in this checkpoint.
+PR34, paid launch, R05/R06 and the app remain incomplete.
+
+
+## Existing tip entry without a saved client request
+
+September14 continuation after `14b8c3ae5`: the existing native detail gates
+required the current worker and owner confirmation, hiding historical payment
+recovery on a fresh install. Web could similarly lack both a retained UUID and
+current eligibility. The existing local preview already identifies the original
+payment; no replacement endpoint, payment, screen or database object is needed.
+
+The three detail implementations now inspect that preview for the completed task's
+current personal payer. Native restores its existing tip dock only when a pending
+payment exists; web opens its existing recovery picker. Existing validators and
+identity/session checks bind discovery to the current account and API origin.
+An empty preview cannot enable a new charge when current terms are missing. The
+picker retains the original amount and UUID and uses the existing explicit check/
+cancel commands. New-tip eligibility, screen layouts and styling are preserved.
+Seven existing source/test files change; no new file or migration is added.
+
+Verification on the seven hashed source files:
+
+- Web87 focused assertions pass (tip57 and stop-entry30); TypeScript passes.
+  Scoped lint has zero errors/seven existing warnings. Cases include an empty
+  preview, recovery without worker/confirmation and retired session/origin replies.
+- Android76 selected unit checks pass: recovery30, tip view-model7, protected-store6,
+  saved-task28 and stop-entry5. Format/detekt pass. Recovery entry disappears when
+  the session changes during discovery; existing API outcomes are synthetic.
+- iOS26 focused tip tests pass with zero failures/skips; format/strict lint pass.
+  Missing current terms can recover the historical amount/UUID through the old
+  picker and explicit check; no existing payment leaves the entry hidden.
+  R1 compiled but installation failed because the Mac ran out of disk space;
+  zero tests ran. After removing2.18GiB of task-owned disposable build caches,
+  R2 executes the same compiled app with test-without-building and passes26.
+  Sources, accepted products/APKs, device data and test evidence are retained.
+
+Private `existing-tip-provider-proof-r1/cold-tip-source-binding-r1.json` binds
+all seven hashes and run results. `cold-tip-*` logs/commands/results are retained
+privately and mirrored in the existing audit directory. This checkpoint is not a
+full installed UI or actual-provider journey. No Android emulator was started;
+the owned iOS simulator is stopped. No hosted/provider change ran. Current-head
+CI, durable tip delivery and the remaining paid/all-app acceptance stay open.
+
+
+## Existing tip notifications reuse the payment delivery worker
+
+September14 continuation after cold-entry `7791bb16f`: the existing
+`_notifyTipReceivedIfNeeded` ran after capture, created/sent a best-effort notice,
+and wrote a stale Payment metadata object without checking the write result.
+Terminal command replay could skip it; a crash or uncertain push could strand
+notification delivery. Existing Notification idempotency and the stored-notice
+sender/scheduled wallet relay already provide the required storage/transport pieces.
+The wallet outbox table requires a wallet settlement, so it cannot represent tip
+capture. Existing typed Home/assignment/stop outboxes have different ownership.
+
+The repair extends Payment metadata, Notification and the existing scheduled relay.
+A new capture atomically inserts the existing tip notice and its immutable financial/
+content snapshot and capture-time preference. Failure to store that notice rolls
+back the local capture write; existing provider/read recovery retains the same
+payment. The worker claims one row immediately before delivery, checks the exact
+leased note and current payment, then uses the existing receipt transport and
+current preference/token ownership checks. Unknown delivery retries the same
+Notification ID after backoff; accepted/suppressed outcomes are durable. A lost
+acknowledgement is recovered from the stored event. Delivery updates merge under
+the Payment row lock and preserve newer metadata and original request terms.
+
+Read notices retain their read flag. Deleted/changed notices, changed recipients
+or refund/dispute state suppress an unsent alert. Existing notices keep their
+identity/content/read state and are not re-alerted. Historical captures are not
+backfilled on adoption/replay. One forward function/trigger/index migration,
+`20260914060000_gig_tip_notification_delivery.sql`, preserves earlier migration
+history and adds no table/column. Ten existing source/test files change alongside
+that migration; no UI or screen design changes. The competing best-effort service
+method is removed. Both existing cron and pg-boss registrations reuse their current
+worker, with a bounded25 events per queue per run.
+
+Verification:
+
+- 181 backend assertions pass:102 tip/transport/webhook checks and79 existing
+  critical routes, paid-delivery and wallet compatibility checks. Capture-time
+  consent, current opt-out, missing preference proof, unknown transport, deleted/
+  changed eligibility and failed acknowledgement are covered.
+- All65 SQL contracts pass; the final extended tip contract also passes after
+  adding authenticated/anonymous privilege denial and existing read-notice
+  preservation. Generated pgTAP wrappers synchronize. Local migration policy passes.
+- Actual StripeService, existing relay and owned PostgreSQL pass22 scenarios with
+  235 queries. Eight committed local notices survive16 synthetic transport attempts
+  (one unknown attempt and one accepted attempt each); lost final SQL acknowledgement
+  creates no extra notice or send. The preserved charge scenarios still make ten
+  create calls/nine modern intents, six pre-existing legacy intent fixtures, two
+  cancellations and one customer; no historical replacement charge is created.
+- Thirteen separate-connection cases pass, including skipped locked delivery,
+  expired-lease reclamation, stale-worker denial and observed row-lock waiting
+  while preserving newer Payment metadata. Exact fixture cleanup is zero.
+- Function lint:363 functions/108 bindings, zero errors/eight existing warnings.
+
+R1 backend failures were stale tests spying on the removed best-effort helper;
+R2 retained stale assertions and exited139. Corrected R3 passes102, and the separate
+compatibility run passes79. Service/concurrency R1 adapters could not parse SQL NULL
+for an empty queue; corrected R2 both pass. Initial owned-local migration application
+reported SET LOCAL outside a transaction; all object creation succeeded. Full fresh
+schema replay remains a current-head CI gate. These failures are retained, not
+counted as passing attempts.
+
+Private `existing-tip-provider-proof-r1/tip-delivery-source-binding-r1.json` binds
+all11 implementation/test/migration hashes and run files. Evidence is mirrored in
+the existing private audit directory. Actual external provider/push transport and
+full installed tip/notification returns remain unverified. No hosted migration,
+deployment, provider activation or physical-phone operation ran. PR34, the paid
+scope, R05/R06 and the wider app remain incomplete. Next: existing installed tip
+recovery journeys, then remaining paid-policy/acceptance rows, reusing accepted work.
+
+
+## Installed iOS historical tip recovery and accessibility
+
+September14 after `161aaf529`: the existing installed detail screen and tip picker
+now pass a complete historical recovery journey through the actual API client,
+Express/Joi tip route, StripeService and owned local PostgreSQL. Authentication
+and provider responses are synthetic; there is no actual Stripe or push send.
+The fixture has an existing$10 payment and no current worker/owner confirmation.
+
+The screen exposes its old tip action, loads the original$10 with amount controls
+disabled, checks the original, restarts and restores that same amount/UUID, then
+checks a freshly supplied synthetic capture. SQL records exactly one success
+receipt and one Notification for the same Payment. Both HTTP commands use check
+and1000 cents; provider create count is zero. After another app restart the recovery
+entry is absent. The existing real Keychain store is used across these restarts.
+The actual installed app matches all679 files in the tested build bundle.
+
+This journey exposed an accessibility identifier defect: the parent shell
+identifier was inherited by its sole dock button, replacing the intended control
+identifier. The complete R4 hierarchy shows the visible Send a tip button identified
+as contentDetailShell. Three `accessibilityElement(children: .contain)` modifiers
+in the existing shared detail shell/dock and tip picker preserve their distinct
+controls. Layout, labels, styling and payment behavior are unchanged. The actual
+R5 picker screenshot retains the established sheet and frozen amount. No new screen,
+file, table or migration is added; one existing payment UI test file is extended.
+
+R5 passes one installed journey with zero failures/skips; build R7 succeeds and
+SwiftFormat/strict SwiftLint pass on all three source/test files. The private
+`installed-tip-ios-source-binding-r5.json` binds hashes and679-file product equality;
+`installed-tip-ios-state-r5.json`, `installed-tip-ios-summary-r5.json`, screenshot
+and result bundle preserve the observed HTTP/SQL/UI evidence. The helper's earlier
+XCTest initializer error (build R1/R2), expired-login/landing-page assumptions
+(UI R1/R2) and inaccessible identifier (UI R3/R4) remain failed attempts. R1–R3
+were stopped after known failures and have incomplete result bundles; R4 has a
+complete failing result and exported hierarchy. No failed run is counted as accepted.
+
+Cold-entry `7791bb16f` passed all15 applicable CI jobs/one Seeder skip in
+[CI34920129205](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34920129205).
+Delivery head `161aaf529` is pushed to the PR branch for its own CI; the new iOS
+accessibility/test checkpoint will also require current-head checks. The owned iOS
+simulator is shut down, preserving its data. The loopback18109 fixture remains
+reserved for Android/web; its current successful iOS state is archived before reuse.
+Actual provider/push delivery, other installed tip cases, wider paid policies and
+all-app acceptance remain open. Next: Android/web existing tip journeys, then P04–P10.
+
+
+## Installed Android and web historical tip recovery
+
+September14 follow-up reuses the existing task detail, tip controls, protected
+storage, actual tip HTTP routes, StripeService and owned local SQL. Authentication
+and Stripe outcomes are synthetic; neither an external charge nor a push send ran.
+This verifies production controls under a private fixture, not the complete site
+or real-provider acceptance. The existing screen designs are preserved.
+
+Android's first installed journey on `d6a0194ea` passes cold discovery, frozen$10,
+restart/reopen, two checks of the same historical UUID, one capture/notice and exact
+one-entry encrypted cleanup. The installed APK matches SHA256 `2774f09daee602ed6247d6d34d454867dc53fee9a309f31a59ebb658045c2a15`.
+It also exposes a stale "Check tip status" dock after success, until reopening.
+The existing coordinator now publishes terminal receipt state and calls the existing
+detail refetch only after verified receipt plus exact storage cleanup. Terminal
+state no longer overrides the detail dock. Internal original/receipt protection
+remains; failed storage cleanup does not refresh or report terminal success.
+Three existing Android implementation/test files change, with no new product file.
+
+The corrected source passes31 recovery/7 view-model tests, formatting, Detekt and
+assembly. Two installed success/cancel journeys pass with restart, frozen amount,
+zero replacement intent/customer creations and immediate dock retirement before
+another restart. Success makes one durable notice; cancellation cancels the same
+intent once and makes none. Both remove exactly one encrypted entry. The installed
+APK equals the candidate byte hash recorded privately. Earlier R1 Detekt rejects
+a complex condition; splitting the existing guards fixes it without changing policy.
+
+Actual Chrome passes existing CompletionFlow/TipModal discovery, selected frozen$10,
+reload/reopening, two same-ID checks, one local receipt/notice, zero replacement
+creates and removal of the saved original/recovery entry. R1 incorrectly expected
+the custom input to contain a selected preset amount; the screenshot proves the
+existing$10 preset is selected and the empty custom input is disabled. R2 verifies
+that unchanged design and passes. There are zero browser page errors. No web product
+file changed; its temporary private wrapper is removed and configs restored.
+
+Evidence is source/product-bound in private `installed-tip-android-source-binding-r2.json`,
+`installed-tip-web-source-binding-r2.json`, the Android success/cancel-r2 XML/images/
+state snapshots, Chrome-r2 snapshots and run logs under `existing-tip-provider-proof-r1`.
+Earlier failed attempts remain preserved. Both owned native simulators, the owned
+Chrome process and tip fixture18109 are stopped. Exact SQL cleanup reports zero
+fixture auth/users/gigs/payments/notifications; products/device data are retained.
+PR34 stays draft; current-head CI, real-provider/push acceptance and the remaining
+paid/no-show/fee/dispute/inventory scopes remain open.
+
+
+## Existing no-show report admission
+
+September14: five route reproductions prove that the existing no-show preview
+returned `can_report:false` while a direct POST still cancelled an early or already
+started task. Both poster/worker exact waiting boundaries were bypassed. The
+existing preview calculation is now shared with POST and enforced before creating
+an incident, changing the task or issuing a notification. Existing30-minute
+scheduled-start,150-minute unscheduled-acceptance and24-hour worker waiting windows
+are preserved, including the strict boundary. Invalid timestamps, absent/same
+counterpart and recorded work start fail closed. No fee rate or allocation changes.
+
+Tests cover both rejection and retained eligible paths using the real Express
+router:54 tests across stop/payment/save-report suites pass. All privacy gates pass,
+including15 audience-profile checks. Nine actual HTTP requests against the same
+router and owned SQL reject before writes; exact Gig snapshots remain unchanged,
+with zero incidents, notifications or provider calls. The local adapter reads actual
+SQL; authentication is synthetic. Exact fixture cleanup passes. The initial local
+harness omitted the existing required Gig.description; R1 failed before a request
+and cleaned its actors, and corrected R2 passes. Source/fixture/run hashes and logs
+are retained privately as `no-show-admission-*` under `existing-tip-provider-proof-r1`.
+
+This changes only the existing gigs route and existing route test file. No table,
+migration, screen or layout is added. This is an admission repair, not acceptance
+of no-show execution: the old multi-write incident/cancellation/reliability path
+still needs concurrency, retry and exact financial receipts. The defined fee rates
+alone do not settle who owes/receives worker cancellation/no-show fees; a policy
+clarification is pending. Completion and other independent security checks continue.
+
+
+## Existing worker completion preserves current assignment
+
+September14: six failing route reproductions show that a delayed worker completion
+could overwrite a changed worker, owner, payment, price or task status. The existing
+mark-completed handler now reuses `bindGigPaymentSnapshot` and checks current
+in-progress status, empty worker/owner completion and the observed assignment/start
+times in the same conditional UPDATE. A lost comparison returns409 before affinity,
+notifications or success; current task data stays intact. Valid completion retains
+the original note/photo/checklist behavior. Only the existing route and lifecycle
+test file change, with no schema, screen or layout change.
+
+93 focused route assertions pass, including nine changed-snapshot cases and valid
+completion. All privacy gates pass, including15 audience-profile assertions. The
+actual Express/owned-PostgreSQL harness passes ten interleavings via separate SQL
+connections plus one unchanged assignment. Replacement-worker/owner/payment/price/
+status/timestamps/owner confirmation and a competing completion remain byte-for-byte
+intact after rejection; no notice is attempted for them. Valid completion saves its
+existing proof and attempts one synthetic owner notification. No provider capture
+runs in worker completion. Exact owned fixture cleanup passes.
+
+Private `worker-completion-http-sql-r3.json`, source bindings and logs retain the
+proof. R1's fixture used a noncanonical account_type and rolled back; R2's local SQL
+adapter incorrectly encoded PostgreSQL text-array proof photos as JSON. The adapter
+was corrected for the existing column type; product serialization was unchanged.
+These failed attempts are retained alongside the passing R3. Existing web/native
+callers were inspected: they retain proof input on a failed submission. That source
+inspection is not a new installed-client acceptance claim; native failures currently
+show generic retry copy. Full proof-upload/privacy, command/session retirement,
+loss/retry recovery, owner-confirmation effects and durable notification acceptance
+remain open within P04/P07/P08/P09.
+
+
+## Existing owner confirmation preserves reviewed completion
+
+September14: three route reproductions show that owner confirmation checked the
+payment/parties/price but still confirmed changed worker-completion or assignment/
+start timestamps after capture returned. The existing conditional UPDATE now
+compares those dates; its concurrent-receipt fallback also requires completed
+status and matching dates. The existing worker and owner paths share the same
+assignment-comparison helper. No payment table, migration, service or UI is rebuilt.
+
+101 assertions pass across the existing paid lifecycle/stop/payment route suites,
+including changed dates, invalid concurrent receipts and matching /complete alias
+recovery. Six actual Express/StripeService/owned-PostgreSQL cases pass with synthetic
+provider/auth/notice transport. Four changed-work cases return409 after recording
+the exact successful capture; the legitimate financial record stays captured_hold
+while owner confirmation and newer task state remain untouched. Two unchanged
+cases confirm and retry with one capture/notice attempt each, including recovery
+from a lost provider reply. There are six synthetic captures, zero new intent
+creations and exact fixture cleanup. Source, fixture and product limits are bound
+in private `owner-confirmation-*` evidence under `existing-tip-provider-proof-r1`.
+
+This is a comparison repair, not complete owner-confirmation acceptance. Existing
+post-confirmation notification/reliability/standby writes still need durable
+recovery; client opening/command-session binding, exact proof-file validation and
+full installed/provider journeys remain open. The three date predicates do not
+establish a general immutable attachment-review contract.
+
+
+## Existing owner confirmation commits its records together
+
+September14: an actual Express/StripeService/local-SQL reproduction interrupted the
+User.gigs_completed write after owner confirmation. The first request and retry
+both returned200, the captured Payment and owner receipt remained saved, and the
+worker's count stayed zero. That is a concrete partial-write defect in the existing
+flow. Active/archive migrations and all-ref history contained no existing
+confirm_gig_completion function; the existing capture functions commit financial
+proof without grouping these later Gig/User/GigBid/Notification writes.
+
+The existing route now invokes one service-only transaction over those existing
+records. It locks the current Gig, rechecks current owner/business authority and
+observed assignment/completion dates, locks and verifies the committed captured
+Payment, then writes confirmation, an atomic count increment, remaining standby
+closures and existing in-app notification types together. UPDATE RETURNING selects
+only the bids actually closed. A failed write rolls back all confirmation effects
+while retaining the previously verified capture. Existing capture recovery and the
+original Payment/intent are reused. Concurrent/retried confirmations do not change
+the first receipt or recreate read/deleted notices. Existing free completion and
+historical receipt behavior are preserved. No historical count/notice backfill runs.
+
+One forward function migration,20260914070000_gig_completion_confirmation.sql,
+is needed for the database transaction because separate REST writes cannot roll
+back together. It adds no table, column, trigger or screen. Existing transport now
+accepts the gig_confirmed type; no notification is inserted again by the route.
+No screen, layout or client file changes. Migration ordering/compatibility checks
+pass against actual master e775af9ae; the initial missing compatibility comment was
+corrected without changing the SQL body. The schema addition is inert for the old
+backend; backend rollback retains already committed records and needs no data rewrite.
+
+Verification:116 focused tests in the existing lifecycle/stop/payment/delivery
+suites pass, as do privacy gates (including15 audience checks),65 SQL contracts and
+the generated paid acceptance pgTAP wrapper. The initial new transport test had an
+unqualified fixture helper (one failure/115 passes); its corrected test passes.
+The SQL contract forces User, bid and notification writes to fail and checks exact
+rollback/preserved financial truth, actor/date/financial denials, free completion,
+read/deleted notices and service-only privileges. Application function lint checks
+364 functions/108 bindings with zero errors/eight existing warnings.
+
+Fourteen actual HTTP/StripeService/owned-SQL scenarios pass (235 SQL queries,
+12 synthetic captures, zero replacement intent creations): six preserve date and
+lost-provider-reply behavior after moving the comparison to SQL; eight exercise
+three interrupted effect writes and successful retries, lost committed RPC reply,
+failed notice transport, free completion, historical receipt and ordinary paid
+completion. Real SQL rows confirm the counter/bid/notice outcomes, and notice
+metadata contains only the existing gig/reason fields in personal context. Five
+separate-connection tests observe actual PostgreSQL lock waits: duplicate same-task
+confirmation, two tasks crediting one worker, a rolled-back leader with a waiting
+retry, changed completion and changed owner. Exact fixture cleanup passes; no
+owned server/device remains running from these checks.
+
+Private owner-effects-* logs, fixture code, source hashes and result files are
+retained under existing-tip-provider-proof-r1 and mirrored to the owner recovery
+archive. CI34924470956 passed the previous installed-tip checkpoint4c8f11114.
+Canonical checkpointaddebe757 is runningCI34926992422; this newer transaction
+milestone still needs its own current-head CI before integration/merge.
+
+Limits: authentication/provider/push transport are synthetic. The in-app notices
+are durable, but push/socket delivery and existing Home service-history capture
+remain best effort after commit. A lost RPC response preserves those notices but
+can leave transport unattempted; this is measured, not labeled eventual delivery.
+Client opening/session binding, proof-file privacy, full installed/provider
+completion and fee/no-show policy remain open. No hosted migration or activation ran.
+
+
+## Existing public gig detail protects completion evidence
+
+September14: six failing route checks reproduced private completion notes, proof
+photo URLs, checklists and owner confirmation feedback in public GET /api/gigs/:id
+responses for anonymous, unrelated, former-worker, bidding, revoked-business and
+failed-authentication callers. The existing SELECT-star path used a serializer
+that passed all five fields through. The existing serializer now defaults those
+fields out; the detail route retains them only for the current accepted worker
+or owner, including current business manage/post permission. Existing public task
+content and participant proof presentation are preserved. No screen/layout changes.
+
+While checking that boundary, a separate reproduction showed that hasPermission
+could treat a failed BusinessPermissionOverride read as an absent denial and use
+a role grant. The existing helper now returns false on that read error. Its usual
+role and override behavior remains intact. This is four existing backend/test
+files; there is no new service, schema or migration.
+
+155 assertions across six existing route/business-permission suites pass, along
+with all privacy gates (including15 audience checks). Eleven actual Express/owned
+SQL reads exercise anonymous/unrelated/invalid authentication, owner/current worker,
+authorized/revoked/explicitly denied business administrator, an unavailable denial
+read, departure and replacement worker. The existing business permission helper
+runs against real SQL. Exact task rows remain unchanged; zero provider or notice
+calls run; owned actors/tasks/team/override and temporary role fixtures are cleaned.
+Authentication and the injected failed override read are synthetic. R1's private
+harness restored its module override before lazy optional-auth loading, so owner
+access failed; R2 fixed that but assumed role defaults existed in the schema-only
+rehearsal DB. R3 explicitly seeds those absent synthetic role defaults, removes them
+afterward, and passes all11 reads. Product source is unchanged between those harness
+attempts. Both initial unit failure sets and private harness attempts are retained.
+
+Evidence is source-bound in private completion-proof-read-* and
+completion-permission-* files under existing-tip-provider-proof-r1 and mirrored to
+the owner recovery archive. This verifies the public HTTP response boundary, not
+all completion-media privacy. Existing upload paths still require proof of owned
+file references and actual private object access; a File.visibility label alone
+is not provider access control. Existing raw Gig SQL policies also use creator/
+beneficiary relationships and need current proxy/business-authority verification.
+Client session/restart recovery, full installed/provider journeys and completion
+push/provenance delivery remain open. No hosted change or native rebuild ran.
+
+
+## Existing Gig policies retire revoked creators
+
+September14: an authenticated PostgreSQL role still read and replaced private
+completion proof after the creator's BusinessTeam membership was revoked. The
+baseline gig_select_authorized and gig_update_creator policies depended forever
+on created_by. The existing backend posts business gigs with the human creator
+and business user_id, so current HTTP authority alone did not protect this path.
+The initial private raw-gig-proxy-before-r1 SQL reproduces both bypasses and rolls
+back all synthetic rows.
+
+The two existing policies now require current authority for a creator acting on
+another owner's task. One caller-bound SECURITY DEFINER wrapper reuses existing
+can_proxy_post and business_has_permission logic, retaining friend delegation,
+current business post/manage authority and personal ownership. It accepts no actor
+argument and binds decisions to auth.uid(). The narrow wrapper avoids recursively
+applying BusinessTeam RLS while evaluating Gig RLS; it does not introduce another
+team/permission implementation. Current owners, beneficiaries and assigned workers
+retain reads. The existing creator-only raw content-edit rule is preserved for
+currently authorized creators. Backend service-role paths remain unchanged.
+
+The first wrapper used STABLE evaluation. An observed separate-connection race
+showed a creator UPDATE could wait on the Gig row while membership was revoked,
+then commit using the statement's old authority snapshot. VOLATILE evaluation
+makes the existing UPDATE WITH CHECK read current authority after that wait. The
+same observed race now returns a denial with zero updated rows and original proof
+preserved. No request-delay assumption substitutes for the measured lock wait.
+
+The existing paid-gig SQL contract now verifies active creator reads/edits,
+revoked creator read/write denial, explicit override denial, manage-only authority,
+owner/worker/personal reads, unrelated and anonymous denials, caller identity binding
+and unchanged proof after denied edits. All65 SQL contracts and the generated paid
+acceptance pgTAP wrapper pass. Function lint remains364 PL/pgSQL functions/108
+bindings, zero errors/eight existing warnings; the new SQL-language wrapper is
+exercised by actual policies/roles. Migration ordering/compatibility checks pass
+against mastere775af9ae. The separate before/after race and exact fixture cleanup
+are retained privately in raw-gig-proxy-* with source hashes and durable mirrors.
+
+One forward migration20260914080000_gig_current_creator_authority.sql changes
+functions/policies only. It adds no table, column, screen or stored-row rewrite,
+and leaves applied migration history intact. Canonical PR34 CI still covers
+addebe757; these later integration milestones need their own CI. No hosted schema,
+provider or device change ran. This closes the reproduced creator-authority paths;
+completion object storage, supplied file references, client session/restart
+recovery and full installed/provider acceptance remain open.
+
+
+## Existing completion submission verifies uploaded files
+
+September14: four route failures reproduce worker completion accepting external,
+foreign-task, foreign-uploader and non-HTTP proof strings. The existing completion
+handler previously filtered string values only. Its existing web upload endpoint
+creates gigs/<gig>/<actor> keys; native generic uploads create uploads/<actor> keys
+and existing File rows with gig_completion purpose. Those source paths already
+exist; this repair extends the existing S3 service and completion route.
+
+Before saving completion, the route now verifies the configured public-origin/path,
+the current uploader/task path, and the existing native File row's purpose, state,
+size/type and optional task relationship. A HeadObject SDK request goes only to
+the configured bucket using that derived key, never to the supplied URL. Current
+object type/size and native metadata must match. Foreign references and missing
+objects reject; unavailable provider reads return retryable503 with no completion
+write. Existing assignment/date comparisons still run after the provider wait.
+Existing image/video/document types, extensionless keys and safe older basenames
+remain supported. No upload endpoint, table, migration, service or screen is added;
+three existing source/test files change. Signed query/fragment text is not retained
+in the canonical stored reference.
+
+178 focused tests across seven existing route/business/upload suites pass, as do
+privacy gates including15 audience checks. The initial new positive fixtures left
+assignment timestamps undefined instead of SQL NULL (three failures/174 passes);
+correcting those fixtures restores the actual database representation. A later
+compatibility check retains safe older basenames without weakening task/uploader
+path checks. Earlier failure evidence is preserved.
+
+Thirteen actual HTTP/upload/SQL/S3-SDK scenarios pass (77 SQL queries,19 PUT and nine
+HEAD requests to the owned synthetic object provider). Both existing upload
+endpoints process a Unicode filename; native File rows and exact uploaded bytes
+are verified, and the web upload still runs its existing image-processing path.
+Cases cover ordinary web/native and older-key proof, foreign URL/worker/task,
+missing objects, unknown provider reads followed by recovery, changed assignment,
+wrong native purpose/size, a mixed valid/invalid list and completion without files.
+Real task rows and notification attempts match each outcome; no financial provider
+call runs. All SQL fixtures and local object bytes are cleaned, and both local
+servers close. This is HTTP coverage of the endpoints used by web/native clients,
+not a new installed UI journey. Authentication, object service and notices are
+synthetic; the HTTP routes, S3 SDK and SQL are real.
+
+Private completion-proof-file-* scripts/logs/results are source-bound and mirrored.
+R1 covers12 actual cases; final R2 adds older-key compatibility and passes13.
+The previous creator-authority checkpoint428243241 is runningCI34929051683;
+prioraddebe757 passed all15 applicable jobs/one skip inCI34926992422. These later
+source changes still require their own current-head CI.
+
+Limits: this proves admitted references resolve to current supported objects in
+an uploader-owned path at validation time. It does not establish private bucket/CDN
+access, immutable byte retention, cross-provider deletion/commit atomicity or
+completion session/restart recovery. Historical stored references are not rewritten.
+The existing document/video proof presentation also needs its own UI verification.
+No hosted storage, schema, provider activation or client layout changed.
+
+
+## Existing completion storage provider check
+
+September14: the actual configured AWS bucket reports all four public-access-block
+flags enabled, no public ACL grant and a nonpublic bucket policy. That does not
+establish CDN privacy. Two tiny synthetic objects were created at random keys
+matching the existing web/native proof paths. Direct anonymous S3 GET returned403;
+anonymous CloudFront GET returned206 with the exact synthetic bytes for both paths.
+The File visibility flag cannot protect those bytes. Both exact created versions
+were deleted and HEAD verified absence. No application records or user files were
+read/written; provider configuration was not changed. This was a bounded real
+storage probe, not a deployment or Stripe/push activation.
+
+The generic File implementation already contains a Supabase private-bucket path;
+Home byte contracts already verify HOME_DOCUMENTS_BUCKET is private. A read-only
+getBucket('private') check returned StorageUnknownError and HOME_DOCUMENTS_BUCKET
+is absent in the owner local configuration. No private bucket availability is
+claimed and no replacement storage infrastructure was created. Authenticated
+private delivery, reference/byte retention and reconciliation of historical public
+objects remain required before PR34 release. Reusing current S3 keys with signed
+URLs alone would leave the demonstrated CDN bypass intact.
+
+Sanitized completion-storage-config-probe-r1, completion-storage-access-probe-r1
+and completion-private-bucket-probe-r1 evidence is retained privately and mirrored.
+Keys, bucket hostnames and credentials are excluded from Git/chat. The probes do
+not establish hosted database/storage policy adoption or other application flows.
+
+## Existing worker completion recovers its saved result
+
+September14: two reproduced route failures reject the same successful completion
+on retry (400) or after a concurrent identical submission (409). The existing Gig
+already stores its completion timestamp, note, photo references and checklist; no
+new command table, client store or migration is needed to recover that receipt.
+
+The existing handler now compares the normalized request with the saved proof and
+requires a valid completion timestamp/current assigned worker. A matching saved
+result returns200/reused without another write, object-provider read, affinity
+interaction or notification attempt. Different proof returns409. A concurrent
+winner must also match the original owner/worker/price/payment/assignment dates
+through the existing conditional query. Later owner confirmation is preserved.
+The existing upload-path parser is reused separately from object verification so
+an unavailable provider cannot prevent reading an already committed result.
+New submissions still require the actual object check. Only three existing backend
+source/test files change; screens, upload endpoints and schema are preserved.
+
+196 assertions across seven focused suites and privacy gates (including15 audience
+checks) pass. Eighteen additional cases cover identical retry/concurrency, changed
+proof, replaced/foreign actors, invalid/missing completion timestamps, optional
+empty proof, query normalization and changed concurrent assignment fields. The
+original two failures are retained in worker-completion-retry-before-r1.log.
+
+Eight actual HTTP/SQL scenarios pass with73 queries and the real S3 SDK against an
+owned synthetic object provider (14 uploads/eight HEADs). A lost database commit
+acknowledgement first returns500; retry returns the exact stored completion with
+zero additional provider checks or writes. Two overlapping SQL updates return the
+same result with one new submission/one reused receipt and one notice attempt.
+Different proof, a replaced worker, later confirmation, empty proof and normalized
+query references preserve the exact stored rows. SQL fixtures and local objects
+are removed and both fixture servers stop. Auth/object-provider/notice transport
+are synthetic; no financial provider call occurs. No installed native/browser
+recovery journey is claimed for this change.
+
+The lost-acknowledgement case also demonstrates a remaining defect: worker notice
+creation is still after the completion commit and can be missed (zero attempts).
+This repair recovers the saved completion only; durable worker notice creation,
+transport/Home provenance, protected object storage, immutable retention and
+client session/restart recovery remain open. Private worker-completion-retry-*
+evidence is source-bound and mirrored. Prior creator-authority428243241 passed all
+15 applicable CI checks/one Seeder skip inCI34929051683; the new source requires
+its own CI. No hosted schema/deployment/provider configuration changed.
+
+
+## Existing worker completion commits its notices
+
+September14: the preceding actual HTTP/SQL retry case reproduced a committed
+worker completion whose lost database acknowledgement caused zero notice attempts.
+The current worker handler stores proof before best-effort createBulkNotifications;
+that separate insert cannot provide transaction safety. Existing/archived SQL and
+all-ref history contain no mark_gig_completed transaction. The existing owner
+confirm_gig_completion function handles a later stage with payment/counter effects;
+it cannot directly save worker proof before owner review. The repair adds one
+service-only function over existing Gig and Notification records. No table, column,
+trigger, service file, client or screen is added. Applied migrations are unchanged.
+
+The existing handler verifies uploaded objects, then the function takes the Gig
+lock and rechecks worker, owner, price/payment and assignment times. It saves the
+existing note/photo/checklist and timestamp together with owner notices. Failed
+notice writes roll back proof. Matching concurrent receipts return the original
+row with no new notices; changed proof/assignment is rejected. Notice recipients
+reuse the existing business permission functions: current owner and active managers
+or posters, excluding the worker. Notice metadata includes only gig ID and proof
+presence flags. Maximum-length gig titles produce a valid truncated notice title.
+No historical completion is backfilled and read/deleted notices are preserved.
+The existing stored-notice transport handles fresh receipts without reinserting.
+
+222 assertions across eight existing suites pass, with privacy gates including15
+audience checks. All65 SQL contracts and the generated paid-gig pgTAP wrapper pass;
+application-function lint checks365 functions/108 trigger bindings with zero errors
+and eight existing warnings. Migration ordering/backward-compatibility checks pass;
+fresh-schema replay remains a current-head CI requirement.
+
+Eight actual HTTP/SQL/S3-SDK cases pass (66 queries,14 synthetic object uploads/eight
+HEADs). Each completion retains exactly one actual Notification row, including the
+lost SQL acknowledgement case (first503, matching retry200). Concurrent identical
+submissions retain one proof/notice with one fresh and one reused result. Existing
+proof mismatch, worker replacement, later confirmation, optional empty proof and
+reference normalization behavior is retained. Auth/object service/notice transport
+are synthetic; SQL rows and route/SDK execution are real. No financial provider
+call runs. Exact fixture rows/objects are cleaned and local servers stop.
+
+Seven separate-connection waits are observed in pg_stat_activity. Same-Gig retry,
+rollback followed by waiting retry, different concurrent proof and changed worker,
+assignment date or owner all preserve the required proof/notice outcome. Business
+team revocation while the caller waits on Gig excludes that member after the lock
+resumes. The contract also forces notice failure to prove rollback and checks
+active/revoked/explicit-denial recipients and read/deleted notice preservation.
+
+Private worker-completion-notice-* source, result and cleanup evidence is bound
+and mirrored. Canonicalf58f322e4 is runningCI34931505743; this later transaction
+still needs its own CI. In-app notice durability is closed for this transaction;
+push/socket retries and Home provenance are still open. Actual client completion
+retry currently re-uploads proof files and needs its own repair/acceptance. Private
+object storage, retention and client session/restart recovery remain unaccepted.
+No hosted migration/deployment/provider configuration changed.
+
+## Existing client completion retries reuse uploaded proof
+
+September14, verified local checkpoint: existing web CompletionFlow and native
+GigDetailViewModel handlers upload again after an unknown mark-completed result.
+Two web regressions reproduce replacement uploads and submission after an account
+change. The repair retains acknowledged upload references while the existing
+form is open, uploads only missing selected files, and rejects incomplete upload
+receipts. Actor/session/origin and attempt checks retire late callbacks after
+identity changes, cancellation or departure. Existing native identity readers and
+uploaders are reused. No screen, layout, table, migration or service file is added.
+Android now passes72 selected JVM tests (36 task lifecycle, five stop entry and31 tip recovery), format, Detekt and compilation. R1–R5 formatting/static/compile failures remain recorded; R6 passes. One test-class size exception follows the existing test fixture convention; shipping complexity is reduced without suppressing its check. iOS passes46 detail tests on R3 plus43 unchanged tip/authorization checks on R2 (89 distinct). The first run stalled before test attachment; R2 exposed an incorrect path in the new fixture, corrected before R3. Installed native verification passes below.
+
+Web passes96 rendered tests across the existing tip and assigned-authorization
+suites, standalone TypeScript and scoped lint (zero errors/six existing warnings).
+Chrome R2 uses the actual completion picker/controls, Express routes, S3 SDK and
+owned PostgreSQL. The first completion commits but its SQL acknowledgement is
+lost:503 leaves the form's note and file selected; retry returns200 with the exact
+same URL and original timestamp. Two submissions produce one upload request
+(original plus existing thumbnail), one HEAD and one durable owner notification.
+R1 incorrectly expected only one object PUT, overlooking the existing thumbnail;
+that failed assertion is preserved. R2 passes with no browser page errors. The
+synthetic authentication/object service/notice transport are explicit fixture
+boundaries. Both SQL fixtures clean exactly; Chrome/API/Next stop, the temporary
+page is removed and prior configs restored. Screenshots retain the existing design.
+
+References are currently transient, so process restart and a lost upload response
+before receipt remain open. A saved proof receipt does not establish private byte
+availability. The confirmed CDN exposure, historical reconciliation, retention,
+completion push/socket and Home provenance recovery remain open. PR34 stays draft;
+canonicalf58f322e4 passed CI34931505743, while this later client/transaction checkpoint
+still needs current-head CI. Private web-completion-* and
+native-completion-* evidence preserves failures and results separately.
+
+The installed iOS R5 journey passes using the existing task, Photos picker, note,
+submit/error/retry and confirmation controls. One upload and two identical
+completion submissions preserve the original timestamp and one actual owner
+Notification. All679 installed app files match build R6. Authentication, shell
+read projection, object provider and notice transport are synthetic; upload and
+completion handlers, S3 SDK calls and owned SQL are real. No financial provider
+work occurs. R2 reproduced parent identifiers replacing submit/close identifiers;
+two existing-sheet accessibility grouping modifiers repair that boundary without
+visual changes. R1/R3 setup failures, R2 failure and R4's Photos accessibility hit
+target failure are retained; R5 uses the photo's observed frame for the actual tap.
+The owned iOS simulator stops and exact SQL cleanup passes.
+
+A further configuration read identifies the unavailable Supabase endpoint as
+loopback, with HOME_DOCUMENTS_BUCKET unset. The earlier StorageUnknownError is
+therefore not evidence about a hosted private Supabase bucket. The S3/CloudFront
+anonymous-byte finding remains an actual configured-provider observation.
+
+The installed Android R1 journey also passes using the existing task, system
+Photos picker, note, submit/error/retry, confirmation and Back controls. Empty
+proof causes zero uploads/submissions. A lost committed response preserves the
+selected photo/note; explicit retry sends identical proof twice, with one upload,
+one object PUT/HEAD, the original timestamp and one stored owner notification.
+The installed APK matches the tested build. Authentication, shell read projection,
+object provider and notice transport are synthetic; actual HTTP upload/completion
+routes, S3 SDK and owned SQL run. No financial provider calls occur. The expired
+session was signed in through existing controls, then the task link was reopened;
+replaying a deferred deep link after login is not verified. Native payment-timing
+copy on a free task is a separate unverified follow-up. Neither journey proves
+process-restart proof recovery or immediate push/socket delivery after a lost reply.
+
+Exact native SQL cleanup passes and both owned simulators/API stop. The exact
+hash-checked Android photo is removed; other device data is retained. Accepted APK
+and app ZIP archives match installed products (all679 iOS files). Final private
+source bindings explicitly reuse unchanged ViewModel/test checks; the later iOS
+UI-test helper and two accessibility modifiers are bound to the passing installed
+journey. All10 modified client/test files already existed. Failed runs and the
+accepted evidence are preserved and mirrored under existing-tip-provider-proof-r1.
+
+
+## Existing completion proof uses private bytes
+
+September15: the configured CloudFront probe established anonymous access to new
+completion objects despite File.visibility=private. The repair extends the existing
+File/quota records, S3 service's completion helpers, both upload endpoints, Gig
+reader and private-file recovery job. Existing Home document/task/claim/lease
+storage, their migrations, archived code and other branches were compared first.
+Their transactions authorize Home actors and cannot bind the current Gig worker
+and assignment. One forward migration extends existing records with service-only
+reservation/read/cleanup functions, guards and a restrictive raw-File read policy.
+No table, replacement service or screen is added; applied history stays unchanged.
+
+Both native callers now send the existing gig ID with their existing multipart
+upload. New proof requires an explicitly configured private GIG_COMPLETION_BUCKET;
+unavailable or public storage fails closed with no S3/CDN fallback. Same actor,
+gig, MIME and bytes select the same existing File ID after an unknown upload reply.
+The reservation locks current assignment terms and uses existing quota accounting.
+Provider uploads never overwrite; an unknown receipt requires exact stored size
+and SHA256. Finalization rechecks assignment. Completion binds ready, undeleted
+proof under the same locks; retirement cannot race it into publishing deleted bytes.
+
+Readers authorize before and after fetching exact private bytes. They send no-store
+responses, while web retains its existing photo dimensions, classes and full-image
+links using temporary blob URLs. Session replacement retires pending requests and
+URLs. Existing published legacy URLs retain their prior rendering behavior; their
+historical exposure is not declared fixed. Unsubmitted files expire through the
+existing private-file worker. Parent deletion preserves immutable cleanup records;
+quota refunds once, exact deletion retries and later object writes are reconciled.
+
+Local evidence:206 focused backend checks/four suites and privacy gates (including15
+audience checks) pass. The full backend run passes6015 with16 skips and one obsolete
+standalone-upload expectation; that existing test is updated to require private
+Gig delegation and zero public writes, and all33 compatibility checks then pass.
+The initial full run is retained as failed;6016 distinct tests are verified across
+the full and corrected focused run. Current-head CI must repeat the complete suite.
+All65 SQL contracts pass, with the later unchanged-reference/changed-assignment
+refinement additionally passing the paid contract. Generated wrappers synchronize.
+A transaction applies the complete new migration over reconstructed preceding
+function/constraint definitions and rolls back successfully. Function lint checks
+372 functions/112 trigger bindings: zero errors/eight existing warnings. Migration
+policy passes; full fresh-schema replay remains a current-head CI requirement.
+
+Eight actual HTTP/SQL/Supabase Storage SDK cases pass (34 SQL calls/20 synthetic
+storage calls), including unknown upload acknowledgement, same-file native/web
+recovery, unauthorized/unsubmitted-owner denial, lost completion acknowledgement,
+authority revoked during byte delivery, public-bucket/corrupt-byte rejection and
+exact retired-object cleanup. Six observed separate-connection waits verify quota,
+rollback, changed bytes, completion-versus-expiry and worker replacement. Exact
+fixture cleanup passes. Authentication and object storage are synthetic; routes,
+SDKs and owned PostgreSQL transactions are real. No financial provider call runs.
+
+Web112 rendered checks, TypeScript and scoped lint pass (zero errors/eight existing
+warnings). Chrome verifies existing upload/note/503/retry controls with one upload,
+one private object POST, two identical completion requests, the original timestamp
+and one actual owner notification. All three existing owner photo surfaces render
+authenticated, no-store bytes at their prior sizes; sign-out clears temporary URLs.
+The temporary page is removed and prior configs restored. Failed harness cookie-
+authentication and Cancel-selector attempts remain recorded; owner R3 passes.
+
+iOS46 focused tests, format/strict lint, build and installed Photos/note/error/retry/
+confirmation/Back journey pass. One upload/two identical completion requests retain
+one timestamp/notice. All679 installed bundle files match the retained product.
+The old shared package checkout had missing files; only an owned cache is restored
+from the same seven pinned revisions. No dependency version changes. Initial build
+and stalled test-attachment failures remain recorded; build R2/unit R2/UI R1 pass.
+Android72 selected JVM checks, formatting/Detekt, build and installed system-picker/
+note/error/retry/confirmation/Back journey pass. Empty-proof submission sends nothing;
+matching retry retains one private object/upload, two identical completion requests,
+one timestamp and one notification. The installed Debug APK matches the retained
+product. Both owned simulators are stopped, exact fixture rows are cleaned, and the
+hash-checked synthetic Android photo is removed. Other device data is preserved.
+
+Private completion-private-* fixtures, commands, results and source/product hashes
+remain outside Git and are mirrored under existing-tip-provider-proof-r1. Current
+PR34 remains draft. Hosted private-bucket adoption/anonymous-denial verification,
+historical CDN reconciliation, broader generic private-file purposes, client
+restart/draft recovery, completion transport and Home provenance remain open.
+Existing native owner models currently do not expose completion photo/note fields;
+this milestone verifies their existing submission flow, not a new native reader.
+No hosted migration, bucket configuration or deployment runs in this checkpoint.
+
+
+## Existing completion notifications reuse the delivery worker
+
+September15: accepted installed-client fixtures established that a lost completion
+SQL acknowledgement left one durable in-app notice and zero transport attempts.
+The matching-receipt retry returned before the route's best-effort delivery. The
+same gap existed after owner confirmation. Existing acceptance, wallet/tip, stop,
+expiry and Home task queues, Notification schema/RLS, archived implementations and
+all-ref history were compared. Paid acceptance requires an acceptance record; Home
+queues require Home/task semantics; Payment metadata excludes free gigs. The repair
+extends existing Notification metadata and the scheduled acceptance worker. One
+forward function/trigger/index migration adds no table, column or service and does
+not backfill historical notices. Existing screens and client sources are unchanged.
+
+New worker, owner and standby completion notices atomically capture SHA256 hashes
+of the original Gig terms and notice, commit-time push consent and lease/retry state.
+Raw proof, assignment and payment snapshots are never copied into notifications.
+The service-only reader locks Gig before Notification, checks current assignment,
+confirmation/financial state and business reviewer authority, then strips queue
+metadata from transport. Changed notices and obsolete review/bid events suppress.
+Read flags survive retries; deletion cancels delivery without recreation. Unknown
+transport outcomes and missing/invalid receipt counts retry the same notice; seven
+malformed acceptance receipts that previously incorrectly finished now also retry.
+Commit-time opt-out stays suppressed after preferences are enabled; current opt-out
+and token ownership remain enforced by the existing transport. Existing detail
+refresh events are also delivered through that worker after a lost request reply.
+Provider delivery is at least once; exactly-once external alerts are not claimed.
+
+Local verification passes204 tests/four focused suites and privacy gates, including15
+audience checks. All65 SQL contracts and generated wrappers pass. Complete forward
+migration replay in a rollback transaction passes; function lint checks376 functions/
+113 trigger bindings with zero errors/eight existing warnings. Full backend passes
+6035 tests/16 skips across339 passing suites. Current-head CI remains required.
+
+Two actual HTTP/SQL/scheduled-worker/notification-service journeys pass, using58 SQL
+calls, three synthetic push attempts and14 synthetic socket events. Worker completion
+returns503 after a committed write, then200 on retry with one original notification.
+An unknown delivery receipt retries the same ID and preserves its read flag. A second
+journey loses both worker and owner acknowledgements: retry keeps the original three
+notices, suppresses the obsolete review and opted-out standby notice, and delivers
+one worker confirmation with its three original detail-refresh signals. Six observed
+separate-connection lock waits cover worker replacement, deletion, owner confirmation,
+read-state changes, stale lease acknowledgement and revoked business authority. Two
+additional SKIP LOCKED/rollback cases prevent duplicate leases/phantom attempts.
+Exact fixture cleanup passes; the owned API is stopped. No provider/storage sends
+or hosted schema changes run in this checkpoint.
+
+Earlier failed attempts remain evidence: seven baseline malformed receipt failures;
+missing digest function caused the first migration transaction to roll back, fixed
+using the existing built-in SHA256 pattern; function lint found an ambiguous local
+variable, renamed before the passing run; two SQL fixture expectation/precedence
+failures are corrected before contract R3. Private completion-delivery-* commands,
+fixtures, outcomes and source bindings are retained under existing-tip-provider-proof-r1.
+Accepted private-proof browser/native products are reused because relevant client
+code/configuration is unchanged. PR34 stays draft. Home maintenance provenance,
+restart recovery, hosted storage/historical reconciliation, live delivery and the
+remaining payment/release scope remain open.
+
+
+## Existing Home maintenance history commits with completion
+
+September15: two actual HTTP/SQL baseline cases confirmed work but stored no Home
+history. The ordinary path failed because HomeMaintenanceLog.task did not exist;
+the lost-acknowledgement retry also skipped the best-effort writer. The screen,
+routes, homeSystemsService and original migration151 already existed. Migration151
+and its archived counterpart were compared with canonical baseline, current tables,
+Home record transactions and all-ref history. Its seven original fields were absent
+from canonical replay. The existing unique gig_id index already guarantees one row
+per Gig; no replacement history table, service or screen is necessary.
+
+One forward migration restores those original fields without rewriting applied
+history. Older performed rows remain completed, retain their original values and
+receive names from existing notes; already-adopted field values are preserved. The
+existing confirmation transaction locks Home/authority before Gig and commits new
+eligible history with confirmation, counters and notices. Current adult maintenance
+edit authority is required; foreign, revoked, frozen, explicitly denied and minor
+Home access cannot add shared history. Private HomeTask publications keep their
+existing null origin_home_id and are not silently copied into the ledger. Replaced
+Home origins conflict. Historical confirmations are not backfilled, deleted history
+is not recreated, and system installation years are never inferred from job labels.
+Raw clients cannot fabricate Gig provenance or change its Home, amount, performer,
+recording actor or original dates. Worker/Gig deletion removes its foreign-key
+identity while preserving the maintenance row. Resident annotations remain possible.
+
+The route's competing best-effort write and now-unused helper are removed. Five
+helper-only mocked tests are superseded by actual SQL history/identity/retention
+assertions in the existing paid contract. The existing maintenance edit route also
+preserves performer/time on a repeated completion or an automatic Gig record, rejects
+replacement automatic costs with409, and compares observed status/update time before
+writing. Six actual HTTP unit cases in its existing test file cover these changes.
+Screens, layout, API envelopes and all client sources are unchanged.
+
+Local verification passes202 tests/four focused suites and privacy gates, including15
+audience checks. All65 SQL contracts pass; the later recorder/time guard and actual
+worker/Gig erasure cases additionally pass the paid contract. Generated wrappers
+synchronize. Legacy-shape forward replay preserves every old column and correct past
+status; full replay over already-adopted fields preserves the complete row. Function
+lint checks377 functions/114 bindings with zero errors/eight existing warnings.
+Current-head CI remains required; the earlier completion-delivery full suite is a
+separate6035-pass/16-skip checkpoint, not a claim of a repeated full suite here.
+
+Five actual HTTP/StripeService/SQL scenarios pass with124 SQL calls and one synthetic
+capture. Lost confirmation replies retain one history row. A simulated lost provider
+capture reply followed by a forced history-write failure leaves the real local
+capture receipt intact; retry confirms and writes history without another capture.
+Another person's Home gets no history. Existing Home list/edit/manual-create/complete/
+retry/delete endpoints work against real SQL; foreign access rejects, original dates
+survive retries, changed automatic cost returns409, and a newer cancellation defeats
+a stale completion edit. Deleting history then retrying confirmation preserves that
+deletion. Authentication and Stripe responses are synthetic; actual Stripe delivery,
+installed maintenance UI and hosted adoption are not claimed.
+
+Six observed separate-connection waits cover competing confirmation, transaction
+rollback, Home revocation/freeze, a changed Gig origin and explicit permission denial.
+They preserve exactly two eligible history rows and five committed completion counters;
+the changed-origin request commits neither. Exact fixture cleanup passes and the owned
+API is stopped. No native build/device, provider activation or hosted schema change
+runs. Accepted client products are retained and reused.
+
+Failed fixtures remain recorded: the initial paid probe used a synthetic charge ID
+with an invalid extra underscore, correctly rejected by the existing capture proof
+contract. Its first cleanup omitted clearing Gig.payment_id; cleanup rolled back,
+then a dedicated exact-ID transaction cleared the reference and verified removal.
+Subsequent fixtures clean correctly; the valid-shape paid case passes. The inherited
+free-fixture service label is corrected with an explicit evidence annotation. A
+wrong-working-directory cleanup search ran no source change; final focused runR4
+passes. Private completion-history-* commands, source/results and prior failures are
+preserved under existing-tip-provider-proof-r1. PR34 stays draft. Generic maintenance
+granular permissions/raw RLS, Home-origin admission, create-command recovery, complete
+maintenance UI acceptance and the remaining paid/release scope remain open.
+
+
+## Existing owner review retires late web responses
+
+The existing worker completion path already scoped callbacks to task, actor, token,
+API origin and session marker; the owner path used an unguarded await. Six baseline
+cases reproduced a late confirmation refreshing a retired page/opening its tip UI.
+The existing scope and attempt are now shared with owner confirmation. Opening and
+submission require current ownership/status/session; late success/failure after
+sign-out, silent session/origin change, role loss, dismissal or unmount has no stale
+UI effect. Missing API methods fail truthfully. Current success preserves the tip
+flow. Dismissal retires UI callbacks; it does not cancel server financial work.
+Only the existing CompletionFlow and its existing tip-modal test file change; no
+screen, layout, storage, schema or backend contract is added.
+
+106 focused tests across two suites pass. TypeScript passes; scoped lint has zero
+errors and six existing any warnings. Chrome uses the real component and API client
+with intercepted synthetic responses: sign-out, role loss, leaving, dismissal and
+normal success all pass, with one submitted request each and zero page errors.
+The four retired cases produce no refresh or tip; the current case refreshes once
+and opens the existing tip control. The sign-out case was additionally rerun with
+the real clearAuthToken API. The original review layout was visually inspected.
+No backend/provider journey or installed native owner-confirmation acceptance is
+claimed by these browser cases. Existing accepted native products are preserved.
+
+The first browser harness attempt could not click fixture-only external controls
+behind the modal backdrop; corrected fixture controls simulate those external events
+without changing product controls. Test DTO casts and a test-only require import
+caused initial type/lint failures, now corrected. All attempts remain preserved in
+private owner-confirmation-web-* evidence. The temporary page was removed, the three
+configuration files restored by hash, the served product retained privately and the
+owned port3107 stopped. No native device or backend server was started.
+
+Completion-delivery head1a8a7d549 passes all15 applicable jobs/one Seeder skip in
+[CI34947875754](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34947875754).
+Home-history dd788e03a and this web checkpoint require their combined current-head
+CI. PR34 remains draft. A separate pre-request stale-reviewed-terms concern remains
+to reproduce; this callback repair makes no financial authorization claim about it.
+
+
+## Existing owner confirmation binds the loaded review
+
+The existing confirmation transaction compared the Gig read by the server after a
+request arrived. None of the seven current owner callers carried the completion
+loaded by the screen. Actual GET, both POST aliases, StripeService and local SQL
+reproduced three changed completion-time/proof/price approvals before request:
+a$12.50 loaded task captured$20 after its price changed. Baseline35 SQL calls/three
+synthetic captures and exact fixture cleanup are retained.
+
+The existing gigPaymentAcceptance helper now computes a non-authorizing digest of
+existing assignment/payment/price, full-precision dates, task description/Home and
+completion proof. Detail exposes it only to current completion viewers; the private
+owner list computes the same digest without adding raw proof to its projection.
+Both confirmation aliases compare the loaded digest before provider work or receipt
+reuse. Current permission checks, Stripe proof and SQL transaction checks remain.
+No new table, migration, service, screen or product file is added. Existing DTOs,
+endpoints and all seven current web/iOS/Android owner callers carry their loaded
+value. The web review keeps its original through projection changes/retries until
+reopened. Actual Chrome also exposed generic error copy for plain API errors; the
+existing shared error helper now displays the instruction to reopen and review.
+Existing screen layout/classes and native presentation source are preserved.
+Updated clients and backend must deploy together: older commands without the loaded
+review now reject before capture.
+
+Full backend passes6053 checks/16 skips across339 suites. Final privacy gates pass,
+including15 audience checks.107 focused web assertions/types pass; scoped lint has
+zero errors/13 existing warnings across its expanded file scope. Android82 tests
+across three suites pass with actual DTO serialization and caller checks, compile,
+detekt and ktlint. iOS78 tests across the detail/MyTasks suites pass with actual
+URLProtocol request-body assertions, build, format and strict lint. These native
+checks do not claim installed owner paid-lifecycle UI or real Stripe acceptance.
+Existing accepted native products remain retained; the current iOS test host is
+separately bound to source and archived. No native UI design change occurs.
+
+Final actual HTTP/SQL acceptance passes three changed-review cases with71 queries:
+stale/missing commands return409 with no capture or new confirmation notices; a
+fresh explicit review captures once, retry preserves the original confirmation,
+and an old review cannot reuse a changed receipt. Private owner-list and detail
+digests match; public detail omits proof/digest. Chrome uses the real CompletionFlow,
+API client, forwarded HTTP routes, StripeService and SQL (21 queries): two same-review
+409s leave capture0/authorized/unconfirmed, then refresh/reopen/current approval
+captures once, stores confirmation and opens the existing tip control. Authentication,
+business directory, Stripe and tip preview are synthetic. No actual provider send,
+hosted adoption or deployment is claimed. All exact aafd/aafe/aaff fixtures are
+removed; API18109 and Next3107 are stopped, temporary page/configuration restored,
+and browser products/private logs retained outside Git.
+
+Retained attempts include a partial test-edit script stopped by a mismatched helper
+name, the first iOS build's file-private test-helper access error (fixed by reusing
+existing shared AuthTestSupport), and the final browser's five-second initial-load
+timeout. The warmed browser retry allows30 seconds and records page errors; it passes
+with zero page errors and the expected server error copy. No app change was made to
+address that timeout. Xcode returns the owned simulator to shutdown; unrelated
+simulators remain untouched. Private owner-review-* records bind exact source, commands,
+results, failed attempts and products. Previous CI34952128109 is a separate checkpoint;
+this change needs current-head CI. PR34 remains draft. The digest is neither an access
+token nor proof that a person inspected all fields. Post-server-read proof/provider
+races, native owner callback lifetime, MyTasks admission, draft/restart and full
+installed/provider/release acceptance remain open for subsequent bounded verification.
+
+
+## Existing MyTasks waits for owner confirmation
+
+Existing native MyTasks called the owner completion endpoint while work was still
+in progress, optimistically moved it to Done before a response, and treated worker
+completion as owner confirmation. Android reproduced two unique failures (six
+executions because the configured runner retried each). Existing web MyGigsV2 also
+offered Mark Complete only before the worker was done. These are repairs to the
+existing row models, handlers and API projection; no replacement screen is needed.
+
+All three existing lists now keep worker-submitted work active with Ready to confirm,
+use their existing confirmation action only for that state, and require a matching
+completed receipt with a valid owner-confirmation date. In-progress work opens the
+existing detail page. Native optimistic completion copies are removed; the existing
+loader refreshes after a receipt. Native failures open existing detail for recovery.
+Duplicate pending taps issue one command. Web retains its existing confirmation
+dialog and rejects changed-auth callbacks. Card layout, styling and row structure
+remain unchanged. Native account/request lifetime is a separate pending check.
+
+Actual Chrome plus existing MyGigs/worker-completion/owner-completion HTTP routes,
+StripeService and owned PostgreSQL pass two scenarios: normal confirmation and
+a lost committed reply. Each uses37 SQL calls and one synthetic capture. Pending
+confirmation has zero captures/no success, a repeat tap sends no second command,
+and reload finds the confirmed receipt after a lost reply. The normal run also
+verifies unconfirmed work is excluded from Completed and included in In progress.
+Authentication, business directory, browser wrapper and Stripe are synthetic.
+Native SDK checks do not establish installed native paid-lifecycle UI acceptance.
+
+This browser fixture honors simple SQL column projections literally. It exposed
+missing Gig.boosted_at and boost_expires_at fields used by the existing list query.
+Original backend migration149 and archived20260516000000 are byte-identical, and
+the legacy schema already contains both fields and the index; canonical replay
+omitted them. The new20260915040000 forward migration restores those two nullable
+fields and the existing partial index with bounded locking. It adds no table and
+does not infer historical boost data. Both missing-field and already-adopted
+rehearsals preserve the complete existing task values, including full-precision
+boost dates, across repeated application. Exact ab02 fixtures roll back. Earlier
+owner-review SQL adapters used SELECT* and did not verify the literal list column
+projection; their other recorded route/payment checks retain their stated scope.
+
+Local verification passes45 Android MyTasks checks plus compile/detekt/ktlint,
+15 backend list/payment checks and all privacy gates (including15 audience checks),
+all65 SQL contracts, the generated paid pgTAP wrapper, migration policy and wrapper
+synchronization. Web project types pass; this existing page retains its pre-existing
+ts-nocheck limitation. Its lint has zero errors/three existing warnings. iOS passes43
+checks across MyTasks and unchanged Magic Task suites, build, format and strict lint.
+All679 installed test-host files match the retained build; the owned simulator
+returns to shutdown, and the unrelated booted simulator remains untouched.
+
+Retained attempts include Android formatting failures R1–R3 and a complex-condition
+static failure R4, corrected without weakening rules; iOS test-file length was
+repaired by replacing its obsolete header comments. The first browser attempt
+failed on the missing original boost fields. Final normal browser R4 and lost-reply
+R3 pass with zero page errors, and screenshots preserve the existing layout.
+Exact ab01 actors/tasks/payments/notices are cleaned after every fixture. API18109
+and Next3107 are stopped; the private page is removed, configuration hashes restored,
+and served browser products retained. No hosted schema or actual provider operation
+is part of this scope. Private my-tasks-completion-* source/run/product records
+retain failures and verification limits. Current-head CI remains required and
+PR34 remains draft; no wider inventory row is closed by these bounded checks.
+
+
+## Existing native owner confirmation retires stale callbacks
+
+The existing detail handlers accepted empty success responses; Android emitted
+completion success and refetched, while iOS returned nil and the existing view
+treated nil as success. Both could refetch after a session changed. Android also
+sent two commands for a repeated pending tap. Corrected baseline fixtures reproduce
+three unique Android failures (nine failed executions with configured retries) and
+two iOS failures with three failed assertions. Android's first fixture missed the
+existing tip-preview dependency; it is retained as a fixture failure, not product
+evidence. The corrected baseline uses a consistent owner identity.
+
+Five existing native files extend the existing completion attempt/generation/job,
+identity markers, read scope and departure wiring. Owner admission requires the
+loaded review and current owner context; pending repeats send one command. A
+matching completed receipt with a valid owner-confirmation date is required before
+success/refetch. Late session/departure responses retire silently. iOS returns
+confirmed/failed/ignored and the existing view displays success only for confirmed;
+its previous nil-success convention remains unchanged for unrelated actions.
+No new schema, service, screen or visual layout is introduced. Retirement suppresses
+client callbacks; it does not cancel a financial operation already admitted by
+the server. Existing server receipt/recovery requirements remain separate.
+
+All42 selected Android detail tests pass with compilation, detekt and ktlint,
+including the existing worker proof regressions and the normal confirmed receipt.
+All50 iOS detail tests pass with build, SwiftFormat and strict SwiftLint, including
+normal confirmation/tip refresh, incomplete receipt, late session, departure and
+duplicate command checks. All679 installed iOS test-host files match the retained
+build, and the owned simulator returns to shutdown. These use mocked repositories
+or URLProtocol responses; they are not installed full owner paid-lifecycle UI or
+actual provider acceptance. Backend/web/schema acceptance is reused where source
+is unchanged; no broad suite is repeated solely for these native handler changes.
+
+Android's first candidate failed line-length formatting; iOS's first lint failed
+two trailing-closure checks. Minimal corrections preserve the original rules.
+Private native-owner-confirmation-* evidence retains baseline attempts, source
+and product hashes, commands and final results. The five application/test files
+already existed. The unrelated simulator and owner checkout remain untouched.
+The preceding loaded-review/MyTasks checkpoint48df046f6 passes all15 applicable
+jobs/one Seeder skip in CI34957710591. Native checkpoint `c12c55e099` now passes
+all15 applicable jobs/one Seeder skip in [CI34960015092](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34960015092).
+PR34 stays draft. Native MyTasks account/request lifetime remains a separate pending check.
+
+## Existing owner capture interleaving baseline
+
+While native validation ran, the existing HTTP/StripeService/SQL fixture reproduced
+four post-server-read races (50 SQL calls/four synthetic captures). Completion
+proof changes during provider retrieval, after capture preparation, and at the
+synthetic capture call each return200 and confirm different proof. A completion-time
+change during provider retrieval returns409 only after the payment is captured,
+leaving the task unconfirmed. Both confirmation aliases are exercised. Auth,
+business directory and Stripe are synthetic; routes/services and owned PostgreSQL
+are actual. Exact ab03 cleanup passes and API18109 is stopped.
+
+This records the failing baseline; the locally verified repair follows below.
+At this baseline, capture preparation locks/checks financial terms but does not bind the reviewed proof;
+final confirmation checks only the earlier assignment fields. Existing stop/expiry
+guards cover their own requests. The existing capture retry job also only selects
+already-confirmed tasks, missing newly ambiguous captures before confirmation.
+Compare and extend the existing Payment metadata, capture functions and retry job
+before proposing new persistence. Preserve the separate booking-payment caller.
+Private owner-capture-interleaving-* baseline and reuse records retain the exact
+commands/results. The following section records the subsequent source change and its limits.
+
+
+## Existing owner capture original and recovery
+
+The existing route checked loaded review before a provider await, but capture
+preparation and final confirmation did not bind all the reviewed proof. The four
+actual baseline races above could confirm changed work or reject only after capture.
+The existing retry job also missed unconfirmed originals after a process failure.
+Current/archive/history comparison found no private original-approval field.
+Payment.metadata is part of existing involved-user API and direct SQL reads, so it
+cannot safely hold private approving-manager identity and original feedback.
+
+The forward `20260915050000_gig_completion_original.sql` extends the existing Payment
+with one nullable private JSONB field, preserving every old column grant and all
+historical rows. Its original contains actor, review/snapshot hashes and feedback;
+it does not duplicate raw worker proof. Existing APIs omit this field. No table,
+service, screen or layout is replaced. Existing reviewed Gig fields, capture
+preparation/receipt, confirmation counter/notices/Home history and retry job remain
+the implementation. Free completion and historical already-confirmed capture remain
+supported; the separate booking branch is unchanged.
+
+Current locked authority admits one full reviewed snapshot before external work.
+Pending approval prevents edits/deletion of its work/payment identity, retains the
+first actor/note/rating and leases capture preparation. Stable provider identity and
+idempotency key remain unchanged. A fresh matching charge is required. Capture and
+confirmation effects commit in one transaction; a lost provider/local response is
+recovered by the existing job with the same original. Later revocation cannot undo
+an admitted financial operation; HTTP access still requires current permission and
+Home history uses current Home authority. A fresh canceled provider intent plus
+zero captured-charge proof can release pending edits without confirming completion.
+Existing content edits resume after a terminal original.
+
+Validation uses the owned PostgreSQL17.6 database on64522 only:
+
+- 296 focused backend checks pass. Full backend passes6081 tests/16 existing skips
+ across339 suites, exit0; all154 final route checks pass, including two additions for revoked-reader
+ suppression and safe unknown-provider errors. These unit boundaries use synthetic
+ repositories/provider replies; they do not replace SQL acceptance.
+- All65 SQL contracts and generated paid pgTAP pass, including original/feedback
+ immutability, complete proof/microsecond binding, current admission versus revoked
+ recovery, one counter/notice, delete fences, canceled-zero release and direct
+ private-column denial while every old column remains readable. Privacy gates pass.
+- Ten actual Gig HTTP/StripeService/retry-worker/SQL cases pass, with131 recorded SQL
+ calls before two cleanup queries and eight synthetic captures. Four interleaved
+ mutations are blocked; a pre-admission edit gets409/capture0. Lost capture/commit
+ responses recover one original, one counter and one notice. A held concurrent tap
+ gets409 while the admitted command finishes. Canceled zero-charge work stays
+ unconfirmed and becomes editable. Auth/business directory and provider are synthetic.
+- Seven separate-connection lock waits are observed: edit/admission both orders,
+ revocation/admission both orders, duplicate original, duplicate capture lease and
+ duplicate capture receipt. A forced failure after capture effects rolls back status,
+ original completion, counter and notices. Exact ab04/ab06 fixtures are cleaned and
+ every owned connection/API18109 closes.
+- A transaction rehearses the prior schema/functions and the complete new migration
+ with four old authorized/canceled/captured/refunded rows. All Payment and Gig fields
+ survive exactly; zero historical approvals are manufactured. It rolls back with
+ exact ab07 cleanup. Function lint checks381 functions/116 attached bindings with
+ zero errors/eight existing warnings. Migration policy and wrapper synchronization
+ pass; complete fresh schema replay remains required in this checkpoint's CI.
+
+Preserved failed attempts: focusedR1/R2 used old post-capture RPC fixtures; R3's two
+privacy cases inherited a previous unavailable-projection spy, fixed with existing
+reset hooks. HTTPR1 exposed an unknown provider error returned as500; the existing
+route now returns a safe retryable503, and R2 passes. SQLcontractR2 used an invalid
+fixture account type; R3 uses the existing individual type. Forward-replayR1 used a
+nonexistent canceled_at fixture field; R2 preserves existing fields successfully.
+The first lint identified two unused variables; removing those declarations restores
+the previous eight warnings. Failed evidence is retained rather than relabeled.
+
+Private owner-original-* files retain commands, failures, source bindings and final
+results in the existing evidence root and durable mirror. Screens/client source did
+not change; accepted native/browser design evidence is reused. No hosted migration,
+deployment or real provider operation ran. Cutover must drain old capture handlers
+and activate all original-aware backend readers before admitting new originals.
+Do not roll back to raw old serializers while private originals exist. Exhausted
+capture caps, provider disputes/refunds, operator resolution, hosted adoption and the
+full installed owner lifecycle remain wider acceptance gates; PR34 remains draft.
+Native MyTasks lifetime and completion draft/restart are the next bounded checks.
+
+## Existing MyTasks refresh order and canceled confirmation
+
+After0654e856e, inspection of the existing MyTasks callers found Android's
+confirmed-receipt path calling `load()`, which returns when the current tab is
+already populated. The earlier happy-path test left an empty Open tab selected;
+selecting the actual Active tab reproduced the stale row after success. A held
+older Android refresh also replaced a newer accepted list. Baseline R1 records
+two distinct failures (six failed executions with the configured retries).
+An iOS baseline using the existing APIClient/SequencedURLProtocol and compiled
+view model reproduced navigation after the confirmation Task was canceled.
+These are bounded model reproductions, not installed screen-departure acceptance.
+
+Four existing native source/test files change. Android calls the existing refresh
+after a matching receipt. Both loaders use a request generation to retire earlier
+responses; iOS also checks cancellation before applying reads or confirmation
+callbacks. No screen, layout, table, migration, endpoint or identity service is
+added. iOS test comments/formatting were shortened to retain the existing500-line
+limit; lint rules were not weakened.
+
+The final Android run passes46 tests, compile, detekt and ktlint. The final iOS
+build and45 tests (37 MyTasks plus8 unchanged Magic Task checks) pass with
+SwiftFormat and strict SwiftLint. The iOS regression also keeps the last accepted
+list when a newer refresh fails and an older response arrives later. Source hashes,
+baseline/final logs, Android XML and iOS result bundles are retained under
+`existing-tip-provider-proof-r1/my-tasks-lifetime-*` in the private evidence root
+and durable mirror. Repository/HTTP responses in these tests are synthetic; this
+does not repeat or replace actual local HTTP/SQL acceptance of unchanged backend
+code. No full installed paid lifecycle or actual provider claim is made.
+
+The owned simulator81989235 is shut down and the separate user simulator is
+preserved. Account changes, real view departure, optimistic boost rollback ordering
+and the adjacent rebook rail remain separate verification work.0654e856e passes
+all15 applicable jobs/one Seeder skip in
+[CI34964238115](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34964238115),
+including complete schema replay and native checks. The refresh follow-up is
+committed locally at f32c8e66b while the account/screen checks finish. PR34 remains
+draft and no broader inventory row is closed.
+
+## Existing native MyTasks account and view lifetime
+
+The existing main-list models did not bind their loaded state and callbacks to
+the current session or view lifetime. iOS baseline tests use the actual AuthManager,
+APIClient and compiled model with synthetic HTTP responses: sign-out leaves the
+old row/count/banner visible, and a held503 confirmation navigates after the same
+actor receives a replacement session. Two tests record four failed assertions.
+Android's held confirmation invokes newly rebound navigation callbacks; its
+baseline records one distinct failure across three configured retry executions.
+Existing root sign-out navigation does not make these retained model callbacks safe.
+
+The repair uses GigStopViewModel.currentIdentity on iOS and GigPaymentIdentitySource
+on Android. Existing model/view files clear or mask retired state, retire row and
+empty-state actions, and reject late reads/confirmation/boost callbacks. Rebinding
+starts a new view generation without letting the previous command clear its state.
+Android observes the existing identity signal and reloads the current account;
+iOS keeps the original session boundary and permits a fresh list entry. All three
+iOS callers append their existing destinations directly, removing22 redundant
+Task hops after the guard. No routes or visual treatment are redesigned.
+
+Android R3 passes52 tests (46 existing main-list checks plus6 focused lifetime
+checks), detekt, ktlint and compilation. The final response-order check holds the
+session lookup itself while a newer list finishes, verifying the generation is
+checked after that await. R2 passed51 checks before this additional ordering guard.
+R1 stopped at the unchanged LargeClass rule; the new lifetime cases were moved to
+one focused Android test file, preserving the rule and existing test suite.
+Ten other native files already existed. No application screen/service, endpoint,
+table, migration or new identity subsystem is added.
+
+iOS R2 passes50 tests (37 existing main-list checks and13 Magic Task/lifetime checks),
+build, strict SwiftLint and SwiftFormat. The existing row designs remain covered by
+the unchanged8 Magic Task projections. Tests cover sign-out, replacement-session
+read and confirmation responses, same-session departure/reentry, old row actions,
+and a fresh entry that loads the replacement session. R1 compiled successfully;
+two new reentry cases exhausted their one-response GET fixtures. Supplying the
+second expected response fixed those fixtures; the same product source passes R2.
+The initial static failures and corrected zero-violation run remain recorded.
+
+Source hashes, both baseline/final runs, Android XML, iOS result bundles and cleanup
+are retained under `existing-tip-provider-proof-r1/my-tasks-account-*` and its
+durable mirror. The owned iOS simulator is shut down and the separate user simulator
+is preserved. These checks use synthetic transport/repositories; no installed full
+owner/account-switch journey, actual provider or hosted operation is claimed.
+The main-list acceptance does not cover the adjacent rebook rail's separate reader,
+optimistic boost rollback ordering or completion draft/restart. Those are next.
+0654e856e's complete CI remains green; the combined native checkpoint needs its own
+CI. PR34 stays draft and the wider inventory remains open.
+
+## Existing native rebooking history and boost refresh
+
+The Android baseline reproduces an older rebook response replacing newer history
+and a failed boost restoring an obsolete whole list after a successful refresh:
+two distinct failures across six configured retry executions. iOS reproduces
+retained history after actual AuthManager sign-out, a held read repopulating a
+replacement session, and the same boost rollback defect (three tests/five failed
+assertions). HTTP/repository responses are synthetic. The existing iOS test
+transport gains an optional response gate so a newer GET can finish while the
+boost POST is held; its existing ungated behavior/default initializer are preserved.
+
+The existing rebook models reuse the current native identity helpers and retire
+state/actions on session change and view departure. Read generations reject older
+responses, including after an awaited Android identity lookup. Reentry reloads;
+identical Android history still publishes the new view generation so current cards
+work and retained old actions stay silent. iOS requires a fresh entry after a new
+session. Existing card styles and navigation destinations are unchanged.
+
+Both boost handlers remove the whole-list optimistic rollback and refresh through
+their existing loader after success. The current cards did not display those
+optimistic fields. A failure therefore leaves the latest accepted list intact,
+and successful-boost tests require the server's refreshed title and a second read.
+All nine changed application/test files already existed. No new screen, endpoint,
+table, migration or identity service is added.
+
+Final Android R2 passes57 tests (46 main-list/11 lifetime), detekt, ktlint and
+compilation. iOS R1 passes55 tests (37 main-list/8 Magic Task/10 lifetime), build,
+SwiftFormat and strict SwiftLint. Two test classes share the existing Magic Task
+test file to preserve the300-line class limit. Android R1 stopped at an unchanged
+condition-complexity rule; splitting that condition retains its post-await checks.
+The first iOS baseline build exposed a test-helper initializer compatibility issue;
+the defaulted initializer fixed it before the successful R2 baseline build and
+expected failing R2 tests. Failed runs remain preserved, not relabeled as passing.
+
+Source hashes, baseline/final logs, Android XML, iOS result bundles and exact device
+cleanup are retained under `existing-tip-provider-proof-r1/my-tasks-rebook-boost-*`
+and its durable private mirror. The owned iOS simulator is shut down; the separate
+user simulator remains untouched. These compiled-model/APIClient checks do not
+establish installed rebooking/boost account-switch UI or actual provider acceptance.
+No database, hosted or provider operation ran in this scope. The preceding
+a943a0dab checkpoint passes all15 applicable jobs/one Seeder skip in
+[CI34969633236](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34969633236).
+This follow-up needs its own CI. PR34 and the wider inventory remain unfinished.
+
+## Existing web My Gigs cache, reads and actions
+
+Both personal list routes already existed. The canonical page used an unscoped
+React Query key; the v2 page kept local rows/bids. Their containing layouts provide
+a plain QueryClientProvider and do not retire these pages on session changes.
+The corrected baseline records five failures: each page retains private rows after
+a same-cookie session replacement, the canonical cache reuses the old account after
+departure/reentry, a pending bid confirmation submits after page departure, and an
+old v2 filter response replaces a newer accepted list. The initial fixture missed
+the bid-count suffix; R2 fixes that selector, and R3 resets unused mock queues
+between failed tests before adding the filter case. All failed runs remain retained.
+
+The two existing pages reuse the API client's token-change and cross-tab marker
+signals through one small shared `useGigListSession` hook. It binds callbacks to
+their mounted opening session; the canonical query uses a nonsecret entry key and
+zero inactive retention. No credential enters the cache key. Retired rows/counts,
+bid modals and page actions disappear or become inert. A fresh entry loads current
+data. V2 read generations reject old lists/bids, and pending rejection/owner
+confirmation checks current page/modal scope before sending or applying results.
+Normal bid checkout URLs, confirmation receipts and post-success refresh remain.
+The existing error component provides reopening feedback. Layouts and navigation
+destinations are unchanged. Three edited source/test files already existed; only
+the shared hook is new. No endpoint, database migration or application screen is added.
+
+Final source passes101 focused tests across the existing entrypoint, session-signal
+and tip/completion suites; TypeScript has zero errors and scoped ESLint has zero
+errors/five existing warnings. Tests include StrictMode replay, signed-out guards,
+same-cookie/cross-tab changes, delivered old reads, same-task modal reentry,
+current checkout navigation, retired completion responses and matching-receipt
+refresh. The initial candidate passes all five reproduced defects; the final run
+also includes the expanded positive and adjacent compatibility checks.
+
+Seven Chrome R2 scenarios pass using compiled actual pages, the root query provider,
+actual API client/session signals and real root confirmation dialog: two same-cookie
+replacement/reentry cases, two cross-tab held-read cases, departed rejection,
+current owner confirmation and reversed filter responses. Only the current owner
+confirmation sends a write, carrying its exact loaded review, then refreshes the
+server-confirmed row. These use synthetic route responses and fixture entry controls;
+they are not backend/SQL, real-account, provider or full installed lifecycle proof.
+R1 timed out at its initial five-second populated-page expectation and accepted no
+case; R2 adds diagnostic capture and passes on unchanged application source. Its
+failure cause was not established, and R1 is not reported as passing.
+
+Source hashes, baseline/final checks, browser scenarios/screenshots, compiled entry
+chunks and cleanup are retained under `existing-tip-provider-proof-r1/my-gigs-web-*`
+and the durable private mirror. The temporary route/build cache are removed, the
+Next-modified tsconfig is restored byte-for-byte and port3107 is released. No database,
+hosted or provider operation ran in this scope. The preceding native head8ea69bbe4
+passes all15 applicable jobs/one Seeder skip in [CI34972981459](https://github.com/WangPantopus/skinny-pantopus/actions/runs/34972981459);
+this web follow-up needs its own CI. PR34 remains draft. Completion draft/restart,
+full paid/account journeys and the broader inventory remain open.
+
+
+## Existing worker completion receipt validation
+
+The three existing completion-proof handlers treated an empty200 reply as success:
+web closed the proof form, Android accepted its message-only response and iOS decoded
+EmptyResponse. The baseline records one failing web case, one distinct Android
+failure executed three times by the configured retry rule, and one failing iOS case.
+Earlier positive retry fixtures also returned empty responses; they now represent
+the actual backend's saved Gig fields. These are concrete client/fixture defects,
+not evidence that a new completion service or screen was missing.
+
+Existing handlers now require the original task/worker, completed status, valid
+completion time and matching note/photo URLs before clearing upload references or
+reporting success. Missing/mismatched receipts retain the current draft and existing
+upload references for retry. Existing account/screen guards remain in place. Native
+response models extend their existing DTO files; the web SDK uses the already
+exported raw GigSchema type. Note comparison follows the existing server2000 UTF-16
+unit limit, including a native emoji boundary check. Sent notes and screen controls
+are unchanged. Nine existing source/test files change; no new file, route, storage
+service, table or migration is introduced.
+
+Final R7 Android passes46 tests with zero failures/errors, compilation, detekt and
+ktlint. Final R7 iOS passes53 tests, build, SwiftFormat and strict SwiftLint. Final
+web R4 passes107 tests, TypeScript has zero errors and scoped ESLint has zero errors/
+six existing warnings. Coverage includes empty and seven mismatched receipt shapes,
+matching retries without duplicate uploads, real DTO decoding, partial-upload retry,
+changed photo bytes, and existing owner/session compatibility.
+
+Earlier native candidates stopped at formatting/static rules without weakening any
+rule. Android R4 returned gradle success only after two failed executions retried;
+R6 had one failed execution from background work surviving test teardown. Neither
+is counted as zero-failure acceptance. The fixture now stops and joins its created
+view-model jobs before resetting Main; the mismatch table also avoids reconfiguring
+MockK while a refresh runs. R7 is clean. Early web type checks exposed the repository's
+legacy Gig versus raw GigSchema distinction and an outdated post generic; both now
+reuse the correct existing type. One wrapper stopped before tests because its old
+command record omitted cwd; the corrected explicit-worktree R4 runner passes.
+
+Source hashes, final source copies, baselines, all failed/final logs, Android XML,
+iOS result bundles and exact device cleanup are retained under
+`existing-tip-provider-proof-r1/worker-receipt-*` and the durable private mirror.
+The owned iOS simulator is shut down; the separate user simulator is unchanged.
+No backend/SQL/provider fixture or hosted operation ran for this receipt scope.
+These compiled-model/component tests do not establish full installed worker/owner
+lifecycle or real-provider acceptance. Existing content-addressed completion File
+upload recovery already handles unknown upload replies and is preserved. My bids,
+the reachable v2 active-task completion caller, completion drafts/restart and the
+broader inventory remain under verification. PR34 stays draft; this follow-up and
+local web4ddcdaa65 require their combined CI push.
+
+
+## Existing My bids reader and command lifetime
+
+The existing Profile-linked My bids page used an unscoped QueryClient key and
+unguarded global confirmations. Baseline six tests fail: same-cookie session change
+retains private rows, each of completion/start/accept-counter/decline-counter can
+submit after page departure, and an empty completion receipt triggers a successful
+refetch. The actual backend projects the worker as GigBid.user_id; the page uses
+that existing field to compare its completion receipt.
+
+The page reuses useGigListSession, its current query and existing modal/notification
+controls. An entry-specific nonsecret cache key and zero inactive retention prevent
+old-account cache reuse; retired rows/counts/modals and actions are masked or inert.
+Reads and post-request refresh/errors check the opening session. A withdrawal
+attempt cannot affect a later modal opening, and duplicate clicks on the same
+pending withdrawal are blocked. Worker completion checks task/status/worker/time
+and the empty note/photos it submitted before refetching. Existing start/counter
+commands, reason values, navigation destinations and screen styles remain intact.
+Only the existing page and existing entrypoint test file change.
+
+Final R3 passes129 checks across the two existing entrypoint and tip/completion
+suites (42 entrypoint,87 tip/completion). Types pass; scoped lint reports zero errors
+and two existing warnings, including the existing page-level ts-nocheck. Positive
+checks preserve current start/counter/withdrawal behavior and matching-receipt
+refresh; negative checks include seven mismatched receipts, cache reentry, cross-tab
+held reads, retired replies and a reopened withdrawal during a held request.
+An initial append command used the wrong working-directory-relative path and wrote
+no test content; R2 therefore covered the earlier113 checks. R3 uses the explicit
+existing path and runs the full129. The original failed baseline is retained.
+
+Five Chrome R3 cases pass using the actual compiled page, API client session signals,
+QueryProvider and root confirmation: same-cookie reentry, cross-tab held read,
+departed completion, invalid receipt followed by matching retry, and withdrawal
+modal reentry. Completion retry sends two identical existing commands; only the
+matching receipt refreshes the list. Withdrawals use the existing DELETE endpoint.
+The fixture's responses, cookies and entry controls are synthetic; no backend,
+database, hosted or provider operation ran. Screenshots preserve the current layout.
+
+Browser R1 reports an initial script parse error and zero reads; its cause is not
+established. Diagnostic R2 passes the first four cases on unchanged application
+source, then stops because the fixture supported POST but omitted the existing
+DELETE withdrawal method. R3 corrects that fixture and passes all five; failed runs
+are not relabeled as green. The first cleanup stopped safely at a Next-generated
+reference change after stopping the owned server and restoring tsconfig; the exact
+one-line next-env change was then confirmed and the original restored. The owned
+route/build cache are removed, served entry chunks retained and port3107 released.
+Source hashes, baselines, runs, screenshots, compiled entry chunks and cleanup are
+under `existing-tip-provider-proof-r1/my-bids-web-*` and its durable private mirror.
+
+PR34 remains draft. This and worker60bdd6ba6/web4ddcdaa65 await the combined CI push.
+The reachable v2 active-task caller and its containing detail page remain separate
+verification; no full paid, account, installed or provider journey is closed here.
+
+
+## Existing v2 task detail and active-panel lifetime
+
+The existing reachable detail page and active panel had separate unguarded loaders,
+confirmations and socket handlers. Baseline R2 reproduces eight failures: retired
+worker confirmation sends, empty worker receipt succeeds, premature owner confirmation
+is offered, account replacement retains private detail, a held old response restores
+it, a departed error emits a toast, an older refresh replaces newer data, and page
+cleanup removes another consumer's socket listener. R1's owner assertion initially
+matched two progress labels; R2 corrects that selector and reproduces the button.
+Two further baselines reproduce empty urgent-status receipts advancing the controls
+and ordinary tasks calling the backend's explicitly urgent-only endpoint.
+
+The existing page and panel reuse useGigListSession. Per-loader versions and mounted
+scope checks retire reads/errors/commands; route-id keys retire rebinding. Socket
+cleanup removes only its own callbacks. The panel binds actions to current task,
+actor, role and loaded state, rejects missing/mismatched worker/owner/status receipts,
+and preserves newer socket status over older reads/replies. Ordinary tasks use their
+existing assigned/in-progress state and shared completion action without calling the
+urgent endpoint; urgent tasks retain their existing progression controls. Owner
+confirmation requires completed worker state; the existing CompletionFlow remains
+the actual page's owner entry once the active panel leaves. The SDK's owner response
+reuses the already-exported raw GigSchema. Five existing source/test files change;
+no new file, screen, route, backend, table or migration is introduced. Cards, styles
+and navigation destinations are preserved.
+
+Final R4 passes187 tests across three existing suites, and TypeScript passes. Scoped
+lint has zero errors/the same27 baseline warnings. Earlier new hook dependency/ref
+warnings were corrected without rule waivers; the baseline warning count is retained.
+R1 types exposed the old SDK Gig response shape, corrected to GigSchema before R2
+passed. A wrapper initially omitted its deferred lint command after that type failure;
+the explicit lint runner and subsequent complete command sets pass. Coverage includes
+positive ordinary/urgent completion, matching status/owner receipts, task rebinding,
+retired callbacks, seven mismatched worker receipt fields and socket ordering.
+
+Chrome R4 passes six cases using the actual compiled page, active panel, API client
+session signals and root confirmation: same-cookie reentry, cross-tab held read,
+departed confirmation, invalid/matching receipt retry, owner awaiting worker and
+ordinary completion with zero urgent-status reads. R1 omitted the existing payout
+account GET and failed its fixture coverage assertion after the first scenario; R2
+supplies its expected404 and passes five cases. R3 verifies the hook cleanup refinement.
+Those earlier fixtures did not enforce urgent-only backend admission. R4 explicitly
+marks urgent fixtures, rejects ordinary active-status requests, and adds the ordinary
+case after its separate failing baseline. Responses/authentication/entry controls are
+synthetic; the badge socket is the existing null default, with socket behavior tested
+separately. No full backend/SQL/provider or installed lifecycle is established.
+
+Source hashes, baseline/final runs, browser screenshots and served entry chunks are
+under `existing-tip-provider-proof-r1/v2-task-*` and the durable private mirror.
+Owned server/port3107, fixture route and build cache are cleaned; tsconfig and
+next-env are restored exactly. No native rebuild or hosted operation ran here.
+The preceding b513c8184 is running CI34980516319, with backend/schema/web/static
+checks passing at last inspection; this follow-up needs its own CI. PR34 stays draft.
+Existing ETA/location/share-link privacy and child-action retirement remain separate
+verification, alongside completion drafts/restart and the broader inventory.
+
+
+## Existing ETA tracker and share lifetime
+
+The active imported ETATracker (not the unused inline copy) reproduced seven failures:
+another task's event overwrote ETA; a session change or page departure still copied
+a held share reply; rebinding retained old ETA and a pending share; a refreshed
+location was ignored; an unknown ETA retained an old estimate; and an empty share
+reply was copied and reported successful. Baseline runs are retained.
+
+The existing component reuses useGigListSession and keys its entry by task/status/
+owner/worker. Current context is required before sharing, copying or showing a result.
+A synchronous pending guard prevents duplicate requests. Missing/expired share
+receipts retain the existing failure/retry controls. Socket handlers accept only
+their task and valid producer timestamps, preserve newer updates, support unknown
+ETA and remove only their own listener. The existing backend already dynamically
+emits this event with gigId/timestamp; no replacement producer was added. Loaded
+location props remain current without overwriting a newer socket estimate.
+Only the existing tracker and existing entrypoint tests change; styles are unchanged.
+
+Final R1 passes201 focused checks across three existing suites, TypeScript and scoped
+lint (zero errors/one existing any warning). Five Chrome cases pass against the actual
+compiled v2 page, tracker, API SDK, session signals and root toast: current share,
+held share after session change, departure, cross-tab change and invalid-reply retry.
+Responses/cookies/entry controls and clipboard adapter are synthetic; no user clipboard,
+backend fixture, SQL write, provider or hosted operation was used. Socket ordering and
+rebinding are separately component-tested, not a live Socket.IO transport claim.
+
+A separate local Chrome probe returns404 for the exact `/status/:token` path generated
+by the existing backend. Current/master route inventory and Next rewrites contain
+no matching page; the unrelated `/shared/:token` Home-grant page is a different contract.
+Canonical Gig share token/expiry and helper location/ETA columns already exist.
+Read-only local metadata confirms participant-scoped Gig SELECT RLS; column grants
+alone are not evidence that anonymous users can read those rows. General API detail
+projection and share/location authority still need separate reproduction and repair.
+
+The owned server/route/build cache are removed, served entry chunks retained, port3107
+released and both original configs restored exactly. Cleanup first stopped because
+next-env is generated/untracked, then at its one changed route-types reference;
+that exact reference was compared and restored. Both stopped attempts are retained.
+Source hashes/copies, baseline/final checks, five screenshots and cleanup are under
+`existing-tip-provider-proof-r1/eta-sharing-*` and its durable private mirror.
+Previous b513c8184 CI34980516319 passes all15 applicable jobs/one Seeder skip. This
+and v2 checkpoint4611b261c require combined CI; PR34 and the full app remain unfinished.
+
+
+## Existing general task response tracking privacy
+
+The general Gig detail uses an admin wildcard read. Fourteen baseline tests reproduce
+raw share token/expiry, top-level/nested helper coordinates and outsider ETA exposure;
+one cache test and one v2 entry test also fail. Four additional list baselines reproduce
+urgent_details.helper_last_location bypassing the existing location-sharing switch in
+public browse, saved tasks, user/me and my-gigs. These20 failed assertions are bounded
+regressions, not an app completion or duplicated-effort percentage.
+
+Actual HTTP with owned PostgreSQL confirms the detail exposure for anonymous, owner,
+worker and three outsider viewers. Direct anon/authenticated-outsider SELECT sees zero
+rows, proving the API bypass separately from existing RLS. A later fixture exercises
+the literal selected Gig columns for all four list routes and confirms nested-location
+exposure there too. Unused nested User relation joins are omitted by the SQL adapter.
+
+The existing route file now uses one small tracking projection across those responses.
+Share credentials and raw helper coordinates stay out of general reads. Current owner/
+worker detail retains ETA; public/foreign lists do not. Existing owner list ETA remains.
+The separate active-status endpoint continues to honor its location switch. Serialized
+urgent objects are cloned before removal, including legacy encoded objects; malformed
+values fail closed. No stored column is removed or rewritten. All five affected routes
+send private/no-store headers. The existing v2 page restricts its share card to the
+owner/worker; current participants retain it, with no styling changes.
+
+Final R3 passes264 checks/seven backend suites and204 checks/three web suites, web
+TypeScript, scoped lint (zero errors/23 existing page warnings) and all privacy gates,
+including15 audience-profile checks. Candidate R1's10 extra failures came from comparing
+the entire in-memory mock row after the old detail handler decorated it; the test now
+checks every original value, and actual SQL independently confirms no stored change.
+Web R2 stopped on the named-component lint requirement for the new test stub; a named
+stub passes without changing product behavior or weakening lint.
+
+Actual final HTTP/SQL acceptance passes six detail viewers, four list routes, two
+consent-disabled active-status reads and two direct outsider RLS denials.31 SQL queries
+plus two cleanup queries pass, with the complete stored Gig unchanged. The shared
+mock-based tests additionally preserve consent-enabled owner/worker coordinates and
+legacy urgent-value redaction. The first HTTP fixture stopped during route import
+because its synthetic Stripe getter threw during construction; no provider operation
+ran. Returning a getter-only proxy fixed the fixture. The first list fixture omitted
+the existing deadline OR filter; the corrected adapter runs the actual SQL predicate.
+Both failed runs cleaned their exact owned rows, and failed logs remain retained.
+
+Four existing source/test files change. No new file, table, migration, native code or
+screen design is added. Source hashes/copies, baselines, accepted runs and exact ab12
+cleanup are under `existing-tip-provider-proof-r1/eta-privacy-*` and its durable private
+mirror. API18109 is stopped; no hosted operation ran. Authentication/business directory
+are synthetic. This does not close full installed UI, every tracking/socket surface,
+share/location post-read authority, assignment changes, status destination or hosted
+cache/token reconciliation. PR34 remains draft; CI34985637885 covers preceding75ea51867,
+and this follow-up requires its own later CI.
+
+
+## Existing status links: authority, expiry and missing destination
+
+Ten baseline tests fail on the existing share/status routes: delayed owner/worker/
+deleted-task/newer-link changes still issue links; exact expiry and expiry/token/
+worker changes during helper lookup still disclose status; both responses lack
+no-store headers. Seven actual local HTTP/SQL interleavings independently reproduce
+the authority/rotation/deletion and in-flight read gaps, with exact ab13 cleanup.
+
+The existing share POST compares the observed owner, worker, token and expiry in its
+single UPDATE and returns success only for a matching saved token/expiry. Zero rows
+return409; unavailable reads remain retryable. The public GET validates the token,
+checks expiry strictly, and re-reads the same task/token after its helper lookup.
+Changed helper, revocation or expiry return404; data outages return503. Both responses
+are no-store. The limited public payload adds existing expiry/location-update times
+so a reader can retire expired content and avoid presenting an old ETA as current.
+No table, column, migration or replacement sharing service is introduced.
+
+Current/master/history route inventory and an actual Chrome404 confirmed the generated
+`/status/:token` destination was absent. The one new app file supplies that destination,
+using current public-page spacing, app colors/cards, shared status styles and existing
+EmptyState/ErrorState. The existing SDK gains its missing public-reader method and
+Next headers prevent caching, indexing and referrer forwarding from bearer-link pages.
+The reader needs no account, refreshes current status, stops at expiry, clears denied/
+failed content, and ignores late responses after token changes or departure. Its
+explicit expiry timer also retires a held refresh. Existing screens are unchanged.
+
+Final backend R3 passes276 checks/seven suites plus all privacy gates (including15
+audience-profile checks). Final web R4 passes212 checks/three suites; types and scoped
+lint pass with zero new warnings/errors. R1 types exposed a nondiscriminated view-state
+union; R2 lint required a const timer. Both were fixed without suppressions. The final
+CSS-only long-title wrapping refinement is covered by R2 Chrome, final types and R4
+web checks. Earlier failed/stopped commands are preserved.
+
+Actual final HTTP/SQL R2 passes nine cases: seven race denials and current owner/worker
+link creation/public reads, with exact expiry receipts, limited fields, no-store and
+old-link invalidation.81 fixture SQL calls plus two cleanup calls pass. The retained
+UI fixture repeats these checks around the browser journey (131 fixture SQL calls,
+two cleanup calls); two browser runs add six exact fixture updates to simulate status,
+expiry and long-title changes. Synthetic auth/business directory and a SQL transport
+adapter are used; actual HTTP handlers and PostgreSQL execute the operations.
+
+Chrome R2 passes seven checks: generated link without an account, actual SQL refresh,
+expired-link erasure, replacement-link invalidation, temporary503 retry to actual API,
+narrow layout and a long title within390px. Header checks confirm no-store/no-referrer/
+noindex, and the public page performs no profile lookup. One503 is substituted at the
+browser transport; the remaining reads and link generation reach actual local routes.
+R1's six checks also passed; R2 adds the long-title refinement. This is not hosted or
+full native/paid/provider acceptance. App screenshots and served entry chunks are retained.
+
+The exact ab13 rows and owned API18109/Next3107 servers are cleaned. Original tsconfig
+and generated next-env are restored. The first cache removal stopped at a final Next
+shutdown write; after confirming process/port exit, the exact owned cache was removed.
+Source hashes/copies, baselines, accepted results, UI screenshots and cleanup are under
+`existing-tip-provider-proof-r1/status-link-*` and the durable private mirror. Six app/
+test/config files change, of which only the missing page is new, plus three existing
+docs. Prior75ea51867 CI34985637885 passes all15 applicable jobs/one Seeder skip. This and
+2ef9772be require combined CI; PR34 remains draft. Live task-room audiences, location
+publisher authority/consent/input, assignment transitions and hosted cutover remain open.
+
+
+## Existing private task socket delivery
+
+September15: two failing real Socket.IO cases confirm that an unrelated signed-in
+account subscribing through existing `gig:join` receives `gig:eta-update` and
+`gig_status_update`, including helper ETA. The public room also supports legitimate
+public task/acceptance/bid activity. Existing notification/badge delivery already
+uses the authenticated `connectedUsers` socket registry, so no new room, subscription
+store, service, migration or client implementation is needed.
+
+The two existing producers now call a narrow helper in `chatSocketio.js`. A current
+Gig owner/worker read must match the producer's observed participants. Delivery
+uses their authenticated connected socket IDs only when still subscribed to this
+Gig. Missing/changed participants, failed reads, departed subscriptions and outsiders
+receive no private event. Public room admission and event names remain unchanged;
+the actual free-task instant-accept route still emits its limited public marker.
+No screen/style/layout or data storage changes are included.
+
+Acceptance and private evidence under `existing-tip-provider-proof-r1`:
+
+- `tracking-socket-baseline-r1`: two reproduced route/socket disclosure failures.
+- `tracking-socket-candidate-r2`:247 tests in five existing suites pass, including
+  chat, both tracking producers, delivery, paid lifecycle and session revocation.
+  `tracking-socket-privacy-r1` passes all privacy gates, including15 audience checks.
+- `tracking-socket-http-r2`: twelve actual HTTP/Socket.IO/local PostgreSQL scenarios
+  cover current participants, two owner devices, assignment/ownership changes after
+  saving, deletion, a failed authority lookup and a departed subscription. One
+  additional actual free-task acceptance event reaches the public watcher.
+  Authentication, notification/badge transport and one lookup outage are synthetic;
+  the narrow SQL adapter executes the selected Gig columns and actual writes.
+- Exact ab14 rows are cleaned; API18109 and all owned socket clients are stopped.
+  Source/check commands, results and cleanup are preserved and mirrored privately.
+
+Candidate R1 passed50 tests but failed the command because it also named a nonexistent
+location test file. R2 uses the verified existing suite paths. HTTP fixture R1 had a
+syntax error before execution and performed no SQL/server work; R2 corrected the
+fixture and passes. These failures are preserved rather than relabeled successful.
+
+This closes only the reproduced socket audience gap. A missed live event remains
+recoverable through existing readers; this is not durable transport acceptance.
+Location/urgent write authority, consent/raw participant reads, late writes and
+notification recipient races remain separate verification work. The actual SQL
+fixture additionally confirms null ETA from the existing WKT-only parser when
+`exact_location` is returned in stored geography format. The existing shared
+`utils/parsePostGISPoint.js` already supports that format and should be reused.
+Installed native/UI live-tracking and real provider/release acceptance remain open;
+PR34 remains draft. The d01 status-link CI34990349201 is still running at this checkpoint.
+
+
+## Existing helper location writer
+
+September15: the existing `update-location` endpoint has a typed SDK function but
+no active web/iOS/Android publisher caller was found. It already stores location/ETA
+fields; no new screen, table, migration or tracking service is needed.16 failing
+unit baselines reproduce nonnumeric coordinates, inactive-task writes, post-read
+owner/worker/status/target/newer-location/deletion changes, absent geography ETA,
+retained obsolete ETA, mismatched receipts and bypassed stored throttling.
+
+Thirteen actual HTTP/owned-SQL baseline cases confirm the existing geography format
+is missed, obsolete ETA remains stored, stale updates return200, numeric strings/
+arrays can be persisted and a boolean instead causes a database error/500. This last
+case differs from the permissive in-memory mock; it is not a successful boolean
+location write. A separate two-request baseline holds both observed snapshots and
+returns two successes, overwriting one location.
+
+The existing route now reuses `utils/parsePostGISPoint.js`, validates finite numeric
+coordinates and requires an assigned/in-progress task with this helper. Its existing
+write compares observed owner/worker/status/assignment/start/task-update/target and
+prior location/ETA fields. No matching row returns409; database/receipt uncertainty
+returns503. A success requires matching task participants/status, stored coordinates,
+ETA and update time. Unknown destination clears obsolete ETA. The existing30-second
+limit reads the stored update time, with the same conditional write preventing
+competing processes from replacing one snapshot. The process-local map is removed.
+Event names and socket delivery from the preceding checkpoint remain intact.
+
+Evidence under private `existing-tip-provider-proof-r1`:
+
+- `location-writer-baseline-r1`:16 reproduced failing checks/one passing outsider denial.
+- `location-writer-candidate-r3`:266 checks in five suites pass; privacy gates pass,
+  including15 audience checks. Added empty-body and concurrent-write checks pass.
+- `location-writer-http-baseline-r1` and `...candidate-r1`:13 actual HTTP/local SQL
+  cases each. Candidate performs74 queries plus two cleanup queries; denied writes
+  preserve the complete current row. Current geography yields2-minute ETA, and an
+  absent destination clears the stored99-minute value.
+- `location-writer-concurrent-baseline-r1`/`...candidate-r1`: two actual HTTP requests
+  observe the same SQL snapshot before either writes. Baseline returns200/200;
+  candidate returns200/409 and the stored coordinates/ETA/time match the winner.
+  Candidate performs nine queries plus two cleanup queries.
+- Exact ab15 rows are absent after both runs and API18109/socket clients are stopped.
+  Auth, notification/badge transport and SQL adapter are synthetic. Actual handler
+  code, geography serialization, SQL predicates and committed interleavings execute.
+
+Candidate R1's17 new writer checks passed but six socket cases failed because their
+in-memory Gig omitted nullable database columns. The existing socket fixture now
+supplies actual null fields; R2/R3 pass without weakening production comparisons or
+changing the shared database mock. The final request-body guard is also covered by
+R3 and the final concurrent HTTP candidate. No client/style/schema change is made.
+
+This does not establish a working installed publisher or resolve urgent-status
+writes, notification recipient races, or raw participant access/consent semantics.
+The compose toggle says the helper sees the poster's location, while active-status
+uses it to gate helper location; keep that discrepancy open rather than inventing
+policy. Continue the existing urgent status route next. PR34/app/release remain
+unfinished. Prior d01a2f248 CI34990349201 is now fully green (15 successes/one skip);
+the socket/location checkpoint requires its own canonical CI.
+
+
+## Existing urgent status writer and private reader
+
+September15:20 actual-route unit failures reproduce inactive/post-read task changes,
+stale JSON merges, false saved receipts, poster-supplied helper data, partial
+coordinates silently discarded, private mutation responses, zero ETA erased and
+missing cache controls. A separate21st check reproduces a stored string `false`
+being treated as enabled location sharing. The existing endpoint, current native/
+web callers, JSONB fields, serializer and notification/socket helpers already exist.
+
+The urgent POST now validates coordinate pairs and the current assigned/in-progress
+work relationship. Only the helper may change helper tracking; a poster's optional
+null ETA is ignored so existing typed callers preserve the helper's value. Its
+conditional update compares observed task/assignment/start/update fields and the
+complete explicitly serialized JSONB snapshot. A changed row returns409; database
+or receipt uncertainty returns503 before success/events/notices. Matching saved
+participants, status, urgent details and update time are required. The response
+retains its original four Gig fields and uses the existing tracking redactor to
+withhold exact coordinates. Existing fields, styles and canonical paid lifecycle
+transitions are preserved; no new screen/table/migration/service is added.
+
+The active reader and private event preserve zero ETA. Exact live coordinates
+require both an active task and boolean sharing opt-in. Successful private readers/
+mutations use no-store headers; validation failures occur in the existing middleware.
+
+Evidence under private `existing-tip-provider-proof-r1`:
+
+- `urgent-writer-baseline-r1` has20 failing cases; `urgent-writer-opt-in-baseline-r1`
+  has the separate string-false disclosure failure.
+- `urgent-writer-candidate-r3` passes289 checks/five suites and privacy gates pass
+  (including15 audience checks). After the one-line boolean opt-in refinement,
+  `urgent-writer-candidate-r4` passes202 final route checks. Totals overlap; there
+  are290 distinct checks across these runs, not491 distinct tests.
+- `urgent-writer-http-baseline-r1`/`...candidate-r1` execute13 actual local HTTP/SQL
+  cases. Denied current writes preserve the complete current row and attempt no
+  notice. Candidate uses73 queries plus two cleanup queries. The deleted baseline
+  returned500; it is not counted as an unsafe successful deletion response.
+- `urgent-writer-concurrent-baseline-r1` reproduces two simultaneous successes and
+  two notification attempts after both requests observe one SQL snapshot. The final
+  `urgent-writer-concurrent-candidate-r2` returns200/409, saves the winner's status
+  and attempts one notice. It also verifies ASAP-only tasks, historical JSON-string
+  objects, poster null ETA and the boolean opt-in gate (five cases,27 queries plus
+  two cleanup queries). The original four-field response shape is checked.
+- All ab16 rows and API18109/socket clients are cleaned. HTTP handlers, SQL snapshot
+  predicates/JSONB comparison and committed interleavings execute locally. Auth,
+  notification/badge transport and SQL adapter are synthetic; notification counts
+  are attempts, not real delivery or durable in-app storage acceptance.
+
+The shared in-memory database mock now implements serialized equality specifically
+for the existing urgent_details JSONB column. Actual SQL independently proves both
+ordinary and historical JSON values. Candidate R1 passed223 checks but failed four
+socket fixtures: Node structuredClone produced objects from another Jest realm,
+which do not satisfy strict JSON receipt equality. These fixtures now use JSON
+serialization/parsing like HTTP. R2/R3 pass with production receipt checks intact.
+One nullable starts_asap fixture field was also made explicit, matching the schema.
+
+This does not close sequential retry/lost-reply notification delivery, installed
+urgent tracking or broader consent/raw participant access. Existing notification
+idempotency and stored-notice transport must be inspected before adding anything.
+Historical notices need not be removed solely because participants later change.
+The prior c7d45dd09 socket/location head is in CI34993419890; this follow-up needs
+its own subsequent canonical CI. PR34/app/release remain unfinished.
+
+
+## Existing urgent notification retry identity
+
+September15: two route/actual-service unit failures and three actual local HTTP/
+Notification-service/SQL scenarios reproduce a second unread notice after repeating
+an accepted fulfillment step. The real HTTP reply is destroyed in one case; another
+persists Notification but substitutes a failed insert acknowledgement. The existing
+Notification service already accepts an idempotency key, and the baseline schema
+already has a unique index. No new storage/queue/schema/provider integration is needed.
+
+The existing urgent producer now supplies a SHA256-derived event key over the task,
+owner/worker/assignment time, actor, recipient and fulfillment step. One assignment's
+repeated step/ETA submissions retain its original notice, including read state and
+original text; current tracking values still update through the existing status/socket
+flow. Distinct steps and assignments have distinct keys. The existing service/index
+handle concurrent duplicates and lost insert replies. Only two existing source/test
+files change, with no client/layout change or additional JSON control fields.
+
+Private evidence under `existing-tip-provider-proof-r1`:
+
+- `urgent-notice-baseline-r1`: two reproduced route/actual-service failures.
+- `urgent-notice-http-baseline-r1`: three actual scenarios each save two notices;
+  repeating a read notice adds a new unread one (46 SQL queries before cleanup).
+- `urgent-notice-candidate-r2`:243 checks/three suites pass, including existing push
+  preference and desktop delivery checks. Privacy gates pass, including15 audience checks.
+- `urgent-notice-http-candidate-r2`: six actual HTTP/Notification-service/local-SQL
+  cases pass. Ordinary retry, destroyed HTTP reply and lost committed insert reply
+  each leave one notice. New steps/new assignments still create their own notices,
+  and one historical unkeyed/read notice remains byte-for-byte unchanged. The actual
+  global unique index rejects duplicate keys.96 queries plus two cleanup queries.
+- All ab17 rows, API18109 and socket clients are cleaned. Authentication and badge/
+  push transport are synthetic; actual route, service and Notification storage run.
+  The SQL adapter maps real23505 failures to the existing service's PostgREST contract.
+
+Candidate R1 passed242 checks but one lost-reply fixture recursively replaced its
+own database spy, producing500 before the intended assertion. R2 composes the lost
+reply with the same scoped unique-index fixture and passes. Production code is
+unchanged between those runs. Actual SQL independently proves uniqueness.
+
+This is bounded event deduplication and retryable storage, not guaranteed transport.
+A process failure before the first notification write with no later request still
+has the existing best-effort limitation. Existing unkeyed historical notices are not
+rewritten/backfilled, and cross-version deduplication is not claimed. A same-step ETA
+change keeps the earlier stage notice; live/current status remains separately readable.
+Continue actual completion/restart and remaining provider/release acceptance. PR34
+stays draft. c7d45dd09 CI34993419890 has since passed15 applicable jobs/one skip;
+this and urgent341da82c6 need a later
+canonical CI run without canceling the in-flight native checks.
+
+
+## Existing web Start Work control
+
+September15 continuation from integration4c5655217. Inspection followed the existing
+CompletionFlow button/imperative control, SDK startGig, POST /api/gigs/:id/start,
+existing Gig fields and paid authorization check. No replacement flow is needed.
+Ten baseline checks fail: four invalid receipts, late replies after session/marker/
+departure/assignment changes, duplicate pending clicks and a retired imperative
+control. The ordinary matching response already works.
+
+Three existing source/test files change. CompletionFlow reuses its identity guard,
+retains one request per current assignment/payment context and ignores retired
+success/error/finally callbacks. The returned Gig must match the task, worker,
+in-progress status and a valid start timestamp before refresh/success. Existing
+payment eligibility also applies to the imperative entry. Pending disables the
+existing button without changing its label, styles or layout. SDK startGig now uses
+the existing raw GigSchema, as neighboring lifecycle methods already do. Existing
+completion proof/tip storage and backend/schema are untouched.
+
+R1 passes39 existing authorization/start tests; R2 passes180 tests across existing
+authorization, tip/completion and stop-entry suites, plus TypeScript. Scoped lint
+has zero errors/six existing any warnings. Additional checks cover an old failed
+request during a newer pending assignment, explicit retry, ineligible imperative
+entry and assignment values returning to their previous values.
+
+Seven actual compiled Chrome cases pass in R4: matching success, invalid receipt
+then retry, pending duplicate, late session/assignment/departure responses and a
+real cross-tab session signal. The actual component, SDK HTTP requests and root
+toast run with a private entry wrapper and synthetic HTTP/authentication. This is
+not backend/SQL, real payment, native or full task-workflow acceptance. The wrapper's
+refresh counter stands in for the parent refresh; it does not prove saved-state
+reload. Stripe network loading is intentionally blocked and the existing payout
+account read receives a synthetic404; no provider activation runs.
+
+Earlier browser attempts are retained: R1 reached the server-rendered wrapper but
+missed hydration within five seconds; R2 increased the wait but had an output-root
+typo and its owned driver was explicitly terminated; R3 reached successful Start
+Work but rejected an unconfigured existing payout-account read. R4 supplies that
+fixture and passes all seven cases with unchanged application bytes. No failed run
+is relabeled passing. Owned Next3107/browser fixtures are stopped, the temporary
+wrapper is removed, configs restored and compiled products archived with hashes.
+Private start-work-* evidence is mirrored under the existing recovery audit root.
+
+Prior c7d45dd09 CI34993419890 passes15 applicable jobs/one Seeder skip. The combined
+urgent341da82c6, notice4c5655217 and this client scope require subsequent canonical
+CI; PR34 remains draft. Next inspect/reproduce existing Start Work backend/native
+saved-result recovery and assignment races, then continue completion restart and
+the consent/payment/Home/release backlog. No complete inventory row closes here.
 
 ## Existing profile safety and blocked-user journeys
 

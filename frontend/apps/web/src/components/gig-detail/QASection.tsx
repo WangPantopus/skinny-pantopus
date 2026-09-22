@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Paperclip, CheckCircle, Clock, Pin } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { GigQuestion } from '@pantopus/types';
 import FileUpload from '@/components/FileUpload';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
+import ErrorState from '@/components/ui/ErrorState';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
@@ -23,6 +24,10 @@ interface QASectionProps {
 export default function QASection({ gigId, isMyGig, currentUserId }: QASectionProps) {
   const [questions, setQuestions] = useState<GigQuestion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const readGeneration = useRef(0);
+  const activeScope = useRef<string | null>(null);
+  const scope = `${gigId}:${currentUserId || ''}`;
   const [newQuestion, setNewQuestion] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [answeringId, setAnsweringId] = useState<string | null>(null);
@@ -33,18 +38,31 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
   const [uploadingQuestionFiles, setUploadingQuestionFiles] = useState(false);
   const [uploadingAnswerFiles, setUploadingAnswerFiles] = useState(false);
 
-  const loadQuestions = async () => {
+  const loadQuestions = useCallback(async () => {
+    if (activeScope.current !== scope) return;
+    const generation = ++readGeneration.current;
+    const isCurrent = () => activeScope.current === scope && readGeneration.current === generation;
+    setLoading(true);
+    setLoadError(false);
     try {
       const data = await api.gigs.getGigQuestions(gigId);
-      setQuestions(data.questions || []);
+      if (isCurrent()) setQuestions(data.questions || []);
     } catch {
-      setQuestions([]);
+      if (isCurrent()) setLoadError(true);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  };
+  }, [gigId, scope]);
 
-  useEffect(() => { loadQuestions(); }, [gigId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    activeScope.current = scope;
+    setQuestions([]);
+    void loadQuestions();
+    return () => {
+      activeScope.current = null;
+      readGeneration.current += 1;
+    };
+  }, [loadQuestions, scope]);
 
   const handleAsk = async () => {
     if (!newQuestion.trim() || newQuestion.trim().length < 5) return;
@@ -95,14 +113,18 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
     try {
       await api.gigs.toggleUpvoteQuestion(gigId, questionId);
       await loadQuestions();
-    } catch {}
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update upvote');
+    }
   };
 
   const handlePin = async (questionId: string) => {
     try {
       await api.gigs.togglePinQuestion(gigId, questionId);
       await loadQuestions();
-    } catch {}
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update pin');
+    }
   };
 
   const handleDelete = async (questionId: string) => {
@@ -111,7 +133,9 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
     try {
       await api.gigs.deleteGigQuestion(gigId, questionId);
       await loadQuestions();
-    } catch {}
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete question');
+    }
   };
 
   const pinnedQuestions = questions.filter((q) => q.is_pinned && q.status === 'answered');
@@ -161,6 +185,22 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
             <div key={q.id} className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <div className="flex items-center gap-1.5 text-xs text-blue-600 font-medium mb-1">
                 <Pin className="w-3 h-3 inline-block" /> Pinned Answer
+                {isMyGig && (
+                  <button
+                    onClick={() => handlePin(q.id)}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    Unpin
+                  </button>
+                )}
+                {(isMyGig || (currentUserId && String(q.asker?.id) === String(currentUserId))) && (
+                  <button
+                    onClick={() => handleDelete(q.id)}
+                    className="text-xs text-red-500 hover:text-red-700"
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
               <p className="text-sm font-medium text-app-text mb-1">Q: {q.question}</p>
               {renderAttachments(q.question_attachments || [])}
@@ -206,16 +246,29 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
         </div>
       )}
 
+      {loadError && (
+        <div role="alert">
+          <ErrorState message="We couldn't load questions. Please try again." onRetry={loadQuestions} />
+        </div>
+      )}
+
       {/* Questions list */}
-      {loading ? (
+      {loading && questions.length === 0 ? (
         <p className="text-sm text-app-text-secondary text-center py-4">Loading questions...</p>
-      ) : otherQuestions.length === 0 && pinnedQuestions.length === 0 ? (
+      ) : loadError && questions.length === 0 ? null : otherQuestions.length === 0 && pinnedQuestions.length === 0 ? (
         <p className="text-sm text-app-text-secondary text-center py-4">No questions yet. Be the first to ask!</p>
       ) : (
         <div className="space-y-3">
 	          {otherQuestions.map((q) => {
 	            const asker = (q.asker || {}) as NonNullable<GigQuestion['asker']>;
-            const askerName = asker.name || [asker.first_name, asker.last_name].filter(Boolean).join(' ') || asker.username || 'Anonymous';
+            const askerName = asker.displayName || asker.handle || 'Anonymous';
+            const askerUsername = typeof asker.handle === 'string' && asker.handle &&
+              !asker.handle.startsWith('/') && asker.href === `/${asker.handle}` ? asker.handle : null;
+            const answerer = q.answerer;
+            const answererName = q.answerer_display_name || answerer?.displayName || answerer?.handle || 'Poster';
+            const answererUsername = !q.answerer_display_name && typeof answerer?.handle === 'string' &&
+              answerer.handle && !answerer.handle.startsWith('/') && answerer.href === `/${answerer.handle}`
+              ? answerer.handle : null;
             const isMyQuestion = currentUserId && String(asker.id) === String(currentUserId);
             const timeAgoStr = q.created_at ? timeAgo(q.created_at) : '';
 
@@ -237,14 +290,14 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
                     <p className="text-sm font-medium text-app-text">{q.question}</p>
                     {renderAttachments(q.question_attachments || [])}
                     <div className="flex items-center gap-2 mt-1 text-xs text-app-text-muted">
-                      {asker?.username ? (
+                      {askerUsername ? (
                         <UserIdentityLink
                           userId={asker?.id || null}
-                          username={asker.username}
+                          username={askerUsername}
                           displayName={askerName}
-                          avatarUrl={asker?.profile_picture_url || null}
-                          city={asker?.city || null}
-                          state={asker?.state || null}
+                          avatarUrl={asker.avatarUrl || null}
+                          city={asker.locality?.city || null}
+                          state={asker.locality?.state || null}
                           textClassName="text-xs text-app-text-secondary hover:underline"
                         />
                       ) : (
@@ -264,21 +317,21 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
                     {q.answer && (
                       <div className="mt-2 bg-green-50 rounded-md p-2.5 border-l-2 border-green-400">
                         <div className="text-xs text-green-700 font-medium mb-0.5">
-                          {q.answerer?.username ? (
+                          {answererUsername ? (
                             <>
                               <UserIdentityLink
                                 userId={q.answerer?.id || null}
-                                username={q.answerer.username}
-                                displayName={q.answerer_display_name || q.answerer?.name || q.answerer?.username || 'Poster'}
-                                avatarUrl={q.answerer?.profile_picture_url || null}
-                                city={q.answerer?.city || null}
-                                state={q.answerer?.state || null}
+                                username={answererUsername}
+                                displayName={answererName}
+                                avatarUrl={answerer?.avatarUrl || null}
+                                city={answerer?.locality?.city || null}
+                                state={answerer?.locality?.state || null}
                                 textClassName="text-xs text-green-700 hover:underline"
                               />{' '}
                               answered:
                             </>
                           ) : (
-                            `${q.answerer_display_name || q.answerer?.name || q.answerer?.username || 'Poster'} answered:`
+                            `${answererName} answered:`
                           )}
                         </div>
                         <p className="text-sm text-app-text-strong">{q.answer}</p>

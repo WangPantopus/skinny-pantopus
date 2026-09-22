@@ -793,31 +793,11 @@ router.post('/gig-completion-media/:gigId', uploadLimiter, verifyToken, upload.a
 
     const uploadedFiles = [];
     for (const file of files) {
-      const { url, key } = await s3.uploadGigMedia(
-        file.buffer,
-        file.originalname,
-        actorUserId,
-        gigId,
-        file.mimetype
-      );
-      const category = s3.categorizeFile(file.mimetype) || 'document';
-
-      let thumbnailUrl = null;
-      const thumbBuffer = await generateThumbnail(file.buffer, file.mimetype);
-      if (thumbBuffer) {
-        const thumbKey = key.replace(/(\.[^.]+)$/, '_thumb.webp');
-        const thumbResult = await s3.uploadToS3(thumbBuffer, thumbKey, 'image/webp');
-        thumbnailUrl = thumbResult.url;
-      }
-
+      const saved = await s3.createPrivateGigCompletionFile(gigId, actorUserId, file);
       uploadedFiles.push({
-        file_url: url,
-        file_key: key,
-        file_name: file.originalname,
-        file_type: category,
-        mime_type: file.mimetype,
-        file_size: file.size,
-        thumbnail_url: thumbnailUrl,
+        id: saved.id, file_url: saved.file_url, file_key: '', file_name: saved.original_filename,
+        file_type: s3.categorizeFile(saved.mime_type), mime_type: saved.mime_type,
+        file_size: saved.file_size, thumbnail_url: null,
       });
     }
 
@@ -826,8 +806,8 @@ router.post('/gig-completion-media/:gigId', uploadLimiter, verifyToken, upload.a
       media: uploadedFiles,
     });
   } catch (err) {
-    logger.error('Gig completion media upload error', { error: err.message });
-    return res.status(500).json({ error: err.message || 'Failed to upload files' });
+    logger.warn('Gig completion media upload unavailable', { status: err.statusCode || 503 });
+    return res.status(err.statusCode || 503).json({ error: 'Completion proof could not be saved. Please retry.' });
   }
 });
 

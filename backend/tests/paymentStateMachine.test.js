@@ -65,12 +65,19 @@ describe('transitionPaymentStatus', () => {
   const paymentId = 'pay-001';
   const gigId = 'gig-001';
 
+  test('a tip or retired payment cannot overwrite the gig main-payment status', async () => {
+    seedTable('Payment', [{ id: paymentId, gig_id: gigId, payment_status: 'authorized' }]);
+    seedTable('Gig', [{ id: gigId, payment_id: 'current-main-payment', payment_status: 'authorized' }]);
+    await transitionPaymentStatus(paymentId, PAYMENT_STATES.CANCELED);
+    expect(getTable('Gig')[0].payment_status).toBe('authorized');
+  });
+
   test('happy path: transitions payment and syncs gig', async () => {
     seedTable('Payment', [
       { id: paymentId, payment_status: 'none', gig_id: gigId },
     ]);
     seedTable('Gig', [
-      { id: gigId, payment_status: 'none' },
+      { id: gigId, payment_id: paymentId, payment_status: 'none' },
     ]);
 
     const result = await transitionPaymentStatus(paymentId, PAYMENT_STATES.SETUP_PENDING);
@@ -86,7 +93,7 @@ describe('transitionPaymentStatus', () => {
     seedTable('Payment', [
       { id: paymentId, payment_status: 'none', gig_id: gigId },
     ]);
-    seedTable('Gig', [{ id: gigId, payment_status: 'none' }]);
+    seedTable('Gig', [{ id: gigId, payment_id: paymentId, payment_status: 'none' }]);
 
     const steps = [
       'authorize_pending',

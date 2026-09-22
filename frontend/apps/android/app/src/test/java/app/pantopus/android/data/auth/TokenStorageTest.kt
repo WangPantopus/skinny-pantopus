@@ -36,6 +36,36 @@ class TokenStorageTest {
     }
 
     @Test
+    fun `opening marker is synchronous nonsecret and follows published login refresh logout`() =
+        runTest {
+            assertNull(storage.accessTokenMarker())
+            storage.save(accessToken = "synthetic-opening", refreshToken = "synthetic-refresh", userId = "u-1")
+            val first = checkNotNull(storage.accessTokenMarker())
+            org.junit.Assert.assertTrue(Regex("^[a-f0-9]{64}$").matches(first))
+            org.junit.Assert.assertNotEquals("synthetic-opening", first)
+            assertEquals(first, storage.accessTokenMarker())
+            storage.updateTokens(accessToken = "synthetic-replacement", refreshToken = null)
+            org.junit.Assert.assertNotEquals(first, storage.accessTokenMarker())
+            storage.clear()
+            assertNull(storage.accessTokenMarker())
+        }
+
+    @Test
+    fun `checkout identity keeps refresh but changes with login and clears with logout`() =
+        runTest {
+            assertNull(storage.sessionIdentity())
+            storage.save(accessToken = "synthetic-a", refreshToken = "synthetic-r", userId = "u-1", sessionId = "session-1")
+            val first = checkNotNull(storage.sessionIdentity())
+            assertEquals("u-1", first.first)
+            storage.updateTokens(accessToken = "synthetic-b", refreshToken = null)
+            assertEquals(first, storage.sessionIdentity())
+            storage.save(accessToken = "synthetic-c", refreshToken = "synthetic-r", userId = "u-1", sessionId = "session-2")
+            org.junit.Assert.assertNotEquals(first, storage.sessionIdentity())
+            storage.clear()
+            assertNull(storage.sessionIdentity())
+        }
+
+    @Test
     fun `save persists access, refresh, userId`() =
         runTest {
             storage.save(accessToken = "at-1", refreshToken = "rt-1", userId = "u-1")
@@ -180,5 +210,22 @@ class TokenStorageTest {
             assertEquals("sid-2", storage.sessionId())
             // Context is never rewritten by a rotation.
             assertEquals("interactive", storage.sessionContext())
+        }
+
+    @Test fun coherentCredentialsRetainLegacyTokenAndTrackRegisteredReplacement() =
+        runTest {
+            assertNull(storage.sessionCredentials())
+            storage.save("legacy-a", null, "user-a")
+            val legacy = checkNotNull(storage.sessionCredentials())
+            assertEquals("user-a", legacy.userId)
+            assertEquals("legacy-a", legacy.accessToken)
+            assertNull(legacy.sessionId)
+            storage.save("registered-b", null, "user-b", sessionId = "session-b")
+            val current = checkNotNull(storage.sessionCredentials())
+            assertEquals("user-b", current.userId)
+            assertEquals("registered-b", current.accessToken)
+            assertEquals("session-b", current.sessionId)
+            storage.clear()
+            assertNull(storage.sessionCredentials())
         }
 }

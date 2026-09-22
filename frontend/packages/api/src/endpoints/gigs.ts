@@ -5,8 +5,12 @@
 
 import { get, post, put, patch, del } from '../client';
 import type { ApiRequestConfig } from '../client';
+export * from './gigStop';
+import { submitGigStopRequest } from './gigStop';
+import type { GigStopCommand, GigStopProgress } from './gigStop';
 import type {
   Gig,
+  GigSchema,
   GigBid,
   GigListItem,
   GigWithDetails,
@@ -330,6 +334,11 @@ export interface AcceptBidResponse {
   bid: GigBid;
   paymentRequired?: boolean;
   requiresPaymentSetup?: boolean;
+  /** Exact provider proof for the same durable acceptance; finalize without another sheet. */
+  authorizationReady?: boolean;
+  paymentStatus?: string;
+  amountCents?: number;
+  currency?: string;
   isSetupIntent?: boolean;
   payment?: {
     clientSecret?: string | null;
@@ -379,10 +388,21 @@ export async function getGigChatRoom(
 }
 
 /**
- * Worker starts the gig: assigned -> in_progress
+ * Assignment terms the caller displayed when it asked to start work. The
+ * route answers 409 `ASSIGNMENT_CHANGED` when they no longer match its read.
  */
-export async function startGig(gigId: string): Promise<{ gig: Gig }> {
-  return post<{ gig: Gig }>(`/api/gigs/${gigId}/start`);
+export interface StartGigExpectedTerms {
+  expectedAcceptedAt: string | null;
+  expectedPrice: number | string | null;
+  expectedPaymentId: string | null;
+}
+
+/**
+ * Worker starts the gig: assigned -> in_progress. Pass the displayed terms so
+ * a stale screen cannot start an assignment it never showed.
+ */
+export async function startGig(gigId: string, expected?: StartGigExpectedTerms): Promise<{ gig: GigSchema }> {
+  return post<{ gig: GigSchema }>(`/api/gigs/${gigId}/start`, expected);
 }
 
 /**
@@ -392,8 +412,8 @@ export async function startGig(gigId: string): Promise<{ gig: Gig }> {
 export async function markGigCompleted(
   gigId: string,
   proof?: { note?: string; photos?: string[]; checklist?: { item: string; done: boolean }[] }
-): Promise<{ gig: Gig }> {
-  return post<{ gig: Gig }>(`/api/gigs/${gigId}/mark-completed`, proof || {});
+): Promise<{ gig: GigSchema }> {
+  return post<{ gig: GigSchema }>(`/api/gigs/${gigId}/mark-completed`, proof || {});
 }
 
 /**
@@ -402,9 +422,9 @@ export async function markGigCompleted(
  */
 export async function confirmGigCompletion(
   gigId: string,
-  data?: { satisfaction?: number; note?: string }
-): Promise<{ gig: Gig }> {
-  return post<{ gig: Gig }>(`/api/gigs/${gigId}/confirm-completion`, data || {});
+  data: { expectedReview: string | null; satisfaction?: number; note?: string }
+): Promise<{ gig: GigSchema }> {
+  return post<{ gig: GigSchema }>(`/api/gigs/${gigId}/confirm-completion`, data || {});
 }
 
 /**
@@ -418,21 +438,11 @@ export async function rejectBid(gigId: string, bidId: string): Promise<ApiRespon
  * Reopen bidding for an assigned gig (poster only).
  * Moves gig back to open and restores previously rejected bids to pending.
  */
-export async function reopenBidding(
+export function reopenBidding(
   gigId: string,
-  options?: { rollbackMode?: 'payment_setup_aborted' }
-): Promise<{
-  gig: Gig;
-  reopened_count: number;
-  accepted_bid_restored?: boolean;
-  message: string;
-}> {
-  return post<{
-    gig: Gig;
-    reopened_count: number;
-    accepted_bid_restored?: boolean;
-    message: string;
-  }>(`/api/gigs/${gigId}/reopen-bidding`, options || {});
+  command: Omit<GigStopCommand, 'action'>
+): Promise<GigStopProgress> {
+  return submitGigStopRequest(gigId, { ...command, action: 'reopen_bidding' });
 }
 
 /**
@@ -508,7 +518,8 @@ export async function getBidStats(): Promise<{
  */
 export async function completeGig(
   gigId: string,
-  data?: {
+  data: {
+    expectedReview: string | null;
     rating?: number;
     review?: string;
   }
@@ -519,20 +530,11 @@ export async function completeGig(
 /**
  * Cancel a gig (poster or worker)
  */
-export async function cancelGig(
+export function cancelGig(
   gigId: string,
-  reason?: string
-): Promise<{
-  gig: Gig;
-  cancellation: {
-    zone: number;
-    zone_label: string;
-    fee: number;
-    in_grace: boolean;
-    cancelled_by: 'poster' | 'worker';
-  };
-}> {
-  return post(`/api/gigs/${gigId}/cancel`, { reason });
+  command: Omit<GigStopCommand, 'action'>
+): Promise<GigStopProgress> {
+  return submitGigStopRequest(gigId, { ...command, action: 'cancel' });
 }
 
 /**
@@ -874,11 +876,11 @@ export async function workerAck(
 /**
  * Worker self-releases from the assignment ("can't make it").
  */
-export async function workerRelease(
+export function workerRelease(
   gigId: string,
-  data?: { note?: string },
-): Promise<{ success: boolean; message: string }> {
-  return post<{ success: boolean; message: string }>(`/api/gigs/${gigId}/worker-release`, data || {});
+  command: Omit<GigStopCommand, 'action'>
+): Promise<GigStopProgress> {
+  return submitGigStopRequest(gigId, { ...command, action: 'worker_release' });
 }
 
 // ─── Reliability ───
@@ -1137,6 +1139,21 @@ export async function shareGigStatus(
   gigId: string
 ): Promise<{ share_url: string; expires_at: string }> {
   return post<{ share_url: string; expires_at: string }>(`/api/gigs/${gigId}/share-status`);
+}
+
+/** Limited public payload for an existing bearer status link. */
+export interface SharedGigStatus {
+  title: string;
+  status: string;
+  helper_first_name: string | null;
+  helper_eta_minutes: number | null;
+  helper_location_updated_at: string | null;
+  updated_at: string;
+  expires_at: string;
+}
+
+export async function getSharedGigStatus(token: string, config?: ApiRequestConfig): Promise<SharedGigStatus> {
+  return get<SharedGigStatus>(`/api/gigs/status/${encodeURIComponent(token)}`, undefined, config);
 }
 
 /**

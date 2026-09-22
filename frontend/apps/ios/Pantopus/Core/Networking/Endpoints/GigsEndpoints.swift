@@ -333,8 +333,8 @@ public enum GigsEndpoints {
     /// Alias of `/confirm-completion`. Route
     /// `backend/routes/gigs.js:6170`. Distinct from `markCompleted(...)`
     /// which is the worker-only `/mark-completed` route.
-    public static func completeGigAsPoster(gigId: String) -> Endpoint {
-        Endpoint(method: .post, path: "/api/gigs/\(gigId)/complete")
+    public static func completeGigAsPoster(gigId: String, expectedReview: String?) -> Endpoint {
+        Endpoint(method: .post, path: "/api/gigs/\(gigId)/complete", body: ConfirmCompletionBody(expectedReview: expectedReview))
     }
 
     /// `POST /api/gigs/:gigId/cancel` — poster cancels the gig. Body
@@ -418,8 +418,10 @@ public enum GigsEndpoints {
     /// `POST /api/gigs/:gigId/start` — the **assigned worker** starts
     /// work (assigned → in_progress). Paid gigs are payment-guarded
     /// server-side. Route `backend/routes/gigs.js:5503`.
-    public static func startGig(gigId: String) -> Endpoint {
-        Endpoint(method: .post, path: "/api/gigs/\(gigId)/start")
+    /// `expected` carries the assignment terms the screen displayed; the
+    /// route answers 409 `ASSIGNMENT_CHANGED` when they no longer match its read.
+    public static func startGig(gigId: String, expected: StartGigBody? = nil) -> Endpoint {
+        Endpoint(method: .post, path: "/api/gigs/\(gigId)/start", body: expected)
     }
 
     /// `GET /api/gigs/:gigId/no-show-check` — should the viewer see a
@@ -508,6 +510,33 @@ public enum GigsEndpoints {
     }
 }
 
+/// Body for `POST /api/gigs/:gigId/start`: the assignment terms the screen
+/// displayed. Every key is sent, with `null` for a value the screen showed as
+/// absent, so the route binds the displayed assignment (route
+/// `backend/routes/gigs.js`, `parseExpectedStartTerms`).
+public struct StartGigBody: Encodable, Sendable, Equatable {
+    public let expectedAcceptedAt: String?
+    public let expectedPrice: Double?
+    public let expectedPaymentId: String?
+
+    public init(expectedAcceptedAt: String?, expectedPrice: Double?, expectedPaymentId: String?) {
+        self.expectedAcceptedAt = expectedAcceptedAt
+        self.expectedPrice = expectedPrice
+        self.expectedPaymentId = expectedPaymentId
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case expectedAcceptedAt, expectedPrice, expectedPaymentId
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(expectedAcceptedAt, forKey: .expectedAcceptedAt)
+        try container.encode(expectedPrice, forKey: .expectedPrice)
+        try container.encode(expectedPaymentId, forKey: .expectedPaymentId)
+    }
+}
+
 /// Body for `POST /api/gigs/:gigId/dismiss`. Reason is optional
 /// free-text the backend truncates at 500 chars.
 public struct DismissGigBody: Encodable, Sendable {
@@ -554,6 +583,11 @@ public struct WithdrawBidBody: Encodable, Sendable {
     public init(reason: WithdrawBidReason?) {
         self.reason = reason?.rawValue
     }
+}
+
+/// The exact review loaded before the owner chose to confirm.
+public struct ConfirmCompletionBody: Encodable, Sendable {
+    public let expectedReview: String?
 }
 
 /// Body for `POST /api/gigs/:gigId/mark-completed`. The backend shape

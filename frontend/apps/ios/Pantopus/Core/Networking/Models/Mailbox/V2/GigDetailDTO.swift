@@ -47,14 +47,12 @@ public struct GigDetailDTO: Sendable, Hashable {
         self.nextSteps = nextSteps
     }
 
-    /// Returns a copy flagged accepted — used by the view-model to
-    /// optimistically flip into the secondary state when the recipient
-    /// taps Accept.
-    public func accepted() -> GigDetailDTO {
+    /// Copies the acceptance state confirmed by the current server receipt.
+    public func accepted(_ value: Bool = true) -> GigDetailDTO {
         GigDetailDTO(
             gigId: gigId,
             bidId: bidId,
-            isAccepted: true,
+            isAccepted: value,
             bidder: bidder,
             bid: bid,
             post: post,

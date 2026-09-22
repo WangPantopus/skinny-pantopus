@@ -8,12 +8,14 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const stripeService = require('../stripe/stripeService');
+const { publicPayment } = require('../stripe/gigPaymentProof');
 const verifyToken = require('../middleware/verifyToken');
 const { requireAdmin } = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
+const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 
 const paymentHistoryReadLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -145,6 +147,7 @@ const attachPaymentMethodSchema = Joi.object({
 });
 
 const createRefundSchema = Joi.object({
+  requestId: Joi.string().uuid().optional(),
   amount: Joi.number().integer().min(50).optional(), // If not provided, full refund
   reason: Joi.string().valid(
     'duplicate', 'fraudulent', 'requested_by_customer', 
@@ -620,7 +623,7 @@ router.post('/intent', verifyToken, validate(createPaymentSchema), async (req, r
     res.status(existingIntent?.reused ? 200 : 201).json({
       clientSecret: result.clientSecret,
       paymentIntentId: result.paymentIntentId,
-      payment: result.payment,
+      payment: publicPayment(result.payment),
       paymentId: result.paymentId,
       customer,
       ephemeralKey,
@@ -703,7 +706,7 @@ router.get('/', verifyToken, paymentHistoryReadLimiter, async (req, res) => {
       const payerAmount = Number(payment?.amount_total || 0) || 0;
       const payeeAmount = Number(payment?.amount_to_payee ?? payment?.amount_total ?? 0) || 0;
       return {
-        ...payment,
+        ...publicPayment(payment),
         amount_cents: isSender ? payerAmount : payeeAmount,
         _isSender: isSender,
         direction: isSender ? 'debit' : 'credit',
@@ -809,7 +812,7 @@ router.get('/history', verifyToken, paymentHistoryReadLimiter, async (req, res) 
       const payerAmount = Number(payment?.amount_total || 0) || 0;
       const payeeAmount = Number(payment?.amount_to_payee ?? payment?.amount_total ?? 0) || 0;
       return {
-        ...payment,
+        ...publicPayment(payment),
         id: payment.id,
         entry_type: 'payment',
         amount_cents: isSender ? payerAmount : payeeAmount,
@@ -869,66 +872,27 @@ router.get('/history', verifyToken, paymentHistoryReadLimiter, async (req, res) 
  * POST /api/payments/:paymentId/refund
  * Create refund
  */
+function refundError(res, err) {
+  return res.status(err.statusCode || 503).json({ error: err.message, code: err.code,
+    ...(err.refundRequest ? { refundRequest: err.refundRequest } : {}) });
+}
+router.get('/:paymentId/refunds', verifyToken, async (req, res) => {
+  try {
+    const refundService = require('../services/paymentRefundService');
+    // The service rechecks the current persisted admin role. Token claims alone
+    // never grant access to another payer's receipt history.
+    const result = await refundService.history(req.params.paymentId, req.user.id, req.user.role === 'admin' ? 'admin' : 'payer');
+    return res.json(result);
+  } catch (err) { return refundError(res, err); }
+});
 router.post('/:paymentId/refund', verifyToken, validate(createRefundSchema), async (req, res) => {
   try {
-    const { paymentId } = req.params;
-    const userId = req.user.id;
-    const { amount, reason, description } = req.body;
-    
-    // Get payment
-    const { data: payment, error: paymentError } = await supabaseAdmin
-      .from('Payment')
-      .select('*')
-      .eq('id', paymentId)
-      .single();
-
-    if (paymentError) {
-      logger.error('Error fetching payment for refund', { error: paymentError.message, paymentId });
-      return res.status(500).json({ error: 'Failed to fetch payment' });
-    }
-
-    if (!payment) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    // Only the payer can initiate a refund
-    if (payment.payer_id !== userId) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    // Terminal states cannot be refunded
-    const terminalStates = ['refunded_full', 'canceled', 'disputed'];
-    if (terminalStates.includes(payment.payment_status)) {
-      return res.status(400).json({ error: 'Payment is in a terminal state and cannot be refunded' });
-    }
-
-    // Transferred payments require admin/support intervention
-    if (payment.payment_status === 'transferred') {
-      return res.status(403).json({ error: 'Payment already transferred. Contact support for refund.' });
-    }
-
-    // Default to full refund
-    const refundAmount = amount || payment.amount_total;
-    
-    const result = await stripeService.createRefund(
-      paymentId,
-      refundAmount,
-      reason,
-      userId
-    );
-    
-    res.status(201).json({
-      message: 'Refund created successfully',
-      refund: result.refund
+    const result = await require('../services/paymentRefundService').create({
+      amount: req.body.amount, reason: req.body.reason, description: req.body.description, requestId: req.body.requestId,
+      paymentId: req.params.paymentId, actorId: req.user.id, actorMode: 'payer',
     });
-    
-  } catch (err) {
-    logger.error('Refund creation error', { error: err.message, paymentId: req.params.paymentId });
-    res.status(500).json({ 
-      error: 'Failed to create refund',
-      message: err.message 
-    });
-  }
+    return res.status(result.success ? 200 : 202).json(result);
+  } catch (err) { return refundError(res, err); }
 });
 
 /**
@@ -937,6 +901,7 @@ router.post('/:paymentId/refund', verifyToken, validate(createRefundSchema), asy
  * Delegates to createSmartRefund which handles Stripe refund + transfer reversal.
  */
 const adminRefundSchema = Joi.object({
+  requestId: Joi.string().uuid().optional(),
   amount: Joi.number().integer().min(50).optional(),
   reason: Joi.string().valid(
     'duplicate', 'fraudulent', 'requested_by_customer',
@@ -947,66 +912,12 @@ const adminRefundSchema = Joi.object({
 
 router.post('/:paymentId/admin-refund', verifyToken, requireAdmin, validate(adminRefundSchema), async (req, res) => {
   try {
-    const { paymentId } = req.params;
-    const adminUserId = req.user.id;
-    const { amount, reason, description } = req.body;
-
-    // `maybeSingle`, not `single`: real PostgREST reports zero rows from
-    // `.single()` as an ERROR (PGRST116), so the guard below answered a
-    // missing payment with 500 "Failed to fetch payment" instead of the
-    // 404 three lines further down. The test suite did not catch it
-    // because the in-memory mock collapsed the two terminals; it models
-    // them separately now, which is what surfaced this.
-    const { data: payment, error: paymentError } = await supabaseAdmin
-      .from('Payment')
-      .select('*')
-      .eq('id', paymentId)
-      .maybeSingle();
-
-    if (paymentError) {
-      logger.error('Admin refund: error fetching payment', { error: paymentError.message, paymentId });
-      return res.status(500).json({ error: 'Failed to fetch payment' });
-    }
-
-    if (!payment) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    const terminalStates = ['refunded_full', 'canceled'];
-    if (terminalStates.includes(payment.payment_status)) {
-      return res.status(400).json({ error: `Payment is in terminal state (${payment.payment_status}) and cannot be refunded` });
-    }
-
-    const refundAmount = amount || payment.amount_total;
-
-    logger.info('Admin refund initiated', {
-      adminUserId,
-      paymentId,
-      amount: refundAmount,
-      reason,
-      description: description || null,
-      currentStatus: payment.payment_status,
+    const result = await require('../services/paymentRefundService').create({
+      amount: req.body.amount, reason: req.body.reason, description: req.body.description, requestId: req.body.requestId,
+      paymentId: req.params.paymentId, actorId: req.user.id, actorMode: 'admin',
     });
-
-    const result = await stripeService.createSmartRefund(
-      paymentId,
-      refundAmount,
-      reason,
-      adminUserId
-    );
-
-    res.status(201).json({
-      message: 'Admin refund created successfully',
-      refund: result.refund,
-    });
-
-  } catch (err) {
-    logger.error('Admin refund error', { error: err.message, paymentId: req.params.paymentId });
-    res.status(500).json({
-      error: 'Failed to create admin refund',
-      message: err.message,
-    });
-  }
+    return res.status(result.success ? 200 : 202).json(result);
+  } catch (err) { return refundError(res, err); }
 });
 
 // ============ PAYMENT METHOD ROUTES ============
@@ -1175,112 +1086,62 @@ router.get('/spending', verifyToken, async (req, res) => {
 // ============ TIP ROUTE ============
 
 const tipSchema = Joi.object({
+  requestId: Joi.string().uuid().required(),
   gigId: Joi.string().uuid().required(),
-  amount: Joi.number().integer().min(50).required(), // Min $0.50
-  paymentMethodId: Joi.string().optional(), // Optional: use saved card for off-session
+  amount: Joi.number().integer().min(50).max(99999999).required(),
+  paymentMethodId: Joi.string().pattern(/^pm_[a-zA-Z0-9]+$/).allow(null).default(null),
+  expectedActorId: Joi.string().uuid().required(),
+  expectedSessionScope: Joi.string().pattern(/^[a-f0-9]{64}$/).required(),
+  expectedTerms: Joi.object({ gigId: Joi.string().uuid().required(), payerId: Joi.string().uuid().required(),
+    // Native encoders omit absent optional fields. Only legacy check/cancel
+    // accepts an unknown date; new reservation still requires current terms.
+    payeeId: Joi.string().uuid().required(), ownerConfirmedAt: Joi.string().isoDate().allow(null).default(null) }).required(),
+  mode: Joi.string().valid('resume', 'check', 'cancel').required(),
+});
+function tipError(res, error) {
+  return res.status(error.statusCode || 503).json({ code: error.code || 'TIP_UNKNOWN',
+    error: error.statusCode ? error.message : 'The tip could not be checked. Keep the original request and try again.',
+    ...(error.code === 'TIP_ACTIVE' ? { activeRequestId: error.activeRequestId } : {}) });
+}
+
+router.get('/tip-preview', verifyToken, async (req, res) => {
+  if (Joi.string().uuid().required().validate(req.query.gigId, { convert: false }).error) {
+    return res.status(400).json({ code: 'TIP_INVALID_REQUEST', error: 'A task ID is required.' });
+  }
+  try {
+    const scope = getRequestSessionScope(req);
+    const preview = await stripeService.previewTip({ gigId: req.query.gigId, payerId: scope.actor_id });
+    return res.json({ ...preview, actorId: scope.actor_id, sessionScope: scope.session_scope });
+  } catch (error) { return tipError(res, error); }
 });
 
-/**
- * POST /api/payments/tip
- * Create a tip payment for a completed gig.
- * Tips are auto-captured (not escrowed) and transferred after cooling-off.
- *
- * Flow:
- *   - On-session (no paymentMethodId): returns clientSecret for frontend confirmation
- *   - Off-session (with paymentMethodId): auto-confirms, handles SCA gracefully
- */
-router.post('/tip', verifyToken, validate(tipSchema), async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { gigId, amount, paymentMethodId } = req.body;
-
-    // Validate gig exists, is completed, and user is the poster
-    const { data: gig, error: gigError } = await supabaseAdmin
-      .from('Gig')
-      .select('id, user_id, accepted_by, status, title, owner_confirmed_at')
-      .eq('id', gigId)
-      .single();
-
-    if (gigError || !gig) {
-      return res.status(404).json({ error: 'Gig not found' });
-    }
-
-    // Only the gig poster can tip
-    if (gig.user_id !== userId) {
-      return res.status(403).json({ error: 'Only the gig poster can send a tip' });
-    }
-
-    // Gig must be completed and confirmed
-    if (gig.status !== 'completed') {
-      return res.status(400).json({ error: 'Gig must be completed before tipping' });
-    }
-    if (!gig.owner_confirmed_at) {
-      return res.status(400).json({ error: 'Gig must be confirmed before tipping' });
-    }
-
-    // Worker must exist
-    if (!gig.accepted_by) {
-      return res.status(400).json({ error: 'No worker assigned to tip' });
-    }
-
-    // Check for duplicate tips (limit 3 per gig to prevent abuse).
-    // Only count tips that actually succeeded; abandoned on-session attempts
-    // should not burn one of the limited tip slots.
-    const { data: existingTips } = await supabaseAdmin
-      .from('Payment')
-      .select('id')
-      .eq('gig_id', gigId)
-      .eq('payer_id', userId)
-      .eq('payment_type', 'tip')
-      .not('payment_succeeded_at', 'is', null);
-
-    if (existingTips && existingTips.length >= 3) {
-      return res.status(400).json({ error: 'Maximum 3 tips per gig reached' });
-    }
-
-    // Create the tip payment via StripeService
-    const result = await stripeService.createTipPayment({
-      payerId: userId,
-      payeeId: gig.accepted_by,
-      gigId,
-      amount,
-      paymentMethodId: paymentMethodId || undefined,
-      offSession: Boolean(paymentMethodId),
-    });
-
-    logger.info('Tip payment created', {
-      gigId,
-      payerId: userId,
-      payeeId: gig.accepted_by,
-      amount,
-      paymentId: result.paymentId,
-    });
-
-    res.json({
-      success: true,
-      clientSecret: result.clientSecret || null,
-      paymentId: result.paymentId,
-      paymentIntentId: result.paymentIntentId || null,
-      // Mobile PaymentSheet needs these to show saved cards / accept a new one.
-      // Web ignores them.
-      customer: result.customer || null,
-      ephemeralKey: result.ephemeralKey || null,
-      publishableKey: result.publishableKey || null,
-    });
-  } catch (err) {
-    logger.error('Tip payment error', { error: err.message });
-
-    // Handle SCA failure gracefully for off-session attempts
-    if (err.type === 'StripeCardError' && err.code === 'authentication_required') {
-      return res.status(402).json({
-        error: 'Card requires authentication',
-        code: 'authentication_required',
-        message: 'Your card requires additional verification. Try again without a saved card.',
-      });
-    }
-
-    res.status(500).json({ error: err.message || 'Failed to create tip' });
+router.get('/tip-requests/:requestId', verifyToken, async (req, res) => {
+  if (Joi.string().uuid().required().validate(req.params.requestId, { convert: false }).error) {
+    return res.status(400).json({ code: 'TIP_INVALID_REQUEST', error: 'The original tip ID is required.' });
   }
+  try {
+    const scope = getRequestSessionScope(req);
+    const progress = await stripeService.readTipRequest({ requestId: req.params.requestId, payerId: scope.actor_id });
+    return res.json({ ...progress, actorId: scope.actor_id, sessionScope: scope.session_scope });
+  } catch (error) { return tipError(res, error); }
+});
+
+// Existing endpoint, now bound to one durable original. Old clients cannot
+// begin an untracked charge; matching clients obtain preview/session terms.
+router.post('/tip', verifyToken, async (req, res) => {
+  const parsed = tipSchema.validate(req.body, { convert: false });
+  if (parsed.error) return res.status(409).json({ code: 'TIP_TERMS_REQUIRED', error: 'Refresh the tip preview before continuing.' });
+  if (parsed.value.expectedActorId !== req.user.id) {
+    return res.status(409).json({ code: 'SESSION_SCOPE_CHANGED', error: 'Your account changed. Reopen the tip screen.' });
+  }
+  if (!requireExpectedSessionScope({ user: req.user, session: req.session, cookies: req.cookies,
+    headers: { ...req.headers, 'x-pantopus-session-scope': parsed.value.expectedSessionScope } }, res, { required: true })) return;
+  try {
+    const scope = getRequestSessionScope(req);
+    const progress = await stripeService.createTipPayment({ ...parsed.value, payerId: scope.actor_id, sessionScope: scope.session_scope });
+    return res.status(['succeeded', 'canceled'].includes(progress.status) ? 200 : 202)
+      .json({ ...progress, actorId: scope.actor_id, sessionScope: scope.session_scope });
+  } catch (error) { return tipError(res, error); }
 });
 
 /**
@@ -1369,7 +1230,7 @@ router.get('/:paymentId', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    res.json({ payment });
+    res.json({ payment: publicPayment(payment) });
 
   } catch (err) {
     logger.error('Get payment error', { error: err.message });

@@ -20,6 +20,8 @@ const logger = require('../utils/logger');
 const { createNotification } = require('../services/notificationService');
 const stripeService = require('../stripe/stripeService');
 const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
+const { emitPrivateGigUpdate } = require('../socket/chatSocketio');
+const parsePostGISPoint = require('../utils/parsePostGISPoint');
 
 // ============ REAL-TIME HELPER (same pattern as gigs.js) ============
 
@@ -34,12 +36,8 @@ function emitGigUpdate(req, gigId, eventType, extra) {
   });
 }
 
-// ============ RATE-LIMIT MAP FOR LOCATION UPDATES ============
-
-/** In-memory per-gig throttle: gigId → last update timestamp */
-const locationUpdateTimestamps = new Map();
-
-const LOCATION_UPDATE_INTERVAL_MS = 30_000; // 30 seconds
+// The stored timestamp and conditional write enforce this across API processes.
+const LOCATION_UPDATE_INTERVAL_MS = 30_000;
 
 // ============ HAVERSINE HELPER ============
 
@@ -242,95 +240,80 @@ router.post('/:gigId/instant-accept', verifyToken, async (req, res) => {
 // =====================================================================
 
 router.post('/:gigId/share-status', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { gigId } = req.params;
     const userId = req.user.id;
-
-    // Fetch gig
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, accepted_by')
+      .select('id, user_id, accepted_by, status_share_token, status_share_expires_at')
       .eq('id', gigId)
-      .single();
+      .maybeSingle();
 
-    if (gigErr || !gig) {
-      return res.status(404).json({ error: 'Gig not found' });
-    }
-
-    // Only poster or assigned helper can share status
+    if (gigErr) return res.status(503).json({ error: 'Task sharing is temporarily unavailable' });
+    if (!gig) return res.status(404).json({ error: 'Gig not found' });
     if (gig.user_id !== userId && gig.accepted_by !== userId) {
       return res.status(403).json({ error: 'Not authorised to share this task status' });
     }
 
-    // Generate token + expiry
     const token = crypto.randomBytes(16).toString('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h
-
-    const { error: updateErr } = await supabaseAdmin
-      .from('Gig')
-      .update({
-        status_share_token: token,
-        status_share_expires_at: expiresAt,
-      })
-      .eq('id', gigId);
-
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    let update = supabaseAdmin.from('Gig').update({ status_share_token: token, status_share_expires_at: expiresAt }).eq('id', gigId);
+    // A delayed command cannot replace another work relationship or newer link.
+    for (const field of ['user_id', 'accepted_by', 'status_share_token', 'status_share_expires_at']) {
+      update = gig[field] == null ? update.is(field, null) : update.eq(field, gig[field]);
+    }
+    const { data: saved, error: updateErr } = await update.select('status_share_token, status_share_expires_at').maybeSingle();
     if (updateErr) {
       logger.error('Failed to save share token', { gigId, error: updateErr.message });
       return res.status(500).json({ error: 'Failed to generate share link' });
     }
-
-    const baseUrl = process.env.APP_URL || 'https://pantopus.com';
-    return res.status(200).json({
-      share_url: `${baseUrl}/status/${token}`,
-      expires_at: expiresAt,
-    });
+    if (!saved) return res.status(409).json({ error: 'Task sharing changed. Reopen the task and try again.' });
+    if (saved.status_share_token !== token || Date.parse(saved.status_share_expires_at) !== Date.parse(expiresAt)) {
+      return res.status(503).json({ error: 'Share link could not be confirmed. Please retry.' });
+    }
+    const baseUrl = (process.env.APP_URL || 'https://pantopus.com').replace(/\/$/, '');
+    return res.status(200).json({ share_url: `${baseUrl}/status/${token}`, expires_at: saved.status_share_expires_at });
   } catch (err) {
-    logger.error('Share status error', { error: err.message, stack: err.stack });
+    logger.error('Share status error', { error: err.message });
     return res.status(500).json({ error: 'Failed to share status' });
   }
 });
 
-// =====================================================================
-//  GET /status/:token   (PUBLIC — no auth)
-// =====================================================================
-
+// Public bearer-link reader. Recheck the link after the helper lookup so a
+// revoked/expired link or replaced helper cannot use the opening snapshot.
 router.get('/status/:token', async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   try {
     const { token } = req.params;
+    if (!/^[a-f0-9]{32}$/.test(token)) return res.status(404).json({ error: 'Not found' });
+    const columns = 'id, title, status, helper_eta_minutes, helper_location_updated_at, updated_at, status_share_expires_at, accepted_by';
+    const { data: gig, error: gigErr } = await supabaseAdmin.from('Gig').select(columns).eq('status_share_token', token).maybeSingle();
+    if (gigErr) return res.status(503).json({ error: 'Status is temporarily unavailable' });
+    if (!gig) return res.status(404).json({ error: 'Not found' });
+    const live = value => Number.isFinite(Date.parse(value)) && Date.parse(value) > Date.now();
+    if (!live(gig.status_share_expires_at)) return res.status(404).json({ error: 'Status link expired' });
 
-    const { data: gig, error: gigErr } = await supabaseAdmin
-      .from('Gig')
-      .select('title, status, helper_eta_minutes, updated_at, status_share_expires_at, accepted_by')
-      .eq('status_share_token', token)
-      .single();
-
-    if (gigErr || !gig) {
-      return res.status(404).json({ error: 'Not found' });
-    }
-
-    // Check expiry
-    if (new Date(gig.status_share_expires_at) < new Date()) {
-      return res.status(404).json({ error: 'Status link expired' });
-    }
-
-    // Fetch helper first name only (sanitised)
     let helperFirstName = null;
     if (gig.accepted_by) {
-      const { data: helper } = await supabaseAdmin
-        .from('User')
-        .select('first_name')
-        .eq('id', gig.accepted_by)
-        .single();
+      const { data: helper, error: helperErr } = await supabaseAdmin.from('User').select('first_name').eq('id', gig.accepted_by).single();
+      if (helperErr) return res.status(503).json({ error: 'Status is temporarily unavailable' });
       helperFirstName = helper?.first_name || null;
     }
-
-    // Return sanitised response — NO PII, NO IDs, NO addresses, NO payment info
+    const { data: current, error: currentErr } = await supabaseAdmin.from('Gig').select(columns).eq('id', gig.id).eq('status_share_token', token).maybeSingle();
+    if (currentErr) return res.status(503).json({ error: 'Status is temporarily unavailable' });
+    if (!current || current.accepted_by !== gig.accepted_by || !live(current.status_share_expires_at)) {
+      return res.status(404).json({ error: 'Status link expired or unavailable' });
+    }
+    // Limited shared status: excludes IDs, addresses, exact coordinates and payment details.
     return res.status(200).json({
-      title: gig.title,
-      status: gig.status,
+      title: current.title,
+      status: current.status,
       helper_first_name: helperFirstName,
-      helper_eta_minutes: gig.helper_eta_minutes,
-      updated_at: gig.updated_at,
+      helper_eta_minutes: current.helper_eta_minutes,
+      helper_location_updated_at: current.helper_location_updated_at ?? null,
+      updated_at: current.updated_at,
+      expires_at: current.status_share_expires_at,
     });
   } catch (err) {
     logger.error('Public status lookup error', { error: err.message });
@@ -346,79 +329,73 @@ router.post('/:gigId/update-location', verifyToken, async (req, res) => {
   try {
     const { gigId } = req.params;
     const helperId = req.user.id;
-    const { latitude, longitude } = req.body;
+    const { latitude, longitude } = req.body || {};
 
-    // Validate input
-    if (latitude == null || longitude == null) {
-      return res.status(400).json({ error: 'latitude and longitude are required' });
-    }
-    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-      return res.status(400).json({ error: 'Invalid coordinates' });
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+      || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      return res.status(400).json({ error: 'Valid numeric latitude and longitude are required' });
     }
 
-    // Rate limit: 1 update per 30s per gig
-    const lastUpdate = locationUpdateTimestamps.get(gigId);
-    if (lastUpdate && Date.now() - lastUpdate < LOCATION_UPDATE_INTERVAL_MS) {
-      return res.status(429).json({ error: 'Location updates limited to once per 30 seconds' });
-    }
-
-    // Fetch gig — verify caller is the assigned helper
     const { data: gig, error: gigErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, accepted_by, exact_location')
+      .select('id, user_id, accepted_by, status, accepted_at, started_at, updated_at, exact_location, helper_last_location, helper_location_updated_at, helper_eta_minutes')
       .eq('id', gigId)
-      .single();
-
-    if (gigErr || !gig) {
-      return res.status(404).json({ error: 'Gig not found' });
-    }
-
+      .maybeSingle();
+    if (gigErr) return res.status(503).json({ error: 'Unable to verify the current task' });
+    if (!gig) return res.status(404).json({ error: 'Gig not found' });
     if (gig.accepted_by !== helperId) {
       return res.status(403).json({ error: 'Only the assigned helper can update location' });
     }
-
-    // Calculate ETA using Haversine if gig has a location
-    let etaMinutes = null;
-    if (gig.exact_location) {
-      // Parse PostGIS point: SRID=4326;POINT(lng lat) or POINT(lng lat)
-      const pointMatch = String(gig.exact_location).match(
-        /POINT\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i
-      );
-      if (pointMatch) {
-        const gigLng = parseFloat(pointMatch[1]);
-        const gigLat = parseFloat(pointMatch[2]);
-        const distKm = haversineKm(latitude, longitude, gigLat, gigLng);
-        etaMinutes = Math.max(1, Math.round((distKm / 30) * 60)); // 30 km/h average
-      }
+    if (!['assigned', 'in_progress'].includes(gig.status)) {
+      return res.status(409).json({ error: 'Location updates require an active task' });
+    }
+    const previousUpdate = Date.parse(gig.helper_location_updated_at);
+    if (Number.isFinite(previousUpdate) && Date.now() - previousUpdate < LOCATION_UPDATE_INTERVAL_MS) {
+      return res.status(429).json({ error: 'Location updates limited to once per 30 seconds' });
     }
 
-    // Build PostGIS point string
+    const target = parsePostGISPoint(gig.exact_location);
+    const etaMinutes = target && Number.isFinite(target.latitude) && Number.isFinite(target.longitude)
+      && Math.abs(target.latitude) <= 90 && Math.abs(target.longitude) <= 180
+      ? Math.max(1, Math.round((haversineKm(latitude, longitude, target.latitude, target.longitude) / 30) * 60))
+      : null;
     const pointWkt = `SRID=4326;POINT(${longitude} ${latitude})`;
     const now = new Date().toISOString();
-
     const updateData = {
       helper_last_location: pointWkt,
       helper_location_updated_at: now,
+      helper_eta_minutes: etaMinutes,
+      updated_at: now,
     };
-    if (etaMinutes != null) {
-      updateData.helper_eta_minutes = etaMinutes;
+
+    // Preserve the exact work relationship, target and previously observed update.
+    // Competing requests cannot both replace the same snapshot, even on separate servers.
+    let update = supabaseAdmin.from('Gig').update(updateData).eq('id', gigId);
+    for (const field of ['user_id', 'accepted_by', 'status', 'accepted_at', 'started_at', 'updated_at',
+      'exact_location', 'helper_last_location', 'helper_location_updated_at', 'helper_eta_minutes']) {
+      update = gig[field] == null ? update.is(field, null) : update.eq(field, gig[field]);
     }
-
-    const { error: updateErr } = await supabaseAdmin
-      .from('Gig')
-      .update(updateData)
-      .eq('id', gigId);
-
+    const { data: saved, error: updateErr } = await update
+      .select('id, user_id, accepted_by, status, helper_last_location, helper_location_updated_at, helper_eta_minutes')
+      .maybeSingle();
     if (updateErr) {
       logger.error('Failed to update helper location', { gigId, error: updateErr.message });
-      return res.status(500).json({ error: 'Failed to update location' });
+      return res.status(503).json({ error: 'Unable to confirm the location update' });
+    }
+    if (!saved) return res.status(409).json({ error: 'Task changed. Refresh before updating location' });
+    const savedLocation = parsePostGISPoint(saved.helper_last_location);
+    if (saved.id !== gigId || saved.user_id !== gig.user_id || saved.accepted_by !== helperId
+      || saved.status !== gig.status || saved.helper_eta_minutes !== etaMinutes
+      || Date.parse(saved.helper_location_updated_at) !== Date.parse(now)
+      || savedLocation?.latitude !== latitude || savedLocation?.longitude !== longitude) {
+      return res.status(503).json({ error: 'Unable to confirm the location update' });
     }
 
-    // Record timestamp for rate-limiting
-    locationUpdateTimestamps.set(gigId, Date.now());
-
     // Real-time ETA event
-    emitGigUpdate(req, gigId, 'eta-update', {
+    await emitPrivateGigUpdate(req.app.get('io'), gig, 'gig:eta-update', {
+      gigId,
+      eventType: 'eta-update',
+      timestamp: Date.now(),
       eta_minutes: etaMinutes,
     });
 

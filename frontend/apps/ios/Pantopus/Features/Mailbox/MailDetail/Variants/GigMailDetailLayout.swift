@@ -25,6 +25,8 @@ struct GigMailDetailLayout: View {
     let onAccept: @MainActor () -> Void
     let onOpenSenderProfile: (@MainActor (String) -> Void)?
     var onSaveToVault: @MainActor () -> Void = {}
+    var paymentPending: Bool = false
+    var onCancelPayment: @MainActor () -> Void = {}
 
     var body: some View {
         MailItemDetailShell(
@@ -51,7 +53,9 @@ struct GigMailDetailLayout: View {
                     isAccepted: gig.isAccepted,
                     amount: gig.bid.amount,
                     inFlight: bidInFlight,
-                    onAccept: onAccept
+                    onAccept: onAccept,
+                    paymentPending: paymentPending,
+                    onCancelPayment: onCancelPayment
                 )
             }
         )
@@ -367,10 +371,24 @@ private struct GigSplitDock: View {
     let amount: Int
     let inFlight: Bool
     let onAccept: @MainActor () -> Void
+    var paymentPending = false
+    var onCancelPayment: @MainActor () -> Void = {}
 
     var body: some View {
         if isAccepted {
             acceptedShelf
+        } else if paymentPending {
+            HStack(spacing: Spacing.s2) {
+                primaryButton(
+                    icon: .creditCard,
+                    label: "Resume payment",
+                    identifier: "mailDetail_gig_resumePayment",
+                    action: onAccept
+                )
+                Button("Cancel payment", action: onCancelPayment)
+                    .disabled(inFlight)
+                    .accessibilityIdentifier("mailDetail_gig_cancelPayment")
+            }
         } else {
             actionRow
         }

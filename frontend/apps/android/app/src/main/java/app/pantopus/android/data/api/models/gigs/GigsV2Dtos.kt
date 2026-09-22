@@ -63,6 +63,7 @@ data class GigScoredOfferDto(
     fun asBid(): GigBidDto =
         GigBidDto(
             id = id,
+            gigId = gigId,
             userId = userId,
             bidAmount = amount ?: price,
             amount = amount ?: price,

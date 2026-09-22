@@ -32,6 +32,7 @@ interface FilesApi {
         @Part file: MultipartBody.Part,
         @Part("file_type") fileType: RequestBody,
         @Part("visibility") visibility: RequestBody,
+        @Part("gig_id") gigId: RequestBody? = null,
     ): FileUploadResponse
 
     /**

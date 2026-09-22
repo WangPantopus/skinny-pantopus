@@ -101,6 +101,7 @@ fun GigDetailLayout(
             actions = {
                 GigDetailActions(
                     isAccepted = gig.isAccepted,
+                    pendingPayment = gig.bidStatus == "pending_payment",
                     amount = gig.bid.amount,
                     inFlight = bidInFlight,
                     onAccept = onAccept,
@@ -454,6 +455,7 @@ private fun GigSenderCard(
 @Composable
 private fun GigDetailActions(
     isAccepted: Boolean,
+    pendingPayment: Boolean,
     amount: Int,
     inFlight: Boolean,
     onAccept: () -> Unit,
@@ -464,7 +466,7 @@ private fun GigDetailActions(
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             ActionButton(
                 id = "accept",
-                label = "Accept · $$amount",
+                label = if (pendingPayment) "Resume payment" else "Accept · $$amount",
                 icon = PantopusIcon.Check,
                 background = PantopusColors.success,
                 foreground = PantopusColors.appTextInverse,
@@ -472,27 +474,29 @@ private fun GigDetailActions(
                 onClick = onAccept,
                 modifier = Modifier.weight(1f),
             )
-            ActionButton(
-                id = "counter",
-                label = "Counter",
-                icon = PantopusIcon.ArrowsRepeat,
-                background = PantopusColors.appSurface,
-                foreground = PantopusColors.appText,
-                borderColor = PantopusColors.appBorder,
-                inFlight = false,
-                onClick = {},
-                modifier = Modifier.weight(1f),
-            )
-            ActionButton(
-                id = "decline",
-                label = "Decline",
-                icon = PantopusIcon.X,
-                background = PantopusColors.error,
-                foreground = PantopusColors.appTextInverse,
-                inFlight = false,
-                onClick = {},
-                modifier = Modifier.weight(1f),
-            )
+            if (!pendingPayment) {
+                ActionButton(
+                    id = "counter",
+                    label = "Counter",
+                    icon = PantopusIcon.ArrowsRepeat,
+                    background = PantopusColors.appSurface,
+                    foreground = PantopusColors.appText,
+                    borderColor = PantopusColors.appBorder,
+                    inFlight = false,
+                    onClick = {},
+                    modifier = Modifier.weight(1f),
+                )
+                ActionButton(
+                    id = "decline",
+                    label = "Decline",
+                    icon = PantopusIcon.X,
+                    background = PantopusColors.error,
+                    foreground = PantopusColors.appTextInverse,
+                    inFlight = false,
+                    onClick = {},
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }

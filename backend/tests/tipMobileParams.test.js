@@ -2,8 +2,7 @@
 // TEST: Tip mobile PaymentSheet params + refresh-status (Block 3D)
 // The mobile clients tip a worker via POST /api/payments/tip and then
 // reconcile with POST /api/payments/tip/:paymentId/refresh-status. This locks
-// the mobile-specific bits the clients depend on: the tip response carries the
-// PaymentSheet params (customer + ephemeralKey + publishableKey), and the
+// the existing mobile-specific params inside a scoped original progress response, and the
 // refresh-status route returns the reconciled payment status.
 // ============================================================
 
@@ -24,6 +23,7 @@ jest.mock('../services/notificationService', () => ({
 jest.mock('../middleware/verifyToken', () => {
   const mw = (req, _res, next) => {
     req.user = { id: req.headers['x-test-user-id'] || POSTER_ID, role: 'user' };
+    req.session = { id: 'tip-mobile-route-session' };
     next();
   };
   mw.requireAdmin = (_req, _res, next) => next();
@@ -44,62 +44,40 @@ function buildApp() {
   return app;
 }
 
-function completedGig() {
-  return {
-    id: GIG_ID,
-    user_id: POSTER_ID,
-    accepted_by: WORKER_ID,
-    status: 'completed',
-    title: 'Patio cleanup',
-    owner_confirmed_at: new Date().toISOString(),
-  };
-}
+const { getRequestSessionScope } = require('../utils/requestSessionScope');
+const originalId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const tipCommand = () => ({ requestId: originalId, gigId: GIG_ID, amount: 500, mode: 'check', expectedActorId: POSTER_ID,
+  expectedSessionScope: getRequestSessionScope({ user: { id: POSTER_ID }, session: { id: 'tip-mobile-route-session' } }).session_scope,
+  expectedTerms: { gigId: GIG_ID, payerId: POSTER_ID, payeeId: WORKER_ID, ownerConfirmedAt: '2026-09-14T00:00:00Z' } });
 
 beforeEach(() => {
   resetTables();
   jest.clearAllMocks();
 });
 
-describe('POST /api/payments/tip — mobile PaymentSheet params', () => {
-  test('returns clientSecret + customer + ephemeralKey + publishableKey', async () => {
-    seedTable('Gig', [completedGig()]);
-    seedTable('Payment', []);
-    stripeService.createTipPayment.mockResolvedValue({
-      success: true,
-      clientSecret: 'pi_tip_secret',
-      paymentId: 'pay-tip-1',
-      paymentIntentId: 'pi_tip',
-      customer: 'cus_1',
-      ephemeralKey: 'ek_1',
-      publishableKey: 'pk_test',
-    });
-
-    const res = await request(buildApp())
-      .post('/api/payments/tip')
-      .send({ gigId: GIG_ID, amount: 500 });
-
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
-      success: true,
-      clientSecret: 'pi_tip_secret',
-      paymentId: 'pay-tip-1',
-      customer: 'cus_1',
-      ephemeralKey: 'ek_1',
-      publishableKey: 'pk_test',
-    });
-    expect(stripeService.createTipPayment).toHaveBeenCalledWith(
-      expect.objectContaining({ payerId: POSTER_ID, payeeId: WORKER_ID, gigId: GIG_ID, amount: 500, offSession: false }),
-    );
+describe('POST /api/payments/tip — existing mobile PaymentSheet params', () => {
+  test.each(['null', 'omitted'])('historical check preserves %s confirmation time through the scoped command', async encoding => {
+    const cmd = tipCommand(); cmd.expectedTerms.ownerConfirmedAt = null;
+    if (encoding === 'omitted') delete cmd.expectedTerms.ownerConfirmedAt;
+    stripeService.createTipPayment.mockResolvedValue({ status: 'needs_review', receipt: null });
+    const res = await request(buildApp()).post('/api/payments/tip').send(cmd);
+    expect(res.status).toBe(202); expect(res.body.receipt).toBeNull();
+    expect(stripeService.createTipPayment).toHaveBeenCalledWith(expect.objectContaining({
+      expectedTerms: expect.objectContaining({ ownerConfirmedAt: null }), mode: 'check', payerId: POSTER_ID }));
   });
-
-  test('only the gig poster can tip', async () => {
-    seedTable('Gig', [completedGig()]);
-    const res = await request(buildApp())
-      .post('/api/payments/tip')
-      .set('x-test-user-id', WORKER_ID)
-      .send({ gigId: GIG_ID, amount: 500 });
-
-    expect(res.status).toBe(403);
+  test('pending scoped command carries transient checkout without asserting payment success', async () => {
+    const checkout = { paymentIntentId: 'pi_tip', clientSecret: 'pi_tip_secret_fixture', customer: 'cus_tip',
+      ephemeralKey: 'ek_fixture', publishableKey: 'pk_test_fixture' };
+    stripeService.createTipPayment.mockResolvedValue({ status: 'requires_action', request: { requestId: originalId, paymentId: originalId },
+      receipt: null, checkout });
+    const res = await request(buildApp()).post('/api/payments/tip').send(tipCommand());
+    expect(res.status).toBe(202); expect(res.body.checkout).toEqual(checkout);
+    expect(res.body.receipt).toBeNull(); expect(res.body.success).toBeUndefined();
+    expect(stripeService.createTipPayment).toHaveBeenCalledWith(expect.objectContaining({ payerId: POSTER_ID, requestId: originalId, mode: 'check' }));
+  });
+  test('a sheet opened under a different actor cannot resume a tip', async () => {
+    const res = await request(buildApp()).post('/api/payments/tip').set('x-test-user-id', WORKER_ID).send(tipCommand());
+    expect(res.status).toBe(409); expect(res.body.code).toBe('SESSION_SCOPE_CHANGED');
     expect(stripeService.createTipPayment).not.toHaveBeenCalled();
   });
 });

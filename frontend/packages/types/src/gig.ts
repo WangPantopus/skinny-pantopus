@@ -102,6 +102,7 @@ export interface Gig {
   cancellation_fee?: number | null;
 
   // Completion
+  completion_review?: string | null;
   completion_note?: string | null;
   completion_photos?: string[];
   completion_checklist?: Array<{ item: string; done: boolean }>;
@@ -173,6 +174,8 @@ export type GigUserSummary = {
   displayName?: string | null;
   /** Canonical avatar URL. Prefer this over profile_picture_url. */
   avatarUrl?: string | null;
+  href?: string | null;
+  locality?: { city?: string | null; state?: string | null } | null;
   userId?: string | null;
   user_id?: string | null;
   display_name?: string | null;

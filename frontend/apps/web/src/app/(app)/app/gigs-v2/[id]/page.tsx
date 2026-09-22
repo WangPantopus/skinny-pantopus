@@ -1,5 +1,12 @@
 'use client';
 
+import { useGigListSession } from '@/hooks/useGigListSession';
+import ErrorState from '@/components/ui/ErrorState';
+import { useBusinessGigAccess } from '@/hooks/useBusinessGigAccess';
+import { usePaymentRedirectCleanup } from '@/hooks/usePaymentRedirectCleanup';
+
+import { gigBidCheckoutUrl } from '@/components/gig-detail/GigBidCheckout';
+
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -7,7 +14,6 @@ import dynamic from 'next/dynamic';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
-import { confirmStore } from '@/components/ui/confirm-store';
 import { useBadges } from '@/contexts/BadgeContext';
 
 // Import existing web gig-detail components
@@ -16,6 +22,7 @@ import GigTimeline from '@/components/gig-detail/GigTimeline';
 import BidPanel from '@/components/gig-detail/BidPanel';
 import OffersPanel from '@/components/gig-detail/OffersPanel';
 import CompletionFlow, { type CompletionFlowHandle } from '@/components/gig-detail/CompletionFlow';
+import GigStopRecoveryEntry from '@/components/gig-detail/GigStopRecoveryEntry';
 import PaymentSection from '@/components/gig-detail/PaymentSection';
 import QASection from '@/components/gig-detail/QASection';
 import ChangeOrdersSection from '@/components/gig-detail/ChangeOrdersSection';
@@ -69,7 +76,6 @@ const ENGAGEMENT_LABELS: Record<string, { icon: string; label: string }> = {
   quotes: { icon: '💼', label: 'Quotes' },
 };
 
-const formatUsd = (amount: number): string => `$${amount.toFixed(2)}`;
 
 // ─── Trust Capsule ───────────────────────────────────────────────────
 
@@ -415,6 +421,13 @@ function GigDetailV2Content() {
   const { socket } = useBadges();
 
   const completionFlowRef = useRef<CompletionFlowHandle>(null);
+  const session = useGigListSession();
+  const { isCurrent: isSessionCurrent } = session;
+  const reads = useRef({ user: 0, gig: 0, offers: 0, media: 0, payment: 0 });
+  const beginRead = useCallback((kind: keyof typeof reads.current) => {
+    const version = ++reads.current[kind];
+    return () => isSessionCurrent() && reads.current[kind] === version;
+  }, [isSessionCurrent]);
 
   // State
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -427,9 +440,13 @@ function GigDetailV2Content() {
 
   // Derived
   const currentUserId = currentUser?.id;
+  const canManageGigAsBusinessMember = useBusinessGigAccess(
+    currentUserId, gig?.user_id || gig?.poster_user_id || gig?.poster_id,
+    gig?.creator?.account_type === 'business', gig,
+  );
   const isMyGig = Boolean(
     currentUserId &&
-    (gig?.user_id === currentUserId || gig?.poster_id === currentUserId || gig?.poster_user_id === currentUserId)
+    (gig?.user_id === currentUserId || gig?.poster_id === currentUserId || gig?.poster_user_id === currentUserId || canManageGigAsBusinessMember)
   );
   const acceptedBy = gig?.accepted_by || gig?.acceptedBy?.id || gig?.accepted_bid?.bidder_id || gig?.worker_id;
   const iAmWorker = Boolean(currentUserId && String(acceptedBy) === String(currentUserId));
@@ -443,66 +460,75 @@ function GigDetailV2Content() {
   // ── Data loading ──
 
   const loadCurrentUser = useCallback(async () => {
+    const current = beginRead('user');
+    if (!current()) return;
     try {
       const res = await api.users.getMyProfile();
-      setCurrentUser(res);
+      if (current()) setCurrentUser(res);
     } catch { /* not critical */ }
-  }, []);
+  }, [beginRead]);
 
   const loadGig = useCallback(async () => {
-    if (!gigId) return;
+    const current = beginRead('gig');
+    if (!gigId || !current()) return;
     try {
       const result = await api.gigs.getGigById(gigId);
-      setGig(result || null);
+      if (current()) setGig(result || null);
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to load task');
+      if (current()) toast.error(err?.message || 'Failed to load task');
     }
-  }, [gigId]);
+  }, [gigId, beginRead]);
 
   const loadOffers = useCallback(async () => {
-    if (!gigId || !currentUserId) return;
+    const current = beginRead('offers');
+    if (!gigId || !currentUserId || !current()) return;
     // Only owner sees offers
     if (!isMyGig) return;
     setOffersLoading(true);
     try {
       const res = await api.gigs.getGigOffersV2(gigId);
-      setOffersV2(res?.offers || []);
+      if (current()) setOffersV2(res?.offers || []);
     } catch {
       // Fallback: legacy bids
+      if (!current()) return;
       try {
         const bidsRes = await api.gigs.getGigBids(gigId);
-        setOffersV2((bidsRes as any)?.bids || []);
+        if (current()) setOffersV2((bidsRes as any)?.bids || []);
       } catch { /* ignore */ }
     } finally {
-      setOffersLoading(false);
+      if (current()) setOffersLoading(false);
     }
-  }, [gigId, currentUserId, isMyGig]);
+  }, [gigId, currentUserId, isMyGig, beginRead]);
 
   const loadMedia = useCallback(async () => {
-    if (!gigId) return;
+    const current = beginRead('media');
+    if (!gigId || !current()) return;
     try {
       const res = await api.upload.getGigMedia(gigId);
-      setGigMedia((res as any)?.media || []);
-    } catch { setGigMedia([]); }
-  }, [gigId]);
+      if (current()) setGigMedia((res as any)?.media || []);
+    } catch { if (current()) setGigMedia([]); }
+  }, [gigId, beginRead]);
 
   const loadPayment = useCallback(async () => {
-    if (!gigId) return;
+    const current = beginRead('payment');
+    if (!gigId || !current()) return;
     try {
       const res = await api.payments.getPaymentForGig(gigId);
-      setGigPayment((res as any)?.payment || null);
-    } catch { setGigPayment(null); }
-  }, [gigId]);
+      if (current()) setGigPayment((res as any)?.payment || null);
+    } catch { if (current()) setGigPayment(null); }
+  }, [gigId, beginRead]);
 
   // Init
   useEffect(() => {
     const token = getAuthToken();
     if (!token) { router.push('/login'); return; }
-
+    if (!isSessionCurrent()) return;
+    let active = true;
     setLoading(true);
     Promise.all([loadCurrentUser(), loadGig(), loadMedia(), loadPayment()])
-      .finally(() => setLoading(false));
-  }, [loadCurrentUser, loadGig, loadMedia, loadPayment, router]);
+      .finally(() => { if (active && isSessionCurrent()) setLoading(false); });
+    return () => { active = false; };
+  }, [loadCurrentUser, loadGig, loadMedia, loadPayment, router, isSessionCurrent]);
 
   // Load offers after we know the user
   useEffect(() => {
@@ -511,79 +537,45 @@ function GigDetailV2Content() {
 
   // Socket
   useEffect(() => {
-    if (!gigId || !socket) return;
+    if (!gigId || !socket || !isSessionCurrent()) return;
     socket.emit('gig:join', { gigId });
 
     const refresh = () => { loadGig(); loadPayment(); loadOffers(); };
     socket.on('gig:status-change', refresh);
-    socket.on('gig:bid-update', () => { loadGig(); loadOffers(); });
+    const bidsChanged = () => { loadGig(); loadOffers(); };
+    const paymentChanged = () => { loadPayment(); };
+    const qaChanged = () => { loadGig(); };
+    socket.on('gig:bid-update', bidsChanged);
     socket.on('gig:bid-accepted', refresh);
-    socket.on('gig:payment-update', () => loadPayment());
+    socket.on('gig:payment-update', paymentChanged);
     socket.on('gig:completion-update', refresh);
-    socket.on('gig:qa-update', () => loadGig());
+    socket.on('gig:qa-update', qaChanged);
 
     return () => {
       socket.emit('gig:leave', { gigId });
       socket.off('gig:status-change', refresh);
-      socket.off('gig:bid-update');
+      socket.off('gig:bid-update', bidsChanged);
       socket.off('gig:bid-accepted', refresh);
-      socket.off('gig:payment-update');
+      socket.off('gig:payment-update', paymentChanged);
       socket.off('gig:completion-update', refresh);
-      socket.off('gig:qa-update');
+      socket.off('gig:qa-update', qaChanged);
     };
-  }, [gigId, socket, loadGig, loadPayment, loadOffers]);
+  }, [gigId, socket, loadGig, loadPayment, loadOffers, isSessionCurrent, session.active]);
 
   // Handlers
   const handleStatusChange = () => { loadGig(); loadPayment(); loadOffers(); };
   const handleOpenChat = async () => {
-    if (!gigId) return;
+    if (!gigId || !isSessionCurrent()) return;
     try {
       const res = await api.gigs.getGigChatRoom(gigId);
-      if (res?.roomId) router.push(`/app/mailbox?roomId=${res.roomId}`);
+      if (isSessionCurrent() && res?.roomId) router.push(`/app/mailbox?roomId=${res.roomId}`);
     } catch { /* ignore */ }
   };
-  const handleAcceptOffer = async (offerId: string) => {
-    if (!gigId) return;
-    const selectedOffer = offersV2.find((offer) => String(offer?.id) === String(offerId));
-    const rawAmount = Number(selectedOffer?.amount ?? selectedOffer?.bid_amount ?? gig?.price ?? NaN);
-    const amount = Number.isFinite(rawAmount) ? rawAmount : null;
-    const confirmed = await confirmStore.open({
-      title: amount != null && amount > 0 ? 'Authorize payment method?' : 'Accept this bid?',
-      description:
-        amount != null && amount > 0
-          ? `Pantopus will place a temporary authorization hold of ${formatUsd(amount)}. You are charged only after you confirm the task is completed. If canceled per policy, the hold is released (or only applicable fees apply).`
-          : 'This will assign the gig to this bidder.',
-      confirmLabel: amount != null && amount > 0 ? 'Continue to Payment' : 'Accept',
-      cancelLabel: amount != null && amount > 0 ? 'Not now' : 'Cancel',
-      variant: 'primary',
-    });
-    if (!confirmed) return;
-    try {
-      const resp = await api.gigs.acceptBid(gigId, offerId);
-      const payment = (resp as any)?.payment || {};
-      const clientSecret = (resp as any)?.clientSecret || payment?.clientSecret || null;
-      const setupIntentId = (resp as any)?.setupIntentId || payment?.setupIntentId || null;
-      const isSetupIntent = Boolean((resp as any)?.isSetupIntent ?? setupIntentId);
-      const requiresPaymentSetup = Boolean((resp as any)?.requiresPaymentSetup || clientSecret);
-
-      if (requiresPaymentSetup && clientSecret && typeof window !== 'undefined') {
-        window.sessionStorage.setItem(
-          `gig_payment_setup_${gigId}`,
-          JSON.stringify({
-            clientSecret,
-            isSetupIntent,
-            roomId: (resp as any)?.roomId || null,
-            rollbackOnAbort: true,
-          })
-        );
-        toast.info('Bid accepted. Complete payment authorization to continue.');
-        router.push(`/app/gigs-v2/${gigId}?action=payment_setup`);
-      }
-      handleStatusChange();
-    } catch (e: any) { toast.error(e?.message || 'Failed to accept offer'); }
+  const handleAcceptOffer = (offerId: string) => {
+    if (gigId && isSessionCurrent()) router.push(gigBidCheckoutUrl(gigId, offerId));
   };
   const handleDeclineOffer = async (offerId: string) => {
-    if (!gigId) return;
+    if (!gigId || !isSessionCurrent()) return;
     try {
       await api.gigs.rejectBid(gigId, offerId);
       loadGig();
@@ -592,7 +584,8 @@ function GigDetailV2Content() {
   };
 
   // Loading
-  if (loading) {
+  if (session.retired) return <ErrorState message="Your session changed. Reopen this task to continue." onRetry={() => window.location.reload()} />;
+  if (loading || !session.active) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="animate-spin h-8 w-8 border-3 border-primary-600 border-t-transparent rounded-full" />
@@ -602,8 +595,9 @@ function GigDetailV2Content() {
 
   if (!gig) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="flex flex-col items-center justify-center min-h-[50vh]">
         <p className="text-gray-500 text-lg">Task not found</p>
+        <GigStopRecoveryEntry key={gigId} gigId={gigId} />
       </div>
     );
   }
@@ -612,6 +606,7 @@ function GigDetailV2Content() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
+      <GigStopRecoveryEntry key={gigId} gigId={gigId} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* ── Left column (2/3) ── */}
         <div className="lg:col-span-2 space-y-6">
@@ -705,13 +700,14 @@ function GigDetailV2Content() {
           )}
 
           {/* ETA tracker when assigned */}
-          {(gigStatus === 'assigned' || gigStatus === 'in_progress') && (
+          {(gigStatus === 'assigned' || gigStatus === 'in_progress') && (isMyGig || iAmWorker) && (
             <ETATrackerComp gig={gig} socket={socket} />
           )}
 
           {/* Active task panel for in-progress gigs */}
           {(gigStatus === 'assigned' || gigStatus === 'in_progress') && (isMyGig || iAmWorker) && (
             <ActiveTaskPanel
+              currentUserId={currentUserId}
               gig={gig}
               isOwner={isMyGig}
               isWorker={iAmWorker}
@@ -777,6 +773,8 @@ function GigDetailV2Content() {
           )}
 
           <PaymentSection
+                actorId={currentUserId}
+                onChanged={handleStatusChange}
             gigId={gigId!}
             gigPrice={Number(gig.price || 0)}
             isOwner={isMyGig}
@@ -792,9 +790,11 @@ function GigDetailV2Content() {
 // ─── Page Export ──────────────────────────────────────────────────────
 
 export default function GigDetailV2Page() {
+  usePaymentRedirectCleanup();
+  const { id } = useParams<{ id: string }>();
   return (
     <Suspense>
-      <GigDetailV2Content />
+      <GigDetailV2Content key={id} />
     </Suspense>
   );
 }

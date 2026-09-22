@@ -2918,6 +2918,11 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
     const access = await checkHomePermission(homeId, userId, 'home.edit');
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage maintenance' });
 
+    const { data: current, error: readError } = await supabaseAdmin.from('HomeMaintenanceLog')
+      .select('*').eq('id', taskId).eq('home_id', homeId).maybeSingle();
+    if (readError) return res.status(503).json({ error: 'Maintenance could not be checked. Please retry.' });
+    if (!current) return res.status(404).json({ error: 'Maintenance task not found' });
+
     const allowed = ['task', 'vendor', 'cost', 'recurrence', 'due_date', 'status'];
     const updates = {};
     for (const key of allowed) {
@@ -2931,7 +2936,13 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid recurrence' });
     }
 
-    if (updates.status === 'completed') {
+    if (current.gig_id && updates.cost !== undefined
+      && (updates.cost == null ? null : Number(updates.cost)) !== (current.cost == null ? null : Number(current.cost))) {
+      return res.status(409).json({ error: 'The cost of completed Gig work comes from its payment record.' });
+    }
+    // A saved completion retry and edits to automatic Gig history keep the
+    // original performer/time. Only a manual task's first completion stamps them.
+    if (updates.status === 'completed' && current.status !== 'completed' && !current.gig_id) {
       updates.performed_at = new Date().toISOString();
       updates.performed_by = userId;
     }
@@ -2943,14 +2954,16 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
       .update(updates)
       .eq('id', taskId)
       .eq('home_id', homeId)
+      .eq('status', current.status)
+      .eq('updated_at', current.updated_at)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       logger.error('Error updating maintenance task', { error: error.message, taskId });
       return res.status(500).json({ error: 'Failed to update maintenance task' });
     }
-    if (!data) return res.status(404).json({ error: 'Maintenance task not found' });
+    if (!data) return res.status(409).json({ error: 'Maintenance changed. Reload it before saving.' });
 
     res.json({ task: data });
   } catch (err) {
