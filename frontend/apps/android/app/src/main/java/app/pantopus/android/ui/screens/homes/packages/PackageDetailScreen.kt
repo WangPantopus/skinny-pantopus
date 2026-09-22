@@ -191,15 +191,21 @@ private fun LoadedShell(
             }
         },
         cta = {
+            // Picked up, missing and returned close the record; a delivered
+            // package is exactly the one that still needs "Mark picked up".
+            val closed =
+                status == PackageChipStatus.PickedUp ||
+                    status == PackageChipStatus.Lost ||
+                    status == PackageChipStatus.Returned
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 PrimaryButton(
                     title = primaryCtaLabel(status),
                     isLoading = saving,
-                    isEnabled = !status.isTerminal && !saving,
+                    isEnabled = !closed && !saving,
                     onClick = onMarkPickedUp,
                     modifier = Modifier.testTag("packageDetail_markPickedUp"),
                 )
-                if (!status.isTerminal) {
+                if (!closed) {
                     GhostButton(
                         title = "Mark missing",
                         isEnabled = !saving,

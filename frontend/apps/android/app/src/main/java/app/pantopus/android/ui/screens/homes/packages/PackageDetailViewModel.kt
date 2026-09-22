@@ -110,7 +110,9 @@ class PackageDetailViewModel
                 when (val result = repo.updateHomePackage(homeId, packageId, request)) {
                     is NetworkResult.Success -> {
                         onChanged()
-                        _state.value = current.copy(pkg = result.data.`package`, saving = false)
+                        // `current` predates this attempt; a confirmed write must
+                        // also clear the error left by a failed earlier attempt.
+                        _state.value = current.copy(pkg = result.data.`package`, saving = false, saveError = null)
                         if (closeOnSuccess) onClose()
                     }
                     is NetworkResult.Failure ->
