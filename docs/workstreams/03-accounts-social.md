@@ -3843,3 +3843,38 @@ operational folder; the durable bundle contains sanitized request/status receipt
 ## Evidence bundle hygiene correction (2026-09-22)
 
 Raw Android/backend `.log` files from the N02 passes were removed from the durable private bundle after coordinator review. The raw originals remain only under `/private/tmp/pantopus-stream3-20260920-r1`; durable evidence now uses `n02-android-delete-http-receipt-20260922.json` and `n02-android-new-follower-http-receipt-20260922.json` with method/path/status summaries. The refreshed 156-file MANIFEST SHA-256 is `99bf0cb46f5127210137e35290932978fd914d2cca950d78e384ac50d41fa3c1`. No journey was rerun and no application behavior changed.
+
+## N02 installed Android delete Cancel, offline rollback and retry (2026-09-22)
+
+Coordinator requested one final client-specific control check where the retained runtime could
+support it without a build. A disposable unread Auth Bob notification (`n02-cancel-r1`) was shown
+on the installed Android Notifications screen with All 12 / Unread 8 / Read 4. Long-pressing the
+existing row opened **Delete notification?**. Tapping the existing **Cancel** control closed the
+confirmation without sending DELETE; the row remained visible and SQL stayed at 12 Bob rows, 8
+unread, marker count 1.
+
+For a real offline failure, I stopped only the owned API process after the confirmation opened and
+then tapped the same existing Delete control. Android recorded `HTTP DELETE -> transport failure`.
+The installed screen rolled the optimistic removal back: after scrolling to the top,
+the original **Stream3 cancel notification** card and unread dot were visible again. SQL remained
+at 12 rows / 8 unread / marker 1. This is a real transport outage and rollback, not a mocked
+repository result.
+
+I restarted the same local API, repeated the same long-press/confirmation/Delete journey, and the
+installed Android log recorded DELETE 200. The card disappeared, SQL returned to Bob 11 rows / 7
+unread, and exact id plus marker counts were 0. Settings → Log out returned Sign in, with the
+follow-up request receiving 401. The durable evidence uses sanitized receipts only:
+`n02-android-delete-cancel-failure-retry-20260922.json`,
+`n02-android-delete-cancel-failure-retry-http-receipt-20260922.json`,
+`cancel-before.xml`, `cancel-confirm.xml`, `cancel-after.xml`, `failure-confirm.xml`,
+`failure-after-scroll.xml`, `n02-cancel-failure-after-scroll.png`, `retry-after.xml`, and
+`n02-cancel-retry-after.png`.
+
+This adds installed Android Cancel, network-failure rollback and reconnect retry evidence. It does
+not claim an Android HTTP 5xx fault; accepted web PR86 evidence remains the source for real HTTP
+failure/toast, lost-reply, duplicate-tap and stale-response cases. No application source, design,
+build, schema or unit test changed. No provider/device delivery claim is made. The existing
+non-fatal hub `chat.local_profile_identity_lookup_error` remains a local schema boundary only.
+
+The durable private bundle now has 166 files; MANIFEST SHA-256 is
+`f1996b9a0d3b3d284c73eab0f643bee3b484927daf43c85e9c4655bcca74ba00`.
