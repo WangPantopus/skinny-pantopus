@@ -263,7 +263,12 @@ class HomeSettingsViewModel
             _identity.value =
                 HomeSettingsSampleData.Identity(
                     homeName = homeName,
-                    addressChipLabel = if (isPending) "Verifying" else if (verified) "Verified" else "Unverified",
+                    addressChipLabel =
+                        when {
+                            isPending -> "Verifying"
+                            verified -> "Verified"
+                            else -> "Unverified"
+                        },
                     addressChipTone = if (isPending || !verified) RowControl.ChipTone.Warning else RowControl.ChipTone.Success,
                 )
             _footerCaption.value = "$homeName · ${if (isPending) "Claim pending" else roleLabel(detail, access)}"
