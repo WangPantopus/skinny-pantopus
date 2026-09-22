@@ -233,6 +233,7 @@ class AddEmergencyInfoFormViewModelTest {
                     details = "Inhaler in go-bag.",
                     verifiedByUserId = null,
                     lastUpdated = Instant.ofEpochSecond(1_700_000_000),
+                    homeId = "home-1",
                 )
             val vm = makeVm(editDraft = seed, onUpdated = { captured = it })
             vm.setSeverity(EmergencySeverity.Critical)

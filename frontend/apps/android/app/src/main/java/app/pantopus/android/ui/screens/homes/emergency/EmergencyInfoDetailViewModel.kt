@@ -157,6 +157,7 @@ class EmergencyInfoDetailViewModel
                         },
                     location = dto.location,
                     rawDetails = dto.details.orEmpty(),
+                    homeId = dto.homeId,
                 )
         }
     }

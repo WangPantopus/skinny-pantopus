@@ -43,6 +43,7 @@ data class EmergencyFormDraft(
     /** Server fields the current form does not expose but must preserve. */
     val location: String? = null,
     val rawDetails: Map<String, String> = emptyMap(),
+    val homeId: String? = null,
 ) {
     companion object {
         /**
@@ -63,6 +64,7 @@ data class EmergencyFormDraft(
                 lastUpdated = parseInstant(dto.updatedAt) ?: parseInstant(dto.createdAt) ?: Instant.now(),
                 location = dto.location,
                 rawDetails = dto.details.orEmpty(),
+                homeId = dto.homeId,
             )
         }
 
@@ -367,7 +369,7 @@ class AddEmergencyInfoFormViewModel
                 when (val result = homesRepo.updateHomeEmergency(homeId, originalDraft.id, request)) {
                     is NetworkResult.Success -> {
                         val updated = EmergencyFormDraft.from(result.data.emergency)
-                        if (updated == null) {
+                        if (updated == null || updated.id != originalDraft.id || updated.homeId != homeId) {
                             _state.update {
                                 it.copy(
                                     isSaving = false,
