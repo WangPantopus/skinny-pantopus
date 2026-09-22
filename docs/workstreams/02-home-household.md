@@ -1,5 +1,15 @@
 # Stream 2 — Home and household
 
+## September 22 native owner My Tasks — runtime schema compatibility repaired and verified
+
+The retained Android owner journey reached the existing **My Tasks** screen, but the first real load showed `Couldn't load the list` / `Server error 500`. The existing backend route `GET /api/gigs/my-gigs` reproduced HTTP 500 on the same owner token. A disposable development backend isolated the server exception to the existing `GIG_LIST` projection requesting `Gig.boosted_at` while the retained disposable database was still at migration head `20260922010000` and lacked both nullable boost columns; `Gig` and `GigBid` each had zero rows.
+
+The source already contains the additive forward migration `supabase/migrations/20260922022000_restore_existing_gig_boost.sql`, also present on current `origin/master`. I applied that exact existing SQL to the disposable runtime only: `boosted_at`, `boost_expires_at`, and the existing partial index were restored. No application source, screen, SDK, route, service or migration history changed; migration history remains at `20260922010000` because this runtime intentionally does not replay the intervening paid-gig migrations. No fixture rows were inserted or changed.
+
+The real Android Retry control then reissued the same request and rendered the existing empty states: Open 0 / “No tasks posted yet — try Magic Task”, Active 0 / “No active tasks”, Done 0 / “No completed tasks yet”, and Closed 0 / “Nothing here”. Owner direct and LAN-proxy requests returned HTTP 200 with `{total:0,gigs:0}`; the viewer route also returned HTTP 200 with an empty envelope. The same retained owner session rendered the Home dashboard, verified Home Settings, empty Documents state, and the three seeded Members rows (owner, viewer tenant, editor tenant) through existing screens. No native build was started.
+
+Private evidence: `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-native-my-tasks-r1/`, MANIFEST SHA256 `0328a6438809cfd91cb46deb613c2e41aae8e473b35b3bcd9212d7cf23352a58`. The temporary diagnostic backend was stopped; retained backend 18143 and LAN proxy 18142 remain healthy. Physical iPhone remains unavailable/offline, so no install or launch is claimed. Provider, hosted, and physical-device boundaries remain open.
+
 ## September 22 D10 household self-leave — repaired and verified in the real web journey
 
 The current Home Settings caller used `api.homes.detachFromHome(homeId)` for the member-facing **Leave Home** action. That existing admin endpoint requires a target `userId`: on the retained full-schema native-r1 runtime, a lease-resident viewer's no-body request returned 503 (`Cannot read properties of undefined (reading 'userId')`), and `{}` returned 400 (`userId` required), while all three fixture occupancies remained active. The existing SDK already exposes `api.homes.leaveHome`, which calls the existing self-service `POST /api/homes/:id/move-out` transaction. No new screen, service, endpoint, schema or migration was justified.
