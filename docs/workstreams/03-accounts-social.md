@@ -3017,8 +3017,17 @@ Per grant: no tab creation, profile/alternate browser/extension install, cookie 
 IAB login or credentials. Built-in browser pane left closed. Capability boundary, not
 product failure; distinct-session/A step-up/B retirement scope untouched.
 
+User reported the extension installed and signed in; three further connection reads
+still returned [] and one bounded tabs_context createIfEmpty reported not connected
+(no tab created). Read-tier computer-use look at Chrome only: profile window shows
+claude.ai settings with Preferred browser = Built-in browser and no pinned Claude
+extension icon; the other window is an Incognito Pantopus tab owned elsewhere, untouched.
+Extension instance is not registered to this account from this session; likely side
+panel never opened/signed in for this profile, different Claude account, or reload
+needed. No install/reload/sign-in/profile/incognito change performed.
+
 Artifacts a02-retry-before/runtime-restore/browser-boundary.json; durable700
-MANIFEST **8ce0a2ffb4d2fa98f9112c91c833a4b1c962d3863cb36b1690d63b3e1709ed65**.
-Next: user/coordinator provides a connected Claude in Chrome extension (or another
-supported second context); then Chrome target tab first, then IAB tab, per grant.
-Runtime36126(API)/36139(Next) retained for that retry. No tests/app edit.
+MANIFEST **6aadada10fe3ceb6f94576bf1b2becc3bc015e808e76fef69d0d7de807862f82**.
+Next: user opens the Claude side panel in Chrome signed in as this account (or
+coordinator assigns another supported second context); then Chrome target tab first,
+then IAB tab, per grant. Runtime36126(API)/36139(Next) retained. No tests/app edit.
