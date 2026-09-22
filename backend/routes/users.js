@@ -1742,6 +1742,15 @@ router.post('/login', loginLimiter, validate(loginSchema), authRouteDpop(), asyn
     });
 
     if (authError) {
+      // GoTrue refuses unconfirmed accounts before we can inspect
+      // email_confirmed_at below; surface the same verification response.
+      if (/email not confirmed/i.test(authError.message || '')) {
+        logger.warn('Login blocked - email not verified', { email });
+        return res.status(403).json({
+          error: 'Please verify your email before signing in.',
+          needsVerification: true,
+        });
+      }
       logger.warn('Login failed - invalid credentials', {
         email,
         error: authError.message,

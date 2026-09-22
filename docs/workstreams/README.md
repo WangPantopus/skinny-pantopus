@@ -1,5 +1,202 @@
 # Three-stream coordination
 
+## September 22 — peer PR review: 149/151/154 approved pending refreshed CI; 152 blocked
+
+Coordinator reviewed the four PRs opened while Stream1 ran the native journeys.
+- PR149 (Stream3, iOS APIClient +8): skip the APNs registration POST until signed in and
+  keep the token for the existing post-login device registration. Minimal, matches the
+  fresh-install 401→"session expired" reproduction. Approved; branch updated to master,
+  fresh CI running, merge when CI OK.
+- PR151 (Stream3, users.js +12/−1): /verify-email retries a hashed token with the
+  alternate purpose (signup↔magiclink) so resent links opened from native deep links
+  verify. Minimal, web unchanged, invalid tokens still 400. Approved; merge after PR149.
+- PR154 (Stream2, native packages, 4 files): iOS list reload on reappearance, Mark picked
+  up enabled for delivered packages on both platforms, iOS Remove closes only after a
+  confirmed write, Android clears the stale error on success. Approved; branch updated,
+  fresh CI running, merge when CI OK. It edits docs/workstreams/02 on the feature branch:
+  merge order handles it this time, but the rule stands (status edits belong in the hub).
+- PR152 (Stream3, AuthManager+Session +6/−1): **blocked**. Its CI fails two existing iOS
+  regressions on every simulator: AuthManagerTests.testHandleUnauthorizedTransitionsToSignedOut
+  expects a plain 401 with no local token to publish sessionEndReason .expired, and
+  DeepLinkRouterSessionReturnTests.testOriginalAccountReplaysAfterServerRejectionAndConcurrentTeardown
+  expects endSession(reason) called after a concurrent teardown to still publish the
+  reason (accepted session-return contract). Gating the reason on "had a local token"
+  breaks both accepted behaviours. Stream3: reproduce the deliberate-sign-out race and
+  repair it without changing those contracts (for example suppress the reason only while
+  the app's own logout is in flight, or let logout clear the reason it just caused), then
+  push to the same PR; no new tests, existing suites must pass. Not merged.
+
+## September 22 — paid81fa83103 adopted master111580dfa; exact full CI green
+
+Paid `codex/paid-gig-integration` merged master111580dfa (PR142–PR153: Home package
+permissions and In Transit migration20260922010000, Stream3 unverified-login403, all
+coordinator docs) as ac26fdf1a, then renamed the22 still-unmerged paid migrations
+20260921020100–022200→20260922020100–022200 in unchanged order with identical bytes
+(gig-tip contract reference follows; policy check against origin/master passes,72
+infrastructure tests,67 SQL wrappers) as81fa83103. Exact CI35686792990 completed SUCCESS
+on every job (backend, Docker, web lint/typecheck/Jest, web E2E, complete schema replay/
+lint, migration safeguards, Android lint/test/assemble and instrumented tests, iOS lint/
+build and three simulators; Seeder skipped by change detection). PR47 is MERGEABLE and
+stays draft; PR34 keeps the older names and stays draft;46 separate. No application or
+unit-test change in this batch. Stream1 P02/P03/P08/P09 native acceptances published above;
+remaining Stream1 scope: P10 workload checks, P04/P05 fee policy pending the founder's
+payer/recipient decision, native dispute/3DS and hosted/Connect/live boundaries.
+
+## September 22 — P09 installed iOS refund / hold-release journey accepted (bounded)
+
+Same native harness and both installed clients re-ran the paid journey to capture, then
+exercised the existing owner Refunds and hold releases sheet against real Stripe TEST:
+partial $5.00 refund (real refund, Refund row, refunded_partial, History copy); a second
+$5.00 request with the committed reply lost showed "The result is not confirmed. Check
+status to recover this request." and Check status recovered both refunds with no
+duplicate provider call; an over-limit amount (5.00 with $2.50 remaining) disables
+Continue; gig 0102 Accept→authorize→Release authorization hold cancelled the real intent,
+Payment canceled, gig stays assigned per the dialog copy. One fixture remnant surfaced:
+an orphaned completion File row from the earlier run's Gig delete made the deterministic
+proof-file reserve return 409 (UI "Couldn't send your proof…", draft kept); removed under
+replica mode and the harness cleanup now deletes owned File rows. Not a reproduced
+production defect; recorded as a source observation for retries with identical proof
+bytes after a failed/soft-deleted file. Limits: synthetic identity/Connect, local Storage
+bucket, no socket push, no dispute/3DS, remaining $2.50 refunded by cleanup. Cleanup: full
+refund of the capture, release intent canceled, customer deleted, owned rows0, bucket
+removed, devices stopped. Owner audit20260922-stream1-p09-native-r1 (66 files),
+MANIFEST46227a8c58c06f44198bba35a796b019ee5e2ebab7f759196303d29881a07c70. Master CI on d2c2ea62c still queued/running; paid adoption waits for it.
+
+## September 22 — P08 installed iOS+Android paid-gig journey accepted (bounded); PR145 merged
+
+Stream3 PR145 (unverified-login403 feedback, reviewed with its a01-fix-verification
+receipt, CI green) merged57d6beb7d after a branch update. Stream1 then ran the accepted
+September21 wallet-release harness against both installed clients on the retained
+wallet-read-r1 stack with real Stripe TEST: iOS poster Accept→real PaymentSheet4242→
+finalize-accept (authorized1250c, intent requires_capture); Android worker deep link→
+Start task200; Android photo-proof delivery through the real files router (real File row
+and Storage object in an owned private bucket; the earlier shim path and a missing
+GIG_COMPLETION_BUCKET produced400/503 with the existing "Couldn't send your proof" copy
+and a kept draft); iOS Confirm completion→captured_hold1250/1063/187; owned cooling-off
+advance→existing processPendingTransfers→wallet_credited, WalletTransaction1063,
+Android wallet shows$10.63 available and the cleared income row; gig0102 cancel-before-
+pay and declined-card→abort both released their real intents (canceled) and reopened
+the bid. Synthetic identity/Connect, local Storage bucket for hosted S3, no socket push,
+emulator/simulator only. Cleanup: real refund of the1250 capture, both750 intents
+canceled, customer deleted, owned rows0, bucket removed, devices shut down. Owner audit
+20260922-stream1-p08-native-r1 (84 files,42 screens), MANIFEST5590f05258babb98d27b2fd420382154a68e5405f9e8a5a21e8bdef98ee1b76c.
+Paid adoption of master57d6beb7d waits for its running CI. PR34/47 remain drafts.
+
+## September 22 — P03 installed Android aged tip discovery accepted (bounded); Android control recipe
+
+Owned AVD Pantopus_Stream1_Start_R2 now runs headless (-no-window, ports5568/5569) and is
+driven with adb screencap/input/am start, so the earlier "supported window control
+unavailable" limit is superseded. Installed app.pantopus.android.debug (a65411758
+candidate, API10.0.2.2:18132) reopened the restored aged originals from
+preview.activeRequestId, discovered the real refunded (500c) and canceled (50c) Stripe TEST
+intents by customer list, recorded refunded_full/canceled receipts, kept the retained
+original after an injected provider failure ("Check tip status" dock), sent exactly one
+POST for two rapid taps with the committed reply lost ("The tip result is unconfirmed…"),
+and resolved the stale retry read-only; zero provider writes. Limits: synthetic
+/api/hub shell breaks the Android hub screen (harness only), snackbars not captured, adb
+text entry needs chunking on a cold emulator, emulator only. Owner audit
+20260922-stream1-tip-age-discovery-r1 now64 files (8 Android screens), MANIFEST
+a6e561d352e3a4e30905311e2a31b44d0c429ddbedb2c6fe3644a4afe4762715 (supersedes0b162fcf).
+Emulator killed after the run; peer emulators5554/5556 untouched. Documentation147 merged
+d4c044920; master CI on it is running and paid adoption still waits for that exact CI.
+P03 native tips are now accepted on iOS and Android for the bounded aged-discovery,
+failure, lost-reply, duplicate-tap and stale-retry paths; remaining P03 limits are
+cancel-tip natively, checkout/3DS natively, physical devices and hosted/Connect/live.
+
+## September 22 — P03 installed iOS aged tip discovery accepted (bounded); manifest updated
+
+Supported simulator control is now available headlessly (screenshot/tap/text on owned
+C2BCF36A while Simulator.app is still absent under Xcode27), so Stream1 ran the same
+aged-discovery harness against the installed a65411758 candidate (binaries byte-equal to
+September20 provenance): fixtures2/3 (1000c/2000c refunded Stripe TEST intents,27h old)
+through the real installed GigDetail→Send a tip→Continue original tip→real routes→real
+Stripe TEST reads→SQL. Success, injected provider failure, lost committed reply with two
+rapid taps (exactly one POST), device-retained-original recovery and post-terminal
+reopen all behaved as designed; zero provider writes. Cancel-tip natively, toasts,
+physical device, Android, hosted/Connect/live remain limits. Owner audit
+20260922-stream1-tip-age-discovery-r1 now40 files, MANIFEST
+0b162fcf2d6d8494cca4ba7378e5234c187187f0e6f454fd09dc94e8d90159d2 (supersedes8a053009).
+Owned simulator shut down after the run; EB5AD759 untouched (Stream2). Documentation146
+merged5d398aaeb; its master CI is running and paid adoption of708b0a931/5d398aaeb waits
+for it. Native Android tips remain the open P03 remainder; P04 no-show/cancellation-fee
+still needs the founder's payer/recipient decision.
+
+## September 22 — coordinator resumed; P02 >24h discovery accepted on web; PR143/144 merged
+
+Stream1 coordinator resumed in a new session (prior coordinator session idle since
+06:55 PDT; Stream2/3 handoffs waiting). Paid53e738cfc exact CI35607497359 completed
+SUCCESS in full (previously recorded as running). PR143 (Stream3 A02 two-context
+remote sign-out + A01 proposal) reviewed: 707 durable hashes verified, merged
+2201ceabd. PR144 (Stream2 package edit permissions repair; 33/33 hashes verified,
+CI35676049112) then received the founder's In Transit decision (migration
+20260922010000 strict superset, PUT status400, control gating) with CI on
+d4f33b930 green; merged 708b0a931 after branch update. Master CI35678148827 on
+708b0a931 is running; paid adoption waits for it. PR34/47 remain drafts, 46 separate.
+
+Stream1 P02: the four owned Stripe TEST tip intents (2026-09-20 22:24–22:40 UTC) are
+now 27h old, so the natural >24h cold discovery that the 07:17 UTC receipt could not
+prove was run through the real web UI on the retained owned wallet-read-r1 stack:
+fresh browser reopened the aged originals, Retry same tip discovered the real
+succeeded (fully refunded) and canceled intents by customer list with the −24h
+window, recorded refunded_full/canceled receipts, zero provider writes; injected
+provider failure, lost committed reply, duplicate tap, stale retry, reload and
+worker-permission 403 all behaved as designed. Details/limits in
+[Stream1](01-gigs-payments.md); owner audit20260922-stream1-tip-age-discovery-r1
+(22 files, MANIFEST 8a0530095c1ed0877bb758b231e63a5c3c0436534e1cb045e5d8c3b78fac7039).
+No app edit/new test. P02 stays open only for hosted/L01 provider boundaries.
+
+Stream2 next (after master708b0a931): D02 browser media-discard baseline on the same
+owned18141/18142/64550–59 runtime and current master source. Reproduce in the actual
+issue/bill/package panels whether attached media is discarded or a write error is
+silently swallowed: one synthetic record each, real routes/SQL/storage or its explicit
+local limit, exact before/after state, no repair until reproduced; hand off the smallest
+existing-handler proposal. Exact child-first cleanup; preserve ledger56/approved
+migrations. The Home iPhone17 simulator EB5AD759 and backend8000 Stream2 started for
+the founder's device session remain Stream2-owned: shut both down when the founder is
+done; Stream1 will not touch them. No native acceptance claim from that build.
+
+Stream3 grant: A01 signup/verification/reset proposal (durable708 f967e080) is granted
+as written: exactly one synthetic stream3-auth-r3-*@example.com created only through
+the real register form and deleted at cleanup; Evan d3671605 as reset target with the
+recorded password restored by a second real reset; retained Mailpit64535/36 as the only
+mail sink; journeys as proposed (success, duplicate400, pre-verification login, consumed
+link reuse/resend, reset success/old-password failure, consumed reset reuse, unknown
+email). No provider/hosted mail, limiter exhaustion, lost-response hook, clock/config
+change or app edit; expired-token cases stay a recorded limit. Retained36126/36139/DB
+only; record exact GoTrue/User/session/mail rows before and after and clean exactly.
+
+Stream1 next: adopt master708b0a931 into paid after its CI, then P03 installed native
+tips on owned simulator C2BCF36A via headless simctl plus the supported simulator
+control tool (Simulator.app is still absent under Xcode27; EB5AD759 is Stream2's).
+
+## Stream2 D01 package-edit entry baseline assignment
+
+Coordinator verified12 source artifacts (manifest61d14626),54 Git bindings with53
+present/one historicalmissing. All six compared dashboard variants give existing
+clickable Deliveries rows a no-op callback. Existing package-aware panel opener,
+editpanel/savehandler/SDK PUT/permissionroute/HomePackage contract already exist.
+This is a source lead, not yet an observed UIdefect; no replacement is justified.
+
+Assign one baseline on Stream2 owned18141/18142/64550–59/retainedledger56, current
+source rebound before runtime. Reuse existing ownedfixture/syntheticidentity only;
+relevant packageGET/POST/currentauthority/readprojection must run actual existing
+routes/services/SQL, including truly emptyGET200 and rendered createdrow. Label
+unrelated scaffoldcollections; do not synthesize the package list/editor result.
+Existing TrackPackage UI creates exactly one clearly synthetic expected package
+(description/carrier only; no media/tracking/provider). Record real201/fullrow and
+unrelatedfullstate. ExpandDeliveries and click that exact row once; capture actual
+panel/URL/controls/requests/fullstate. If editor opens, record then close unsaved.
+No PUT/status/pickup/repeatedcreate/fault or applicationedit is assigned. InTransit
+schema/read-filter mismatch is a separate later requirement, not part of this repair.
+
+Clean exact newlycreatedpackage and ownedbasefixture child-before-parent; verify
+allcounts0/fullunrelatedstate/RPCprovenance/ledger56 unchanged. Close newtab/ownAPI/
+Next/fivecontainers and releaseports; preserve otherdata/caches/devices/peers.
+No new appfile/helper/table/migration/design/unit test. Hand off reproduced outcome
+and smallest existing-opener wiring proposal only if rowno-op actually occurs.
+Reuse accepted dashboard-read/current-authority/panel-retirement evidence within
+source/runtime limits; no guest/member/Settings journey replay.
+
 ## Current paid head fixed; one A02 browser reconnect retry
 
 Paid53e738cfc is published, CI35607497359 safeguards/freshschema replay pass; fullCI

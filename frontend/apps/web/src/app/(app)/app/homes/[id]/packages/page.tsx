@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { readCurrentHomeAccess } from '@/components/home/homeAccessFingerprint';
 
 type PkgTab = 'expected' | 'delivered' | 'archived';
 
@@ -29,14 +30,29 @@ function PackagesContent() {
   const [newDesc, setNewDesc] = useState('');
   const [newCarrier, setNewCarrier] = useState('');
   const [creating, setCreating] = useState(false);
+  // Current package grants, read with the packages; controls the actor cannot
+  // use are hidden (the routes enforce the same HomePackage policy).
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const canAdd = permissions.includes('packages.edit') || permissions.includes('packages.manage');
+  const canEdit = useCallback(
+    (pkg: any) => permissions.includes('packages.manage') || (permissions.includes('packages.edit') && pkg.created_by === currentUserId),
+    [permissions, currentUserId]
+  );
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
   const fetchPackages = useCallback(async () => {
     if (!homeId) return;
     try {
-      const res = await api.homeProfile.getHomePackages(homeId);
+      const [res, access, me] = await Promise.all([
+        api.homeProfile.getHomePackages(homeId),
+        readCurrentHomeAccess(homeId).catch(() => null),
+        api.users.getMyProfile().catch(() => null) as Promise<Record<string, any> | null>,
+      ]);
       setPackages((res as any)?.packages || []);
+      setPermissions(access?.hasAccess === true && Array.isArray(access.permissions) ? access.permissions : []);
+      setCurrentUserId((me as any)?.user?.id || (me as any)?.id || null);
     } catch { toast.error('Failed to load packages'); }
   }, [homeId]);
 
@@ -89,12 +105,14 @@ function PackagesContent() {
           <button onClick={() => router.back()} className="p-1.5 hover:bg-app-hover rounded-lg transition"><ArrowLeft className="w-5 h-5 text-app-text" /></button>
           <h1 className="text-xl font-bold text-app-text">Deliveries</h1>
         </div>
-        <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition">
-          <Plus className="w-4 h-4" /> Log Package
-        </button>
+        {canAdd && (
+          <button onClick={() => setShowCreate(!showCreate)} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition">
+            <Plus className="w-4 h-4" /> Log Package
+          </button>
+        )}
       </div>
 
-      {showCreate && (
+      {showCreate && canAdd && (
         <div className="bg-app-surface border border-app-border rounded-xl p-4 mb-4 space-y-3">
           <input type="text" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Package description" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           <input type="text" value={newCarrier} onChange={(e) => setNewCarrier(e.target.value)} placeholder="Carrier (optional)" className="w-full px-3 py-2 border border-app-border rounded-lg text-sm text-app-text bg-app-surface placeholder:text-app-text-muted focus:outline-none focus:ring-2 focus:ring-emerald-400" />
@@ -131,12 +149,14 @@ function PackagesContent() {
                   </div>
                   {pkg.tracking_number && <p className="text-[11px] text-app-text-muted mt-1 font-mono">#{pkg.tracking_number}</p>}
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {pkg.status === 'delivered' && (
-                    <button onClick={() => markPickedUp(pkg.id)} title="Mark picked up" className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition"><Hand className="w-4 h-4" /></button>
-                  )}
-                  <button onClick={() => handleDelete(pkg.id)} className="p-1.5 text-app-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-4 h-4" /></button>
-                </div>
+                {canEdit(pkg) && (
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {pkg.status === 'delivered' && (
+                      <button onClick={() => markPickedUp(pkg.id)} title="Mark picked up" className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition"><Hand className="w-4 h-4" /></button>
+                    )}
+                    <button onClick={() => handleDelete(pkg.id)} className="p-1.5 text-app-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                )}
               </div>
             );
           })}
