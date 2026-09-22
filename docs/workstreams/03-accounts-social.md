@@ -3191,3 +3191,12 @@ deletion not exercised, retained DB lacks LocalProfile.verified_resident (chat i
 warning only). Cleanup: Hank and Evan's test preference row deleted (auth.users 3/User 3,
 Evan active sessions 0); natural revoked sessions/devices/push tokens and Mailpit retained;
 simulator/emulator apps left installed and signed out; web tab closed. No new unit tests.
+
+Addendum: Android Lockdown verified — Devices→Lockdown→dialog→password step-up→POST step-up
+200→POST /api/auth/sessions/revoke-all 200 (sockets disconnected); own session revoked reason
+lockdown, Evan active sessions 0/45, remembered devices 0/4 active, GoTrue 0; app on login with
+account hint, no banner. A second emulator ANR (6.5s input timeout at host load ≈13 while
+system_server itself skipped 36/88 frames) is recorded as emulator starvation, not an app
+defect; a dedicated Android performance pass on a quiet host is recommended. Native account
+deletion left unexercised to preserve fixtures. Durable719 MANIFEST
+**dd5a17bb716623447c3a4e44998e00ae298538c3e3f7759f6c46100bb35e7a42**.
