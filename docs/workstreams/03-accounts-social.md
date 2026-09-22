@@ -3530,3 +3530,19 @@ The durable audit bundle now contains 130 files with MANIFEST SHA-256
 `a17d90aa41cae3167b7cf76e50dc67de6d193cd587c74ddd93f0ba6990dce915`. The current local API
 process was stopped after verification; the user-owned browser tab was left untouched. No
 credentials, raw tokens, database archives or operator logs were added to Git.
+
+### A05 native profile edit — populated-skill preservation addendum
+
+Coordinator requested a populated-skill case rather than relying only on Bob's empty baseline. A
+single disposable `UserSkill` row (`Stream3 Temporary Skill`) was inserted for Bob, then a real
+GoTrue bearer called the existing PATCH route on an isolated API instance at 18134. GET before,
+PATCH 200, and GET after each returned the one skill unchanged alongside the canonical fields;
+the PATCH also applied a temporary bio. The exact row was deleted by id/user predicate, the bio,
+first/last/name baseline was restored, and SQL ended at zero Bob `UserSkill` rows. Evidence:
+`a05-native-profile-edit-populated-skill-20260922.json`. This is HTTP/API/persistence evidence
+for populated-skill preservation; the installed Android screen's prior save used the same decoder
+contract, while the skill list itself is not rendered by the current Edit profile screen.
+
+The refreshed durable bundle has 131 files; MANIFEST SHA-256 is
+`1ed1182466b240fab36ecc6b2bd4a0eb92b2b4706c339174b7fd4ef29ff982fc`. The app repair remains
+backend-only, so no new native build was needed; the exclusive heavy slot is released.
