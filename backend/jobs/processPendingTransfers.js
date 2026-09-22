@@ -133,8 +133,8 @@ async function processPendingTransfers() {
           .eq('id', payment.id)
           .single();
 
-        const preciseGig = payment.payment_type === 'gig_payment';
-        const admittedStates = preciseGig ? ['captured_hold', 'refunded_partial', 'refunded_full'] : ['captured_hold'];
+        const protectedWalletPayment = ['gig_payment', 'tip'].includes(payment.payment_type);
+        const admittedStates = protectedWalletPayment ? ['captured_hold', 'refunded_partial', 'refunded_full'] : ['captured_hold'];
         if (!fresh || !admittedStates.includes(fresh.payment_status) || fresh.dispute_id) {
           logger.info('processPendingTransfers: skipping (state changed)', {
             paymentId: payment.id,
@@ -146,7 +146,7 @@ async function processPendingTransfers() {
 
         // Safety: verify amount makes sense
         let transferAmount = payment.amount_to_payee;
-        if (!preciseGig && (!transferAmount || transferAmount <= 0)) {
+        if (!protectedWalletPayment && (!transferAmount || transferAmount <= 0)) {
           logger.error('processPendingTransfers: invalid transfer amount', {
             paymentId: payment.id,
             amount: transferAmount,
@@ -155,7 +155,7 @@ async function processPendingTransfers() {
           continue;
         }
 
-        if (preciseGig) {
+        if (protectedWalletPayment) {
           const result = await walletSettlement.settle(payment);
           if (result.reused || result.settlement.status === 'no_earnings') { skipCount++; continue; }
           // Money, in-app notices and delivery events committed together. The
