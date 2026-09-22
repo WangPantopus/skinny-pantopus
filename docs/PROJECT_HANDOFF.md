@@ -1,5 +1,71 @@
 # Pantopus project handoff
 
+## September 22 09:30 UTC — founder STOP; exact state of the parallel Stream 2/3 session (START HERE for Streams 2 and 3)
+
+Both stream agents were stopped mid-batch on the founder's instruction. Everything is
+committed and pushed; nothing is merged. Runtimes were deliberately left running so the
+next agent can continue without a rebuild. All PRs below need `gh pr update-branch`
+before CI is final (they are BEHIND master 39fd33433).
+
+**Stream 2 (Home)** — code [PR160](https://github.com/WangPantopus/skinny-pantopus/pull/160)
+`codex/stream2-home-batch1-20260922` head 417a46465 (CI rerunning after a ktlint fix; the
+prior head was green except that rule); docs [PR161](https://github.com/WangPantopus/skinny-pantopus/pull/161)
+`codex/stream2-home-docs-20260922` edf9dabd4 (five newest-first sections in
+02-home-household.md). Web milestones done and cleaned: D02 attachments/silent write
+errors (6ce4dbfc2), D03 standalone bill units (340185123), package `delivered_at`
+clearing + vendor_name (bfa286b24), D09 false-empty pets/polls readers (f05d2c5b7).
+Native batch 1 (installed iOS + Android, real GoTrue logins on disposable project
+`pantopus-stream2-native-r1`): Android bill date off-by-one, Android Mark paid/Remove Moshi
+NPE, "cancelled"→"canceled" on both, backend `paid_by`, iOS due-date UTC parse, D05
+hard-coded "Owner"/"Verified" settings labels now derived from the real role/verification
+(27b0fcf82, 46b7df6bd). Bundles: `20260922-stream2-{media-discard,bill-units,
+package-delivered-at,false-empty-readers,home-native-batch1}-r1`. Runtime left running:
+project 64553/64554 (ledger 59), backend pid 45479 :18143, logging proxy pid 52633
+:18142, emulator-5556 (pid 37281, app r5, viewer logged in), simulator 6F914A30 (iOS r4,
+viewer logged in), fixture rows HomeBill 3 / HomeOccupancy 3. Open founder calls: issue/
+bill/package attachments have no server contract; Android has no Issues entry point for a
+member without a Local Profile; Docs "Upload document" shown to docs.view-only; hub
+"Verify your home" shown to verified lease residents; web bill edit panel unreachable and
+PUT drops bill_type/period/currency; issue PUT requires home.edit while RLS allows the
+reporter. Next: PR160 CI green → native Issues, tasks, members, settings/notifications,
+guest passes, docs, emergency, calendar, pets, residency; then D remainder → R03–R06 →
+I → F → M → H07/H08. Resume note: `/private/tmp/pantopus-workstream-home/.stream2-verification/RESUME-2026-09-22.md`.
+
+**Stream 3 (accounts/social)** — fix PRs from master c1280e078, one each:
+[163](https://github.com/WangPantopus/skinny-pantopus/pull/163) backend UserBlock gate on
+follow/feed/post/comments (Gate 3a fails because an added import shifted an allowlisted
+`users.js` line; remedy in the PR body), [164](https://github.com/WangPantopus/skinny-pantopus/pull/164)
+iOS background push-tap crash (green), [165](https://github.com/WangPantopus/skinny-pantopus/pull/165)
+iOS sheet dismissal + `new_follower` rewrite (green), [166](https://github.com/WangPantopus/skinny-pantopus/pull/166)
+iOS Beacon follow fallback / Follow hidden after block / refused-send banner (green),
+[167](https://github.com/WangPantopus/skinny-pantopus/pull/167) and
+[168](https://github.com/WangPantopus/skinny-pantopus/pull/168) Android twins (ktlint findings
+listed in the PR bodies; 168 not yet re-verified on device). Docs
+[PR170](https://github.com/WangPantopus/skinny-pantopus/pull/170) `codex/stream3-social-docs-20260922`
+3ae65c3e6 (appended sections in 03-accounts-social.md). Verification-only integration
+branches `codex/stream3-verify-{ios,android}-integration` (PR171/172) are never for merge;
+close them once the fix PRs land. Verified on installed iOS (Evan) and Android (Bob):
+N03 feed/empty/503-retry/post/reply/follow/identity, N04 report post+user, block, blocked
+list/unblock/re-block, DM 403 both directions, block-in-DM, held reply; N01 list/unread/
+tap destinations, simctl push foreground+background, Android background/cold-start links,
+permission denial, login continuation and account switch. Bundle
+`20260922-stream3-native-social-r1` (100 files, MANIFEST 9ff965be…faf4). Runtime left
+running: API pid 49623 :18130 (running PR163 code), Next 36139 :18131, stream3
+containers, simulator 0AE16FA0 (Evan, build e86b9fe5b), emulator-5554 (Evan, APK
+827f28a08, location permission revoked). NOT yet cleaned: 2 Posts, 2 PostComments, 1
+PostReport, 2 UserReports, 2 UserBlocks, 1 UserFollow, 5 Notifications
+(`cleanup-social-r4-rows.py`); Evan has 2 active sessions and a throwaway password
+(`restore-evan-password.py`). Founder calls: persona surfaces are not gated by a personal
+UserBlock; no report-outcome notification producer exists; "PERSONA · VERIFIED" chip
+semantics. Next: fix CI on 163/167/168, install the 10c4368c6 APK and finish the four
+Android re-verifications, rerun the touched iOS/Android suites, cleanup + password
+restore, then batch 2 A05 → A03 → N05 → A02 → A01 → A04/N02. Resume note:
+`/private/tmp/pantopus-stream3-20260920-r1/RESUME-2026-09-22.md`.
+
+**Coordinator**: PR159 (this branch) carries the P01 relabel and these handoffs; merge
+order is the founder's/coordinator's call. PR158 is a stale duplicate of merged PR157 —
+close it. PR47 is ready for review at the founder's discretion; PR34 draft; PR46 separate.
+
 ## START HERE — state as of 2026-09-22 09:15 UTC (Stream 1 coordinator session ended)
 
 **Where things are.** Master `85399bedd`. Paid branch `codex/paid-gig-integration` head
