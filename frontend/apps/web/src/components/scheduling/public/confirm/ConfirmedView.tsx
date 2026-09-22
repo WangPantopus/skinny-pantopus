@@ -31,6 +31,7 @@ import {
 } from "@/components/scheduling";
 import { ShimmerBlock } from "@/components/ui/Shimmer";
 import { getPaymentStatusLabel } from "@/components/payments/PaymentStatusBadge";
+import { authPageHref } from "@/lib/auth-utils";
 import BookingSummaryCard from "./BookingSummaryCard";
 import { formatCents, formatSlotRange } from "./confirmUtils";
 
@@ -362,7 +363,7 @@ export default function ConfirmedView({ token }: { token: string }) {
 
         {/* Create-account nudge */}
         <Link
-          href="/signup"
+          href={authPageHref("/register", "/app/scheduling/my-bookings")}
           className={clsx(
             "flex items-center gap-3 rounded-xl border px-3.5 py-3",
             tk.bgSoft,
