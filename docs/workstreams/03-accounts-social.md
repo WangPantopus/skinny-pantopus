@@ -3325,8 +3325,7 @@ retry.` toast and no extra row was written. SELECT/INSERT were restored, a retry
 UI returned the success toast, and SQL still showed the single original row. The exact
 temporary row was then deleted with actor/target/reason predicates (`DELETE 1`, follow-up
 count 0); the fixture actor logged out through Settings → Log Out and the browser ended at
-`/login`. Evidence: `a05-profile-report-final-evidence-20260922.json`. The refreshed 111-file
-MANIFEST is **a523f02956eaffc7e84ef43d1fee73571b6eebc91ae401a020717430a0e3869d**.
+`/login`. Evidence: `a05-profile-report-final-evidence-20260922.json`. The source/UI checkpoint was 111 files; the API evidence below refreshes the bundle to 112 files.
 
 This closes the web profile report journey within the local fixture scope. It does not claim
 moderation-review behavior, provider delivery, an external recipient, or a native profile
@@ -3347,8 +3346,7 @@ and the browser ended at `/login`.
 The source trace is `AppShell.openDiscover` → existing `/app/discover?q=` route,
 `useUniversalSearch` → `identitySearch.searchProfiles` for profile scopes with stale-query
 retirement, and `UnifiedResultCard` → `router.push(item.href)`. Evidence is
-`a05-search-profile-destination-20260922.json`; the refreshed durable 111-file MANIFEST is
-**a523f02956eaffc7e84ef43d1fee73571b6eebc91ae401a020717430a0e3869d**. This verifies the
+`a05-search-profile-destination-20260922.json`; the source/UI checkpoint was the 111-file manifest; the API evidence below refreshes it. This verifies the
 real web search-to-profile destination within the local runtime; it does not claim search
 provider/index freshness, native search parity, or unrelated marketplace/subscription/
 booking/wallet/mail actions. No application/schema/unit-test change was made.
@@ -3358,3 +3356,16 @@ revoked only on `UserReport`, then SELECT/INSERT were restored; final `\dp` show
 standard full `arwdDxtm` ACL. No other table privilege was touched. A pre-fault ACL snapshot
 was not captured, so the evidence records the final ACL and this limitation rather than
 claiming an unsubstantiated byte-for-byte before/after comparison.
+
+
+### A05 profile search — API and no-write evidence addendum
+
+The same search journey was bound to the real API and retained SQL. An authorized Bob
+fixture login returned HTTP 200; `GET /api/identity/search?scope=all&q=stream3_auth_r3_dana&limit=5`
+returned HTTP 200 with one `local_profile` result (`Auth Dana`, href
+`/stream3_auth_r3_dana`), and fixture logout returned HTTP 200. Before/after SQL counts
+for `UserFollow|UserBlock|UserReport|Notification|ChatMessage|Post` were identical at
+`0|1|0|20|0|6`, proving the read-only search made no social/report/message/post writes.
+The identity-search `local_profile` id is deliberately distinct from the Auth User id; the
+route href is the established destination contract. Evidence: `a05-search-api-20260922.json`.
+The refreshed 112-file MANIFEST is **4a55f3e217be0b6fad71802d3d8a3a1bb403a9ad429e2ab78874d2870e6de9ae**.
