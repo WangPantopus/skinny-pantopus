@@ -1,6 +1,20 @@
 # Pantopus project handoff
 
-Runtime update September22 15:04 UTC: Stream1 API18132/Next18133 are reserved again for ownedf9220535 won-after-wallet-income status verification; actualTESTcharge/customer cleanup pending, ledger80 retained. No new application edit yet; see newest Stream1 section. Stream2 heavy slot explicitly released;183 final16-file MANIFESTdc9f2a3c5820a6adaa10e365a2443c2a7c0b1b47bf81995e0f91082f884eb022 independently verified. PR167 also awaits a source-correct installed notification-tap binding from Stream3 before merge. Earlier runtime snapshots below are historical.
+## Current coordinator checkpoint — September 22, 15:25 UTC
+
+PR188cd6d6876c completes bounded won-after-wallet-income state repair: actual TEST baseline,
+fresh first-delivery web/API/SQL, three truthful privilege failure/retry controls and51existing
+tests/CI35745486220 pass.14-file MANIFEST4198e8d08fa19d016fef54dae9f30cf77b63852a47898f5a53851fa437b63057.
+Both TESTcharges refunded/customerdeleted;22 SQL/auth/event checks0 each. API18132/Next18133
+stopped/tabsclosed/appclean; retain SQL64562 ledger80 and original79 entries unchanged.
+PR167 merged3c1e4a47d after766feed passed CI35740330734 and final installed notification-tap
+proof; sanitized Stream3 156-file MANIFEST99bf0cb46f5127210137e35290932978fd914d2cca950d78e384ac50d41fa3c1 verified.
+PR168142220190 runs freshCI35746647258; merged-master3c1e4a47d CI pending. Paid integration
+retains last acceptedf9176. Stream2 completed189EmergencyDelete candidate0cbb505fe and
+released heavy native slot;189CI35746587131 pending, coordinator evidence review next.
+Queue168→177→179→180→182→183→184→185→186→187→188→189; docs161/170/174 last.
+Verify-only171/172 never merge. Eight closed/72partial-open remain. Earlier checkpoints
+below are historical; exact evidence/limits/runtime state are in the stream status files.
 
 ## Current coordinator checkpoint — September 22, 15:00 UTC
 

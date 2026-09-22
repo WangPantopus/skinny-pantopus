@@ -1,21 +1,49 @@
 # Stream 1 — Gigs and payments
 
-## September 22 — active won-dispute status after prior wallet income
+## September 22 — won-dispute state after wallet income complete; PR188
 
-Clean newbranchcodex/won-dispute-payment-state from verifiedmasterf9176cc2c. Existing
-won handler selects transferred only for stripe_transfer_id; the already accepted
-wallet projection provides exact income proof. Current/merged/initial/all-ref comparison
-recorded before edit. New owned real TEST1250charge and actualworker1062income predate
-deliberately delayed created-event delivery. Pending real won closure/status/UI check;
-no defect or application change claimed yet. Synthetic identity/fulfillment/age remain.
-Private /private/tmp/pantopus-stream1-won-wallet-state-r1, prefixf9220535, API18132PID36137,
-Next18133PID38644, IABtab8 worker session. Setup alreadydone; keep provider receipt for
-actual won refund/customer/exactSQL cleanup. Retain ledger80; privateRESUME current.
-PR183 durable16files dc9f2a3c5820a6adaa10e365a2443c2a7c0b1b47bf81995e0f91082f884eb022
-verified; peer body/privateRESUME/docsd81b1098b current, heavybuildslot released.
-PR167 final notificationPath rewrite needs an actual source-correct installed notification
-row tap; earlier broad bare-link evidence alone does not bind it. Peer3 is resolving this
-while its last Android CI job runs. Preserve all accepted evidence and queue order.
+Branch `codex/won-dispute-payment-state`, `cd6d6876cd32ce132c936e2e7601a6fad98e6873`,
+[PR188](https://github.com/WangPantopus/skinny-pantopus/pull/188), base verified masterf9176cc2c.
+One existing `backend/stripe/stripeWebhooks.js` changes20add/4remove. Actual TEST1250charge,
+existing worker1062income and delayed actual won dispute event reproduced Payment/Gig
+captured_hold and web History captured hold despite exact wallet_credited projection.
+Compared current/merged/initial/all-ref implementations; reused existing wallet projection.
+The handler now restores transferred using that proof, checks fallback failures and
+updates the current Gig mirror before acknowledging. No new SQL/service/table/screen,
+unit test, layout, styling or navigation change.
+
+Actual PaymentWalletSettlement SELECT, Payment UPDATE and Gig UPDATE privilege faults each
+returned500 and left the event unprocessed; exact ACL restoration/retry200 repaired state
+without money changes. The intermediate Payment-only candidate exposed the stale Gig mirror;
+the final repair covers it. Separate fresh candidate actual TEST first won-event delivery
+(no event reset) restored both rows transferred, preserving one1062income/settlement. Two
+concurrent processed duplicates preserved money and six notices. CUA existing web History
+showed transferred→disputed→transferred with10.62. Existing51tests/5suites, syntax/diff and
+[CI35745486220](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35745486220)
+passed backend/Docker/full fresh schema/SQL/safeguards; native/web jobs skipped by diff.
+
+Durable14-file [result](../../../skinny-pantopus/.pantopus-recovery/audits/20260922-stream1-won-dispute-state-r1/RESULT.md),
+MANIFEST `4198e8d08fa19d016fef54dae9f30cf77b63852a47898f5a53851fa437b63057`, independently verified.
+Limits: synthetic identity/fulfillment/maturity, deliberate delayed locally signed forwarding
+of unchanged actual TEST events. Baseline fault replay explicitly reopened its owned event;
+fresh candidate did not. Compact CUA accessibility receipt, no screenshot export. No native
+dispute, natural48hour, hosted transport/worker, Connect/bank/live-money or external notice
+claim. A private cleanup/start race rolled back the initial fresh seed; awaiting old cleanup
+and confirming both prefixes0 resolved it before successful setup, without application edits.
+Bothf9220535/36 have22 independent SQL/auth/event checks0 each. Both TEST charges refunded1250,
+both customers deleted, both CUA tabs logged out/closed, API18132/Next18133 stopped and owned
+Next generated files cleaned. Retain SQL64562 ledger80/original79 hash unchanged; app treeclean.
+PRbody/privateRESUME current. Eight closed/72partial-open unchanged; P06 remains partial.
+
+Coordinator: PR167 merged3c1e4a47d after exact766feed all CI35740330734 passed and installed
+final notification-row tap bound to sanitized156-file Stream3 MANIFEST
+99bf0cb46f5127210137e35290932978fd914d2cca950d78e384ac50d41fa3c1 (all hashes verified).
+PR168 refreshed142220190; freshCI35746647258 running. Current merged-master3c1e4a47d
+aggregate CI pending; paid integration retains last acceptedf9176. Stream2 completed189
+Emergency Delete candidate and released heavy slot, CI35746587131 pending; coordinator
+review/evidence validation next. Queue168→177→179→180→182→183→184→185→186→187→188→189,
+docs161/170/174 last; verify-only171/172 never merge. Continue independent remainingP/O/L
+verification and peer review while freshCI runs; do not repeat accepted journeys.
 
 ## September 22 — lost-dispute wallet recovery complete; PR187
 
