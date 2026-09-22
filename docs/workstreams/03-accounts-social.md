@@ -4138,3 +4138,72 @@ and API receipts are recorded honestly. This does not claim physical keychain fa
 revocation, APNs/FCM delivery or hosted OAuth behavior. The durable private bundle now contains
 187 files; refreshed MANIFEST SHA-256 is
 `3f0a7bac2613d80a2a6d314e1b8eaa51c5671b4a412fc071aec989fc3a3edb47`.
+
+## A05 installed Android profile readback fault and retry (2026-09-22 addendum)
+
+The existing backend repair for the profile PATCH readback contract had already been verified at
+HTTP/API level, but its user-facing Android fault/retry state had not been exercised. I reused the
+existing installed APK (`2728688a30a78449c990c302ebc72053802322772a990e7a3a6030e2265d504a`) on
+`emulator-5554`, the existing **Settings → Edit profile** screen, and the existing
+`PATCH /api/users/profile` caller. With the disposable Auth Bob fixture, I entered temporary
+`Fault` / `Probem` values and tapped the existing Save control after revoking only
+`SELECT` on `public."UserSkill"` from `service_role`. The real request returned HTTP 503 with
+`PROFILE_READBACK_UNAVAILABLE`; the server logged that the profile write completed but skills
+readback was unavailable. The installed screen retained **2 unsaved changes** and did not show a
+false saved state. This is the real UI/API boundary for the repaired readback error path, not a
+mocked response.
+
+After restoring the existing `UserSkill` SELECT grant, the same pending form was retried through
+the same Save control. The real request returned HTTP 200; the screen showed **All changes saved ·
+just now**, and the server logged `Profile updated`. The temporary first/last name write was then
+removed by an exact SQL fixture cleanup because the public PATCH validation requires string name
+parts; the User row ended with `first_name=NULL`, `last_name=NULL`, `middle_name=NULL`, `name='Auth Bob'`,
+`bio=NULL`, zero Bob `UserSkill` rows, and the SELECT grant restored. Settings logout returned
+HTTP 200 and the local API process was stopped. No application, schema, design, provider or unit
+-test change was made.
+
+Evidence: `a05-android-profile-readback-fault-retry-20260922.json` and
+`a05-android-fault-evidence-20260922/{fault-before.xml,fault-after-503.xml,retry-200.xml}`.
+The two fault-state XML captures intentionally have the same visible state because the repaired
+failure preserves the pending form; the distinct retry XML records the transition to saved. This
+proves local installed UI/API/SQL error and retry handling. It does not claim hosted provider,
+iOS or physical-device behavior.
+
+## Current row-accounting correction after the native addenda (2026-09-22)
+
+The older generic row table above predates the latest native evidence. The current accounting is:
+
+- **N01:** local saved-record/list/preferences and installed controls are evidenced; APNs/FCM
+  delivery, token rotation, physical-device delivery, and true provider foreground/background/
+  cold-start behavior remain unverified.
+- **N02:** web and installed Android list/filter/read/delete/Cancel/offline rollback/reconnect retry,
+  `new_follower` destination, and induced Android HTTP-5xx rollback/retry are evidenced. iOS
+  installed destination and provider delivery remain unavailable; no duplicate repair is indicated.
+- **N03:** web/API/SQL and Android discovery/follow/unfollow/post/reply/mute/identity/block paths,
+  including reopened local-neighbor block visibility and fail-closed blocked-list read fault, are
+  evidenced. Fresh iOS/provider freshness and policy changes across Persona/UserBlock/local-home
+  scopes remain outside this local runtime.
+- **N04:** local block/unblock, blocked DM refusal, report idempotence/failure/retry, access/cache/
+  error paths and installed Android safety are evidenced. Hosted moderation/shared-owner schema and
+  iOS/provider boundaries remain owner work.
+- **N05:** reminder worker/pause/retry and daily-agenda preference persistence are evidenced; no
+  daily-agenda producer/consumer or settled delivery policy exists, so delivery is not claimed.
+- **A01:** web/native signup, verification, recovery and unverified-login feedback are evidenced;
+  external Google/Apple consent/callback/provider boundaries remain unavailable.
+- **A02:** refresh/retry/logout/remote sign-out/lock-down/account switching/local-data retirement
+  and installed Android cold-process session restoration are evidenced; physical provider
+  revocation and external OAuth return remain unavailable.
+- **A03:** existing document-picker/chooser-to-byte path and local reads/quota are evidenced; the
+  real hosted portfolio upload returned the provider's existing credential 500 with no partial row,
+  so hosted S3/CloudFront success and lifecycle remain shared-provider boundaries.
+- **A04:** local provider capability and invalid-provider handling are evidenced; real provider
+  consent/callback/production activation remains unavailable and was not changed.
+- **A05:** web report/search/edit/audience/mailbox and installed profile save are evidenced; this
+  addendum now also covers installed profile readback HTTP-503 preservation and same-form HTTP-200
+  retry. Marketplace/subscription/booking/wallet/mail/search and Home/payment findings remain with
+  their owners.
+
+The durable private bundle now contains 191 files with MANIFEST SHA-256
+`f72d89f805e0592d0a7d967e2ed1afb121dfe10ad81212543b2c2efc4f892107`. No unit-test coverage is
+claimed or required; implementation, local UI/API/SQL behavior, CI, merge, and external provider
+boundaries remain separately reported.
