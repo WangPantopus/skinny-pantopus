@@ -2711,7 +2711,11 @@ router.put('/:id/bills/:billId', verifyToken, async (req, res) => {
     const access = await checkHomePermission(homeId, userId, 'can_manage_finance');
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage finances' });
 
-    const allowed = ['amount', 'status', 'paid_at', 'paid_by', 'provider_name', 'due_date', 'details'];
+    const allowed = [
+      'bill_type', 'provider_name', 'amount', 'currency',
+      'period_start', 'period_end', 'due_date', 'status',
+      'paid_at', 'paid_by', 'details',
+    ];
     const updates = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) updates[key] = req.body[key];
