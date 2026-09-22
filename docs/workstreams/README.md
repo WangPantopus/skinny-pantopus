@@ -1,5 +1,7 @@
 # Three-stream coordination
 
+Current runtime override, September22 14:44UTC: Stream1 reopened owned API18132/Next18133 for a fresh lost-dispute-after-income check, prefixf9220533, tab6. Provider cleanup pending; retainedledger80. Completed185 evidence/cleanup remains accepted. See newest Stream1 status. PR186 is now queued after185. Earlier runtime snapshots below are historical.
+
 ## Current coordinator checkpoint — September 22, 14:37 UTC
 
 PR185 ae5364db9 is a completed bounded won-dispute release milestone: actual TEST

@@ -1,5 +1,21 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — active lost-dispute-after-income verification
+
+New owned source lead after185 completion: existing lost-dispute handler records
+refunded_amount but only logs transferred-provider liability; existing wallet refund
+recovery RPC is not called. No application change yet. Relevant stripeWebhooks blob
+f854080bed2a740a86a751da42ceeec0f62b297c matchescurrentmaster at current185 checkout;
+current/merged/initial/all-ref comparisons retained in private lost-wallet-r1 evidence.
+Owned real TEST1250charge credited1062 via actualworker before deliberately delayed
+created-event delivery. Web wallet shows1062. Identity/completion/cooling/delivery order
+are controlled fixtures, not natural age or live bank behavior. Real created/lost closed
+sequence is now being checked against wallet SQL/UI; no failure claim before readback.
+API18132 PID440/Next18133 PID2382 active; IABtab6 workerloggedin. Exactprefixf9220533,
+private /private/tmp/pantopus-stream1-lost-wallet-r1, provider cleanup pending. Never rerun
+setup; keep owned provider receipt for final loss-aware cleanup. Retain ledger80. Private
+RESUME updated. PR186f941c3bb4 now CIpassed, queuedafter185; source/evidence review underway.
+
 ## September 22 — won-dispute release milestone complete; PR185
 
 Branch codex/won-dispute-wallet-release, ae5364db9cf8fa9c359d48d9e17e3d7792a34e70,
