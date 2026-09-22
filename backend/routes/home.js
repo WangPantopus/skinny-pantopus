@@ -3102,7 +3102,8 @@ router.put('/:id/packages/:packageId', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'You can only edit packages you added' });
     }
 
-    const allowed = ['status', 'delivered_at', 'picked_up_by', 'carrier', 'tracking_number', 'description', 'delivery_instructions', 'expected_at'];
+    // vendor_name is accepted on create and edited by every client's package editor.
+    const allowed = ['status', 'delivered_at', 'picked_up_by', 'carrier', 'tracking_number', 'vendor_name', 'description', 'delivery_instructions', 'expected_at'];
     // Mirrors HomePackage_status_chk so an unsupported status is a 400, not a 500.
     const statuses = ['expected', 'in_transit', 'out_for_delivery', 'delivered', 'picked_up', 'lost', 'returned'];
     if (req.body.status !== undefined && !statuses.includes(req.body.status)) {
@@ -3117,6 +3118,12 @@ router.put('/:id/packages/:packageId', verifyToken, async (req, res) => {
     }
     if (updates.status === 'picked_up' && !updates.picked_up_by) {
       updates.picked_up_by = userId;
+    }
+    // A package moved back before delivery is no longer delivered or picked up;
+    // keep the row truthful unless the caller set those fields explicitly.
+    if (['expected', 'in_transit', 'out_for_delivery'].includes(updates.status)) {
+      if (req.body.delivered_at === undefined) updates.delivered_at = null;
+      if (req.body.picked_up_by === undefined) updates.picked_up_by = null;
     }
     updates.updated_at = new Date().toISOString();
 
