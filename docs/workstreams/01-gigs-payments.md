@@ -1,5 +1,30 @@
 # Stream 1 — Gigs and payments
 
+## September22 — native3DS return defect; draftPR177
+
+Paid integration adopted/pushed master`e5335f584` after exactCI35719378741 passed;
+migration policy passes. The existing worktree now holds repair branch
+`codex/ios-stripe-authentication-return`, commit`ad20c667d`, draft
+[PR177](https://github.com/WangPantopus/skinny-pantopus/pull/177).
+
+Installed iOSa65411758 (checkout source unchanged through662ab04b5) → real gigs/pays
+routes → Stripe TEST → retained SQL79 reproduced a return-flow gap. Both FAIL and
+COMPLETE on Stripe’s3DS page remain in Safari until manual Close. Failure creates no
+charge and leaves gig open; manual-close retry authorizes1250c using the same intent
+and finalizes assignment. The existing PaymentSheet configuration omitted returnURL
+and the app URL handler omitted StripeAPI.handleURLCallback. The three-line repair
+uses the registered pantopus scheme and forwards Stripe callbacks before normal routing.
+No new app files/unit tests or screen/navigation design changes. All-ref iOS history
+contains no alternative implementation. Focused SwiftLint/SwiftFormat and diff check pass.
+
+Candidate build, installed automatic-return/failure/retry/cancel and exact CI remain
+pending. Stream2 owns the active native build slot; Stream1 requested the next slot.
+Private evidence and baseline result: `/private/tmp/pantopus-stream1-native-3ds-r1`.
+Publish its sanitized durable manifest after candidate verification. Baseline sole
+intent canceled/customer deleted/owned SQL0;18132/18133free, retained Supabase79 up.
+Synthetic identity/Connect and simulator/Stripe TEST boundaries remain; no row closes.
+Private RESUME updated.
+
 ## September 22 — O02 local recovery rehearsal and peer integration
 
 The existing backup runbook was exercised against the owned wallet-read-r1 project
