@@ -132,7 +132,7 @@ async function readResource({ homeId, actorId, kind, status, severity }) {
     packages: ['HomePackage', 'packages.view', HOME_PACKAGE_LIST] }[kind];
   if (!spec) throw failure();
   const statuses = kind === 'issues' ? ['open', 'scheduled', 'in_progress', 'resolved', 'canceled']
-    : ['expected', 'out_for_delivery', 'delivered', 'picked_up', 'lost', 'returned'];
+    : ['expected', 'in_transit', 'out_for_delivery', 'delivered', 'picked_up', 'lost', 'returned'];
   if ((status !== undefined && !statuses.includes(status))
     || (severity !== undefined && (kind !== 'issues' || !['low', 'medium', 'high', 'urgent'].includes(severity)))) throw failure('HOME_RESOURCE_INVALID', 400);
   const access = await readAccess(homeId, actorId, spec[1]);
@@ -195,8 +195,8 @@ async function read({ homeId, actorId, includeHealthScore = false }) {
       && !staleAffectsTrust(access.occupancy.verified_at) ? count(unreadMailQuery(homeId, actorId, nowISO)) : 0,
     has('members.manage') ? count(db.from('HomeGuestPass').select('id', { count: 'exact', head: true }).eq('home_id', homeId)
       .is('revoked_at', null).lte('start_at', nowISO).or(`end_at.is.null,end_at.gt.${nowISO}`)) : 0,
-    packages ? count(packages.in('status', ['expected', 'out_for_delivery'])) : 0,
-    arriving ? count(arriving.or(`status.eq.out_for_delivery,and(status.eq.expected,expected_at.gte.${startOfToday.toISOString()},expected_at.lte.${endOfToday.toISOString()})`)) : 0,
+    packages ? count(packages.in('status', ['expected', 'in_transit', 'out_for_delivery'])) : 0,
+    arriving ? count(arriving.or(`status.eq.out_for_delivery,and(status.in.(expected,in_transit),expected_at.gte.${startOfToday.toISOString()},expected_at.lte.${endOfToday.toISOString()})`)) : 0,
     issues ? count(issues.in('status', ['open', 'scheduled', 'in_progress'])) : 0,
     has('finance.view') ? count(db.from('HomeBill').select('id', { count: 'exact', head: true }).eq('home_id', homeId).in('status', ['due', 'overdue'])) : 0,
     documents ? count(documents) : 0,

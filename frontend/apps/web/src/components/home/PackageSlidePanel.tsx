@@ -88,7 +88,11 @@ export default function PackageSlidePanel({
       await onSave(payload);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to save package');
+      // The SDK rejects with a plain { message } object, not an Error; keep the
+      // server's reason (e.g. a permission denial) instead of the generic copy.
+      const message = err instanceof Error ? err.message
+        : typeof (err as { message?: unknown } | null)?.message === 'string' ? (err as { message: string }).message : '';
+      setError(message || 'Failed to save package');
     } finally {
       setSaving(false);
     }

@@ -158,14 +158,10 @@ export default function HomeSettingsTab({
     setSaving(true);
     setSaveMsg('');
     try {
-      // Update home info
-      await api.homes.updateHome(homeId, {
+      // Save the complete draft in the existing settings transaction.
+      await api.homeProfile.updateHomeSettings(homeId, {
         name: homeName.trim() || null,
         home_type: homeType,
-      } as Record<string, any>);
-
-      // Update settings & preferences
-      await api.homeProfile.updateHomeSettings(homeId, {
         house_rules: houseRules.trim(),
         parking_instructions: parkingInstructions.trim(),
         entry_instructions: entryInstructions.trim(),
@@ -189,7 +185,7 @@ export default function HomeSettingsTab({
       setTimeout(() => setSaveMsg(''), 3000);
       onHomeUpdate();
     } catch (err: unknown) {
-      setSaveMsg(err instanceof Error ? err.message : 'Failed to save');
+      setSaveMsg(failureMessage(err, 'Failed to save settings. Please try again.'));
     }
     setSaving(false);
   };
