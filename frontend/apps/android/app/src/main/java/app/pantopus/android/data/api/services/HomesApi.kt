@@ -17,6 +17,7 @@ import app.pantopus.android.data.api.models.homes.CreateMaintenanceRequest
 import app.pantopus.android.data.api.models.homes.CreatePackageRequest
 import app.pantopus.android.data.api.models.homes.CreatePollRequest
 import app.pantopus.android.data.api.models.homes.DeleteDocumentResponse
+import app.pantopus.android.data.api.models.homes.DeleteEmergencyResponse
 import app.pantopus.android.data.api.models.homes.DeleteOwnershipClaimResponse
 import app.pantopus.android.data.api.models.homes.GetBillSplitsResponse
 import app.pantopus.android.data.api.models.homes.GetHomeBillsResponse
@@ -319,6 +320,21 @@ interface HomesApi {
         @Path("id") homeId: String,
         @Body body: CreateEmergencyRequest,
     ): CreateEmergencyResponse
+
+    /** `PUT /api/homes/:id/emergencies/:emergencyId`. */
+    @PUT("api/homes/{id}/emergencies/{emergencyId}")
+    suspend fun updateHomeEmergency(
+        @Path("id") homeId: String,
+        @Path("emergencyId") emergencyId: String,
+        @Body body: CreateEmergencyRequest,
+    ): CreateEmergencyResponse
+
+    /** `DELETE /api/homes/:id/emergencies/:emergencyId` — route `backend/routes/home.js:3730`. */
+    @DELETE("api/homes/{id}/emergencies/{emergencyId}")
+    suspend fun deleteHomeEmergency(
+        @Path("id") homeId: String,
+        @Path("emergencyId") emergencyId: String,
+    ): DeleteEmergencyResponse
 
     // ─── Documents (T6.4b / P17) ──────────────────────────────
 

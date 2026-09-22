@@ -33,7 +33,7 @@ async function reconcileWalletRelease(paymentId) {
 async function recoverStrandedTransfers() {
   const { data, error } = await supabaseAdmin.from('Payment').select('id')
     .in('payment_status', [PAYMENT_STATES.TRANSFER_SCHEDULED, PAYMENT_STATES.TRANSFER_PENDING])
-    .lte('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()).is('dispute_id', null);
+    .lte('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()).or('dispute_id.is.null,dispute_status.eq.won');
   if (error) throw new Error('Wallet release recovery is unavailable');
   for (const payment of data || []) {
     try { await reconcileWalletRelease(payment.id); }
@@ -58,6 +58,7 @@ async function processPendingTransfers() {
     const selectFields = `
       id,
       gig_id,
+      booking_id,
       payer_id,
       payee_id,
       amount_total,
@@ -87,7 +88,7 @@ async function processPendingTransfers() {
         .in('payment_status', [PAYMENT_STATES.CAPTURED_HOLD, PAYMENT_STATES.REFUNDED_PARTIAL, PAYMENT_STATES.REFUNDED_FULL])
         .is('transfer_completed_at', null)
         .lte('cooling_off_ends_at', nowIso)
-        .is('dispute_id', null),
+        .or('dispute_id.is.null,dispute_status.eq.won'),
       // Legacy safety-net: older captured_hold rows may have null cooling_off_ends_at.
       // Treat them as transferable once they are at least 48h old.
       supabaseAdmin
@@ -97,7 +98,7 @@ async function processPendingTransfers() {
         .is('transfer_completed_at', null)
         .is('cooling_off_ends_at', null)
         .lte('created_at', legacyCoolingFallbackIso)
-        .is('dispute_id', null),
+        .or('dispute_id.is.null,dispute_status.eq.won'),
     ]);
 
     if (standardReadyRes.error || legacyReadyRes.error) {
@@ -129,13 +130,13 @@ async function processPendingTransfers() {
         // Safety: double-check state hasn't changed (race condition guard)
         const { data: fresh } = await supabaseAdmin
           .from('Payment')
-          .select('payment_status, dispute_id')
+          .select('payment_status, dispute_id, dispute_status')
           .eq('id', payment.id)
           .single();
 
-        const preciseGig = payment.payment_type === 'gig_payment';
-        const admittedStates = preciseGig ? ['captured_hold', 'refunded_partial', 'refunded_full'] : ['captured_hold'];
-        if (!fresh || !admittedStates.includes(fresh.payment_status) || fresh.dispute_id) {
+        const protectedWalletPayment = ['gig_payment', 'tip'].includes(payment.payment_type);
+        const admittedStates = protectedWalletPayment ? ['captured_hold', 'refunded_partial', 'refunded_full'] : ['captured_hold'];
+        if (!fresh || !admittedStates.includes(fresh.payment_status) || (fresh.dispute_id && fresh.dispute_status !== 'won')) {
           logger.info('processPendingTransfers: skipping (state changed)', {
             paymentId: payment.id,
             currentStatus: fresh?.payment_status,
@@ -146,7 +147,7 @@ async function processPendingTransfers() {
 
         // Safety: verify amount makes sense
         let transferAmount = payment.amount_to_payee;
-        if (!preciseGig && (!transferAmount || transferAmount <= 0)) {
+        if (!protectedWalletPayment && (!transferAmount || transferAmount <= 0)) {
           logger.error('processPendingTransfers: invalid transfer amount', {
             paymentId: payment.id,
             amount: transferAmount,
@@ -155,7 +156,7 @@ async function processPendingTransfers() {
           continue;
         }
 
-        if (preciseGig) {
+        if (protectedWalletPayment) {
           const result = await walletSettlement.settle(payment);
           if (result.reused || result.settlement.status === 'no_earnings') { skipCount++; continue; }
           // Money, in-app notices and delivery events committed together. The
@@ -208,26 +209,33 @@ async function processPendingTransfers() {
 
         successCount++;
 
-        // Get gig title for notification
-        const { data: gig } = await supabaseAdmin
+        // Booking payments have no gig. Keep their notices on invitee-accessible
+        // booking pages instead of producing a /gigs/null destination.
+        const isBooking = payment.payment_type === 'booking_payment';
+        const { data: gig } = payment.gig_id ? await supabaseAdmin
           .from('Gig')
           .select('title')
           .eq('id', payment.gig_id)
-          .single();
+          .single() : { data: null };
 
         const gigTitle = gig?.title || 'a gig';
         const amountFormatted = `$${(transferAmount / 100).toFixed(2)}`;
+        const subjectMetadata = isBooking
+          ? { booking_id: payment.booking_id }
+          : { gig_id: payment.gig_id };
 
         // Notify provider: funds added to wallet
         createNotification({
           userId: payment.payee_id,
           type: 'payout_sent',
           title: `${amountFormatted} added to your wallet`,
-          body: `Your payment for "${gigTitle}" has been added to your Pantopus wallet. You can withdraw to your bank anytime.`,
+          body: isBooking
+            ? 'Your booking payment has been added to your Pantopus wallet. You can withdraw to your bank anytime.'
+            : `Your payment for "${gigTitle}" has been added to your Pantopus wallet. You can withdraw to your bank anytime.`,
           icon: '💰',
           link: '/app/settings/payments',
           metadata: {
-            gig_id: payment.gig_id,
+            ...subjectMetadata,
             payment_id: payment.id,
             amount: transferAmount,
           },
@@ -237,12 +245,12 @@ async function processPendingTransfers() {
         createNotification({
           userId: payment.payer_id,
           type: 'payment_completed',
-          title: `Payment complete for "${gigTitle}"`,
+          title: isBooking ? 'Booking payment complete' : `Payment complete for "${gigTitle}"`,
           body: `Your payment of ${amountFormatted} has been sent to the provider.`,
           icon: '✅',
-          link: `/gigs/${payment.gig_id}`,
+          link: isBooking ? '/app/scheduling/my-bookings' : `/gigs/${payment.gig_id}`,
           metadata: {
-            gig_id: payment.gig_id,
+            ...subjectMetadata,
             payment_id: payment.id,
             amount: payment.amount_total,
           },

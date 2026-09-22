@@ -84,8 +84,8 @@ fun AddEmergencyInfoFormScreen(
 
     LaunchedEffect(state.shouldDismiss) {
         if (state.shouldDismiss) {
-            viewModel.acknowledgeDismiss()
             delay(400)
+            viewModel.acknowledgeDismiss()
             onClose()
         }
     }
