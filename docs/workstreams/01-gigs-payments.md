@@ -1,5 +1,48 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — ranked offers reader repaired; PR179
+
+Branch `codex/offers-user-verification-contract`, commit
+`924ac3299ba73191f1cbdf7dd5060f33931cf853`, is
+[PR179](https://github.com/WangPantopus/skinny-pantopus/pull/179), based on master3b4404ed3.
+Paid integration adopted/pushed that master after exact CI35724702512 and migration
+policy passed. The unchanged policy check passed on Node20.20.0 after Node24's child
+stdin hashing stalled; only the owned stuck child was stopped. No checker source changed.
+
+Reused actual native3DS baseline: both clients' ranked-offers GET500 came from selecting
+nonexistent `User.verified_at`. Canonical and retained SQL already expose `verified`.
+Current/archived/all-ref comparison found the same query; the existing route now selects
+that boolean and returns strict true in bidder/trust projections. Three lines in existing
+`backend/routes/offersV2.js`; no new app file, migration, unit test, scoring or UI change.
+
+Installed iOS and Android now receive offers200 without legacy fallback and display
+their existing Best Match treatment. Real web login → `/app/gigs-v2/:id` also receives
+ranked offers200 and renders one bid. Actual User boolean true/false/null projects
+true/false/false; amount12.50/score45/rank1 unchanged. Worker/other403, missing/malformed
+gig404. UI before/after collections unchanged, zero provider objects. Original verified
+value restored; timestamp driver precision is bounded and all disposable rows deleted.
+
+All15 existing scoring tests, syntax/diff and exact
+[CI35728227377](https://github.com/WangPantopus/skinny-pantopus/actions/runs/35728227377)
+pass. Current-master update/fresh CI remains required before serial merge. Owner bundle
+`.pantopus-recovery/audits/20260922-stream1-offers-reader-r1/`:12 files; MANIFEST
+`d6e38fbfba28f4a1f4914e5bd41ac8b4ef1ceef53842badac122e56a3c67fcf1`.
+
+Browser logged out to/login and tab closed; apps terminated; API18132/Next18133 stopped.
+Independent12-table fixture counts0; ledger79 retained. Only owned generated tsconfig/cache
+changes removed. Owned devices stay available; heavy slot free, peer resources untouched.
+Synthetic identity/session, local retained schema/provider and device boundaries remain;
+no row closes. Stale browser cookies and missing harness logout handling were corrected
+only in the private harness. CUA export is unavailable: compact observed AX and real
+API/SQL are retained, without a claimed web screenshot.
+
+Next: actual web offer12.50 renders13 because existing OfferCardV2 uses toFixed(0).
+This separate monetary display defect is recorded for the smallest existing-card repair;
+then continue native dispute/provider and remaining payment scope. Coordinator merged
+PR160 as6e24aef59 after all CI35724788993 passed; PR175 is updated to5c5c91b9d with fresh
+CI running. Reviewed178 moves the unchanged mailbox preferences block before/:id;
+176/178 exact evidence handoffs remain with Stream2. Private RESUME updated.
+
 ## September 22 — native 3DS return repaired and verified; PR177
 
 Repair branch `codex/ios-stripe-authentication-return`, commit

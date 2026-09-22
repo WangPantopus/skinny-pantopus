@@ -10,21 +10,24 @@ PR158 was already closed, and PR159's reconciliation is incorporated into this l
 - **Integration:** PR173 P10 pagination merged `662ab04b5`; PR163 social privacy/cache
   merged `e5335f584`; PR164 push-tap isolation merged `3b4404ed3`. Each passed exact-head
   CI before merge. PR164 tests initially passed but artifact upload timed out; the failed
-  job rerun passed on unchanged source. Current master is `3b4404ed3`; its merged CI is
-  still running. PR160 updated to `4cca0a681` with fresh CI35724788993 running. Its previous
-  exact ede5b72b full CI35719644248 passed. Serial code order:160 →175 →176 →165 →166
-  →167 →168 →177; update each branch and require fresh checks. Docs161/170/174 last;
+  job rerun passed on unchanged source. Master3b4404ed3 CI35724702512 passed. PR160
+  merged as `6e24aef59` after current4cca0a CI35724788993 passed all checks. Its previous
+  exact ede5b72b full CI35719644248 passed. Serial code order:175 →176 →178 →165 →166
+  →167 →168 →177 →179; update each branch and require fresh checks. Docs161/170/174 last;
   verify-only171/172 never merge, close after their fixes land.
-- **Stream 1:** paid integration adopted/pushed `e5335f584` after merged CI and migration
-  policy passed. Clean paid worktree now holds `codex/ios-stripe-authentication-return`
-  at `ad20c667d`, PR177. Installed iOS failed/successful3DS now returns automatically;
+- **Stream 1:** paid integration adopted/pushed `3b4404ed3` after merged CI and migration
+  policy passed. Clean paid worktree now holds `codex/offers-user-verification-contract`
+  at `924ac3299`, PR179. Ranked offers now return200 on both native apps and web;
+  15 existing scoring tests and CI35728227377 pass, 12-file manifest
+  `d6e38fbfba28f4a1f4914e5bd41ac8b4ef1ceef53842badac122e56a3c67fcf1`.
+  PR177ad20c667d remains ready in the queue. Installed iOS failed/successful3DS now returns automatically;
   iOS and Android cancellation restores pending bid/open gig; same-intent retries
   reconcile with real API/SQL/Stripe TEST. Build +77 existing focused tests and exact
   CI35723156495 pass. The26-file owner bundle MANIFEST is
   `2560b7c78a9971316680390b8225b120e00f427c2f8cc52f9ab100a90659b9de`.
   Earlier P10 workload, local O02 recovery, ledger and release-link evidence is retained.
 - **Stream 2:** existing task `01a0c0d4-2278-71d3-bc23-a9d789d2afeb` continues Home
-  native verification; PR160 current CI is pending. Separate175 bill-field contract and
+  native verification; PR160 is merged. PR1755c5c91b9d fresh CI is running. Separate175 bill-field contract and
   176 self-service leave-route repairs passed prior heads; current-master refresh remains.
   Coordinator requested176's exact occupancy/task/notice/audit restoration evidence.
   Mailbox GET preferences404 from generic /:id route ordering is assigned to Stream2;
@@ -48,8 +51,8 @@ before starting another heavy build. Peer devices, databases and processes remai
 by their streams. Private coordinator continuation:
 `/private/tmp/pantopus-stream1-wallet-read-r1/RESUME-2026-09-22.md`.
 
-Next: repair the reproduced native offers-reader500 (`User.verified_at` absent; existing
-`User.verified` available), then native dispute/remaining P10 and provider boundaries;
+Next: repair the reproduced web bid12.50→13 rounding in existing OfferCardV2, then
+native dispute/remaining P10 and provider boundaries;
 continue peer row orders and serial merges. Hosted/Connect/live, physical-device,
 production recovery and release association/configuration remain unverified. P04/P05
 fee payer/recipient and the recorded founder decisions remain unresolved.
