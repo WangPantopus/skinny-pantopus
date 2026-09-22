@@ -3020,6 +3020,10 @@ router.post('/:id/packages', verifyToken, async (req, res) => {
 
     const access = await checkHomePermission(homeId, userId);
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    // Same grant as the HomePackage insert policy and the web Track Package control.
+    if (!['packages.edit', 'packages.manage'].some(permission => access.permissions.includes(permission))) {
+      return res.status(403).json({ error: 'Insufficient permissions to track packages' });
+    }
 
     const { carrier, tracking_number, vendor_name, description, delivery_instructions, expected_at } = req.body;
 
@@ -3060,6 +3064,26 @@ router.put('/:id/packages/:packageId', verifyToken, async (req, res) => {
 
     const access = await checkHomePermission(homeId, userId);
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    // Same grant as the HomePackage update policy: packages.manage edits any
+    // package in the home; packages.edit only the actor's own packages.
+    const canManage = access.permissions.includes('packages.manage');
+    if (!canManage && !access.permissions.includes('packages.edit')) {
+      return res.status(403).json({ error: 'Insufficient permissions to edit packages' });
+    }
+    const { data: existing, error: readError } = await supabaseAdmin
+      .from('HomePackage')
+      .select('id, created_by')
+      .eq('id', packageId)
+      .eq('home_id', homeId)
+      .maybeSingle();
+    if (readError) {
+      logger.error('Error reading home package', { error: readError.message, packageId });
+      return res.status(500).json({ error: 'Failed to update package' });
+    }
+    if (!existing) return res.status(404).json({ error: 'Package not found' });
+    if (!canManage && existing.created_by !== userId) {
+      return res.status(403).json({ error: 'You can only edit packages you added' });
+    }
 
     const allowed = ['status', 'delivered_at', 'picked_up_by', 'carrier', 'tracking_number', 'description', 'delivery_instructions', 'expected_at'];
     const updates = {};

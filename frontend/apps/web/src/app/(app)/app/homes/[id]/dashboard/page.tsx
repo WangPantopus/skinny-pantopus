@@ -432,6 +432,11 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
           onAddBill={() => openBillPanel()}
           onMarkBillPaid={handleBillMarkPaid}
           onAddPackage={() => openPackagePanel()}
+          onPackageClick={(pkg: Record<string, any>) => {
+            // Mirrors the HomePackage update policy: managers edit any visible
+            // package; editors only the packages they created.
+            if (can('packages.manage') || (can('packages.edit') && pkg.created_by === currentUserId)) openPackagePanel(pkg);
+          }}
           onMarkPackagePickedUp={handlePackageMarkPickedUp}
           onInviteMember={openInviteModal}
           onSecretsChange={(s: Record<string, any>[]) => setSecrets(() => s)}
@@ -529,6 +534,7 @@ function DashboardTab({
   onAddBill,
   onMarkBillPaid,
   onAddPackage,
+  onPackageClick,
   onMarkPackagePickedUp,
   onInviteMember,
   onSecretsChange,
@@ -571,6 +577,7 @@ function DashboardTab({
   onAddBill: () => void;
   onMarkBillPaid: (billId: string) => void;
   onAddPackage: () => void;
+  onPackageClick: (pkg: Record<string, any>) => void;
   onMarkPackagePickedUp: (pkgId: string) => void;
   onInviteMember: () => void;
   onSecretsChange: (s: Record<string, any>[]) => void;
@@ -654,7 +661,7 @@ function DashboardTab({
             homeId={homeId}
             onAddPackage={onAddPackage}
             onMarkPickedUp={onMarkPackagePickedUp}
-            onPackageClick={() => {}}
+            onPackageClick={onPackageClick}
             onBack={onBack}
             highlightPackageId={linkedType === 'package' ? linkedId : undefined}
           />
