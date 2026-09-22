@@ -695,7 +695,9 @@ class NotificationsViewModel
         private fun openNotification(dto: NotificationDto) {
             if (dto.isRead != true) markRead(dto.id)
             if (!mayOpenTask(dto)) return
-            val link = HomeTaskNotificationRoute.metadataPath(dto.type, dto.metadata) ?: dto.link
+            val link =
+                HomeTaskNotificationRoute.metadataPath(dto.type, dto.metadata)
+                    ?: DeepLinkRouter.notificationPath(dto.type, dto.link)
             if (!link.isNullOrEmpty()) {
                 DeepLinkRouter.handle(link)
             }

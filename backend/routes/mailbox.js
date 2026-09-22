@@ -1446,6 +1446,75 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
+// ============ PREFERENCES ROUTES ============
+
+/**
+ * GET /api/mailbox/preferences
+ * Get user's mail preferences
+ */
+router.get('/preferences', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const prefs = await getUserPreferences(userId);
+
+    if (!prefs) {
+      return res.status(500).json({ error: 'Failed to fetch preferences' });
+    }
+
+    res.json({ preferences: prefs });
+
+  } catch (err) {
+    logger.error('Preferences fetch error', { error: err.message, userId: req.user.id });
+    res.status(500).json({ error: 'Failed to fetch preferences' });
+  }
+});
+
+/**
+ * PATCH /api/mailbox/preferences
+ * Update user's mail preferences
+ */
+router.patch('/preferences', verifyToken, validate(updatePreferencesSchema), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const updates = {
+      ...req.body,
+      updated_at: new Date().toISOString()
+    };
+
+    // Convert camelCase to snake_case
+    const snakeCaseUpdates = {};
+    for (const [key, value] of Object.entries(updates)) {
+      const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+      snakeCaseUpdates[snakeKey] = value;
+    }
+
+    const { data: prefs, error } = await supabaseAdmin
+      .from('MailPreferences')
+      .upsert({
+        user_id: userId,
+        ...snakeCaseUpdates
+      })
+      .select()
+      .single();
+
+    if (error) {
+      logger.error('Error updating preferences', { error: error.message, userId });
+      return res.status(500).json({ error: 'Failed to update preferences' });
+    }
+
+    logger.info('Preferences updated', { userId });
+
+    res.json({
+      message: 'Preferences updated successfully',
+      preferences: prefs
+    });
+
+  } catch (err) {
+    logger.error('Preferences update error', { error: err.message, userId: req.user.id });
+    res.status(500).json({ error: 'Failed to update preferences' });
+  }
+});
+
 /**
  * GET /api/mailbox/:id
  * Get single mail item
@@ -2900,75 +2969,6 @@ router.get('/earnings/history', verifyToken, async (req, res) => {
   } catch (err) {
     logger.error('Earnings history error', { error: err.message, userId: req.user.id });
     res.status(500).json({ error: 'Failed to fetch earnings history' });
-  }
-});
-
-// ============ PREFERENCES ROUTES ============
-
-/**
- * GET /api/mailbox/preferences
- * Get user's mail preferences
- */
-router.get('/preferences', verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const prefs = await getUserPreferences(userId);
-
-    if (!prefs) {
-      return res.status(500).json({ error: 'Failed to fetch preferences' });
-    }
-
-    res.json({ preferences: prefs });
-
-  } catch (err) {
-    logger.error('Preferences fetch error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ error: 'Failed to fetch preferences' });
-  }
-});
-
-/**
- * PATCH /api/mailbox/preferences
- * Update user's mail preferences
- */
-router.patch('/preferences', verifyToken, validate(updatePreferencesSchema), async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const updates = {
-      ...req.body,
-      updated_at: new Date().toISOString()
-    };
-
-    // Convert camelCase to snake_case
-    const snakeCaseUpdates = {};
-    for (const [key, value] of Object.entries(updates)) {
-      const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-      snakeCaseUpdates[snakeKey] = value;
-    }
-
-    const { data: prefs, error } = await supabaseAdmin
-      .from('MailPreferences')
-      .upsert({
-        user_id: userId,
-        ...snakeCaseUpdates
-      })
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error updating preferences', { error: error.message, userId });
-      return res.status(500).json({ error: 'Failed to update preferences' });
-    }
-
-    logger.info('Preferences updated', { userId });
-
-    res.json({
-      message: 'Preferences updated successfully',
-      preferences: prefs
-    });
-
-  } catch (err) {
-    logger.error('Preferences update error', { error: err.message, userId: req.user.id });
-    res.status(500).json({ error: 'Failed to update preferences' });
   }
 });
 

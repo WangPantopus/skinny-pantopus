@@ -70,6 +70,17 @@ const SIDEBAR_TO_EXPANDED_CARD: Record<string, string> = {
   emergency: 'emergency',
 };
 
+// The SDK rejects with a plain { message } object; keep the server's reason.
+function writeFailureMessage(err: unknown, fallback: string): string {
+  const message = err instanceof Error ? err.message
+    : typeof (err as { message?: unknown } | null)?.message === 'string' ? (err as { message: string }).message : '';
+  return message || fallback;
+}
+function attachmentsNotSavedNotice(kind: 'issue' | 'bill' | 'package', count: number): string {
+  const files = count === 1 ? '1 attachment was' : `${count} attachments were`;
+  return `${kind.charAt(0).toUpperCase()}${kind.slice(1)} saved, but ${files} not uploaded: attachments for ${kind}s are not available yet.`;
+}
+
 export default function HomeDashboardPage() {
   const params = useParams();
   const homeId = params.id as string;
@@ -256,7 +267,9 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
         setIssues((prev) => [result.issue, ...prev]);
       }
 
-      void mediaFiles;
+      // No server contract binds attachments to a HomeIssue yet; say so
+      // instead of discarding the selected files without a word.
+      if (mediaFiles?.length) toast.warning(attachmentsNotSavedNotice('issue', mediaFiles.length));
     },
     [homeId, issuePanel.issue, setIssues]
   );
@@ -276,7 +289,9 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
         setBills((prev) => [result.bill, ...prev]);
       }
 
-      void mediaFiles;
+      // No server contract binds attachments to a HomeBill yet; say so
+      // instead of discarding the selected files without a word.
+      if (mediaFiles?.length) toast.warning(attachmentsNotSavedNotice('bill', mediaFiles.length));
     },
     [homeId, billPanel.bill, setBills]
   );
@@ -290,7 +305,7 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
         });
         setBills((prev) => prev.map((b) => (b.id === billId ? { ...b, ...result.bill, status: 'paid' } : b)));
       } catch (err) {
-        console.error('Failed to mark bill as paid:', err);
+        toast.error(writeFailureMessage(err, 'Bill update was not confirmed. Reload before retrying.'));
       }
     },
     [homeId, setBills]
@@ -320,7 +335,9 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
         setPackages((prev) => [result.package, ...prev]);
       }
 
-      void mediaFiles;
+      // No server contract binds attachments to a HomePackage yet; say so
+      // instead of discarding the selected files without a word.
+      if (mediaFiles?.length) toast.warning(attachmentsNotSavedNotice('package', mediaFiles.length));
     },
     [homeId, packagePanel.pkg, setPackages]
   );
@@ -333,7 +350,7 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
           prev.map((p) => (p.id === pkgId ? { ...p, ...result.package, status: 'picked_up' } : p))
         );
       } catch (err) {
-        console.error('Failed to mark package as picked up:', err);
+        toast.error(writeFailureMessage(err, 'Package update was not confirmed. Reload before retrying.'));
       }
     },
     [homeId, setPackages]

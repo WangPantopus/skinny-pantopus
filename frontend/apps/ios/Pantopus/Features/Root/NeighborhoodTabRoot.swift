@@ -48,6 +48,13 @@ public struct NeighborhoodTabRoot: View {
         .onChange(of: door.pendingSurface) { _, pending in
             presentPendingSurfaceIfNeeded(pending)
         }
+        .onChange(of: rootTabs.selected) { _, selected in
+            // A deep link owned by another tab (profile, Beacon,
+            // notifications, conversation) selects that tab underneath the
+            // presented surface sheet; dismiss the sheet so the destination
+            // is actually visible instead of rendering behind it.
+            if selected != .nearby { presentedSurface = nil }
+        }
         .task {
             presentPendingSurfaceIfNeeded(door.pendingSurface)
         }
