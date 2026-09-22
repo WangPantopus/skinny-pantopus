@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { randomBytes } = crypto;
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
+const blockService = require('../services/blockService');
 const { signUp, signIn } = require('../config/auth');
 const rateLimit = require('express-rate-limit');
 const verifyToken = require('../middleware/verifyToken');
@@ -4044,6 +4045,10 @@ router.post('/:id/follow', verifyToken, async (req, res) => {
     if (await visibility.isBlocked(followerId, followingId)) {
       return res.status(403).json({ error: 'Cannot follow this user' });
     }
+    // Profile blocks (UserBlock) refuse follows in both directions, like messaging.
+    if (await blockService.isBlocked(followerId, followingId)) {
+      return res.status(403).json({ error: 'Cannot follow this user' });
+    }
 
     const { error } = await supabaseAdmin
       .from('UserFollow')
@@ -4074,6 +4079,7 @@ router.post('/:id/follow', verifyToken, async (req, res) => {
 
     res.status(200).json({ message: `You are now following ${user.username}`, following: true });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Follow error', { error: err.message });
     res.status(500).json({ error: 'Failed to follow user' });
   }
