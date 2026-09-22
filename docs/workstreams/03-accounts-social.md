@@ -2991,3 +2991,112 @@ interruption, not product failure or remote-revocation acceptance. Context4→2
 identity/retry scope needs coordinatorreconciliation; actual two-context isolation
 unverified. Safe remote-browser-before/abort artifacts; durable697
 MANIFEST **622e0f021ff1778933d0089cb65905867e8c23862bf94909c8dd569df1891eeb**. No tests/appedit/runtime restart.
+
+
+## A02 reconnect retry — runtime restored, second browser context unavailable
+
+README "one A02 browser reconnect retry" followed on a new Claude session (harness
+changed from Codex). Documented retainedAPI48548/80449 andNext42165/42493 were absent
+at start: no18130/18131 listener, PIDs gone, hostuptime1d3h (no reboot); retained
+Supabase stream3-block-r1 64531–37 andSMTP64535 still running. Only the owned API/Next
+were restarted from the exact previously captured private launch files (identical
+executable/argv/cwd/22-key env, original hook sha d7c8b953 unchanged, all21 fault
+trigger paths absent), Next with NEXT_DIST_DIR=.next-stream3 on stream3-auth.localhost
+18131; login page200. This is restoration from identical inputs, not continuity of the
+prior processes. No app edit/env mutation/DB write; local287058421 source fixed.
+
+Evan recheck after restart (a02-retry-before.json): appUnrevoked0/total27, GoTrue0,
+devices0, resumeGrants0, prefs0; appSessions/GoTrue/prefs byte-equal to remote-browser-
+abort.json; only two /api/health404 liveness probes in authHTTP since restart.
+
+Second context: Claude in Chrome list_connected_browsers returned [] initially and on
+the one bounded retry; tabs_context reported extension not connected, no tab group, no
+owned target tab. Google Chrome process57357 runs but no extension instance is signed
+in to this account. Prior Codex IAB1/Chrome4→2 identities are not addressable here.
+Per grant: no tab creation, profile/alternate browser/extension install, cookie edit,
+IAB login or credentials. Built-in browser pane left closed. Capability boundary, not
+product failure; distinct-session/A step-up/B retirement scope untouched.
+
+User reported the extension installed and signed in; three further connection reads
+still returned [] and one bounded tabs_context createIfEmpty reported not connected
+(no tab created). Read-tier computer-use look at Chrome only: profile window shows
+claude.ai settings with Preferred browser = Built-in browser and no pinned Claude
+extension icon; the other window is an Incognito Pantopus tab owned elsewhere, untouched.
+Extension instance is not registered to this account from this session; likely side
+panel never opened/signed in for this profile, different Claude account, or reload
+needed. No install/reload/sign-in/profile/incognito change performed.
+
+Artifacts a02-retry-before/runtime-restore/browser-boundary.json; durable700
+MANIFEST **6aadada10fe3ceb6f94576bf1b2becc3bc015e808e76fef69d0d7de807862f82**.
+Next: user opens the Claude side panel in Chrome signed in as this account (or
+coordinator assigns another supported second context); then Chrome target tab first,
+then IAB tab, per grant. Runtime36126(API)/36139(Next) retained. No tests/app edit.
+
+
+## A02 remote sign-out — two-context journey completed
+
+User confirmed the extension; Claude in Chrome then reported one connected browser.
+Evan rechecked zero (a02-retry-prelogin.json equal to before). Exactly two owned tabs:
+Chrome tab257777372 (clientA) and built-in pane tab (clientB, emulated1280x900 because
+the hidden pane reports0x0). One ordinary UI login each: A POST/api/users/login200
+01:32:03→session15b7e0a8; B 01:32:52→f10f6310. Binding by real requests: server
+AuthSession.user_agent from each login equals that browser's navigator.userAgent
+(Chrome/153 vs Claude/2.2553.1 Chrome/152); A's Security page listed both with
+"This device" on the earlier one. Two app + two GoTrue sessions, devices/grants/prefs0.
+
+A existing Security "Sign out of all other devices"→password step-up modal→POST
+/api/auth/step-up200 01:34:45.811→POST/api/auth/sessions/revoke-others200 .896 (both
+Chrome UA in API log). GoTrue audit: login .770 (temporary step-up session), logout
+.803 (temporary removed), logout .879 (B). SQL: B revoked_at01:34:45.884 reason user,
+A unrevoked; GoTrue only A; 27 historical rows/prefs/devices/grants byte-equal to
+baseline. Only non-session change: auth.users.last_sign_in_at moved to the step-up
+login time. A Security re-listed "This device" only; A polls continued304.
+
+B untouched on personal Settings: its next real ~5s polls at01:34:48.763 returned401
+(unread-count/chat stats/received-offers), SDK POST/api/users/refresh401 once, no
+GoTrue token call/429, then location /login?redirectTo=%2Fapp%2Fprofile%2Fsettings with
+Sign in form only. No manual control, workaround login or timer change. No socket
+connection/event evidence captured; no socket delivery claim. Retirement proven via
+HTTP401 path only. Post-retirement layout GETs401 observed, no visible failure.
+
+Assigned cleanup: A ordinary Settings Log Out→POST/api/users/logout200→/login;
+A revoked_at01:36:14 reason logout, no refresh POST/429; final GoTrue0/app unrevoked0,
+appTotal29 (27+2 natural revoked rows retained). Both owned tabs closed, viewport
+reset, no other tab/store touched. Runtime36126/36139 and DB retained; no fault
+triggers armed; no app edit/new test. Not physical offline/native/hosted/provider.
+Artifacts a02-retry-{prelogin,after-login-a,after-login-b,bindings-pre-revoke,
+after-revoke,final,result}.json; durable707
+MANIFEST **f50472b0c2c7825c8c5aa26a6ab59085ea6ff95329d406991d15cba8a7247234**.
+Next: coordinator review; A02 open-browser gap closed within these limits.
+
+
+## Next inventory priority — A01 signup verification and reset completion (proposal only)
+
+With the A02 open-browser gap closed, the next unresolved accounts row runnable on the
+retained local runtime is A01: complete signup/email verification and the password-reset
+final credential change that earlier needed user takeover. Eight bindings (users.js,
+emailService.js, register/verify-email/verify-email-sent/forgot-password/reset-password
+pages, SDK auth.ts) are byte-equal to origin/master ed391c3a6; local287058421 fixed.
+
+Contract from source: register→503 when delivery unavailable→400 taken/invalid→admin
+generateLink(signup)→User insert (verified:false, auth user deleted on insert failure)→own
+SMTP verification link {APP_URL}/verify-email?token_hash→503 if send fails→201, no
+auto-login. verify-email→anon verifyOtp→400 invalid/expired→User.verified sync→any
+verifyOtp session dropped→login. forgot-password (5/15min)→generateLink(recovery,
+/reset-password)→sendPasswordResetEmail→one enumeration-safe message. reset-password→
+client length/match checks→verifyOtp(recovery,token_hash)→scoped updateUser→revoke ALL
+sessions/devices/grants+watermark→200→login; 400 invalid/expired or unable. Mail sink is
+retained Mailpit 64535/64536 (12 lifecycle messages retained), not GoTrue's mailer.
+
+Proposed runtime (not started): one new owned synthetic stream3-auth-r3-*@example.com
+created only by the real register form and deleted exactly at cleanup; Evan d3671605
+(zero sessions) as reset target, password restored to the recorded fixture value by a
+second real reset. Journeys: signup success→Mailpit→verify link→verified→first login;
+duplicate email/username 400; login-before-verification actual response; consumed
+verify link reuse 400 and resend; reset success→old password fails/new succeeds; consumed
+reset token reuse 400; unknown email same message/no mail. Expired tokens need clock or
+config change (limit). No provider/native/hosted mail, no limiter exhaustion, no lost-
+response hook in this milestone. Detailed a01-signup-reset-source-proposal.json; durable708
+MANIFEST **f967e080959dde6c0e05f6b89f6275b651576cbb218712ee9b7f5d30d327cb01**.
+Coordinator fixture/account-creation grant required before runtime. Runtime36126/36139
+and signed-out state retained; no app edit/new test.
