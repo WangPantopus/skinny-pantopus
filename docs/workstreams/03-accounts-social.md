@@ -3289,3 +3289,72 @@ physical-device, hosted-migration, or APNs/FCM evidence is claimed here. The And
 is released. Remaining work is coordinator integration/CI and the other independently open
 N01–N05/A01–A05 acceptance rows; do not rerun the cleanup helper or claim unit-test
 coverage as feature closure.
+
+## A05 profile safety action — real web reachability and report contract (2026-09-22)
+
+The initial bounded A05 pass exercised the existing web profile action through the retained
+local runtime. An authorized isolated Bob fixture logged in through the real
+`stream3-auth.localhost:18131` login page, opened Dana's real public profile, expanded
+its existing overflow menu, selected **Report profile**, and reached the existing
+**Report User** modal. Selecting an allowed reason enabled the existing **Submit Report**
+button. The final click, persistence, duplicate, failure/retry, and cleanup were completed
+in the addendum below; the initial source/UI evidence remains separately bound in
+`a05-profile-report-source-ui-20260922.json`.
+
+The source trace is bound to the current worktree: `PublicProfileClient.handleReport`
+creates the action-scoped target, `submitReport` calls the existing
+`api.users.reportUser`, the SDK posts `/api/users/:userId/report`, and `users.js` applies
+`verifyToken`, the established Joi reason set, target existence, duplicate idempotence,
+`UserReport` persistence, and a 503 when the table is unavailable. `ProfileHeader` keeps
+Report profile in the existing overflow menu and `ReportModal` keeps the current visual
+and reason treatment. The final status and refreshed MANIFEST are recorded below.
+
+No application file, schema, provider, or unit test was added.
+
+### A05 profile report — persistence, duplicate, failure and cleanup complete
+
+The prepared report was submitted through the same real browser UI on the retained local
+API/database. The UI showed the existing `Report submitted` toast and SQL found exactly one
+`UserReport` row for the isolated Bob→Dana pair (`spam`). Repeating the same report through
+the UI returned the same generic success toast and SQL remained one row with the same id,
+matching the endpoint's existing `already_reported` idempotence contract.
+
+For the unavailable-storage case, `service_role` SELECT on `UserReport` was revoked before
+a third UI submission. The UI showed the existing `Couldn't submit your report. Please
+retry.` toast and no extra row was written. SELECT/INSERT were restored, a retry through the
+UI returned the success toast, and SQL still showed the single original row. The exact
+temporary row was then deleted with actor/target/reason predicates (`DELETE 1`, follow-up
+count 0); the fixture actor logged out through Settings → Log Out and the browser ended at
+`/login`. Evidence: `a05-profile-report-final-evidence-20260922.json`. The refreshed 111-file
+MANIFEST is **a523f02956eaffc7e84ef43d1fee73571b6eebc91ae401a020717430a0e3869d**.
+
+This closes the web profile report journey within the local fixture scope. It does not claim
+moderation-review behavior, provider delivery, an external recipient, or a native profile
+report screen; existing native and other content-report evidence remains the applicable
+coverage for those surfaces. No application/schema/unit-test change was made.
+
+
+## A05 profile search → destination — actual web workflow (2026-09-22)
+
+A separate reachable-action pass used the existing web AppShell search with the isolated
+Bob fixture. Typing `stream3_auth_r3_dana` and submitting the real header form navigated to
+`/app/discover?q=stream3_auth_r3_dana`; the real universal-search result list showed
+`Auth Dana /stream3_auth_r3_dana PROFILE`. Clicking that existing result opened the real
+`/stream3_auth_r3_dana` profile route and showed the existing Message, Request / Hire,
+Follow, Share, and overflow actions. The actor then logged out through Settings → Log Out
+and the browser ended at `/login`.
+
+The source trace is `AppShell.openDiscover` → existing `/app/discover?q=` route,
+`useUniversalSearch` → `identitySearch.searchProfiles` for profile scopes with stale-query
+retirement, and `UnifiedResultCard` → `router.push(item.href)`. Evidence is
+`a05-search-profile-destination-20260922.json`; the refreshed durable 111-file MANIFEST is
+**a523f02956eaffc7e84ef43d1fee73571b6eebc91ae401a020717430a0e3869d**. This verifies the
+real web search-to-profile destination within the local runtime; it does not claim search
+provider/index freshness, native search parity, or unrelated marketplace/subscription/
+booking/wallet/mail actions. No application/schema/unit-test change was made.
+
+The report-storage fault injection is also explicitly bounded: service_role SELECT was
+revoked only on `UserReport`, then SELECT/INSERT were restored; final `\dp` showed the
+standard full `arwdDxtm` ACL. No other table privilege was touched. A pre-fault ACL snapshot
+was not captured, so the evidence records the final ACL and this limitation rather than
+claiming an unsubstantiated byte-for-byte before/after comparison.
