@@ -542,21 +542,20 @@ final class DeepLinkRouter {
             }
             return .unknown(url)
         default:
-            // A bare single segment is the web's canonical profile URL
-            // (`/[username]`, e.g. the `new_follower` notification link);
-            // resolve it like `pantopus://u/:username`.
-            if segments.count == 1, Self.isUsernameSegment(firstSegment) {
-                return .user(id: firstSegment)
-            }
             return .unknown(url)
         }
     }
 
-    /// Usernames are letters, digits, dots, dashes and underscores (no
-    /// reserved punctuation), so anything else stays `.unknown`.
-    static func isUsernameSegment(_ segment: String) -> Bool {
-        guard (1...64).contains(segment.count) else { return false }
-        return segment.allSatisfy { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == "_" }
+    /// Server notification links are web paths. The `new_follower` link is
+    /// the web's canonical profile URL `/<username>`, which has no native
+    /// route (unknown paths are deliberately discarded); rewrite just that
+    /// type to the native short profile form `/u/<username>`.
+    static func notificationPath(type: String?, link: String?) -> String? {
+        guard type == "new_follower", let link else { return link }
+        let trimmed = link.hasPrefix("/") ? String(link.dropFirst()) : link
+        let segments = trimmed.split(separator: "/", omittingEmptySubsequences: true)
+        guard segments.count == 1, !trimmed.contains("?"), !trimmed.hasPrefix("@") else { return link }
+        return "/u/" + trimmed
     }
 
     private func routeSegments(for url: URL) -> [String] {
