@@ -3435,6 +3435,40 @@ The companion real API read returned HTTP 200 from `GET /api/scheduling/notifica
 
 Assessment: the user-facing preference and persistence contract work locally, but the current scoped backend search/source has no daily-agenda scheduler or delivery consumer. A saved toggle is not a delivered agenda. No digest, worker, notification policy, schema, provider, native surface, or unit test was added because the finding does not authorize inventing that policy. Implementation/local checks and cleanup pass; end-to-end delivery, provider/native/background/cold-start and hosted email/push boundaries remain unverified. The durable bundle now has 121 files with MANIFEST SHA-256 `e16a92fb8f895ddbc665db499aa88c19d9d5f4a7745a6cf44c8e639a2fa894a3`.
 
+## N02 saved notifications — real web read/filter and API/SQL reconciliation (2026-09-22)
+
+This bounded N02 pass reused the existing notification route, SDK, page, badge context,
+and AppShell behavior. Source was rebound to the current Stream3 checkout
+`local/stream3-ios-integration` at `acedbf14a83bcae72ce4817504661fd3809caa1a`; the
+relevant source hashes are recorded in `n02-notifications-ui-source-20260922.json`.
+No application file, schema, provider configuration, or unit test was added.
+
+The real IAB opened `/app/notifications` for the authorized isolated Auth Bob fixture.
+After the existing login redirect completed, the screen rendered **Notifications**, the
+existing **Mark all read** action, all/unread/read filters, and notification rows for
+reminders, booking confirmations, and Beacon activity. The initial state showed 7 unread
+notifications. Selecting **Unread** rendered 7 rows; selecting **Read** rendered 4 rows.
+No mark-read or delete mutation was sent. Settings → Log Out returned the tab to `/login`,
+and the IAB tab was closed.
+
+The same fixture used the real local API. Login returned HTTP 200;
+`GET /api/notifications?limit=20` returned HTTP 200 with 11 records and `unreadCount=7`;
+`GET /api/notifications/unread-count` returned HTTP 200 with the existing count/total/
+byContext payload; `GET /api/hub/preferences` returned HTTP 200; and logout returned
+HTTP 200. Before/after SQL counts were unchanged: Notification total 20, Bob unread 7,
+PushToken 0, UserNotificationPreferences 0, and Bob active AuthSession 4. Evidence is in
+`n02-notifications-api-20260922.json` and `n02-notifications-ui-source-20260922.json`;
+the refreshed durable bundle MANIFEST is
+`c84f26b102a99957228616fc4644ce60437aa8f600839b1d2bf0cfdb0c4df681` (126 files).
+
+Assessment: implementation and local API/UI read behavior are verified for the web
+saved-notification surface, with no repair indicated by this pass. End-to-end provider or
+device behavior is not claimed: APNs/FCM delivery, token registration/rotation, denied
+permission, foreground/background/cold-start delivery, account-switch continuation, and
+physical-device evidence remain open or are covered only by the prior bounded native
+evidence. CI/integration was not rerun because no application source changed; no unit-test
+coverage is claimed or required for this read-only verification.
+
 ## A04 provider/OAuth capability boundary — current local read-only check (2026-09-22)
 
 A04 source was rebound to the current Stream3 checkout `local/stream3-ios-integration` at `acedbf14a83bcae72ce4817504661fd3809caa1a`; route/config/provider hashes and the existing staging report binding are in `a04-provider-source-20260922.json`. The accepted provider report remains authoritative for Smarty/geographic/Lob behavior and disabled Google/Apple staging capability; no provider activation or address ownership change was authorized.
