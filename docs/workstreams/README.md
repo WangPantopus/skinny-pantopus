@@ -34,7 +34,13 @@ All three run on APK `db303e5bbe782a089715f8b91808b4f37c5fa3c96841edb37d23f8ac29
   - A won dispute restores `captured_hold` without `captured_at`.
   - Settlement refuses payout even after 48h, so money is safe but stuck.
   - **Founder/design decision needed**: record the capture and apply the existing dispute freeze, or build operator reconciliation. No code change was made.
-- Rows: P03, P06 and P09 stay partial.
+- **P08 Android checkout lifetime (22:32–22:44)** — audit `20260922-stream1-p08-android-account-r1`, MANIFEST `75f3381e09f32c11ea8570cb112f8bf52f2dc4e95d1d1b381720d6cdf0a1c162`. Covers:
+  - Sheet dismissal cancels the setup.
+  - After process death the owner is offered Resume/Cancel for the same bid.
+  - Remote revocation (fixture 401) signs out with "Your session has expired".
+  - Another account on the same device sees no checkout (owner reads 403).
+  - The owner's cancel voids the intent.
+- Rows: P03, P06, P08 and P09 stay partial.
   - P03: iOS native tips and unavailable local-storage recovery.
   - P06: the capture-proof decision, normal-path native presentation, and Connect/hosted operation.
   - P09: historical Connect reversal and broader close/release.
@@ -44,7 +50,7 @@ All three run on APK `db303e5bbe782a089715f8b91808b4f37c5fa3c96841edb37d23f8ac29
 
 | Stream | Application checkout | Runtime / devices | Next |
 |---|---|---|---|
-| 1 + coordinator (Claude) | `/private/tmp/pantopus-paid-gig-integration` on local `codex/stream1-verification-20260922` at final master `b36d379b2` (clean, no commits). Coordinator checkout `/private/tmp/pantopus-pr192-integration` detached at `094ed5826` is the APK source (ignored build outputs/backend deps only). The historical `codex/paid-gig-integration` ref is preserved. | No API/Next running. Retained SQL64562/PostgREST64561 ledger88. `emulator-5558` keeps the P09/P03 APK with app data cleared; iOS `C2BCF36A…` idle. Heavy slot **unassigned**; Stream 3 has the next claim. | Next Stream 1 criterion: the P08 remaining native role/lost/stale/account-lifetime cases, or iOS native tips (P03). The P06 capture-proof boundary waits on a design decision. |
+| 1 + coordinator (Claude) | `/private/tmp/pantopus-paid-gig-integration` on local `codex/stream1-verification-20260922` at final master `b36d379b2` (clean, no commits). Coordinator checkout `/private/tmp/pantopus-pr192-integration` detached at `094ed5826` is the APK source (ignored build outputs/backend deps only). The historical `codex/paid-gig-integration` ref is preserved. | No API/Next running. Retained SQL64562/PostgREST64561 ledger88. `emulator-5558` keeps the P09/P03 APK with app data cleared; iOS `C2BCF36A…` idle. Heavy slot **unassigned**; Stream 3 has the next claim. | Next Stream 1 criterion: iOS equivalents of the P03/P08/P09 Android cases, once the heavy slot is free after Stream 3's iOS parity build. The P06 capture-proof boundary waits on a design decision. |
 | 2 Home (Codex `01a0c0d4…`, idle) | `/private/tmp/pantopus-workstream-home` at `ee69cbd8d` (now merged through PR192). When starting R06 the owner moves to a fresh branch from master, preserving `.next-stream2`. | API18143/LAN18142 retained; its `home.js` runtime patch is **identical** to merged PR192 (47 added lines), so adopt master at the next restart and keep the backup. `:8000` from the Home worktree is the founder device backend. SQL64554/PostgREST64553, emulator-5556, iOS `6F914A30…`. | **R06**, below. |
 | 3 Accounts/social (Codex `01a0a824…`, idle) | iOS `/private/tmp/pantopus-workstream-accounts-social` `b956a0076` (preserve `publicShare.ts`/tsconfig edits, `.next-stream3`). Android `/private/tmp/pantopus-stream3-android` fast-forwarded by the coordinator to merged `7f557a006` (clean). | SQL64532/PostgREST64531, Mailpit64535/36. **Correction:** Next `[::1]:18131` is running (pid 15494 from the Stream 3 worktree), contrary to the 20:00 note; left untouched. iOS `0AE16FA0…`, emulator-5554. | **iOS parity of PR195**, below. Gets the heavy slot next. |
 
