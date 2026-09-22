@@ -22,9 +22,17 @@ export function normalizePublicProfileIdentifier(value: string): string {
   return String(value || '').trim().replace(/^@+/, '');
 }
 
-async function fetchPublicJson<T>(path: string): Promise<PublicFetchResult<T>> {
+async function fetchPublicJson<T>(
+  path: string,
+  options: { noStore?: boolean } = {},
+): Promise<PublicFetchResult<T>> {
   try {
-    const response = await fetch(`${API_BASE}${path}`, {
+    const response = await fetch(`${API_BASE}${path}`, options.noStore ? {
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/json',
+      },
+    } : {
       next: { revalidate: 60 },
       headers: {
         Accept: 'application/json',
@@ -59,7 +67,10 @@ export const fetchPublicListing = cache(async (id: string): Promise<PublicFetchR
 });
 
 export const fetchPublicPost = cache(async (id: string): Promise<PublicFetchResult<any>> => {
-  const result = await fetchPublicJson<{ post: any }>(`/api/posts/${encodeURIComponent(id)}`);
+  const result = await fetchPublicJson<{ post: any }>(
+    `/api/posts/${encodeURIComponent(id)}`,
+    { noStore: true },
+  );
   return { data: result.data?.post ?? null, status: result.status };
 });
 
@@ -141,7 +152,8 @@ export const fetchPublicLocalProfile = cache(async (handle: string): Promise<Pub
 
 export const fetchPublicPersona = cache(async (handle: string): Promise<PublicFetchResult<any>> => {
   const result = await fetchPublicJson<{ persona: any; channel: any }>(
-    `/api/personas/${encodeURIComponent(handle.replace(/^@/, ''))}`
+    `/api/personas/${encodeURIComponent(handle.replace(/^@/, ''))}`,
+    { noStore: true },
   );
   return { data: result.data ?? null, status: result.status };
 });
