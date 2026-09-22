@@ -21,6 +21,14 @@ protocol SecureStore: Sendable {
     func delete(_ key: String) throws
     func setData(_ value: Data, for key: String) throws
     func getData(_ key: String) -> Data?
+    /// Recovery must distinguish missing values from an inaccessible keychain.
+    func readData(_ key: String) throws -> Data?
+}
+
+extension SecureStore {
+    func readData(_ key: String) throws -> Data? {
+        getData(key)
+    }
 }
 
 /// `@unchecked Sendable` because the underlying `KeychainAccess.Keychain`
@@ -61,6 +69,10 @@ struct KeychainStore: SecureStore, @unchecked Sendable {
 
     func getData(_ key: String) -> Data? {
         try? keychain.getData(key)
+    }
+
+    func readData(_ key: String) throws -> Data? {
+        try keychain.getData(key)
     }
 }
 

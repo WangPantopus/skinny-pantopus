@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.models.gigs.BoostGigResponse
 import app.pantopus.android.data.api.models.gigs.CancelGigBody
 import app.pantopus.android.data.api.models.gigs.CancellationPreviewResponse
 import app.pantopus.android.data.api.models.gigs.CompleteGigResponse
+import app.pantopus.android.data.api.models.gigs.ConfirmCompletionBody
 import app.pantopus.android.data.api.models.gigs.CounterBidBody
 import app.pantopus.android.data.api.models.gigs.CreateChangeOrderBody
 import app.pantopus.android.data.api.models.gigs.CreateGigBody
@@ -48,6 +49,7 @@ import app.pantopus.android.data.api.models.gigs.ReportNoShowBody
 import app.pantopus.android.data.api.models.gigs.ReportNoShowResponse
 import app.pantopus.android.data.api.models.gigs.RescheduleGigBody
 import app.pantopus.android.data.api.models.gigs.RescheduleGigResponse
+import app.pantopus.android.data.api.models.gigs.StartGigBody
 import app.pantopus.android.data.api.models.gigs.WorkerAckBody
 import app.pantopus.android.data.api.models.gigs.WorkerAckResponse
 import app.pantopus.android.data.api.net.NetworkResult
@@ -250,8 +252,11 @@ class GigsRepository
         ): NetworkResult<WorkerAckResponse> =
             safeApiCall { api.workerAck(gigId, WorkerAckBody(status = status, etaMinutes = etaMinutes, note = note)) }
 
-        /** `POST /api/gigs/:gigId/start` — worker moves `assigned → in_progress`. */
-        suspend fun startGig(gigId: String): NetworkResult<GigDetailResponse> = safeApiCall { api.startGig(gigId) }
+        /** `POST /api/gigs/:gigId/start` — worker moves `assigned → in_progress` under the displayed terms. */
+        suspend fun startGig(
+            gigId: String,
+            displayed: StartGigBody,
+        ): NetworkResult<GigDetailResponse> = safeApiCall { api.startGig(gigId, displayed) }
 
         /** `GET /api/gigs/:gigId/no-show-check` — gate for the no-show affordance. */
         suspend fun noShowCheck(gigId: String): NetworkResult<NoShowCheckResponse> = safeApiCall { api.noShowCheck(gigId) }
@@ -283,6 +288,17 @@ class GigsRepository
 
         /** `GET /api/gigs/:gigId/payment` — payment card for poster/worker. */
         suspend fun gigPayment(gigId: String): NetworkResult<GigPaymentResponse> = safeApiCall { api.gigPayment(gigId) }
+
+        suspend fun assignedAuthorizationStatus(
+            gigId: String,
+        ): NetworkResult<app.pantopus.android.data.api.models.gigs.GigAssignedAuthorizationDto> =
+            safeApiCall { api.assignedAuthorizationStatus(gigId) }
+
+        suspend fun continueAssignedAuthorization(
+            gigId: String,
+            body: app.pantopus.android.data.api.models.gigs.GigAssignedAuthorizationBody,
+        ): NetworkResult<app.pantopus.android.data.api.models.gigs.GigAssignedAuthorizationDto> =
+            safeApiCall { api.continueAssignedAuthorization(gigId, body) }
 
         /** `GET /api/gigs/:gigId/change-orders` — list for poster/worker. */
         suspend fun changeOrders(gigId: String): NetworkResult<GigChangeOrdersResponse> = safeApiCall { api.changeOrders(gigId) }
@@ -353,7 +369,10 @@ class GigsRepository
 
         suspend fun boostGig(gigId: String): NetworkResult<BoostGigResponse> = safeApiCall { api.boostGig(gigId) }
 
-        suspend fun completeGigAsPoster(gigId: String): NetworkResult<CompleteGigResponse> = safeApiCall { api.completeGigAsPoster(gigId) }
+        suspend fun completeGigAsPoster(
+            gigId: String,
+            expectedReview: String?,
+        ): NetworkResult<CompleteGigResponse> = safeApiCall { api.completeGigAsPoster(gigId, ConfirmCompletionBody(expectedReview)) }
 
         suspend fun cancelGig(
             gigId: String,

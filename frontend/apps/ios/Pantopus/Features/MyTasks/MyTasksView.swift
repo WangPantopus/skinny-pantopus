@@ -30,6 +30,10 @@ public struct MyTasksView: View {
             }
         }
         .accessibilityIdentifier("my-tasks")
+        .onDisappear { viewModel.retire() }
+        .onChange(of: viewModel.isCurrentAccount) { _, current in
+            if !current { viewModel.retire() }
+        }
         .sheet(isPresented: $bindable.isFilterPresented) {
             ActivityFilterSheet(
                 statusTitle: viewModel.statusFilterTitle,

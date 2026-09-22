@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.models.gigs.BoostGigResponse
 import app.pantopus.android.data.api.models.gigs.CancelGigBody
 import app.pantopus.android.data.api.models.gigs.CancellationPreviewResponse
 import app.pantopus.android.data.api.models.gigs.CompleteGigResponse
+import app.pantopus.android.data.api.models.gigs.ConfirmCompletionBody
 import app.pantopus.android.data.api.models.gigs.CounterBidBody
 import app.pantopus.android.data.api.models.gigs.CreateChangeOrderBody
 import app.pantopus.android.data.api.models.gigs.CreateGigBody
@@ -48,6 +49,7 @@ import app.pantopus.android.data.api.models.gigs.ReportNoShowBody
 import app.pantopus.android.data.api.models.gigs.ReportNoShowResponse
 import app.pantopus.android.data.api.models.gigs.RescheduleGigBody
 import app.pantopus.android.data.api.models.gigs.RescheduleGigResponse
+import app.pantopus.android.data.api.models.gigs.StartGigBody
 import app.pantopus.android.data.api.models.gigs.WorkerAckBody
 import app.pantopus.android.data.api.models.gigs.WorkerAckResponse
 import retrofit2.http.Body
@@ -327,11 +329,13 @@ interface GigsApi {
     /**
      * `POST /api/gigs/:gigId/start` — assigned worker transitions
      * `assigned → in_progress` (payment must be authorized for paid
-     * gigs). Route `backend/routes/gigs.js:5501`. Returns `{ gig }`.
+     * gigs). Route `backend/routes/gigs.js:5501`. Returns `{ gig }`. The body
+     * carries the displayed assignment terms (409 `ASSIGNMENT_CHANGED` on drift).
      */
     @POST("api/gigs/{gigId}/start")
     suspend fun startGig(
         @Path("gigId") gigId: String,
+        @Body body: StartGigBody,
     ): GigDetailResponse
 
     /**
@@ -396,6 +400,17 @@ interface GigsApi {
     suspend fun gigPayment(
         @Path("gigId") gigId: String,
     ): GigPaymentResponse
+
+    @POST("api/gigs/{gigId}/refresh-payment-status")
+    suspend fun assignedAuthorizationStatus(
+        @Path("gigId") gigId: String,
+    ): app.pantopus.android.data.api.models.gigs.GigAssignedAuthorizationDto
+
+    @POST("api/gigs/{gigId}/continue-authorization")
+    suspend fun continueAssignedAuthorization(
+        @Path("gigId") gigId: String,
+        @Body body: app.pantopus.android.data.api.models.gigs.GigAssignedAuthorizationBody,
+    ): app.pantopus.android.data.api.models.gigs.GigAssignedAuthorizationDto
 
     /**
      * `GET /api/gigs/:gigId/change-orders` — list change orders, newest
@@ -525,6 +540,7 @@ interface GigsApi {
     @POST("api/gigs/{gigId}/complete")
     suspend fun completeGigAsPoster(
         @Path("gigId") gigId: String,
+        @Body body: ConfirmCompletionBody,
     ): CompleteGigResponse
 
     /**

@@ -387,9 +387,10 @@ final class AddBillWizardViewModel: WizardModel {
     /// `yyyy-MM-dd` formatter built per-call so we don't have to manage a
     /// static `DateFormatter` under Swift 6 strict concurrency.
     private static func formatISODate(_ date: Date) -> String {
+        // The picker yields local midnight; write that calendar day, not its UTC instant.
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.timeZone = TimeZone.current
         f.dateFormat = "yyyy-MM-dd"
         return f.string(from: date)
     }

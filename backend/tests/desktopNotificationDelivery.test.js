@@ -13,6 +13,20 @@ beforeEach(() => {
 });
 afterEach(() => notifications.init(null, null));
 
+test.each(['gig_completed', 'gig_confirmed'])('%s recovery reuses the existing detail refresh events without an alert after commit-time opt-out', async type => {
+  const push = require('./__mocks__/pushService');
+  push.sendToUserWithReceipt = jest.fn().mockResolvedValue({ acceptedCount: 1, unresolvedCount: 0 });
+  const note = { id: 'completion-note', user_id: userId, type, title: 'Completed', metadata: { gig_id: 'gig' } };
+  await notifications.deliverStoredGigNotification(note, { pushAllowedAtCompletion: false });
+  expect(push.sendToUserWithReceipt).not.toHaveBeenCalled();
+  expect(emit).not.toHaveBeenCalledWith('notification:alert', expect.anything());
+  expect(emit).toHaveBeenCalledWith('notification:new', note);
+  for (const eventType of ['completion-update', 'status-change']) {
+    expect(emit).toHaveBeenCalledWith(`gig:${eventType}`, expect.objectContaining({ gigId: 'gig', eventType }));
+  }
+  expect(emit.mock.calls.some(([event]) => event === 'gig:payment-update')).toBe(type === 'gig_confirmed');
+});
+
 describe.each(['single', 'bulk'])('%s browser alert eligibility', (mode) => {
   async function publish() {
     const note = mode === 'single' ? await notifications.createNotification(input)
@@ -61,4 +75,12 @@ test.each(['persona_broadcast', 'gig_completed', 'home_update', 'mail_new'])('%s
   const note = await notifications.createNotification({ ...input, type }); await drain();
   expect(emit).toHaveBeenCalledWith('notification:new', note);
   expect(emit).not.toHaveBeenCalledWith('notification:alert', expect.anything());
+});
+
+test.each([false, true])('durable wallet notice uses the same alert policy; opted out=%s', async (off) => {
+  db.seedTable('UserNotificationPreferences', [{ user_id: userId, gig_updates_enabled: !off }]);
+  const note = { id: 'wallet-note', user_id: userId, type: 'payout_sent', title: 'Wallet credited', link: '/app/wallet' };
+  await notifications.deliverStoredGigNotification(note);
+  expect(emit).toHaveBeenCalledWith('notification:new', note);
+  expect(emit.mock.calls.filter(([event]) => event === 'notification:alert')).toEqual(off ? [] : [['notification:alert', note]]);
 });

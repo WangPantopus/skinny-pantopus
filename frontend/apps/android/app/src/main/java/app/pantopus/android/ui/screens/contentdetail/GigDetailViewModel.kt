@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.notifications.GigActiveNotification
 import app.pantopus.android.core.notifications.GigActiveNotifier
-import app.pantopus.android.data.api.models.gigs.CancelGigReason
 import app.pantopus.android.data.api.models.gigs.CancellationPreviewResponse
 import app.pantopus.android.data.api.models.gigs.GigActiveStatusResponse
 import app.pantopus.android.data.api.models.gigs.GigBidDto
@@ -20,17 +19,18 @@ import app.pantopus.android.data.api.models.gigs.GigPaymentResponse
 import app.pantopus.android.data.api.models.gigs.GigQuestionDto
 import app.pantopus.android.data.api.models.gigs.GigReportReason
 import app.pantopus.android.data.api.models.gigs.PlaceBidBody
+import app.pantopus.android.data.api.models.gigs.StartGigBody
 import app.pantopus.android.data.api.models.gigs.ViewerBidStatus
+import app.pantopus.android.data.api.models.gigs.WorkerCompletionReceipt
 import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.data.api.models.offers.UpdateBidBody
-import app.pantopus.android.data.api.models.payments.TipRequest
+import app.pantopus.android.data.api.models.payments.TipValidation
 import app.pantopus.android.data.api.models.reviews.CreateReviewBody
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.files.FilesRepository
 import app.pantopus.android.data.gigs.GigOwnerActionsRepository
-import app.pantopus.android.data.gigs.GigReassignmentRepository
 import app.pantopus.android.data.gigs.GigViewerBidRepository
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.offers.OffersRepository
@@ -38,6 +38,12 @@ import app.pantopus.android.data.payments.PaymentsRepository
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.reviews.ReviewsRepository
 import app.pantopus.android.ui.screens.gigs.GigsCategory
+import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationCoordinator
+import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
+import app.pantopus.android.ui.screens.gigs.checkout.GigCheckoutIdentity
+import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
+import app.pantopus.android.ui.screens.gigs.refunds.GigRefundCoordinator
+import app.pantopus.android.ui.screens.gigs.refunds.GigRefundFactory
 import app.pantopus.android.ui.screens.marketplace.ListingGradient
 import app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -100,7 +106,6 @@ class GigDetailViewModel
         // RN→native parity: Q&A upvote / pin / delete + the poster's
         // "Remind worker" nudge live on their own thin repository.
         private val extrasRepo: app.pantopus.android.data.gigs.GigExtrasRepository,
-        private val reassignmentRepo: GigReassignmentRepository,
         // Bidder side — `GET /api/gigs/:id/my-bid`; the update / withdraw
         // half reuses OffersRepository rather than duplicating the routes.
         private val viewerBidRepo: GigViewerBidRepository,
@@ -118,6 +123,11 @@ class GigDetailViewModel
         // "share live status" link.
         private val gigsV2Repo: app.pantopus.android.data.gigs.GigsV2Repository,
         savedStateHandle: SavedStateHandle,
+        private val checkoutIdentities: GigPaymentIdentitySource,
+        refundFactory: GigRefundFactory,
+        authorizationFactory: app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationFactory,
+        stopFactory: app.pantopus.android.ui.screens.gigs.stop.GigStopFactory,
+        private val tipStore: app.pantopus.android.data.payments.PendingGigTipStore,
     ) : ViewModel() {
         companion object {
             const val GIG_ID_KEY = "gigId"
@@ -339,12 +349,6 @@ class GigDetailViewModel
         private val _state = MutableStateFlow<ContentDetailUiState>(ContentDetailUiState.Loading)
         val state: StateFlow<ContentDetailUiState> = _state.asStateFlow()
 
-        private val _tipStatus = MutableStateFlow<TipStatus>(TipStatus.Idle)
-        val tipStatus: StateFlow<TipStatus> = _tipStatus.asStateFlow()
-
-        private val _events = MutableSharedFlow<GigTipEvent>(extraBufferCapacity = 4)
-        val events: SharedFlow<GigTipEvent> = _events.asSharedFlow()
-
         private val _openChatEvents = MutableSharedFlow<GigOpenChatEvent>(extraBufferCapacity = 1)
         val openChatEvents: SharedFlow<GigOpenChatEvent> = _openChatEvents.asSharedFlow()
 
@@ -430,6 +434,40 @@ class GigDetailViewModel
         /** Payment card (owner, assigned+) from `GET /payment`; null hides it. */
         private val _payment = MutableStateFlow<GigPaymentResponse?>(null)
         val payment: StateFlow<GigPaymentResponse?> = _payment.asStateFlow()
+        val refunds = refundFactory.create(viewModelScope) { silentRefetch() }
+        val assignedAuthorization = authorizationFactory.create(viewModelScope) { silentRefetch() }
+        val taskStop = stopFactory.create(viewModelScope) { silentRefetch() }
+
+        fun openTaskStop(action: String = "cancel") {
+            taskStop.open(gigId, action)
+            if (action == "cancel") requestCancelPreview()
+        }
+
+        fun openTaskStopRecovery() = taskStop.openRecovery(gigId)
+
+        private var paymentGeneration = 0
+
+        fun canOpenAssignedAuthorization(): Boolean {
+            val gig = rawGig ?: return false
+            val payment = _payment.value?.payment ?: return false
+            return !assignedAuthorization.state.value.invalidated &&
+                GigAssignedAuthorizationCoordinator.validTarget(gig, payment, currentUserId())
+        }
+
+        fun openAssignedAuthorization() {
+            if (!canOpenAssignedAuthorization()) return
+            assignedAuthorization.open(checkNotNull(rawGig), checkNotNull(_payment.value?.payment))
+        }
+
+        fun canOpenRefunds(): Boolean =
+            viewerIsOwner &&
+                _payment.value?.payment?.let { GigRefundCoordinator.validTarget(gigId, it, currentUserId()) } == true
+
+        fun openRefunds() {
+            if (!canOpenRefunds()) return
+            val payment = _payment.value?.payment ?: return
+            refunds.open(gigId, payment)
+        }
 
         /** Change orders for the active task (both roles, assigned/in_progress). */
         private val _changeOrders = MutableStateFlow<List<GigChangeOrderDto>>(emptyList())
@@ -455,10 +493,19 @@ class GigDetailViewModel
 
         /** Which checkout the presented PaymentSheet belongs to. */
         private sealed interface PendingCheckout {
-            data class BidAccept(val bidId: String) : PendingCheckout
-
             data object InstantAccept : PendingCheckout
         }
+
+        val bidCheckout =
+            GigBidCheckoutCoordinator(
+                repo,
+                viewModelScope,
+                checkoutIdentities::checkoutIdentity,
+                checkoutIdentities::scopeMarker,
+                checkoutIdentities::permitsAnonymousRead,
+                onAccepted = { _, _ -> silentRefetch() },
+                onCanceled = { silentRefetch() },
+            )
 
         private var pendingCheckout: PendingCheckout? = null
         private var canInstantAccept = false
@@ -500,9 +547,6 @@ class GigDetailViewModel
          */
         private val _workerReminderCooldownEndsAt = MutableStateFlow<Long?>(null)
         val workerReminderCooldownEndsAt: StateFlow<Long?> = _workerReminderCooldownEndsAt.asStateFlow()
-
-        /** Payment id of the in-flight tip, used to reconcile after PaymentSheet. */
-        private var pendingTipPaymentId: String? = null
 
         /** Current gig snapshot — null until the first fetch resolves. */
         fun gigSnapshot(): GigDto? = rawGig
@@ -751,7 +795,10 @@ class GigDetailViewModel
 
         private fun currentUserId(): String? = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
 
-        fun load() = fetch(showLoading = true)
+        fun load() {
+            taskStop.probeRecovery(gigId)
+            fetch(showLoading = true)
+        }
 
         /**
          * Phase 5 — refetch triggered by a `gig:*` room event: refreshes the
@@ -765,13 +812,30 @@ class GigDetailViewModel
             if (showLoading) _state.value = ContentDetailUiState.Loading
             refetchInFlight = true
             viewModelScope.launch {
-                when (val result = repo.detail(gigId)) {
+                if (!bidCheckout.isCurrentReadScope()) {
+                    _state.value = ContentDetailUiState.Error("Your account changed. Reopen this task to continue.")
+                    refetchInFlight = false
+                    return@launch
+                }
+                val result = repo.detail(gigId)
+                if (!bidCheckout.isCurrentReadScope()) {
+                    _state.value = ContentDetailUiState.Error("Your account changed. Reopen this task to continue.")
+                    refetchInFlight = false
+                    return@launch
+                }
+                when (result) {
                     is NetworkResult.Success -> {
                         val bids = fetchOwnerBids(result.data.gig)
                         // Bidder side — resolve before projecting so the
                         // dock renders "Update bid" on the first frame.
                         loadViewerBid(result.data.gig)
-                        applyLoaded(result.data.gig, bids)
+                        val historicalTip = hasHistoricalTipEntry(result.data.gig)
+                        if (!bidCheckout.isCurrentReadScope()) {
+                            _state.value = ContentDetailUiState.Error("Your account changed. Reopen this task to continue.")
+                            refetchInFlight = false
+                            return@launch
+                        }
+                        applyLoaded(result.data.gig, bids, historicalTip)
                         loadQuestions()
                     }
                     is NetworkResult.Failure -> {
@@ -860,16 +924,20 @@ class GigDetailViewModel
         private fun applyLoaded(
             gig: GigDto,
             bids: List<GigBidDto>,
+            historicalTip: Boolean = false,
         ) {
             val uid = currentUserId()
+            if (!sameStartAssignment(rawGig, gig) || gig.status !in listOf("assigned", "in_progress")) startAttempt = null
             rawGig = gig
+            taskStop.probeRecovery(gigId)
             _saved.value = gig.savedByUser == true
             viewerIsOwner = uid != null && uid == gig.userId
             viewerIsWorker = uid != null && uid == gig.acceptedBy
             canMarkDelivered = viewerCanMarkDelivered(gig, uid)
-            canTip = viewerCanTip(gig, uid)
+            canTip = viewerCanTip(gig, uid) || historicalTip
             canInstantAccept = viewerCanInstantAccept(gig, uid)
             _bids.value = bids
+            if (viewerIsOwner) bidCheckout.restore(gigId, bids)
             _activeTask.value = deriveActiveTask(gig, uid)
             syncWorkerReminderCooldown(gig)
             syncActiveNotification(gig, uid)
@@ -1211,7 +1279,7 @@ class GigDetailViewModel
         // MARK: - Phase 5b · payment card (work item 1)
 
         /**
-         * Owner on an assigned+ task: fetch the payment summary; the card
+         * The server admits the current owner or business manager on an assigned+ task; the card
          * silently hides on failure / 404 / no linked payment. Re-runs with
          * every gig refresh (including `gig:*` room events).
          */
@@ -1219,15 +1287,31 @@ class GigDetailViewModel
             gig: GigDto,
             uid: String?,
         ) {
-            val isOwner = uid != null && uid == gig.userId
+            val revision = ++paymentGeneration
+            val mayReadPayerSummary = uid != null && uid != gig.acceptedBy
             val assignedPlus = gig.status?.lowercase() in listOf("assigned", "in_progress", "completed")
-            if (!isOwner || !assignedPlus) {
+            if (!mayReadPayerSummary || !assignedPlus) {
                 _payment.value = null
                 return
             }
             viewModelScope.launch {
-                when (val result = repo.gigPayment(gigId)) {
-                    is NetworkResult.Success -> _payment.value = result.data.takeIf { it.payment != null }
+                if (!bidCheckout.isCurrentReadScope() || !assignedAuthorization.isCurrentReadScope() || uid != currentUserId()) {
+                    return@launch
+                }
+                val result = repo.gigPayment(gigId)
+                if (revision != paymentGeneration || !bidCheckout.isCurrentReadScope() ||
+                    !assignedAuthorization.isCurrentReadScope() || uid != currentUserId()
+                ) {
+                    return@launch
+                }
+                when (result) {
+                    is NetworkResult.Success ->
+                        _payment.value =
+                            result.data.takeIf {
+                                val receipt = it.payment
+                                receipt != null && receipt.id == gig.paymentId && receipt.gigId == gig.id &&
+                                    receipt.payerId == gig.userId && receipt.payeeId == gig.acceptedBy
+                            }
                     is NetworkResult.Failure -> _payment.value = null
                 }
             }
@@ -1446,43 +1530,150 @@ class GigDetailViewModel
          * Calls [onResult] with `true` so the Delivery Proof sheet can flip
          * to its SUBMITTED confirmation; refreshes the task on success.
          */
+        private val completionUploads = mutableMapOf<String, String>()
+        private var completionGeneration = 0L
+        private var completionInFlight = false
+        private var completionJob: Job? = null
+
+        fun retireDeliveryProof() {
+            completionGeneration++
+            completionJob?.cancel()
+            completionJob = null
+            completionInFlight = false
+            completionUploads.clear()
+        }
+
         fun submitDeliveryProof(
             photos: List<DeliveryProofPhoto>,
             note: String?,
             onResult: (Boolean) -> Unit = {},
         ) {
             val gig = rawGig
-            if (gig == null || photos.isEmpty()) {
+            val actor = currentUserId()
+            if (gig == null || actor == null || photos.isEmpty()) {
                 onResult(false)
                 return
             }
-            viewModelScope.launch {
-                val urls = mutableListOf<String>()
-                for (photo in photos) {
-                    val upload =
-                        filesRepo.uploadFile(
-                            filename = photo.filename,
-                            mimeType = photo.mimeType,
-                            bytes = photo.bytes,
-                            fileType = "gig_completion",
-                            visibility = "private",
-                        )
-                    when (upload) {
-                        is NetworkResult.Success -> urls.add(upload.data.file.url)
-                        is NetworkResult.Failure -> {
-                            onResult(false)
+            val workerMaySubmit = gig.acceptedBy == actor && gig.status?.lowercase() in listOf("in_progress", "completed")
+            if (completionInFlight || !workerMaySubmit) {
+                onResult(false)
+                return
+            }
+            val generation = completionGeneration
+            val marker = checkoutIdentities.scopeMarker()
+            completionInFlight = true
+            completionJob =
+                viewModelScope.launch {
+                    var succeeded = false
+                    try {
+                        if (!bidCheckout.isCurrentReadScope()) {
+                            retireDeliveryProof()
                             return@launch
                         }
+                        val identity = checkoutIdentities.paymentIdentity() ?: return@launch
+
+                        suspend fun current(): Boolean = completionIsCurrent(identity, actor, marker, gig.id, generation)
+
+                        if (!current()) return@launch
+                        val urls = deliveryProofUrls(photos, gig.status?.lowercase() == "completed", ::current) ?: return@launch
+                        if (!current()) return@launch
+                        val result = repo.markCompleted(gigId, note, urls)
+                        if (!current()) return@launch
+                        if (result is NetworkResult.Success && matchesWorkerReceipt(result.data.gig, actor, note, urls)) {
+                            completionUploads.clear()
+                            load()
+                            succeeded = true
+                        }
+                    } finally {
+                        onResult(finishCompletionAttempt(succeeded, actor, marker, generation))
                     }
                 }
-                when (repo.markCompleted(gigId, note, urls)) {
-                    is NetworkResult.Success -> {
-                        load()
-                        onResult(true)
-                    }
-                    is NetworkResult.Failure -> onResult(false)
-                }
+        }
+
+        private fun matchesWorkerReceipt(
+            receipt: WorkerCompletionReceipt?,
+            actor: String,
+            note: String?,
+            urls: List<String>,
+        ): Boolean {
+            if (receipt == null) return false
+            val sameTask = receipt.id == gigId && receipt.status == "completed" && receipt.acceptedBy == actor
+            val expectedNote = note?.take(2000)?.takeIf { it.isNotEmpty() }
+            val sameProof = receipt.completionNote == expectedNote && receipt.completionPhotos.orEmpty() == urls
+            return sameTask && sameProof && parseEpochMillis(receipt.workerCompletedAt) != null
+        }
+
+        private suspend fun completionIsCurrent(
+            identity: GigCheckoutIdentity,
+            actor: String,
+            marker: String,
+            taskId: String,
+            generation: Long,
+            owner: Boolean = false,
+        ): Boolean {
+            val latest = checkoutIdentities.paymentIdentity()
+            val readable = bidCheckout.isCurrentReadScope()
+            val sameSession = latest == identity && identity.userId == actor && marker == checkoutIdentities.scopeMarker()
+            val sameTask = rawGig?.id == taskId && (if (owner) rawGig?.userId else rawGig?.acceptedBy) == actor
+            val sameFrame = generation == completionGeneration && readable && actor == currentUserId()
+            return sameSession && sameTask && sameFrame
+        }
+
+        private fun finishCompletionAttempt(
+            succeeded: Boolean,
+            actor: String,
+            marker: String,
+            generation: Long,
+        ): Boolean {
+            val ownsAttempt = generation == completionGeneration
+            val current = actor == currentUserId() && marker == checkoutIdentities.scopeMarker()
+            if (ownsAttempt) {
+                completionInFlight = false
+                completionJob = null
+                if (!current) completionUploads.clear()
             }
+            return succeeded && ownsAttempt && current
+        }
+
+        private suspend fun deliveryProofUrls(
+            photos: List<DeliveryProofPhoto>,
+            alreadyCompleted: Boolean,
+            current: suspend () -> Boolean,
+        ): List<String>? {
+            val urls = mutableListOf<String>()
+            for (photo in photos) {
+                val (bytes, key) =
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                        val snapshot = photo.bytes.copyOf()
+                        val hash =
+                            java.security.MessageDigest.getInstance("SHA-256").digest(snapshot)
+                                .joinToString("") { "%02x".format(it) }
+                        snapshot to (photo.filename + "|" + photo.mimeType + "|" + hash)
+                    }
+                if (!current()) return null
+                val saved = completionUploads[key]
+                if (saved != null) {
+                    urls.add(saved)
+                    continue
+                }
+                if (alreadyCompleted) return null
+                val uploaded =
+                    filesRepo.uploadFile(
+                        filename = photo.filename,
+                        mimeType = photo.mimeType,
+                        bytes = bytes,
+                        fileType = "gig_completion",
+                        visibility = "private",
+                        gigId = gigId,
+                    )
+                if (!current()) return null
+                if (uploaded !is NetworkResult.Success || uploaded.data.file.url.isBlank()) return null
+                completionUploads[key] = uploaded.data.file.url
+                urls.add(uploaded.data.file.url)
+            }
+            if (!current()) return null
+
+            return urls
         }
 
         /** Returns the gig id wired from `SavedStateHandle`. */
@@ -1518,29 +1709,8 @@ class GigDetailViewModel
          * A17.6).
          */
         fun acceptBidAsOwner(bidId: String) {
-            if (_bidActionInFlight.value != null) return
-            _bidActionInFlight.value = bidId
-            viewModelScope.launch {
-                when (val result = repo.acceptBid(gigId, bidId)) {
-                    is NetworkResult.Success -> {
-                        val params = result.data.sheetParams()
-                        val needsPayment =
-                            result.data.requiresPaymentSetup == true || !params.clientSecret.isNullOrBlank()
-                        if (needsPayment) {
-                            pendingCheckout = PendingCheckout.BidAccept(bidId)
-                            _lifecycleEvents.emit(GigLifecycleEvent.PresentPaymentSheet(params))
-                        } else {
-                            _lifecycleEvents.emit(GigLifecycleEvent.Toast("Bid accepted"))
-                            _bidActionInFlight.value = null
-                            silentRefetch()
-                        }
-                    }
-                    is NetworkResult.Failure -> {
-                        _bidActionInFlight.value = null
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
-                    }
-                }
-            }
+            if (_bidActionInFlight.value != null || !viewerIsOwner) return
+            bidCheckout.start(gigId, bidId)
         }
 
         /** Owner counters a pending bid; the row flips to "Countered $X". */
@@ -1550,7 +1720,7 @@ class GigDetailViewModel
             message: String?,
             onResult: (Boolean) -> Unit = {},
         ) {
-            if (_bidActionInFlight.value != null) {
+            if (_bidActionInFlight.value != null || bidCheckout.state.value.blocksNewBidActions) {
                 onResult(false)
                 return
             }
@@ -1574,7 +1744,7 @@ class GigDetailViewModel
 
         /** Owner rejects a bid after the confirm step; the row dims. */
         fun rejectBidAsOwner(bidId: String) {
-            if (_bidActionInFlight.value != null) return
+            if (_bidActionInFlight.value != null || bidCheckout.state.value.blocksNewBidActions) return
             _bidActionInFlight.value = bidId
             viewModelScope.launch {
                 when (val result = repo.rejectBid(gigId, bidId)) {
@@ -1599,7 +1769,7 @@ class GigDetailViewModel
          * (`OffersPanel.tsx:177`). Route `backend/routes/gigs.js:5342`.
          */
         fun withdrawCounterAsOwner(bidId: String) {
-            if (_bidActionInFlight.value != null) return
+            if (_bidActionInFlight.value != null || bidCheckout.state.value.blocksNewBidActions) return
             _bidActionInFlight.value = bidId
             viewModelScope.launch {
                 when (val result = ownerActionsRepo.withdrawCounterOffer(gigId, bidId)) {
@@ -1616,36 +1786,6 @@ class GigDetailViewModel
                                 isError = true,
                             ),
                         )
-                    }
-                }
-            }
-        }
-
-        /**
-         * Poster closes a **still-open** task: `DELETE /api/gigs/:id`
-         * removes the row outright (the backend 400s any other status).
-         * Mirrors RN's `handleCloseGig` open branch (`gig/[id].tsx:427`);
-         * the caller pops back once `onDone(true)` fires.
-         */
-        fun closeGig(onDone: (Boolean) -> Unit) {
-            if (!canCloseTask()) {
-                onDone(false)
-                return
-            }
-            viewModelScope.launch {
-                when (val result = ownerActionsRepo.deleteGig(gigId)) {
-                    is NetworkResult.Success -> {
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast("Gig closed successfully."))
-                        onDone(true)
-                    }
-                    is NetworkResult.Failure -> {
-                        _lifecycleEvents.emit(
-                            GigLifecycleEvent.Toast(
-                                result.error.displayMessage("Failed to close gig."),
-                                isError = true,
-                            ),
-                        )
-                        onDone(false)
                     }
                 }
             }
@@ -1684,34 +1824,6 @@ class GigDetailViewModel
             pendingCheckout = null
             viewModelScope.launch {
                 when (pending) {
-                    is PendingCheckout.BidAccept -> {
-                        when (outcome) {
-                            CheckoutOutcome.Paid -> {
-                                when (val result = repo.finalizeAcceptBid(gigId, pending.bidId)) {
-                                    is NetworkResult.Success ->
-                                        _lifecycleEvents.emit(GigLifecycleEvent.Toast("Bid accepted"))
-                                    is NetworkResult.Failure ->
-                                        _lifecycleEvents.emit(
-                                            GigLifecycleEvent.Toast(result.error.message, isError = true),
-                                        )
-                                }
-                            }
-                            CheckoutOutcome.Canceled -> {
-                                repo.abortAcceptBid(gigId, pending.bidId)
-                                _lifecycleEvents.emit(GigLifecycleEvent.Toast("Payment canceled", isError = true))
-                            }
-                            is CheckoutOutcome.Declined -> {
-                                repo.abortAcceptBid(gigId, pending.bidId)
-                                _lifecycleEvents.emit(
-                                    GigLifecycleEvent.Toast(
-                                        outcome.message ?: "Your card was declined.",
-                                        isError = true,
-                                    ),
-                                )
-                            }
-                        }
-                        _bidActionInFlight.value = null
-                    }
                     is PendingCheckout.InstantAccept -> {
                         when (outcome) {
                             CheckoutOutcome.Paid ->
@@ -1782,32 +1894,116 @@ class GigDetailViewModel
             }
         }
 
-        /** Worker `POST /start` — `assigned → in_progress`. */
+        private var startSequence = 0L
+        private var startAttempt: Long? = null
+
+        private fun sameStartAssignment(
+            current: GigDto?,
+            original: GigDto,
+        ): Boolean =
+            current?.id == original.id && current.userId == original.userId &&
+                current.acceptedBy == original.acceptedBy && current.acceptedAt == original.acceptedAt &&
+                current.paymentId == original.paymentId && current.price == original.price
+
+        private fun matchesStartReceipt(
+            receipt: GigDto,
+            original: GigDto,
+        ): Boolean =
+            sameStartAssignment(receipt, original) && receipt.status == "in_progress" &&
+                parseEpochMillis(receipt.startedAt) != null
+
+        /** Worker `POST /start` — publish only the current assignment's saved receipt. */
         fun startTask() {
+            val gig = rawGig ?: return
+            val actor = currentUserId() ?: return
+            if (startAttempt != null || gig.status != "assigned" || gig.acceptedBy != actor) return
+            val attempt = ++startSequence
+            val generation = completionGeneration
+            val marker = checkoutIdentities.scopeMarker()
+            startAttempt = attempt
             viewModelScope.launch {
-                when (val result = repo.startGig(gigId)) {
-                    is NetworkResult.Success -> {
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast("Task started"))
-                        silentRefetch()
+                try {
+                    val identity = checkoutIdentities.paymentIdentity() ?: return@launch
+
+                    suspend fun current(): Boolean =
+                        completionIsCurrent(identity, actor, marker, gig.id, generation) &&
+                            startAttempt == attempt && sameStartAssignment(rawGig, gig)
+                    if (!current()) return@launch
+                    val displayed =
+                        StartGigBody(
+                            expectedAcceptedAt = gig.acceptedAt,
+                            expectedPrice = gig.price,
+                            expectedPaymentId = gig.paymentId,
+                        )
+                    val result = repo.startGig(gigId, displayed)
+                    if (!current()) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            val receipt = result.data.gig
+                            if (matchesStartReceipt(receipt, gig)) {
+                                _lifecycleEvents.emit(GigLifecycleEvent.Toast("Task started"))
+                                silentRefetch()
+                            } else {
+                                _lifecycleEvents.emit(
+                                    GigLifecycleEvent.Toast(
+                                        "Start receipt unavailable. Reopen the task to check its current state.",
+                                        isError = true,
+                                    ),
+                                )
+                            }
+                        }
+                        is NetworkResult.Failure ->
+                            _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
                     }
-                    is NetworkResult.Failure ->
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                } finally {
+                    if (startAttempt == attempt) startAttempt = null
                 }
             }
         }
 
-        /** Owner `POST /complete` — confirm the worker's marked-done. */
+        /** Confirm the loaded work only within the original account and screen. */
         fun confirmCompletion() {
-            viewModelScope.launch {
-                when (val result = repo.completeGigAsPoster(gigId)) {
-                    is NetworkResult.Success -> {
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast("Completion confirmed"))
-                        silentRefetch()
+            val gig = rawGig ?: return
+            val actor = currentUserId() ?: return
+            val review = gig.completionReview
+            if (completionInFlight || !ownerCanConfirmCompletion(gig, actor) || review.isNullOrEmpty()) return
+            val generation = completionGeneration
+            val marker = checkoutIdentities.scopeMarker()
+            completionInFlight = true
+            completionJob =
+                viewModelScope.launch {
+                    try {
+                        val identity = checkoutIdentities.paymentIdentity() ?: return@launch
+
+                        suspend fun current(): Boolean =
+                            completionIsCurrent(identity, actor, marker, gig.id, generation, owner = true) &&
+                                rawGig?.completionReview == review
+                        if (!current()) return@launch
+                        val result = repo.completeGigAsPoster(gigId, review)
+                        if (!current()) return@launch
+                        when (result) {
+                            is NetworkResult.Success -> {
+                                val receipt = result.data.gig
+                                val confirmed = parseEpochMillis(receipt?.ownerConfirmedAt) != null
+                                if (receipt?.id == gigId && receipt.status == "completed" && confirmed) {
+                                    _lifecycleEvents.emit(GigLifecycleEvent.Toast("Completion confirmed"))
+                                    silentRefetch()
+                                } else {
+                                    _lifecycleEvents.emit(
+                                        GigLifecycleEvent.Toast(
+                                            "Confirmation receipt unavailable. Reopen the task to check its current state.",
+                                            isError = true,
+                                        ),
+                                    )
+                                }
+                            }
+                            is NetworkResult.Failure ->
+                                _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        }
+                    } finally {
+                        finishCompletionAttempt(false, actor, marker, generation)
                     }
-                    is NetworkResult.Failure ->
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
                 }
-            }
         }
 
         /** Either party `POST /report-no-show` — cancels the task with an incident. */
@@ -1915,77 +2111,14 @@ class GigDetailViewModel
             return ownerCanReplaceWorker(gig, currentUserId())
         }
 
-        /**
-         * Poster's "Replace worker" — `POST /reopen-bidding`. Unassigns the
-         * current worker, cancels the pre-capture payment hold, rejects
-         * their accepted bid, and moves the gig back to `open`
-         * (`backend/routes/gigs.js:4874`). Refetches on success so the
-         * lifecycle sections re-render in the reopened state.
-         */
-        fun replaceWorker(onResult: (Boolean) -> Unit = {}) {
-            viewModelScope.launch {
-                when (val result = reassignmentRepo.reopenBidding(gigId)) {
-                    is NetworkResult.Success -> {
-                        _lifecycleEvents.emit(
-                            GigLifecycleEvent.Toast(
-                                result.data.message ?: "Worker removed and bidding reopened",
-                            ),
-                        )
-                        silentRefetch()
-                        onResult(true)
-                    }
-                    is NetworkResult.Failure -> {
-                        _lifecycleEvents.emit(
-                            GigLifecycleEvent.Toast(
-                                result.error.displayMessage("Failed to replace worker"),
-                                isError = true,
-                            ),
-                        )
-                        onResult(false)
-                    }
-                }
-            }
-        }
-
-        /**
-         * Assigned worker's "Can't make it" — `POST /worker-release`.
-         * Unassigns the viewer, releases the payment hold, reopens the task
-         * for bids, and notifies the poster (`backend/routes/gigs.js:5954`).
-         */
-        fun releaseAssignment(
-            note: String? = null,
-            onResult: (Boolean) -> Unit = {},
-        ) {
-            viewModelScope.launch {
-                when (val result = reassignmentRepo.workerRelease(gigId, note)) {
-                    is NetworkResult.Success -> {
-                        _lifecycleEvents.emit(
-                            GigLifecycleEvent.Toast(
-                                result.data.message ?: "You have been released from this task",
-                            ),
-                        )
-                        silentRefetch()
-                        onResult(true)
-                    }
-                    is NetworkResult.Failure -> {
-                        _lifecycleEvents.emit(
-                            GigLifecycleEvent.Toast(
-                                result.error.displayMessage("Failed to release from task"),
-                                isError = true,
-                            ),
-                        )
-                        onResult(false)
-                    }
-                }
-            }
-        }
-
         /** Fetch the zone + fee preview when the cancel sheet opens. */
         fun requestCancelPreview() {
             _cancelPreview.value = null
             _cancelPreviewLoading.value = true
             viewModelScope.launch {
-                when (val result = repo.cancellationPreview(gigId)) {
+                val result = repo.cancellationPreview(gigId)
+                if (!bidCheckout.isCurrentReadScope()) return@launch
+                when (result) {
                     is NetworkResult.Success -> _cancelPreview.value = result.data
                     is NetworkResult.Failure -> Unit
                 }
@@ -2009,26 +2142,6 @@ class GigDetailViewModel
                 when (val result = repo.rescheduleGig(gigId, scheduledStartIso, note)) {
                     is NetworkResult.Success -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast("Task rescheduled"))
-                        silentRefetch()
-                        onResult(true)
-                    }
-                    is NetworkResult.Failure -> {
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
-                        onResult(false)
-                    }
-                }
-            }
-        }
-
-        /** Owner confirms the cancel with a reason radio. */
-        fun confirmCancel(
-            reason: CancelGigReason,
-            onResult: (Boolean) -> Unit = {},
-        ) {
-            viewModelScope.launch {
-                when (val result = repo.cancelGig(gigId, reason.wireValue)) {
-                    is NetworkResult.Success -> {
-                        _lifecycleEvents.emit(GigLifecycleEvent.Toast("Task cancelled"))
                         silentRefetch()
                         onResult(true)
                     }
@@ -2071,6 +2184,8 @@ class GigDetailViewModel
 
         /** Leave the room + stop collecting when the screen goes away. */
         fun leaveRealtime() {
+            startAttempt = null
+            retireDeliveryProof()
             realtimeJob?.cancel()
             realtimeJob = null
             socket.emit("gig:leave", JSONObject().put("gigId", gigId))
@@ -2078,45 +2193,31 @@ class GigDetailViewModel
 
         // MARK: - Tip (Block 3D)
 
-        /** Tap "Send a tip" → create the tip payment, then ask the screen to present PaymentSheet. */
-        fun sendTip(amountCents: Int) {
-            if (!canTip) return
-            _tipStatus.value = TipStatus.Sending
-            viewModelScope.launch {
-                when (val result = paymentsRepo.tip(TipRequest(gigId = gigId, amount = amountCents))) {
-                    is NetworkResult.Success -> {
-                        pendingTipPaymentId = result.data.paymentId
-                        _events.emit(GigTipEvent.PresentTipSheet(result.data.sheetParams()))
-                    }
-                    is NetworkResult.Failure -> {
-                        _tipStatus.value = TipStatus.Failed(result.error.message)
-                    }
-                }
-            }
+        /** Existing local payment discovery restores the old picker, without admitting a new charge. */
+        private suspend fun hasHistoricalTipEntry(gig: GigDto): Boolean {
+            val actor = currentUserId() ?: return false
+            if (viewerCanTip(gig, actor) || gig.userId != actor || gig.status?.lowercase() != "completed") return false
+            val marker = checkoutIdentities.scopeMarker()
+            val identity = checkoutIdentities.paymentIdentity() ?: return false
+            if (identity.userId != actor || checkoutIdentities.scopeMarker() != marker) return false
+            val preview = (paymentsRepo.tipPreview(gig.id) as? NetworkResult.Success)?.data ?: return false
+            if (checkoutIdentities.paymentIdentity() != identity || checkoutIdentities.scopeMarker() != marker) return false
+            return TipValidation.preview(preview, gig.id, actor, null) &&
+                (preview.activeRequestId != null || preview.legacyPaymentId != null)
         }
 
-        /** Result of presenting the tip PaymentSheet, mapped from Stripe in the screen. */
-        fun onTipOutcome(outcome: CheckoutOutcome) {
-            when (outcome) {
-                CheckoutOutcome.Paid -> {
-                    _tipStatus.value = TipStatus.Succeeded
-                    viewModelScope.launch {
-                        // Best-effort reconcile (mobile PaymentSheet may beat the webhook), then refresh.
-                        pendingTipPaymentId?.let { paymentsRepo.tipRefreshStatus(it) }
-                        pendingTipPaymentId = null
-                        load()
-                    }
-                }
-                CheckoutOutcome.Canceled -> _tipStatus.value = TipStatus.Canceled
-                is CheckoutOutcome.Declined ->
-                    _tipStatus.value = TipStatus.Failed(outcome.message ?: "Your card was declined.")
-            }
-        }
-
-        /** Clear the tip toast once the screen has shown it. */
-        fun clearTipStatus() {
-            _tipStatus.value = TipStatus.Idle
-        }
+        /** Each screen opening owns its recovery callbacks; storage survives navigation. */
+        fun createTipRecovery(scope: kotlinx.coroutines.CoroutineScope) =
+            GigTipRecovery(
+                gigId,
+                paymentsRepo,
+                tipStore,
+                scope,
+                checkoutIdentities::paymentIdentity,
+                checkoutIdentities::scopeMarker,
+                checkoutIdentities.changes,
+                onReceipt = { silentRefetch() },
+            )
 
         /** Get-or-create the gig chat room, then emit navigation payload. */
         fun openGigChat() {

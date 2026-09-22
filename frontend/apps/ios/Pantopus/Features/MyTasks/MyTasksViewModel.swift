@@ -72,9 +72,9 @@ public enum MyTasksStatus: Sendable, Hashable {
     /// "Starts {weekday}" — gig.status = assigned + scheduled_start in
     /// the future.
     case scheduled(weekday: String)
-    /// "Leave a review" — completed gigs where the poster hasn't yet
-    /// rated the worker (uses awaitReview as a fallback while the
-    /// backend doesn't surface `poster_review_left`).
+    /// Worker-submitted work still awaiting owner confirmation.
+    case awaitingConfirmation
+    /// Confirmed work awaiting the poster’s review.
     case awaitReview
     /// "Completed" — completed + the poster has already rated.
     case completed
@@ -93,6 +93,7 @@ public enum MyTasksStatus: Sendable, Hashable {
         case .noBids: "No bids yet"
         case .inProgress: "In progress"
         case let .scheduled(weekday): "Starts \(weekday)"
+        case .awaitingConfirmation: "Ready to confirm"
         case .awaitReview: "Leave a review"
         case .completed: "Completed"
         case .cancelled: "Cancelled"
@@ -107,6 +108,7 @@ public enum MyTasksStatus: Sendable, Hashable {
         case .noBids: .circleSlash
         case .inProgress: .play
         case .scheduled: .calendar
+        case .awaitingConfirmation: .checkCheck
         case .awaitReview: .star
         case .completed: .checkCheck
         case .cancelled: .x
@@ -117,7 +119,7 @@ public enum MyTasksStatus: Sendable, Hashable {
     /// Chip variant straight from the design's STATUS map.
     public var chipVariant: StatusChipVariant {
         switch self {
-        case .reviewing, .scheduled, .awaitReview: .info
+        case .reviewing, .scheduled, .awaitingConfirmation, .awaitReview: .info
         case .urgent: .error
         case .noBids, .cancelled, .expired: .neutral
         case .inProgress, .completed: .success
@@ -275,8 +277,9 @@ public enum MyTasksFooter: Sendable, Hashable {
     /// `boost` — [Edit details (ghost), Boost in feed (primary)]. Used
     /// for open + no-bids tasks.
     case boost
-    /// `inprogress` — [Message (ghost), Mark complete (primary)].
+    /// Active work keeps the existing Message and View task actions.
     case inProgress
+    case confirmCompletion
     /// `review` — single full-width "Leave a review".
     case review
     /// `repost` — single full-width "Repost task".
@@ -296,10 +299,10 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
 
     public var tabs: [ListOfRowsTab] {
         [
-            ListOfRowsTab(id: MyTasksTab.open, label: "Open", count: counts.open),
-            ListOfRowsTab(id: MyTasksTab.active, label: "Active", count: counts.active),
-            ListOfRowsTab(id: MyTasksTab.done, label: "Done", count: counts.done),
-            ListOfRowsTab(id: MyTasksTab.closed, label: "Closed", count: counts.closed)
+            ListOfRowsTab(id: MyTasksTab.open, label: "Open", count: visibleCounts.open),
+            ListOfRowsTab(id: MyTasksTab.active, label: "Active", count: visibleCounts.active),
+            ListOfRowsTab(id: MyTasksTab.done, label: "Done", count: visibleCounts.done),
+            ListOfRowsTab(id: MyTasksTab.closed, label: "Closed", count: visibleCounts.closed)
         ]
     }
 
@@ -311,19 +314,24 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     }
 
     public var fab: FABAction? {
+        guard canDisplay else { return nil }
+        let generation = screenGeneration
         // T6.0b — Magic Task FAB. 60pt gradient (primary600 → primary700)
         // with a sparkles disc clipped over the top-right corner.
         // Tapping invokes the same `onPostTask` callback the screen
         // already wires; the destination route is responsible for
         // opening the Magic Task draft flow (or falling back to the
         // classic compose form when Magic Task is feature-flagged off).
-        FABAction(
+        return FABAction(
             icon: .plus,
             accessibilityLabel: "Post a task with Magic Task",
             variant: .magicCreate
         ) { [weak self] in
             guard let self else { return }
-            Task { @MainActor in self.onPostTask() }
+            Task { @MainActor in
+                guard self.isCurrent(generation) else { return }
+                self.onPostTask()
+            }
         }
     }
 
@@ -335,16 +343,22 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     /// (HubTabRoot.swift:213), and widening it would touch every existing
     /// caller. Category prefill ships; title prefill is recorded as a gap.
     public func rebook(_ gig: RebookableGigDTO) {
+        guard canDisplay else { return }
         onRebook(gig)
     }
 
     public var topBarAction: TopBarAction? {
-        TopBarAction(
+        guard canDisplay else { return nil }
+        let generation = screenGeneration
+        return TopBarAction(
             icon: .filter,
             accessibilityLabel: "Filter tasks"
         ) { [weak self] in
             guard let self else { return }
-            Task { @MainActor in self.isFilterPresented = true }
+            Task { @MainActor in
+                guard self.isCurrent(generation) else { return }
+                self.isFilterPresented = true
+            }
         }
     }
 
@@ -374,11 +388,13 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
 
     /// Store the applied filter and re-project the visible rows.
     public func applyFilter(_ filter: ActivityFilter) {
+        guard canDisplay else { return }
         activityFilter = filter
         rebuild()
     }
 
     public var banner: BannerConfig? {
+        guard canDisplay else { return nil }
         guard selectedTab == MyTasksTab.open else { return nil }
         guard counts.openTotal > 0 else { return nil }
         let title: String
@@ -397,11 +413,50 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         return BannerConfig(icon: .inbox, title: title, subtitle: subtitle, onTap: nil)
     }
 
-    public private(set) var state: ListOfRowsState = .loading
+    private var storedState: ListOfRowsState = .loading
+    public private(set) var state: ListOfRowsState {
+        get {
+            guard isCurrentAccount else { return .error(message: "Reopen My tasks to load your current session.") }
+            return screenActive ? storedState : .loading
+        }
+        set { storedState = newValue }
+    }
+
+    private let identity: () -> GigStopViewModel.Identity?
+    private let openingIdentity: GigStopViewModel.Identity?
+    private var screenActive = true
+    private var screenGeneration = 0
+    public var isCurrentAccount: Bool {
+        openingIdentity != nil && identity() == openingIdentity
+    }
+
+    private var canDisplay: Bool {
+        screenActive && isCurrentAccount
+    }
+
+    private var visibleCounts: TabCounts {
+        canDisplay ? counts : TabCounts()
+    }
+
+    private func isCurrent(_ generation: Int) -> Bool {
+        generation == screenGeneration && canDisplay && !Task.isCancelled
+    }
+
+    public func retire() {
+        screenActive = false
+        screenGeneration += 1
+        loadGeneration += 1
+        gigs = []
+        counts = TabCounts()
+        loadedAtLeastOnce = false
+        confirmingGigIds.removeAll()
+        isFilterPresented = false
+    }
 
     // MARK: - Dependencies
 
     private let api: APIClient
+    private var confirmingGigIds: Set<String> = []
     private let onOpenTask: @MainActor (MyGigDTO) -> Void
     private let onOpenBids: @MainActor (MyGigDTO) -> Void
     private let onEditTask: @MainActor (MyGigDTO) -> Void
@@ -416,6 +471,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
 
     private var gigs: [MyGigDTO] = []
     private var loadedAtLeastOnce = false
+    private var loadGeneration = 0
     private var counts = TabCounts()
 
     private struct TabCounts {
@@ -439,9 +495,13 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         onPostTask: @escaping @MainActor () -> Void = {},
         onRepost: @escaping @MainActor (MyGigDTO) -> Void = { _ in },
         onRebook: @escaping @MainActor (RebookableGigDTO) -> Void = { _ in },
+        identity: (() -> GigStopViewModel.Identity?)? = nil,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.api = api
+        let resolveIdentity = identity ?? { GigStopViewModel.currentIdentity(api: api) }
+        self.identity = resolveIdentity
+        openingIdentity = resolveIdentity()
         self.onOpenTask = onOpenTask
         self.onOpenBids = onOpenBids
         self.onEditTask = onEditTask
@@ -456,6 +516,8 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     // MARK: - ListOfRowsDataSource
 
     public func load() async {
+        guard isCurrentAccount, !Task.isCancelled else { return }
+        screenActive = true
         if !loadedAtLeastOnce { state = .loading }
         await fetch()
     }
@@ -470,12 +532,18 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     // MARK: - Fetching
 
     private func fetch() async {
+        guard canDisplay, !Task.isCancelled else { return }
+        let screen = screenGeneration
+        loadGeneration += 1
+        let generation = loadGeneration
         do {
             let response: MyGigsResponse = try await api.request(GigsEndpoints.myGigs())
+            guard generation == loadGeneration, isCurrent(screen) else { return }
             gigs = response.gigs
             loadedAtLeastOnce = true
             rebuild()
         } catch {
+            guard generation == loadGeneration, isCurrent(screen) else { return }
             if !loadedAtLeastOnce {
                 let message = (error as? APIError)?.errorDescription ?? "Couldn't load your tasks."
                 state = .error(message: message)
@@ -522,7 +590,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
     public static func statusFilterId(for status: MyTasksStatus) -> String {
         switch status {
         case .reviewing, .urgent, .noBids: "open"
-        case .inProgress, .scheduled: "in_progress"
+        case .inProgress, .scheduled, .awaitingConfirmation: "in_progress"
         case .completed, .awaitReview: "done"
         case .cancelled, .expired: "closed"
         }
@@ -541,45 +609,68 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         }
     }
 
+    private func performIfCurrent(_ generation: Int, action: () async -> Void) async {
+        guard isCurrent(generation) else { return }
+        await action()
+    }
+
     private func callbacks(for dto: MyGigDTO) -> RowCallbacks {
-        RowCallbacks(
+        let generation = screenGeneration
+        return RowCallbacks(
             onTap: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in self.onOpenTask(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { self.onOpenTask(dto) }
+                }
             },
             onReviewBids: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in self.onOpenBids(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { self.onOpenBids(dto) }
+                }
             },
             onEdit: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in self.onEditTask(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { self.onEditTask(dto) }
+                }
             },
             onBoost: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in await self.boost(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { await self.boost(dto) }
+                }
             },
             onMessage: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in self.onMessageWorker(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { self.onMessageWorker(dto) }
+                }
             },
             onMarkComplete: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in await self.markComplete(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { await self.markComplete(dto) }
+                }
             },
             onLeaveReview: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in self.onLeaveReview(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { self.onLeaveReview(dto) }
+                }
             },
             onRepost: { [weak self] in
                 guard let self else { return }
-                Task { @MainActor in self.onRepost(dto) }
+                Task { @MainActor in
+                    await self.performIfCurrent(generation) { self.onRepost(dto) }
+                }
             }
         )
     }
 
     private func emptyContent(for tab: String) -> ListOfRowsState.EmptyContent {
-        switch tab {
+        let generation = screenGeneration
+        return switch tab {
         case MyTasksTab.open:
             // T6.0b — Magic Task primary CTA. The shell's EmptyState
             // renders the headline + body + single primary button; the
@@ -593,7 +684,10 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
                     + "confirm and post.",
                 ctaTitle: "Try Magic Task"
             ) { [weak self] in
-                Task { @MainActor in self?.onPostTask() }
+                Task { @MainActor in
+                    guard let self, self.isCurrent(generation) else { return }
+                    self.onPostTask()
+                }
             }
         case MyTasksTab.active:
             ListOfRowsState.EmptyContent(
@@ -633,41 +727,44 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
 
     // MARK: - Mutations
 
-    /// Optimistically boost the gig. The chip stays the same (Reviewing /
-    /// No bids) but the row's `boost_expires_at` is updated locally so
-    /// future renders can surface a "Boosted" hint.
+    /// Refresh the existing list from the server after a successful boost.
     public func boost(_ dto: MyGigDTO) async {
-        guard let index = gigs.firstIndex(where: { $0.id == dto.id }) else { return }
-        let previous = gigs
-        gigs[index] = Self.boostedCopy(of: gigs[index], now: now())
-        rebuild()
+        let generation = screenGeneration
+        guard isCurrent(generation), gigs.contains(where: { $0.id == dto.id }) else { return }
         do {
-            _ = try await api.request(
-                GigsEndpoints.boostGig(gigId: dto.id),
-                as: BoostGigResponse.self
-            )
-        } catch {
-            gigs = previous
-            rebuild()
-        }
+            _ = try await api.request(GigsEndpoints.boostGig(gigId: dto.id), as: BoostGigResponse.self)
+            guard isCurrent(generation) else { return }
+            await refresh()
+        } catch { return }
     }
 
-    /// Optimistically mark the assigned gig as complete (poster
-    /// confirmation). The row moves from Active → Done with the "Leave
-    /// a review" chip.
+    /// Confirm only worker-submitted work and keep the row active until a receipt.
     public func markComplete(_ dto: MyGigDTO) async {
-        guard let index = gigs.firstIndex(where: { $0.id == dto.id }) else { return }
-        let previous = gigs
-        gigs[index] = Self.completedCopy(of: gigs[index])
-        rebuild()
+        let generation = screenGeneration
+        guard isCurrent(generation) else { return }
+        guard let current = gigs.first(where: { $0.id == dto.id }) else { return }
+        guard current.status == "completed", Self.parseDate(current.ownerConfirmedAt) == nil,
+              let review = dto.completionReview, !review.isEmpty, current.completionReview == review
+        else { onOpenTask(dto)
+            return
+        }
+        guard confirmingGigIds.insert(dto.id).inserted else { return }
+        defer { if generation == screenGeneration { confirmingGigIds.remove(dto.id) } }
         do {
-            _ = try await api.request(
-                GigsEndpoints.completeGigAsPoster(gigId: dto.id),
-                as: EmptyResponse.self
+            let response: GigDetailResponse = try await api.request(
+                GigsEndpoints.completeGigAsPoster(gigId: dto.id, expectedReview: review)
             )
+            guard isCurrent(generation) else { return }
+            guard response.gig.id == dto.id, response.gig.status == "completed",
+                  Self.parseDate(response.gig.ownerConfirmedAt) != nil
+            else { onOpenTask(dto)
+                return
+            }
+            await refresh()
         } catch {
-            gigs = previous
-            rebuild()
+            // The existing detail loader recovers a lost committed reply or shows
+            // current work after a conflict; never manufacture a local receipt.
+            if isCurrent(generation) { onOpenTask(dto) }
         }
     }
 
@@ -716,7 +813,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         switch status {
         case .reviewing, .urgent, .noBids:
             MyTasksTab.open
-        case .inProgress, .scheduled:
+        case .inProgress, .scheduled, .awaitingConfirmation:
             MyTasksTab.active
         case .completed, .awaitReview:
             MyTasksTab.done
@@ -733,9 +830,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         case "cancelled":
             return .cancelled
         case "completed":
-            // Until a backend `poster_review_left` flag lands, every
-            // completed gig prompts a review.
-            return .awaitReview
+            return parseDate(dto.ownerConfirmedAt) == nil ? .awaitingConfirmation : .awaitReview
         case "in_progress":
             return .inProgress
         case "assigned":
@@ -773,6 +868,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
         case .noBids: .boost
         case .inProgress: .inProgress
         case .scheduled: .inProgress
+        case .awaitingConfirmation: .confirmCompletion
         case .awaitReview: .review
         case .completed: .none
         case .cancelled, .expired: .repost
@@ -1019,7 +1115,7 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
                     handler: callbacks.onBoost
                 )
             ])
-        case .inProgress:
+        case .inProgress, .confirmCompletion:
             RowFooter(actions: [
                 RowFooterAction(
                     title: "Message",
@@ -1028,10 +1124,10 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
                     handler: callbacks.onMessage
                 ),
                 RowFooterAction(
-                    title: "Mark complete",
+                    title: variant == .confirmCompletion ? "Confirm completion" : "View task",
                     icon: .checkCheck,
                     variant: .primary,
-                    handler: callbacks.onMarkComplete
+                    handler: variant == .confirmCompletion ? callbacks.onMarkComplete : callbacks.onTap
                 )
             ])
         case .review:
@@ -1122,37 +1218,9 @@ public final class MyTasksViewModel: ListOfRowsDataSource {
             boostExpiresAt: formatter.string(from: expires),
             sourceFlow: dto.sourceFlow,
             taskArchetype: dto.taskArchetype,
-            taskFormat: dto.taskFormat
-        )
-    }
-
-    /// Build an optimistic copy of a gig whose status is flipped to
-    /// completed (used by `markComplete`).
-    public static func completedCopy(of dto: MyGigDTO) -> MyGigDTO {
-        MyGigDTO(
-            id: dto.id,
-            title: dto.title,
-            description: dto.description,
-            price: dto.price,
-            category: dto.category,
-            status: "completed",
-            createdAt: dto.createdAt,
-            updatedAt: ISO8601DateFormatter().string(from: Date()),
-            deadline: dto.deadline,
-            isUrgent: dto.isUrgent,
-            userId: dto.userId,
-            acceptedBy: dto.acceptedBy,
-            acceptedAt: dto.acceptedAt,
-            scheduledStart: dto.scheduledStart,
-            payType: dto.payType,
-            bidCount: dto.bidCount,
-            topBidAmount: dto.topBidAmount,
-            topBidders: dto.topBidders,
-            boostedAt: dto.boostedAt,
-            boostExpiresAt: dto.boostExpiresAt,
-            sourceFlow: dto.sourceFlow,
-            taskArchetype: dto.taskArchetype,
-            taskFormat: dto.taskFormat
+            taskFormat: dto.taskFormat,
+            completionReview: dto.completionReview,
+            ownerConfirmedAt: dto.ownerConfirmedAt
         )
     }
 }

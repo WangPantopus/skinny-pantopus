@@ -2567,27 +2567,27 @@ public struct HubTabRoot: View {
             MyTasksView(
                 viewModel: MyTasksViewModel(
                     onOpenTask: { dto in
-                        Task { @MainActor in push(.gigDetail(gigId: dto.id)) }
+                        push(.gigDetail(gigId: dto.id))
                     },
                     onOpenBids: { dto in
                         // Bids live inside the owner's gig detail (the
                         // "Review bids" section). Android mirrors this.
-                        Task { @MainActor in push(.gigDetail(gigId: dto.id)) }
+                        push(.gigDetail(gigId: dto.id))
                     },
                     onEditTask: { dto in
-                        Task { @MainActor in push(.editGig(gigId: dto.id)) }
+                        push(.editGig(gigId: dto.id))
                     },
                     onMessageWorker: { dto in
-                        Task { @MainActor in push(.gigDetail(gigId: dto.id)) }
+                        push(.gigDetail(gigId: dto.id))
                     },
                     onLeaveReview: { dto in
-                        Task { @MainActor in push(.gigDetail(gigId: dto.id)) }
+                        push(.gigDetail(gigId: dto.id))
                     },
                     onPostTask: {
-                        Task { @MainActor in push(.composeGig(category: GigsCategory.all.rawValue)) }
+                        push(.composeGig(category: GigsCategory.all.rawValue))
                     },
                     onRepost: { _ in
-                        Task { @MainActor in push(.composeGig(category: GigsCategory.all.rawValue)) }
+                        push(.composeGig(category: GigsCategory.all.rawValue))
                     }
                 )
             )

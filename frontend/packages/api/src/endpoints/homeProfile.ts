@@ -118,9 +118,17 @@ export async function createHomeBill(homeId: string, data: {
 }
 
 export async function updateHomeBill(homeId: string, billId: string, data: Partial<{
+  bill_type: string;
+  provider_name: string;
   status: string;
   paid_at: string;
+  paid_by: string;
   amount: number;
+  currency: string;
+  period_start: string;
+  period_end: string;
+  due_date: string;
+  details: Record<string, unknown>;
 }>) {
   return put<{ bill: any }>(`/api/homes/${homeId}/bills/${billId}`, data);
 }

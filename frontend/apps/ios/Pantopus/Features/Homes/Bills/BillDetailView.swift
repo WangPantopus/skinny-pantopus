@@ -99,7 +99,8 @@ final class BillDetailViewModel {
 
     /// Soft-delete — backend has no DELETE handler for bills.
     func remove() async {
-        if await update(request: UpdateBillRequest(status: "cancelled")) {
+        // HomeBill_status_chk spells the soft-deleted status `canceled`.
+        if await update(request: UpdateBillRequest(status: "canceled")) {
             onClose()
         }
     }
@@ -116,8 +117,12 @@ final class BillDetailViewModel {
                 HomesEndpoints.updateBill(homeId: homeId, billId: billId, request: request)
             )
             try financeAccess.require(managing: true)
-            guard response.bill.id == billId, response.bill.homeId == homeId,
-                  request.status == nil || response.bill.status == request.status else { throw APIError.invalidResponse }
+            let statusMatches = request.status == nil
+                || response.bill.status == request.status
+                || (request.status == "canceled" && response.bill.status == "cancelled")
+            guard response.bill.id == billId, response.bill.homeId == homeId, statusMatches else {
+                throw APIError.invalidResponse
+            }
             onChanged()
             if case let .loaded(_, splits) = state {
                 contentState = .loaded(response.bill, splits)

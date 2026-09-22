@@ -2545,6 +2545,10 @@ router.post('/:id/issues', verifyToken, async (req, res) => {
 
     const access = await checkHomePermission(homeId, userId);
     if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    // Same grant as the web/native Report Issue controls; a view-only member is refused here, not only in the UI.
+    if (!['maintenance.edit', 'maintenance.manage'].some(permission => access.permissions.includes(permission))) {
+      return res.status(403).json({ error: 'Insufficient permissions to report issues' });
+    }
 
     const { title, description, severity, photos, estimated_cost, details } = req.body;
 
@@ -2711,13 +2715,18 @@ router.put('/:id/bills/:billId', verifyToken, async (req, res) => {
     const access = await checkHomePermission(homeId, userId, 'can_manage_finance');
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage finances' });
 
-    const allowed = ['amount', 'status', 'paid_at', 'paid_by', 'provider_name', 'due_date', 'details'];
+    const allowed = [
+      'bill_type', 'provider_name', 'amount', 'currency',
+      'period_start', 'period_end', 'due_date', 'status',
+      'paid_at', 'paid_by', 'details',
+    ];
     const updates = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) updates[key] = req.body[key];
     }
-    if (updates.status === 'paid' && !updates.paid_at) {
-      updates.paid_at = new Date().toISOString();
+    // Clients that send their own paid_at still need the payer recorded.
+    if (updates.status === 'paid') {
+      if (!updates.paid_at) updates.paid_at = new Date().toISOString();
       if (!updates.paid_by) updates.paid_by = userId;
     }
     updates.updated_at = new Date().toISOString();
@@ -2918,6 +2927,11 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
     const access = await checkHomePermission(homeId, userId, 'home.edit');
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage maintenance' });
 
+    const { data: current, error: readError } = await supabaseAdmin.from('HomeMaintenanceLog')
+      .select('*').eq('id', taskId).eq('home_id', homeId).maybeSingle();
+    if (readError) return res.status(503).json({ error: 'Maintenance could not be checked. Please retry.' });
+    if (!current) return res.status(404).json({ error: 'Maintenance task not found' });
+
     const allowed = ['task', 'vendor', 'cost', 'recurrence', 'due_date', 'status'];
     const updates = {};
     for (const key of allowed) {
@@ -2931,7 +2945,13 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid recurrence' });
     }
 
-    if (updates.status === 'completed') {
+    if (current.gig_id && updates.cost !== undefined
+      && (updates.cost == null ? null : Number(updates.cost)) !== (current.cost == null ? null : Number(current.cost))) {
+      return res.status(409).json({ error: 'The cost of completed Gig work comes from its payment record.' });
+    }
+    // A saved completion retry and edits to automatic Gig history keep the
+    // original performer/time. Only a manual task's first completion stamps them.
+    if (updates.status === 'completed' && current.status !== 'completed' && !current.gig_id) {
       updates.performed_at = new Date().toISOString();
       updates.performed_by = userId;
     }
@@ -2943,14 +2963,16 @@ router.put('/:id/maintenance/:taskId', verifyToken, async (req, res) => {
       .update(updates)
       .eq('id', taskId)
       .eq('home_id', homeId)
+      .eq('status', current.status)
+      .eq('updated_at', current.updated_at)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       logger.error('Error updating maintenance task', { error: error.message, taskId });
       return res.status(500).json({ error: 'Failed to update maintenance task' });
     }
-    if (!data) return res.status(404).json({ error: 'Maintenance task not found' });
+    if (!data) return res.status(409).json({ error: 'Maintenance changed. Reload it before saving.' });
 
     res.json({ task: data });
   } catch (err) {
@@ -3085,7 +3107,8 @@ router.put('/:id/packages/:packageId', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'You can only edit packages you added' });
     }
 
-    const allowed = ['status', 'delivered_at', 'picked_up_by', 'carrier', 'tracking_number', 'description', 'delivery_instructions', 'expected_at'];
+    // vendor_name is accepted on create and edited by every client's package editor.
+    const allowed = ['status', 'delivered_at', 'picked_up_by', 'carrier', 'tracking_number', 'vendor_name', 'description', 'delivery_instructions', 'expected_at'];
     // Mirrors HomePackage_status_chk so an unsupported status is a 400, not a 500.
     const statuses = ['expected', 'in_transit', 'out_for_delivery', 'delivered', 'picked_up', 'lost', 'returned'];
     if (req.body.status !== undefined && !statuses.includes(req.body.status)) {
@@ -3100,6 +3123,12 @@ router.put('/:id/packages/:packageId', verifyToken, async (req, res) => {
     }
     if (updates.status === 'picked_up' && !updates.picked_up_by) {
       updates.picked_up_by = userId;
+    }
+    // A package moved back before delivery is no longer delivered or picked up;
+    // keep the row truthful unless the caller set those fields explicitly.
+    if (['expected', 'in_transit', 'out_for_delivery'].includes(updates.status)) {
+      if (req.body.delivered_at === undefined) updates.delivered_at = null;
+      if (req.body.picked_up_by === undefined) updates.picked_up_by = null;
     }
     updates.updated_at = new Date().toISOString();
 
@@ -4172,20 +4201,13 @@ router.get('/:id/pets', verifyToken, async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      // Table may not exist yet if migration hasn't been applied — return empty
-      if (error.message && (error.message.includes('does not exist') || error.code === '42P01')) {
-        logger.warn('HomePet table not found, returning empty', { homeId });
-        return res.json({ pets: [] });
-      }
+      // An unavailable read is an error, never a confirmed-empty list.
       logger.error('Error fetching pets', { error: error.message, homeId });
       return res.status(500).json({ error: 'Failed to fetch pets' });
     }
 
     res.json({ pets: data || [] });
   } catch (err) {
-    if (err.message && (err.message.includes('does not exist') || err.message.includes('42P01'))) {
-      return res.json({ pets: [] });
-    }
     logger.error('Pets fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch pets' });
   }
@@ -4367,11 +4389,7 @@ router.get('/:id/polls', verifyToken, async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      // Table may not exist yet if migration hasn't been applied — return empty
-      if (error.message && (error.message.includes('does not exist') || error.code === '42P01')) {
-        logger.warn('HomePoll table not found, returning empty', { homeId });
-        return res.json({ polls: [] });
-      }
+      // An unavailable read is an error, never a confirmed-empty list.
       logger.error('Error fetching polls', { error: error.message, homeId });
       return res.status(500).json({ error: 'Failed to fetch polls' });
     }
@@ -4429,9 +4447,6 @@ router.get('/:id/polls', verifyToken, async (req, res) => {
 
     res.json({ polls: enriched });
   } catch (err) {
-    if (err.message && (err.message.includes('does not exist') || err.message.includes('42P01'))) {
-      return res.json({ polls: [] });
-    }
     logger.error('Polls fetch error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch polls' });
   }

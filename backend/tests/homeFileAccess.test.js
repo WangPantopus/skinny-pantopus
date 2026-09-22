@@ -5,6 +5,7 @@ const db = require('./__mocks__/supabaseAdmin');
 jest.mock('../utils/homePermissions', () => ({ checkHomePermission: jest.fn() }));
 jest.mock('../services/s3Service', () => ({
   uploadToS3: jest.fn(), generateS3Key: jest.fn(), deleteFromS3: jest.fn(),
+  createPrivateGigCompletionFile: jest.fn(),
 }));
 const s3 = require('../services/s3Service');
 
@@ -169,7 +170,6 @@ describe('Existing standalone upload types', () => {
     ['general', 'other', 'general', 'text/plain', 'file.txt'],
     ['voice_postscript', 'other', 'voice_postscript', 'audio/m4a', 'voice.m4a'],
     ['gig_photo', 'gig_attachment', 'gig_photo', 'image/jpeg', 'gig.jpg'],
-    ['gig_completion', 'gig_attachment', 'gig_completion', 'image/jpeg', 'proof.jpg'],
     ['mailbox_unboxing', 'mailbox_attachment', 'mailbox_unboxing', 'image/jpeg', 'mail.jpg'],
     ['business_verification', 'other', 'business_verification', 'application/pdf', 'proof.pdf'],
     ['gig_attachment', 'gig_attachment', null, 'image/jpeg', 'existing.jpg'],
@@ -184,6 +184,20 @@ describe('Existing standalone upload types', () => {
     });
     expect(s3.generateS3Key).toHaveBeenCalledWith(requested === 'voice_postscript' ? 'voice-postscripts' : 'uploads', name, userId);
     expect(response.body.file).toMatchObject({ id: expect.any(String), url: expect.any(String) });
+  });
+
+  test('routes completion proof through its gig-bound private contract without public S3 writes', async () => {
+    const gigId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    const file = { id: 'private-proof', file_url: `/api/gigs/${gigId}/completion-files/private-proof`, mime_type: 'image/jpeg', file_size: 8 };
+    s3.createPrivateGigCompletionFile.mockResolvedValue(file);
+    const response = await request(app).post('/api/files/upload')
+      .field('file_type', 'gig_completion').field('gig_id', gigId)
+      .attach('file', Buffer.from('proof'), { filename: 'proof.jpg', contentType: 'image/jpeg' });
+    expect(response.status).toBe(201);
+    expect(s3.createPrivateGigCompletionFile).toHaveBeenCalledWith(gigId, userId, expect.objectContaining({ originalname: 'proof.jpg' }));
+    expect(s3.uploadToS3).not.toHaveBeenCalled();
+    expect(s3.generateS3Key).not.toHaveBeenCalled();
+    expect(response.body.file).toMatchObject({ id: file.id, url: file.file_url });
   });
 
   test.each([

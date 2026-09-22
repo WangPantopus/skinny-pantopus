@@ -151,25 +151,21 @@ public struct TasksTabRoot: View {
     private func myTasksDestination() -> some View {
         MyTasksView(
             viewModel: MyTasksViewModel(
-                onOpenTask: { dto in Task { @MainActor in path.append(.gigDetail(gigId: dto.id)) } },
-                onOpenBids: { dto in Task { @MainActor in path.append(.gigDetail(gigId: dto.id)) } },
+                onOpenTask: { dto in path.append(.gigDetail(gigId: dto.id)) },
+                onOpenBids: { dto in path.append(.gigDetail(gigId: dto.id)) },
                 onEditTask: { dto in
-                    Task { @MainActor in
-                        path.append(.quickPostGig(category: GigsCategory.all.rawValue, editGigId: dto.id))
-                    }
+                    path.append(.quickPostGig(category: GigsCategory.all.rawValue, editGigId: dto.id))
                 },
-                onMessageWorker: { dto in Task { @MainActor in path.append(.gigDetail(gigId: dto.id)) } },
-                onLeaveReview: { dto in Task { @MainActor in path.append(.gigDetail(gigId: dto.id)) } },
+                onMessageWorker: { dto in path.append(.gigDetail(gigId: dto.id)) },
+                onLeaveReview: { dto in path.append(.gigDetail(gigId: dto.id)) },
                 onPostTask: {
-                    Task { @MainActor in path.append(.composeGig(category: GigsCategory.all.rawValue)) }
+                    path.append(.composeGig(category: GigsCategory.all.rawValue))
                 },
                 onRepost: { _ in
-                    Task { @MainActor in path.append(.composeGig(category: GigsCategory.all.rawValue)) }
+                    path.append(.composeGig(category: GigsCategory.all.rawValue))
                 },
                 onRebook: { gig in
-                    Task { @MainActor in
-                        path.append(.composeGig(category: GigsCategory.from(backendKey: gig.category).rawValue))
-                    }
+                    path.append(.composeGig(category: GigsCategory.from(backendKey: gig.category).rawValue))
                 }
             )
         )

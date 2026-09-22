@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.payments.PaymentMethodAckResponse
 import app.pantopus.android.data.api.models.payments.PaymentMethodsResponse
 import app.pantopus.android.data.api.models.payments.PaymentsEarningsResponse
 import app.pantopus.android.data.api.models.payments.SpendingSummaryResponse
+import app.pantopus.android.data.api.models.payments.TipPreview
 import app.pantopus.android.data.api.models.payments.TipRefreshStatusResponse
 import app.pantopus.android.data.api.models.payments.TipRequest
 import app.pantopus.android.data.api.models.payments.TipResponse
@@ -26,6 +27,25 @@ class PaymentsRepository
     constructor(
         private val api: PaymentsApi,
     ) {
+        suspend fun refunds(paymentId: String): NetworkResult<app.pantopus.android.data.api.models.payments.PaymentRefundHistoryDto> =
+            safeApiCall { api.refunds(paymentId) }
+
+        suspend fun refund(
+            paymentId: String,
+            attempt: app.pantopus.android.data.api.models.payments.PaymentRefundAttempt,
+        ): NetworkResult<app.pantopus.android.data.api.models.payments.PaymentRefundResultDto> =
+            safeApiCall {
+                api.refund(
+                    paymentId,
+                    app.pantopus.android.data.api.models.payments.PaymentRefundBody(
+                        attempt.requestId,
+                        attempt.requestedAmountCents,
+                        attempt.reason,
+                        attempt.description,
+                    ),
+                )
+            }
+
         /** `GET /api/payments/methods`. */
         suspend fun paymentMethods(): NetworkResult<PaymentMethodsResponse> = safeApiCall { api.methods() }
 
@@ -40,6 +60,10 @@ class PaymentsRepository
         /** `POST /api/payments/intent` — PaymentSheet params for a checkout (Block 3B). */
         suspend fun createPaymentIntent(request: CreatePaymentIntentRequest): NetworkResult<PaymentIntentSheetParamsDto> =
             safeApiCall { api.createIntent(request) }
+
+        suspend fun tipPreview(gigId: String): NetworkResult<TipPreview> = safeApiCall { api.tipPreview(gigId) }
+
+        suspend fun tipOriginal(requestId: String): NetworkResult<TipResponse> = safeApiCall { api.tipOriginal(requestId) }
 
         /** `POST /api/payments/tip` — tip the worker on a completed gig (Block 3D). */
         suspend fun tip(request: TipRequest): NetworkResult<TipResponse> = safeApiCall { api.tip(request) }

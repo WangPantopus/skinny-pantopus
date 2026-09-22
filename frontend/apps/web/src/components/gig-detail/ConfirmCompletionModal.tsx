@@ -3,6 +3,7 @@
 import { CheckCircle, CheckSquare, Square } from 'lucide-react';
 import ModalShell from '@/components/ui/ModalShell';
 import StarRating from '@/components/ui/StarRating';
+import { CompletionProofImage } from '@/components/FileUpload';
 
 const SATISFACTION_LABELS: Record<number, string> = {
   0: 'Tap to rate',
@@ -82,19 +83,17 @@ export default function ConfirmCompletionModal({
               </p>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {gig.completion_photos.map((url: string, i: number) => (
-                  <a
+                  <CompletionProofImage
                     key={i}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-shrink-0"
-                  >
-                    <img
-                      src={url}
-                      alt={`Completion photo ${i + 1}`}
-                      className="w-20 h-20 rounded-lg object-cover border border-app-border hover:ring-2 hover:ring-emerald-400 transition"
-                    />
-                  </a>
+                    reference={url}
+                    openFull
+                    unoptimized
+                    anchorClassName="flex-shrink-0"
+                    alt={`Completion photo ${i + 1}`}
+                    width={80}
+                    height={80}
+                    className="w-20 h-20 rounded-lg object-cover border border-app-border hover:ring-2 hover:ring-emerald-400 transition"
+                  />
                 ))}
               </div>
             </div>

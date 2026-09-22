@@ -206,6 +206,15 @@ export async function uploadGigCompletionMedia(
   return response.data;
 }
 
+/** Fetch private completion bytes using the existing authenticated API client. */
+export async function downloadGigCompletionFile(reference: string, signal?: AbortSignal): Promise<Blob> {
+  if (!/^\/api\/gigs\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\/completion-files\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(reference)) {
+    throw new Error('Invalid completion file reference.');
+  }
+  const response = await apiClient.get<Blob>(reference, { responseType: 'blob', signal, headers: { 'Cache-Control': 'no-store' } });
+  return response.data;
+}
+
 /**
  * Get media for a gig
  */

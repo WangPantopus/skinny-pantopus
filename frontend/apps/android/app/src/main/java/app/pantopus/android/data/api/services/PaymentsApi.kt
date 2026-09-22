@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.payments.PaymentMethodAckResponse
 import app.pantopus.android.data.api.models.payments.PaymentMethodsResponse
 import app.pantopus.android.data.api.models.payments.PaymentsEarningsResponse
 import app.pantopus.android.data.api.models.payments.SpendingSummaryResponse
+import app.pantopus.android.data.api.models.payments.TipPreview
 import app.pantopus.android.data.api.models.payments.TipRefreshStatusResponse
 import app.pantopus.android.data.api.models.payments.TipRequest
 import app.pantopus.android.data.api.models.payments.TipResponse
@@ -19,13 +20,26 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * Stripe payment-methods routes from `backend/routes/pays.js` (mounted at
  * `/api/payments`). Phase 3 (3A) wires the Settings → Payments methods
  * card. Connect onboarding, payouts, checkout and tips are 3B/3C/3D.
  */
+@Suppress("TooManyFunctions") // Keep the payment gateway's paired refund/recovery routes on its existing API.
 interface PaymentsApi {
+    @GET("api/payments/{paymentId}/refunds")
+    suspend fun refunds(
+        @Path("paymentId") paymentId: String,
+    ): app.pantopus.android.data.api.models.payments.PaymentRefundHistoryDto
+
+    @POST("api/payments/{paymentId}/refund")
+    suspend fun refund(
+        @Path("paymentId") paymentId: String,
+        @Body request: app.pantopus.android.data.api.models.payments.PaymentRefundBody,
+    ): app.pantopus.android.data.api.models.payments.PaymentRefundResultDto
+
     /** `GET /api/payments/methods` — route `backend/routes/pays.js:701`. */
     @GET("api/payments/methods")
     suspend fun methods(): PaymentMethodsResponse
@@ -64,6 +78,16 @@ interface PaymentsApi {
      * the poster tips the worker; returns the mobile PaymentSheet params +
      * `paymentId` for reconciliation.
      */
+    @GET("api/payments/tip-preview")
+    suspend fun tipPreview(
+        @Query("gigId") gigId: String,
+    ): TipPreview
+
+    @GET("api/payments/tip-requests/{requestId}")
+    suspend fun tipOriginal(
+        @Path("requestId") requestId: String,
+    ): TipResponse
+
     @POST("api/payments/tip")
     suspend fun tip(
         @Body request: TipRequest,

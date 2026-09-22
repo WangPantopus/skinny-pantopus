@@ -215,3 +215,19 @@ describe('checkBusinessPermission', () => {
     expect(result.isOwner).toBe(false);
   });
 });
+
+
+test('an unreadable explicit denial cannot fall back to a role grant', async () => {
+  const db = require('./__mocks__/supabaseAdmin');
+  seedTable('BusinessTeam', [{ id: 'membership', business_user_id: 'business', user_id: 'delegate', is_active: true, role_base: 'admin' }]);
+  seedTable('BusinessPermissionOverride', [{ business_user_id: 'business', user_id: 'delegate', permission: 'gigs.manage', allowed: false }]);
+  seedTable('BusinessRolePermission', [{ role_base: 'admin', permission: 'gigs.manage', allowed: true }]);
+  const from = db.from.bind(db);
+  const intercepted = jest.spyOn(db, 'from').mockImplementation(table => {
+    const query = from(table);
+    if (table === 'BusinessPermissionOverride') query.maybeSingle = async () => ({ data: null, error: { code: '08006' } });
+    return query;
+  });
+  try { expect(await hasPermission('business', 'delegate', 'gigs.manage')).toBe(false); }
+  finally { intercepted.mockRestore(); }
+});
