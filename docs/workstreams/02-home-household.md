@@ -1056,3 +1056,23 @@ Coordinator reacquired same SQL64552/API64551 and web[::1]:18141/API18142 for St
   failure.
 - **Runtime:** backend remains intentionally running for the user’s device
   session; no database rows, fixtures, caches or peer worktrees were changed.
+
+## Latest accepted native build and LAN handoff — September22
+
+- The accepted native source remains PR160 exact head `ede5b72b5`; its full CI
+  dispatch `35719644248` is green across iOS, Android, web, backend, database
+  and deployment gates. The focused Stream2 D10 web repair remains PR176
+  `ee9e78c5d` with CI `35722484544` green.
+- A generic signed physical-device Debug build completed successfully from the
+  accepted native source. Artifact:
+  `/private/tmp/pantopus-stream2-ios-latest/.stream2-device-dd/Build/Products/Debug-iphoneos/Pantopus.app`.
+  Bundle identifier is `app.pantopus.ios`; signing authority is the local Apple
+  Development team `6UYZBA546R`.
+- The retained physical iPhone remains Offline in `xcrun xctrace list devices`,
+  so no install or device launch is claimed. The signed artifact is ready once
+  the phone is connected/unlocked and paired. The retained Stream2 simulator
+  was not reset or replaced.
+- The combined temporary runtime is healthy at `127.0.0.1:18143` and through
+  the LAN proxy `192.168.0.176:18142`; its source is PR160 plus the accepted
+  PR175 bill-field allowlist. No application branch was merged or changed for
+  this runtime handoff.
