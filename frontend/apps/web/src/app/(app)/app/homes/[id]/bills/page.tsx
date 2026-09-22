@@ -13,11 +13,9 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { formatHomeBillAmount, formatHomeBillDate, parseHomeBillDate } from '@/components/home/homeBillAmount';
 
 type BillTab = 'upcoming' | 'paid' | 'all';
-
-const formatCurrency = (cents?: number | null) =>
-  cents != null ? `$${(cents / 100).toFixed(2)}` : '';
 
 function BillsContent() {
   const router = useRouter();
@@ -55,7 +53,10 @@ function BillsContent() {
 
   // Filters
   const now = new Date();
-  const isOverdue = (b: any) => b.status !== 'paid' && b.status !== 'canceled' && b.due_date && new Date(b.due_date) < now;
+  const isOverdue = (b: any) => {
+    const due = parseHomeBillDate(b.due_date);
+    return b.status !== 'paid' && b.status !== 'canceled' && !!due && due < now;
+  };
   const upcomingBills = bills.filter((b) => b.status !== 'paid' && b.status !== 'canceled');
   const paidBills = bills.filter((b) => b.status === 'paid');
   const currentList = tab === 'upcoming' ? upcomingBills : tab === 'paid' ? paidBills : bills;
@@ -67,7 +68,10 @@ function BillsContent() {
     return new Date(a.due_date || 0).getTime() - new Date(b.due_date || 0).getTime();
   });
 
-  const totalDue = upcomingBills.reduce((sum, b) => sum + Number(b.amount_cents ?? b.amount ?? 0), 0);
+  // HomeBill.amount is a major-unit amount in its own currency (same as the
+  // dashboard bill card); a total only makes sense across one currency.
+  const dueCurrencies = new Set(upcomingBills.map((b) => b.currency));
+  const totalDue = dueCurrencies.size === 1 ? upcomingBills.reduce((sum, b) => sum + Number(b.amount ?? 0), 0) : 0;
 
   const handleMarkPaid = useCallback(async (billId: string) => {
     try {
@@ -88,7 +92,7 @@ function BillsContent() {
     });
     if (!yes) return;
     try {
-      await api.homeProfile.updateHomeBill(homeId!, billId, { status: 'cancelled' });
+      await api.homeProfile.updateHomeBill(homeId!, billId, { status: 'canceled' });
       toast.success('Bill deleted');
       await fetchBills();
     } catch {
@@ -98,12 +102,17 @@ function BillsContent() {
 
   const handleCreate = useCallback(async () => {
     if (!newTitle.trim()) return;
+    const amount = Number(newAmount);
+    if (!newAmount.trim() || !Number.isFinite(amount) || amount <= 0) {
+      toast.error('Amount is required');
+      return;
+    }
     setCreating(true);
     try {
       await api.homeProfile.createHomeBill(homeId!, {
         bill_type: 'other',
         provider_name: newTitle.trim(),
-        amount: newAmount ? Math.round(parseFloat(newAmount) * 100) : 0,
+        amount,
       });
       setNewTitle('');
       setNewAmount('');
@@ -143,7 +152,7 @@ function BillsContent() {
             <h1 className="text-xl font-bold text-app-text">Bills & Payments</h1>
             {totalDue > 0 && (
               <p className="text-sm text-app-text-secondary">
-                <span className="font-semibold text-app-text-strong">{formatCurrency(totalDue)}</span> total due
+                <span className="font-semibold text-app-text-strong">{formatHomeBillAmount(totalDue, [...dueCurrencies][0])}</span> total due
               </p>
             )}
           </div>
@@ -211,7 +220,7 @@ function BillsContent() {
         <div className="space-y-2">
           {sorted.map((bill) => {
             const overdue = isOverdue(bill);
-            const amount = bill.amount_cents ?? bill.amount;
+            const amount = formatHomeBillAmount(bill.amount, bill.currency);
             return (
               <div
                 key={bill.id}
@@ -224,16 +233,14 @@ function BillsContent() {
                     <p className="text-sm font-medium text-app-text truncate">
                       {bill.title || bill.provider_name || bill.bill_type || 'Bill'}
                     </p>
-                    {amount != null && (
-                      <span className="text-sm font-bold text-app-text flex-shrink-0 ml-2">
-                        {formatCurrency(amount)}
-                      </span>
-                    )}
+                    <span className="text-sm font-bold text-app-text flex-shrink-0 ml-2">
+                      {amount}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 mt-1">
                     {bill.due_date && (
                       <span className={`text-xs ${overdue ? 'text-red-600 font-semibold' : 'text-app-text-secondary'}`}>
-                        {overdue ? 'Overdue · ' : ''}Due {new Date(bill.due_date).toLocaleDateString()}
+                        {overdue ? 'Overdue · ' : ''}Due {formatHomeBillDate(bill.due_date)}
                       </span>
                     )}
                     {bill.status === 'paid' && (
