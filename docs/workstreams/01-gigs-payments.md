@@ -1,5 +1,26 @@
 # Stream 1 — Gigs and payments
 
+## September 22 — P03 installed Android tips: aged discovery accepted on the owned AVD
+
+Same harness as the web/iOS runs (fixtures1/4 restored again after the web cleanup).
+Owned Pantopus_Stream1_Start_R2 booted cold (snapshot failed; system Bluetooth crash
+dialog and notifications permission dismissed), existing login form with the owner
+fixture typed via adb, deep links pantopus://gigs/<id>. Gig0101: Send a tip reopened the
+server original (locked$5.00, Continue original tip/Cancel tip); Continue→POST/tip200
+704ms→list by customer→match→intent+charge retrieve→record refunded_full/succeeded;
+gig refreshed, dock back to Send a tip. Gig0104: injected list failure→POST202 pending,
+lease released, dock became Check tip status; lost committed reply plus two rapid taps→
+exactly one POST (200 body captured, socket destroyed), canceled recorded, sheet kept
+open with "The tip result is unconfirmed. Reopen and check the same original request.";
+stale retry→POST200 via reserve read only, no Stripe, sheet closed, dock Send a tip.
+Totals4 POST/tip,6 Stripe reads,0 writes,0 errors,0 notices. Limits: synthetic hub shell
+mismatch ("Couldn't load your hub", harness only), snackbars not captured, synthetic
+identity/device registration, emulator only. Cleanup: owned rows0 (harness and direct
+recount), API stopped, app force-stopped, emulator killed, Stripe intents unchanged,
+worktree clean. Evidence in owner audit20260922-stream1-tip-age-discovery-r1
+(evidence-android/, screens/, source/android-installed-binding.txt), MANIFEST
+a6e561d352e3a4e30905311e2a31b44d0c429ddbedb2c6fe3644a4afe4762715.
+
 ## September 22 — P03 installed iOS tips: aged discovery accepted on the owned simulator
 
 Installed candidate a65411758 on C2BCF36A (PantopusAPIBaseURL127.0.0.1:18132; hashes

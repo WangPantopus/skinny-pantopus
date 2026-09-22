@@ -1,5 +1,26 @@
 # Three-stream coordination
 
+## September 22 — P03 installed Android aged tip discovery accepted (bounded); Android control recipe
+
+Owned AVD Pantopus_Stream1_Start_R2 now runs headless (-no-window, ports5568/5569) and is
+driven with adb screencap/input/am start, so the earlier "supported window control
+unavailable" limit is superseded. Installed app.pantopus.android.debug (a65411758
+candidate, API10.0.2.2:18132) reopened the restored aged originals from
+preview.activeRequestId, discovered the real refunded (500c) and canceled (50c) Stripe TEST
+intents by customer list, recorded refunded_full/canceled receipts, kept the retained
+original after an injected provider failure ("Check tip status" dock), sent exactly one
+POST for two rapid taps with the committed reply lost ("The tip result is unconfirmed…"),
+and resolved the stale retry read-only; zero provider writes. Limits: synthetic
+/api/hub shell breaks the Android hub screen (harness only), snackbars not captured, adb
+text entry needs chunking on a cold emulator, emulator only. Owner audit
+20260922-stream1-tip-age-discovery-r1 now64 files (8 Android screens), MANIFEST
+a6e561d352e3a4e30905311e2a31b44d0c429ddbedb2c6fe3644a4afe4762715 (supersedes0b162fcf).
+Emulator killed after the run; peer emulators5554/5556 untouched. Documentation147 merged
+d4c044920; master CI on it is running and paid adoption still waits for that exact CI.
+P03 native tips are now accepted on iOS and Android for the bounded aged-discovery,
+failure, lost-reply, duplicate-tap and stale-retry paths; remaining P03 limits are
+cancel-tip natively, checkout/3DS natively, physical devices and hosted/Connect/live.
+
 ## September 22 — P03 installed iOS aged tip discovery accepted (bounded); manifest updated
 
 Supported simulator control is now available headlessly (screenshot/tap/text on owned
