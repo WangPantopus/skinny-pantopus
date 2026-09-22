@@ -1,5 +1,14 @@
 # Three-stream coordination
 
+## Native slot update — September22, 17:50 UTC
+
+Stream3 explicitly released the slot after N02 HTTP500/retry and N03 profile-block reopen
+verification, exact cleanup and API shutdown. All181 bundle hashes verified. Stream2 now owns
+one focused PR192 preservation build/install; Stream1 continues source/SQL review only.
+PR195 publication must use current master plus its one-file repair, retaining the installed
+integration build and reusing unchanged source evidence. No extra verification-only PR.
+
+
 ## Current checkpoint — September 22, 17:44 UTC
 
 PR closure audit verifies that171/172 reused fixes already merged through164–168;38–42
