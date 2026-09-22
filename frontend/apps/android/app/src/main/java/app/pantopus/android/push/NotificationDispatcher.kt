@@ -16,6 +16,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import app.pantopus.android.MainActivity
 import app.pantopus.android.R
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.core.routing.HomeTaskNotificationRoute
 import app.pantopus.android.data.chats.ActiveChatThread
 import com.google.firebase.messaging.RemoteMessage
@@ -122,7 +123,11 @@ class NotificationDispatcher
             val channel = channelFor(data["type"])
             val title = notificationTitle ?: data["title"]
             val body = notificationBody ?: data["body"]
-            var deepLink = HomeTaskNotificationRoute.pushPath(data) ?: data["link"] ?: data["deepLink"] ?: briefingOrReceiptLink(data)
+            var deepLink =
+                HomeTaskNotificationRoute.pushPath(data)
+                    ?: DeepLinkRouter.notificationPath(data["type"], data["link"])
+                    ?: data["deepLink"]
+                    ?: briefingOrReceiptLink(data)
             // Chat pushes link to `/chat/<roomId>` with the sender name in
             // the title — forward it as a `name` query param so the
             // conversation header has a display name on cold-open
