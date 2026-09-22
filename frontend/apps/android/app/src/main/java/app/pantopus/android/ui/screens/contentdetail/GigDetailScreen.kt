@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -572,11 +573,18 @@ internal fun TipAmountSheet(
             size = 32.dp,
             tint = PantopusColors.primary600,
         )
-        Text(text = "Send a tip", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
+        // Sheet-surface text follows the theme: identical to appText/appTextSecondary in light mode,
+        // and legible on the dark ModalBottomSheet surface.
+        Text(
+            text = "Send a tip",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         Text(
             text = recovery.message,
             fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
         Row(
@@ -612,7 +620,7 @@ internal fun TipAmountSheet(
                 text = "Custom amount",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appTextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(
                 modifier =
@@ -697,7 +705,7 @@ internal fun TipAmountSheet(
             text = if (recovery.canCancel) "Cancel tip" else "Not now",
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.appTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.clickable(enabled = !sending, onClick = onCancel),
         )
     }
