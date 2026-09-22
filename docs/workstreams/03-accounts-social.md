@@ -3211,3 +3211,73 @@ clears it, and the terminal 401 handler ignores a 401 while it is set and state 
 signedOut; endSession is unchanged. AuthManagerTests + DeepLinkRouterSessionReturnTests
 41/41 locally, PR152 CI green on 72ec734db (all three simulators). Stream3 accounts scope
 for this session is complete; awaiting merges of PR149/151/152 and the next assignment.
+
+
+## N03/N04/N01 native-social-r1 — installed iOS+Android journeys verified; 8 defects reproduced, 6 PRs (September 22)
+
+Branches (each from master c1280e078, none merged): backend `codex/stream3-userblock-content-gate`
+29951b76a → PR163; iOS `codex/stream3-ios-push-tap-main-thread` 579a57fe7 → PR164,
+`codex/stream3-ios-deeplink-surface` 8890d1a58 → PR165, `codex/stream3-ios-social-follow-block-chat`
+8b4d47c0a → PR166; Android `codex/stream3-android-deeplink-location` 32a216f9a → PR167,
+`codex/stream3-android-social-follow-block-chat` f248ce8e9 → PR168. Verification builds came from
+local integration branches (iOS 4adcc12c8 = 164+165+166, Android 827f28a08 = 167+168), one native
+build at a time. Retained API restarted once from the exact captured recipe (80982 → 49623) to load
+PR163; Next 36139, DB, Mailpit and both devices retained.
+
+Runtime/actors: iOS 0AE16FA0 as Evan, Android emulator-5554 as Bob (later Evan for the account
+switch). Evan's fixture password was rotated to a throwaway through the REAL forgot/reset flow
+(pantopus://auth/reset-password deep link) because the headless simulator offers no scriptable or
+pasteboard text path and the fixture value must never be printed; restored at cleanup by the same
+real flow from a script. Simulated GPS on both devices; the emulator's fused location never returned
+a fix (geo fix + test provider both failed) so Android posted to Connections.
+
+Verified natively (real API/SQL receipts per journey): Pulse Nearby/Connections feed load, empty
+state, injected 503 error frame + Try again recovery (both); address-free rendering (city/coords
+label only, no street); iOS Nearby Ask post via fresh GPS (POST /api/posts 201, ask_local/nearby),
+Android Connections post (201); shared post link to another user's Nearby post (Android 200);
+comment + threaded reply with post_commented / comment_replied notifications and exact foreground
+tap destinations on both platforms; Beacon profile, follow/unfollow of a user and (after the fix) of
+a Beacon; report post (PostReport pending), report user (UserReport pending) on both; block from the
+profile on both, Settings → Blocked users list/unblock/re-block with one DELETE for a double tap
+(Android), block while a DM is open (Android details sheet, thread closes); DM after block refused
+403 in both directions (no ChatMessage written); held block reply (private hook, 25 s auto-release);
+simctl push foreground banner + tap destination; Android background (HOME→link) and cold start
+(force-stop→link) destinations; POST_NOTIFICATIONS denial (system prompt → logcat only, no in-app
+state); Android sign-out → deferred post link → login form → sign in as Evan → continuation to the
+post and Evan-only unread count.
+
+Reproduced defects → repairs: (1) iOS background push banner tap crashed (SIGABRT, UIKit
+state-restoration assert in the async didReceive completion) → PR164; (2) iOS Place/Mail-tab deep
+links rendered under the Nearby→Pulse sheet (profile, Beacon, notifications; 3 occurrences) → PR165;
+(3) new_follower link `/<username>` unroutable natively (tap marked read, no navigation) → PR165 +
+PR167; (4) Beacon Follow dead-ended on the flag-gated fan-handle-suggestion 404 under the release
+default → plain-follow fallback PR166 + PR168; (5) UserBlock did not gate follow/feed/post
+reads/comments — blocker followed the blocked user (notification delivered), blocked author's post
+readable via shared link → PR163 (backend) + Follow row hidden after block PR166/PR168; (6) chat 403
+rendered as bare "Failed to send · Retry" → banner copy PR166/PR168; (7) Android composer "Current
+Location" never requested the runtime permission → PR167; (8) Android `pantopus://feed` from a
+child screen left the child on top (recorded, not fixed — navigateToRootTab restoreState).
+
+Re-verified on the rebuilt iOS app: sheet dismissed and Notifications visible on the link;
+new_follower tap opens the profile; Beacon follow → suggestion 404 → POST /api/personas/:id/follow
+201 → "You're following" step (Dana got persona_follow); refused send shows "You can't send messages
+in this conversation."; background banner tap keeps pid 52093 (0 crash reports) and opens the room.
+Backend gate on the restarted API: Bob's post → 403 for Evan, blocked comments dropped, follow → 403.
+Backend Jest 10 suites/153 pass. Android: bare-username link opens the profile on the rebuilt app; the remaining Android re-verification (composer permission prompt, Beacon fallback, blocked Follow, refused-send copy) runs after the next Android rebuild carrying 87460475e (two emulator ANRs under xcodebuild host load ≈21 were starvation, not app defects).
+
+Limits: simctl push and adb `am start` stand in for APNs/FCM (no provider delivery); emulator, not
+hardware (N02 boundary unchanged); throwaway password rotation labelled; no report-outcome
+notification exists (no PostReport/UserReport reader) — moderation outcome is a product boundary;
+persona broadcasts remain readable/followable across a personal UserBlock (persona surfaces gated by
+PersonaBlock/tier only) — founder call; retained DB lacks find_businesses_nearby (matched-businesses
+404) and LocalProfile.verified_resident; Mapbox key absent so location_name is a coordinate string;
+iOS Ask title not rendered on native cards/detail (design question, web to compare); `PERSONA ·
+VERIFIED` chip shown for any user without home residency (derivedKind) — product call; iOS pushed
+Place-stack screens show duplicated back/title chrome (presentation, untouched).
+
+Cleanup: partial — pre-existing Notification read flags restored from preflight after an accidental "Mark all read" (Bob), POST_NOTIFICATIONS re-granted, iOS Beacon membership removed by unfollow; batch-1 rows (2 Posts, 2 PostComments, 1 PostReport, 2 UserReports, 2 UserBlocks, 1 UserFollow, 5 Notifications) still present for the remaining re-verification and are deleted child-first by `cleanup-social-r4-rows.py` (dry run recorded); Evan stays signed in on both devices for batch 2 and his fixture password is restored at the final cleanup by `restore-evan-password.py` (real reset flow).
+
+Evidence: `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream3-native-social-r1/`
+(preflight.json, n03/n04/n01-native-result.json, push payload, crash .ips, screenshots), 95
+files, MANIFEST **392f263c7ff73f9500a2c43cf05d1cb90c1ef3efea74fcb6e5f5bbb1ab1c3b14**. CI at publication: PR163 29951b76a FAILURE/SKIPPED/SUCCESS;PR164 579a57fe7 /SKIPPED/SUCCESS;PR165 ba8f7374e /SKIPPED/SUCCESS;PR166 8b4d47c0a /SKIPPED/SUCCESS;PR167 87460475e /SKIPPED/SUCCESS;PR168 f248ce8e9 /FAILURE/SKIPPED/SUCCESS; Runtime: API pid 49623:18130 (codex/stream3-userblock-content-gate 29951b76a), Next 36139:18131, containers *pantopus-stream3-block-r1 + pantopus-stream3-mail-r3, simulator 0AE16FA0 (installed local/stream3-ios-integration e86b9fe5b = PR164+165+166), emulator-5554 (installed 827f28a08 = PR167 first commit + PR168; rebuild with 87460475e pending). Next: finish the Android re-verification, run touched unit suites, batch-1 row cleanup, then batch 2 rows (A05 native sweep → A03 → N05 → A02 → A01 → A04/N02 notes).
+Open founder questions: personal block vs persona surfaces; Ask title rendering; PERSONA·VERIFIED chip semantics; report-outcome notifications.
