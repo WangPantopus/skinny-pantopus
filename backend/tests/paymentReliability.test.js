@@ -11,7 +11,7 @@
 // reliability initiative and serve as regression guards.
 // ============================================================
 
-const { resetTables, seedTable, getTable } = require('./__mocks__/supabaseAdmin');
+const { resetTables, seedTable, getTable, setRpcMock } = require('./__mocks__/supabaseAdmin');
 const { PAYMENT_STATES, transitionPaymentStatus, canTransition } = require('../stripe/paymentStateMachine');
 
 // Mock walletService
@@ -150,13 +150,19 @@ describe('Tip payment lifecycle', () => {
       cooling_off_ends_at: hoursAgo(2), // Already past cooling
     });
 
-    // processPendingTransfers should use creditTipIncome for tips
+    // The existing lifecycle now crosses the atomic settlement boundary.
+    // Actual wallet, notice and rollback behavior is verified with PostgreSQL.
+    const settlementRpc = jest.fn(async (name, args) => {
+      const payment = getTable('Payment').find(p => p.id === args.p_payment_id);
+      payment.payment_status = PAYMENT_STATES.TRANSFERRED;
+      return { data: { payment, settlement: { status: 'credited' }, reused: false } };
+    });
+    setRpcMock(settlementRpc);
     await processPendingTransfers();
 
-    expect(walletService.creditTipIncome).toHaveBeenCalledTimes(1);
-    expect(walletService.creditTipIncome).toHaveBeenCalledWith(
-      'user-payee', 8500, 'gig-rel-001', 'pay-tip-001', 'user-payer'
-    );
+    expect(settlementRpc).toHaveBeenCalledWith('settle_paid_gig_wallet_income',
+      expect.objectContaining({ p_payment_id: 'pay-tip-001' }));
+    expect(walletService.creditTipIncome).not.toHaveBeenCalled();
 
     const payment = getTable('Payment').find(p => p.id === 'pay-tip-001');
     expect(payment.payment_status).toBe(PAYMENT_STATES.TRANSFERRED);
