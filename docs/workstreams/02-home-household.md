@@ -1,5 +1,13 @@
 # Stream 2 — Home and household
 
+## September 22 native Android guest-pass form — focused dismiss repair pending rebuilt verification
+
+The retained Android owner journey reached the existing Home Members → Guests → Add a guest form. A valid real submission created one `HomeGuestPass` row and one existing `guest_pass_created` audit, then showed the existing **Guest pass created / Share this pass now?** dialog. Tapping the existing **Later** action closed the dialog but left the form open. Source comparison found the existing `LaunchedEffect(state.shouldDismiss)` cleared its own key before its 700 ms delay; Compose cancelled that effect before the existing `onSent()` navigation callback could pop the form.
+
+PR183 (`codex/native-guest-pass-dismiss-20260922`, commit `83f507457`) makes the smallest in-place repair in `frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/homes/guests/AddGuestFormScreen.kt`: the existing state acknowledgement now runs after the delay, preserving the existing callback, screen layout and navigation. No new screen, callback, route, service, schema, migration or design change was added.
+
+The real created pass was revoked through the existing DELETE route (HTTP 200; `guest_pass_revoked` audit), then the synthetic pass and exactly its two generated audit rows were deleted. Final fixture counts were `HomeGuestPass=0` and HomeAuditLog=0. Private evidence: `/private/tmp/pantopus-workstream-home/.stream2-verification/evidence/20260922-native-guest-pass-dismiss-r1/`, MANIFEST SHA256 `589247cc9afb8a6b56a28f465a863969c79afacaef2d881eccbaaa73491d31ed`. Rebuilt installed Android verification of the repaired Later → caller journey is pending the coordinator's native-build reservation; no build was started for PR183. Native copied-link/passcode viewing remains outside this Android receipt and is covered by accepted browser M02 evidence.
+
 ## September 22 native owner My Tasks — runtime schema compatibility repaired and verified
 
 The retained Android owner journey reached the existing **My Tasks** screen, but the first real load showed `Couldn't load the list` / `Server error 500`. The existing backend route `GET /api/gigs/my-gigs` reproduced HTTP 500 on the same owner token. A disposable development backend isolated the server exception to the existing `GIG_LIST` projection requesting `Gig.boosted_at` while the retained disposable database was still at migration head `20260922010000` and lacked both nullable boost columns; `Gig` and `GigBid` each had zero rows.
