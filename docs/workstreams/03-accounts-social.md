@@ -3546,3 +3546,17 @@ contract, while the skill list itself is not rendered by the current Edit profil
 The refreshed durable bundle has 131 files; MANIFEST SHA-256 is
 `1ed1182466b240fab36ecc6b2bd4a0eb92b2b4706c339174b7fd4ef29ff982fc`. The app repair remains
 backend-only, so no new native build was needed; the exclusive heavy slot is released.
+
+### A05 profile PATCH review/CI receipt
+
+The focused repair was republished from current `master` as PR [#182](https://github.com/WangPantopus/skinny-pantopus/pull/182)
+(branch `codex/stream3-profile-contract`) so coordinator review does not inherit the other
+Stream3 integration commits. PR CI completed green for backend privacy/Jest, backend Docker,
+complete schema replay/lint, deployment/migration safeguards, and change detection; Seeder,
+Web, Web E2E, Android and iOS jobs were correctly skipped by the change detector. No merge or
+hosted activation was performed.
+
+A fresh iOS profile save was attempted against the retained installed simulator, but its current
+state is the existing security sign-out screen and the Device Hub control surface timed out; no
+valid iOS save claim is made. The Android installed-screen and real API/SQL evidence above remain
+the supported native E2E result for this backend-only contract repair.
