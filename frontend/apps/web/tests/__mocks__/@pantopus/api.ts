@@ -45,6 +45,7 @@ export const broadcast = {
 };
 
 export const upload = {
+  downloadGigCompletionFile: jest.fn(),
   uploadPostMedia: jest.fn(),
 };
 

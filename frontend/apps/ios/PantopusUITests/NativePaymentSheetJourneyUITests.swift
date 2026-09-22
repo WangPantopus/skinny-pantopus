@@ -13,8 +13,9 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
         try await super.setUp()
         continueAfterFailure = false
         let env = ProcessInfo.processInfo.environment
-        try XCTSkipUnless(env["RUN_NATIVE_PAYMENT_SHEET_UI"] == "1", "Requires disposable test-mode card setup")
-        XCTAssertEqual(env["PAYMENT_SHEET_TEST_API"], "http://localhost:8000")
+        let tipJourney = env["RUN_NATIVE_TIP_UI"] == "1" || env["RUN_NATIVE_COMPLETION_UI"] == "1"
+        try XCTSkipUnless(tipJourney || env["RUN_NATIVE_PAYMENT_SHEET_UI"] == "1", "Requires disposable local payment fixture")
+        XCTAssertEqual(env["PAYMENT_SHEET_TEST_API"], tipJourney ? "http://127.0.0.1:18109" : "http://localhost:8000")
         email = try XCTUnwrap(env["PAYMENT_SHEET_TEST_EMAIL"])
         password = try XCTUnwrap(env["PAYMENT_SHEET_TEST_PASSWORD"])
         XCTAssertTrue(email.hasPrefix("bp-sheet-") && email.hasSuffix("@example.com"))
@@ -33,6 +34,7 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
     }
 
     func testCancelResumeSaveDefaultRestartAndRemoveCards() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["RUN_NATIVE_PAYMENT_SHEET_UI"] == "1")
         app.launch()
         signIn()
         openPayments()
@@ -81,6 +83,87 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
         tapBack()
         tapButton("Log out")
         XCTAssertTrue(element("placeLaunchSignIn").waitForExistence(timeout: 20))
+    }
+
+    /// Actual installed UI/HTTP/SQL; the opt-in loopback runner supplies synthetic
+    /// authentication/provider responses and asserts zero replacement charges.
+    func testExistingTipColdEntryRestartAndSamePaymentCheck() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["RUN_NATIVE_TIP_UI"] == "1")
+        let fixture = try await tipFixture("reset", body: ["mode": "legacy"])
+        let gig = try XCTUnwrap(fixture["gig"] as? String)
+        let url = try XCTUnwrap(URL(string: "pantopus://gigs/" + gig))
+        app.launch()
+        if !element("tab.place").waitForExistence(timeout: 5) { signIn() }
+        app.open(url)
+        try tipTap("contentDetailDockPrimary")
+        XCTAssertTrue(element("tip.amount.customSubmit").waitForExistence(timeout: 20))
+        guard waitTipControl() else { throw tipFailure("Tip recovery control unavailable") }
+        XCTAssertFalse(element("tip.amount.500").isEnabled)
+        XCTAssertFalse(element("tip.amount.customInput").isEnabled)
+        XCTAssertEqual(element("tip.amount.customInput").value as? String, "10.00")
+        try tipTap("tip.amount.customSubmit")
+        waitForAbsence(element("tip.amount.customSubmit"))
+        app.terminate()
+        app.launch()
+        app.open(url)
+        try tipTap("contentDetailDockPrimary")
+        guard waitTipControl() else { throw tipFailure("Tip recovery control unavailable") }
+        XCTAssertEqual(element("tip.amount.customInput").value as? String, "10.00")
+        _ = try await tipFixture("provider-succeed", body: [:])
+        try tipTap("tip.amount.customSubmit")
+        XCTAssertTrue(app.staticTexts["Tip sent — thank you!"].waitForExistence(timeout: 20))
+        let result = try await tipFixture("state")
+        let commands = try XCTUnwrap(result["commands"] as? [[String: Any]])
+        XCTAssertEqual(commands.count, 2)
+        XCTAssertTrue(commands.allSatisfy { $0["mode"] as? String == "check" && $0["amount"] as? Int == 1000 })
+        XCTAssertEqual(commands[0]["requestId"] as? String, commands[1]["requestId"] as? String)
+        XCTAssertEqual(result["createCalls"] as? Int, 0)
+        XCTAssertEqual(result["notificationCount"] as? Int, 1)
+        let payments = try XCTUnwrap(result["payments"] as? [[String: Any]])
+        XCTAssertEqual(payments.count, 1)
+        XCTAssertEqual(payments[0]["id"] as? String, commands[0]["requestId"] as? String)
+        XCTAssertEqual(payments[0]["originalState"] as? String, "succeeded")
+        app.terminate()
+        app.launch()
+        app.open(url)
+        XCTAssertTrue(app.staticTexts["Existing tip recovery"].waitForExistence(timeout: 20))
+        XCTAssertFalse(element("contentDetailDockPrimary").exists && element("contentDetailDockPrimary").label.contains("Send a tip"))
+    }
+
+    private func tipFailure(_ message: String) -> NSError {
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "Installed tip accessibility hierarchy"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
+        XCTFail(message)
+        return NSError(domain: "InstalledTipJourney", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+    }
+
+    private func tipTap(_ id: String) throws {
+        let target = element(id)
+        guard target.waitForExistence(timeout: 15), target.isEnabled else { throw tipFailure("Missing or disabled " + id) }
+        target.tap()
+    }
+
+    private func waitTipControl() -> Bool {
+        let ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == true AND enabled == true"),
+            object: element("tip.amount.customSubmit")
+        )
+        return XCTWaiter.wait(for: [ready], timeout: 20) == .completed
+    }
+
+    private func tipFixture(_ action: String, body: [String: String]? = nil) async throws -> [String: Any] {
+        let url = try XCTUnwrap(URL(string: "http://127.0.0.1:18109/fixture/" + action))
+        var request = URLRequest(url: url)
+        if let body {
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
     private func openPayments() {
@@ -184,14 +267,14 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
             tap(element("place.menu").exists ? "place.menu" : "hubMenuButton")
             tap("navDrawer.item.settings")
             tapButton("Log out")
-            XCTAssertTrue(element("placeLaunchSignIn").waitForExistence(timeout: 20))
         }
-        tap("placeLaunchSignIn")
+        if !element("loginEmailField").waitForExistence(timeout: 3) { tap("placeLaunchSignIn") }
+        if element("loginRememberedAccountForget").exists { tap("loginRememberedAccountForget") }
         enter(email, into: "loginEmailField")
         enter(password, into: "loginPasswordField")
         tap("loginSubmitButton")
-        XCTAssertTrue(element("hubMenuButton").waitForExistence(timeout: 25))
         dismissSignInPrompts()
+        XCTAssertTrue(element("tab.place").waitForExistence(timeout: 25) || element("hubMenuButton").exists)
     }
 
     private func dismissSignInPrompts() {
@@ -254,5 +337,61 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
             start.press(forDuration: 0.05, thenDragTo: end)
         }
         XCTAssertTrue(target.isHittable, "Could not reveal \(target.identifier)")
+    }
+}
+
+extension NativePaymentSheetJourneyUITests {
+    /// Existing picker/handler against real local upload and completion routes.
+    /// The private fixture loses the first committed response; auth/storage are synthetic.
+    func testExistingCompletionProofRetryKeepsUploadedFile() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["RUN_NATIVE_COMPLETION_UI"] == "1")
+        let url = try XCTUnwrap(URL(string: "pantopus://gigs/aaed0000-0000-4000-8000-000000000100"))
+        app.launch()
+        if !element("tab.place").waitForExistence(timeout: 5) { signIn() }
+        app.open(url)
+        try tipTap("contentDetailDockPrimary")
+        guard element("deliveryProof.submit").waitForExistence(timeout: 20) else {
+            throw tipFailure("Existing completion submit control is unavailable")
+        }
+        XCTAssertFalse(element("deliveryProof.submit").isEnabled)
+        try tipTap("deliveryProof.photoUpload")
+        let photo = app.images.matching(NSPredicate(format: "label BEGINSWITH %@", "Photo,")).firstMatch
+        guard photo.waitForExistence(timeout: 15) else { throw tipFailure("Owned proof photo picker unavailable") }
+        let photoFrame = photo.frame
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: photoFrame.midX, dy: photoFrame.midY)).tap()
+        guard element("deliveryProof.removePhoto").waitForExistence(timeout: 15) else {
+            throw tipFailure("Selected proof photo did not return to the existing sheet")
+        }
+        enter("Original proof after a lost reply", into: "deliveryProof.note")
+        app.swipeUp()
+        try tipTap("deliveryProof.submit")
+        guard element("deliveryProof.error").waitForExistence(timeout: 20) else { throw tipFailure("Expected retryable lost reply") }
+        XCTAssertTrue(element("deliveryProof.removePhoto").exists)
+        let saved = try await completionFixtureState()
+        XCTAssertEqual(saved["uploadRequests"] as? Int, 1)
+        XCTAssertEqual((saved["completionRequests"] as? [[String: Any]])?.count, 1)
+        XCTAssertEqual((saved["notices"] as? [[String: Any]])?.count, 1)
+        let firstGig = try XCTUnwrap(saved["gig"] as? [String: Any])
+        XCTAssertEqual(firstGig["status"] as? String, "completed")
+        try tipTap("deliveryProof.submit")
+        guard element("deliveryProof.backToTask").waitForExistence(timeout: 20) else {
+            throw tipFailure("Saved proof retry did not reach its existing confirmation")
+        }
+        let final = try await completionFixtureState()
+        XCTAssertEqual(final["uploadRequests"] as? Int, 1)
+        let commands = try XCTUnwrap(final["completionRequests"] as? [NSDictionary])
+        XCTAssertEqual(commands.count, 2)
+        XCTAssertEqual(try XCTUnwrap(commands.first), try XCTUnwrap(commands.last))
+        XCTAssertEqual((final["notices"] as? [[String: Any]])?.count, 1)
+        let finalGig = try XCTUnwrap(final["gig"] as? [String: Any])
+        XCTAssertEqual(firstGig["worker_completed_at"] as? String, finalGig["worker_completed_at"] as? String)
+        try tipTap("deliveryProof.backToTask")
+    }
+
+    private func completionFixtureState() async throws -> [String: Any] {
+        let url = try XCTUnwrap(URL(string: "http://127.0.0.1:18109/api/fixture/state"))
+        let (data, response) = try await URLSession.shared.data(from: url)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 }

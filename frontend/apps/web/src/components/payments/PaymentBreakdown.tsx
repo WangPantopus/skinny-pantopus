@@ -1,6 +1,7 @@
 'use client';
 
 import type { Payment } from '@pantopus/types';
+import { verifiedSettlement } from './payeeRelease';
 
 interface PaymentBreakdownProps {
   payment: Payment;
@@ -15,6 +16,20 @@ function formatCents(cents: number | undefined | null): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function payerTotalLabel(payment: Payment): string {
+  if (payment.payment_status === 'authorized') return 'Authorization hold';
+  if (payment.payment_status === 'capture_pending') return 'Capture pending';
+  // A pending refund may instead be cancellation of an uncaptured hold.
+  if (payment.payment_status === 'refund_pending') {
+    return payment.captured_at ? 'Task charged' : 'Payment total';
+  }
+  if (['captured_hold', 'transfer_scheduled', 'transfer_pending', 'transferred',
+    'refunded_partial', 'refunded_full', 'disputed'].includes(payment.payment_status)) {
+    return 'Task charged';
+  }
+  return 'Payment total';
+}
+
 export default function PaymentBreakdown({
   payment,
   perspective = 'payer',
@@ -26,6 +41,7 @@ export default function PaymentBreakdown({
   const total = payment.amount_total;
   const tip = payment.tip_amount || 0;
   const refunded = payment.refunded_amount || 0;
+  const settlement = verifiedSettlement(payment);
 
   if (compact) {
     return (
@@ -70,7 +86,7 @@ export default function PaymentBreakdown({
         {/* Platform fee */}
         {perspective === 'payer' ? (
           <div className="flex justify-between">
-            <span className="text-app-text-secondary">Service fee</span>
+            <span className="text-app-text-secondary">Platform fee (included)</span>
             <span className="text-app-text">{formatCents(platformFee)}</span>
           </div>
         ) : (
@@ -94,14 +110,27 @@ export default function PaymentBreakdown({
         {/* Total or Earnings */}
         {perspective === 'payer' ? (
           <div className="flex justify-between font-semibold">
-            <span className="text-app-text">Total charged</span>
+            <span className="text-app-text">{payerTotalLabel(payment)}</span>
             <span className="text-app-text">{formatCents(total)}</span>
           </div>
         ) : (
           <div className="flex justify-between font-semibold">
-            <span className="text-app-text">You earn</span>
+            <span className="text-app-text">{refunded > 0 ? 'Original expected earnings' : 'Expected earnings'}</span>
             <span className="text-green-700">{formatCents(toPayee + tip)}</span>
           </div>
+        )}
+        {perspective === 'payee' && settlement && (
+          <div className="flex justify-between font-semibold">
+            <span>{settlement.status === 'no_earnings' ? 'Remaining worker earnings' : 'Credited to wallet'}</span>
+            <span>{formatCents(settlement.amountCents)}</span>
+          </div>
+        )}
+        {perspective === 'payee' && refunded > 0 && (
+          <p className="text-xs text-app-text-secondary">
+            {settlement?.status === 'no_earnings' ? 'Refunds left no worker earnings to release.' : settlement
+              ? 'This credit reflects refunds recorded before release. Check your wallet for later adjustments and separate tips.'
+              : 'Refunds affect the worker’s earnings. The final wallet credit is not confirmed here.'}
+          </p>
         )}
 
         {/* Refund info */}
@@ -109,13 +138,13 @@ export default function PaymentBreakdown({
           <>
             <div className="border-t border-app-border-subtle my-1" />
             <div className="flex justify-between text-red-600">
-              <span>Refunded</span>
+              <span>{perspective === 'payer' ? 'Refunded' : 'Refunded to payer'}</span>
               <span>-{formatCents(refunded)}</span>
             </div>
-            <div className="flex justify-between font-semibold">
+            {perspective === 'payer' && <div className="flex justify-between font-semibold">
               <span className="text-app-text">Net</span>
               <span>{formatCents(total - refunded)}</span>
-            </div>
+            </div>}
           </>
         )}
       </div>

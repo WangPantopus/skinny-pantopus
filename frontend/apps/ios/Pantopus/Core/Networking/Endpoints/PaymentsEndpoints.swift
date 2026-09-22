@@ -11,6 +11,19 @@
 import Foundation
 
 public enum PaymentsEndpoints {
+    static func refunds(paymentId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/payments/\(paymentId)/refunds")
+    }
+
+    static func refund(paymentId: String, attempt: PaymentRefundAttempt) -> Endpoint {
+        Endpoint(method: .post, path: "/api/payments/\(paymentId)/refund", body: PaymentRefundBody(
+            requestId: attempt.requestId,
+            amount: attempt.requestedAmountCents,
+            reason: attempt.reason,
+            description: attempt.description
+        ))
+    }
+
     /// `GET /api/payments/methods` — route `backend/routes/pays.js:701`.
     /// Saved cards / bank accounts, default-first.
     public static func methods() -> Endpoint {
@@ -53,11 +66,15 @@ public enum PaymentsEndpoints {
         Endpoint(method: .post, path: "/api/payments/intent", body: body)
     }
 
-    /// `POST /api/payments/tip` — route `backend/routes/pays.js:913`.
-    /// Block 3D: the gig poster tips the assigned worker on a completed +
-    /// owner-confirmed gig. Returns the mobile PaymentSheet params
-    /// (`clientSecret` + `customer` + `ephemeralKey` + `publishableKey`) plus
-    /// the `paymentId` used to reconcile via `tipRefreshStatus`.
+    /// Local original/eligibility reads; never create a provider operation.
+    static func tipPreview(gigId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/payments/tip-preview", query: ["gigId": gigId])
+    }
+
+    static func tipOriginal(requestId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/payments/tip-requests/\(requestId)")
+    }
+
     public static func tip(body: TipRequest) -> Endpoint {
         Endpoint(method: .post, path: "/api/payments/tip", body: body)
     }

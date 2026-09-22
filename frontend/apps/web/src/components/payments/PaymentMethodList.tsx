@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { CreditCard } from 'lucide-react';
-import { payments } from '@pantopus/api';
+import { payments, getAuthToken, getApiBaseUrl, AUTH_SESSION_CHANGE_KEY, onTokenChange } from '@pantopus/api';
 const { getPaymentMethods, deletePaymentMethod, setDefaultPaymentMethod } = payments;
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
@@ -89,6 +89,32 @@ export default function PaymentMethodList({
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [settingDefault, setSettingDefault] = useState(false);
+  const defaultChangePending = useRef(false);
+  const removalGeneration = useRef(0);
+  const removalConfirmation = useRef<ReturnType<typeof confirmStore.getSnapshot>>(null);
+
+  useEffect(() => {
+    const retire = () => {
+      removalGeneration.current++;
+      const dialog = removalConfirmation.current;
+      removalConfirmation.current = null;
+      if (dialog && confirmStore.getSnapshot() === dialog) confirmStore.close(false);
+      setDeletingId(null);
+    };
+    const visibility = () => { if (document.visibilityState === 'hidden') retire(); };
+    const storage = (event: StorageEvent) => { if (event.key === null || event.key === AUTH_SESSION_CHANGE_KEY) retire(); };
+    const unsubscribe = onTokenChange(retire);
+    window.addEventListener('pagehide', retire);
+    window.addEventListener('storage', storage);
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      retire(); unsubscribe();
+      window.removeEventListener('pagehide', retire);
+      window.removeEventListener('storage', storage);
+      document.removeEventListener('visibilitychange', visibility);
+    };
+  }, []);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -110,20 +136,32 @@ export default function PaymentMethodList({
   }, [loadMethods]);
 
   const handleDelete = async (id: string) => {
-    const yes = await confirmStore.open({ title: 'Remove this payment method?', confirmLabel: 'Remove', variant: 'destructive' });
-    if (!yes) return;
+    const revision = removalGeneration.current, token = getAuthToken(), origin = getApiBaseUrl();
+    const marker = localStorage.getItem(AUTH_SESSION_CHANGE_KEY);
+    const current = () => removalGeneration.current === revision && getAuthToken() === token && getApiBaseUrl() === origin
+      && localStorage.getItem(AUTH_SESSION_CHANGE_KEY) === marker && document.visibilityState !== 'hidden';
+    const confirmation = confirmStore.open({ title: 'Remove this payment method?', confirmLabel: 'Remove', variant: 'destructive' });
+    const dialog = confirmStore.getSnapshot();
+    removalConfirmation.current = dialog;
+    const yes = await confirmation;
+    if (removalConfirmation.current === dialog) removalConfirmation.current = null;
+    if (!yes || !current()) return;
     setDeletingId(id);
     try {
       await deletePaymentMethod(id);
+      if (!current()) return;
       setMethods((prev) => prev.filter((m) => m.id !== id));
     } catch {
-      toast.error('Failed to remove payment method.');
+      if (current()) toast.error('Failed to remove payment method.');
     } finally {
-      setDeletingId(null);
+      if (current()) setDeletingId(null);
     }
   };
 
   const handleSetDefault = async (id: string) => {
+    if (defaultChangePending.current) return;
+    defaultChangePending.current = true;
+    setSettingDefault(true);
     try {
       await setDefaultPaymentMethod(id);
       setMethods((prev) =>
@@ -131,6 +169,9 @@ export default function PaymentMethodList({
       );
     } catch {
       toast.error('Failed to set default payment method.');
+    } finally {
+      defaultChangePending.current = false;
+      setSettingDefault(false);
     }
   };
 
@@ -248,6 +289,7 @@ export default function PaymentMethodList({
                   }}
                   className="text-xs text-app-text-secondary hover:text-emerald-600 px-2 py-1"
                   title="Set as default"
+                  disabled={settingDefault}
                 >
                   Set default
                 </button>

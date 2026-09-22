@@ -87,6 +87,7 @@ public struct TransactionalDetailShell: View {
             }
         }
         .background(Theme.Color.appSurface)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("contentDetailShell")
     }
 
@@ -1261,6 +1262,7 @@ public struct TransactionalDetailShell: View {
         .overlay(alignment: .top) {
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("contentDetailDock")
     }
 }

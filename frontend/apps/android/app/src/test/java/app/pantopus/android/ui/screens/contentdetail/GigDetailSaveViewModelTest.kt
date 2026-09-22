@@ -3,8 +3,10 @@
 package app.pantopus.android.ui.screens.contentdetail
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.notifications.GigActiveNotification
 import app.pantopus.android.core.notifications.GigActiveNotifier
+import app.pantopus.android.data.api.models.gigs.CompleteGigResponse
 import app.pantopus.android.data.api.models.gigs.GigBidAcceptResponse
 import app.pantopus.android.data.api.models.gigs.GigBidDto
 import app.pantopus.android.data.api.models.gigs.GigBidMutationResponse
@@ -20,31 +22,43 @@ import app.pantopus.android.data.api.models.gigs.GigPaymentDto
 import app.pantopus.android.data.api.models.gigs.GigPaymentResponse
 import app.pantopus.android.data.api.models.gigs.GigQuestionsResponse
 import app.pantopus.android.data.api.models.gigs.GigSaveResponse
+import app.pantopus.android.data.api.models.gigs.MarkCompletedResponse
+import app.pantopus.android.data.api.models.gigs.MyGigDto
 import app.pantopus.android.data.api.models.gigs.NoShowCheckResponse
 import app.pantopus.android.data.api.models.gigs.RescheduleGigResponse
+import app.pantopus.android.data.api.models.gigs.StartGigBody
 import app.pantopus.android.data.api.models.gigs.WorkerAckResponse
+import app.pantopus.android.data.api.models.gigs.WorkerCompletionReceipt
+import app.pantopus.android.data.api.models.homes.FileUploadResponse
 import app.pantopus.android.data.api.models.offers.MyBidsResponse
 import app.pantopus.android.data.api.models.users.UserDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.files.FilesRepository
-import app.pantopus.android.data.gigs.GigReassignmentRepository
 import app.pantopus.android.data.gigs.GigViewerBidRepository
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.offers.OffersRepository
 import app.pantopus.android.data.payments.PaymentsRepository
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.reviews.ReviewsRepository
+import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationFactory
+import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationState
+import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -80,11 +94,12 @@ private class RecordingActiveNotifier : GigActiveNotifier {
     }
 }
 
+// Lifecycle regressions share the existing task/session fixture.
+@Suppress("LargeClass")
 @OptIn(ExperimentalCoroutinesApi::class)
 class GigDetailSaveViewModelTest {
     private val repo: GigsRepository = mockk()
     private val extrasRepo: app.pantopus.android.data.gigs.GigExtrasRepository = mockk()
-    private val reassignmentRepo: GigReassignmentRepository = mockk()
     private val viewerBidRepo: GigViewerBidRepository = mockk()
     private val ownerActionsRepo: app.pantopus.android.data.gigs.GigOwnerActionsRepository = mockk()
     private val offersRepo: OffersRepository = mockk()
@@ -95,6 +110,7 @@ class GigDetailSaveViewModelTest {
     private val gigsV2Repo: app.pantopus.android.data.gigs.GigsV2Repository = mockk(relaxed = true)
     private val socket: SocketManager = mockk(relaxed = true)
     private val activeNotifier = RecordingActiveNotifier()
+    private val viewModels = mutableListOf<GigDetailViewModel>()
 
     @Before
     fun setUp() {
@@ -112,6 +128,11 @@ class GigDetailSaveViewModelTest {
 
     @After
     fun tearDown() {
+        runBlocking {
+            val jobs = viewModels.mapNotNull { it.viewModelScope.coroutineContext[Job] }
+            jobs.forEach { it.cancel() }
+            jobs.joinAll()
+        }
         Dispatchers.resetMain()
     }
 
@@ -132,7 +153,6 @@ class GigDetailSaveViewModelTest {
             GigDetailViewModel(
                 repo,
                 extrasRepo,
-                reassignmentRepo,
                 viewerBidRepo,
                 ownerActionsRepo,
                 offersRepo,
@@ -144,7 +164,13 @@ class GigDetailSaveViewModelTest {
                 activeNotifier,
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
+                checkoutIdentities = gigIdentityFixture(),
+                refundFactory = mockk(relaxed = true),
+                authorizationFactory = authorizationFactory(),
+                stopFactory = mockk(relaxed = true),
+                tipStore = mockk(relaxed = true),
             )
+        viewModels.add(vm)
         vm.load()
         return vm
     }
@@ -257,7 +283,6 @@ class GigDetailSaveViewModelTest {
             GigDetailViewModel(
                 repo,
                 extrasRepo,
-                reassignmentRepo,
                 viewerBidRepo,
                 ownerActionsRepo,
                 offersRepo,
@@ -269,7 +294,13 @@ class GigDetailSaveViewModelTest {
                 activeNotifier,
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
+                checkoutIdentities = gigIdentityFixture(),
+                refundFactory = mockk(relaxed = true),
+                authorizationFactory = authorizationFactory(),
+                stopFactory = mockk(relaxed = true),
+                tipStore = mockk(relaxed = true),
             )
+        viewModels.add(vm)
         vm.load()
         return vm
     }
@@ -293,17 +324,22 @@ class GigDetailSaveViewModelTest {
             val vm = ownerOpenGigVm(bids = listOf(GigBidDto(id = "b1", userId = "u2", bidAmount = 40.0)))
             coEvery { repo.acceptBid("g1", "b1") } returns
                 NetworkResult.Success(
-                    GigBidAcceptResponse(requiresPaymentSetup = true, clientSecret = "cs_test", publishableKey = "pk"),
+                    GigBidAcceptResponse(
+                        bid = GigBidDto(id = "b1", gigId = "g1", status = "pending_payment"),
+                        requiresPaymentSetup = true, clientSecret = "cs_test", publishableKey = "pk", paymentIntentId = "pi_test",
+                        amountCents = 4000, currency = "usd",
+                    ),
                 )
             coEvery { repo.finalizeAcceptBid("g1", "b1") } returns
-                NetworkResult.Success(GigBidAcceptResponse())
+                NetworkResult.Success(GigBidAcceptResponse(bid = GigBidDto(id = "b1", gigId = "g1", status = "accepted")))
             val events = mutableListOf<GigLifecycleEvent>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
                 vm.lifecycleEvents.toList(events)
             }
             vm.acceptBidAsOwner("b1")
-            assertTrue(events.any { it is GigLifecycleEvent.PresentPaymentSheet })
-            vm.onLifecycleCheckoutOutcome(
+            val presentation = checkNotNull(vm.bidCheckout.state.value.presentation)
+            vm.bidCheckout.onSheetResult(
+                presentation.token,
                 app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome.Paid,
             )
             coVerify(exactly = 1) { repo.finalizeAcceptBid("g1", "b1") }
@@ -338,7 +374,6 @@ class GigDetailSaveViewModelTest {
                 GigDetailViewModel(
                     repo,
                     extrasRepo,
-                    reassignmentRepo,
                     viewerBidRepo,
                     ownerActionsRepo,
                     offersRepo,
@@ -350,7 +385,13 @@ class GigDetailSaveViewModelTest {
                     activeNotifier,
                     gigsV2Repo,
                     SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
+                    checkoutIdentities = gigIdentityFixture(),
+                    refundFactory = mockk(relaxed = true),
+                    authorizationFactory = authorizationFactory(),
+                    stopFactory = mockk(relaxed = true),
+                    tipStore = mockk(relaxed = true),
                 )
+            viewModels.add(vm)
             vm.load()
             assertTrue(vm.canInstantAccept())
             val content = (vm.state.value as ContentDetailUiState.Loaded).content
@@ -361,12 +402,22 @@ class GigDetailSaveViewModelTest {
 
     // MARK: - Phase 5b · lifecycle completers
 
+    private fun authorizationFactory(): GigAssignedAuthorizationFactory =
+        mockk {
+            every { create(any(), any()) } returns
+                mockk(relaxed = true) {
+                    coEvery { isCurrentReadScope() } returns true
+                    every { state } returns MutableStateFlow(GigAssignedAuthorizationState())
+                }
+        }
+
     private fun assignedGig(
         acceptedBy: String,
         ownerId: String = "poster-1",
     ) = GigDto(
         id = "g1",
         title = "Hang shelves",
+        paymentId = "11111111-1111-4111-8111-111111111111",
         userId = ownerId,
         status = "assigned",
         acceptedBy = acceptedBy,
@@ -375,10 +426,21 @@ class GigDetailSaveViewModelTest {
     private fun lifecycleVm(
         gig: GigDto,
         noShowCanReport: Boolean = false,
+        checkoutIdentity: () -> Pair<String, String?>? = { "u1" to "test-session" },
         changeOrders: List<GigChangeOrderDto> = emptyList(),
         payment: NetworkResult<GigPaymentResponse> =
             NetworkResult.Success(
-                GigPaymentResponse(payment = GigPaymentDto(amountTotal = 5_000, amountSubtotal = 5_000)),
+                GigPaymentResponse(
+                    payment =
+                        GigPaymentDto(
+                            id = gig.paymentId,
+                            gigId = gig.id,
+                            payerId = gig.userId,
+                            payeeId = gig.acceptedBy,
+                            amountTotal = 5_000,
+                            amountSubtotal = 5_000,
+                        ),
+                ),
             ),
     ): GigDetailViewModel {
         coEvery { repo.detail("g1") } returns NetworkResult.Success(GigDetailResponse(gig = gig))
@@ -394,7 +456,6 @@ class GigDetailSaveViewModelTest {
             GigDetailViewModel(
                 repo,
                 extrasRepo,
-                reassignmentRepo,
                 viewerBidRepo,
                 ownerActionsRepo,
                 offersRepo,
@@ -406,10 +467,42 @@ class GigDetailSaveViewModelTest {
                 activeNotifier,
                 gigsV2Repo,
                 SavedStateHandle(mapOf(GigDetailViewModel.GIG_ID_KEY to "g1")),
+                checkoutIdentities = gigIdentityFixture(checkoutIdentity),
+                refundFactory = mockk(relaxed = true),
+                authorizationFactory = authorizationFactory(),
+                stopFactory = mockk(relaxed = true),
+                tipStore = mockk(relaxed = true),
             )
+        viewModels.add(vm)
         vm.load()
         return vm
     }
+
+    @Test
+    fun changed_screen_identity_shows_reopen_error_without_fetching_new_account_data() =
+        runTest {
+            var identity: Pair<String, String?>? = "u1" to "session-1"
+            val vm = lifecycleVm(openGig(savedByUser = false), checkoutIdentity = { identity })
+            assertTrue(vm.state.value is ContentDetailUiState.Loaded)
+            identity = "u2" to "session-2"
+            vm.silentRefetch()
+            assertTrue(vm.state.value is ContentDetailUiState.Error)
+            coVerify(exactly = 1) { repo.detail("g1") }
+            vm.bidCheckout.start("g1", "b1")
+            coVerify(exactly = 0) { repo.acceptBid(any(), any()) }
+        }
+
+    @Test
+    fun anonymous_and_legacy_session_reads_still_load_without_payment_admission() =
+        runTest {
+            for (identity in listOf(null, "u1" to null)) {
+                val vm = lifecycleVm(openGig(savedByUser = false), checkoutIdentity = { identity })
+                assertTrue(vm.state.value is ContentDetailUiState.Loaded)
+                vm.bidCheckout.start("g1", "b1")
+                assertEquals(app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutPhase.Idle, vm.bidCheckout.state.value.phase)
+            }
+            coVerify(exactly = 0) { repo.acceptBid(any(), any()) }
+        }
 
     @Test
     fun worker_running_late_gate_and_endpoint() =
@@ -460,7 +553,16 @@ class GigDetailSaveViewModelTest {
                     payment =
                         NetworkResult.Success(
                             GigPaymentResponse(
-                                payment = GigPaymentDto(amountTotal = 7_000, amountSubtotal = 7_000, tipAmount = 500),
+                                payment =
+                                    GigPaymentDto(
+                                        id = gig.paymentId,
+                                        gigId = gig.id,
+                                        payerId = gig.userId,
+                                        payeeId = gig.acceptedBy,
+                                        amountTotal = 7_000,
+                                        amountSubtotal = 7_000,
+                                        tipAmount = 500,
+                                    ),
                             ),
                         ),
                 )
@@ -476,6 +578,31 @@ class GigDetailSaveViewModelTest {
             val vm = lifecycleVm(assignedGig(acceptedBy = "viewer-1"))
             assertNull(vm.payment.value)
             coVerify(exactly = 0) { repo.gigPayment(any()) }
+        }
+
+    @Test
+    fun payer_refund_entry_opens_only_the_exact_owned_payment() =
+        runTest {
+            val gig = assignedGig(acceptedBy = "worker-9", ownerId = "viewer-1")
+            val payment =
+                GigPaymentDto(
+                    id = "11111111-1111-4111-8111-111111111111",
+                    gigId = "g1",
+                    payerId = "viewer-1",
+                    payeeId = "worker-9",
+                    amountTotal = 1000,
+                    currency = "usd",
+                )
+            val vm = lifecycleVm(gig, payment = NetworkResult.Success(GigPaymentResponse(payment)))
+            assertTrue(vm.canOpenRefunds())
+            vm.openRefunds()
+            verify(exactly = 1) { vm.refunds.open("g1", payment) }
+            for (invalid in listOf(payment.copy(payerId = "other"), payment.copy(gigId = "other"), payment.copy(id = null))) {
+                val invalidVm = lifecycleVm(gig, payment = NetworkResult.Success(GigPaymentResponse(invalid)))
+                assertFalse(invalidVm.canOpenRefunds())
+                invalidVm.openRefunds()
+                verify(exactly = 0) { invalidVm.refunds.open(any(), any()) }
+            }
         }
 
     @Test
@@ -644,4 +771,494 @@ class GigDetailSaveViewModelTest {
     fun realtime_room_events_include_rescheduled() {
         assertTrue(GigDetailViewModel.GIG_ROOM_EVENTS.contains("gig:rescheduled"))
     }
+
+    private fun deliveryPhoto() = DeliveryProofPhoto("photo-one", "synthetic proof".toByteArray(), "work.jpg", "image/jpeg")
+
+    private fun uploadedProof(suffix: String = "one") =
+        NetworkResult.Success(FileUploadResponse("Uploaded", FileUploadResponse.FileRef("file-$suffix", "https://proof.test/$suffix.jpg")))
+
+    @Test
+    fun owner_confirmation_sends_the_loaded_review() =
+        runTest {
+            val gig =
+                assignedGig(acceptedBy = "worker-9", ownerId = "viewer-1")
+                    .copy(status = "completed", completionReview = "original-loaded-review")
+            coEvery { paymentsRepo.tipPreview("g1") } returns NetworkResult.Failure(NetworkError.Server(503, null))
+            val vm = lifecycleVm(gig, checkoutIdentity = { "viewer-1" to "owner-session" })
+            coEvery { repo.completeGigAsPoster("g1", "original-loaded-review") } returns NetworkResult.Success(CompleteGigResponse())
+            vm.confirmCompletion()
+            coVerify(exactly = 1) { repo.completeGigAsPoster("g1", "original-loaded-review") }
+        }
+
+    private fun ownerConfirmationVm(identity: () -> Pair<String, String?>? = { "viewer-1" to "owner-session" }): GigDetailViewModel {
+        coEvery { paymentsRepo.tipPreview("g1") } returns NetworkResult.Failure(NetworkError.Server(503, null))
+        return lifecycleVm(
+            assignedGig(acceptedBy = "worker-9", ownerId = "viewer-1").copy(status = "completed", completionReview = "owner-review"),
+            checkoutIdentity = identity,
+        )
+    }
+
+    private fun startGigFixture() = assignedGig(acceptedBy = "viewer-1").copy(acceptedAt = "2026-09-15T12:00:00Z")
+
+    @Test
+    fun start_invalid_receipts_do_not_report_success_or_refresh() =
+        runTest {
+            val gig = startGigFixture()
+            val receipt = gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z")
+            val invalid =
+                listOf(
+                    receipt.copy(id = "other"),
+                    receipt.copy(acceptedBy = "other"),
+                    receipt.copy(status = "assigned"),
+                    receipt.copy(startedAt = "invalid"),
+                    receipt.copy(startedAt = null),
+                    receipt.copy(acceptedAt = "2026-09-15T13:00:00Z"),
+                    receipt.copy(paymentId = "other-payment"),
+                    receipt.copy(userId = "other-owner"),
+                    receipt.copy(price = 99.0),
+                )
+            val vm = lifecycleVm(gig, checkoutIdentity = { "viewer-1" to "worker-session" })
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            invalid.forEach { bad ->
+                coEvery { repo.startGig("g1", any()) } returns NetworkResult.Success(GigDetailResponse(bad))
+                vm.startTask()
+            }
+            assertFalse(events.contains(GigLifecycleEvent.Toast("Task started")))
+            coVerify(exactly = 1) { repo.detail("g1") }
+        }
+
+    @Test
+    fun start_sends_the_displayed_assignment_terms() =
+        runTest {
+            val gig = startGigFixture().copy(price = 25.0, paymentId = "pay-1")
+            val vm = lifecycleVm(gig, checkoutIdentity = { "viewer-1" to "worker-session" })
+            coEvery { repo.startGig("g1", any()) } returns
+                NetworkResult.Success(GigDetailResponse(gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z")))
+            vm.startTask()
+            coVerify(exactly = 1) {
+                repo.startGig(
+                    "g1",
+                    StartGigBody(expectedAcceptedAt = "2026-09-15T12:00:00Z", expectedPrice = 25.0, expectedPaymentId = "pay-1"),
+                )
+            }
+        }
+
+    @Test
+    fun start_duplicate_pending_tap_sends_one_request() =
+        runTest {
+            val gig = startGigFixture()
+            val vm = lifecycleVm(gig, checkoutIdentity = { "viewer-1" to "worker-session" })
+            val reply = CompletableDeferred<NetworkResult<GigDetailResponse>>()
+            coEvery { repo.startGig("g1", any()) } coAnswers { reply.await() }
+            vm.startTask()
+            vm.startTask()
+            reply.complete(NetworkResult.Success(GigDetailResponse(gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z"))))
+            coVerify(exactly = 1) { repo.startGig("g1", any()) }
+        }
+
+    @Test
+    fun start_late_session_reply_does_not_report_or_refresh() =
+        runTest {
+            var identity: Pair<String, String?>? = "viewer-1" to "worker-session"
+            val gig = startGigFixture()
+            val vm = lifecycleVm(gig, checkoutIdentity = { identity })
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            val reply = CompletableDeferred<NetworkResult<GigDetailResponse>>()
+            coEvery { repo.startGig("g1", any()) } coAnswers { reply.await() }
+            vm.startTask()
+            identity = "viewer-1" to "replacement-session"
+            reply.complete(NetworkResult.Success(GigDetailResponse(gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z"))))
+            assertTrue(events.isEmpty())
+            coVerify(exactly = 1) { repo.detail("g1") }
+        }
+
+    @Test
+    fun start_departure_retires_pending_reply() =
+        runTest {
+            val gig = startGigFixture()
+            val vm = lifecycleVm(gig, checkoutIdentity = { "viewer-1" to "worker-session" })
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            val reply = CompletableDeferred<NetworkResult<GigDetailResponse>>()
+            coEvery { repo.startGig("g1", any()) } coAnswers { reply.await() }
+            vm.startTask()
+            vm.leaveRealtime()
+            reply.complete(NetworkResult.Success(GigDetailResponse(gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z"))))
+            assertTrue(events.isEmpty())
+            coVerify(exactly = 1) { repo.detail("g1") }
+        }
+
+    @Test
+    fun start_reassignment_retires_the_old_reply() =
+        runTest {
+            val gig = startGigFixture()
+            val vm = lifecycleVm(gig, checkoutIdentity = { "viewer-1" to "worker-session" })
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            val reply = CompletableDeferred<NetworkResult<GigDetailResponse>>()
+            coEvery { repo.startGig("g1", any()) } coAnswers { reply.await() }
+            vm.startTask()
+            coEvery { repo.detail("g1") } returns NetworkResult.Success(GigDetailResponse(gig.copy(acceptedAt = "2026-09-15T13:00:00Z")))
+            vm.load()
+            reply.complete(NetworkResult.Success(GigDetailResponse(gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z"))))
+            assertTrue(events.isEmpty())
+            coVerify(exactly = 2) { repo.detail("g1") }
+        }
+
+    @Test
+    fun start_current_receipt_reports_success_and_refreshes() =
+        runTest {
+            val gig = startGigFixture()
+            val vm = lifecycleVm(gig, checkoutIdentity = { "viewer-1" to "worker-session" })
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            coEvery {
+                repo.startGig("g1", any())
+            } returns NetworkResult.Success(GigDetailResponse(gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z")))
+            vm.startTask()
+            assertEquals(listOf(GigLifecycleEvent.Toast("Task started")), events)
+            coVerify(exactly = 2) { repo.detail("g1") }
+        }
+
+    @Test
+    fun start_failed_request_can_retry_the_saved_receipt() =
+        runTest {
+            val gig = startGigFixture()
+            val vm = lifecycleVm(gig, checkoutIdentity = { "viewer-1" to "worker-session" })
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            coEvery { repo.startGig("g1", any()) } returns NetworkResult.Failure(NetworkError.Server(503, "Retry"))
+            vm.startTask()
+            coEvery {
+                repo.startGig("g1", any())
+            } returns NetworkResult.Success(GigDetailResponse(gig.copy(status = "in_progress", startedAt = "2026-09-15T12:01:00Z")))
+            vm.startTask()
+            assertEquals(1, events.count { it == GigLifecycleEvent.Toast("Task started") })
+            coVerify(exactly = 2) { repo.startGig("g1", any()) }
+            coVerify(exactly = 2) { repo.detail("g1") }
+        }
+
+    @Test
+    fun start_old_failure_cannot_release_a_new_assignment_request() =
+        runTest {
+            val gig = startGigFixture()
+            val vm = lifecycleVm(gig, checkoutIdentity = { "viewer-1" to "worker-session" })
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            val oldReply = CompletableDeferred<NetworkResult<GigDetailResponse>>()
+            val currentReply = CompletableDeferred<NetworkResult<GigDetailResponse>>()
+            coEvery { repo.startGig("g1", any()) } coAnswers { oldReply.await() }
+            vm.startTask()
+            val replacement = gig.copy(acceptedAt = "2026-09-15T13:00:00Z")
+            coEvery { repo.detail("g1") } returns NetworkResult.Success(GigDetailResponse(replacement))
+            vm.load()
+            coEvery { repo.startGig("g1", any()) } coAnswers { currentReply.await() }
+            vm.startTask()
+            oldReply.complete(NetworkResult.Failure(NetworkError.Server(503, "Old failure")))
+            vm.startTask()
+            coVerify(exactly = 2) { repo.startGig("g1", any()) }
+            assertTrue(events.isEmpty())
+            currentReply.complete(
+                NetworkResult.Success(GigDetailResponse(replacement.copy(status = "in_progress", startedAt = "2026-09-15T13:01:00Z"))),
+            )
+            assertEquals(listOf(GigLifecycleEvent.Toast("Task started")), events)
+        }
+
+    @Test
+    fun owner_missing_receipt_does_not_report_success() =
+        runTest {
+            val vm = ownerConfirmationVm()
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            coEvery { repo.completeGigAsPoster("g1", "owner-review") } returns NetworkResult.Success(CompleteGigResponse())
+            vm.confirmCompletion()
+            assertFalse(events.contains(GigLifecycleEvent.Toast("Completion confirmed")))
+            coVerify(exactly = 1) { repo.detail("g1") }
+        }
+
+    @Test
+    fun owner_late_session_reply_does_not_report_or_refresh() =
+        runTest {
+            var identity: Pair<String, String?>? = "viewer-1" to "owner-session"
+            val vm = ownerConfirmationVm { identity }
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            val reply = CompletableDeferred<NetworkResult<CompleteGigResponse>>()
+            coEvery { repo.completeGigAsPoster("g1", "owner-review") } coAnswers { reply.await() }
+            vm.confirmCompletion()
+            identity = "viewer-1" to "replacement-session"
+            reply.complete(NetworkResult.Success(CompleteGigResponse()))
+            assertTrue(events.isEmpty())
+            coVerify(exactly = 1) { repo.detail("g1") }
+        }
+
+    @Test
+    fun owner_duplicate_pending_tap_sends_one_confirmation() =
+        runTest {
+            val vm = ownerConfirmationVm()
+            val reply = CompletableDeferred<NetworkResult<CompleteGigResponse>>()
+            coEvery { repo.completeGigAsPoster("g1", "owner-review") } coAnswers { reply.await() }
+            vm.confirmCompletion()
+            vm.confirmCompletion()
+            reply.complete(NetworkResult.Success(CompleteGigResponse()))
+            coVerify(exactly = 1) { repo.completeGigAsPoster("g1", "owner-review") }
+        }
+
+    @Test
+    fun owner_departure_retires_pending_confirmation() =
+        runTest {
+            val vm = ownerConfirmationVm()
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            val reply = CompletableDeferred<NetworkResult<CompleteGigResponse>>()
+            coEvery { repo.completeGigAsPoster("g1", "owner-review") } coAnswers { reply.await() }
+            vm.confirmCompletion()
+            vm.leaveRealtime()
+            reply.complete(NetworkResult.Success(CompleteGigResponse()))
+            assertTrue(events.isEmpty())
+            coVerify(exactly = 1) { repo.detail("g1") }
+        }
+
+    @Test
+    fun owner_current_receipt_reports_success_and_refreshes() =
+        runTest {
+            val vm = ownerConfirmationVm()
+            val events = mutableListOf<GigLifecycleEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.lifecycleEvents.toList(events) }
+            val receipt = MyGigDto(id = "g1", title = "Existing task", status = "completed", ownerConfirmedAt = "2026-09-15T12:00:00Z")
+            coEvery { repo.completeGigAsPoster("g1", "owner-review") } returns NetworkResult.Success(CompleteGigResponse(gig = receipt))
+            vm.confirmCompletion()
+            assertEquals(listOf(GigLifecycleEvent.Toast("Completion confirmed")), events)
+            coVerify(exactly = 2) { repo.detail("g1") }
+        }
+
+    private fun deliveryVm(
+        identity: () -> Pair<String, String?>? = { "u1" to "proof-session" },
+        status: String = "in_progress",
+    ): GigDetailViewModel {
+        every { authRepo.state } returns
+            MutableStateFlow<AuthRepository.State>(
+                AuthRepository.State.SignedIn(
+                    UserDto(id = "u1", email = "proof@example.invalid", displayName = "Worker", avatarUrl = null),
+                ),
+            )
+        coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } returns uploadedProof()
+        coEvery { repo.markCompleted(any(), any(), any()) } coAnswers {
+            NetworkResult.Success(completedProof(secondArg(), thirdArg()))
+        }
+        return lifecycleVm(assignedGig(acceptedBy = "u1").copy(status = status), checkoutIdentity = identity)
+    }
+
+    private suspend fun submitProof(
+        vm: GigDetailViewModel,
+        photos: List<DeliveryProofPhoto>,
+    ): Boolean {
+        val response = CompletableDeferred<Boolean>()
+        vm.submitDeliveryProof(photos, "Original note") { response.complete(it) }
+        return response.await()
+    }
+
+    private fun completedProof(
+        note: String? = "Original note",
+        urls: List<String> = listOf("https://proof.test/one.jpg"),
+    ): MarkCompletedResponse =
+        MarkCompletedResponse(
+            gig = WorkerCompletionReceipt("g1", "completed", "u1", "2026-09-15T12:00:00Z", note, urls),
+        )
+
+    @Test
+    fun empty_completion_receipt_cannot_report_delivery_submitted() =
+        runTest {
+            val vm = deliveryVm()
+            coEvery { repo.markCompleted(any(), any(), any()) } returns NetworkResult.Success(MarkCompletedResponse())
+            assertFalse(submitProof(vm, listOf(deliveryPhoto())))
+        }
+
+    @Test
+    fun mismatched_completion_receipts_preserve_uploads_for_retry() =
+        runTest {
+            val vm = deliveryVm()
+            val receipt = requireNotNull(completedProof().gig)
+            val invalid =
+                listOf(
+                    receipt.copy(id = "other"),
+                    receipt.copy(status = "in_progress"),
+                    receipt.copy(acceptedBy = "other"),
+                    receipt.copy(workerCompletedAt = null),
+                    receipt.copy(workerCompletedAt = "invalid"),
+                    receipt.copy(completionNote = "Different note"),
+                    receipt.copy(completionPhotos = listOf("other")),
+                )
+            var response = completedProof()
+            coEvery { repo.markCompleted(any(), any(), any()) } coAnswers { NetworkResult.Success(response) }
+            invalid.forEach { changed ->
+                response = MarkCompletedResponse(gig = changed)
+                val photos = listOf(deliveryPhoto())
+                assertFalse(submitProof(vm, photos))
+                response = completedProof()
+                assertTrue(submitProof(vm, photos))
+            }
+            coVerify(exactly = invalid.size) { filesRepo.uploadFile(any(), any(), any(), "gig_completion", "private", "g1") }
+            coVerify(exactly = invalid.size * 2) { repo.markCompleted("g1", "Original note", listOf("https://proof.test/one.jpg")) }
+        }
+
+    @Test
+    fun worker_completion_response_decodes_the_existing_saved_proof_fields() {
+        val adapter = com.squareup.moshi.Moshi.Builder().build().adapter(MarkCompletedResponse::class.java)
+        val response =
+            adapter.fromJson(
+                """
+                {"gig":{"id":"g1","status":"completed","accepted_by":"u1",
+                "worker_completed_at":"2026-09-15T12:00:00Z","completion_note":"Original note",
+                "completion_photos":["https://proof.test/one.jpg"]}}
+                """.trimIndent(),
+            )
+        assertEquals(completedProof(), response)
+        assertEquals(null, adapter.fromJson("{}")?.gig)
+    }
+
+    @Test
+    fun worker_receipt_preserves_the_existing_server_note_limit() =
+        runTest {
+            val vm = deliveryVm()
+            val note = "🙂".repeat(1001)
+            coEvery { repo.markCompleted(any(), any(), any()) } returns NetworkResult.Success(completedProof(note = note.take(2000)))
+            val result = CompletableDeferred<Boolean>()
+            vm.submitDeliveryProof(listOf(deliveryPhoto()), note) { result.complete(it) }
+            assertTrue(result.await())
+        }
+
+    @Test
+    fun delivery_proof_retry_reuses_the_original_upload() =
+        runTest {
+            val vm = deliveryVm()
+            coEvery { repo.markCompleted(any(), any(), any()) } returnsMany
+                listOf(
+                    NetworkResult.Failure(NetworkError.Server(503, null)), NetworkResult.Success(completedProof()),
+                )
+            val photos = listOf(deliveryPhoto())
+            assertFalse(submitProof(vm, photos))
+            assertTrue(submitProof(vm, photos))
+            coVerify(exactly = 1) { filesRepo.uploadFile(any(), any(), any(), "gig_completion", "private", "g1") }
+            coVerify(exactly = 2) { repo.markCompleted("g1", "Original note", listOf("https://proof.test/one.jpg")) }
+        }
+
+    @Test
+    fun partial_delivery_upload_keeps_the_first_file_for_retry() =
+        runTest {
+            val vm = deliveryVm()
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } returnsMany
+                listOf(
+                    uploadedProof(), NetworkResult.Failure(NetworkError.Server(503, null)), uploadedProof("two"),
+                )
+            val photos = listOf(deliveryPhoto(), DeliveryProofPhoto("two", "second proof".toByteArray(), "two.jpg", "image/jpeg"))
+            assertFalse(submitProof(vm, photos))
+            coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }
+            assertTrue(submitProof(vm, photos))
+            coVerify(exactly = 3) { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") }
+            coVerify(
+                exactly = 1,
+            ) { repo.markCompleted("g1", "Original note", listOf("https://proof.test/one.jpg", "https://proof.test/two.jpg")) }
+        }
+
+    @Test
+    fun late_delivery_upload_cannot_submit_after_identity_change() =
+        runTest {
+            var identity: Pair<String, String?>? = "u1" to "proof-session"
+            val vm = deliveryVm(identity = { identity })
+            val started = CompletableDeferred<Unit>()
+            val held = CompletableDeferred<NetworkResult<FileUploadResponse>>()
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } coAnswers {
+                started.complete(Unit)
+                held.await()
+            }
+            val result = CompletableDeferred<Boolean>()
+            vm.submitDeliveryProof(listOf(deliveryPhoto()), null) { result.complete(it) }
+            started.await()
+            identity = "u2" to "other-session"
+            held.complete(uploadedProof())
+            assertFalse(result.await())
+            coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }
+        }
+
+    @Test
+    fun delivery_departure_and_duplicate_submit_do_not_create_another_request() =
+        runTest {
+            val vm = deliveryVm()
+            val started = CompletableDeferred<Unit>()
+            val held = CompletableDeferred<NetworkResult<FileUploadResponse>>()
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } coAnswers {
+                started.complete(Unit)
+                held.await()
+            }
+            val result = CompletableDeferred<Boolean>()
+            vm.submitDeliveryProof(listOf(deliveryPhoto()), null) { result.complete(it) }
+            started.await()
+            assertFalse(submitProof(vm, listOf(deliveryPhoto())))
+            vm.retireDeliveryProof()
+            held.complete(uploadedProof())
+            assertFalse(result.await())
+            coVerify(exactly = 1) { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") }
+            coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }
+        }
+
+    @Test
+    fun changed_photo_bytes_with_same_picker_id_get_a_new_upload() =
+        runTest {
+            val vm = deliveryVm()
+            val uploads = listOf(uploadedProof(), uploadedProof("changed"))
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } returnsMany uploads
+            coEvery { repo.markCompleted(any(), any(), any()) } returnsMany
+                listOf(
+                    NetworkResult.Failure(NetworkError.Server(503, null)),
+                    NetworkResult.Success(completedProof(urls = listOf("https://proof.test/changed.jpg"))),
+                )
+            val photo = deliveryPhoto()
+            assertFalse(submitProof(vm, listOf(photo)))
+            photo.bytes[0] = 1
+            assertTrue(submitProof(vm, listOf(photo)))
+            coVerify(exactly = 2) { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") }
+            coVerify(exactly = 1) { repo.markCompleted("g1", "Original note", listOf("https://proof.test/changed.jpg")) }
+        }
+
+    @Test
+    fun completed_cold_entry_does_not_upload_replacement_proof() =
+        runTest {
+            val vm = deliveryVm(status = "completed")
+            assertFalse(submitProof(vm, listOf(deliveryPhoto())))
+            coVerify(exactly = 0) { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") }
+            coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }
+        }
+
+    @Test
+    fun missing_upload_reference_does_not_mark_work_complete() =
+        runTest {
+            val vm = deliveryVm()
+            coEvery { filesRepo.uploadFile(any(), any(), any(), any(), any(), "g1") } returns
+                NetworkResult.Success(FileUploadResponse("Uploaded", FileUploadResponse.FileRef("file-one", "")))
+            assertFalse(submitProof(vm, listOf(deliveryPhoto())))
+            coVerify(exactly = 0) { repo.markCompleted(any(), any(), any()) }
+        }
+
+    @Test
+    fun late_completion_response_cannot_refresh_a_replacement_session() =
+        runTest {
+            var identity: Pair<String, String?>? = "u1" to "proof-session"
+            val vm = deliveryVm(identity = { identity })
+            val started = CompletableDeferred<Unit>()
+            val held = CompletableDeferred<NetworkResult<MarkCompletedResponse>>()
+            coEvery { repo.markCompleted(any(), any(), any()) } coAnswers {
+                started.complete(Unit)
+                held.await()
+            }
+            val result = CompletableDeferred<Boolean>()
+            vm.submitDeliveryProof(listOf(deliveryPhoto()), null) { result.complete(it) }
+            started.await()
+            identity = "u2" to "replacement"
+            held.complete(NetworkResult.Success(MarkCompletedResponse()))
+            assertFalse(result.await())
+            coVerify(exactly = 1) { repo.detail("g1") }
+        }
 }

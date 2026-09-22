@@ -97,6 +97,7 @@ public struct DeliveryProofSheetView: View {
         .background(Theme.Color.appSurface)
         .presentationDetents(submitted ? [.medium] : [.large])
         .presentationDragIndicator(.visible)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("deliveryProofSheet")
         .photosPicker(
             isPresented: $photoPickerPresented,
@@ -387,6 +388,7 @@ extension DeliveryProofSheetView {
             .accessibilityIdentifier("deliveryProof.backToTask")
         }
         .padding(.top, Spacing.s2)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("deliveryProof.submittedView")
     }
 

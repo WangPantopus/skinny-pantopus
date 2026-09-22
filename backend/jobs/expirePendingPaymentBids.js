@@ -30,6 +30,11 @@ async function expirePendingPaymentBids() {
 
   for (const bid of staleBids) {
     try {
+      // Durable checkouts are resumed or explicitly aborted with provider proof.
+      // A timer must not discard their identity after an SDK/network interruption.
+      const { data: active, error: attemptError } = await supabaseAdmin.from('GigPaymentAcceptance')
+        .select('id').eq('bid_id', bid.id).in('state', ['initializing', 'pending', 'canceling']).maybeSingle();
+      if (attemptError || active) continue;
       // Cancel the Stripe intent if one exists
       if (bid.pending_payment_intent_id) {
         try {
@@ -40,6 +45,7 @@ async function expirePendingPaymentBids() {
             intentId: bid.pending_payment_intent_id,
             error: cancelErr.message,
           });
+          continue;
         }
       }
 

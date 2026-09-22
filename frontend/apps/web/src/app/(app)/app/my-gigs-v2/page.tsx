@@ -1,7 +1,10 @@
 // @ts-nocheck
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { getErrorMessage } from '@pantopus/utils';
+import { gigBidCheckoutUrl } from '@/components/gig-detail/GigBidCheckout';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
@@ -14,8 +17,17 @@ import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import type { GigListItem, GigBidWithUser } from '@pantopus/types';
 import { ListArchetype } from '@/components/archetypes';
+import { useGigListSession } from '@/hooks/useGigListSession';
 
 type FilterStatus = 'all' | 'open' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
+
+function awaitingConfirmation(gig: GigListItem) {
+  return gig.status === 'completed' && !Number.isFinite(Date.parse(gig.owner_confirmed_at || ''));
+}
+
+function listStatus(gig: GigListItem) {
+  return awaitingConfirmation(gig) ? 'in_progress' : gig.status;
+}
 
 const ENGAGEMENT_CONFIG: Record<string, { label: string; cls: string }> = {
   instant_accept: { label: '⚡ Instant', cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
@@ -23,16 +35,19 @@ const ENGAGEMENT_CONFIG: Record<string, { label: string; cls: string }> = {
   quotes: { label: '💼 Quotes', cls: 'bg-purple-50 text-purple-700 border border-purple-200' },
 };
 
-const formatUsd = (amount: number): string => `$${amount.toFixed(2)}`;
-const getBidAmount = (bid?: GigBidWithUser | null): number | null => {
-  const raw = (bid as unknown as Record<string, any> | null)?.amount ?? null;
-  const amount = Number(raw);
-  return Number.isFinite(amount) ? amount : null;
-};
+
 
 export default function MyGigsV2Page() {
   const router = useRouter();
-  const [gigs, setGigs] = useState<GigListItem[]>([]);
+  const session = useGigListSession();
+  const { isCurrent } = session;
+  const navigate = (url: string) => { if (isCurrent()) router.push(url); };
+  const confirmingGigs = useRef(new Set<string>());
+  const rejectingBids = useRef(new Set<string>());
+  const loadGeneration = useRef(0);
+  const bidsGeneration = useRef(0);
+  const [storedGigs, setGigs] = useState<GigListItem[]>([]);
+  const gigs = session.active ? storedGigs : [];
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterStatus>('all');
@@ -42,143 +57,137 @@ export default function MyGigsV2Page() {
   const [loadingBids, setLoadingBids] = useState(false);
   const [bidsError, setBidsError] = useState<string | null>(null);
 
-  const loadGigs = useCallback(async () => {
-    try {
-      const token = getAuthToken();
-      if (!token) {
-        router.push('/login');
-        return;
-      }
+  useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
+  useEffect(() => {
+    if (!session.active) {
+      setGigs([]); setSelectedGig(null); setBids([]); setBidsError(null);
+      confirmingGigs.current.clear(); rejectingBids.current.clear();
+      loadGeneration.current++; bidsGeneration.current++;
+    }
+  }, [session.active]);
+
+  const loadGigs = useCallback(async () => {
+    if (!isCurrent()) return;
+    const generation = ++loadGeneration.current;
+    const current = () => isCurrent() && generation === loadGeneration.current;
+    try {
       setFetchError(null);
       const response = await api.gigs.getMyGigs({
         limit: 100,
-        status: filter === 'all' ? undefined : [filter]
+        status: filter === 'all' ? undefined : filter === 'in_progress' ? ['in_progress', 'completed'] : [filter]
       });
-
+      if (!current()) return;
       const resObj = response as Record<string, any>;
       const gigsArray = (resObj.gigs || resObj.data || []) as GigListItem[];
       setGigs(gigsArray);
     } catch (err) {
+      if (!current()) return;
       console.error('Failed to load gigs:', err);
       setGigs([]);
       setFetchError('Failed to load your gigs. Please try again.');
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
-  }, [filter, router]);
+  }, [filter, isCurrent]);
 
   useEffect(() => {
+    const generation = loadGeneration;
     loadGigs();
+    return () => { generation.current++; };
   }, [loadGigs]);
 
+  const closeBids = () => {
+    bidsGeneration.current++; setSelectedGig(null); setBids([]); setBidsError(null);
+  };
+
   const loadBidsForGig = async (gigId: string) => {
+    if (!isCurrent()) return;
+    const generation = ++bidsGeneration.current;
+    const current = () => isCurrent() && generation === bidsGeneration.current;
     setLoadingBids(true);
+    setBids([]);
     setBidsError(null);
     try {
       const response = await api.gigs.getGigBids(gigId);
+      if (!current()) return;
       setBids(response.bids || []);
     } catch {
+      if (!current()) return;
       setBids([]);
       setBidsError('Failed to load bids');
     } finally {
-      setLoadingBids(false);
+      if (current()) setLoadingBids(false);
     }
   };
 
   const handleViewGig = (gig: GigListItem) => {
-    router.push(`/app/gigs-v2/${gig.id}`);
+    navigate(`/app/gigs-v2/${gig.id}`);
   };
 
   const handleViewBids = (gig: GigListItem) => {
+    if (!isCurrent() || !gigs.includes(gig)) return;
     setBidsError(null);
     setSelectedGig(gig);
     loadBidsForGig(gig.id);
   };
 
-  const handleAcceptBid = async (bidId: string) => {
-    if (!selectedGig) return;
-    const selectedBid = bids.find((bid) => String((bid as unknown as Record<string, any>)?.id) === String(bidId));
-    const amount = getBidAmount(selectedBid || null);
-    const yes = await confirmStore.open({
-      title: amount != null && amount > 0 ? 'Authorize payment method?' : 'Accept this bid?',
-      description:
-        amount != null && amount > 0
-          ? `Pantopus will place a temporary authorization hold of ${formatUsd(amount)}. You are charged only after you confirm the task is completed. If canceled per policy, the hold is released (or only applicable fees apply).`
-          : 'This will close the gig to other bidders.',
-      confirmLabel: amount != null && amount > 0 ? 'Continue to Payment' : 'Accept Bid',
-      cancelLabel: amount != null && amount > 0 ? 'Not now' : 'Cancel',
-      variant: 'primary',
-    });
-    if (!yes) return;
-
-    try {
-      setBidsError(null);
-      const resp = await api.gigs.acceptBid(selectedGig.id, bidId) as Record<string, any>;
-      const payment = (resp?.payment || {}) as Record<string, any>;
-      const clientSecret = (resp?.clientSecret || payment?.clientSecret || null) as string | null;
-      const setupIntentId = (resp?.setupIntentId || payment?.setupIntentId || null) as string | null;
-      const isSetupIntent = Boolean((resp?.isSetupIntent as boolean | undefined) ?? setupIntentId);
-      const requiresPaymentSetup = Boolean(resp?.requiresPaymentSetup || clientSecret);
-
-      if (requiresPaymentSetup && clientSecret && typeof window !== 'undefined') {
-        window.sessionStorage.setItem(
-          `gig_payment_setup_${selectedGig.id}`,
-          JSON.stringify({
-            clientSecret,
-            isSetupIntent,
-            roomId: (resp?.roomId as string | null) || null,
-            rollbackOnAbort: true,
-          })
-        );
-        toast.info('Bid accepted. Complete payment authorization to continue.');
-        router.push(`/app/gigs-v2/${selectedGig.id}?action=payment_setup`);
-        return;
-      }
-
-      toast.success('Bid accepted!');
-      loadGigs();
-      loadBidsForGig(selectedGig.id);
-
-      const roomId = (resp?.roomId || null) as string | null;
-      if (roomId) {
-        router.push(`/app/chat/${roomId}`);
-      }
-    } catch (err: unknown) {
-      setBidsError(err instanceof Error ? err.message : 'Failed to accept bid');
+  const handleAcceptBid = (bidId: string) => {
+    if (selectedGig && !loadingBids && bids.some(bid => bid.id === bidId && ['pending', 'pending_payment'].includes(bid.status))) {
+      navigate(gigBidCheckoutUrl(selectedGig.id, bidId));
     }
   };
 
   const handleRejectBid = async (bidId: string) => {
-    if (!selectedGig) return;
+    if (!isCurrent() || !selectedGig || loadingBids || !bids.some(bid => bid.id === bidId && bid.status === 'pending')) return;
+    const generation = bidsGeneration.current;
+    const current = () => isCurrent() && generation === bidsGeneration.current;
+    const pendingKey = `${generation}:${bidId}`;
     const yes = await confirmStore.open({ title: 'Reject this bid?', description: 'This bidder will be notified of the rejection.', confirmLabel: 'Reject Bid', variant: 'destructive' });
-    if (!yes) return;
+    if (!yes || !current() || rejectingBids.current.has(pendingKey)) return;
+    rejectingBids.current.add(pendingKey);
 
     try {
       setBidsError(null);
       await api.gigs.rejectBid(selectedGig.id, bidId);
+      if (!current()) return;
       toast.info('Bid rejected');
       loadBidsForGig(selectedGig.id);
     } catch (err: unknown) {
-      setBidsError(err instanceof Error ? err.message : 'Failed to reject bid');
+      if (current()) setBidsError(err instanceof Error ? err.message : 'Failed to reject bid');
+    } finally {
+      rejectingBids.current.delete(pendingKey);
     }
   };
 
   const handleMarkComplete = async (gigId: string) => {
-    const yes = await confirmStore.open({ title: 'Mark this gig as complete?', description: 'This will finalize the task and trigger payment processing.', confirmLabel: 'Complete', variant: 'primary' });
-    if (!yes) return;
+    if (!isCurrent()) return;
+    const loaded = gigs.find(gig => gig.id === gigId);
+    if (!loaded || !awaitingConfirmation(loaded) || !loaded.completion_review) {
+      navigate(`/app/gigs-v2/${gigId}`); return;
+    }
+    const expectedReview = loaded.completion_review;
+    const generation = loadGeneration.current;
+    const current = () => isCurrent() && generation === loadGeneration.current;
+    const yes = await confirmStore.open({ title: 'Confirm this completed work?', description: 'This approves the worker’s completed task and releases its payment.', confirmLabel: 'Confirm', variant: 'primary' });
+    if (!yes || !current() || confirmingGigs.current.has(gigId)) return;
+    confirmingGigs.current.add(gigId);
 
     try {
-      await api.gigs.completeGig(gigId);
-      toast.success('Gig marked as complete!');
+      const result = await api.gigs.completeGig(gigId, { expectedReview });
+      if (!current()) return;
+      if (result.gig?.id !== gigId || result.gig.status !== 'completed' || !Number.isFinite(Date.parse(result.gig.owner_confirmed_at || ''))) throw new Error('Completion receipt unavailable. Open the task to check its current state.');
+      toast.success('Completion confirmed');
       loadGigs();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to complete gig');
+      if (current()) toast.error(getErrorMessage(err));
+    } finally {
+      confirmingGigs.current.delete(gigId);
     }
   };
 
   const filteredGigs = gigs.filter(gig => {
-    if (filter !== 'all' && gig.status !== filter) return false;
+    if (filter !== 'all' && listStatus(gig) !== filter) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       const title = (gig.title || '').toLowerCase();
@@ -193,8 +202,8 @@ export default function MyGigsV2Page() {
     all: gigs.length,
     open: gigs.filter(g => g.status === 'open').length,
     assigned: gigs.filter(g => g.status === 'assigned').length,
-    in_progress: gigs.filter(g => g.status === 'in_progress').length,
-    completed: gigs.filter(g => g.status === 'completed').length,
+    in_progress: gigs.filter(g => listStatus(g) === 'in_progress').length,
+    completed: gigs.filter(g => listStatus(g) === 'completed').length,
     cancelled: gigs.filter(g => g.status === 'cancelled').length,
   };
 
@@ -206,7 +215,7 @@ export default function MyGigsV2Page() {
           subtitle={`${gigs.length} total · ${stats.open} open`}
           primaryAction={{
             label: 'Quick post',
-            onClick: () => router.push('/app/gigs-v2/new'),
+            onClick: () => navigate('/app/gigs-v2/new'),
           }}
           headerFilters={
             <SearchInput
@@ -218,9 +227,10 @@ export default function MyGigsV2Page() {
           }
           renderHeader={() => (
             <>
-              {fetchError && (
+              {(fetchError || session.retired) && (
                 <div className="mb-4">
-                  <ErrorState message={fetchError} onRetry={() => loadGigs()} />
+                  <ErrorState message={session.retired ? 'Your session changed. Reopen My tasks to continue.' : fetchError!}
+                    onRetry={() => { if (session.retired) window.location.reload(); else void loadGigs(); }} />
                 </div>
               )}
               <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
@@ -233,7 +243,7 @@ export default function MyGigsV2Page() {
               </div>
             </>
           )}
-          loading={loading}
+          loading={loading && !session.retired}
           loadingSlot={<LoadingSkeleton variant="gig-card" count={3} />}
           rows={filteredGigs}
           rowSpacing={4}
@@ -243,7 +253,7 @@ export default function MyGigsV2Page() {
               gig={gig}
               onView={() => handleViewGig(gig)}
               onViewBids={() => handleViewBids(gig)}
-              onClose={() => router.push(`/app/gigs-v2/${gig.id}?action=cancel`)}
+              onClose={() => navigate(`/app/gigs-v2/${gig.id}?action=cancel`)}
               onComplete={() => handleMarkComplete(gig.id)}
             />
           )}
@@ -253,22 +263,19 @@ export default function MyGigsV2Page() {
             subcopy: filter === 'all' ? 'Post your first task to get started.' : 'Try changing your filter.',
             tone: 'personal',
             ctaLabel: 'Quick post',
-            onCtaClick: () => router.push('/app/gigs-v2/new'),
+            onCtaClick: () => navigate('/app/gigs-v2/new'),
           }}
         />
       </main>
 
       {/* Bids Modal */}
-      {selectedGig && (
+      {session.active && selectedGig && (
         <BidsModal
           gig={selectedGig}
           bids={bids}
           loading={loadingBids}
           error={bidsError}
-          onClose={() => {
-            setSelectedGig(null);
-            setBidsError(null);
-          }}
+          onClose={closeBids}
           onAccept={handleAcceptBid}
           onReject={handleRejectBid}
         />
@@ -325,7 +332,7 @@ function GigCardV2({
           <div className="flex items-center gap-3 mb-2">
             <h3 className="text-xl font-semibold text-app-text">{gig.title}</h3>
             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusClasses(GIG_STATUS, gig.status)}`}>
-              {statusLabel(GIG_STATUS, gig.status)}
+              {awaitingConfirmation(gig) ? 'Ready to confirm' : statusLabel(GIG_STATUS, gig.status)}
             </span>
             {ec && (
               <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${ec.cls}`}>
@@ -376,12 +383,12 @@ function GigCardV2({
             Close Gig
           </button>
         )}
-        {gig.status === 'in_progress' && (
+        {(gig.status === 'in_progress' || awaitingConfirmation(gig)) && (
           <button
-            onClick={onComplete}
+            onClick={gig.status === 'completed' ? onComplete : onView}
             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
           >
-            Mark Complete
+            {gig.status === 'completed' ? 'Confirm completion' : 'View task'}
           </button>
         )}
       </div>
@@ -475,6 +482,11 @@ function BidsModal({
                       </p>
                     )}
 
+                    {bid.status === 'pending_payment' && (
+                      <button onClick={() => onAccept(bid.id)} className="px-4 py-2 bg-emerald-600 text-white rounded-lg">
+                        Resume payment
+                      </button>
+                    )}
                     {bid.status === 'pending' && (
                       <div className="flex gap-2">
                         <button

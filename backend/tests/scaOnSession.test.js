@@ -28,6 +28,7 @@ function seedPaymentAndGig(paymentOverrides = {}) {
   };
   const gig = {
     id: 'gig-sca-001',
+    payment_id: 'pay-sca-001',
     payment_status: payment.payment_status,
   };
   seedTable('Payment', [payment]);

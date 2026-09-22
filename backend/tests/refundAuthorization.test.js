@@ -79,7 +79,7 @@ describe('Refund authorization checks', () => {
 describe('Refund state machine flow', () => {
   test('captured_hold → refund_pending transition succeeds', async () => {
     seedTable('Payment', [makePayment()]);
-    seedTable('Gig', [{ id: 'gig-ref-001', payment_status: PAYMENT_STATES.CAPTURED_HOLD }]);
+    seedTable('Gig', [{ id: 'gig-ref-001', payment_id: 'pay-ref-001', payment_status: PAYMENT_STATES.CAPTURED_HOLD }]);
 
     const result = await transitionPaymentStatus(
       'pay-ref-001',
@@ -93,7 +93,7 @@ describe('Refund state machine flow', () => {
 
   test('refund_pending → refunded_full transition succeeds', async () => {
     seedTable('Payment', [makePayment({ payment_status: PAYMENT_STATES.REFUND_PENDING })]);
-    seedTable('Gig', [{ id: 'gig-ref-001', payment_status: PAYMENT_STATES.REFUND_PENDING }]);
+    seedTable('Gig', [{ id: 'gig-ref-001', payment_id: 'pay-ref-001', payment_status: PAYMENT_STATES.REFUND_PENDING }]);
 
     const result = await transitionPaymentStatus(
       'pay-ref-001',
@@ -111,7 +111,7 @@ describe('Refund state machine flow', () => {
 
   test('full refund flow: captured_hold → refund_pending → refunded_full', async () => {
     seedTable('Payment', [makePayment()]);
-    seedTable('Gig', [{ id: 'gig-ref-001', payment_status: PAYMENT_STATES.CAPTURED_HOLD }]);
+    seedTable('Gig', [{ id: 'gig-ref-001', payment_id: 'pay-ref-001', payment_status: PAYMENT_STATES.CAPTURED_HOLD }]);
 
     await transitionPaymentStatus('pay-ref-001', PAYMENT_STATES.REFUND_PENDING);
     const result = await transitionPaymentStatus('pay-ref-001', PAYMENT_STATES.REFUNDED_FULL);
@@ -124,7 +124,7 @@ describe('Refund state machine flow', () => {
 
   test('Stripe refund failure after refund_pending: payment stays in refund_pending', async () => {
     seedTable('Payment', [makePayment({ payment_status: PAYMENT_STATES.REFUND_PENDING })]);
-    seedTable('Gig', [{ id: 'gig-ref-001', payment_status: PAYMENT_STATES.REFUND_PENDING }]);
+    seedTable('Gig', [{ id: 'gig-ref-001', payment_id: 'pay-ref-001', payment_status: PAYMENT_STATES.REFUND_PENDING }]);
 
     // Stripe refund would throw here — payment should NOT transition
     // Verify payment is still in refund_pending
@@ -134,7 +134,7 @@ describe('Refund state machine flow', () => {
 
   test('transferred → refund_pending transition is valid in state machine', async () => {
     seedTable('Payment', [makePayment({ payment_status: PAYMENT_STATES.TRANSFERRED })]);
-    seedTable('Gig', [{ id: 'gig-ref-001', payment_status: PAYMENT_STATES.TRANSFERRED }]);
+    seedTable('Gig', [{ id: 'gig-ref-001', payment_id: 'pay-ref-001', payment_status: PAYMENT_STATES.TRANSFERRED }]);
 
     // State machine allows transferred → refund_pending (for admin/support)
     const result = await transitionPaymentStatus('pay-ref-001', PAYMENT_STATES.REFUND_PENDING);
@@ -143,7 +143,7 @@ describe('Refund state machine flow', () => {
 
   test('refunded_full → refund_pending is invalid (terminal state)', async () => {
     seedTable('Payment', [makePayment({ payment_status: PAYMENT_STATES.REFUNDED_FULL })]);
-    seedTable('Gig', [{ id: 'gig-ref-001', payment_status: PAYMENT_STATES.REFUNDED_FULL }]);
+    seedTable('Gig', [{ id: 'gig-ref-001', payment_id: 'pay-ref-001', payment_status: PAYMENT_STATES.REFUNDED_FULL }]);
 
     await expect(
       transitionPaymentStatus('pay-ref-001', PAYMENT_STATES.REFUND_PENDING)

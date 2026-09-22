@@ -181,3 +181,245 @@ final class MyTasksMagicTaskTests: XCTestCase {
         )
     }
 }
+
+@MainActor
+final class MyTasksLifetimeTests: XCTestCase {
+    private func lifetimeAPI() -> (APIClient, AuthManager) {
+        SequencedURLProtocol.reset()
+        let api = APIClient(environment: .current, session: SequencedURLProtocol.makeSession(), retryPolicy: .none)
+        let auth = AuthManager(store: InMemorySecureStore(), apiClient: api, allowSecureEnclave: false)
+        auth.setState(.signedIn(UserDTO(id: "u_me", email: "owner@example.invalid", displayName: nil, avatarURL: nil)))
+        auth.setAccessToken("synthetic-my-tasks-token")
+        auth.setSessionMetadata(id: "original-session", context: nil, expiresAt: nil)
+        return (api, auth)
+    }
+
+    func testLoadedTasksDisappearWhenOwnerSignsOut() async {
+        let (api, auth) = lifetimeAPI()
+        SequencedURLProtocol.sequence = [
+            .status(
+                200,
+                body:
+                #"{"gigs":[{"id":"g1","title":"Private task","status":"open","user_id":"u_me"}]}"#
+            )
+        ]
+        let vm = MyTasksViewModel(api: api)
+        await vm.load()
+        guard case .loaded = vm.state else { return XCTFail("Expected original list") }
+        auth.setState(.signedOut)
+        if case .loaded = vm.state { XCTFail("Retired owner's tasks remain visible") }
+        XCTAssertEqual(vm.tabs.compactMap(\.count).reduce(0, +), 0)
+        XCTAssertNil(vm.banner)
+    }
+
+    func testHeldConfirmationDoesNotNavigateIntoANewSession() async throws {
+        let (api, auth) = lifetimeAPI()
+        let before = #"{"id":"g1","title":"Work","status":"completed","user_id":"u_me","completion_review":"loaded-review"}"#
+        let dto = try JSONDecoder().decode(MyGigDTO.self, from: Data(before.utf8))
+        SequencedURLProtocol.routeResponses = [
+            "/api/gigs/my-gigs": [.status(200, body: "{\"gigs\":[\(before)]}")],
+            "/api/gigs/g1/complete": [.status(503, body: "{}", delay: 0.5)]
+        ]
+        var opened = 0
+        let onOpen: @MainActor (MyGigDTO) -> Void = { _ in opened += 1 }
+        let vm = MyTasksViewModel(api: api, onOpenTask: onOpen)
+        await vm.load()
+        let pending = Task { await vm.markComplete(dto) }
+        for _ in 0..<100 {
+            if SequencedURLProtocol.capturedRequests.contains(where: { $0.url?.path == "/api/gigs/g1/complete" }) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(SequencedURLProtocol.capturedRequests.contains { $0.url?.path == "/api/gigs/g1/complete" })
+        auth.setSessionMetadata(id: "replacement-session", context: nil, expiresAt: nil)
+        await pending.value
+        XCTAssertEqual(opened, 0)
+    }
+
+    func testRetiredConfirmationStaysQuietAfterSameSessionReentry() async throws {
+        let (api, auth) = lifetimeAPI()
+        defer { _ = auth.state }
+        let before = #"{"id":"g1","title":"Work","status":"completed","user_id":"u_me","completion_review":"loaded-review"}"#
+        let dto = try JSONDecoder().decode(MyGigDTO.self, from: Data(before.utf8))
+        SequencedURLProtocol.routeResponses = [
+            "/api/gigs/my-gigs": [
+                .status(200, body: "{\"gigs\":[\(before)]}"),
+                .status(200, body: "{\"gigs\":[\(before)]}")
+            ],
+            "/api/gigs/g1/complete": [.status(503, body: "{}", delay: 0.5)]
+        ]
+        var opened = 0
+        let onOpen: @MainActor (MyGigDTO) -> Void = { _ in opened += 1 }
+        let vm = MyTasksViewModel(api: api, onOpenTask: onOpen)
+        await vm.load()
+        let pending = Task { await vm.markComplete(dto) }
+        for _ in 0..<100 {
+            if SequencedURLProtocol.capturedRequests.contains(where: { $0.url?.path == "/api/gigs/g1/complete" }) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(SequencedURLProtocol.capturedRequests.contains { $0.url?.path == "/api/gigs/g1/complete" })
+        vm.retire()
+        await vm.load()
+        await pending.value
+        XCTAssertEqual(opened, 0)
+        XCTAssertEqual(SequencedURLProtocol.captured(path: "/api/gigs/my-gigs").count, 2)
+        XCTAssertEqual(vm.tabs.first { $0.id == MyTasksTab.active }?.count, 1)
+    }
+
+    func testOldRowCannotNavigateAfterReentryButNewRowCan() async throws {
+        let (api, auth) = lifetimeAPI()
+        defer { _ = auth.state }
+        SequencedURLProtocol.routeResponses = [
+            "/api/gigs/my-gigs": [
+                .status(
+                    200,
+                    body:
+                    #"{"gigs":[{"id":"g1","title":"Private task","status":"open","user_id":"u_me"}]}"#
+                ),
+                .status(200, body: #"{"gigs":[{"id":"g1","title":"Private task","status":"open","user_id":"u_me"}]}"#)
+            ]
+        ]
+        var opened = 0
+        let onOpen: @MainActor (MyGigDTO) -> Void = { _ in opened += 1 }
+        let vm = MyTasksViewModel(api: api, onOpenTask: onOpen)
+        await vm.load()
+        guard case let .loaded(oldSections, _) = vm.state else { return XCTFail("Expected original list") }
+        vm.retire()
+        await vm.load()
+        oldSections.first?.rows.first?.onTap()
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(opened, 0)
+        guard case let .loaded(sections, _) = vm.state else { return XCTFail("Expected fresh list") }
+        sections.first?.rows.first?.onTap()
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(opened, 1)
+    }
+
+    func testHeldReadCannotPopulateReplacementSessionAndFreshEntryLoads() async throws {
+        let (api, auth) = lifetimeAPI()
+        SequencedURLProtocol.routeResponses = [
+            "/api/gigs/my-gigs": [
+                .status(200, body: #"{"gigs":[{"id":"old","title":"Old","status":"open"}]}"#, delay: 0.5),
+                .status(200, body: #"{"gigs":[{"id":"new","title":"New","status":"open"}]}"#)
+            ]
+        ]
+        let vm = MyTasksViewModel(api: api)
+        let pending = Task { await vm.load() }
+        for _ in 0..<100 {
+            if !SequencedURLProtocol.captured(path: "/api/gigs/my-gigs").isEmpty { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(SequencedURLProtocol.captured(path: "/api/gigs/my-gigs").count, 1)
+        auth.setSessionMetadata(id: "replacement-session", context: nil, expiresAt: nil)
+        await pending.value
+        if case .loaded = vm.state { XCTFail("Old private response was adopted") }
+        await vm.load()
+        XCTAssertEqual(SequencedURLProtocol.captured(path: "/api/gigs/my-gigs").count, 1)
+        let reopened = MyTasksViewModel(api: api)
+        await reopened.load()
+        guard case let .loaded(sections, _) = reopened.state else { return XCTFail("Expected new session list") }
+        XCTAssertEqual(sections.first?.rows.first?.id, "new")
+    }
+
+    func testRebookHistoryDisappearsWhenOwnerSignsOut() async {
+        let (api, auth) = lifetimeAPI()
+        defer { _ = auth.state }
+        SequencedURLProtocol.sequence = [.status(200, body: #"{"rebookable":[{"id":"old","title":"Private history"}]}"#)]
+        let rail = RebookRailViewModel(api: api)
+        await rail.load()
+        XCTAssertTrue(rail.isVisible)
+        auth.setState(.signedOut)
+        XCTAssertFalse(rail.isVisible)
+        XCTAssertTrue(rail.items.isEmpty)
+    }
+
+    func testHeldRebookReadCannotPopulateReplacementSession() async throws {
+        let (api, auth) = lifetimeAPI()
+        defer { _ = auth.state }
+        SequencedURLProtocol.sequence = [
+            .status(200, body: #"{"rebookable":[{"id":"old","title":"Private history"}]}"#, delay: 0.5)
+        ]
+        let rail = RebookRailViewModel(api: api)
+        let pending = Task { await rail.load() }
+        for _ in 0..<100 {
+            if !SequencedURLProtocol.captured(path: "/api/gigs/rebookable").isEmpty { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(SequencedURLProtocol.captured(path: "/api/gigs/rebookable").count, 1)
+        auth.setSessionMetadata(id: "replacement-session", context: nil, expiresAt: nil)
+        await pending.value
+        XCTAssertFalse(rail.isVisible)
+        XCTAssertTrue(rail.items.isEmpty)
+    }
+
+    func testFailedBoostCannotRestoreAListReplacedByRefresh() async throws {
+        let (api, auth) = lifetimeAPI()
+        defer { _ = auth.state
+            SequencedURLProtocol.release("my-tasks-boost")
+        }
+        SequencedURLProtocol.routeResponses = [
+            "/api/gigs/my-gigs": [
+                .status(200, body: #"{"gigs":[{"id":"old","title":"Old","status":"open"}]}"#),
+                .status(200, body: #"{"gigs":[{"id":"new","title":"New","status":"open"}]}"#)
+            ],
+            "/api/gigs/old/boost": [.status(503, body: "{}", gate: "my-tasks-boost")]
+        ]
+        let vm = MyTasksViewModel(api: api)
+        await vm.load()
+        let pending = Task { await vm.boost(MyGigDTO(id: "old", title: "Old", status: "open")) }
+        for _ in 0..<100 {
+            if !SequencedURLProtocol.captured(path: "/api/gigs/old/boost").isEmpty { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(SequencedURLProtocol.captured(path: "/api/gigs/old/boost").count, 1)
+        await vm.refresh()
+        guard case let .loaded(fresh, _) = vm.state else { return XCTFail("Expected fresh list") }
+        XCTAssertEqual(fresh.first?.rows.first?.id, "new")
+        XCTAssertTrue(SequencedURLProtocol.release("my-tasks-boost"))
+        await pending.value
+        guard case let .loaded(sections, _) = vm.state else { return XCTFail("Expected fresh list after failure") }
+        XCTAssertEqual(sections.first?.rows.first?.id, "new")
+    }
+
+    func testRebookRefreshKeepsNewestHistory() async throws {
+        let (api, auth) = lifetimeAPI()
+        defer { _ = auth.state
+            SequencedURLProtocol.release("rebook-old")
+        }
+        SequencedURLProtocol.routeResponses = [
+            "/api/gigs/rebookable": [
+                .status(200, body: #"{"rebookable":[{"id":"old"}]}"#, gate: "rebook-old"),
+                .status(200, body: #"{"rebookable":[{"id":"new"}]}"#)
+            ]
+        ]
+        let rail = RebookRailViewModel(api: api)
+        let pending = Task { await rail.load() }
+        for _ in 0..<100 {
+            if !SequencedURLProtocol.captured(path: "/api/gigs/rebookable").isEmpty { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        await rail.refresh()
+        XCTAssertEqual(rail.items.first?.id, "new")
+        XCTAssertTrue(SequencedURLProtocol.release("rebook-old"))
+        await pending.value
+        XCTAssertEqual(rail.items.first?.id, "new")
+    }
+
+    func testRetiredRebookActionStaysQuietAfterReentry() async {
+        let (api, auth) = lifetimeAPI()
+        defer { _ = auth.state }
+        let response = SequencedURLProtocol.Response.status(200, body: #"{"rebookable":[{"id":"g1"}]}"#)
+        SequencedURLProtocol.sequence = [response, response]
+        let rail = RebookRailViewModel(api: api)
+        await rail.load()
+        guard let gig = rail.items.first else { return XCTFail("Expected history") }
+        var opened = 0
+        let old = rail.rebookAction(gig) { _ in opened += 1 }
+        rail.retire()
+        XCTAssertFalse(rail.isVisible)
+        await rail.load()
+        old()
+        XCTAssertEqual(opened, 0)
+        rail.rebookAction(gig) { _ in opened += 1 }()
+        XCTAssertEqual(opened, 1)
+    }
+}

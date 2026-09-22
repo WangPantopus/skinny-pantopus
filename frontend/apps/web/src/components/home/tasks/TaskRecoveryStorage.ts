@@ -83,7 +83,7 @@ export class ProtectedRecoverySlot<T> {
       throw new Error('The saved original could not be read. It was kept; reopen recovery before sending.');
     }
   }
-  async retain(value: T, isCurrent: () => boolean): Promise<ProtectedRecoverySnapshot<T>> {
+  async retain(value: T, isCurrent: () => boolean, expected?: ProtectedRecoverySnapshot<T>): Promise<ProtectedRecoverySnapshot<T>> {
     if (!this.valid(value)) throw new Error('The original request could not be validated.');
     const db = await this.database();
     const key = await taskRecoveryEncryptionKey(db, 'protected-original-v1');
@@ -91,7 +91,8 @@ export class ProtectedRecoverySlot<T> {
     const original = JSON.stringify(value);
     const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: this.additionalData }, key, new TextEncoder().encode(original));
     const revision = crypto.randomUUID();
-    await this.replace(db, null, { version: 1, revision, iv: iv.buffer, ciphertext }, isCurrent);
+    // Explicit adoption replaces only the exact retained revision in one transaction.
+    await this.replace(db, expected?.revision ?? null, { version: 1, revision, iv: iv.buffer, ciphertext }, isCurrent);
     return { value: JSON.parse(original) as T, revision };
   }
   async clear(expected: ProtectedRecoverySnapshot<T>, isCurrent: () => boolean): Promise<void> {

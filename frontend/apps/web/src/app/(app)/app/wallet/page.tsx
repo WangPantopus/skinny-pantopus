@@ -82,7 +82,7 @@ function WalletContent() {
         <h2 className="text-sm font-bold text-app-text-strong mb-3">
           Transaction History
         </h2>
-        <WalletTransactionList key={refreshKey} />
+        <WalletTransactionList key={refreshKey} refreshKey={walletBalance} />
       </div>
 
       {/* Withdraw modal */}

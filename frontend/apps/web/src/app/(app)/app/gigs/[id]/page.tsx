@@ -1,6 +1,9 @@
 // @ts-nocheck
 'use client';
 
+import { useBusinessGigAccess } from '@/hooks/useBusinessGigAccess';
+import { usePaymentRedirectCleanup } from '@/hooks/usePaymentRedirectCleanup';
+
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -21,6 +24,7 @@ import ChangeOrdersSection from '@/components/gig-detail/ChangeOrdersSection';
 import BidPanel from '@/components/gig-detail/BidPanel';
 import OffersPanel from '@/components/gig-detail/OffersPanel';
 import CompletionFlow, { type CompletionFlowHandle } from '@/components/gig-detail/CompletionFlow';
+import GigStopRecoveryEntry from '@/components/gig-detail/GigStopRecoveryEntry';
 import GigHeader from '@/components/gig-detail/GigHeader';
 import PaymentSection from '@/components/gig-detail/PaymentSection';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
@@ -79,6 +83,11 @@ const MiniMap = dynamic(
 /** Common shape for poster/creator nested objects from backend variants. */
 interface GigActorSummary {
   [key: string]: unknown;
+  displayName?: string | null;
+  handle?: string | null;
+  href?: string | null;
+  avatarUrl?: string | null;
+  locality?: { city?: string | null; state?: string | null } | null;
   id?: string;
   account_type?: string;
   username?: string;
@@ -132,6 +141,7 @@ interface GigMediaItem {
 }
 
 export default function GigDetailsPage() {
+  usePaymentRedirectCleanup();
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -140,7 +150,6 @@ export default function GigDetailsPage() {
 
   const [gig, setGig] = useState<GigFullRecord | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [canManageGigAsBusinessMember, setCanManageGigAsBusinessMember] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Media gallery state
@@ -150,7 +159,7 @@ export default function GigDetailsPage() {
 
   const completionRef = useRef<CompletionFlowHandle>(null);
 
-  // Key incremented on socket bid events to trigger OffersPanel refresh
+  // Refresh offers after local mutations as well as socket bid events.
   const [offersRefreshKey, setOffersRefreshKey] = useState(0);
 
   // ---------- Loaders ----------
@@ -208,34 +217,10 @@ export default function GigDetailsPage() {
   // ---------- Derived ----------
   const currentUserId = user?.id;
 
-  useEffect(() => {
-    const resolveBusinessManageAccess = async () => {
-      if (!gig || !currentUserId) {
-        setCanManageGigAsBusinessMember(false);
-        return;
-      }
-      const ownerId = gig.user_id || gig.poster_user_id || gig.poster_id;
-      const ownerAccountType = gig.creator?.account_type;
-      if (!ownerId || String(ownerId) === String(currentUserId) || ownerAccountType !== 'business') {
-        setCanManageGigAsBusinessMember(false);
-        return;
-      }
-      try {
-        const access = await api.businessIam.getMyBusinessAccess(String(ownerId));
-        const canManage = Boolean(
-          access?.hasAccess &&
-          (access?.isOwner ||
-            (Array.isArray(access?.permissions) &&
-              (access.permissions.includes('gigs.manage') || access.permissions.includes('gigs.post')))
-          )
-        );
-        setCanManageGigAsBusinessMember(canManage);
-      } catch {
-        setCanManageGigAsBusinessMember(false);
-      }
-    };
-    void resolveBusinessManageAccess();
-  }, [gig, currentUserId]);
+  const canManageGigAsBusinessMember = useBusinessGigAccess(
+    currentUserId, gig?.user_id || gig?.poster_user_id || gig?.poster_id,
+    gig?.creator?.account_type === 'business', gig,
+  );
 
   const gigStatus = String(gig?.status ?? '');
   const isAssigned = gigStatus === 'assigned';
@@ -279,32 +264,18 @@ export default function GigDetailsPage() {
     !poster;
   const posterDisplayName = isAnonymousPoster
     ? 'Anonymous'
-    : poster?.name ||
-      (poster?.firstName && poster?.lastName ? `${poster.firstName} ${poster.lastName}` : null) ||
-      (poster?.first_name && poster?.last_name ? `${poster.first_name} ${poster.last_name}` : null) ||
-      poster?.username ||
-      'Anonymous';
+    : poster?.displayName || poster?.handle || 'Anonymous';
   const posterInitial = isAnonymousPoster
     ? '?'
-    : (
-        String(posterDisplayName || '').trim()[0] ||
-        String(poster?.username ?? '')?.[0] ||
-        String(poster?.name ?? '')?.[0] ||
-        '?'
-      ).toUpperCase();
+    : (posterDisplayName.trim()[0] || '?').toUpperCase();
   const gigCreatedAt = gig?.created_at || gig?.createdAt;
-  const posterUserId = poster?.id || gig?.user_id || gig?.poster_id || null;
-  const posterUsername = poster?.username || null;
-  const posterAvatarRaw =
-    poster?.profile_picture_url ||
-    poster?.avatar_url ||
-    poster?.profilePicture ||
-    gig?.poster_profile_picture_url ||
-    null;
-  const posterAvatar =
-    typeof posterAvatarRaw === 'string' && posterAvatarRaw.trim().length > 0
-      ? posterAvatarRaw.trim()
-      : null;
+  const posterUserId = poster?.id || null;
+  const posterUsername = !isAnonymousPoster && typeof poster?.handle === 'string' &&
+    poster.handle && !poster.handle.startsWith('/') && poster.href === `/${poster.handle}`
+    ? poster.handle
+    : null;
+  const posterAvatar = !isAnonymousPoster && typeof poster?.avatarUrl === 'string' &&
+    poster.avatarUrl.trim().length > 0 ? poster.avatarUrl.trim() : null;
 
   // Auto-open cancel modal if ?action=cancel
   useEffect(() => {
@@ -393,6 +364,7 @@ export default function GigDetailsPage() {
   };
 
   const handleRefresh = () => {
+    setOffersRefreshKey((key) => key + 1);
     void loadGigDetails();
   };
 
@@ -450,6 +422,7 @@ export default function GigDetailsPage() {
         <div className="text-center">
           <h2 className="text-2xl font-bold text-app-text mb-2">Gig not found</h2>
           <p className="text-app-text-secondary mb-4">This gig may have been removed or doesn&apos;t exist.</p>
+          <GigStopRecoveryEntry key={gigId} gigId={gigId} />
           <button onClick={() => router.push('/app')} className="bg-primary-600 text-white px-6 py-2 rounded-lg hover:bg-primary-700">
             Back to Home
           </button>
@@ -461,6 +434,7 @@ export default function GigDetailsPage() {
   return (
     <div className="bg-app-surface-raised">
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <GigStopRecoveryEntry key={gigId} gigId={gigId} />
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left */}
           <div className="lg:col-span-2 space-y-6">
@@ -775,8 +749,8 @@ export default function GigDetailsPage() {
                       username={posterUsername}
                       displayName={posterDisplayName}
                       avatarUrl={posterAvatar}
-                      city={poster?.city}
-                      state={poster?.state}
+                      city={poster?.locality?.city}
+                      state={poster?.locality?.state}
                       textClassName="font-semibold text-app-text hover:underline"
                     />
                   )}
@@ -810,6 +784,8 @@ export default function GigDetailsPage() {
             {/* Payment breakdown (owner and worker) */}
             <ErrorBoundary>
               <PaymentSection
+                actorId={currentUserId}
+                onChanged={handleRefresh}
                 gigId={gigId}
                 gigPrice={budget}
                 isOwner={isMyGig}
@@ -821,6 +797,7 @@ export default function GigDetailsPage() {
             {/* Offers panel (owner only) */}
             <ErrorBoundary>
               <OffersPanel
+                actorId={currentUserId}
                 gigId={gigId}
                 gigStatus={gigStatus}
                 gigPrice={budget}
