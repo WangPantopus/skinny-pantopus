@@ -5,7 +5,8 @@
 PR189 merged6bec1e878 after exact073f0806a fullCI35766200401. PR190 integration7a555c92e
 retains tip and won-dispute worker guards;128 existing regressions pass. Migration guard
 caught225 sorting behind merged226; public230 preserves the original225 SQL/ledger and
-accepts its exact prior transformation. RealSQL preservation passed; freshCI35771059661 runs.
+accepts its exact prior transformation. RealSQL preservation and fullCI35771059661 pass.190 merged ea43d92b3 at19:04:59UTC.
+191 now1b9e43788 runs freshCI35771470998.
 Queue190→191→192→193→194→195→196, then docs161/170/174;46 untouched.
 
 PR1963f82ae478 is published with real booking cancellation/refund recovery and capture-race
@@ -25,8 +26,8 @@ Installed title-only preservation,403/retry, malformed type and wrong id/home re
 coordinator independently confirmed HomeEmergency/override/audit counts0.192 fullCI35764090022
 passed. Its prior bundle claim was missing; this recovered bundle is the actual durable owner.
 Last four Stream2 follow-up turns completed with no output; no new progress/slot release or
-40-row accounting is inferred. Existing backend/LAN runtime is preserved. Hold192 for final
-handoff accounting; the completed journeys must not be rerun.
+40-row accounting is inferred. Existing backend/LAN runtime is preserved. 192 is accepted within its recorded preservation scope and remains queued after191;
+its completed journeys must not be rerun. Outstanding row accounting does not block this repair.
 
 Stream3's187-file bundle hashes pass, MANIFEST3f0a7bac2613d80a2a6d314e1b8eaa51c5671b4a412fc071aec989fc3a3edb47.
 Android cold-process session/profile200 and logout200 are accepted within local scope;
