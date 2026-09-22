@@ -53,7 +53,7 @@ router.get('/health', async (req, res) => {
         .select('id', { count: 'exact', head: true })
         .eq('payment_status', PAYMENT_STATES.CAPTURED_HOLD)
         .lte('cooling_off_ends_at', twoHoursAgo)
-        .is('dispute_id', null),
+        .or('dispute_id.is.null,dispute_status.eq.won'),
 
       // transfer_scheduled older than 30m
       supabaseAdmin
@@ -148,7 +148,7 @@ router.get('/stuck', async (req, res) => {
         .select('id, gig_id, payer_id, payee_id, amount_total, amount_to_payee, payment_status, cooling_off_ends_at, updated_at, payment_type')
         .eq('payment_status', PAYMENT_STATES.CAPTURED_HOLD)
         .lte('cooling_off_ends_at', twoHoursAgo)
-        .is('dispute_id', null)
+        .or('dispute_id.is.null,dispute_status.eq.won')
         .order('updated_at', { ascending: true })
         .limit(100),
 
@@ -278,7 +278,7 @@ async function checkAndAlertStuckPayments() {
     .select('id', { count: 'exact', head: true })
     .eq('payment_status', PAYMENT_STATES.CAPTURED_HOLD)
     .lte('cooling_off_ends_at', twoHoursAgo)
-    .is('dispute_id', null);
+    .or('dispute_id.is.null,dispute_status.eq.won');
 
   if (capturedErr) {
     logger.error('[payment-ops] alert query failed for captured_hold', { error: capturedErr.message });
