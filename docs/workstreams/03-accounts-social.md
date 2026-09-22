@@ -3476,3 +3476,57 @@ A04 source was rebound to the current Stream3 checkout `local/stream3-ios-integr
 The retained local API performed only capability reads. `GET /api/users/oauth/google` and `/api/users/oauth/apple` each returned HTTP 200 with the existing local GoTrue authorization URL. The generated local authorize URLs were fetched with `redirect: manual`; both returned HTTP 400 with no `Location`, so no external provider consent or callback was followed. Invalid provider `bogus` returned HTTP 400 with the existing validation message. SQL counts for User (3), AuthSession (180), Notification (20), and auth audit rows (453) were identical before and after; no session, user, notification, mail or provider row was created. Evidence: `a04-provider-api-20260922.json` and `a04-provider-boundary-20260922.json`.
 
 Implementation/local verification: existing provider-name validation, local authorize URL generation and disabled-provider failure are confirmed; no repair is indicated. End-to-end/provider verification: no successful or cancelled Google/Apple consent, Smarty/geographic validation, Lob postcard, hosted provider, production configuration or purchase was exercised. CI/integration: no code changed, so no CI or PR was created. The durable bundle now has 124 files; MANIFEST SHA-256 is `09677f0c24dca41fab514514db773c2c63a73bb2448a4b9b478506c24fac3334`.
+
+## A05 native profile edit — PATCH response contract and installed Android journey (2026-09-22)
+
+This was the next uncovered A05 action after the web report/search/mailbox/audience checks. The
+existing Android caller was located in the installed Edit profile screen and its profile API
+client; the server caller is `backend/routes/users.js` `PATCH /api/users/profile`. The baseline
+was reproduced with the existing Auth Bob fixture: the real Android screen entered valid first
+and last names, the endpoint returned HTTP 200, but the native `ProfileUpdateResponse.user`
+decoder failed because the PATCH receipt omitted canonical account metadata, residency, skills,
+avatar/stat fields and `createdAt`. The screen retained **2 unsaved** and analytics recorded
+`form.edit_profile.submit result=error`, although SQL had already applied the name update.
+No Android DTO defaults or UI redesign was added.
+
+The smallest repair is in application commit `26fe9d57f8568b704969e60c515dde07e3e9aa10`
+(and follow-up `b956a0076`): the existing PATCH receipt now reuses the saved `User` row plus
+the existing `UserSkill` and `getPublicResidencySummary` projection, returning the same canonical
+fields consumed by GET `/api/users/profile` (`accountType`, `role`, `verified`, `residency`,
+avatar aliases, skills, stats, `createdAt`, settings and timestamps). A controlled service-role
+`UserSkill` SELECT fault initially showed the old code returned HTTP 200 with `skills: []`,
+which could falsely confirm emptiness. The follow-up now returns HTTP 503 with
+`PROFILE_READBACK_UNAVAILABLE` after the write when that readback is unavailable; the privilege
+was restored and the temporary bio was cleared. A normal real-token PATCH after restoration
+returned HTTP 200 with all canonical fields, and the exact profile cleanup was verified.
+Evidence: `a05-native-profile-edit-contract-20260922.json` and
+`a05-profile-skill-read-fault-20260922.json`.
+
+End-to-end installed Android verification used the existing APK on `emulator-5554`
+(SHA-256 `83cc0db08992e83dd1faa87a7baacdf582624a3e847f965f6361ab5fdd2cdf93`); Android source
+was unchanged after reverting the rejected generic-default experiment. The real API/SQL runtime
+was local GoTrue/PostgREST/SQL on 18130/64531/64532. Saving valid Auth/Bob names produced
+`HTTP PATCH -> 200`, `form.edit_profile.submit result=success`, and cleared the unsaved
+indicator. A temporary `BobTemp` last-name edit showed one unsaved change; **Discard** restored
+Bob with no PATCH. Clearing last name rendered the existing **Last name is required.** error,
+retained the unsaved state, and sent no HTTP request. The fixture was restored to
+`first_name=NULL`, `last_name=NULL`, `name='Auth Bob'`; API GET confirmed that state and no
+skills rows existed for this fixture. Evidence: `a05-native-profile-edit-ui-20260922.json`
+and `a05-native-profile-edit-cleanup-20260922.json`.
+
+Implementation completion: the response contract and truthful readback failure path are repaired
+and pushed on `local/stream3-ios-integration`; no schema, migration, provider or native source
+file changed. Local verification: `node --check backend/routes/users.js`, `git diff --check`,
+normal HTTP contract, controlled SQL fault and cleanup all passed. Installed-screen E2E:
+Android save/discard/validation passed against persisted local data. CI/integration: no new unit
+tests were written per instruction; coordinator CI/review remains required, and the branch is
+pushed for coordinator integration. No fresh iOS installed build was needed for this backend-only
+contract change; iOS decoder/device behavior remains accepted/source-bound evidence rather than a
+new iOS run. Bob has no `UserSkill` rows, so this fixture proves the field is present and typed as
+an array but does not prove a populated-skill preservation case. External photo upload/OAuth and
+provider delivery remain outside this journey.
+
+The durable audit bundle now contains 130 files with MANIFEST SHA-256
+`a17d90aa41cae3167b7cf76e50dc67de6d193cd587c74ddd93f0ba6990dce915`. The current local API
+process was stopped after verification; the user-owned browser tab was left untouched. No
+credentials, raw tokens, database archives or operator logs were added to Git.
