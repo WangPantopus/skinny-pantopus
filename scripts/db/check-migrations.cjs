@@ -97,8 +97,8 @@ function check(root, base) {
         // Compare exact Git blob identities without buffering a complete schema
         // dump through stdout (canonical baselines can exceed Node's 1 MiB cap).
         const original = git(['rev-parse', `${base}:${name}`]).trim();
-        const current = files[name] === undefined ? null : execFileSync('git', ['hash-object', '--stdin'], {
-          cwd: root, input: files[name], encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
+        const current = files[name] === undefined ? null : execFileSync('git', ['hash-object', '--no-filters', '--', name], {
+          cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
         }).trim();
         if (current !== original) errors.push(`Applied migrations are immutable: ${name}`);
       }

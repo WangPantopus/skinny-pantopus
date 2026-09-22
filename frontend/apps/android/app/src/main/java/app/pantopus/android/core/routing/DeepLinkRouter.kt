@@ -725,6 +725,22 @@ object DeepLinkRouter {
     }
 
     /**
+     * Server notification links are web paths. The `new_follower` link is the
+     * web's canonical profile URL `/<username>`, which has no native route
+     * (unknown paths are deliberately discarded); rewrite just that type to the
+     * native short profile form `/u/<username>`.
+     */
+    fun notificationPath(
+        type: String?,
+        link: String?,
+    ): String? {
+        if (type != "new_follower" || link == null) return link
+        val trimmed = link.removePrefix("/")
+        val single = trimmed.isNotEmpty() && !trimmed.contains('/') && !trimmed.contains('?') && !trimmed.startsWith("@")
+        return if (single) "/u/$trimmed" else link
+    }
+
+    /**
      * Pure string plumbing for incoming links. Nothing here touches
      * `android.net.Uri`, so notification payloads (which arrive as raw
      * paths) and the JVM unit tests share the same code without
