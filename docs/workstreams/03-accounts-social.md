@@ -3281,3 +3281,51 @@ Evidence: `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/2026092
 (preflight.json, n03/n04/n01-native-result.json, push payload, crash .ips, screenshots), 95
 files, MANIFEST **392f263c7ff73f9500a2c43cf05d1cb90c1ef3efea74fcb6e5f5bbb1ab1c3b14**. CI at publication: PR163 29951b76a FAILURE/SKIPPED/SUCCESS;PR164 579a57fe7 /SKIPPED/SUCCESS;PR165 ba8f7374e /SKIPPED/SUCCESS;PR166 8b4d47c0a /SKIPPED/SUCCESS;PR167 87460475e /SKIPPED/SUCCESS;PR168 f248ce8e9 /FAILURE/SKIPPED/SUCCESS; Runtime: API pid 49623:18130 (codex/stream3-userblock-content-gate 29951b76a), Next 36139:18131, containers *pantopus-stream3-block-r1 + pantopus-stream3-mail-r3, simulator 0AE16FA0 (installed local/stream3-ios-integration e86b9fe5b = PR164+165+166), emulator-5554 (installed 827f28a08 = PR167 first commit + PR168; rebuild with 87460475e pending). Next: finish the Android re-verification, run touched unit suites, batch-1 row cleanup, then batch 2 rows (A05 native sweep → A03 → N05 → A02 → A01 → A04/N02 notes).
 Open founder questions: personal block vs persona surfaces; Ask title rendering; PERSONA·VERIFIED chip semantics; report-outcome notifications.
+
+
+## Founder stop — native-social-r1 state at 09:25UTC (September 22)
+
+Stopped on instruction before the Android on-device re-verification finished. Everything is
+committed and pushed; no build is running. Branches/heads/PRs: backend
+`codex/stream3-userblock-content-gate` 29951b76a → PR163 (CI: privacy Gate 3a fails because the
+new top-level require shifted the allowlisted `routes/users.js:306` compat line to :307 — remedy:
+inline the require at the follow-route use site or move the allowlist key; Jest passed); iOS
+`codex/stream3-ios-push-tap-main-thread` 579a57fe7 → PR164 (CI green), `codex/stream3-ios-deeplink-surface`
+ba8f7374e → PR165 (CI green; router widening withdrawn for the accepted unknown-path contract,
+replaced by a type-scoped `new_follower` link rewrite), `codex/stream3-ios-social-follow-block-chat`
+8b4d47c0a → PR166 (CI green); Android `codex/stream3-android-deeplink-location` 87460475e → PR167
+(CI green), `codex/stream3-android-social-follow-block-chat` f248ce8e9 → PR168 (CI: ktlint, three
+formatting findings listed in the PR); verification builds pushed as `codex/stream3-verify-ios-integration`
+e86b9fe5b and `codex/stream3-verify-android-integration` 10c4368c6 (never for merge); docs PR170.
+
+Reproduced/fixed: see the section above (8 defects, 6 PRs). Re-verified on device: all iOS fixes
+(sheet dismissal, new_follower tap → profile on the r4c build only for the list path, Beacon plain
+follow, refused-send banner, background push tap without crash) and the backend gate (403 post read,
+comments dropped, follow refused). Not re-verified: Android composer permission prompt, Android
+Beacon fallback / blocked Follow row / refused-send copy on the rebuilt APK (the installed APK is
+827f28a08 = PR167 first commit + PR168; the 87460475e rewrite is built locally but not installed);
+iOS DeepLinkRouter suites not rerun after the rewrite (last run on 46bde64f3: 123 executed, 3
+failures all from the withdrawn widening); Android unit suites not run.
+
+Evidence: `/Users/yingpengwang/skinny-pantopus/.pantopus-recovery/audits/20260922-stream3-native-social-r1/`
+100 files, MANIFEST **9ff965be0d1042fc3e147ee15bb5224c1c2c500ede9bd59be251d9ee8721faf4** (result.md indexes
+every journey; crash .ips, push payload, cleanup/restore scripts included). Limits: simctl push and
+adb `am start` stand in for APNs/FCM; simulator/emulator only; Evan's password rotated through the
+real reset flow (throwaway, never the fixture value in transcripts).
+
+Runtime left running: API pid 49623 on 127.0.0.1:18130 (code = PR163 branch), Next pid 36139 on
+18131 (stream3-auth.localhost), containers `*pantopus-stream3-block-r1` + `pantopus-stream3-mail-r3`,
+simulator 0AE16FA0 signed in as Evan with build e86b9fe5b, emulator-5554 signed in as Evan (Bob
+signed out) with the 827f28a08 APK; emulator location permission revoked for the pending test.
+Rows created and NOT cleaned (guarded child-first script `cleanup-social-r4-rows.py` in the bundle):
+Posts 5f7a2322/b9cf8480, PostComments 60a4048a/b4691d46, PostReport de0dfb95, UserReports
+a492140b/ac8a85d3, UserBlocks 440b7047/acde5f0c, UserFollow 63bcd4ff, Notifications b35ea1b0/
+a78eb98a/93b05807/46375f39/04922c53. Evan has 2 active device sessions and the throwaway password
+(`restore-evan-password.py` restores it through the real reset flow); Bob's pre-existing notification
+read flags were restored and POST_NOTIFICATIONS re-granted.
+
+Exact next step: fix the two CI findings (PR163 inline require; PR168 ktlint), install the
+10c4368c6 APK, finish the four Android re-verifications, rerun the iOS DeepLinkRouter suites and
+the Android view-model suites, run the cleanup + password restore, refresh MANIFEST/docs, then
+batch 2 (A05 → A03 → N05 → A02 → A01 → A04/N02). START HERE note:
+`/private/tmp/pantopus-stream3-20260920-r1/RESUME-2026-09-22.md`.
