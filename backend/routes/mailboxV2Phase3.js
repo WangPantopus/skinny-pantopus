@@ -88,7 +88,8 @@ const taskToGigSchema = Joi.object({
 
 // ── MailDay ──
 const updateMailDaySchema = Joi.object({
-  delivery_time: Joi.string().pattern(/^\d{2}:\d{2}$/).optional(),
+  // The GET returns the stored time column as HH:MM:SS; accept it back.
+  delivery_time: Joi.string().pattern(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
   timezone: Joi.string().max(50).optional(),
   enabled: Joi.boolean().optional(),
   sound_enabled: Joi.boolean().optional(),
@@ -1004,12 +1005,15 @@ router.patch('/mailday/settings', verifyToken, validate(updateMailDaySchema), as
   try {
     const userId = req.user.id;
 
-    // Upsert
-    const { data: existing } = await supabaseAdmin
+    // Upsert. MailDaySettings is keyed by user_id and has no id column: the
+    // old select('id') always failed, so every save after the first tried a
+    // second insert and hit the primary key.
+    const { data: existing, error: existingErr } = await supabaseAdmin
       .from('MailDaySettings')
-      .select('id')
+      .select('user_id')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+    if (existingErr) throw existingErr;
 
     let settings;
     if (existing) {
