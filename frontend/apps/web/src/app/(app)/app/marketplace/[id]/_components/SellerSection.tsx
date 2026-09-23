@@ -36,21 +36,14 @@ export default function SellerSection({ listing }: SellerSectionProps) {
           )}
           {creator.handle && <p className="text-sm text-app-text-secondary">@{creator.handle}</p>}
         </div>
-        {publicProfileHref ? (
+        {/* A seller without a public profile gets no button rather than a greyed-out one with no reason. */}
+        {publicProfileHref && (
           <Link
             href={publicProfileHref}
             className="px-3 py-1.5 border border-app-border text-app-text-strong rounded-lg text-sm font-medium hover:bg-app-hover"
           >
             View Profile
           </Link>
-        ) : (
-          <button
-            type="button"
-            disabled
-            className="px-3 py-1.5 border border-app-border text-app-text-secondary rounded-lg text-sm font-medium opacity-60 cursor-not-allowed"
-          >
-            View Profile
-          </button>
         )}
       </div>
     </div>
