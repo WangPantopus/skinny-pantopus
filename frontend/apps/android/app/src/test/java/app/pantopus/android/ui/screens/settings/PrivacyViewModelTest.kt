@@ -225,9 +225,10 @@ class PrivacyViewModelTest {
         val groups = privacyVm().loadedGroups()
         assertEquals("a failed settings fetch must not blank the screen", 8, groups.size)
         assertEquals(
-            "Search privacy could not load. Pull to refresh before changing this setting.",
+            "Search privacy could not load. Try again before changing this setting.",
             groups.group("searchPrivacy")?.helper,
         )
+        assertEquals("the card offers Try again", "searchPrivacyRetry", groups.group("searchPrivacy")?.rows?.first()?.id)
     }
 
     // ---- Delete account (DELETE /api/users/account) ----

@@ -251,8 +251,9 @@ final class PrivacyViewModelTests: XCTestCase {
         XCTAssertEqual(groups.count, 8, "a failed settings fetch must not blank the screen")
         XCTAssertEqual(
             group(groups, "searchPrivacy")?.helper,
-            "Search privacy could not load. Pull to refresh before changing this setting."
+            "Search privacy could not load. Try again before changing this setting."
         )
+        XCTAssertEqual(group(groups, "searchPrivacy")?.rows.first?.id, "searchPrivacyRetry", "the card offers Try again")
     }
 
     // MARK: - Delete account (DELETE /api/users/account)

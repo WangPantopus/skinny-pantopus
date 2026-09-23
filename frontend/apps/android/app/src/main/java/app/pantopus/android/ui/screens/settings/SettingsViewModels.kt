@@ -511,6 +511,7 @@ class PrivacySettingsViewModel
                 _deleteAccountError.value = null
                 _deleteSheetVisible.value = true
             }
+            if (rowId == ROW_SEARCH_PRIVACY_RETRY) load()
         }
 
         fun consumeToast() {
@@ -742,11 +743,20 @@ class PrivacySettingsViewModel
                 overline = "Find me in search",
                 helper =
                     if (searchPrivacyLoadFailed) {
-                        "Search privacy could not load. Pull to refresh before changing this setting."
+                        "Search privacy could not load. Try again before changing this setting."
                     } else {
                         PrivacyCatalog.searchVisibilityHelp[searchVisibility]
                     },
                 rows =
+                    // The card has no pull-to-refresh; this row is the way back.
+                    listOfNotNull(
+                        GroupedListRow(
+                            id = ROW_SEARCH_PRIVACY_RETRY,
+                            label = "Try again",
+                            control = RowControl.Chevron,
+                            testTag = "search-privacy-retry",
+                        ).takeIf { searchPrivacyLoadFailed },
+                    ) +
                     PrivacyCatalog.searchVisibilityOptions.map { option ->
                         GroupedListRow(
                             id = "$SEARCH_VISIBILITY_PREFIX${option.key}",
@@ -936,6 +946,7 @@ internal const val PASSWORDLESS_DELETE_HELP =
     "Biometric verification isn't set up on this device. Sign in again with Google or Apple, then try again."
 private const val ROW_FINDABLE_BY_NAME = "findableByName"
 private const val ROW_DELETE_ACCOUNT = "deleteAccount"
+private const val ROW_SEARCH_PRIVACY_RETRY = "searchPrivacyRetry"
 
 /**
  * A14.7 privacy catalog — the radio options, activity specs, and seeds.

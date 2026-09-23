@@ -179,6 +179,8 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
             onOpen(.dataExport)
         case "whatWeCollect":
             onOpen(.privacyPolicy)
+        case Row.searchPrivacyRetry:
+            await load()
         default:
             break
         }
@@ -455,6 +457,18 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
                 accessibilityIdentifier: "search-visibility-\(option.key)"
             )
         }
+        if searchPrivacyLoadFailed {
+            // The card has no pull-to-refresh; this row is the way back.
+            rows.insert(
+                GroupedListRow(
+                    id: Row.searchPrivacyRetry,
+                    label: "Try again",
+                    control: .chevron,
+                    accessibilityIdentifier: "search-privacy-retry"
+                ),
+                at: 0
+            )
+        }
         rows.append(
             GroupedListRow(
                 id: Row.findableByName,
@@ -469,7 +483,7 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
             id: Group.searchPrivacy,
             overline: "Find me in search",
             helper: searchPrivacyLoadFailed
-                ? "Search privacy could not load. Pull to refresh before changing this setting."
+                ? "Search privacy could not load. Try again before changing this setting."
                 : Self.searchVisibilityHelp[searchVisibility],
             rows: rows
         )
@@ -603,6 +617,7 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         /// `searchVisibility.<everyone|mutuals|nobody>`.
         public static let searchVisibilityPrefix = "searchVisibility"
         public static let findableByName = "findableByName"
+        public static let searchPrivacyRetry = "searchPrivacyRetry"
         public static let deleteAccount = "deleteAccount"
     }
 
