@@ -38,8 +38,11 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -267,6 +270,11 @@ class NotificationsViewModel
 
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
+
+        private val _openGig = MutableSharedFlow<String>(extraBufferCapacity = 1)
+
+        /** A gig row's task, opened on top of this list so Back returns here. */
+        val openGig: SharedFlow<String> = _openGig.asSharedFlow()
 
         private val _unreadCount = MutableStateFlow(0)
         val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
@@ -699,7 +707,8 @@ class NotificationsViewModel
                 HomeTaskNotificationRoute.metadataPath(dto.type, dto.metadata)
                     ?: DeepLinkRouter.notificationPath(dto.type, dto.link)
             if (!link.isNullOrEmpty()) {
-                DeepLinkRouter.handle(link)
+                val gigId = DeepLinkRouter.gigIdForLink(link)
+                if (gigId != null) _openGig.tryEmit(gigId) else DeepLinkRouter.handle(link)
             }
         }
 
