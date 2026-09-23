@@ -72,6 +72,10 @@ import {
 
 const MANAGE_ROLES = new Set(["owner", "admin", "manager"]);
 
+// Notice, horizon, buffers and the approval window are edited per event type;
+// there are no pages under /app/scheduling/business/settings/ (native does the same).
+const EVENT_TYPES_PATH = "/app/scheduling/event-types";
+
 export default function BusinessSettings() {
   const biz = useBusinessOwner();
   const owner = biz.owner;
@@ -294,7 +298,7 @@ export default function BusinessSettings() {
                   icon={Hourglass}
                   label="Approval window"
                   sub={approvalWindowLabel(draft.approvalWindowHours)}
-                  href={gated ? undefined : "/app/scheduling/business/settings/approval-window"}
+                  href={gated ? undefined : EVENT_TYPES_PATH}
                   last
                   trailing={gated ? null : <Chevron />}
                 />
@@ -309,21 +313,21 @@ export default function BusinessSettings() {
                 icon={Clock}
                 label="Minimum notice"
                 sub={minNoticeLabel(draft.minNoticeMin)}
-                href={gated ? undefined : "/app/scheduling/business/settings/minimum-notice"}
+                href={gated ? undefined : EVENT_TYPES_PATH}
                 trailing={gated ? null : <Chevron />}
               />
               <SettingRow
                 icon={CalendarRange}
                 label="Booking horizon"
                 sub={horizonLabel(draft.maxHorizonDays)}
-                href={gated ? undefined : "/app/scheduling/business/settings/booking-horizon"}
+                href={gated ? undefined : EVENT_TYPES_PATH}
                 trailing={gated ? null : <Chevron />}
               />
               <SettingRow
                 icon={GitCommitHorizontal}
                 label="Buffers"
                 sub={bufferLabel(draft.bufferBeforeMin, draft.bufferAfterMin)}
-                href={gated ? undefined : "/app/scheduling/business/settings/buffers"}
+                href={gated ? undefined : EVENT_TYPES_PATH}
                 trailing={gated ? null : <Chevron />}
               />
               <SettingRow

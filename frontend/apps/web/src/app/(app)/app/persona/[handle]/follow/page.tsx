@@ -19,7 +19,6 @@
 //     screen — not a dismissible popup.
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { AudienceProfile } from '@pantopus/types';
@@ -291,12 +290,7 @@ export default function FollowHandshakePage() {
             people may still figure it out from how you write or what
             you post — that&rsquo;s outside what we control.
           </p>
-          <Link
-            href="/help/audience-firewall"
-            className="mt-2 inline-block text-teal-700 hover:underline"
-          >
-            What does this mean? →
-          </Link>
+          {/* No help page explains this further; the note above is the explanation. */}
         </aside>
 
         <label className="flex items-start gap-3 text-sm">
