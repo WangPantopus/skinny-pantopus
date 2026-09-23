@@ -105,6 +105,9 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     public let tabs: [ListOfRowsTab] = []
 
     public private(set) var state: ListOfRowsState = .loading
+    /// Set when a reload or next page fails while mail is on screen: it stays
+    /// and this shows as a toast. The view clears it after display.
+    public var refreshFailureMessage: String?
 
     public var topBarAction: TopBarAction? {
         TopBarAction(icon: .search, accessibilityLabel: "Search mail") { [weak self] in
@@ -480,7 +483,13 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         } catch {
             isLoadingPage = false
             guard generation == loadGeneration else { return }
-            state = .error(message: (error as? APIError)?.errorDescription ?? "Couldn't load mail.")
+            let message = (error as? APIError)?.errorDescription ?? "Couldn't load mail."
+            if loadedMail.isEmpty {
+                state = .error(message: message)
+            } else {
+                // Keep the mail on screen; a failed reload or page only toasts.
+                refreshFailureMessage = message
+            }
         }
     }
 

@@ -45,6 +45,7 @@ public struct ChatListView: View {
         }
         .background(Theme.Color.appSurface)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .refreshFailureToast($viewModel.refreshFailureMessage)
         .task { await viewModel.load() }
         .onDisappear { viewModel.teardown() }
         .accessibilityIdentifier("chatList")

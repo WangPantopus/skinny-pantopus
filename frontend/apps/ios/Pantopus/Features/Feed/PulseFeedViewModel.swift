@@ -572,7 +572,12 @@ public final class PulseFeedViewModel {
             rebuildLoadedState()
         } catch {
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load posts."
-            state = .error(message: message)
+            if case .loaded = state {
+                // Keep the posts on screen; a failed refresh only toasts.
+                toastMessage = message
+            } else {
+                state = .error(message: message)
+            }
         }
     }
 
