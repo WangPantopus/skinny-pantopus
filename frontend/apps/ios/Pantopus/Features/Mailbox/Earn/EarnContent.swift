@@ -26,10 +26,12 @@ public enum EarnCategory: String, Equatable, Sendable, CaseIterable {
 
 /// Clearing status for a single earnings row. `paid` renders the green
 /// cleared amount; `pending` renders the amber "Pending" chip + amount
-/// and the "clears …" sub-line.
+/// and the "clears …" sub-line; `offer` renders a muted amount marked
+/// "Not cashable yet" — a mail-offer or ad payout, which nothing pays out.
 public enum EarnStatus: Equatable, Sendable {
     case paid
     case pending(clearsLabel: String)
+    case offer
 }
 
 /// A single earnings row inside the Recent-earnings card.
@@ -196,6 +198,10 @@ public struct EarnContent: Equatable, Sendable {
     /// Pending / on-hold earnings (hero split cell), e.g. `"$60.00"`.
     public let pending: String
     public let pendingMeta: String
+    /// Mail-offer and ad payouts, e.g. `"$10.00"`. They can't be cashed out,
+    /// so they stay out of `available`; when set, the hero shows this one
+    /// split cell in place of This week / Pending.
+    public let offerEarnings: String?
     // The weekly-goal target, linked payout method, auto-cash-out, and
     // 1099 tax docs have no source on `/earnings/*` (the last three are
     // Stripe Connect — Phase 3), so the live path leaves them nil and the
@@ -213,6 +219,7 @@ public struct EarnContent: Equatable, Sendable {
         thisWeekMeta: String,
         pending: String,
         pendingMeta: String,
+        offerEarnings: String? = nil,
         weeklyGoal: EarnWeeklyGoal? = nil,
         waysToEarn: [EarnWayToEarn],
         earnings: [EarnEarning],
@@ -225,11 +232,18 @@ public struct EarnContent: Equatable, Sendable {
         self.thisWeekMeta = thisWeekMeta
         self.pending = pending
         self.pendingMeta = pendingMeta
+        self.offerEarnings = offerEarnings
         self.weeklyGoal = weeklyGoal
         self.waysToEarn = waysToEarn
         self.earnings = earnings
         self.payoutMethod = payoutMethod
         self.autoCashOut = autoCashOut
         self.taxDocs = taxDocs
+    }
+
+    /// True when there is wallet money to cash out; the Cash out bar shows
+    /// only then.
+    public var hasCashableBalance: Bool {
+        (Double(available) ?? 0) > 0
     }
 }
