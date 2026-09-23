@@ -25,13 +25,11 @@ const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
 
 function PublishModal({
   item,
-  neighborCount,
   onConfirm,
   onClose,
   publishing,
 }: {
   item: CommunityMailItem;
-  neighborCount: number;
   onConfirm: (scope: 'building' | 'neighborhood' | 'city') => void;
   onClose: () => void;
   publishing: boolean;
@@ -48,7 +46,7 @@ function PublishModal({
           Share with your neighborhood?
         </h3>
         <p className="text-sm text-app-text-secondary mb-4">
-          Share with ~{neighborCount} households within 0.5mi?
+          Share with households nearby?
         </p>
 
         {/* Scope selector */}
@@ -143,7 +141,7 @@ export default function MailCommunityPage() {
       { itemId: publishTarget.mail_id, scope },
       {
         onSuccess: () => {
-          setPublishSuccess(`Shared with ~47 households`);
+          setPublishSuccess(`Shared with your ${scope}`);
           setPublishTarget(null);
           setTimeout(() => setPublishSuccess(null), 4000);
         },
@@ -175,7 +173,6 @@ export default function MailCommunityPage() {
             <p className="text-sm text-app-text-strong mb-2">
               A <span className="font-semibold">{eligibleForPublish.community_type.replace(/_/g, ' ')}</span> notice from{' '}
               <span className="font-semibold">{eligibleForPublish.sender_display || 'a sender'}</span> is eligible to share with your neighborhood.
-              Reach ~47 households.
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -279,7 +276,6 @@ export default function MailCommunityPage() {
       {publishTarget && (
         <PublishModal
           item={publishTarget}
-          neighborCount={47}
           onConfirm={handlePublish}
           onClose={() => setPublishTarget(null)}
           publishing={publishMutation.isPending}

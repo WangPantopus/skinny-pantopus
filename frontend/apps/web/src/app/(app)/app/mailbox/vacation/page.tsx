@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plane, ShieldCheck, Calendar } from 'lucide-react';
+import { ArrowLeft, Plane, Calendar } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import type { VacationHold, HoldAction, PackageHoldAction } from '@pantopus/api';
@@ -226,12 +226,6 @@ function VacationContent() {
             </div>
           </label>
         )}
-      </div>
-
-      {/* Safety note */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl mb-4">
-        <ShieldCheck className="w-4 h-4 text-emerald-700 flex-shrink-0" />
-        <p className="text-xs text-emerald-800">Only verified household members and trusted neighbors will handle your mail</p>
       </div>
 
       {/* CTA */}
