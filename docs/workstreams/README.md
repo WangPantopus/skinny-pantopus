@@ -1,6 +1,65 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — September 23, 2026, 04:40 UTC
+## CURRENT RESUME POINT — September 23, 2026, 05:07 UTC
+
+This updates the 04:40 block below; read both. The count is still **9 closed / 71 partial**.
+
+### Merged since 04:40 UTC
+- #226, #227: Stream 2 web error reasons.
+- #242: v1 send keeps attention and visibility fields.
+- #240: business Contact works again (block/curator gates added first).
+- #209: D07 role change independent of expiry.
+
+### Stream 1 (coordinator)
+- **#244, money safety, queued.** A Stripe webhook whose Payment write failed was still acknowledged with 200 and marked processed, and redelivery was skipped as a duplicate. Reproduced with a **real TEST dispute** and an injected write failure on master: the Payment stayed `captured_hold` with no `dispute_id` while both parties were told of a dispute. Settlement gates on the database's `dispute_id`, so it would still credit the worker.
+  - Fix: 18 money-state writes now use the file's existing `assertSupabaseOk`. The event returns 500 and Stripe redelivers it. Verified: 500, event unprocessed, no notifications; then the healthy redelivery records `disputed` + `dispute_id`.
+  - Bundle `20260923-stream1-webhook-write-failures-r1`, MANIFEST `f64e89c13eb0f4ae22a7873b4835075ca492b14149be014c60aff613c51abf49`.
+  - Found by the new unchecked-write scan (`/private/tmp/pantopus-coord-schema/unchecked-writes.cjs`). The 17 non-webhook hits and the StripeAccount writes are recorded.
+- **#241 (iOS tip refresh):** built in its own derived data. The simulator run is deferred until swap recovers.
+- **Parity check:** Android refetches after 16 gig actions. iOS refreshes or updates in place for all of them except tips, which #241 fixes. Web `/confirm-completion` and native `/cancel` share the same services as `/complete` and the stop flow.
+- **Fee agent:** web and iOS pixel identity done (fee line, card and stop sheet identical apart from the clock and blur); Android pair in progress. Migration pre-read by the coordinator: the 24h worker-reports-poster rule matches the route.
+
+### Notification-return audit (coordinator)
+- **Web:** gig links are fine (middleware `/gigs/:id` → `/app/gigs/:id`). Broken: booking host lifecycle `/app/profile/schedule/bookings/:id` (404); `invoice_sent` → the recipient page `/app/invoice/:id` (Stream 3 corrected the coordinator's target); four `/homes/…` subpaths (Stream 2).
+- **Native:** mail item and `mail_summary` links are discarded; neighbor-message opens Place with homeId "neighbor-message"; landlord, `connection_accepted`, `marketplace` and audience links are discarded.
+- Dispatched: Stream 2 (mail, Place, landlord, homes); Stream 3 (booking host link + invoice PR in progress, connection/marketplace/persona).
+
+### Stream 2
+- **#243 queued:** the web Counter uses the existing `drawer/*?tab=counter`.
+- **Six web mailbox pages ran on a hard-coded stub Home `home_1`** (Camas, WA coordinates). Records create and list crash, Tasks falsely empty, Travel 400. One PR is in progress, reusing an existing Home source with an unmask check.
+- Recorded:
+  - records category options vs the HomeAsset CHECK (a visible change; founder);
+  - the p3 records reader field mapping (a small follow-up PR);
+  - the `mail_extracted` compatibility retry, to be limited later;
+  - the v1 residency test uses `finance.view`, pending a comparison with v2.
+
+### Stream 3
+- Deletion 409 is correct on both native apps (M18).
+- Android You → Help/Legal/Privacy opened "isn't here yet" placeholders although the screens exist; a wiring fix is approved.
+- Booking-link + invoice PR in progress.
+- Invoice notifications failed silently (a `data` column); fix approved with a block gate.
+- Combined per-platform verification builds are approved (exact heads recorded per bundle).
+
+### Host overload incident (~05:00 UTC)
+- Load reached about 660 and swap about 23.5 of 24.6 GB. Emulator input stalled.
+- Each stream shed only its own load:
+  - the coordinator's schema DB and simulator;
+  - Stream 3's emulator-5554, sim 0AE16FA0 and mail-r3 stack;
+  - Stream 2's emulator-5556, sim 6F914A30 and Next.
+- **The founder's live environment was identified and left alone:** Docker stack `pantopus-home-gig-replay` (64521/64522), backend :8000 and simulator iPhone 17 `EB5AD759`. Never stop these.
+- Native work is serial until swap recovers. At 05:07 load was about 240 and swap had 2 GB free.
+
+### Founder questions added (not implemented)
+- **Business drawer:** should a `business_team` letter keep honouring attn and recipient? Today a member who files an attn_only letter into Business exposes it to the household.
+- **Records:** extend the HomeAsset CHECK, or align the categories?
+- **Blocks and invoices:** may a blocked business still create or list invoices to the blocker?
+- **Business-scheduled notifications:** notifications to business User rows (draftBusinessReminder, expirePopupBusinesses) are unreadable. Reroute them to owners?
+- **iOS tip dock:** label parity ("Check tip status") and tip-limit copy (UX proposals).
+
+### Queue
+243 211 244 210 218 231 221 236 219 213 214 215 224 199 208.
+
+## Resume point history — September 23, 2026, 04:40 UTC
 
 This updates the 04:17 block below; read both. The count is still **9 closed / 71 partial**. P03 closure is proposed once #241 is verified on a simulator (below).
 
