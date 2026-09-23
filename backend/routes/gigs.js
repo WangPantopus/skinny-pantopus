@@ -43,6 +43,7 @@ const homeTaskGigService = require('../services/homeTaskGigService');
 const gigPricingService = require('../services/gig/gigPricingService');
 const { alertMatchingSavedSearches } = require('../services/savedSearchAlertService');
 const { haversineMiles } = require('../utils/geo');
+const { checkHomePermission } = require('../utils/homePermissions');
 const {
   serializeGigAuthorForViewer,
   serializeUserAsLocalIdentity,
@@ -1062,6 +1063,11 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
   logger.info('Creating gig', { userId, beneficiary_user_id });
 
   try {
+    // Posting from a Home needs home.view there: its members see these tasks on the Home help card.
+    if (location.homeId && !(await checkHomePermission(location.homeId, userId, 'home.view')).hasAccess) {
+      return res.status(403).json({ error: "You can't post from that Home." });
+    }
+
     // ─── Proxy posting (post as business) ───
     let effectiveUserId = userId; // who the gig belongs to
     let createdBy = userId; // who actually created it
@@ -3818,6 +3824,9 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
       const { latitude, longitude, mode, address, city, state, zip, homeId, place_id,
         geocode_provider, geocode_accuracy, geocode_place_id } =
         updateData.location;
+      if (homeId && !(await checkHomePermission(homeId, userId, 'home.view')).hasAccess) {
+        return res.status(403).json({ error: "You can't post from that Home." });
+      }
       const approx = calculateApproxLocation(latitude, longitude);
 
       updateData.exact_location = formatLocationForDB(latitude, longitude);
