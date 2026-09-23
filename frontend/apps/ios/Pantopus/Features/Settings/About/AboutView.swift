@@ -57,7 +57,7 @@ public struct AboutView: View {
             )
             infoCard(
                 heading: "Built by",
-                body: "A small team of people who wanted somewhere better to ask their block for a ladder. Reach us at support@pantopus.app."
+                body: "A small team of people who wanted somewhere better to ask their block for a ladder. Reach us at support@pantopus.com."
             )
             VStack(alignment: .leading, spacing: Spacing.s2) {
                 Text("Attributions")
