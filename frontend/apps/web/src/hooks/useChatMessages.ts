@@ -137,9 +137,16 @@ export interface UseChatMessagesOptions {
   currentUserId?: string | null;
 }
 
+/** Why the first page of a conversation could not load (null when it did). */
+export type ChatLoadFailure = 'forbidden' | 'notFound' | 'unavailable';
+
 export interface UseChatMessagesReturn {
   messages: ChatMessage[];
   loading: boolean;
+  /** The first load failed, so the conversation is not shown at all. */
+  loadFailure: ChatLoadFailure | null;
+  /** Try the first load again after a failure. */
+  retryLoad: () => void;
   error: string | null;
   setError: (e: string | null) => void;
   connected: boolean;
@@ -165,6 +172,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadFailure, setLoadFailure] = useState<ChatLoadFailure | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [sending, setSending] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -190,7 +199,10 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
 
   // ── Fetch functions ─────────────────────────────────────
 
-  const fetchMessages = useCallback(async (cursor?: { before?: string; after?: string }): Promise<ChatMessage[]> => {
+  const fetchMessages = useCallback(async (
+    cursor?: { before?: string; after?: string },
+    rethrow = false,
+  ): Promise<ChatMessage[]> => {
     try {
       const before = cursor?.before;
       const after = cursor?.after;
@@ -220,7 +232,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         return (result?.messages as ChatMessage[]) || [];
       }
       return [];
-    } catch {
+    } catch (err) {
+      if (rethrow) throw err;
       return [];
     }
   }, [isRoomMode, roomId, otherUserId, topicId, asBusinessUserId]);
@@ -317,21 +330,30 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     (async () => {
       setLoading(true);
       setError(null);
+      setLoadFailure(null);
       try {
-        const msgs = await fetchMessages();
+        // The first page must not fail silently: an empty list would read as
+        // "No messages yet" under a live composer (e.g. a room the viewer
+        // isn't in answers 403).
+        const msgs = await fetchMessages(undefined, true);
         if (!cancelled) {
           setMessages(sortAsc(msgs));
           setHasMore(msgs.length >= 100);
           await markRead();
         }
       } catch (e: unknown) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load messages');
+        if (!cancelled) {
+          const status = (e as { statusCode?: number } | null)?.statusCode;
+          setLoadFailure(status === 403 ? 'forbidden' : status === 404 ? 'notFound' : 'unavailable');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [roomId, otherUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [roomId, otherUserId, loadAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const retryLoad = useCallback(() => setLoadAttempt((n) => n + 1), []);
 
   // ── Refetch on topic change (person-based mode) ─────────
 
@@ -701,6 +723,8 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   return {
     messages,
     loading,
+    loadFailure,
+    retryLoad,
     error,
     setError,
     connected,
