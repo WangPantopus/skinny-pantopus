@@ -1595,7 +1595,7 @@ open class GigComposeViewModel
                     MagicDraftDto(
                         title = title,
                         description = description,
-                        category = form.category?.key,
+                        category = form.category?.backendLabel,
                         taskArchetype = archetype,
                         payType = budgetType.wireValue,
                         budgetFixed = if (budgetType == GigComposeBudgetType.Fixed) amount else null,
