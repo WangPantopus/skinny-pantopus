@@ -177,8 +177,22 @@ data class MagicDraftResponse(
     val draft: MagicDraftDto,
     val confidence: Double? = null,
     val fieldConfidence: Map<String, Double>? = null,
-    val clarifyingQuestion: String? = null,
+    /**
+     * `{ field, question, options }` (`magicTaskService.js`) or null. Typed
+     * loosely so a bare string decodes too; read it through
+     * [clarifyingQuestionText].
+     */
+    val clarifyingQuestion: Any? = null,
     val source: String? = null,
     val elapsed: Long? = null,
     @Json(name = "_fallback") val fallback: Boolean? = null,
-)
+) {
+    /** The follow-up question's text, whichever shape it arrived in. */
+    val clarifyingQuestionText: String?
+        get() =
+            when (val question = clarifyingQuestion) {
+                is String -> question
+                is Map<*, *> -> question["question"] as? String
+                else -> null
+            }
+}

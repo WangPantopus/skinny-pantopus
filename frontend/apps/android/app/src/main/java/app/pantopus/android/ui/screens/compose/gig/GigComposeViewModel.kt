@@ -373,7 +373,7 @@ open class GigComposeViewModel
             _state.update { state ->
                 state.copy(
                     isParsingDraft = false,
-                    clarifyingQuestion = response.clarifyingQuestion?.takeIf { it.isNotBlank() },
+                    clarifyingQuestion = response.clarifyingQuestionText?.takeIf { it.isNotBlank() },
                     form = prefillFormFromDraft(state.form, draft),
                 )
             }
