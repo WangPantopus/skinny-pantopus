@@ -207,6 +207,19 @@ export async function starMail(mailId: string, starred?: boolean): Promise<{ mes
   return patch<{ message: string }>(`/api/mailbox/${mailId}/star`, { starred });
 }
 
+export interface SenderBusiness {
+  id: string;
+  name: string;
+  verified: boolean;
+}
+
+/**
+ * The businesses the signed-in user may send mail as (business permission mail.send), for compose's "Send as".
+ */
+export async function getSenderBusinesses(): Promise<{ businesses: SenderBusiness[] }> {
+  return get<{ businesses: SenderBusiness[] }>('/api/mailbox/sender-businesses');
+}
+
 /**
  * Send mail to an address
  */
@@ -229,6 +242,8 @@ export async function sendMail(data: LegacyMailSendPayload | StructuredMailSendP
     attnUserId?: string | null;
     attnLabel?: string | null;
     deliveryVisibility?: 'home_members' | 'attn_only' | 'attn_plus_admins' | null;
+    /** The business the letter went out as; null when it went out under the sender's own name. */
+    senderBusinessName?: string | null;
     createdAt: string;
   };
 }> {

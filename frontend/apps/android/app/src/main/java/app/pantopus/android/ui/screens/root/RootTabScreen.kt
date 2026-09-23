@@ -10,20 +10,26 @@ import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -250,6 +256,7 @@ import app.pantopus.android.ui.screens.inbox.conversation.ChatCreatorThreadChrom
 import app.pantopus.android.ui.screens.inbox.conversation.ChatCreatorThreadContext
 import app.pantopus.android.ui.screens.inbox.conversation.ChatInitialTopic
 import app.pantopus.android.ui.screens.inbox.conversation.ChatThreadMode
+import app.pantopus.android.ui.screens.inbox.conversation.DeepLinkChatResolverViewModel
 import app.pantopus.android.ui.screens.inbox.newmessage.NewMessageScreen
 import app.pantopus.android.ui.screens.inbox.search.ChatSearchResult
 import app.pantopus.android.ui.screens.inbox.search.ChatSearchResultKind
@@ -1323,6 +1330,10 @@ private object ChildRoutes {
     /** P4.3 — message id to scroll to on open (Chat Search deep-link).
      *  Empty for normal opens, which land on the latest message. */
     const val CHAT_SCROLL_TO_KEY = "scrollTo"
+
+    /** The room a chat link named when it opened as a person thread, so the
+     *  link's arrival still completes (empty for every other open). */
+    const val CHAT_ARRIVAL_ROOM_KEY = "arrivalRoom"
     const val CHAT_CONVERSATION =
         "chat/{$CHAT_KIND_KEY}/{$CHAT_ID_KEY}?" +
             "$CHAT_NAME_KEY={$CHAT_NAME_KEY}" +
@@ -1337,7 +1348,8 @@ private object ChildRoutes {
             "&$CHAT_TOPIC_TYPE_KEY={$CHAT_TOPIC_TYPE_KEY}" +
             "&$CHAT_TOPIC_REF_ID_KEY={$CHAT_TOPIC_REF_ID_KEY}" +
             "&$CHAT_TOPIC_TITLE_KEY={$CHAT_TOPIC_TITLE_KEY}" +
-            "&$CHAT_GIG_ID_KEY={$CHAT_GIG_ID_KEY}"
+            "&$CHAT_GIG_ID_KEY={$CHAT_GIG_ID_KEY}" +
+            "&$CHAT_ARRIVAL_ROOM_KEY={$CHAT_ARRIVAL_ROOM_KEY}"
 
     /** New message contact picker (T6.6b P25). Reached from Chat list
      *  compose button + empty-state CTA. */
@@ -1425,7 +1437,10 @@ private object ChildRoutes {
     fun postcardVerification(homeId: String): String = "homes/$homeId/verify-postcard"
 
     /** Build the generic placeholder path with an encoded label. */
-    fun placeholder(label: String): String = "_placeholder/generic?$PLACEHOLDER_LABEL_KEY=${java.net.URLEncoder.encode(label, "UTF-8")}"
+    // `%20`, not URLEncoder's `+`: Navigation decodes the query value
+    // literally, so "Edit dates" showed as "Edit+dates".
+    fun placeholder(label: String): String =
+        "_placeholder/generic?$PLACEHOLDER_LABEL_KEY=${java.net.URLEncoder.encode(label, "UTF-8").replace("+", "%20")}"
 
     /** Build the compose-post path with the pre-fill intent encoded. */
     fun composePost(
@@ -1531,6 +1546,12 @@ private object ChildRoutes {
             "&$CHAT_TOPIC_REF_ID_KEY=${enc(topicRefId ?: "")}" +
             "&$CHAT_TOPIC_TITLE_KEY=${enc(topicTitle ?: "")}"
     }
+
+    /** Adds the linked room id to a person-thread route (see [CHAT_ARRIVAL_ROOM_KEY]). */
+    fun withArrivalRoom(
+        route: String,
+        roomId: String,
+    ): String = "$route&$CHAT_ARRIVAL_ROOM_KEY=${java.net.URLEncoder.encode(roomId, "UTF-8").replace("+", "%20")}"
 
     /** Build the chat-conversation path for a gig-scoped room. */
     fun chatConversationRoom(
@@ -1863,18 +1884,43 @@ private object ChildRoutes {
 }
 
 /**
- * Fire a `mailto:` intent, swallowing [ActivityNotFoundException] when the
- * device has no mail client. iOS degrades silently here (`openURL` on a
- * `mailto:` URL is a no-op without a mail app), so the CTA does nothing on
- * both platforms rather than crashing on Android.
+ * Fire a `mailto:` intent. Returns `false` instead of crashing when the device
+ * has no mail client ([ActivityNotFoundException]); callers then show
+ * [EmailFallbackDialog] with the address, as iOS does.
  */
-private fun Context.openMailto(uri: String) {
+private fun Context.openMailto(uri: String): Boolean {
     val intent = Intent(Intent.ACTION_SENDTO, Uri.parse(uri))
-    try {
+    return try {
         startActivity(intent)
+        true
     } catch (_: ActivityNotFoundException) {
-        Log.i("RootTabScreen", "mailto ignored: no mail client installed")
+        Log.i("RootTabScreen", "mailto: no mail client installed")
+        false
     }
+}
+
+/**
+ * Shown when a `mailto:` link can't open because no mail app is installed:
+ * the address with a Copy action, so "Email us" never ends in silence.
+ */
+@Composable
+private fun EmailFallbackDialog(
+    address: String,
+    onDismiss: () -> Unit,
+) {
+    val clipboard = LocalClipboardManager.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("No email app found") },
+        text = { Text("Write to us at $address.") },
+        confirmButton = {
+            TextButton(onClick = {
+                clipboard.setText(AnnotatedString(address))
+                onDismiss()
+            }) { Text("Copy address") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+    )
 }
 
 private fun NavHostController.navigateToRootTab(route: PantopusRoute) {
@@ -1955,6 +2001,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val pendingDeepLink by DeepLinkRouter.pending.collectAsStateWithLifecycle()
     // Fetches nothing until a bare Place link actually needs the primary home.
     val deepLinkPlaceResolver: DeepLinkPlaceResolverViewModel = hiltViewModel()
+    // Fetches nothing until a chat link needs its direct room's other person.
+    val deepLinkChatResolver: DeepLinkChatResolverViewModel = hiltViewModel()
     LaunchedEffect(pendingDeepLink) {
         when (val pending = pendingDeepLink) {
             null -> Unit
@@ -2014,7 +2062,31 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 // Land on the Messages tab first so Back pops to the chat
                 // list, then push the thread itself.
                 navController.navigateToRootTab(PantopusRoute.Messages)
-                if (pending.id.isNotBlank()) {
+                // A direct room with one other person opens that person's
+                // thread (Report / Block in its details); anything else, or a
+                // failed read, opens the room exactly as before.
+                val person = pending.id.takeIf { it.isNotBlank() }?.let { deepLinkChatResolver.directCounterpart(it) }
+                if (person != null) {
+                    navController.navigate(
+                        ChildRoutes.withArrivalRoom(
+                            ChildRoutes.chatConversationFromPicker(
+                                userId = person.userId,
+                                displayName = person.displayName,
+                                initials =
+                                    person.displayName
+                                        .split(" ")
+                                        .take(2)
+                                        .mapNotNull { it.firstOrNull()?.toString() }
+                                        .joinToString("")
+                                        .uppercase()
+                                        .ifEmpty { "?" },
+                                verified = false,
+                                locality = null,
+                            ),
+                            pending.id,
+                        ),
+                    )
+                } else if (pending.id.isNotBlank()) {
                     val display = pending.name?.takeIf { it.isNotBlank() } ?: "Conversation"
                     val initials =
                         display
@@ -2061,7 +2133,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             }
             is DeepLinkRouter.Destination.Gig -> {
                 navController.navigateToRootTab(PantopusRoute.Tasks)
-                navController.navigate(ChildRoutes.gigDetail(pending.id))
+                // `/gigs/new` is the web composer's path: open the native composer.
+                if (pending.id == "new") {
+                    navController.navigate(ChildRoutes.composeGig(GigsCategory.All.key))
+                } else {
+                    navController.navigate(ChildRoutes.gigDetail(pending.id))
+                }
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.Listing -> {
@@ -2237,11 +2314,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.BookingDetail -> {
-                navController.navigate(SchedulingRoutes.bookingDetail(pending.bookingId))
+                navController.navigate(SchedulingRoutes.bookingDetail(pending.bookingId, pending.ownerKind, pending.ownerId))
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.MyBookings -> {
                 navController.navigate(SchedulingRoutes.MY_BOOKINGS)
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.InvoiceDetail -> {
+                navController.navigate(ChildRoutes.invoiceDetail(pending.invoiceId))
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.ResetPassword,
@@ -2531,6 +2612,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.placeholder(label))
                         },
                         onOpenSettings = { navController.navigate(ChildRoutes.MENU) },
+                        onOpenHelp = { navController.navigate(ChildRoutes.SETTINGS_HELP) },
+                        onOpenLegal = { navController.navigate(ChildRoutes.SETTINGS_LEGAL) },
+                        onOpenPrivacySettings = { navController.navigate(ChildRoutes.SETTINGS_PRIVACY) },
                         onOpenOffers = { navController.navigate(ChildRoutes.OFFERS) },
                         onOpenMyBids = { navController.navigate(ChildRoutes.MY_BIDS) },
                         onOpenMyTasks = { navController.navigate(ChildRoutes.MY_TASKS) },
@@ -2559,6 +2643,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                         onOpenHomeOwners = { homeId -> navController.navigate(ChildRoutes.homeOwners(homeId)) },
                         onOpenHomeMembers = { homeId -> navController.navigate(ChildRoutes.homeMembers(homeId)) },
+                        onOpenHomeDocs = { homeId -> navController.navigate(ChildRoutes.homeDocs(homeId)) },
+                        onOpenHomeEmergency = { homeId ->
+                            navController.navigate(ChildRoutes.homeEmergency(homeId))
+                        },
                         onOpenMyHomes = { navController.navigate(ChildRoutes.MY_HOMES) },
                         onOpenMyListings = { navController.navigate(ChildRoutes.MY_LISTINGS) },
                         onOpenMyBusinesses = { navController.navigate(ChildRoutes.MY_BUSINESSES) },
@@ -2769,6 +2857,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                         onOpenMembers = { homeId ->
                             navController.navigate(ChildRoutes.homeMembers(homeId))
+                        },
+                        onOpenOwnership = { homeId ->
+                            navController.navigate(ChildRoutes.homeOwnershipSecurity(homeId))
                         },
                         onOpenPropertyDetails = { homeId ->
                             navController.navigate(ChildRoutes.propertyDetails(homeId))
@@ -3153,7 +3244,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 composable(
                     route = SchedulingRoutes.BOOKING_DETAIL,
-                    arguments = listOf(navArgument(SchedulingRoutes.ARG_BOOKING_ID) { type = NavType.StringType }),
+                    arguments =
+                        listOf(navArgument(SchedulingRoutes.ARG_BOOKING_ID) { type = NavType.StringType }) +
+                            schedulingOwnerNavArgs(),
                 ) { entry ->
                     BookingDetailScreen(
                         bookingId = entry.arguments?.getString(SchedulingRoutes.ARG_BOOKING_ID).orEmpty(),
@@ -4339,6 +4432,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.CHAT_ARRIVAL_ROOM_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val args = entry.arguments ?: return@composable
@@ -4356,6 +4453,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val topicRefId = args.getString(ChildRoutes.CHAT_TOPIC_REF_ID_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val topicTitle = args.getString(ChildRoutes.CHAT_TOPIC_TITLE_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val gigId = args.getString(ChildRoutes.CHAT_GIG_ID_KEY).orEmpty().takeIf { it.isNotEmpty() }
+                    val arrivalRoomId = args.getString(ChildRoutes.CHAT_ARRIVAL_ROOM_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val initialTopic =
                         if (topicType != null && topicTitle != null) {
                             ChatInitialTopic(topicType = topicType, topicRefId = topicRefId, title = topicTitle)
@@ -4425,6 +4523,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
                         onOpenListing = { listingId -> navController.navigate(ChildRoutes.listingDetail(listingId)) },
+                        arrivalRoomId = arrivalRoomId,
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {
@@ -4638,6 +4737,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     GigDetailScreen(
                         onBack = { navController.popBackStack() },
+                        onOpenPayouts = { navController.navigate(ChildRoutes.SETTINGS_PAYMENTS) },
                         onOpenChat = { roomId, displayName, initials, verified ->
                             navController.navigate(
                                 ChildRoutes.chatConversationRoom(
@@ -4763,7 +4863,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     // The VM reads `context` from SavedStateHandle; a plain
                     // `notifications` navigate leaves it null (unscoped list).
-                    NotificationsScreen(onBack = { navController.popBackStack() })
+                    NotificationsScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
+                    )
                 }
                 composable(ChildRoutes.RECENT_ACTIVITY) {
                     RecentActivityScreen(
@@ -4988,21 +5091,30 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 composable(ChildRoutes.SETTINGS_DATA_EXPORT) {
                     val context = androidx.compose.ui.platform.LocalContext.current
+                    var showsEmailFallback by remember { mutableStateOf(false) }
                     DataExportScreen(
                         onBack = { navController.popBackStack() },
                         onEmailPrivacy = {
-                            context.openMailto("mailto:privacy@pantopus.com?subject=Data%20export%20request")
+                            showsEmailFallback =
+                                !context.openMailto("mailto:privacy@pantopus.com?subject=Data%20export%20request")
                         },
                     )
+                    if (showsEmailFallback) {
+                        EmailFallbackDialog("privacy@pantopus.com") { showsEmailFallback = false }
+                    }
                 }
                 composable(ChildRoutes.SETTINGS_HELP) {
                     val context = androidx.compose.ui.platform.LocalContext.current
+                    var showsEmailFallback by remember { mutableStateOf(false) }
                     HelpCenterScreen(
                         onBack = { navController.popBackStack() },
                         onEmailSupport = {
-                            context.openMailto("mailto:support@pantopus.app?subject=Help")
+                            showsEmailFallback = !context.openMailto("mailto:support@pantopus.com?subject=Help")
                         },
                     )
+                    if (showsEmailFallback) {
+                        EmailFallbackDialog("support@pantopus.com") { showsEmailFallback = false }
+                    }
                 }
                 composable(ChildRoutes.SETTINGS_LEGAL) {
                     LegalIndexScreen(
@@ -5328,8 +5440,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onEditSignup = { reservationId ->
                             navController.navigate(ChildRoutes.editSignup(reservationId))
                         },
-                        onMessageHelper = { reservationId ->
-                            navController.navigate(ChildRoutes.placeholder("Message helper · $reservationId"))
+                        onMessageHelper = { _ ->
+                            navController.navigate(ChildRoutes.placeholder("Message helper"))
                         },
                     )
                 }
@@ -5357,14 +5469,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     ManageTrainScreen(
                         onBack = { navController.popBackStack() },
-                        onOpenAnalytics = { id ->
-                            navController.navigate(ChildRoutes.placeholder("Train analytics · $id"))
+                        onOpenAnalytics = { _ ->
+                            navController.navigate(ChildRoutes.placeholder("Train analytics"))
                         },
-                        onEditDates = { id ->
-                            navController.navigate(ChildRoutes.placeholder("Edit dates · $id"))
+                        onEditDates = { _ ->
+                            navController.navigate(ChildRoutes.placeholder("Edit dates"))
                         },
-                        onInviteHelpers = { id ->
-                            navController.navigate(ChildRoutes.placeholder("Invite helpers · $id"))
+                        onInviteHelpers = { _ ->
+                            navController.navigate(ChildRoutes.placeholder("Invite helpers"))
                         },
                     )
                 }
@@ -5403,7 +5515,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         ),
                 ) { entry ->
                     val label = entry.arguments?.getString(ChildRoutes.PLACEHOLDER_LABEL_KEY) ?: "This"
-                    NotYetAvailableView(tabName = label, icon = PantopusIcon.Info)
+                    NotYetAvailableView(
+                        tabName = label,
+                        icon = PantopusIcon.Info,
+                        onBack = { navController.popBackStack() },
+                    )
                 }
                 // ---- Wave A bootstrap placeholders. Swap each body for the real
                 // screen when the matching A.x screen ships. ----
@@ -6325,7 +6441,21 @@ private fun routeForJumpBackIn(item: JumpBackItem): String {
     if (path.startsWith("/app/chat")) return ChildRoutes.placeholder("Messages")
     if (path.startsWith("/gigs/new")) return ChildRoutes.composeGig(GigsCategory.All.key)
     if (path.startsWith("/gigs")) return ChildRoutes.GIGS_FEED
+    // Hub status pills: "N notifications" and "$X ready · Tap to withdraw".
+    // The wallet holds the balance and the Withdraw action.
+    if (path.startsWith("/app/notifications")) return ChildRoutes.NOTIFICATIONS
+    if (path.startsWith("/app/settings/payments") || path.startsWith("/app/wallet")) return ChildRoutes.WALLET
+    if (path.startsWith("/app/map")) return ChildRoutes.EXPLORE
+    businessIdFromDashboardRoute(path)?.let { return ChildRoutes.businessOwner(it) }
     return ChildRoutes.placeholder(item.title)
+}
+
+/** Extracts `<id>` from `/app/businesses/<id>/dashboard`. */
+private fun businessIdFromDashboardRoute(route: String): String? {
+    val prefix = "/app/businesses/"
+    if (!route.startsWith(prefix)) return null
+    val segment = route.removePrefix(prefix).substringBefore('/').substringBefore('?')
+    return segment.takeIf { it.isNotEmpty() }
 }
 
 /** Extracts `<id>` from `/app/homes/<id>/dashboard`. */

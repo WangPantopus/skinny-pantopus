@@ -65,21 +65,27 @@ public final class PasswordChangeViewModel {
     public private(set) var toast: String?
     public var shouldDismiss: Bool = false
 
-    /// Identity reminder rendered in the `ContextBand`. Sample data — the
-    /// auth-methods endpoint carries neither the email nor a last-changed
-    /// timestamp, so these are seeded defaults until the backend exposes them.
-    public let accountEmail: String
-    public let lastChangedLabel: String
+    /// Identity reminder rendered in the `ContextBand`: the signed-in
+    /// account's email. No endpoint reports when the password last changed,
+    /// so that line stays hidden (nil) rather than showing a made-up date.
+    public let accountEmail: String?
+    public let lastChangedLabel: String?
 
     private let api: APIClient
 
+    /// The signed-in account's email, if the session knows it.
+    private static func signedInEmail() -> String? {
+        guard case let .signedIn(user) = AuthManager.shared.state else { return nil }
+        return user.email
+    }
+
     init(
         api: APIClient = .shared,
-        accountEmail: String = "maria@pantopus.app",
-        lastChangedLabel: String = "84 days ago"
+        accountEmail: String? = nil,
+        lastChangedLabel: String? = nil
     ) {
         self.api = api
-        self.accountEmail = accountEmail
+        self.accountEmail = accountEmail ?? Self.signedInEmail()
         self.lastChangedLabel = lastChangedLabel
     }
 

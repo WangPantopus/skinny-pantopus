@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react';
 import { Mailbox, MailOpen } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import SearchInput from '@/components/SearchInput';
+import ErrorState from '@/components/ui/ErrorState';
 import useMailboxData from './_components/useMailboxData';
 import MailListItem from './_components/MailListItem';
 import MailDetail from './_components/MailDetail';
@@ -71,10 +72,6 @@ function MailboxPageContent() {
           </div>
         )}
       </PageHeader>
-
-      {scopeError && (
-        <div className="mb-4 text-sm px-3 py-2 rounded-lg border bg-red-50 text-red-700 border-red-200">{scopeError}</div>
-      )}
 
       {/* Scope selector */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -155,6 +152,10 @@ function MailboxPageContent() {
             <div className="py-16 text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-2 border-app-border border-t-gray-600 mx-auto" />
               <p className="text-sm text-app-text-secondary mt-3">Loading mail...</p>
+            </div>
+          ) : scopeError ? (
+            <div className="bg-app-surface rounded-xl border border-app-border">
+              <ErrorState message={scopeError} onRetry={loadMail} />
             </div>
           ) : filteredMail.length === 0 ? (
             <div className="py-16 text-center bg-app-surface rounded-xl border border-app-border">

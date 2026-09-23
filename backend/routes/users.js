@@ -4242,7 +4242,7 @@ router.get('/:id/relationship', verifyToken, async (req, res) => {
 
     const visibility = require('../utils/visibilityPolicy');
     const [relationshipStatus, followingThem, theyFollowMe] = await Promise.all([
-      visibility.getRelationshipStatus(viewerId, targetId),
+      visibility.getRelationshipStatus(viewerId, targetId, { forViewer: true }),
       isUserFollowing(viewerId, targetId),
       isUserFollowing(targetId, viewerId),
     ]);
@@ -4741,6 +4741,18 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       return res.status(409).json({
         error: 'Cannot delete account while you have pending or escrowed payments. Please resolve them first.',
         pendingPaymentCount: escrowPayments.length + (payoutsInFlight || []).length,
+      });
+    }
+
+    // Settled payment history cannot be removed yet: every gig payment is still
+    // referenced by its task and settlement records, so the deletes below fail
+    // part-way, after erasing refunds, the wallet ledger and payouts and after
+    // signing the user out everywhere. Refuse before anything changes.
+    if ((userPaymentStates || []).length > 0) {
+      return res.status(409).json({
+        error: "Your account has payment history, so it can't be deleted in the app yet. Contact support to close it.",
+        code: 'PAYMENT_HISTORY_RETAINED',
+        paymentCount: userPaymentStates.length,
       });
     }
 

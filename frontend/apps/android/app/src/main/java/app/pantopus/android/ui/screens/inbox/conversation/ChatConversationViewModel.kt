@@ -17,6 +17,7 @@ import app.pantopus.android.data.api.models.chats.resolvedType
 import app.pantopus.android.data.api.models.profile.UserReportRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.readableForbiddenMessage
 import app.pantopus.android.data.api.services.GeoApi
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.chats.ActiveChatThread
@@ -190,6 +191,16 @@ class ChatConversationViewModel
         private var messages: MutableList<ChatMessageDto> = mutableListOf()
         private val pendingByClientId = LinkedHashMap<String, ChatMessageDto>()
         private val failedClientIds = mutableSetOf<String>()
+
+        /**
+         * Failed sends the server refused with a 403 (blocked, not a
+         * participant, the account can't message). They show "Not sent"
+         * with no Retry, since resending cannot succeed.
+         */
+        private val refusedClientIds = mutableSetOf<String>()
+
+        /** Why the last direct-room creation failed, kept for the send that awaited it. */
+        private var directRoomFailure: NetworkError? = null
         private var hasMore = false
         private var oldestCursor: String? = null
         private var activeRoomIds: Set<String> = emptySet()
@@ -775,6 +786,7 @@ class ChatConversationViewModel
             val bareId = clientId.removePrefix("client_")
             if (!pendingByClientId.containsKey(bareId)) return
             if (!sendContextsByClientId.containsKey(bareId)) return
+            if (refusedClientIds.contains(bareId)) return
             if (_isSending.value) return
             failedClientIds.remove(bareId)
             _isSending.value = true
@@ -798,6 +810,8 @@ class ChatConversationViewModel
             var context = sendContextsByClientId[clientId] ?: return false
             val roomId = ensureRoomId()
             if (roomId == null) {
+                directRoomFailure?.takeIf(::isSendRefused)?.let { markRefused(clientId, it) }
+                directRoomFailure = null
                 failedClientIds.add(clientId)
                 rebuild()
                 return false
@@ -847,10 +861,7 @@ class ChatConversationViewModel
                     if (isPreBidLimit(result.error)) {
                         _sendLimitNotice.value = PRE_BID_LIMIT_NOTICE
                     } else if (isSendRefused(result.error)) {
-                        // 403: the server refuses this pairing (blocked, not a
-                        // participant, or the account can't message). Retrying
-                        // cannot succeed, so say so instead of a bare "Failed to send".
-                        _sendLimitNotice.value = SEND_REFUSED_NOTICE
+                        markRefused(clientId, result.error)
                     }
                     // Don't resurrect a row that a concurrent socket echo
                     // already confirmed and retired (lost-response race —
@@ -875,6 +886,26 @@ class ChatConversationViewModel
         /** A 403 refusal of the send itself (`chats.js` "Unable to message this user" / "Not a participant"). */
         private fun isSendRefused(error: NetworkError): Boolean =
             error is NetworkError.Forbidden || (error is NetworkError.ClientError && error.code == 403)
+
+        /**
+         * 403: the server refuses this pairing (blocked, not a participant,
+         * or the account can't message). Retrying cannot succeed: show the
+         * server's reason ("Unable to message this user") and mark the row
+         * "Not sent" without a Retry.
+         */
+        private fun markRefused(
+            clientId: String,
+            error: NetworkError,
+        ) {
+            val reason =
+                when (error) {
+                    is NetworkError.Forbidden -> error.reason
+                    is NetworkError.ClientError -> readableForbiddenMessage(error.body)
+                    else -> null
+                }
+            _sendLimitNotice.value = reason ?: SEND_REFUSED_NOTICE
+            refusedClientIds.add(clientId)
+        }
 
         private fun isPreBidLimit(error: NetworkError): Boolean =
             error is NetworkError.ClientError &&
@@ -1062,9 +1093,13 @@ class ChatConversationViewModel
          * Block the person counterparty via `POST /api/users/:userId/block`
          * (route `backend/routes/blocks.js:13`). Person threads only — on
          * success the caller dismisses the details sheet and leaves the
-         * thread via [onBlocked].
+         * thread via [onBlocked]; on failure [onFailed] lets it say so,
+         * because the details sheet covers the screen's snackbar.
          */
-        fun blockUser(onBlocked: () -> Unit = {}) {
+        fun blockUser(
+            onFailed: () -> Unit = {},
+            onBlocked: () -> Unit = {},
+        ) {
             val target = mode as? ChatThreadMode.Person ?: return
             if (_isBlocking.value) return
             viewModelScope.launch {
@@ -1072,7 +1107,10 @@ class ChatConversationViewModel
                 try {
                     when (val result = blocksRepo.block(target.otherUserId)) {
                         is NetworkResult.Success -> onBlocked()
-                        is NetworkResult.Failure -> Timber.w("block user failed: ${result.error.message}")
+                        is NetworkResult.Failure -> {
+                            Timber.w("block user failed: ${result.error.message}")
+                            onFailed()
+                        }
                     }
                 } finally {
                     _isBlocking.value = false
@@ -1087,12 +1125,14 @@ class ChatConversationViewModel
          * misinformation · safety · other`, `details` optional, max 1000).
          * Person threads only, mirroring [blockUser]. On success the
          * caller dismisses the report sheet via [onReported] and the
-         * success toast is published through [reportNotice]; failures
-         * publish a friendly message there instead.
+         * success toast is published through [reportNotice]. Failures go
+         * to [onFailed] instead: the report sheet stays open over the
+         * snackbar, so the caller shows its own alert.
          */
         fun reportUser(
             reason: String,
             details: String?,
+            onFailed: () -> Unit = {},
             onReported: () -> Unit = {},
         ) {
             val target = mode as? ChatThreadMode.Person ?: return
@@ -1112,7 +1152,7 @@ class ChatConversationViewModel
                         }
                         is NetworkResult.Failure -> {
                             Timber.w("report user failed: ${result.error.message}")
-                            _reportNotice.value = "Couldn't submit the report. Please try again."
+                            onFailed()
                         }
                     }
                 } finally {
@@ -1339,6 +1379,7 @@ class ChatConversationViewModel
                         is NetworkResult.Success -> result.data.roomId
                         is NetworkResult.Failure -> {
                             Timber.w("create direct chat failed: ${result.error.message}")
+                            directRoomFailure = result.error
                             null
                         }
                     }
@@ -1881,7 +1922,11 @@ class ChatConversationViewModel
                     if (side != ChatMessageSide.Outgoing) {
                         null
                     } else if (message.clientMessageId != null && failedClientIds.contains(message.clientMessageId)) {
-                        ChatDeliveryState.Failed
+                        if (refusedClientIds.contains(message.clientMessageId)) {
+                            ChatDeliveryState.Refused
+                        } else {
+                            ChatDeliveryState.Failed
+                        }
                     } else if (message.id.startsWith("client_")) {
                         ChatDeliveryState.Sending
                     } else if (message.readAt != null) {
@@ -1896,6 +1941,7 @@ class ChatConversationViewModel
                 val showStamp =
                     hasTail ||
                         deliveryState == ChatDeliveryState.Failed ||
+                        deliveryState == ChatDeliveryState.Refused ||
                         deliveryState == ChatDeliveryState.Sending
                 val stamp = if (showStamp) stampLabel(message) else null
                 val body = bodyOf(message)

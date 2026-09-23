@@ -55,3 +55,21 @@ public struct ToastView: View {
         }
     }
 }
+
+public extension View {
+    /// Floats an error toast when a refresh fails while the screen's content
+    /// stays up, then clears the message. Screens keep what they loaded
+    /// instead of swapping it for a full-screen error.
+    func refreshFailureToast(_ message: Binding<String?>) -> some View {
+        overlay(alignment: .bottom) {
+            if let text = message.wrappedValue {
+                ToastView(message: ToastMessage(text: text, kind: .error))
+                    .padding(.bottom, Spacing.s10)
+                    .task(id: text) {
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        message.wrappedValue = nil
+                    }
+            }
+        }
+    }
+}

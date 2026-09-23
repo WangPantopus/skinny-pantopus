@@ -8,6 +8,7 @@ const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
+const { escapeIlike } = require('../utils/escapeIlike');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -93,15 +94,6 @@ const packageGigSchema = Joi.object({
 
 const couponBrowseSchema = Joi.object({
   offerId: Joi.string().uuid().required(),
-});
-
-const couponOrderSchema = Joi.object({
-  offerId: Joi.string().uuid().required(),
-  items: Joi.array().items(Joi.object({
-    name: Joi.string().required(),
-    price: Joi.number().required(),
-    quantity: Joi.number().integer().min(1).default(1),
-  })).min(1).required(),
 });
 
 const riskAppealSchema = Joi.object({
@@ -1218,7 +1210,8 @@ router.get('/vault/search', async (req, res, next) => {
     }
     // General text search
     else {
-      query = query.or(`subject.ilike.%${q}%,content.ilike.%${q}%,sender_display.ilike.%${q}%`);
+      const escapedQ = escapeIlike(q);
+      query = query.or(`subject.ilike.%${escapedQ}%,content.ilike.%${escapedQ}%,sender_display.ilike.%${escapedQ}%`);
     }
 
     query = query.order('created_at', { ascending: false })
@@ -1416,113 +1409,18 @@ router.post('/coupon/browse', validate(couponBrowseSchema), async (req, res, nex
   } catch (err) { next(err); }
 });
 
-// POST /coupon/order — place an order with coupon
-router.post('/coupon/order', validate(couponOrderSchema), async (req, res, next) => {
-  try {
-    const { offerId, items } = req.body;
-
-    const { data: offer } = await supabaseAdmin
-      .from('EarnOffer')
-      .select('*')
-      .eq('id', offerId)
-      .single();
-
-    if (!offer) return res.status(404).json({ error: 'Offer not found' });
-
-    const subtotal = items.reduce((s, i) => s + i.price * (i.quantity || 1), 0);
-    let discount = 0;
-    if (offer.discount_type === 'percentage' && offer.discount_value) {
-      discount = +(subtotal * offer.discount_value / 100).toFixed(2);
-    } else if (offer.discount_type === 'fixed' && offer.discount_value) {
-      discount = Math.min(offer.discount_value, subtotal);
-    }
-    const total = +(subtotal - discount).toFixed(2);
-
-    const orderId = require('crypto').randomUUID();
-
-    // Create redemption record
-    const { data: redemption } = await supabaseAdmin
-      .from('OfferRedemption')
-      .insert({
-        offer_id: offerId,
-        user_id: req.user.id,
-        merchant_id: offer.merchant_id,
-        redemption_type: 'in_app_order',
-        order_id: orderId,
-        order_total: total,
-        discount_applied: discount,
-        status: 'redeemed',
-        redeemed_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    // Release earn payout immediately for converted offers
-    await supabaseAdmin
-      .from('EarnTransaction')
-      .update({
-        status: 'available',
-        verified_at: new Date().toISOString(),
-      })
-      .eq('user_id', req.user.id)
-      .eq('offer_id', offerId);
-
-    // Auto-create receipt in personal drawer
-    const { data: receipt } = await supabaseAdmin
-      .from('Mail')
-      .insert({
-        recipient_user_id: req.user.id,
-        drawer: 'personal',
-        mail_object_type: 'envelope',
-        type: 'receipt',
-        category: 'receipt',
-        sender_display: offer.business_name,
-        sender_trust: 'verified_business',
-        subject: `Order receipt from ${offer.business_name}`,
-        content: `Order #${orderId.slice(0, 8)} · Total: $${total} · Saved: $${discount}`,
-        preview_text: `$${total} order · Saved $${discount} with mailbox coupon`,
-        lifecycle: 'delivered',
-        urgency: 'none',
-        key_facts: JSON.stringify([
-          { field: 'Amount', value: `$${total}`, confidence: 1 },
-          { field: 'Discount', value: `$${discount}`, confidence: 1 },
-          { field: 'Order ID', value: orderId.slice(0, 8), confidence: 1 },
-        ]),
-      })
-      .select()
-      .single();
-
-    // Auto-file receipt to Receipts folder
-    if (receipt) {
-      const { data: receiptFolder } = await supabaseAdmin
-        .from('VaultFolder')
-        .select('id')
-        .eq('user_id', req.user.id)
-        .eq('label', 'Receipts')
-        .eq('drawer', 'personal')
-        .single();
-
-      if (receiptFolder) {
-        await supabaseAdmin
-          .from('Mail')
-          .update({ vault_folder_id: receiptFolder.id, lifecycle: 'filed' })
-          .eq('id', receipt.id);
-      }
-    }
-
-    await logMailEvent(req.user.id, 'coupon_order_placed', null, {
-      offer_id: offerId, order_id: orderId, total, discount_applied: discount,
-    });
-
-    res.json({
-      orderId,
-      subtotal,
-      discount,
-      total,
-      receiptMailId: receipt?.id,
-      earnPayoutReleased: true,
-    });
-  } catch (err) { next(err); }
+// POST /coupon/order — disabled: coupon orders aren't available yet, and no app calls this route.
+// The previous handler set the caller's EarnTransaction for any existing offer to `available`. It did so with no
+// checks, lifting risk holds (flagged, under_review, rejected), and it could be repeated. Nothing here writes
+// EarnTransaction now. A real implementation needs at least:
+//   - ownership: the offer was delivered to the caller and they opened it;
+//   - a status filter: release only a transaction that passed the dwell check (`verified`), never a held
+//     (`flagged`, `under_review`, `suspended`) or `rejected` one;
+//   - idempotency: one order per user and offer, so a repeat can't add redemptions or re-release a payout;
+//   - a price minimum: every item price must be positive;
+//   - a valid receipt type: `Mail.type` 'receipt' fails Mail_type_check, so the receipt letter was never created.
+router.post('/coupon/order', (req, res) => {
+  res.status(410).json({ error: "Coupon orders aren't available yet." });
 });
 
 // POST /coupon/save — save offer for later/in-store use

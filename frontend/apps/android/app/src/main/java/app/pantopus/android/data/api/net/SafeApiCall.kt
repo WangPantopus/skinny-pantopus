@@ -16,16 +16,15 @@ import java.io.IOException
  *
  * Usage: `val result = safeApiCall { authApi.login(body) }`.
  *
- * [surfaceForbiddenBody] is OPT-IN and defaults to the historical
- * behaviour, so every existing call site keeps mapping 403 to the canned
- * [NetworkError.Forbidden] object it already switches on. Pass `true`
- * only where the route writes a 403 sentence the resident must actually
- * read — e.g. the Real Rent contribution's `VERIFICATION_REQUIRED`,
- * whose whole message ("verify your address…") IS the next step. With
- * the flag on, a 403 that carries a body arrives as
- * [NetworkError.ClientError] (code 403) so the server's copy survives,
- * exactly as 400 already does; a bodiless 403 still maps to
- * [NetworkError.Forbidden].
+ * A 403 maps to [NetworkError.Forbidden], which every existing call site
+ * already switches on; its message is the server's sentence when the body
+ * carries a readable one, else the generic copy.
+ * [surfaceForbiddenBody] is OPT-IN: pass `true` only where the caller must
+ * read the raw 403 body — e.g. the Real Rent contribution's
+ * `VERIFICATION_REQUIRED`, whose whole message ("verify your address…")
+ * IS the next step. With the flag on, a 403 that carries a body arrives as
+ * [NetworkError.ClientError] (code 403), exactly as 400 already does; a
+ * bodiless 403 still maps to [NetworkError.Forbidden].
  */
 suspend inline fun <T> safeApiCall(
     surfaceForbiddenBody: Boolean = false,
@@ -42,7 +41,7 @@ suspend inline fun <T> safeApiCall(
                     if (surfaceForbiddenBody && !body.isNullOrBlank()) {
                         NetworkError.ClientError(403, body)
                     } else {
-                        NetworkError.Forbidden
+                        NetworkError.Forbidden(body)
                     }
                 404 -> NetworkError.NotFound
                 in 400..499 -> NetworkError.ClientError(error.code(), body)

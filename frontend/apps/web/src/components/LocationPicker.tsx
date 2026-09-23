@@ -34,9 +34,14 @@ function classNames(...xs: Array<string | false | null | undefined>) {
 
 function coordsFromHome(h: Record<string, any>) {
   // Try multiple location formats
-  
-  // 1. GeoJSON object: { type: 'Point', coordinates: [lng, lat] }
   const loc = h?.location as Record<string, any> | undefined;
+
+  // 0. { latitude, longitude } — what the Home list (/api/homes/my-homes, /primary) returns.
+  if (Number.isFinite(loc?.latitude) && Number.isFinite(loc?.longitude)) {
+    return { latitude: loc?.latitude as number, longitude: loc?.longitude as number };
+  }
+
+  // 1. GeoJSON object: { type: 'Point', coordinates: [lng, lat] }
   const coords = loc?.coordinates as number[] | undefined;
   if (coords && coords.length >= 2) {
     const [lng, lat] = coords;

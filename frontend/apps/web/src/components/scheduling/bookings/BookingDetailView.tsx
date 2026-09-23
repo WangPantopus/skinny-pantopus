@@ -137,9 +137,11 @@ export default function BookingDetailView({
             <div className="truncate text-sm font-bold text-app-text">
               {inviteeDisplay(booking.invitee_name)}
             </div>
-            <div className="truncate text-xs text-app-text-muted">
-              {booking.invitee_email || "Verified requester"}
-            </div>
+            {booking.invitee_email && (
+              <div className="truncate text-xs text-app-text-muted">
+                {booking.invitee_email}
+              </div>
+            )}
           </div>
           {booking.invitee_email && (
             <a

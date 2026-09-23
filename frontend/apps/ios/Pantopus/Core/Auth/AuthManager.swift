@@ -147,6 +147,11 @@ final class AuthManager {
     /// A request that raced the sign-out may still 401; that 401 must not
     /// end (and label) a session the user just ended themselves.
     var didSignOutDeliberately = false
+    /// Set while the account's own DELETE is in flight. The server revokes
+    /// the account's sessions before it answers; that revocation is the
+    /// deletion itself, which ends with an explicit sign-out, not a
+    /// security sign-out.
+    var accountDeletionInFlight = false
 
     /// Server session id (`AuthSession.id`) of the live session.
     private(set) var sessionId: String?
@@ -542,6 +547,11 @@ final class AuthManager {
         if didSignOutDeliberately, case .signedOut = state {
             lastRefreshRejection = nil
             logger.info("Ignoring 401 that raced a deliberate sign-out")
+            return
+        }
+        if accountDeletionInFlight {
+            lastRefreshRejection = nil
+            logger.info("Ignoring 401 that raced the account's own deletion")
             return
         }
         let reason = lastRefreshRejection ?? .expired

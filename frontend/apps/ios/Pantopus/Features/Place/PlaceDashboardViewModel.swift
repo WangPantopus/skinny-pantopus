@@ -21,6 +21,9 @@ final class PlaceDashboardViewModel {
     }
 
     private(set) var state: State = .loading
+    /// Set when a refresh fails while the dashboard is on screen: it stays
+    /// and this shows as a toast. The view clears it after display.
+    var refreshFailureMessage: String?
     let homeId: String
     /// `Home.move_in_date`, read alongside the intelligence; nil until the
     /// detail fetch lands or when the home has none. Drives `JustMovedCard`.
@@ -96,10 +99,14 @@ final class PlaceDashboardViewModel {
             // keeps the last known value so the card does not blink out.
             if let detail = await detail { moveInDate = detail.home.base.moveInDate }
             state = .loaded(intelligence)
-        } catch let error as APIError {
-            state = .error(message: error.errorDescription ?? "Couldn't load your place.")
         } catch {
-            state = .error(message: "Couldn't load your place.")
+            let message = (error as? APIError)?.errorDescription ?? "Couldn't load your place."
+            if case .loaded = state {
+                // Keep the dashboard on screen; a failed refresh only toasts.
+                refreshFailureMessage = message
+            } else {
+                state = .error(message: message)
+            }
         }
     }
 }

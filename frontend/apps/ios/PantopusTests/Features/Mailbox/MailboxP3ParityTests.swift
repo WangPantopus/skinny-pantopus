@@ -16,15 +16,17 @@ import XCTest
 final class MailboxP3ParityTests: XCTestCase {
     // MARK: - CATEGORY_ACTIONS (constants.ts:25-33)
 
-    func test_categoryActions_matchRNVerbatim() {
+    /// RN's rows minus the tiles that only logged a click (Pay, Sign, Remind,
+    /// Forward, Dispute, Share with Household, Acknowledge).
+    func test_categoryActions_offerOnlyTilesThatWork() {
         let expected: [String: [String]] = [
-            "bill": ["Pay", "Remind", "File", "Forward", "Dispute"],
-            "legal": ["File Now", "Forward", "Remind"],
-            "notice": ["Acknowledge", "Share with Household", "Create Task", "File"],
-            "receipt": ["File", "Forward"],
-            "community": ["Acknowledge", "Share with Household", "File"],
+            "bill": ["File"],
+            "legal": ["File Now"],
+            "notice": ["Create Task", "File"],
+            "receipt": ["File"],
+            "community": ["File"],
             "promo": ["Save Offer", "Dismiss"],
-            "other": ["File", "Forward"]
+            "other": ["File"]
         ]
         for (category, labels) in expected {
             let actions = MailCategoryActions.actions(
@@ -37,14 +39,14 @@ final class MailboxP3ParityTests: XCTestCase {
 
     func test_unknownCategory_fallsBackToOther() {
         let actions = MailCategoryActions.actions(forCategory: "not-a-category", isSenderUnknown: false)
-        XCTAssertEqual(actions.map(\.label), ["File", "Forward"])
+        XCTAssertEqual(actions.map(\.label), ["File"])
         let missing = MailCategoryActions.actions(forCategory: nil, isSenderUnknown: false)
-        XCTAssertEqual(missing.map(\.label), ["File", "Forward"])
+        XCTAssertEqual(missing.map(\.label), ["File"])
     }
 
     func test_unknownSender_suppressesPayAndSign() {
         let actions = MailCategoryActions.actions(forCategory: "bill", isSenderUnknown: true)
-        XCTAssertEqual(actions.map(\.label), ["Remind", "File", "Forward", "Dispute"])
+        XCTAssertEqual(actions.map(\.label), ["File"])
         XCTAssertFalse(actions.contains(.pay))
         XCTAssertFalse(actions.contains(.sign))
     }

@@ -34,6 +34,7 @@ const {
 } = require('../utils/moduleSchemas');
 const { fanoutUrgentTask } = require('../services/urgentFanoutService');
 const { alertMatchingSavedSearches } = require('../services/savedSearchAlertService');
+const { checkHomePermission } = require('../utils/homePermissions');
 
 // ── Undo window duration (ms) ────────────────────────────────
 const UNDO_WINDOW_MS = 10_000; // 10 seconds
@@ -429,6 +430,11 @@ router.post('/magic-post', verifyToken, validate(magicPostSchema), async (req, r
 
     // ── Build gig data ──
     const normalizedLocation = normalizeMagicPostLocation(location);
+    // Posting from a Home needs home.view there: its members see these tasks on the Home help card.
+    if (normalizedLocation?.homeId
+      && !(await checkHomePermission(normalizedLocation.homeId, userId, 'home.view')).hasAccess) {
+      return res.status(403).json({ error: "You can't post from that Home." });
+    }
     const approx = normalizedLocation
       ? calculateApproxLocation(normalizedLocation.latitude, normalizedLocation.longitude)
       : null;
@@ -477,7 +483,9 @@ router.post('/magic-post', verifyToken, validate(magicPostSchema), async (req, r
       is_urgent: draft.is_urgent || false,
       tags: draft.tags || [],
       attachments: draft.attachments || [],
-      items: draft.items ? JSON.stringify(draft.items) : '[]',
+      // `items` is jsonb: pass the array itself. A JSON string here is stored as a jsonb string, which clients
+      // reading `gig.items` as an array can't decode.
+      items: Array.isArray(draft.items) ? draft.items : [],
       // Location
       origin_mode: normalizedLocation
         ? (normalizedLocation.mode === 'custom' ? 'address' : normalizedLocation.mode) || 'address'
@@ -510,8 +518,9 @@ router.post('/magic-post', verifyToken, validate(magicPostSchema), async (req, r
       // Source tracking
       source_flow: source_flow || 'magic',
       engagement_mode: resolvedEngagementMode,
-      // T6.0b — helper-engagement format. Defaults to in_person via DB.
-      task_format: task_format || null,
+      // T6.0b — helper-engagement format. Gig.task_format is NOT NULL and an
+      // explicit null skips the column default, so default it here as gigs.js does.
+      task_format: task_format || 'in_person',
       ai_confidence: ai_confidence || null,
       ai_draft_json: ai_draft_json || null,
       // Task archetype + module fields

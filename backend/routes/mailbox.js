@@ -5,12 +5,15 @@ const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
-const { getAccessibleHomeIds, canAccessMail, homeMailFilter, visibleMailFilter } = require('../utils/homeMailAccess');
+const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, homeMailFilter, visibleMailFilter } = require('../utils/homeMailAccess');
+const { HOME_DOCUMENT_TYPES } = require('../utils/homeDocumentAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { checkHomePermission } = require('../utils/homePermissions');
+const { getBusinessIdsWithPermissions } = require('../utils/businessPermissions');
+const { VERIFICATION_RANK } = require('../utils/businessConstants');
 const s3 = require('../services/s3Service');
 const notificationService = require('../services/notificationService');
 const emailService = require('../services/emailService');
@@ -685,25 +688,28 @@ const getHomeForRouting = async (homeId) => {
   return home || null;
 };
 
+// Who may send a letter to a Home: anyone who can open the Home's mail (the
+// Home mail rule), and its owners, the same test as isUserLinkedToHome. It used
+// finance.view, which only owners hold, so a resident could not write to their
+// own Home.
 const hasHomeAccess = async (homeId, userId) => {
   const home = await getHomeForRouting(homeId);
   if (!home) {
     return { allowed: false, home: null };
   }
 
-  const mailAccess = await checkHomePermission(homeId, userId, 'finance.view');
-  if (mailAccess.hasAccess) {
-    return { allowed: true, home };
-  }
-
-  return { allowed: false, home };
+  return { allowed: await isUserLinkedToHome(home, userId), home };
 };
 
+// "Lives at this home" for a letter addressed to a person at a Home: they can
+// open this Home's mail under the Home mail rule (utils/homeMailAccess), or
+// they own it. It used finance.view, which only owners hold, so a letter to any
+// other resident was refused.
 const isUserLinkedToHome = async (home, userId) => {
   if (!home || !userId) return false;
-
-  const mailAccess = await checkHomePermission(home.id, userId, 'finance.view');
-  return mailAccess.hasAccess;
+  if ((await trustedHomeIdsOrThrow(userId)).includes(home.id)) return true;
+  const access = await checkHomePermission(home.id, userId);
+  return access.hasAccess === true && access.isOwner === true;
 };
 
 const hasVerifiedSenderHome = async (userId) => {
@@ -737,6 +743,42 @@ const sendHomeVerificationRequired = (res) =>
     message: HOME_ADDRESS_VERIFICATION_REQUIRED_DETAIL,
     code: HOME_ADDRESS_VERIFICATION_REQUIRED_CODE,
   });
+
+const normalizeBusinessName = (name) => String(name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+// The businesses a user may send mail as: business IAM 'mail.send' (owners always may), each with its own name and
+// whether it is verified (document- or government-verified). Compose lists them in its "Send as" picker.
+const listSenderBusinesses = async (senderId) => {
+  const businessIds = await getBusinessIdsWithPermissions(senderId, ['mail.send']);
+  if (businessIds.length === 0) return [];
+  const [{ data: businesses, error }, { data: profiles }] = await Promise.all([
+    supabaseAdmin.from('User').select('id, name').in('id', businessIds).eq('account_type', 'business'),
+    supabaseAdmin.from('BusinessProfile').select('business_user_id, verification_status').in('business_user_id', businessIds),
+  ]);
+  if (error) {
+    logger.warn('Sender business lookup failed', { senderId, error: error.message });
+    return [];
+  }
+  const statusById = new Map((profiles || []).map((profile) => [profile.business_user_id, profile.verification_status]));
+  return (businesses || [])
+    .filter((business) => typeof business.name === 'string' && business.name.trim())
+    .map((business) => ({
+      id: business.id,
+      name: business.name.trim(),
+      verified: (VERIFICATION_RANK[statusById.get(business.id)] || 0) >= VERIFICATION_RANK.document_verified,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+};
+
+// A letter names a business as its sender only when it is one of listSenderBusinesses. The requested name only picks
+// among them; the letter then carries the business's own name. It is 'verified_business' only when that business is
+// verified. Otherwise the letter goes out under the sender's own name and the requested name is not stored.
+const resolveSenderBusiness = async (senderId, requestedName) => {
+  const wanted = normalizeBusinessName(requestedName);
+  if (!wanted) return null;
+  const businesses = await listSenderBusinesses(senderId);
+  return businesses.find((business) => normalizeBusinessName(business.name) === wanted) || null;
+};
 
 
 // Home letters are filtered by the Home mail rule (utils/homeMailAccess, M01):
@@ -1126,7 +1168,10 @@ const createHomeDocumentFanoutTarget = async ({
   homeId,
   senderId
 }) => {
-  const docType = pickExtractedString(mail, ['doc_type', 'docType']) || 'mail_document';
+  // HomeDocument_type_chk allows only HOME_DOCUMENT_TYPES; an unknown or missing
+  // type is 'other' (it defaulted to 'mail_document', which failed every insert).
+  const extractedDocType = pickExtractedString(mail, ['doc_type', 'docType']);
+  const docType = HOME_DOCUMENT_TYPES.includes(extractedDocType) ? extractedDocType : 'other';
   const title = mail.display_title || mail.subject || 'Mailbox document';
   const mimeType = pickExtractedString(mail, ['mime_type', 'mimeType']);
   const sizeBytes = pickExtractedNumber(mail, ['size_bytes', 'sizeBytes']);
@@ -1213,7 +1258,8 @@ const autoFanoutMailTargets = async ({
   mail,
   homeId,
   senderId,
-  outcomes: outcomesList
+  outcomes: outcomesList,
+  failed = [],
 }) => {
   if (!mail || !homeId) return [];
 
@@ -1224,6 +1270,13 @@ const autoFanoutMailTargets = async ({
   // Determine which fan-out targets to create based on type AND outcomes
   const targets = [];
 
+  // A letter meant for one person (attn_only) creates no household record: a
+  // HomeBill, HomeDocument, HomePackage or HomeTask is read by the household,
+  // so the attention person keeps the letter in their mailbox instead.
+  if (String(mail.delivery_visibility || '') === 'attn_only') {
+    return [];
+  }
+
   // Type-based fan-out
   if (rawType === 'bill' || rawType === 'statement' || mailType === 'bill' || oc.includes('pay_now')) {
     targets.push('bill');
@@ -1231,7 +1284,9 @@ const autoFanoutMailTargets = async ({
   if (rawType === 'package') {
     targets.push('package');
   }
-  if (rawType === 'document' || mailType === 'packet' || oc.includes('save_to_records')) {
+  // A package letter's deliverable type is also 'packet'; its record is the
+  // HomePackage, so only document letters and "save to records" add a HomeDocument.
+  if (rawType === 'document' || (mailType === 'packet' && rawType !== 'package') || oc.includes('save_to_records')) {
     // Avoid duplicate if bill already covers document
     if (!targets.includes('document')) {
       targets.push('document');
@@ -1248,34 +1303,51 @@ const autoFanoutMailTargets = async ({
   const links = [];
 
   for (const targetType of targets) {
-    // Skip if link already exists for this target type
-    const existingLink = await getMailLinkByType(mail.id, targetType);
-    if (existingLink) {
-      links.push(existingLink);
-      continue;
+    // One failed target must not drop the others; the caller tells the sender
+    // which ones failed instead of reporting a plain success.
+    try {
+      // Skip if link already exists for this target type
+      const existingLink = await getMailLinkByType(mail.id, targetType);
+      if (existingLink) {
+        links.push(existingLink);
+        continue;
+      }
+
+      let targetId = null;
+      if (targetType === 'bill') {
+        targetId = await createHomeBillFanoutTarget({ mail, homeId, senderId });
+      } else if (targetType === 'document') {
+        targetId = await createHomeDocumentFanoutTarget({ mail, homeId, senderId });
+      } else if (targetType === 'package') {
+        targetId = await createHomePackageFanoutTarget({ mail, homeId, senderId });
+      } else if (targetType === 'task') {
+        targetId = await createHomeTaskFanoutTarget({ mail, homeId, senderId });
+      }
+
+      if (!targetId) {
+        failed.push(targetType);
+        continue;
+      }
+
+      // A HomeTask records its letter itself (source_mail_id); MailLink has no
+      // 'task' target type, so writing one failed after the task was created.
+      if (targetType === 'task') {
+        links.push({ target_type: 'task', target_id: targetId });
+        continue;
+      }
+
+      const link = await upsertMailLink({
+        mailId: mail.id,
+        targetType,
+        targetId,
+        createdBy: 'system'
+      });
+
+      if (link) links.push(link);
+    } catch (targetErr) {
+      failed.push(targetType);
+      logger.warn('Mailbox fanout target failed', { mailId: mail.id, homeId, targetType, error: targetErr.message });
     }
-
-    let targetId = null;
-    if (targetType === 'bill') {
-      targetId = await createHomeBillFanoutTarget({ mail, homeId, senderId });
-    } else if (targetType === 'document') {
-      targetId = await createHomeDocumentFanoutTarget({ mail, homeId, senderId });
-    } else if (targetType === 'package') {
-      targetId = await createHomePackageFanoutTarget({ mail, homeId, senderId });
-    } else if (targetType === 'task') {
-      targetId = await createHomeTaskFanoutTarget({ mail, homeId, senderId });
-    }
-
-    if (!targetId) continue;
-
-    const link = await upsertMailLink({
-      mailId: mail.id,
-      targetType,
-      targetId,
-      createdBy: 'system'
-    });
-
-    if (link) links.push(link);
   }
 
   return links;
@@ -1360,7 +1432,12 @@ router.get('/', verifyToken, async (req, res) => {
         priority,
         attachments,
         expires_at,
-        created_at
+        created_at,
+        sender:sender_user_id (
+          id,
+          username,
+          name
+        )
       `, { count: 'exact' })
       .eq('archived', archived === 'true')
       .order('created_at', { ascending: false })
@@ -1509,6 +1586,20 @@ router.patch('/preferences', verifyToken, validate(updatePreferencesSchema), asy
   } catch (err) {
     logger.error('Preferences update error', { error: err.message, userId: req.user.id });
     res.status(500).json({ error: 'Failed to update preferences' });
+  }
+});
+
+/**
+ * GET /api/mailbox/sender-businesses
+ * The businesses the signed-in user may send mail as, for compose's "Send as" picker (the list POST /send accepts).
+ */
+router.get('/sender-businesses', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    res.json({ businesses: await listSenderBusinesses(req.user.id) });
+  } catch (err) {
+    logger.error('Sender businesses fetch error', { error: err.message, userId: req.user.id });
+    res.status(500).json({ error: "Couldn't load the businesses you can send as." });
   }
 });
 
@@ -1734,7 +1825,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       subject,
       content,
       attachments,
-      senderBusinessName,
+      senderBusinessName: requestedSenderBusinessName,
       senderAddress,
       payoutAmount,
       category,
@@ -1750,13 +1841,17 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       .select('name, username')
       .eq('id', senderId)
       .maybeSingle();
+    // The client's senderBusinessName is only a request: see resolveSenderBusiness.
+    const senderBusiness = await resolveSenderBusiness(senderId, requestedSenderBusinessName);
+    const senderBusinessName = senderBusiness ? senderBusiness.name : null;
+    objectPayload.envelope.senderBusinessName = senderBusinessName;
     const senderDisplayName = (
       senderBusinessName ||
       senderProfile?.name ||
       senderProfile?.username ||
       'Someone'
     ).trim();
-    const senderTrust = senderBusinessName ? 'verified_business' : 'pantopus_user';
+    const senderTrust = senderBusiness?.verified ? 'verified_business' : 'pantopus_user';
 
     // ── Non-user escrow path ──────────────────────────────────
     const escrowContact = normalizeEscrowContact(req.body.recipientEmail || req.body.recipientPhone || null);
@@ -1963,6 +2058,18 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       }
     }
 
+    // A Home letter's attention person must be able to open this Home's mail
+    // (the Home mail rule). Otherwise an attn_only letter was stored for nobody,
+    // or failed the attention foreign key when the person's account was gone.
+    if (deliveryTargetType === 'home' && attnUserId) {
+      const attnHomeIds = await trustedHomeIdsOrThrow(attnUserId);
+      if (!addressHome || !attnHomeIds.includes(addressHome.id)) {
+        return res.status(400).json({
+          error: 'That person doesn\u2019t live at the selected home address.'
+        });
+      }
+    }
+
     // Check user preferences if sending ad
     if (type === 'ad' && recipientUserId) {
       const prefs = await getUserPreferences(recipientUserId);
@@ -2016,6 +2123,9 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       delivery_target_id: deliveryTargetId,
       recipient_type: deliveryTargetType,
       recipient_id: deliveryTargetId,
+      // Mail for a Home is Home mail. Left to the column default ('personal'), a household letter had no personal
+      // recipient and sat outside the Home drawer, so the Mailbox drawers (native apps) listed it for nobody.
+      drawer: deliveryTargetType === 'home' ? 'home' : 'personal',
       address_id: addressHomeId || recipientHomeId || null,
       address_home_id: addressHomeId || recipientHomeId || null,
       attn_user_id: attnUserId || null,
@@ -2035,6 +2145,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     }
 
     let fanoutLinks = [];
+    const fanoutFailed = [];
     const fanoutHomeId = addressHomeId || recipientHomeId || null;
     // Fan out for home-targeted mail, or for user-targeted mail with outcome-based
     // fan-out triggers (save_to_records, create_task, pay_now) when a home is known
@@ -2050,9 +2161,11 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
           mail,
           homeId: fanoutHomeId,
           senderId,
-          outcomes
+          outcomes,
+          failed: fanoutFailed,
         });
       } catch (fanoutErr) {
+        fanoutFailed.push('home_records');
         logger.warn('Mailbox fanout failed', {
           mailId: mail.id,
           senderId,
@@ -2164,6 +2277,8 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     res.status(201).json({
       message: 'Mail sent successfully',
       fanoutLinks,
+      // Home records (bill, document, package, task) the letter was meant to add but could not.
+      fanoutFailed,
       mail: {
         id: mail.id,
         type: mail.type,
@@ -2181,6 +2296,8 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
         attnUserId: mail.attn_user_id || null,
         attnLabel: mail.attn_label || null,
         deliveryVisibility: mail.delivery_visibility || null,
+        // The business the letter went out as (null: the sender's own name), so compose can tell a dropped choice.
+        senderBusinessName: mail.sender_business_name || null,
         links: fanoutLinks,
         createdAt: mail.created_at,
         objectId: objectResult?.objectId || mail.object_id || null

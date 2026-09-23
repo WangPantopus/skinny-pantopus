@@ -6,9 +6,10 @@ import { Hammer, User, Store, Megaphone } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { DiscoveryItem, DiscoveryFilter } from '@pantopus/api';
 
+// No "People" tab: `filter=people` never returns anyone today, so the tab
+// could only ever be empty. Whether and how to list people is a product call.
 const FILTER_TABS: { key: DiscoveryFilter; label: string }[] = [
   { key: 'gigs', label: 'Tasks' },
-  { key: 'people', label: 'People' },
   { key: 'businesses', label: 'Businesses' },
   { key: 'posts', label: 'Posts' },
 ];
@@ -33,9 +34,12 @@ export default function HubDiscovery({ lat, lng }: HubDiscoveryProps) {
   const [activeFilter, setActiveFilter] = useState<DiscoveryFilter>('gigs');
   const [items, setItems] = useState<DiscoveryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed request must not read as "Nothing nearby yet".
+  const [failed, setFailed] = useState(false);
 
   const fetchDiscovery = useCallback(async (filter: DiscoveryFilter) => {
     setLoading(true);
+    setFailed(false);
     try {
       const res = await api.hub.getDiscovery({
         filter,
@@ -46,6 +50,7 @@ export default function HubDiscovery({ lat, lng }: HubDiscoveryProps) {
       setItems(res.items || []);
     } catch {
       setItems([]);
+      setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -58,7 +63,8 @@ export default function HubDiscovery({ lat, lng }: HubDiscoveryProps) {
   };
 
   const handleItemPress = (item: DiscoveryItem) => {
-    if (item.route) router.push(item.route);
+    const path = webPathForDiscovery(item);
+    if (path) router.push(path);
   };
 
   return (
@@ -99,6 +105,16 @@ export default function HubDiscovery({ lat, lng }: HubDiscoveryProps) {
           <div className="flex justify-center py-8">
             <div className="animate-spin h-5 w-5 border-2 border-emerald-600 border-t-transparent rounded-full" />
           </div>
+        ) : failed ? (
+          <div className="text-center py-8">
+            <p className="text-sm text-app-text-muted">Couldn&apos;t load this right now.</p>
+            <button
+              onClick={() => fetchDiscovery(activeFilter)}
+              className="mt-2 text-xs font-semibold text-emerald-600 hover:text-emerald-700"
+            >
+              Try again
+            </button>
+          </div>
         ) : items.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-sm text-app-text-muted">Nothing nearby yet</p>
@@ -133,4 +149,28 @@ export default function HubDiscovery({ lat, lng }: HubDiscoveryProps) {
       </div>
     </div>
   );
+}
+
+/**
+ * Discovery items carry the native route vocabulary (`/user/:id`,
+ * `/businesses/:id`, `/gigs/:id`, `/posts/:id`). Web has no such pages, so map
+ * each kind to the in-app page that shows it.
+ */
+function webPathForDiscovery(item: DiscoveryItem): string | null {
+  const route = item.route || '';
+  const match = route.match(/^\/(user|businesses|gigs|posts|listings)\/([^/?#]+)/);
+  if (!match) return route.startsWith('/app/') ? route : null;
+  const [, kind, id] = match;
+  switch (kind) {
+    case 'user':
+      return `/${id}`; // the public profile page accepts an account id
+    case 'businesses':
+      return item.username ? `/b/${item.username}` : null;
+    case 'gigs':
+      return `/app/gigs/${id}`;
+    case 'posts':
+      return `/app/feed/post/${id}`;
+    default:
+      return `/app/marketplace/${id}`;
+  }
 }

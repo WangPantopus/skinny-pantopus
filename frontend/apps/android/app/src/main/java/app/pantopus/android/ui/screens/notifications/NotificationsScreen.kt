@@ -32,6 +32,7 @@ const val NOTIFICATIONS_TAG = "notifications"
 @Composable
 fun NotificationsScreen(
     onBack: () -> Unit,
+    onOpenGig: (String) -> Unit = {},
     viewModel: NotificationsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -44,6 +45,9 @@ fun NotificationsScreen(
     LaunchedEffect(Unit) {
         viewModel.load()
         Analytics.track(AnalyticsEvent.ScreenNotificationsViewed)
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.openGig.collect { gigId -> onOpenGig(gigId) }
     }
 
     Box(modifier = Modifier.fillMaxSize().testTag(NOTIFICATIONS_TAG)) {

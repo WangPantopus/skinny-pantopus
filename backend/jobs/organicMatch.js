@@ -19,6 +19,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { isNewBusiness } = require('../utils/discoveryScoring');
 
 const MATCH_LIMIT = 5;        // Top 5 candidates (3 shown, 2 fallback)
 const CACHE_SHOW_LIMIT = 3;   // Snapshot top 3 for fast initial render
@@ -26,6 +27,7 @@ const RADIUS_METERS = 8047;   // ~5 miles
 const CACHE_TTL_DAYS = 7;     // Re-run match after 7 days
 const MAX_POST_AGE_DAYS = 30; // Stop showing card after 30 days
 const BATCH_SIZE = 50;        // Max posts per cron run
+const METERS_PER_MILE = 1609.34;
 
 /**
  * Match businesses for a single post.
@@ -52,23 +54,20 @@ async function matchBusinessesForPost(postId) {
     const postAgeDays = (Date.now() - new Date(post.created_at).getTime()) / (1000 * 60 * 60 * 24);
     if (postAgeDays > MAX_POST_AGE_DAYS) return;
 
-    // 2. Search for businesses near the post location matching the service category
+    // 2. Search for businesses near the post location matching the service category.
+    // Arguments are the SQL function's own parameters; it returns published
+    // businesses in the category within the radius, nearest first.
     const { data: results, error: searchErr } = await supabaseAdmin.rpc(
       'find_businesses_nearby',
       {
-        p_lat: post.latitude,
-        p_lon: post.longitude,
+        p_center_lat: post.latitude,
+        p_center_lon: post.longitude,
         p_radius_meters: RADIUS_METERS,
-        p_categories: [post.service_category],
-        p_open_now_only: false,
-        p_worked_nearby: false,
-        p_accepts_gigs: false,
-        p_new_on_pantopus: false,
-        p_rating_min: null,
-        p_sort: 'relevance',
         p_viewer_home_id: null,
-        p_page: 1,
-        p_page_size: MATCH_LIMIT,
+        p_categories: [post.service_category],
+        p_rating_min: null,
+        p_limit: MATCH_LIMIT,
+        p_entity_types: null,
       },
     );
 
@@ -101,9 +100,9 @@ async function matchBusinessesForPost(postId) {
       categories: m.categories || [],
       average_rating: m.average_rating != null ? parseFloat(m.average_rating) : null,
       review_count: parseInt(m.review_count, 10) || 0,
-      distance_miles: m.distance_miles != null ? parseFloat(m.distance_miles) : null,
+      distance_miles: m.distance_meters != null ? Number((m.distance_meters / METERS_PER_MILE).toFixed(2)) : null,
       neighbor_count: parseInt(m.neighbor_count, 10) || 0,
-      is_new_business: m.is_new_business || false,
+      is_new_business: isNewBusiness(m.completed_gigs, m.profile_created_at),
       is_open_now: m.is_open_now,
       cached_at: new Date().toISOString(),
     }));

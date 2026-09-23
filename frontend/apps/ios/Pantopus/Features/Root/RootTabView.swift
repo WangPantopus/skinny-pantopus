@@ -10,6 +10,8 @@
 //  two segments, with the unread badge on the tab.
 //
 
+// swiftlint:disable file_length
+
 import Logging
 import SwiftUI
 
@@ -134,9 +136,11 @@ public struct RootTabView: View {
         .task {
             consumeInviteDeepLinkIfNeeded(pending: router.pending)
         }
-        .fullScreenCover(isPresented: $showProfile) {
-            YouTabRoot(expandMonthlyReceipt: expandMonthlyReceipt)
-        }
+        .fullScreenCover(
+            isPresented: $showProfile,
+            onDismiss: { expandMonthlyReceipt = false },
+            content: { YouTabRoot(expandMonthlyReceipt: expandMonthlyReceipt) { showProfile = false } }
+        )
         .fullScreenCover(item: $pendingInviteToken) { item in
             TokenAcceptView(
                 viewModel: TokenAcceptViewModel(
@@ -154,6 +158,10 @@ public struct RootTabView: View {
     // swiftlint:disable:next cyclomatic_complexity
     private func consumeInviteDeepLinkIfNeeded(pending: DeepLinkRouter.Destination?) {
         guard let pending, pending == router.pending else { return }
+        // The profile cover sits above every tab: close it for a link that
+        // lands in a tab (or presents its own cover), or the destination
+        // opens hidden underneath.
+        if showProfile, !Self.keepsProfileOpen(pending) { showProfile = false }
         // Root owns cross-tab dispatch. Concrete drill-down links stay
         // pending so the selected tab can push them into its own
         // NavigationStack.
@@ -190,7 +198,8 @@ public struct RootTabView: View {
              .editBusinessPage,
              .wallet, .paymentsSettings,
              .businessOwner, .viewAs, .waitingRoom,
-             .bookingDetail, .myBookings:
+             .bookingDetail, .myBookings,
+             .invoiceDetail:
             model.selected = .place
         // Morning/Evening Briefing push — the Today tab consumes it.
         case .hubToday:
@@ -214,6 +223,15 @@ public struct RootTabView: View {
             _ = router.consume()
         case .resetPassword, .verifyEmail, .unknown:
             _ = router.consume()
+        }
+    }
+
+    /// Links that leave the profile cover in place: the monthly receipt
+    /// opens inside it, and auth / unknown links navigate nowhere.
+    private static func keepsProfileOpen(_ destination: DeepLinkRouter.Destination) -> Bool {
+        switch destination {
+        case .monthlyReceipt, .resetPassword, .verifyEmail, .unknown: true
+        default: false
         }
     }
 

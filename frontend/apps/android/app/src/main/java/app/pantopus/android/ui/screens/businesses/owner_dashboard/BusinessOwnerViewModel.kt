@@ -18,6 +18,7 @@ import app.pantopus.android.data.businessfounding.BusinessFoundingRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.ui.screens.business_profile.BusinessProfileContent
 import app.pantopus.android.ui.screens.business_profile.BusinessProfileMapper
+import app.pantopus.android.ui.screens.businesses.MyBusinessesViewModel
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
@@ -274,6 +275,7 @@ class BusinessOwnerViewModel
                 publicProfile = publicProfile,
                 canPostAsBusiness = canPost(dashboard.access?.roleBase),
                 foundingOffer = foundingOffer,
+                isVerified = MyBusinessesViewModel.isVerified(dashboard.profile?.identityVerificationTier),
             )
         }
 

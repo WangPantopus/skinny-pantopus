@@ -160,12 +160,18 @@ final class DeepLinkRouter {
         case monthlyReceipt
         /// Booking notification links (`backend/services/scheduling/
         /// bookingNotifyService.js`): `/app/profile/schedule/bookings/:id`
-        /// (lifecycle) and `/app/scheduling/bookings/:id` (personal host
-        /// reminder) open the existing host booking detail; the endpoint's
-        /// own authorization decides what a non-host sees.
-        case bookingDetail(bookingId: String)
+        /// and `/app/scheduling/bookings/:id` open the existing host booking
+        /// detail for `owner` (`?ot=home|business&oid=` on a Home- or
+        /// Business-owned booking, else personal); the endpoint's own
+        /// authorization decides what a non-host sees.
+        case bookingDetail(bookingId: String, owner: SchedulingOwner)
         /// `/app/scheduling/my-bookings` — the existing customer My bookings list.
         case myBookings
+        /// Invoice notification links: `/app/invoice/:id` (`invoice_received`,
+        /// `invoice_sent`) and the older `/app/invoices/:id`. They open the
+        /// existing recipient invoice detail, whose endpoint only returns an
+        /// invoice addressed to the signed-in user.
+        case invoiceDetail(invoiceId: String)
         case unknown(URL)
     }
 
@@ -307,7 +313,12 @@ final class DeepLinkRouter {
                 pending = destination
             } else {
                 activeContentArrival = nil
-                PendingDeepLinkStore.stash(persistencePath)
+                // A cold-start link can arrive while the stored session is
+                // still hydrating. Bind it to that stored account so a
+                // server-ended session keeps it for the same account's
+                // re-sign-in; a different account or an explicit sign-out
+                // still clears it (`PendingDeepLinkStore`).
+                PendingDeepLinkStore.stash(persistencePath, expectedUserID: Self.hydratingUserIDProvider())
                 pending = nil
                 prefersLoginPresentation = true
             }
@@ -322,9 +333,20 @@ final class DeepLinkRouter {
 
     private static var signedInUserIDProvider: @MainActor () -> String? = defaultSignedInUserIDProvider
 
+    /// The stored account while the session is still hydrating (`.unknown`,
+    /// cold start); `nil` once the auth state is known.
+    private static let defaultHydratingUserIDProvider: @MainActor () -> String? = {
+        guard case .unknown = AuthManager.shared.state else { return nil }
+        return AuthManager.shared.store.get(SecureStoreKey.userId)
+    }
+
+    private static var hydratingUserIDProvider: @MainActor () -> String? = defaultHydratingUserIDProvider
+
     /// Override the session check. Pass `nil` to restore the `AuthManager` read.
+    /// A bound check models a known auth state, so it has no hydrating account.
     static func bindSignedInUserIDProvider(_ provider: (@MainActor () -> String?)?) {
         signedInUserIDProvider = provider ?? defaultSignedInUserIDProvider
+        hydratingUserIDProvider = provider == nil ? defaultHydratingUserIDProvider : { nil }
     }
 
     private static func routingKind(of destination: Destination) -> RoutingKind {
@@ -513,16 +535,16 @@ final class DeepLinkRouter {
             if tabQuery?.lowercased() == "receipt" { return .monthlyReceipt }
             if segments.count == 4, segments[1] == "schedule", segments[2] == "bookings",
                UUID(uuidString: segments[3]) != nil {
-                return .bookingDetail(bookingId: segments[3].lowercased())
+                return .bookingDetail(bookingId: segments[3].lowercased(), owner: .personal)
             }
             return .unknown(url)
         case "scheduling":
-            // Booking reminder links. Owner-scoped (`?ot=home|business&oid=`)
-            // host links stay unrouted: the destination carries no owner.
+            // Host booking links; a Home- or Business-owned booking names its
+            // owner with `?ot=home|business&oid=<id>`.
             if segments.count == 2, segments[1] == "my-bookings" { return .myBookings }
             if segments.count == 3, segments[1] == "bookings", UUID(uuidString: segments[2]) != nil,
-               queryValue("ot", in: comps) == nil {
-                return .bookingDetail(bookingId: segments[2].lowercased())
+               let owner = bookingOwner(type: queryValue("ot", in: comps), id: queryValue("oid", in: comps)) {
+                return .bookingDetail(bookingId: segments[2].lowercased(), owner: owner)
             }
             return .unknown(url)
         case "connections":
@@ -537,6 +559,11 @@ final class DeepLinkRouter {
             return mailboxDestination(url: url, segments: segments, idQuery: idQuery)
         case "wallet":
             return .wallet
+        case "invoice", "invoices":
+            if segments.count == 2, UUID(uuidString: segments[1]) != nil {
+                return .invoiceDetail(invoiceId: segments[1].lowercased())
+            }
+            return .unknown(url)
         case "invite":
             if segments.dropFirst().first == "lease" {
                 guard segments.count == 3, let token = segments.last,
@@ -605,6 +632,18 @@ final class DeepLinkRouter {
 
     private func queryValue(_ name: String, in components: URLComponents?) -> String? {
         components?.queryItems?.first { $0.name == name }?.value
+    }
+
+    /// The owner a host booking link names: no `ot` is the personal pillar;
+    /// `home` / `business` need a UUID `oid`. Anything else stays unrouted.
+    private func bookingOwner(type: String?, id: String?) -> SchedulingOwner? {
+        guard let type else { return .personal }
+        guard let id, UUID(uuidString: id) != nil else { return nil }
+        switch type {
+        case "home": return .home(homeId: id.lowercased())
+        case "business": return .business(id: id.lowercased())
+        default: return nil
+        }
     }
 
     private func homeDestination(url: URL, segments: [String], tabQuery: String?) -> Destination {

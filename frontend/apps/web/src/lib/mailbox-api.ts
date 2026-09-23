@@ -200,12 +200,6 @@ export async function getItemDetail(itemId: string): Promise<MailItemDetailRespo
   });
 }
 
-export async function markItemOpened(itemId: string): Promise<void> {
-  return call(async () => {
-    await post(`/api/mailbox/v2/item/${itemId}/action`, { action: 'open' });
-  });
-}
-
 export async function fileItemToVault(itemId: string, folderId: string): Promise<void> {
   return call(async () => {
     await post('/api/mailbox/v2/p2/vault/file', { mailId: itemId, folderId });
@@ -485,49 +479,6 @@ export async function redeemOffer(
 }
 
 // ============================================================
-// TRANSLATION
-// ============================================================
-
-export async function detectLanguage(
-  itemId: string,
-): Promise<{ detected_language: string; confidence: number }> {
-  return call(async () => {
-    // The translate endpoint auto-detects
-    const res = await post<{
-      translated_text: string;
-      from_language: string;
-      to_language: string;
-      cached: boolean;
-    }>('/api/mailbox/v2/p3/translate', { mailId: itemId });
-    return {
-      detected_language: res.from_language,
-      confidence: 1.0,
-    };
-  });
-}
-
-export async function translateItem(
-  itemId: string,
-  targetLang?: string,
-): Promise<{ translated_content: string; from_language: string }> {
-  return call(async () => {
-    const res = await post<{
-      translated_text: string;
-      from_language: string;
-      to_language: string;
-      cached: boolean;
-    }>('/api/mailbox/v2/p3/translate', {
-      mailId: itemId,
-      ...(targetLang ? { targetLang } : {}),
-    });
-    return {
-      translated_content: res.translated_text,
-      from_language: res.from_language,
-    };
-  });
-}
-
-// ============================================================
 // RECORDS (Phase 3)
 // ============================================================
 
@@ -756,12 +707,6 @@ export async function escalateTaskToGig(
 export async function getMailDaySummary(): Promise<MailDaySummary> {
   return call(async () => {
     return get<MailDaySummary>('/api/mailbox/v2/p3/mailday/summary');
-  });
-}
-
-export async function dismissMailDaySummary(): Promise<void> {
-  return call(async () => {
-    await post('/api/mailbox/v2/p3/mailday/summary/dismiss', {});
   });
 }
 

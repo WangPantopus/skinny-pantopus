@@ -33,7 +33,7 @@ export function WhatPantopusKnowsCard() {
         </div>
       </div>
       <Link
-        href="/legal/privacy"
+        href="/privacy"
         data-testid="profiles-what-pantopus-knows-policy-link"
         className="inline-flex items-center gap-1 rounded-lg border border-app px-3 py-1.5 text-sm font-medium text-app hover:bg-surface-muted"
       >

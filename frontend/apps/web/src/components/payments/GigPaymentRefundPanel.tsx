@@ -115,8 +115,9 @@ function ScopedRefundPanel({ actorId, payment, onPaymentChanged }: Props) {
 
   const remaining = summary.amount_total - (summary.refunded_amount || 0);
   const releasing = summary.payment_status === 'authorized' && !summary.captured_at;
+  // A charged cancellation or no-show fee is not self-refundable in the app.
   const mayRequest = ['authorized', 'captured_hold', 'transfer_scheduled', 'refunded_partial'].includes(summary.payment_status)
-    && summary.payee_release_status === 'held' && remaining > 0 && summary.currency.toLowerCase() === 'usd';
+    && summary.payee_release_status === 'held' && remaining > 0 && summary.currency.toLowerCase() === 'usd' && !summary.gig_fee;
   const releaseNotice = releaseMessage(summary);
   const activeReceipt = attempt && requests.find((r) => r.requestId === attempt.requestId);
 

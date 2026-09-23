@@ -21,13 +21,16 @@ public struct MeView: View {
     private let onAction: @MainActor (MeActionTile) -> Void
     private let onSection: @MainActor (MeSectionRow) -> Void
     private let onLogOut: @MainActor () -> Void
+    /// Set when the screen is presented as a cover; shows a Close button.
+    private let onClose: (@MainActor () -> Void)?
 
     init(
         viewModel: MeViewModel? = nil,
         expandMonthlyReceipt: Bool = false,
         onAction: @escaping @MainActor (MeActionTile) -> Void = { _ in },
         onSection: @escaping @MainActor (MeSectionRow) -> Void = { _ in },
-        onLogOut: @escaping @MainActor () -> Void = {}
+        onLogOut: @escaping @MainActor () -> Void = {},
+        onClose: (@MainActor () -> Void)? = nil
     ) {
         _viewModel = State(
             initialValue: viewModel ?? MeViewModel(expandMonthlyReceipt: expandMonthlyReceipt)
@@ -35,6 +38,7 @@ public struct MeView: View {
         self.onAction = onAction
         self.onSection = onSection
         self.onLogOut = onLogOut
+        self.onClose = onClose
     }
 
     public var body: some View {
@@ -103,7 +107,8 @@ public struct MeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s0) {
                 MeHeader(
-                    content: active
+                    content: active,
+                    onClose: onClose
                 ) { viewModel.selectIdentity($0) }
                 if !active.isUnbound {
                     MeStatsRow(stats: active.stats)
@@ -201,11 +206,24 @@ public struct MeView: View {
 
 private struct MeHeader: View {
     let content: MeIdentityContent
+    let onClose: (@MainActor () -> Void)?
     let onSwitch: @MainActor (MeIdentity) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            identityPillRow
+            HStack(spacing: Spacing.s2) {
+                if let onClose {
+                    Button(action: onClose) {
+                        Icon(.x, size: 20, color: Theme.Color.appTextInverse)
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
+                    .accessibilityIdentifier("meClose")
+                }
+                identityPillRow
+            }
             HStack(alignment: .center, spacing: 14) {
                 avatar
                 VStack(alignment: .leading, spacing: 2) {

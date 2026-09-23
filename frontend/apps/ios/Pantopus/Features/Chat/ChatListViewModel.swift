@@ -20,6 +20,9 @@ import Observation
 public final class ChatListViewModel {
     /// Current render state.
     public private(set) var state: ChatListState = .loading
+    /// Set when a refresh fails while conversations are on screen: they stay
+    /// and this shows as a toast. The view clears it after display.
+    public var refreshFailureMessage: String?
 
     /// Active filter tab.
     public private(set) var activeFilter: ChatFilter = .all
@@ -74,9 +77,17 @@ public final class ChatListViewModel {
 
     // MARK: - Public API
 
-    /// First-time load — no-op when we already have content.
+    /// First load, and every return to the list. `teardown()` cancels the
+    /// live subscriptions whenever the list is covered (opening a
+    /// conversation pushes over it), so a return re-subscribes and merges
+    /// in what changed meanwhile: the conversation just read, and messages
+    /// that arrived while it was open.
     public func load() async {
-        if case .loaded = state { return }
+        if case .loaded = state {
+            subscribeToSockets()
+            await fetch()
+            return
+        }
         await fetch()
         subscribeToSockets()
     }
@@ -131,7 +142,13 @@ public final class ChatListViewModel {
             try await self.api.request(ChatEndpoints.stats())
         }
         guard let response = await conversationsTask else {
-            state = .error(message: "Couldn't load conversations.")
+            switch state {
+            case .loaded, .empty:
+                // Keep the list on screen; a failed refresh only toasts.
+                refreshFailureMessage = "Couldn't refresh conversations."
+            case .loading, .error:
+                state = .error(message: "Couldn't load conversations.")
+            }
             return
         }
         let stats = await statsTask?.stats

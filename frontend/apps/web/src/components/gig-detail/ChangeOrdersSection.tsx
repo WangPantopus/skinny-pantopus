@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DollarSign,
   TrendingDown,
@@ -15,6 +15,7 @@ import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { formatTimeAgo as timeAgo, CHANGE_ORDER_STATUS_STYLES, statusClasses } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { getErrorMessage } from '@pantopus/utils';
 
 // ─── Types ───
 
@@ -23,6 +24,9 @@ interface ChangeOrdersSectionProps {
   isMyGig: boolean;
   iAmWorker: boolean;
   currentUserId?: string;
+  /** The gig's payment; while its hold is live the server refuses price changes. */
+  paymentId?: string | null;
+  paymentStatus?: string | null;
 }
 
 // ─── Constants ───
@@ -36,11 +40,17 @@ const CHANGE_ORDER_TYPES = [
   { value: 'other', label: 'Other', icon: <PenLine className="w-4 h-4" />, hint: 'Something else' },
 ];
 
+const PRICE_CHANGE_TYPES = new Set(['price_increase', 'price_decrease']);
+
 // ─── Component ───
 
 export default function ChangeOrdersSection({
-  gigId, isMyGig, iAmWorker, currentUserId,
+  gigId, isMyGig, iAmWorker, currentUserId, paymentId, paymentStatus,
 }: ChangeOrdersSectionProps) {
+  // A live payment hold (a payment that isn't canceled or fully refunded) rules out price changes
+  // (server: 409 PAID_PRICE_CHANGE_UNAVAILABLE), so the form doesn't offer them.
+  const priceChangesAvailable = !paymentId || ['canceled', 'refunded_full'].includes(String(paymentStatus || '').toLowerCase());
+  const offeredTypes = CHANGE_ORDER_TYPES.filter((t) => priceChangesAvailable || !PRICE_CHANGE_TYPES.has(t.value));
   const [orders, setOrders] = useState<GigChangeOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -49,6 +59,9 @@ export default function ChangeOrdersSection({
   const [formAmount, setFormAmount] = useState('');
   const [formTime, setFormTime] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // One approve at a time: a double click must not send the approval twice.
+  const approvingRef = useRef<string | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const loadOrders = async () => {
     try {
@@ -70,7 +83,7 @@ export default function ChangeOrdersSection({
       await api.gigs.createChangeOrder(gigId, {
         type: formType,
         description: formDesc.trim(),
-        amount_change: formAmount ? parseFloat(formAmount) : undefined,
+        amount_change: priceChangesAvailable && formAmount ? parseFloat(formAmount) : undefined,
         time_change_minutes: formTime ? parseInt(formTime) : undefined,
       });
       setShowForm(false);
@@ -80,18 +93,24 @@ export default function ChangeOrdersSection({
       setFormTime('');
       await loadOrders();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to submit change request');
+      toast.error(getErrorMessage(err, 'Failed to submit change request'));
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleApprove = async (orderId: string) => {
+    if (approvingRef.current) return;
+    approvingRef.current = orderId;
+    setApprovingId(orderId);
     try {
       await api.gigs.approveChangeOrder(gigId, orderId);
       await loadOrders();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to approve');
+      toast.error(getErrorMessage(err, 'Failed to approve'));
+    } finally {
+      approvingRef.current = null;
+      setApprovingId(null);
     }
   };
 
@@ -101,7 +120,7 @@ export default function ChangeOrdersSection({
       await api.gigs.rejectChangeOrder(gigId, orderId, reason || undefined);
       await loadOrders();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to decline');
+      toast.error(getErrorMessage(err, 'Failed to decline'));
     }
   };
 
@@ -112,11 +131,18 @@ export default function ChangeOrdersSection({
       await api.gigs.withdrawChangeOrder(gigId, orderId);
       await loadOrders();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to withdraw');
+      toast.error(getErrorMessage(err, 'Failed to withdraw'));
     }
   };
 
-  const pendingCount = orders.filter((o) => o.status === 'pending').length;
+  const pendingOrders = orders.filter((o) => o.status === 'pending');
+  const pendingCount = pendingOrders.length;
+  const isOwnOrder = (o: GigChangeOrder) => Boolean(currentUserId) && String(o.requested_by) === String(currentUserId);
+  // The banner speaks to the viewer: the other party's requests need a review here; the viewer's own wait on them.
+  const awaitingMyReview = pendingOrders.some((o) => !isOwnOrder(o));
+  const pendingBanner = awaitingMyReview
+    ? isMyGig ? 'The worker has requested changes — review below.' : iAmWorker ? 'The poster has requested changes — review below.' : 'Change requests pending review.'
+    : pendingCount > 1 ? 'Your change requests are awaiting review.' : 'Your change request is awaiting review.';
 
   return (
     <div className="bg-app-surface rounded-xl p-6 border border-app-border">
@@ -135,7 +161,7 @@ export default function ChangeOrdersSection({
       {pendingCount > 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 mb-4">
           <p className="text-xs text-yellow-800 font-medium">
-            {isMyGig ? 'The worker has requested changes — review below.' : iAmWorker ? 'Your change request is awaiting review.' : 'Change requests pending review.'}
+            {pendingBanner}
           </p>
         </div>
       )}
@@ -200,7 +226,8 @@ export default function ChangeOrdersSection({
                       <>
                         <button
                           onClick={() => handleApprove(o.id)}
-                          className="text-xs bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700 font-medium"
+                          disabled={approvingId === o.id}
+                          className="text-xs bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700 font-medium disabled:opacity-50"
                         >
                           Approve
                         </button>
@@ -235,9 +262,15 @@ export default function ChangeOrdersSection({
         <div className="border border-app-border rounded-lg p-4 space-y-3">
           <p className="text-sm font-medium text-app-text-strong">Request a Change</p>
 
+          {!priceChangesAvailable && (
+            <p className="text-xs text-app-text-secondary">
+              Price changes aren&apos;t available once a task has a payment hold.
+            </p>
+          )}
+
           {/* Type picker */}
           <div className="grid grid-cols-2 gap-1.5">
-            {CHANGE_ORDER_TYPES.map((t) => (
+            {offeredTypes.map((t) => (
               <button
                 key={t.value}
                 type="button"
@@ -265,18 +298,20 @@ export default function ChangeOrdersSection({
           />
 
           {/* Amount + Time */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-app-text-secondary mb-0.5 block">Price change ($)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={formAmount}
-                onChange={(e) => setFormAmount(e.target.value)}
-                placeholder="e.g. 25 or -10"
-                className="w-full border border-app-border rounded-lg px-3 py-1.5 text-sm"
-              />
-            </div>
+          <div className={`grid ${priceChangesAvailable ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+            {priceChangesAvailable && (
+              <div>
+                <label className="text-xs text-app-text-secondary mb-0.5 block">Price change ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formAmount}
+                  onChange={(e) => setFormAmount(e.target.value)}
+                  placeholder="e.g. 25 or -10"
+                  className="w-full border border-app-border rounded-lg px-3 py-1.5 text-sm"
+                />
+              </div>
+            )}
             <div>
               <label className="text-xs text-app-text-secondary mb-0.5 block">Extra time (min)</label>
               <input

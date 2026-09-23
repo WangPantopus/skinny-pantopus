@@ -186,7 +186,9 @@ fun ChatConversationScreen(
     var showDetailsSheet by remember { mutableStateOf(false) }
     var showEmojiSheet by remember { mutableStateOf(false) }
     var showBlockConfirm by remember { mutableStateOf(false) }
+    var showBlockFailed by remember { mutableStateOf(false) }
     var showReportSheet by remember { mutableStateOf(false) }
+    var showReportFailed by remember { mutableStateOf(false) }
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val photoPicker =
@@ -590,7 +592,7 @@ fun ChatConversationScreen(
                 isSubmitting = isReporting,
                 onDismiss = { showReportSheet = false },
                 onSubmit = { reason, details ->
-                    viewModel.reportUser(reason, details) {
+                    viewModel.reportUser(reason, details, onFailed = { showReportFailed = true }) {
                         showReportSheet = false
                         showDetailsSheet = false
                     }
@@ -615,7 +617,7 @@ fun ChatConversationScreen(
                     TextButton(
                         onClick = {
                             showBlockConfirm = false
-                            viewModel.blockUser {
+                            viewModel.blockUser(onFailed = { showBlockFailed = true }) {
                                 showDetailsSheet = false
                                 onBack()
                             }
@@ -629,6 +631,30 @@ fun ChatConversationScreen(
                     TextButton(onClick = { showBlockConfirm = false }) {
                         Text(text = "Cancel", color = PantopusColors.appTextSecondary)
                     }
+                },
+            )
+        }
+        // Failures surface as dialogs: the details / report sheets stay open
+        // (keeping the typed report) and would cover the snackbar. iOS copy.
+        if (showBlockFailed) {
+            AlertDialog(
+                onDismissRequest = { showBlockFailed = false },
+                containerColor = PantopusColors.appSurface,
+                title = { Text(text = "Couldn't block ${activeCounterparty.displayName}") },
+                text = { Text(text = "Please try again.") },
+                confirmButton = {
+                    TextButton(onClick = { showBlockFailed = false }) { Text(text = "OK") }
+                },
+            )
+        }
+        if (showReportFailed) {
+            AlertDialog(
+                onDismissRequest = { showReportFailed = false },
+                containerColor = PantopusColors.appSurface,
+                title = { Text(text = "Couldn't send your report") },
+                text = { Text(text = "Something went wrong on our end. Please try again.") },
+                confirmButton = {
+                    TextButton(onClick = { showReportFailed = false }) { Text(text = "OK") }
                 },
             )
         }
@@ -4228,6 +4254,7 @@ private fun StampRow(
             ChatDeliveryState.Delivered -> stamp
             ChatDeliveryState.Sending -> "Sending..."
             ChatDeliveryState.Failed -> "Failed to send"
+            ChatDeliveryState.Refused -> "Not sent"
             null -> stamp
         }
     Row(
@@ -4287,6 +4314,14 @@ private fun StampRow(
                             color = PantopusColors.error,
                         )
                     }
+                ChatDeliveryState.Refused ->
+                    PantopusIconImage(
+                        icon = PantopusIcon.AlertCircle,
+                        contentDescription = null,
+                        size = 11.dp,
+                        tint = PantopusColors.error,
+                        modifier = Modifier.padding(start = 6.dp).testTag("chatNotSent_${content.id}"),
+                    )
                 null -> Unit
             }
         }

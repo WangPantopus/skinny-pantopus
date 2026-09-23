@@ -166,7 +166,13 @@ class GigTipRecovery(
                             original = active.request
                             accept(active, active.request)
                         }
-                        !next.eligible -> message = "This task is not currently available for a tip. Reopen its details before continuing."
+                        !next.eligible ->
+                            message =
+                                if (next.unavailableReason == "TIP_LIMIT") {
+                                    "You've reached the 3-tip limit for this task."
+                                } else {
+                                    "This task is not currently available for a tip. Reopen its details before continuing."
+                                }
                     }
                 }
             }
