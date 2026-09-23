@@ -1275,7 +1275,7 @@ private object ChildRoutes {
         listingId: String,
         title: String? = null,
     ): String {
-        val encodedTitle = java.net.URLEncoder.encode(title ?: "", "UTF-8")
+        val encodedTitle = java.net.URLEncoder.encode(title ?: "", "UTF-8").replace("+", "%20")
         return "listings/$listingId/offers?$LISTING_OFFERS_TITLE_KEY=$encodedTitle"
     }
 

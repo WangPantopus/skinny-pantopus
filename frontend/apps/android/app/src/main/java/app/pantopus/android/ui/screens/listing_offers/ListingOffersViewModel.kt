@@ -541,6 +541,7 @@ class ListingOffersViewModel
                 return when (key) {
                     "active" -> ListingContextStatus("Active", PantopusIcon.Circle, StatusChipVariant.Success)
                     "reserved" -> ListingContextStatus("Reserved", PantopusIcon.Check, StatusChipVariant.Info)
+                    "pending_pickup" -> ListingContextStatus("Pickup pending", PantopusIcon.Clock, StatusChipVariant.Info)
                     "sold" -> ListingContextStatus("Sold", PantopusIcon.CheckCheck, StatusChipVariant.Success)
                     "expired" -> ListingContextStatus("Expired", PantopusIcon.Timer, StatusChipVariant.Neutral)
                     "draft" -> ListingContextStatus("Draft", PantopusIcon.Pencil, StatusChipVariant.Neutral)

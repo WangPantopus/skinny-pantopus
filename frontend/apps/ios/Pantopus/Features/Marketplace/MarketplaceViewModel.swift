@@ -35,6 +35,7 @@ public final class MarketplaceViewModel {
     private let location: any LocationProviding
     private let pageSize: Int
     private var loadedItems: [ListingDTO] = []
+    private var viewingCenter: UserCoordinate?
     /// Monotonic fetch token. Each (re)fetch bumps it; responses that
     /// come back under an older token are discarded so a chip tap or
     /// search submitted mid-flight can never be clobbered by a stale
@@ -117,9 +118,17 @@ public final class MarketplaceViewModel {
     private func fetch() async {
         fetchGeneration += 1
         let generation = fetchGeneration
-        let center = location.cachedCoordinate()
-            ?? UserCoordinate(latitude: 40.7484, longitude: -73.9857, accuracyMeters: 100)
         if case .loaded = state {} else { state = .loading }
+        let center = await resolveCenter()
+        guard generation == fetchGeneration else { return }
+        guard let center else {
+            viewingCenter = nil
+            hasMore = false
+            hasLoadedOnce = true
+            state = .error(message: "Choose an area or turn on location to browse nearby listings.")
+            return
+        }
+        viewingCenter = center
 
         do {
             let response: ListingsNearbyResponse = try await api.request(
@@ -144,8 +153,7 @@ public final class MarketplaceViewModel {
 
     private func fetchNextPage() async {
         let generation = fetchGeneration
-        let center = location.cachedCoordinate()
-            ?? UserCoordinate(latitude: 40.7484, longitude: -73.9857, accuracyMeters: 100)
+        guard let center = viewingCenter else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
         do {
@@ -166,6 +174,15 @@ public final class MarketplaceViewModel {
             guard generation == fetchGeneration else { return }
             hasMore = false
         }
+    }
+
+    private func resolveCenter() async -> UserCoordinate? {
+        let payload: ViewingLocationPayload? = try? await api.request(ViewingLocationEndpoints.current())
+        if let selected = payload?.viewingLocation {
+            return UserCoordinate(latitude: selected.latitude, longitude: selected.longitude, accuracyMeters: 0)
+        }
+        if let cached = location.cachedCoordinate() { return cached }
+        return await location.requestCurrent(timeoutSeconds: 4)
     }
 
     private func nearbyEndpoint(center: UserCoordinate, offset: Int) -> Endpoint {
