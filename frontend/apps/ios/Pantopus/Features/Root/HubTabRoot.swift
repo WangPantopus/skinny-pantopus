@@ -2391,6 +2391,12 @@ public struct HubTabRoot: View {
                     case let .mailItemDetail(id): push(.mailItemDetail(mailId: id))
                     case let .pulsePost(id): push(.pulsePost(postId: id))
                     case let .homeDashboard(id): push(.homeDashboard(homeId: id))
+                    case let .link(path, label):
+                        if DeepLinkRouter.shared.canResolve(path: path) {
+                            DeepLinkRouter.shared.handle(path: path)
+                        } else {
+                            push(.placeholder(label: label))
+                        }
                     case let .placeholder(label): push(.placeholder(label: label))
                     }
                 }

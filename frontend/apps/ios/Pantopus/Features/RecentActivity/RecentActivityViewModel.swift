@@ -24,8 +24,11 @@ public enum RecentActivityDestination: Sendable, Hashable {
     case mailItemDetail(id: String)
     case pulsePost(id: String)
     case homeDashboard(id: String)
-    /// Fallback for routes that don't pattern-match a known domain — the
-    /// host renders the generic placeholder with the activity title.
+    /// Any other route (e.g. `/app/notifications`, `/app/connections`): the
+    /// host hands it to the deep-link router, as the Notifications list does,
+    /// and only falls back to the placeholder when nothing resolves.
+    case link(path: String, label: String)
+    /// A row without a route.
     case placeholder(label: String)
 }
 
@@ -181,7 +184,7 @@ public final class RecentActivityViewModel: ListOfRowsDataSource {
         if let id = idAfter(prefixCandidates: ["/app/homes/", "/homes/"], in: path) {
             return .homeDashboard(id: id)
         }
-        return .placeholder(label: item.title)
+        return path.isEmpty ? .placeholder(label: item.title) : .link(path: path, label: item.title)
     }
 
     /// Extract the first path segment after any of `prefixCandidates`.

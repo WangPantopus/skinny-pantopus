@@ -37,6 +37,10 @@ final class HubViewModel {
     /// skeleton instead of stale rows).
     private(set) var discoveryLoading = false
 
+    /// True when the last discovery request failed, so the rail says so
+    /// instead of "Nothing nearby yet".
+    private(set) var discoveryFailed = false
+
     /// Status-strip pills the viewer dismissed this session. RN keeps the
     /// same session-scoped `Set<string>` — nothing is persisted server
     /// side (`(tabs)/index.tsx:319-321`). Module-internal so the
@@ -115,6 +119,7 @@ final class HubViewModel {
         let response: HubDiscoveryResponse? = await optional {
             try await self.api.request(HubEndpoints.discovery(filter: filter, limit: 10))
         }
+        discoveryFailed = response == nil
         applyDiscovery(response?.items.prefix(10).map(Self.projectDiscovery(_:)) ?? [])
     }
 
@@ -182,6 +187,7 @@ final class HubViewModel {
         }
         let today = await todayTask
         let discovery = await discoveryTask
+        discoveryFailed = discovery == nil
         // S5 — per-firewall unread split powers the megaphone shortcut
         // into the Beacon notification zone. Sequenced (not raced) after
         // the companions so a stubbed test sequence stays predictable;
