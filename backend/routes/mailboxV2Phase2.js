@@ -1318,76 +1318,19 @@ router.post('/package/:mailId/save-warranty', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /package/:mailId/gig — create a gig from package
-router.post('/package/:mailId/gig', validate(packageGigSchema), async (req, res, next) => {
-  try {
-    const { mailId } = req.params;
-    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Package not found' });
-    const { gigType, title, description, suggestedStart, compensation } = req.body;
+// Posting a task for a package isn't built yet. These routes used to answer "Gig created" with a made-up id (and
+// store whatever neighbor the client named as the one who accepted), while no task existed, so the apps said "Task
+// Posted!" for nothing. Until package tasks are real, refuse and write nothing.
+const PACKAGE_GIG_UNAVAILABLE = "Posting a task for a package isn't available yet.";
 
-    const { data: pkg } = await supabaseAdmin
-      .from('MailPackage')
-      .select('*, Mail!inner(sender_display, recipient_address_id)')
-      .eq('mail_id', mailId)
-      .single();
-
-    if (!pkg) return res.status(404).json({ error: 'Package not found' });
-
-    const isPreDelivery = pkg.status !== 'delivered';
-    const gigTitle = title || (isPreDelivery
-      ? `${gigType === 'hold' ? 'Hold' : gigType === 'inside' ? 'Bring inside' : gigType === 'sign' ? 'Sign for' : 'Help with'} my package`
-      : `Help assembling ${pkg.inferred_item_name || 'package item'}`);
-
-    // Placeholder: in production this creates an actual Gig record
-    const gigId = require('crypto').randomUUID();
-
-    await supabaseAdmin
-      .from('MailPackage')
-      .update({
-        gig_id: gigId,
-        gig_type: isPreDelivery ? `pre_${gigType}` : `post_${gigType}`,
-      })
-      .eq('mail_id', mailId);
-
-    const eventType = isPreDelivery
-      ? 'package_gig_pre_delivery_created'
-      : 'package_gig_post_delivery_created';
-
-    await logMailEvent(req.user.id, eventType, mailId, {
-      gig_id: gigId, gig_type: gigType,
-    });
-
-    res.json({
-      message: 'Gig created',
-      gigId,
-      title: gigTitle,
-      preDelivery: isPreDelivery,
-    });
-  } catch (err) { next(err); }
+// POST /package/:mailId/gig — create a gig from package (not available yet)
+router.post('/package/:mailId/gig', validate(packageGigSchema), (req, res) => {
+  res.status(501).json({ error: PACKAGE_GIG_UNAVAILABLE });
 });
 
-// POST /package/:mailId/gig-accepted — mark gig as accepted by neighbor
-router.post('/package/:mailId/gig-accepted', async (req, res, next) => {
-  try {
-    const { mailId } = req.params;
-    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Package not found' });
-    const { neighborId, neighborName } = req.body;
-
-    await supabaseAdmin
-      .from('MailPackage')
-      .update({
-        gig_accepted_by: neighborId,
-        gig_accepted_at: new Date().toISOString(),
-        neighbor_helper_name: neighborName,
-      })
-      .eq('mail_id', mailId);
-
-    await logMailEvent(req.user.id, 'package_gig_accepted', mailId, {
-      neighbor_id: neighborId,
-    });
-
-    res.json({ message: `${neighborName || 'Neighbor'} accepted the gig` });
-  } catch (err) { next(err); }
+// POST /package/:mailId/gig-accepted — mark a package gig accepted (not available yet)
+router.post('/package/:mailId/gig-accepted', (req, res) => {
+  res.status(501).json({ error: PACKAGE_GIG_UNAVAILABLE });
 });
 
 // ── COUPON → ORDER PIPELINE ───────────────────────────────
