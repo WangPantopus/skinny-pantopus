@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { BusinessUser, BusinessProfile } from '@pantopus/types';
+import { ENTITY_TYPES, ENTITY_TYPE_CONFIG } from '@pantopus/types';
 
 export default function BusinessSettingsProfilePage() {
   const params = useParams();
@@ -65,7 +66,8 @@ export default function BusinessSettingsProfilePage() {
         name: form.name.trim(),
         tagline: form.tagline.trim() || undefined,
         description: form.description.trim() || undefined,
-        business_type: form.business_type.trim() || undefined,
+        // Only a known entity key is sent; a legacy value the select can't show is left as is.
+        business_type: (ENTITY_TYPES as string[]).includes(form.business_type) ? form.business_type : undefined,
         categories: form.categories.split(',').map((s) => s.trim()).filter(Boolean),
         public_email: form.public_email.trim() || undefined,
         public_phone: form.public_phone.trim() || undefined,
@@ -128,7 +130,7 @@ export default function BusinessSettingsProfilePage() {
       <div className="bg-app-surface border border-app-border rounded-xl p-5 space-y-4">
         <Field label="Business Name" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} />
         <Field label="Tagline" value={form.tagline} onChange={(v) => setForm((f) => ({ ...f, tagline: v }))} />
-        <Field label="Business Type" value={form.business_type} onChange={(v) => setForm((f) => ({ ...f, business_type: v }))} />
+        <EntityTypeField value={form.business_type} onChange={(v) => setForm((f) => ({ ...f, business_type: v }))} />
         <Field label="Categories (comma separated)" value={form.categories} onChange={(v) => setForm((f) => ({ ...f, categories: v }))} />
         <Field label="Description" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -172,6 +174,31 @@ function Field({
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-lg border border-app-border px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
       />
+    </label>
+  );
+}
+
+/**
+ * The legal entity (`business_type`): the server accepts only these keys, so
+ * offer them by name instead of a free-text box that needed an exact key.
+ */
+function EntityTypeField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const known = (ENTITY_TYPES as string[]).includes(value);
+  return (
+    <label className="block">
+      <div className="text-sm font-medium text-app-text-strong mb-1">Business Type</div>
+      <select
+        value={known ? value : ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-app-border px-3 py-2 text-sm bg-app-surface focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+      >
+        {!known && <option value="">Choose a type</option>}
+        {ENTITY_TYPES.map((type) => (
+          <option key={type} value={type}>
+            {ENTITY_TYPE_CONFIG[type].label}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }
