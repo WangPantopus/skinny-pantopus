@@ -281,6 +281,8 @@ internal fun BusinessProfileLoadedFrame(
                 identity = IdentityPillar.Business,
                 logoIcon = content.header.logoIcon,
                 verified = content.header.isVerified,
+                // No shield on the chip for an unverified business.
+                chipIcon = if (content.header.isVerified) PantopusIcon.ShieldCheck else null,
                 status = bannerStatus(content.status),
             )
             StatStrip(stats = content.stats)
@@ -326,7 +328,7 @@ private fun bannerStatus(status: BusinessOpenState?): BizStatusBadge? =
 @Composable
 private fun Sections(content: BusinessProfileContent) {
     if (content.isNewlyClaimed) {
-        JustOpenedNote(modifier = Modifier.padding(bottom = Spacing.s1))
+        JustOpenedNote(isVerified = content.header.isVerified, modifier = Modifier.padding(bottom = Spacing.s1))
     }
     CategoryRow(
         categories = content.categories,
@@ -512,7 +514,12 @@ private fun FooterItem(
 }
 
 @Composable
-private fun JustOpenedNote(modifier: Modifier = Modifier) {
+private fun JustOpenedNote(
+    // Claims verification only for a verified business; otherwise the
+    // "Verification pending" wording My businesses and the owner header use.
+    isVerified: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Row(
         modifier =
             modifier
@@ -528,7 +535,7 @@ private fun JustOpenedNote(modifier: Modifier = Modifier) {
             contentAlignment = Alignment.Center,
         ) {
             PantopusIconImage(
-                icon = PantopusIcon.BadgeCheck,
+                icon = if (isVerified) PantopusIcon.BadgeCheck else PantopusIcon.Hourglass,
                 contentDescription = null,
                 size = 16.dp,
                 strokeWidth = 2.2f,
@@ -545,8 +552,8 @@ private fun JustOpenedNote(modifier: Modifier = Modifier) {
             )
             Text(
                 text =
-                    "Address and business identity are verified. Reviews and photos build up after " +
-                        "the first few jobs — early neighbors set the tone.",
+                    (if (isVerified) "Address and business identity are verified." else "Verification pending.") +
+                        " Reviews and photos build up after the first few jobs — early neighbors set the tone.",
                 color = PantopusColors.appTextStrong,
                 fontSize = 11.5.sp,
             )

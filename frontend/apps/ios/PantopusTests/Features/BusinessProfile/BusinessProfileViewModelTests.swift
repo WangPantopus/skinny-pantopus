@@ -66,6 +66,7 @@ final class BusinessProfileViewModelTests: XCTestCase {
         "founding_badge": true,
         "is_published": true,
         "verification_status": "address_verified",
+        "identity_verification_tier": "bi1_basic",
         "primary_location": {
           "id": "loc-1",
           "label": "Main shop",

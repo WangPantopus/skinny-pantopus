@@ -247,7 +247,9 @@ struct BusinessProfileLoadedView: View {
                         locality: content.header.locality ?? "",
                         logoIcon: content.header.logoIcon,
                         verified: content.header.isVerified,
-                        status: bannerStatus
+                        status: bannerStatus,
+                        // No shield on the chip for an unverified business.
+                        chipIcon: content.header.isVerified ? .shieldCheck : nil
                     )
                     StatStrip(stats: content.stats)
                     BusinessProfileNamedPageSection(state: namedPage)
@@ -296,7 +298,7 @@ private struct BusinessProfileSections: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
             if content.isNewlyClaimed {
-                JustOpenedNote()
+                JustOpenedNote(isVerified: content.header.isVerified)
                     .padding(.bottom, Spacing.s1)
             }
 
@@ -522,21 +524,25 @@ private struct FlowChips: View {
 
 @MainActor
 private struct JustOpenedNote: View {
+    /// Claims verification only for a verified business; otherwise the
+    /// "Verification pending" wording My businesses and the owner header use.
+    let isVerified: Bool
+
     var body: some View {
         HStack(alignment: .top, spacing: 11) {
             ZStack {
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                     .fill(Theme.Color.businessSolid)
                     .frame(width: 32, height: 32)
-                Icon(.badgeCheck, size: 16, strokeWidth: 2.2, color: Theme.Color.appTextInverse)
+                Icon(isVerified ? .badgeCheck : .hourglass, size: 16, strokeWidth: 2.2, color: Theme.Color.appTextInverse)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text("Just opened on Pantopus")
                     .font(.system(size: 12.5, weight: .bold))
                     .tracking(-0.1)
                     .foregroundStyle(Theme.Color.businessDark)
-                Text("Address and business identity are verified. Reviews and photos build up "
-                    + "after the first few jobs — early neighbors set the tone.")
+                Text((isVerified ? "Address and business identity are verified." : "Verification pending.")
+                    + " Reviews and photos build up after the first few jobs — early neighbors set the tone.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.Color.appTextStrong)
                     .lineSpacing(2)

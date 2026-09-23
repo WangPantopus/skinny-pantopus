@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.models.businesses.BusinessPublicResponse
 import app.pantopus.android.data.api.models.businesses.BusinessUserDetailDto
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.profile.PublicProfileReview
+import app.pantopus.android.ui.screens.businesses.MyBusinessesViewModel
 import app.pantopus.android.ui.screens.saved_places.PendingSavePlace
 import app.pantopus.android.ui.theme.PantopusIcon
 import java.time.Duration
@@ -59,7 +60,10 @@ object BusinessProfileMapper {
                         ?: "Business",
                 handle = business.username,
                 locality = locality(business, primaryLocation),
-                isVerified = isVerified(business, profile),
+                // The business's own identity tier, as on My businesses and the
+                // owner header. `business.verified` is the account row's flag, not
+                // the business's verification, so it never earns the mark on its own.
+                isVerified = MyBusinessesViewModel.isVerified(profile?.identityVerificationTier),
                 logoIcon = null,
             )
 
@@ -95,14 +99,6 @@ object BusinessProfileMapper {
             websiteUrl = normalizedWebsite(profile?.website),
             viewerIsOwner = detail.access?.isOwner == true,
         )
-    }
-
-    private fun isVerified(
-        business: BusinessUserDetailDto,
-        profile: BusinessProfileDetailDto?,
-    ): Boolean {
-        business.verified?.let { return it }
-        return profile?.verificationStatus?.let { it != "unverified" } == true
     }
 
     private fun locality(
