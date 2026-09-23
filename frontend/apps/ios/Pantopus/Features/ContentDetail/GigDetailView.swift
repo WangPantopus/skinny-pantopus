@@ -64,7 +64,7 @@ public struct GigDetailView: View {
 
     public var body: some View {
         TransactionalDetailShell(
-            state: viewModel.state,
+            state: viewModel.displayState,
             overflowItems: overflowItems,
             topBarAccessory: topBarAccessories,
             onBack: onBack,
@@ -88,6 +88,7 @@ public struct GigDetailView: View {
         .task {
             await viewModel.load()
             viewModel.startRealtime()
+            await viewModel.prepareRetainedTip()
         }
         .onDisappear { viewModel.stopRealtime()
             viewModel.retireDeliveryProof()
@@ -354,6 +355,7 @@ public struct GigDetailView: View {
                 GigChangesCard(
                     orders: viewModel.changeOrders,
                     inFlightOrderId: viewModel.changeOrderActionInFlight,
+                    priceChangeUnavailableReason: viewModel.priceChangeUnavailableReason,
                     isOwnOrder: { viewModel.isOwnChangeOrder($0) },
                     onApprove: { order in
                         Task { await runToasting(success: "Change approved.") { await viewModel.approveChangeOrder(orderId: order.id) } }
@@ -913,7 +915,7 @@ private struct GigLifecycleSheets: ViewModifier {
             }
             .sheet(isPresented: $showChangeOrderSheet) {
                 GigChangeOrderSheet(
-                    priceChangesAvailable: viewModel.priceChangesAvailable,
+                    priceChangeUnavailableReason: viewModel.priceChangeUnavailableReason,
                     onSubmit: { type, description, amountChange, timeChangeMinutes in
                         let error = await viewModel.proposeChangeOrder(
                             type: type,

@@ -182,6 +182,8 @@ public enum ChatMessageSide: String, Sendable, Hashable {
 public enum ChatDeliveryState: Sendable, Hashable {
     case sending
     case failed
+    /// The server refused the send (403); resending cannot succeed.
+    case refused
     case delivered
     case read
 }

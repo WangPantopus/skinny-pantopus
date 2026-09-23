@@ -276,7 +276,7 @@ class ChatListViewModel
                 }
             val variant: ConversationRowVariant =
                 if (isRoom) ConversationRowVariant.Group() else ConversationRowVariant.Dm
-            val verified = dto.otherParticipantIdentity?.verified == true
+            val verified = dto.otherParticipantIdentity?.isVerified == true
             val preview =
                 dto.lastMessagePreview ?: if (isRoom) "No messages yet" else "Start the conversation"
             val timeLabel = dto.lastMessageAt?.let { relativeTimestamp(it) } ?: ""

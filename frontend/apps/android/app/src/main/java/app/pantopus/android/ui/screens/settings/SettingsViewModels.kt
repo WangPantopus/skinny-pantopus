@@ -15,11 +15,9 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.data.profile.ProfileRepository
-import app.pantopus.android.ui.components.FuzzStop
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListBanner
-import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListFuzz
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListGroup
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListRow
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
@@ -331,12 +329,10 @@ class SettingsIndexViewModel
 // MARK: - Privacy
 
 /**
- * P7.6 / A14.7 — Privacy preferences. Reshaped to the design's
- * full-vocabulary frame: two RadioCards (Profile visibility · Address
- * on profile), a "Map location fuzz" card hosting the `FuzzMap` stepped
- * slider, an Activity toggle card, and a "Your data" card of
- * leading-icon action rows + a detached destructive Delete row. A dark
- * `StealthBanner` rides above the first card in the stealth frame.
+ * P7.6 / A14.7 — Privacy preferences: biometric security, search
+ * privacy, a "Your data" card of leading-icon action rows and a detached
+ * destructive Delete row. A dark `StealthBanner` rides above the first
+ * card in the stealth frame.
  *
  * Backend-backed controls (T1 parity):
  *  · "Find me in search" radios + "Find me by real name" toggle read
@@ -347,12 +343,14 @@ class SettingsIndexViewModel
  *    device-credential re-auth, then `DELETE /api/users/account` and a
  *    full sign-out — RN `src/app/settings.tsx:103-119`.
  *
- * The design's own control set (Profile visibility · Address on profile ·
- * Map location fuzz · Activity) has no column in `UserPrivacySettings` —
- * its four-way vocabularies don't map onto the three-way
- * `profile_default_visibility` enum — so those cards stay local until the
- * backend grows the fields. They are never presented as saved. Copy is
- * the parity contract, mirrored on iOS.
+ * The design's other cards (Profile visibility · Address on profile ·
+ * Map location fuzz · Activity) have no column in `UserPrivacySettings`
+ * — their four-way vocabularies don't map onto the three-way
+ * `profile_default_visibility` enum — so they are not shown: controls
+ * that look saved but reset, beside sample addresses and a made-up "Last
+ * updated" date, misled people (UX inventory S3-29). Profile visibility
+ * stays editable in Edit profile. Bring the cards back only with real
+ * backend fields. Copy is the parity contract, mirrored on iOS.
  */
 @HiltViewModel
 class PrivacySettingsViewModel
@@ -369,14 +367,7 @@ class PrivacySettingsViewModel
 
         val title: String = "Privacy"
 
-        val footerCaption: String
-            get() = if (isStealth) "Stealth · auto-applied May 26, 2026" else "Last updated · Mar 12, 2024"
-
         private var isStealth: Boolean = false
-        private var visibility: String = "verified"
-        private var address: String = "street"
-        private var fuzz: FuzzStop = FuzzStop.HalfMile
-        private val activity: MutableMap<String, Boolean> = PrivacyCatalog.seedActivity(stealth = false).toMutableMap()
 
         // Search privacy (persisted) — `UserPrivacySettings`.
         private var searchVisibility: String = "everyone"
@@ -438,25 +429,13 @@ class PrivacySettingsViewModel
         /** Test / preview seam: boot straight into a variant frame. */
         fun setVariant(variant: Variant) {
             isStealth = variant == Variant.Stealth
-            visibility = if (isStealth) "hidden" else "verified"
-            address = if (isStealth) "hidden" else "street"
-            fuzz = if (isStealth) FuzzStop.Neighborhood else FuzzStop.HalfMile
-            activity.clear()
-            activity.putAll(PrivacyCatalog.seedActivity(isStealth))
             rebuild()
         }
 
         fun onRadio(rowId: String) {
-            when {
-                rowId.startsWith(SEARCH_VISIBILITY_PREFIX) -> {
-                    setSearchVisibility(rowId.removePrefix(SEARCH_VISIBILITY_PREFIX))
-                    return
-                }
-                rowId.startsWith("visibility.") -> visibility = rowId.removePrefix("visibility.")
-                rowId.startsWith("address.") -> address = rowId.removePrefix("address.")
-                else -> return
+            if (rowId.startsWith(SEARCH_VISIBILITY_PREFIX)) {
+                setSearchVisibility(rowId.removePrefix(SEARCH_VISIBILITY_PREFIX))
             }
-            rebuild()
         }
 
         fun onToggle(
@@ -497,21 +476,17 @@ class PrivacySettingsViewModel
                     }
                     rebuild()
                 }
-                return
             }
-            if (!activity.containsKey(rowId)) return
-            activity[rowId] = isOn
-            rebuild()
         }
 
         fun onTapRow(rowId: String) {
-            // "appLockOpenSettings" is handled in the screen (needs Context).
-            // Download your data / What we collect open dedicated GDPR flows
-            // tracked outside this package.
+            // "appLockOpenSettings", "downloadData" and "whatWeCollect" are
+            // handled in the screen (they need Context or navigation).
             if (rowId == ROW_DELETE_ACCOUNT) {
                 _deleteAccountError.value = null
                 _deleteSheetVisible.value = true
             }
+            if (rowId == ROW_SEARCH_PRIVACY_RETRY) load()
         }
 
         fun consumeToast() {
@@ -689,15 +664,6 @@ class PrivacySettingsViewModel
             }
         }
 
-        fun onSetFuzz(
-            rowId: String,
-            stop: FuzzStop,
-        ) {
-            if (rowId != PrivacyCatalog.FUZZ) return
-            fuzz = stop
-            rebuild()
-        }
-
         private fun configureAppLockForSignedInUser() {
             val userId =
                 (authRepository.state.value as? AuthRepository.State.SignedIn)?.user?.id
@@ -723,10 +689,6 @@ class PrivacySettingsViewModel
             listOf(
                 biometricSecurityGroup(),
                 searchPrivacyGroup(),
-                visibilityGroup(),
-                addressGroup(),
-                fuzzGroup(),
-                activityGroup(),
                 dataGroup(),
                 deleteGroup(),
             )
@@ -737,25 +699,34 @@ class PrivacySettingsViewModel
          * Radio labels + helper copy are RN's
          * (`settings/privacy.tsx:20-33`, `:476-556`) word for word.
          */
-        private fun searchPrivacyGroup(): GroupedListGroup =
-            GroupedListGroup(
+        private fun searchPrivacyGroup(): GroupedListGroup {
+            // The card has no pull-to-refresh; after a failed load this row is the way back.
+            val retry =
+                GroupedListRow(
+                    id = ROW_SEARCH_PRIVACY_RETRY,
+                    label = "Try again",
+                    control = RowControl.Chevron,
+                    testTag = "search-privacy-retry",
+                ).takeIf { searchPrivacyLoadFailed }
+            return GroupedListGroup(
                 id = PrivacyCatalog.SEARCH_PRIVACY,
                 overline = "Find me in search",
                 helper =
                     if (searchPrivacyLoadFailed) {
-                        "Search privacy could not load. Pull to refresh before changing this setting."
+                        "Search privacy could not load. Try again before changing this setting."
                     } else {
                         PrivacyCatalog.searchVisibilityHelp[searchVisibility]
                     },
                 rows =
-                    PrivacyCatalog.searchVisibilityOptions.map { option ->
-                        GroupedListRow(
-                            id = "$SEARCH_VISIBILITY_PREFIX${option.key}",
-                            label = option.label,
-                            control = RowControl.Radio(option.key == searchVisibility),
-                            testTag = "search-visibility-${option.key}",
-                        )
-                    } +
+                    listOfNotNull(retry) +
+                        PrivacyCatalog.searchVisibilityOptions.map { option ->
+                            GroupedListRow(
+                                id = "$SEARCH_VISIBILITY_PREFIX${option.key}",
+                                label = option.label,
+                                control = RowControl.Radio(option.key == searchVisibility),
+                                testTag = "search-visibility-${option.key}",
+                            )
+                        } +
                         GroupedListRow(
                             id = ROW_FINDABLE_BY_NAME,
                             label = "Find me by real name",
@@ -766,6 +737,7 @@ class PrivacySettingsViewModel
                             testTag = "findable-by-name-switch",
                         ),
             )
+        }
 
         private fun biometricSecurityGroup(): GroupedListGroup {
             val label = appLock.biometricLabel.value
@@ -808,81 +780,6 @@ class PrivacySettingsViewModel
             )
         }
 
-        private fun visibilityGroup(): GroupedListGroup =
-            GroupedListGroup(
-                id = "visibility",
-                overline = "Profile visibility",
-                helper =
-                    if (isStealth) {
-                        "Hidden — your profile won't show in search or recommendations."
-                    } else {
-                        "Verified neighbors can find you and start a conversation."
-                    },
-                rows =
-                    PrivacyCatalog.visibilityOptions.map { option ->
-                        GroupedListRow(
-                            id = "visibility.${option.key}",
-                            label = option.label,
-                            subtext = option.sub,
-                            control = RowControl.Radio(option.key == visibility),
-                        )
-                    },
-            )
-
-        private fun addressGroup(): GroupedListGroup =
-            GroupedListGroup(
-                id = "address",
-                overline = "Address on profile",
-                helper =
-                    if (isStealth) {
-                        "Address hidden everywhere. Deliveries still route correctly."
-                    } else {
-                        "Street name shows on your profile; full address only to people you hire or sell to."
-                    },
-                rows =
-                    PrivacyCatalog.addressOptions.map { option ->
-                        GroupedListRow(
-                            id = "address.${option.key}",
-                            label = option.label,
-                            subtext = option.sub,
-                            control = RowControl.Radio(option.key == address),
-                        )
-                    },
-            )
-
-        private fun fuzzGroup(): GroupedListGroup =
-            GroupedListGroup(
-                id = PrivacyCatalog.FUZZ,
-                overline = "Map location fuzz",
-                helper =
-                    if (isStealth) {
-                        "Pins fuzz to your neighborhood — buyers see only \"Park Slope\", never your block."
-                    } else {
-                        "Pins drop within a block of you. Exact address only shared after a task is accepted."
-                    },
-                rows = emptyList(),
-                fuzz =
-                    GroupedListFuzz(
-                        leadIn = "How exact your task and listing pins appear on the map.",
-                        stop = fuzz,
-                    ),
-            )
-
-        private fun activityGroup(): GroupedListGroup =
-            GroupedListGroup(
-                id = "activity",
-                overline = "Activity",
-                rows =
-                    PrivacyCatalog.activitySpecs.map { spec ->
-                        GroupedListRow(
-                            id = spec.key,
-                            label = spec.label,
-                            subtext = spec.sub,
-                            control = RowControl.Toggle(activity[spec.key] ?: false),
-                        )
-                    },
-            )
-
         private fun dataGroup(): GroupedListGroup =
             GroupedListGroup(
                 id = "data",
@@ -892,7 +789,9 @@ class PrivacySettingsViewModel
                         GroupedListRow(
                             id = "downloadData",
                             label = "Download your data",
-                            subtext = "ZIP of profile, tasks, messages — emailed to you",
+                            // Export is by request (the Data export screen emails
+                            // the privacy team); there is no automated ZIP yet.
+                            subtext = "Request a copy by email",
                             control = RowControl.Chevron,
                             leadingIcon = PantopusIcon.Download,
                         ),
@@ -935,14 +834,14 @@ internal const val PASSWORDLESS_DELETE_HELP =
     "Biometric verification isn't set up on this device. Sign in again with Google or Apple, then try again."
 private const val ROW_FINDABLE_BY_NAME = "findableByName"
 private const val ROW_DELETE_ACCOUNT = "deleteAccount"
+private const val ROW_SEARCH_PRIVACY_RETRY = "searchPrivacyRetry"
 
 /**
- * A14.7 privacy catalog — the radio options, activity specs, and seeds.
+ * A14.7 privacy catalog — the search-visibility options and helper copy.
  * Top-level (mirror of the iOS static data) so the view-model stays
  * lean. Copy here is the parity contract with iOS.
  */
 internal object PrivacyCatalog {
-    const val FUZZ = "fuzz"
     const val BIOMETRIC_SECURITY = "biometricSecurity"
     const val SEARCH_PRIVACY = "searchPrivacy"
 
@@ -969,30 +868,4 @@ internal object PrivacyCatalog {
             "mutuals" to "Only connected people can find your profile in search.",
             "nobody" to "Your profile is hidden from search and public discovery.",
         )
-
-    val visibilityOptions: List<Option> =
-        listOf(
-            Option("public", "Public", "Anyone with the link can see your profile"),
-            Option("verified", "Verified neighbors only", "People with a verified address can see you"),
-            Option("connections", "Connections only", "Only people you've interacted with"),
-            Option("hidden", "Hidden", "Profile not browsable. Existing chats still work"),
-        )
-
-    val addressOptions: List<Option> =
-        listOf(
-            Option("full", "Full address", "14 Elm Park Lane, Brooklyn NY"),
-            Option("street", "Street only", "Elm Park Lane, Brooklyn"),
-            Option("neighborhood", "Neighborhood", "Park Slope, Brooklyn"),
-            Option("hidden", "Hidden", "Verified badge shown, address not"),
-        )
-
-    val activitySpecs: List<Option> =
-        listOf(
-            Option("online", "Show online status", "Green dot when you're active"),
-            Option("recent", "Show recent activity", "\"Posted a task 2h ago\" on profile"),
-            Option("nearby", "Appear in nearby search", "Neighbors can find you by proximity"),
-            Option("ratings", "Show ratings publicly", null),
-        )
-
-    fun seedActivity(stealth: Boolean): Map<String, Boolean> = activitySpecs.associate { it.key to !stealth }
 }

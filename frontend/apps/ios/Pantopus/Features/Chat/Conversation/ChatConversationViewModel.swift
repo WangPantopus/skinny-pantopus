@@ -359,6 +359,10 @@ public final class ChatConversationViewModel {
     private var messages: [ChatMessageDTO] = []
     private var pendingByClientId: [String: ChatMessageDTO] = [:]
     private var failedClientIds: Set<String> = []
+    /// Failed sends the server refused with a 403 (blocked, not a
+    /// participant, the account can't message). They show "Not sent"
+    /// with no Retry, since resending cannot succeed.
+    private var refusedClientIds: Set<String> = []
     private var activeRoomIds: Set<String> = []
     private var joinedRoomIds: Set<String> = []
     private var hasMore: Bool = false
@@ -667,7 +671,8 @@ public final class ChatConversationViewModel {
     public func retry(clientId rawId: String) async {
         guard !isSending else { return }
         let clientId = Self.bareClientId(rawId)
-        guard pendingByClientId[clientId] != nil, sendContextsByClientId[clientId] != nil else { return }
+        guard pendingByClientId[clientId] != nil, sendContextsByClientId[clientId] != nil,
+              !refusedClientIds.contains(clientId) else { return }
         failedClientIds.remove(clientId)
         isSending = true
         defer { isSending = false }
@@ -723,8 +728,10 @@ public final class ChatConversationViewModel {
             } else if Self.isSendRefused(error) {
                 // 403: the server refuses this pairing (blocked, not a
                 // participant, or the account can't message). Retrying
-                // cannot succeed, so say so instead of a bare "Failed to send".
-                sendLimitNotice = "You can't send messages in this conversation."
+                // cannot succeed: show the server's reason and mark the
+                // row "Not sent" without a Retry.
+                sendLimitNotice = Self.sendRefusedNotice(error)
+                refusedClientIds.insert(clientId)
             }
             // Don't resurrect a row that a concurrent socket echo already
             // confirmed and retired (lost-response race — the server
@@ -751,6 +758,13 @@ public final class ChatConversationViewModel {
         if case APIError.forbidden = error { return true }
         if case let APIError.clientError(status, _) = error, status == 403 { return true }
         return false
+    }
+
+    /// The server's own sentence for a refused send ("Unable to message
+    /// this user"), or a plain fallback when the 403 carried none.
+    private static func sendRefusedNotice(_ error: any Error) -> String {
+        if case let APIError.forbidden(message?) = error { return message }
+        return "You can't send messages in this conversation."
     }
 
     private static func isPreBidLimit(_ error: any Error) -> Bool {
@@ -1865,7 +1879,7 @@ public final class ChatConversationViewModel {
             let deliveryState: ChatDeliveryState? = {
                 guard side == .outgoing else { return nil }
                 if let clientId = message.clientMessageId, failedClientIds.contains(clientId) {
-                    return .failed
+                    return refusedClientIds.contains(clientId) ? .refused : .failed
                 }
                 if message.id.hasPrefix("client_") { return .sending }
                 if message.readAt != nil { return .read }
@@ -1876,7 +1890,8 @@ public final class ChatConversationViewModel {
             // "Sending..." spinner and the "Failed to send" + Retry CTA,
             // which must never be hidden by group rhythm. Tail visuals
             // stay driven by `hasTail`.
-            let showStamp = hasTail || deliveryState == .failed || deliveryState == .sending
+            let showStamp = hasTail || deliveryState == .failed || deliveryState == .refused
+                || deliveryState == .sending
             let stamp: String? = showStamp ? Self.stampLabel(for: message, currentUserId: currentUserId) : nil
             var body = Self.bodyForMessage(message)
             if message.messageType == "ai_reply" {

@@ -1474,9 +1474,17 @@ private fun presenceFor(
     } else {
         when (counterparty) {
             is ChatCounterparty.Person -> {
-                val prefix = if (counterparty.online) "Active now" else "Verified neighbor"
-                val text = if (counterparty.locality != null) "$prefix · ${counterparty.locality}" else prefix
-                counterparty.online to text
+                // "Verified neighbor" only when the person's verified badge
+                // says so; otherwise the locality alone, or no subtitle.
+                val status =
+                    when {
+                        counterparty.online -> "Active now"
+                        counterparty.verified -> "Verified neighbor"
+                        else -> null
+                    }
+                listOfNotNull(status, counterparty.locality)
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { counterparty.online to it.joinToString(" · ") }
             }
             is ChatCounterparty.Group -> counterparty.memberCount?.let { false to "$it members" }
             is ChatCounterparty.Ai -> false to "Replies in seconds · powered by Pantopus AI"
@@ -1864,17 +1872,19 @@ private fun PersonEmptyFrame(
             modifier = Modifier.semantics { heading() },
         )
         Spacer(modifier = Modifier.size(6.dp))
+        // No verification claim: the thread doesn't know the viewer's own.
         Text(
             text =
-                "This is the start of your conversation with ${counterparty.displayName.firstWord()}." +
-                    (counterparty.locality?.let { " You're both verified neighbors on $it." } ?: " You're both verified neighbors."),
+                counterparty.locality?.let {
+                    "This is the start of your conversation with ${counterparty.displayName.firstWord()} from $it."
+                } ?: "This is the start of your conversation with ${counterparty.displayName.firstWord()}.",
             fontSize = 13.sp,
             lineHeight = 18.sp,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.size(10.dp))
-        TrustPill(text = "Private between verified neighbors")
+        TrustPill(text = "Private conversation")
         Spacer(modifier = Modifier.size(18.dp))
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -2116,7 +2126,7 @@ private fun AiWelcomeFrame(onCapabilityTap: (ChatPromptChip) -> Unit) {
         )
         Spacer(modifier = Modifier.size(6.dp))
         Text(
-            text = "I use your verified neighbors, tasks, and mailbox to give answers that fit your block.",
+            text = "I can draft tasks, listings, and posts, and I use your saved places to fit answers to your area.",
             fontSize = 13.sp,
             lineHeight = 18.sp,
             color = PantopusColors.appTextSecondary,
@@ -2265,7 +2275,7 @@ private fun AiWelcomeCard(
                     color = PantopusColors.appText,
                 )
                 Text(
-                    text = "I can use your verified neighbors, tasks, and mailbox to help.",
+                    text = "I can draft tasks, listings, and posts, and use your saved places to help.",
                     fontSize = 11.sp,
                     color = PantopusColors.appTextSecondary,
                 )
@@ -4254,6 +4264,7 @@ private fun StampRow(
             ChatDeliveryState.Delivered -> stamp
             ChatDeliveryState.Sending -> "Sending..."
             ChatDeliveryState.Failed -> "Failed to send"
+            ChatDeliveryState.Refused -> "Not sent"
             null -> stamp
         }
     Row(
@@ -4313,6 +4324,14 @@ private fun StampRow(
                             color = PantopusColors.error,
                         )
                     }
+                ChatDeliveryState.Refused ->
+                    PantopusIconImage(
+                        icon = PantopusIcon.AlertCircle,
+                        contentDescription = null,
+                        size = 11.dp,
+                        tint = PantopusColors.error,
+                        modifier = Modifier.padding(start = 6.dp).testTag("chatNotSent_${content.id}"),
+                    )
                 null -> Unit
             }
         }

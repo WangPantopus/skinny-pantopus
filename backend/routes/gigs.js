@@ -385,9 +385,26 @@ async function topBiddersByGig(gigIds) {
   return byGigId;
 }
 
+// `Gig.items` is jsonb. Older writers stored it as a JSON string ('[]' or '[{…}]'), which clients
+// reading an array can't decode. Serve the array: a string that holds one is parsed, and any other
+// value is served as no items. A missing or null value is left as it is.
+function normalizeGigItems(items) {
+  if (items == null || Array.isArray(items)) return items;
+  if (typeof items === 'string') {
+    try {
+      const parsed = JSON.parse(items);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 function redactGigTracking(gig, canViewPrivateWork = false) {
   if (!gig) return null;
   const safe = { ...gig };
+  if ('items' in safe) safe.items = normalizeGigItems(safe.items);
   // Share credentials belong only to the explicit share command. Exact helper
   // coordinates belong to the existing consent-gated active-status reader.
   for (const key of ['status_share_token', 'status_share_expires_at', 'helper_last_location']) delete safe[key];
@@ -1141,7 +1158,7 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
       is_urgent: is_urgent || false,
       tags: tags || [],
       ref_listing_id: ref_listing_id || null,
-      items: items && items.length > 0 ? JSON.stringify(items) : '[]',
+      items: Array.isArray(items) ? items : [],
       source_type: source_type || null,
       source_id: source_id || null,
       // Magic Task fields
@@ -2599,7 +2616,7 @@ router.get('/', optionalAuth, async (req, res) => {
           locationUnlocked,
           is_urgent: g.is_urgent,
           tags: g.tags,
-          items: g.items,
+          items: normalizeGigItems(g.items),
           scheduled_start: g.scheduled_start,
           attachments: g.attachments,
           first_image: extractFirstImage(g.attachments),
@@ -3901,10 +3918,6 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
       updateData.geocode_created_at = new Date().toISOString();
 
       delete updateData.location;
-    }
-
-    if (Array.isArray(updateData.items)) {
-      updateData.items = updateData.items.length ? JSON.stringify(updateData.items) : '[]';
     }
 
     const { data: updatedGig, error } = await supabaseAdmin
@@ -5816,7 +5829,7 @@ router.post('/:gigId/confirm-completion', verifyToken, async (req, res) => {
     return res.json({ gig: updatedGig });
   } catch (err) {
     logger.error('Confirm completion error', { error: err.message });
-    return res.status(err.statusCode || 500).json({ error: err.message || 'Failed to confirm completion' });
+    return res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Failed to confirm completion' });
   }
 });
 
@@ -5833,7 +5846,7 @@ router.post('/:gigId/complete', verifyToken, async (req, res) => {
     return res.json({ gig: updatedGig });
   } catch (err) {
     logger.error('Complete gig error', { error: err.message });
-    return res.status(err.statusCode || 500).json({ error: err.message || 'Failed to confirm completion' });
+    return res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Failed to confirm completion' });
   }
 });
 
@@ -6021,11 +6034,19 @@ router.get('/:gigId/change-orders', verifyToken, async (req, res) => {
   }
 });
 
-// A paid task's price is bound to its payment hold: Start Work, capture, stop
-// and every settlement compare them, so a price change strands the hold.
-// Until a price change can move the hold, refuse one while it is live.
+// A price change can't be settled yet on any task. A paid task's price is bound
+// to its payment hold (Start Work, capture, stop and every settlement compare
+// them), so a change strands the hold; a task without a payment can't be
+// confirmed once its price is above zero. Until a price change can move money,
+// every price change order is refused at create and at approve. The reason says
+// which case applies.
 const PAID_PRICE_CHANGE_UNAVAILABLE =
   "Price changes aren't available once a task has a payment hold. The task keeps its agreed price.";
+const PRICE_CHANGE_UNAVAILABLE = "Price changes aren't available for this task. It keeps its agreed price.";
+async function priceChangeRefusal(gig) {
+  const error = (await hasLivePaymentHold(gig)) ? PAID_PRICE_CHANGE_UNAVAILABLE : PRICE_CHANGE_UNAVAILABLE;
+  return { error, code: 'PAID_PRICE_CHANGE_UNAVAILABLE' };
+}
 async function hasLivePaymentHold(gig) {
   if (!gig.payment_id) return false;
   const { data: payment, error } = await supabaseAdmin
@@ -6091,8 +6112,8 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
         .status(403)
         .json({ error: 'Only the poster or assigned worker can request changes' });
     }
-    if (Number(amount_change) && (await hasLivePaymentHold(gig))) {
-      return res.status(409).json({ error: PAID_PRICE_CHANGE_UNAVAILABLE, code: 'PAID_PRICE_CHANGE_UNAVAILABLE' });
+    if (Number(amount_change)) {
+      return res.status(409).json(await priceChangeRefusal(gig));
     }
 
     const safeAmountChange = amount_change ? parseFloat(amount_change) : 0;
@@ -6280,8 +6301,8 @@ router.post('/:gigId/change-orders/:orderId/approve', verifyToken, async (req, r
     if (!isPoster && !isWorker) {
       return res.status(403).json({ error: 'Only the poster or worker can approve' });
     }
-    if (Number(order.amount_change) && (await hasLivePaymentHold(gig))) {
-      return res.status(409).json({ error: PAID_PRICE_CHANGE_UNAVAILABLE, code: 'PAID_PRICE_CHANGE_UNAVAILABLE' });
+    if (Number(order.amount_change)) {
+      return res.status(409).json(await priceChangeRefusal(gig));
     }
 
     const nowIso = new Date().toISOString();

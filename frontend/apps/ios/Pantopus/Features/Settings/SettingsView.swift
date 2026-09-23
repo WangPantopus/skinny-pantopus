@@ -42,7 +42,12 @@ public enum SettingsStackRoute: Hashable {
 }
 
 public struct SettingsView: View {
+    @Environment(AuthManager.self) private var auth
+    @State private var showsSignOutConfirm = false
     @State private var path: [SettingsStackRoute] = []
+    /// Set when a caller opens Settings straight on a sub-screen (e.g.
+    /// Payments). Its Back then returns to that caller, not to the index.
+    private let initialRoute: SettingsStackRoute?
     private let onClose: @MainActor () -> Void
     private let onEditProfile: @MainActor () -> Void
     private let onOpenReviewClaims: @MainActor () -> Void
@@ -58,6 +63,7 @@ public struct SettingsView: View {
         onSignedOut: @escaping @MainActor () -> Void = {}
     ) {
         _path = State(initialValue: initialRoute.map { [$0] } ?? [])
+        self.initialRoute = initialRoute
         self.onClose = onClose
         self.onEditProfile = onEditProfile
         self.onOpenReviewClaims = onOpenReviewClaims
@@ -71,6 +77,21 @@ public struct SettingsView: View {
             .background(Theme.Color.appBg)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("settings")
+            .confirmationDialog(
+                "Sign out of Pantopus?",
+                isPresented: $showsSignOutConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Sign out", role: .destructive) {
+                    Task {
+                        await auth.signOut()
+                        onSignedOut()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("You'll need to sign in again to access your hub.")
+            }
     }
 
     @ViewBuilder private var currentView: some View {
@@ -121,7 +142,12 @@ public struct SettingsView: View {
         case let .legalContent(doc):
             LegalContentView(document: doc) { popLast() }
         case let .placeholder(label):
-            NotYetAvailableView(tabName: label, icon: .info)
+            // Settings renders `path.last` without a navigation bar, so the
+            // placeholder carries the Settings top bar for its way back.
+            VStack(spacing: Spacing.s0) {
+                SettingsTopBar(title: label) { popLast() }
+                NotYetAvailableView(tabName: label, icon: .info) { popLast() }
+            }
         case .blockedUsers, .password, .securityDevices, .verification, .help, .about, .payments, .dataExport:
             settingsDestination(for: route)
         }
@@ -155,13 +181,22 @@ public struct SettingsView: View {
         case .notifications:
             NotificationSettingsView { popLast() }
         case .privacy:
-            PrivacyView(viewModel: PrivacySettingsViewModel()) { popLast() }
+            PrivacyView(viewModel: PrivacySettingsViewModel { link in
+                switch link {
+                case .dataExport: path.append(.dataExport)
+                case .privacyPolicy: path.append(.legalContent(.privacy))
+                }
+            }) { popLast() }
         default:
             EmptyView()
         }
     }
 
     private func popLast() {
+        if path.count == 1, let initialRoute, path.first == initialRoute {
+            onClose()
+            return
+        }
         if !path.isEmpty { path.removeLast() }
     }
 
@@ -173,6 +208,7 @@ public struct SettingsView: View {
         switch route {
         case .editProfile: onEditProfile()
         case .reviewClaims: onOpenReviewClaims()
+        case .confirmSignOut: showsSignOutConfirm = true
         case .didSignOut: onSignedOut()
         default: break
         }
@@ -203,4 +239,5 @@ public struct SettingsView: View {
 
 #Preview {
     SettingsView()
+        .environment(AuthManager.previewSignedIn)
 }

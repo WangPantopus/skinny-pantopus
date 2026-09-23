@@ -84,6 +84,16 @@ export default function ComposeMailModal({
   const [structuredRecipientDropdownOpen, setStructuredRecipientDropdownOpen] = useState(false);
   const [structuredRecipientActiveIndex, setStructuredRecipientActiveIndex] = useState(-1);
   const structuredRecipientContainerRef = useRef<HTMLDivElement | null>(null);
+  // Businesses this user may send as (the server's own list); "Send as" shows only when there is one.
+  const [senderBusinesses, setSenderBusinesses] = useState<api.mailbox.SenderBusiness[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.mailbox.getSenderBusinesses()
+      .then((res) => { if (!cancelled) setSenderBusinesses(res.businesses || []); })
+      .catch(() => { if (!cancelled) setSenderBusinesses([]); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Sync address inputs with home labels
   useEffect(() => {
@@ -309,7 +319,15 @@ export default function ComposeMailModal({
       onClose();
       onSent();
       const notAdded = fanoutFailureLabel((sent as { fanoutFailed?: unknown }).fanoutFailed);
-      if (notAdded) setActionError(`Mail sent, but it couldn't be added to this Home's ${notAdded}.`);
+      // The server sends as a business only when the sender may; say so if the chosen one was not used.
+      const chosenBusiness = composeMode === 'structured' ? structuredComposeData.senderBusinessName.trim() : '';
+      const sentAsBusiness = (sent.mail?.senderBusinessName || '').trim();
+      const droppedBusiness = chosenBusiness && chosenBusiness.toLowerCase() !== sentAsBusiness.toLowerCase() ? chosenBusiness : '';
+      const problems = [
+        droppedBusiness && `it went out under your own name, because you can't send as ${droppedBusiness}`,
+        notAdded && `it couldn't be added to this Home's ${notAdded}`,
+      ].filter(Boolean);
+      if (problems.length > 0) setActionError(`Mail sent, but ${problems.join(', and ')}.`);
       else setActionSuccess('Mail sent successfully.');
     } catch (err: unknown) {
       const message = getApiErrorMessage(err, 'Failed to send mail.');
@@ -602,10 +620,16 @@ export default function ComposeMailModal({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input type="text" placeholder="Sender business name (optional)" value={structuredComposeData.senderBusinessName}
-                  onChange={(e) => setStructuredComposeData(prev => ({ ...prev, senderBusinessName: e.target.value }))}
-                  className={COMPOSE_FIELD_CLASS}
-                />
+                {senderBusinesses.length > 0 && (
+                  <select aria-label="Send as" value={structuredComposeData.senderBusinessName}
+                    onChange={(e) => setStructuredComposeData(prev => ({ ...prev, senderBusinessName: e.target.value }))}
+                    className={COMPOSE_SELECT_CLASS}>
+                    <option value="">Send as yourself</option>
+                    {senderBusinesses.map((business) => (
+                      <option key={business.id} value={business.name}>Send as {business.name}</option>
+                    ))}
+                  </select>
+                )}
                 <input type="text" placeholder="Sender address (optional)" value={structuredComposeData.senderAddress}
                   onChange={(e) => setStructuredComposeData(prev => ({ ...prev, senderAddress: e.target.value }))}
                   className={COMPOSE_FIELD_CLASS}

@@ -108,6 +108,8 @@ struct HomeDashboardView: View {
     /// FAB → "Send Mail" — opens the mail composer
     /// (RN `homes/[id]/index.tsx:160`).
     private let onSendMail: ((String) -> Void)?
+    /// The "Ownership" tab — the host's ownership screen for this home.
+    private let onOpenOwnership: ((String) -> Void)?
 
     init(
         homeId: String,
@@ -132,7 +134,8 @@ struct HomeDashboardView: View {
         onAddTask: ((String) -> Void)? = nil,
         onTrackBill: ((String) -> Void)? = nil,
         onTrackPackage: ((String) -> Void)? = nil,
-        onSendMail: ((String) -> Void)? = nil
+        onSendMail: ((String) -> Void)? = nil,
+        onOpenOwnership: ((String) -> Void)? = nil
     ) {
         _viewModel = State(initialValue: HomeDashboardViewModel(homeId: homeId))
         self.homeId = homeId
@@ -158,6 +161,7 @@ struct HomeDashboardView: View {
         self.onTrackBill = onTrackBill
         self.onTrackPackage = onTrackPackage
         self.onSendMail = onSendMail
+        self.onOpenOwnership = onOpenOwnership
     }
 
     /// Current signed-in user's email; used by the Invite Owner form
@@ -289,7 +293,7 @@ struct HomeDashboardView: View {
                         tabs: content.tabs,
                         selectedTab: Binding(
                             get: { viewModel.selectedTab },
-                            set: { viewModel.selectTab($0) }
+                            set: { openTab($0) }
                         ),
                         onQuickAction: { handleQuickAction($0) },
                         overview: {
@@ -421,6 +425,20 @@ struct HomeDashboardView: View {
         } else {
             onOpenPlaceholder?(actionLabel(action))
         }
+    }
+
+    /// A section tab opens that section's screen, and the strip stays on
+    /// Overview. Without a wired screen it keeps the old in-place tab.
+    private func openTab(_ tab: String) {
+        let open: (() -> Void)? = switch tab {
+        case "tasks": onOpenTasks.map { openTasks in { openTasks(homeId) } }
+        case "bills": onOpenBills
+        case "packages": onOpenPackages.map { openPackages in { openPackages(homeId) } }
+        case "members": onOpenMembers.map { openMembers in { openMembers(homeId) } }
+        case "ownership": onOpenOwnership.map { openOwnership in { openOwnership(homeId) } }
+        default: nil
+        }
+        if let open { open() } else { viewModel.selectTab(tab) }
     }
 
     private func handleQuickAction(_ action: String) {

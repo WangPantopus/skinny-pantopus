@@ -10,20 +10,26 @@ import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -1431,7 +1437,10 @@ private object ChildRoutes {
     fun postcardVerification(homeId: String): String = "homes/$homeId/verify-postcard"
 
     /** Build the generic placeholder path with an encoded label. */
-    fun placeholder(label: String): String = "_placeholder/generic?$PLACEHOLDER_LABEL_KEY=${java.net.URLEncoder.encode(label, "UTF-8")}"
+    // `%20`, not URLEncoder's `+`: Navigation decodes the query value
+    // literally, so "Edit dates" showed as "Edit+dates".
+    fun placeholder(label: String): String =
+        "_placeholder/generic?$PLACEHOLDER_LABEL_KEY=${java.net.URLEncoder.encode(label, "UTF-8").replace("+", "%20")}"
 
     /** Build the compose-post path with the pre-fill intent encoded. */
     fun composePost(
@@ -1875,18 +1884,43 @@ private object ChildRoutes {
 }
 
 /**
- * Fire a `mailto:` intent, swallowing [ActivityNotFoundException] when the
- * device has no mail client. iOS degrades silently here (`openURL` on a
- * `mailto:` URL is a no-op without a mail app), so the CTA does nothing on
- * both platforms rather than crashing on Android.
+ * Fire a `mailto:` intent. Returns `false` instead of crashing when the device
+ * has no mail client ([ActivityNotFoundException]); callers then show
+ * [EmailFallbackDialog] with the address, as iOS does.
  */
-private fun Context.openMailto(uri: String) {
+private fun Context.openMailto(uri: String): Boolean {
     val intent = Intent(Intent.ACTION_SENDTO, Uri.parse(uri))
-    try {
+    return try {
         startActivity(intent)
+        true
     } catch (_: ActivityNotFoundException) {
-        Log.i("RootTabScreen", "mailto ignored: no mail client installed")
+        Log.i("RootTabScreen", "mailto: no mail client installed")
+        false
     }
+}
+
+/**
+ * Shown when a `mailto:` link can't open because no mail app is installed:
+ * the address with a Copy action, so "Email us" never ends in silence.
+ */
+@Composable
+private fun EmailFallbackDialog(
+    address: String,
+    onDismiss: () -> Unit,
+) {
+    val clipboard = LocalClipboardManager.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("No email app found") },
+        text = { Text("Write to us at $address.") },
+        confirmButton = {
+            TextButton(onClick = {
+                clipboard.setText(AnnotatedString(address))
+                onDismiss()
+            }) { Text("Copy address") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+    )
 }
 
 private fun NavHostController.navigateToRootTab(route: PantopusRoute) {
@@ -2099,7 +2133,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             }
             is DeepLinkRouter.Destination.Gig -> {
                 navController.navigateToRootTab(PantopusRoute.Tasks)
-                navController.navigate(ChildRoutes.gigDetail(pending.id))
+                // `/gigs/new` is the web composer's path: open the native composer.
+                if (pending.id == "new") {
+                    navController.navigate(ChildRoutes.composeGig(GigsCategory.All.key))
+                } else {
+                    navController.navigate(ChildRoutes.gigDetail(pending.id))
+                }
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.Listing -> {
@@ -2228,6 +2267,22 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             DeepLinkRouter.Destination.Earn -> {
                 navController.navigate(ChildRoutes.MAILBOX_ROOT)
                 navController.navigate(ChildRoutes.EARN)
+                DeepLinkRouter.consume()
+            }
+            // A mail notification's letter, in the item detail the mailbox list
+            // opens; pushed through MAILBOX_ROOT like the other mailbox links.
+            is DeepLinkRouter.Destination.MailItem -> {
+                navController.navigate(ChildRoutes.MAILBOX_ROOT)
+                navController.navigate(ChildRoutes.mailboxItemDetail(pending.mailId))
+                DeepLinkRouter.consume()
+            }
+            // `/mailbox` (the Mail Day summary notification) — the Mail tab.
+            DeepLinkRouter.Destination.Mailbox -> {
+                navController.navigateToRootTab(PantopusRoute.Mail)
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.NeighborMessage -> {
+                navController.navigate(ChildRoutes.neighborMessage(pending.messageId))
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.BusinessOwner -> {
@@ -2604,6 +2659,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                         onOpenHomeOwners = { homeId -> navController.navigate(ChildRoutes.homeOwners(homeId)) },
                         onOpenHomeMembers = { homeId -> navController.navigate(ChildRoutes.homeMembers(homeId)) },
+                        onOpenHomeDocs = { homeId -> navController.navigate(ChildRoutes.homeDocs(homeId)) },
+                        onOpenHomeEmergency = { homeId ->
+                            navController.navigate(ChildRoutes.homeEmergency(homeId))
+                        },
                         onOpenMyHomes = { navController.navigate(ChildRoutes.MY_HOMES) },
                         onOpenMyListings = { navController.navigate(ChildRoutes.MY_LISTINGS) },
                         onOpenMyBusinesses = { navController.navigate(ChildRoutes.MY_BUSINESSES) },
@@ -2814,6 +2873,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                         onOpenMembers = { homeId ->
                             navController.navigate(ChildRoutes.homeMembers(homeId))
+                        },
+                        onOpenOwnership = { homeId ->
+                            navController.navigate(ChildRoutes.homeOwnershipSecurity(homeId))
                         },
                         onOpenPropertyDetails = { homeId ->
                             navController.navigate(ChildRoutes.propertyDetails(homeId))
@@ -4131,12 +4193,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.privacyHandshake(handle, tierRank))
                         },
                         onOpenMessages = { profile ->
+                            // Verified residency is the fact behind "Verified neighbor";
+                            // `profile.verified` is the account flag sign-in sets.
                             navController.navigate(
                                 ChildRoutes.chatConversationFromPicker(
                                     userId = profile.id,
                                     displayName = profile.displayName,
                                     initials = initialsFromName(profile.displayName),
-                                    verified = profile.verified == true,
+                                    verified = profile.residency?.get("verified") == true,
                                     locality = profile.locality,
                                 ),
                             )
@@ -4173,9 +4237,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 "Share business",
                             )
                         },
-                        onOpenReport = { navController.navigate(ChildRoutes.placeholder("Report business")) },
                         onOpenWebsite = { uri -> runCatching { uriHandler.openUri(uri) } },
-                        onBook = { navController.navigate(ChildRoutes.placeholder("Book")) },
                         onEdit = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
                     )
                 }
@@ -4218,9 +4280,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 "Share business",
                             )
                         },
-                        onOpenReport = { navController.navigate(ChildRoutes.placeholder("Report business")) },
                         onOpenWebsite = { uri -> runCatching { uriHandler.openUri(uri) } },
-                        onBook = { navController.navigate(ChildRoutes.placeholder("Book")) },
                         onEdit = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
                     )
                 }
@@ -4553,17 +4613,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onBack = { navController.popBackStack() },
                         onOpenMessages = { listing ->
                             listing.userId?.let { sellerId ->
-                                val name = listing.title ?: "Seller"
+                                // The chat is with the seller; the listing is its topic.
+                                val title = listing.title ?: "Listing"
+                                val name = listing.creator?.resolvedDisplayName() ?: title
                                 navController.navigate(
                                     ChildRoutes.chatConversationFromPicker(
                                         userId = sellerId,
                                         displayName = name,
                                         initials = initialsFromName(name),
-                                        verified = false,
+                                        verified = listing.creator?.resolvedVerified() == true,
                                         locality = listing.locationName,
                                         topicType = "listing",
                                         topicRefId = listing.id,
-                                        topicTitle = name,
+                                        topicTitle = title,
                                     ),
                                 )
                             }
@@ -5029,7 +5091,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     NotificationSettingsScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.SETTINGS_PRIVACY) {
-                    PrivacySettingsScreen(onBack = { navController.popBackStack() })
+                    PrivacySettingsScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenDataExport = { navController.navigate(ChildRoutes.SETTINGS_DATA_EXPORT) },
+                        onOpenPrivacyPolicy = {
+                            navController.navigate(ChildRoutes.settingsLegalContent(LegalDocument.Privacy.rowId))
+                        },
+                    )
                 }
                 composable(ChildRoutes.SETTINGS_BLOCKED_USERS) {
                     BlockedUsersScreen(onBack = { navController.popBackStack() })
@@ -5045,21 +5113,30 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 composable(ChildRoutes.SETTINGS_DATA_EXPORT) {
                     val context = androidx.compose.ui.platform.LocalContext.current
+                    var showsEmailFallback by remember { mutableStateOf(false) }
                     DataExportScreen(
                         onBack = { navController.popBackStack() },
                         onEmailPrivacy = {
-                            context.openMailto("mailto:privacy@pantopus.com?subject=Data%20export%20request")
+                            showsEmailFallback =
+                                !context.openMailto("mailto:privacy@pantopus.com?subject=Data%20export%20request")
                         },
                     )
+                    if (showsEmailFallback) {
+                        EmailFallbackDialog("privacy@pantopus.com") { showsEmailFallback = false }
+                    }
                 }
                 composable(ChildRoutes.SETTINGS_HELP) {
                     val context = androidx.compose.ui.platform.LocalContext.current
+                    var showsEmailFallback by remember { mutableStateOf(false) }
                     HelpCenterScreen(
                         onBack = { navController.popBackStack() },
                         onEmailSupport = {
-                            context.openMailto("mailto:support@pantopus.app?subject=Help")
+                            showsEmailFallback = !context.openMailto("mailto:support@pantopus.com?subject=Help")
                         },
                     )
+                    if (showsEmailFallback) {
+                        EmailFallbackDialog("support@pantopus.com") { showsEmailFallback = false }
+                    }
                 }
                 composable(ChildRoutes.SETTINGS_LEGAL) {
                     LegalIndexScreen(
@@ -5385,8 +5462,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onEditSignup = { reservationId ->
                             navController.navigate(ChildRoutes.editSignup(reservationId))
                         },
-                        onMessageHelper = { reservationId ->
-                            navController.navigate(ChildRoutes.placeholder("Message helper · $reservationId"))
+                        onMessageHelper = { _ ->
+                            navController.navigate(ChildRoutes.placeholder("Message helper"))
                         },
                     )
                 }
@@ -5414,14 +5491,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     ManageTrainScreen(
                         onBack = { navController.popBackStack() },
-                        onOpenAnalytics = { id ->
-                            navController.navigate(ChildRoutes.placeholder("Train analytics · $id"))
+                        onOpenAnalytics = { _ ->
+                            navController.navigate(ChildRoutes.placeholder("Train analytics"))
                         },
-                        onEditDates = { id ->
-                            navController.navigate(ChildRoutes.placeholder("Edit dates · $id"))
+                        onEditDates = { _ ->
+                            navController.navigate(ChildRoutes.placeholder("Edit dates"))
                         },
-                        onInviteHelpers = { id ->
-                            navController.navigate(ChildRoutes.placeholder("Invite helpers · $id"))
+                        onInviteHelpers = { _ ->
+                            navController.navigate(ChildRoutes.placeholder("Invite helpers"))
                         },
                     )
                 }
@@ -5460,7 +5537,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         ),
                 ) { entry ->
                     val label = entry.arguments?.getString(ChildRoutes.PLACEHOLDER_LABEL_KEY) ?: "This"
-                    NotYetAvailableView(tabName = label, icon = PantopusIcon.Info)
+                    NotYetAvailableView(
+                        tabName = label,
+                        icon = PantopusIcon.Info,
+                        onBack = { navController.popBackStack() },
+                    )
                 }
                 // ---- Wave A bootstrap placeholders. Swap each body for the real
                 // screen when the matching A.x screen ships. ----
@@ -6259,7 +6340,8 @@ private fun routeForDrawer(
         NavigationDrawerDestination.MyBusinesses -> ChildRoutes.MY_BUSINESSES
         NavigationDrawerDestination.Connections -> ChildRoutes.CONNECTIONS
         NavigationDrawerDestination.Mailbox -> ChildRoutes.MAILBOX_ROOT
-        NavigationDrawerDestination.ProfileAndPrivacy -> ChildRoutes.IDENTITY_CENTER
+        // Privacy holds Delete account; iOS opens the same screen from this row.
+        NavigationDrawerDestination.ProfileAndPrivacy -> ChildRoutes.SETTINGS_PRIVACY
         NavigationDrawerDestination.BeaconUpdates -> ChildRoutes.BEACONS_FEED
         NavigationDrawerDestination.Search -> ChildRoutes.UNIVERSAL_SEARCH
         NavigationDrawerDestination.DiscoverNeighbors -> ChildRoutes.DISCOVER_HUB

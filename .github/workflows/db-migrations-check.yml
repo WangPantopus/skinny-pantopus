@@ -25,7 +25,16 @@ jobs:
         with:
           version: ${{ inputs.cli-version }}
       - name: Replay from an empty database
-        run: supabase db start
+        # ghcr.io can refuse the Supabase images ("toomanyrequests"; GitHub incident on 2026-09-23 failed every
+        # replay for over an hour). Retry once with the same images from the public ECR mirror; the later steps
+        # (supabase test db, supabase stop) then use that registry too.
+        run: |
+          if ! supabase db start; then
+            echo "::warning::supabase db start failed; retrying with the public ECR image registry"
+            supabase stop --no-backup || true
+            echo "SUPABASE_INTERNAL_IMAGE_REGISTRY=public.ecr.aws" >> "$GITHUB_ENV"
+            SUPABASE_INTERNAL_IMAGE_REGISTRY=public.ecr.aws supabase db start
+          fi
       - name: Reject invalid database functions
         run: node scripts/db/check-function-lint.cjs
       - name: Run SQL contracts

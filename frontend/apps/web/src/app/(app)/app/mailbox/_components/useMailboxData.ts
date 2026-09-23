@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
+import { getErrorMessage } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { toast } from '@/components/ui/toast-store';
 import type { MailItem, Summary, MailScope, MailType, AvailableHome } from './mailbox-types';
 import { DELIVERABLE_TYPE_META } from './mailbox-constants';
 
@@ -65,6 +67,9 @@ export default function useMailboxData() {
       setSummary(res.summary || null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load mailbox for this scope.';
+      // Show the failure in place of the list: not the previous scope's letters, and not an empty mailbox.
+      setMail([]);
+      setSummary(null);
       setScopeError(message);
       console.error('Failed to load mailbox', err);
     }
@@ -202,12 +207,14 @@ export default function useMailboxData() {
 
   const handleStar = async (e: React.MouseEvent, item: MailItem) => {
     e.stopPropagation();
+    // Show the value that was saved, so a failed save leaves the star as it was.
+    const starred = !item.starred;
     try {
-      await api.mailbox.starMail(item.id, !item.starred);
-      setMail(prev => prev.map(m => m.id === item.id ? { ...m, starred: !m.starred } : m));
-      if (selectedMail?.id === item.id) setSelectedMail(prev => prev ? { ...prev, starred: !prev.starred } : null);
-    } catch {
-      setMail(prev => prev.map(m => m.id === item.id ? { ...m, starred: !m.starred } : m));
+      await api.mailbox.starMail(item.id, starred);
+      setMail(prev => prev.map(m => m.id === item.id ? { ...m, starred } : m));
+      if (selectedMail?.id === item.id) setSelectedMail(prev => prev ? { ...prev, starred } : null);
+    } catch (err) {
+      toast.error(`Couldn't ${starred ? 'star' : 'unstar'} this mail. ${getErrorMessage(err, 'Please try again.')}`);
     }
   };
 
@@ -217,7 +224,9 @@ export default function useMailboxData() {
       await api.mailbox.archiveMail(item.id);
       setMail(prev => prev.filter(m => m.id !== item.id));
       setSelectedMail(null);
-    } catch {}
+    } catch (err) {
+      toast.error(`Couldn't archive this mail. ${getErrorMessage(err, 'Please try again.')}`);
+    }
   };
 
   const handleDelete = async (item: MailItem) => {
@@ -228,7 +237,9 @@ export default function useMailboxData() {
       await api.mailbox.deleteMail(item.id);
       setMail(prev => prev.filter(m => m.id !== item.id));
       setSelectedMail(null);
-    } catch {}
+    } catch (err) {
+      toast.error(`Couldn't delete this mail. ${getErrorMessage(err, 'Please try again.')}`);
+    }
   };
 
   const handleCloseDetail = async () => {
