@@ -43,6 +43,9 @@ public enum SettingsStackRoute: Hashable {
 
 public struct SettingsView: View {
     @State private var path: [SettingsStackRoute] = []
+    /// Set when a caller opens Settings straight on a sub-screen (e.g.
+    /// Payments). Its Back then returns to that caller, not to the index.
+    private let initialRoute: SettingsStackRoute?
     private let onClose: @MainActor () -> Void
     private let onEditProfile: @MainActor () -> Void
     private let onOpenReviewClaims: @MainActor () -> Void
@@ -58,6 +61,7 @@ public struct SettingsView: View {
         onSignedOut: @escaping @MainActor () -> Void = {}
     ) {
         _path = State(initialValue: initialRoute.map { [$0] } ?? [])
+        self.initialRoute = initialRoute
         self.onClose = onClose
         self.onEditProfile = onEditProfile
         self.onOpenReviewClaims = onOpenReviewClaims
@@ -167,6 +171,10 @@ public struct SettingsView: View {
     }
 
     private func popLast() {
+        if path.count == 1, let initialRoute, path.first == initialRoute {
+            onClose()
+            return
+        }
         if !path.isEmpty { path.removeLast() }
     }
 
