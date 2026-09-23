@@ -158,6 +158,8 @@ data class HostedByFooter(
     val organizerInitials: String,
     val organizerDisplayName: String,
     val neighborHint: String?,
+    /** The primary organizer's account, for "Message the host". */
+    val organizerUserId: String? = null,
 )
 
 /**
