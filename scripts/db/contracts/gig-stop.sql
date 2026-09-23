@@ -40,7 +40,10 @@ DO $$ DECLARE d jsonb; r jsonb; old_terms jsonb; frozen jsonb; proof jsonb; leas
  r:=public.begin_gig_stop(pg_temp.stop_id(101),pg_temp.stop_id(1),repeat('a',64),pg_temp.stop_id(801),'cancel',old_terms||'{"amountCents":2000}');
  IF r->>'error' IS DISTINCT FROM 'TERMS_CHANGED' THEN RAISE EXCEPTION 'Changed amount accepted %',r; END IF;
  UPDATE public."Gig" SET cancellation_policy='standard',accepted_at=now()-interval '2 hours' WHERE id=pg_temp.stop_id(101);
- IF pg_temp.stop_begin(1)->>'error' IS DISTINCT FROM 'FEE_POLICY_REVIEW' THEN RAISE EXCEPTION 'Fee silently waived'; END IF;
+ -- P04/P05: a late owner cancel charges the policy fee from the live hold; a worker cancel stays fee-free in review.
+ d:=public.read_gig_stop_preview(pg_temp.stop_id(101),pg_temp.stop_id(1),'cancel');
+ IF d->>'eligible'<>'true' OR d->>'financialAction'<>'fee' OR (d->'terms'->>'policyFeeCents')::integer<>50 THEN RAISE EXCEPTION 'Fee silently waived %',d; END IF;
+ IF public.read_gig_stop_preview(pg_temp.stop_id(101),pg_temp.stop_id(2),'cancel')->>'unavailableReason' IS DISTINCT FROM 'FEE_POLICY_REVIEW' THEN RAISE EXCEPTION 'Worker cancel charged a fee'; END IF;
  UPDATE public."Gig" SET cancellation_policy='flexible',accepted_at=now() WHERE id=pg_temp.stop_id(101);
  frozen:=(SELECT public.gig_stop_payment_snapshot(p) FROM public."Payment" p WHERE id=pg_temp.stop_id(301));
  d:=pg_temp.stop_begin(1); IF d ? 'error' OR d->'request'->>'state'<>'pending' THEN RAISE EXCEPTION 'Exact reservation failed %',d; END IF;

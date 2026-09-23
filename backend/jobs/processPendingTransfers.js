@@ -78,7 +78,8 @@ async function processPendingTransfers() {
       cooling_off_ends_at,
       created_at,
       dispute_id,
-      dispute_status
+      dispute_status,
+      metadata
     `;
 
     const [standardReadyRes, legacyReadyRes] = await Promise.all([
@@ -157,7 +158,10 @@ async function processPendingTransfers() {
         }
 
         if (protectedWalletPayment) {
-          const result = await walletSettlement.settle(payment);
+          // A cancelled task's charged poster-fault fee has its own settlement:
+          // only the worker share of the fee, never the task payment path.
+          const result = payment.payment_type === 'gig_payment' && payment.metadata?.gig_fee
+            ? await walletSettlement.settleFee(payment) : await walletSettlement.settle(payment);
           if (result.reused || result.settlement.status === 'no_earnings') { skipCount++; continue; }
           // Money, in-app notices and delivery events committed together. The
           // durable relay sends the same notification after a process restart.

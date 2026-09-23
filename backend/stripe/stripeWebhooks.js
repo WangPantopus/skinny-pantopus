@@ -616,6 +616,20 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
     // ─── Manual capture PI: this means capture() was called ───
     // The capturePayment() in stripeService already transitions to captured_hold,
     // but this webhook serves as a safety net / confirmation.
+    if (payment.payment_type === 'gig_payment' && Number.isSafeInteger(paymentIntent.amount_received)
+      && paymentIntent.amount_received < payment.amount_total) {
+      // A partial capture is a poster-fault fee. Its own command records the
+      // exact fee from fresh provider proof; a full-capture transition or a
+      // "payment captured" notice would be false. Recover only a reserved
+      // no-show fee here; a stop request's fee is finished by its reconciler.
+      try {
+        const gigStop = require('../services/gigStopService');
+        if (!(await gigStop.reconcileNoShowFee(payment.id))) await gigStop.reconcileFeeStop(payment.id);
+      } catch (feeErr) {
+        logger.warn('PI succeeded: partial gig capture awaits its fee command', { paymentId: payment.id, error: feeErr.message });
+      }
+      return;
+    }
     if (payment.payment_status === PAYMENT_STATES.AUTHORIZED) {
       // capturePayment hasn't run its transition yet — do it here
       const COOLING_OFF_MS = 48 * 60 * 60 * 1000;
@@ -1054,6 +1068,17 @@ async function handleDisputeCreated(dispute) {
       await stripeService.capturePayment(payment.id);
     } catch (captureErr) {
       logger.error('Dispute: pending capture could not be recorded', { paymentId: payment.id, error: captureErr.message });
+    }
+    payment = (await findPaymentByField('id', payment.id)) || payment;
+  } else if (payment.payment_type === 'gig_payment' && ((payment.payment_status === PAYMENT_STATES.CAPTURE_PENDING
+    && payment.metadata?.gig_fee?.state === 'pending') || payment.payment_status === PAYMENT_STATES.AUTHORIZED)) {
+    // The same order for a poster-fault fee captured from the hold: record its
+    // exact capture as captured_hold, which the freeze below marks disputed.
+    try {
+      const gigStop = require('../services/gigStopService');
+      if (!(await gigStop.reconcileNoShowFee(payment.id))) await gigStop.reconcileFeeStop(payment.id);
+    } catch (feeErr) {
+      logger.error('Dispute: pending fee capture could not be recorded', { paymentId: payment.id, error: feeErr.message });
     }
     payment = (await findPaymentByField('id', payment.id)) || payment;
   }
