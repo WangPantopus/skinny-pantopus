@@ -930,6 +930,13 @@ public final class GigDetailViewModel {
         return ["assigned", "in_progress"].contains((gig.status ?? "").lowercased())
     }
 
+    /// The server refuses a price change while the task's payment hold is live
+    /// (`PAID_PRICE_CHANGE_UNAVAILABLE`): a payment exists and it isn't canceled or fully refunded.
+    public var priceChangesAvailable: Bool {
+        guard let gig = rawGig, gig.paymentId != nil else { return true }
+        return ["canceled", "refunded_full"].contains((gig.paymentStatus ?? "").lowercased())
+    }
+
     /// True when the signed-in viewer proposed this change order —
     /// drives Withdraw (proposer) vs Approve / Reject (counterparty).
     public func isOwnChangeOrder(_ order: GigChangeOrderDTO) -> Bool {

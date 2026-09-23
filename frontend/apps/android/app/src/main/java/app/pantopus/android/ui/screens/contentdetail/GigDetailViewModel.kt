@@ -1441,6 +1441,16 @@ class GigDetailViewModel
             return gig.status?.lowercase() in listOf("assigned", "in_progress")
         }
 
+        /**
+         * The server refuses a price change while the task's payment hold is live
+         * (`PAID_PRICE_CHANGE_UNAVAILABLE`): a payment exists and it isn't canceled or fully refunded.
+         */
+        fun priceChangesAvailable(): Boolean {
+            val gig = rawGig ?: return true
+            if (gig.paymentId == null) return true
+            return gig.paymentStatus?.lowercase() in setOf("canceled", "refunded_full")
+        }
+
         /** Signed-in viewer id — the Changes card gates per-row actions on it. */
         fun viewerUserId(): String? = currentUserId()
 

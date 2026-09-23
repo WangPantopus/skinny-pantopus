@@ -1412,10 +1412,13 @@ struct GigChangesCard: View {
 /// Propose-a-change sheet: type chips, description, signed dollar delta,
 /// optional extra minutes → `POST /:gigId/change-orders`.
 struct GigChangeOrderSheet: View {
+    /// False while the task's payment hold is live: the server refuses price changes, so the
+    /// sheet leaves out the two price types and the amount field and says why in their place.
+    let priceChangesAvailable: Bool
     let onSubmit: @MainActor (GigChangeOrderType, String, Double?, Int?) async -> String?
     let onDismiss: @MainActor () -> Void
 
-    @State private var type: GigChangeOrderType = .priceIncrease
+    @State private var type: GigChangeOrderType
     @State private var descriptionText = ""
     @State private var amountText = ""
     @State private var amountIsDecrease = false
@@ -1424,6 +1427,22 @@ struct GigChangeOrderSheet: View {
     @State private var errorText: String?
 
     private let typeColumns = [GridItem(.flexible()), GridItem(.flexible())]
+
+    init(
+        priceChangesAvailable: Bool = true,
+        onSubmit: @escaping @MainActor (GigChangeOrderType, String, Double?, Int?) async -> String?,
+        onDismiss: @escaping @MainActor () -> Void
+    ) {
+        self.priceChangesAvailable = priceChangesAvailable
+        self.onSubmit = onSubmit
+        self.onDismiss = onDismiss
+        _type = State(initialValue: priceChangesAvailable ? .priceIncrease : .scopeAddition)
+    }
+
+    private var offeredTypes: [GigChangeOrderType] {
+        guard !priceChangesAvailable else { return GigChangeOrderType.allCases }
+        return GigChangeOrderType.allCases.filter { $0 != .priceIncrease && $0 != .priceDecrease }
+    }
 
     var body: some View {
         ScrollView {
@@ -1436,9 +1455,17 @@ struct GigChangeOrderSheet: View {
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
+                if !priceChangesAvailable {
+                    Text("Price changes aren't available once a task has a payment hold.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .accessibilityIdentifier("gigDetail.changeSheet.priceUnavailable")
+                }
                 typePicker
                 descriptionField
-                amountField
+                if priceChangesAvailable {
+                    amountField
+                }
                 minutesField
                 if let errorText {
                     Text(errorText)
@@ -1467,7 +1494,7 @@ struct GigChangeOrderSheet: View {
 
     private var typePicker: some View {
         LazyVGrid(columns: typeColumns, spacing: Spacing.s2) {
-            ForEach(GigChangeOrderType.allCases, id: \.rawValue) { candidate in
+            ForEach(offeredTypes, id: \.rawValue) { candidate in
                 let selected = type == candidate
                 Button {
                     type = candidate
@@ -1564,6 +1591,7 @@ struct GigChangeOrderSheet: View {
 
     /// Signed dollars — the +/− toggle applies the sign.
     private var parsedAmount: Double? {
+        guard priceChangesAvailable else { return nil }
         let cleaned = amountText
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "$", with: "")

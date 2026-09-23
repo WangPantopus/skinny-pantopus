@@ -265,6 +265,7 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
                 },
                 onCancel = { proposeChangeSheetVisible = false },
                 errorText = submit.error,
+                priceChangesAvailable = viewModel.priceChangesAvailable(),
             )
         }
     }
@@ -1375,12 +1376,17 @@ private fun changeAmountLabel(order: GigChangeOrderDto): String? {
     return null
 }
 
-/** Propose-a-change sheet → `POST /change-orders`. */
+/**
+ * Propose-a-change sheet → `POST /change-orders`. While the task's payment hold is live the
+ * server refuses price changes, so [priceChangesAvailable] false leaves out the two price types
+ * and the amount field and says why in their place.
+ */
 @Composable
 fun GigProposeChangeSheetContent(
     onSubmit: (GigChangeOrderType, String, Double?, Int?) -> Unit,
     onCancel: () -> Unit,
     errorText: String? = null,
+    priceChangesAvailable: Boolean = true,
 ) {
     var selectedType by remember { mutableStateOf<GigChangeOrderType?>(null) }
     var description by remember { mutableStateOf("") }
@@ -1409,7 +1415,15 @@ fun GigProposeChangeSheetContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            GigChangeOrderType.entries.forEach { type ->
+            if (!priceChangesAvailable) {
+                Text(
+                    text = "Price changes aren't available once a task has a payment hold.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("gigDetail.changesSheet.priceUnavailable"),
+                )
+            }
+            GigChangeOrderType.entries.filter { priceChangesAvailable || it !in PRICE_CHANGE_TYPES }.forEach { type ->
                 ReasonRadioRow(
                     label = type.label,
                     selected = selectedType == type,
@@ -1448,33 +1462,35 @@ fun GigProposeChangeSheetContent(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            Row(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(Radii.md))
-                        .background(PantopusColors.appSurfaceSunken)
-                        .padding(horizontal = Spacing.s3),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-            ) {
-                Text(text = "±$", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextSecondary)
-                BasicTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    textStyle = PantopusTextStyle.body.copy(color = PantopusColors.appText, fontWeight = FontWeight.SemiBold),
-                    cursorBrush = SolidColor(PantopusColors.primary600),
-                    modifier = Modifier.weight(1f).testTag("gigDetail.changesSheet.amount"),
-                    decorationBox = { inner ->
-                        if (amountText.isEmpty()) {
-                            Text(text = "0.00", style = PantopusTextStyle.body, color = PantopusColors.appTextMuted)
-                        }
-                        inner()
-                    },
-                )
+            if (priceChangesAvailable) {
+                Row(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(Radii.md))
+                            .background(PantopusColors.appSurfaceSunken)
+                            .padding(horizontal = Spacing.s3),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+                ) {
+                    Text(text = "±$", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextSecondary)
+                    BasicTextField(
+                        value = amountText,
+                        onValueChange = { amountText = it },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        textStyle = PantopusTextStyle.body.copy(color = PantopusColors.appText, fontWeight = FontWeight.SemiBold),
+                        cursorBrush = SolidColor(PantopusColors.primary600),
+                        modifier = Modifier.weight(1f).testTag("gigDetail.changesSheet.amount"),
+                        decorationBox = { inner ->
+                            if (amountText.isEmpty()) {
+                                Text(text = "0.00", style = PantopusTextStyle.body, color = PantopusColors.appTextMuted)
+                            }
+                            inner()
+                        },
+                    )
+                }
             }
             Row(
                 modifier =
@@ -1517,7 +1533,7 @@ fun GigProposeChangeSheetContent(
                     onSubmit(
                         type,
                         description.trim(),
-                        normalizedAmountChange(type, amount),
+                        if (priceChangesAvailable) normalizedAmountChange(type, amount) else null,
                         minutes,
                     )
                 },
@@ -1525,6 +1541,8 @@ fun GigProposeChangeSheetContent(
         }
     }
 }
+
+private val PRICE_CHANGE_TYPES = setOf(GigChangeOrderType.PriceIncrease, GigChangeOrderType.PriceDecrease)
 
 /** Price-increase amounts go up, price-decrease amounts go down. */
 private fun normalizedAmountChange(

@@ -715,7 +715,14 @@ export default function GigDetailsPage() {
             {/* ─── Change Orders Section ─── */}
             {(isAssigned || isInProgress) && (isMyGig || iAmWorker) && (
               <ErrorBoundary>
-                <ChangeOrdersSection gigId={gigId} isMyGig={isMyGig} iAmWorker={iAmWorker} currentUserId={currentUserId} />
+                <ChangeOrdersSection
+                  gigId={gigId}
+                  isMyGig={isMyGig}
+                  iAmWorker={iAmWorker}
+                  currentUserId={currentUserId}
+                  paymentId={gig?.payment_id}
+                  paymentStatus={gig?.payment_status}
+                />
               </ErrorBoundary>
             )}
           </div>
