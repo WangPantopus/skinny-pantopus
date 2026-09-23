@@ -347,13 +347,11 @@ private struct StartSupportTrainWhoAndWhyStep: View {
         HStack(alignment: .top, spacing: 10) {
             Icon(.shield, size: 14, color: Theme.Color.appTextSecondary)
                 .padding(.top, 1)
-            Text(
-                "Invite-only by default. The train stays private until \(viewModel.beneficiaryQuery) accepts. " +
-                    "Other neighbors won't see it on the block."
-            )
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.Color.appTextStrong)
-            .fixedSize(horizontal: false, vertical: true)
+            // No invite goes to the recipient, so nothing is waiting on them to accept.
+            Text("Invite-only by default. Other neighbors won't see it on the block.")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.Color.appTextStrong)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(Spacing.s3)
         .background(Theme.Color.appSurfaceSunken)
