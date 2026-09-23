@@ -38,6 +38,7 @@ struct HubView: View {
         }
         .background(Theme.Color.appBg)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .refreshFailureToast($viewModel.refreshFailureMessage)
         .accessibilityIdentifier("hubScreen")
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }

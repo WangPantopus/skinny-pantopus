@@ -20,6 +20,9 @@ import Observation
 public final class ChatListViewModel {
     /// Current render state.
     public private(set) var state: ChatListState = .loading
+    /// Set when a refresh fails while conversations are on screen: they stay
+    /// and this shows as a toast. The view clears it after display.
+    public var refreshFailureMessage: String?
 
     /// Active filter tab.
     public private(set) var activeFilter: ChatFilter = .all
@@ -131,7 +134,13 @@ public final class ChatListViewModel {
             try await self.api.request(ChatEndpoints.stats())
         }
         guard let response = await conversationsTask else {
-            state = .error(message: "Couldn't load conversations.")
+            switch state {
+            case .loaded, .empty:
+                // Keep the list on screen; a failed refresh only toasts.
+                refreshFailureMessage = "Couldn't refresh conversations."
+            case .loading, .error:
+                state = .error(message: "Couldn't load conversations.")
+            }
             return
         }
         let stats = await statsTask?.stats
