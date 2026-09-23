@@ -1,6 +1,10 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-23T21:36:01Z (coordinator takeover)
+## CURRENT RESUME POINT — 2026-09-23T22:25:34Z (active Codex coordinator)
+
+All three streams plus Shared UX are resumed in staged worker slots. Master is `61c64f9c1778b9b11fda12dd0cfa4762fff3bef0`; #389 and documentation#391 merged. #325 has fresh passing iOS journeys; geo#392 has passing Android with reusable iOS evidence. Four candidate heads received pure GitHub master merges at22:19 and are re-running CI; the recombined tree is identical to the reviewed preflight. See the authoritative [live coordination block](workstreams/README.md) for exact heads, worker/runtime reservations, evidence links and next gates. No batch4 published yet. The corrected155-item UX inventory is63 tracked fixed/merged,30 in flight,62 not started; this is not whole-app coverage. Broad acceptance remains13 closed/67 partial. App quality/full E2E come first; use available resources where helpful, save cost through avoiding duplicate work. Founder queue and all hard limits remain unchanged. Preserve the coordinator evidence store until the required recovery copy precedes any worktree removal.
+
+## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 
 The founder resumed all streams under Codex. Current remote master is `cef95ab67864ccca3ca243cc0d936a87d342cc8f`; #389 already merged after the paused handoff. The authoritative live [coordination resume block](workstreams/README.md) records the staged replacement agents, exact PR heads, runtime recovery discrepancy, three coordinator decisions and next batch gates. Existing real-app evidence is retained; no new journey or acceptance-row closure is claimed at this takeover. Count remains **13 closed / 67 partial**. Founder environment, marketing/data-action queue and search-audit stop remain untouched.
 
