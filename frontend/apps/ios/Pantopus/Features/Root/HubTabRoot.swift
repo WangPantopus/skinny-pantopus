@@ -1198,7 +1198,7 @@ public struct HubTabRoot: View {
         let name = reservation.displayName
         let initials = String(name.split(separator: " ").compactMap(\.first).prefix(2)).uppercased()
         return InboxConversationDestination(
-            mode: .person(otherUserId: reservation.userId ?? ""),
+            mode: .person(otherUserId: reservation.userId ?? reservation.helper?.id ?? ""),
             displayName: name,
             initials: initials,
             identityKind: nil,
