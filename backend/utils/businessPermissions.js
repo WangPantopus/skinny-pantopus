@@ -307,6 +307,26 @@ async function getTeamMembersWithPermissions(businessUserId, permissions, exclud
   return result;
 }
 
+/**
+ * Active team members of a business holding one of the given base roles.
+ * A business account has no sign-in of its own, so notifications meant for
+ * the business itself go to these people instead of the business User row.
+ *
+ * @param {string} businessUserId - The business user ID
+ * @param {string[]} roles - e.g. ['owner'] or ['owner', 'admin']
+ * @returns {Promise<string[]>} - Distinct user IDs (throws on a failed read)
+ */
+async function getBusinessMemberIdsByRole(businessUserId, roles = ['owner']) {
+  const { data, error } = await supabaseAdmin
+    .from('BusinessTeam')
+    .select('user_id')
+    .eq('business_user_id', businessUserId)
+    .eq('is_active', true)
+    .in('role_base', roles);
+  if (error) throw error;
+  return [...new Set((data || []).map((m) => String(m.user_id)))];
+}
+
 // ============================================================
 // Helpers
 // ============================================================
@@ -434,6 +454,7 @@ async function writeAuditLog(businessUserId, actorUserId, action, targetType, ta
 }
 
 module.exports = {
+  getBusinessMemberIdsByRole,
   hasPermission,
   getUserAccess,
   checkBusinessPermission,
