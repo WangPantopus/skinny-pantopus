@@ -698,11 +698,81 @@ BEGIN
 END;
 $$;
 
+-- Spending counts a charged fee's captured amount (and its refunds), never the
+-- authorized task amount the fee was captured from. Signature, invoker rights and
+-- grants are unchanged; the captured amount is inlined for invoker callers.
+CREATE OR REPLACE FUNCTION public.get_user_spending(p_user_id uuid, p_start_date timestamp with time zone DEFAULT NULL::timestamp with time zone, p_end_date timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+DECLARE
+  v_result jsonb;
+BEGIN
+  WITH scoped AS (
+    SELECT
+      CASE WHEN metadata->'gig_fee'->>'state'='captured' AND jsonb_typeof(metadata->'gig_fee'->'fee_cents')='number'
+        THEN (metadata->'gig_fee'->>'fee_cents')::bigint ELSE amount_total END AS amount_total,
+      refunded_amount,
+      payment_status
+    FROM "Payment"
+    WHERE payer_id = p_user_id
+      AND (p_start_date IS NULL OR created_at >= p_start_date)
+      AND (p_end_date IS NULL OR created_at <= p_end_date)
+      AND payment_status IN (
+        'captured_hold', 'transfer_scheduled', 'transfer_pending', 'transferred',
+        'refund_pending', 'refunded_partial', 'refunded_full', 'disputed',
+        'succeeded', 'processing'
+      )
+  ),
+  spending AS (
+    SELECT
+      COUNT(*) AS total_payments,
+      COALESCE(SUM(amount_total), 0) AS total_spent,
+      COALESCE(SUM(GREATEST(0, amount_total - COALESCE(refunded_amount, 0))), 0) AS total_paid,
+      COALESCE(SUM(COALESCE(refunded_amount, 0)), 0) AS total_refunded
+    FROM scoped
+  )
+  SELECT jsonb_build_object(
+    'totalPayments', total_payments,
+    'totalSpent', total_spent,
+    'totalPaid', total_paid,
+    'totalRefunded', total_refunded,
+    'currency', 'USD'
+  ) INTO v_result
+  FROM spending;
+
+  RETURN v_result;
+END;
+$$;
+
+-- A reserved no-show fee whose scheduled replay cannot be proven (for example the
+-- fee was refunded outside the app before it was recorded) is parked for support
+-- review after three definitive failures, so the replay stops retrying it and it
+-- cannot starve newer reservations. The task stays held until support resolves it.
+CREATE FUNCTION public.note_gig_fee_replay_failure(p_payment_id uuid,p_error text) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
+DECLARE target_gig uuid; p public."Payment"; failures integer;
+BEGIN
+ SELECT gig_id INTO target_gig FROM public."Payment" WHERE id=p_payment_id;
+ IF NOT FOUND THEN RETURN jsonb_build_object('error','NOT_FOUND'); END IF;
+ PERFORM 1 FROM public."Gig" WHERE id=target_gig FOR UPDATE;
+ SELECT * INTO p FROM public."Payment" WHERE id=p_payment_id FOR UPDATE;
+ IF p.metadata->'gig_fee'->>'kind' IS DISTINCT FROM 'poster_no_show' OR p.metadata->'gig_fee'->>'state' IS DISTINCT FROM 'pending' THEN
+  RETURN jsonb_build_object('error','NOT_PENDING'); END IF;
+ failures:=coalesce((p.metadata->'gig_fee'->>'replay_failures')::integer,0)+1;
+ UPDATE public."Payment" SET metadata=jsonb_set(metadata,'{gig_fee}',(metadata->'gig_fee')||jsonb_build_object(
+   'replay_failures',failures,'last_replay_error',left(coalesce(p_error,'UNKNOWN'),100))
+   ||CASE WHEN failures>=3 THEN jsonb_build_object('review','REPLAY_EXHAUSTED','parked_at',clock_timestamp()) ELSE '{}'::jsonb END),
+  updated_at=clock_timestamp() WHERE id=p.id RETURNING * INTO p;
+ RETURN jsonb_build_object('failures',failures,'parked',failures>=3);
+END $$;
+
 DO $$ DECLARE f record; BEGIN
  FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'
  AND p.proname IN ('gig_fee_capture_proof','prepare_gig_fee_capture','record_gig_fee_capture','settle_gig_fee_wallet_income',
   'read_gig_stop_preview','record_gig_stop_evidence','materialize_gig_stop_notices','finish_gig_stop','reserve_payment_refund',
-  'guard_gig_fee_gig','payment_captured_amount','reserve_payment_refund_before_stop_fence','record_payment_refund_receipts_before_stop_fence') LOOP
+  'guard_gig_fee_gig','payment_captured_amount','reserve_payment_refund_before_stop_fence','record_payment_refund_receipts_before_stop_fence',
+  'note_gig_fee_replay_failure') LOOP
   EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,anon,authenticated',f.signature);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role',f.signature);
  END LOOP;
