@@ -106,6 +106,16 @@ async function buildBookingIcs({ booking, eventType, method, organizer }) {
 }
 
 /**
+ * The host/owner booking detail link. Home- and business-owned bookings carry
+ * their owner scope so the detail is read under that owner.
+ */
+function hostBookingLink(booking) {
+  const ownerQuery = ['home', 'business'].includes(booking.owner_type)
+    ? `?ot=${booking.owner_type}&oid=${encodeURIComponent(booking.owner_id)}` : '';
+  return `/app/scheduling/bookings/${booking.id}${ownerQuery}`;
+}
+
+/**
  * Fire notifications for a booking lifecycle transition.
  * @param {Object} args
  * @param {Object} args.booking    the (post-transition) booking row
@@ -185,7 +195,7 @@ async function notifyBookingEvent({ booking, eventType, page, kind, manageToken 
 
     if (!copy) return;
 
-    const link = `/app/profile/schedule/bookings/${booking.id}`;
+    const link = hostBookingLink(booking);
 
     // --- Host (always an app user, when assigned) — respect the host's notification prefs ---
     if (booking.host_user_id && (await notifyPrefs.hostWants(booking.host_user_id, kind))) {
@@ -308,9 +318,7 @@ async function sendBookingReminder({ booking, eventType, page, kind, offsetMinut
   const inviteeTz = booking.invitee_timezone || (page && page.timezone) || 'UTC';
   const whenInvitee = formatWhen(booking.start_at, booking.end_at, inviteeTz);
   const label = Number.isFinite(offsetMinutes) ? formatLead(offsetMinutes) : (kind === 'reminder_1h' ? 'in about an hour' : 'tomorrow');
-  const ownerQuery = ['home', 'business'].includes(booking.owner_type)
-    ? `?ot=${booking.owner_type}&oid=${encodeURIComponent(booking.owner_id)}` : '';
-  const link = `/app/scheduling/bookings/${booking.id}${ownerQuery}`;
+  const link = hostBookingLink(booking);
 
   let hostEmail = null;
   if (booking.host_user_id) {
@@ -379,4 +387,4 @@ async function sendBookingReminder({ booking, eventType, page, kind, offsetMinut
   }
 }
 
-module.exports = { notifyBookingEvent, sendBookingReminder, formatWhen, _internal: { bookingEmailHtml, buildBookingIcs } };
+module.exports = { notifyBookingEvent, sendBookingReminder, formatWhen, hostBookingLink, _internal: { bookingEmailHtml, buildBookingIcs } };
