@@ -570,20 +570,20 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             ListOfRowsState.EmptyContent(
                 icon: .wallet,
                 headline: "No earn items yet",
-                subcopy: "Complete gigs to see payouts, 1099s, and tax docs land here automatically.",
+                subcopy: "Task earnings go to your wallet in Payments.",
                 ctaTitle: "Open Earn dashboard"
             ) { [weak self] in Task { @MainActor in self?.onOpenEarn() } }
         case (.earn, .counter):
             ListOfRowsState.EmptyContent(
                 icon: .wallet,
                 headline: "Nothing to action",
-                subcopy: "Payout approvals and tax to-dos for your gigs show up here."
+                subcopy: "Earn mail that needs you shows up here."
             )
         case (.earn, .vault):
             ListOfRowsState.EmptyContent(
                 icon: .archive,
                 headline: "No saved earn mail",
-                subcopy: "Save payout statements and 1099s to find them fast."
+                subcopy: "Earn mail you save shows up here."
             )
         default:
             ListOfRowsState.EmptyContent(
