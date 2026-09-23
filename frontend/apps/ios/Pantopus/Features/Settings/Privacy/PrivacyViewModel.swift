@@ -97,12 +97,25 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
 
     public enum Variant: Sendable, Hashable { case populated, stealth }
 
+    /// Screens the "Your data" rows open; the host pushes them.
+    public enum Link: Sendable, Hashable {
+        /// "Download your data" → the existing Data export screen.
+        case dataExport
+        /// "What we collect" → Legal › Privacy policy.
+        case privacyPolicy
+    }
+
+    @ObservationIgnored
+    private let onOpen: @MainActor (Link) -> Void
+
     init(
         variant: Variant = .populated,
         appLock: AppLockManager = .shared,
         auth: AuthManager = .shared,
-        api: APIClient = .shared
+        api: APIClient = .shared,
+        onOpen: @escaping @MainActor (Link) -> Void = { _ in }
     ) {
+        self.onOpen = onOpen
         let stealth = (variant == .stealth)
         isStealth = stealth
         visibility = stealth ? "hidden" : "verified"
@@ -162,9 +175,11 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         case "deleteAccount":
             deleteAccountError = nil
             isDeleteSheetPresented = true
+        case "downloadData":
+            onOpen(.dataExport)
+        case "whatWeCollect":
+            onOpen(.privacyPolicy)
         default:
-            // Download your data / What we collect open dedicated GDPR
-            // flows tracked outside this package.
             break
         }
     }
@@ -534,7 +549,9 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
                 GroupedListRow(
                     id: "downloadData",
                     label: "Download your data",
-                    subtext: "ZIP of profile, tasks, messages — emailed to you",
+                    // Export is by request (the Data export screen emails
+                    // the privacy team); there is no automated ZIP yet.
+                    subtext: "Request a copy by email",
                     control: .chevron,
                     leadingIcon: .download
                 ),

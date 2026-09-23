@@ -155,7 +155,12 @@ public struct SettingsView: View {
         case .notifications:
             NotificationSettingsView { popLast() }
         case .privacy:
-            PrivacyView(viewModel: PrivacySettingsViewModel()) { popLast() }
+            PrivacyView(viewModel: PrivacySettingsViewModel { link in
+                switch link {
+                case .dataExport: path.append(.dataExport)
+                case .privacyPolicy: path.append(.legalContent(.privacy))
+                }
+            }) { popLast() }
         default:
             EmptyView()
         }

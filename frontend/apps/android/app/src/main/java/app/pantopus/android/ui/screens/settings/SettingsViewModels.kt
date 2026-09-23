@@ -505,9 +505,8 @@ class PrivacySettingsViewModel
         }
 
         fun onTapRow(rowId: String) {
-            // "appLockOpenSettings" is handled in the screen (needs Context).
-            // Download your data / What we collect open dedicated GDPR flows
-            // tracked outside this package.
+            // "appLockOpenSettings", "downloadData" and "whatWeCollect" are
+            // handled in the screen (they need Context or navigation).
             if (rowId == ROW_DELETE_ACCOUNT) {
                 _deleteAccountError.value = null
                 _deleteSheetVisible.value = true
@@ -892,7 +891,9 @@ class PrivacySettingsViewModel
                         GroupedListRow(
                             id = "downloadData",
                             label = "Download your data",
-                            subtext = "ZIP of profile, tasks, messages — emailed to you",
+                            // Export is by request (the Data export screen emails
+                            // the privacy team); there is no automated ZIP yet.
+                            subtext = "Request a copy by email",
                             control = RowControl.Chevron,
                             leadingIcon = PantopusIcon.Download,
                         ),

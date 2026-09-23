@@ -124,6 +124,8 @@ const val NOTIFICATION_SETTINGS_TOAST_TAG = "notificationSettingsToast"
 @Composable
 fun PrivacySettingsScreen(
     onBack: () -> Unit = {},
+    onOpenDataExport: () -> Unit = {},
+    onOpenPrivacyPolicy: () -> Unit = {},
     viewModel: PrivacySettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -173,14 +175,17 @@ fun PrivacySettingsScreen(
                     onSelectRadio = viewModel::onRadio,
                     onSetFuzz = viewModel::onSetFuzz,
                     onTapRow = { rowId ->
-                        if (rowId == "appLockOpenSettings") {
-                            val intent =
-                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                    data = Uri.fromParts("package", context.packageName, null)
-                                }
-                            runCatching { context.startActivity(intent) }
-                        } else {
-                            viewModel.onTapRow(rowId)
+                        when (rowId) {
+                            "appLockOpenSettings" -> {
+                                val intent =
+                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = Uri.fromParts("package", context.packageName, null)
+                                    }
+                                runCatching { context.startActivity(intent) }
+                            }
+                            "downloadData" -> onOpenDataExport()
+                            "whatWeCollect" -> onOpenPrivacyPolicy()
+                            else -> viewModel.onTapRow(rowId)
                         }
                     },
                     onRetry = viewModel::load,
