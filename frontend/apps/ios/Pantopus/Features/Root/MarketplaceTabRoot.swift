@@ -27,7 +27,12 @@ public struct MarketplaceTabRoot: View {
     @State private var router = DeepLinkRouter.shared
     @State private var systemSheet: SystemSheetRequest?
 
-    public init() {}
+    /// Closes the sheet this surface is presented in (Nearby's door).
+    private let onClose: (@MainActor () -> Void)?
+
+    public init(onClose: (@MainActor () -> Void)? = nil) {
+        self.onClose = onClose
+    }
 
     private var currentUserId: String {
         if case let .signedIn(user) = auth.state { return user.id }
@@ -47,7 +52,7 @@ public struct MarketplaceTabRoot: View {
                     path.append(.listingDetail(listingId: listingId))
                 },
                 onCompose: { path.append(.composeListing) },
-                onBack: nil
+                onBack: onClose
             )
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: MarketplaceRoute.self) { route in
