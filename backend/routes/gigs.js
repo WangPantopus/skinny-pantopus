@@ -6011,6 +6011,47 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
         .json({ error: 'Only the poster or assigned worker can request changes' });
     }
 
+    const safeAmountChange = amount_change ? parseFloat(amount_change) : 0;
+    const safeTimeChange = time_change_minutes ? parseInt(time_change_minutes) : 0;
+    const orderFields = {
+      type,
+      description: description.trim(),
+      amount_change: Math.round(safeAmountChange * 100) / 100,
+      time_change_minutes: safeTimeChange,
+    };
+    const orderSelect = `
+        *,
+        requester:requested_by ( id, username, name )
+      `;
+
+    // A repeated submit (double tap, retry after a lost reply) must not add a
+    // second identical pending order: approving both applies the change twice.
+    // Like the report route, answer with the order this person already sent.
+    const findPendingRepeat = () =>
+      supabaseAdmin
+        .from('GigChangeOrder')
+        .select(orderSelect)
+        .eq('gig_id', gigId)
+        .eq('requested_by', userId)
+        .eq('status', 'pending')
+        .match(orderFields)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+    const repeatedOrder = (changeOrder) =>
+      res.json({
+        change_order: changeOrder,
+        already_requested: true,
+        message: 'You already sent this change request. It is waiting for a reply.',
+      });
+
+    const { data: existingOrder, error: existingErr } = await findPendingRepeat();
+    if (existingErr) {
+      logger.error('Error checking for a repeated change order', { error: existingErr.message });
+      return res.status(500).json({ error: 'Failed to create change order' });
+    }
+    if (existingOrder) return repeatedOrder(existingOrder);
+
     // Rate limit: max 5 pending change orders per gig
     const { count, error: countErr } = await supabaseAdmin
       .from('GigChangeOrder')
@@ -6027,27 +6068,46 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
         .json({ error: 'Too many pending change orders. Wait for existing ones to be reviewed.' });
     }
 
-    const safeAmountChange = amount_change ? parseFloat(amount_change) : 0;
-    const safeTimeChange = time_change_minutes ? parseInt(time_change_minutes) : 0;
+    // Identical submits that race past the check above derive the same id, so
+    // the primary key admits only one of them. The id moves on once this
+    // person's earlier orders on the gig are resolved, so asking again later
+    // still creates a new order.
+    const { count: resolvedCount, error: resolvedErr } = await supabaseAdmin
+      .from('GigChangeOrder')
+      .select('id', { count: 'exact', head: true })
+      .eq('gig_id', gigId)
+      .eq('requested_by', userId)
+      .neq('status', 'pending');
+    if (resolvedErr) {
+      logger.error('Error reading resolved change orders', { error: resolvedErr.message });
+      return res.status(500).json({ error: 'Failed to create change order' });
+    }
+    const repeatKey = createHash('sha256')
+      .update(JSON.stringify(['gig-change-order', gigId, userId, orderFields, resolvedCount || 0]))
+      .digest('hex');
+    const orderId = [
+      repeatKey.slice(0, 8),
+      repeatKey.slice(8, 12),
+      `4${repeatKey.slice(13, 16)}`,
+      `8${repeatKey.slice(17, 20)}`,
+      repeatKey.slice(20, 32),
+    ].join('-');
 
     const { data: order, error: insertErr } = await supabaseAdmin
       .from('GigChangeOrder')
       .insert({
+        id: orderId,
         gig_id: gigId,
         requested_by: userId,
-        type,
-        description: description.trim(),
-        amount_change: Math.round(safeAmountChange * 100) / 100,
-        time_change_minutes: safeTimeChange,
+        ...orderFields,
       })
-      .select(
-        `
-        *,
-        requester:requested_by ( id, username, name )
-      `
-      )
+      .select(orderSelect)
       .single();
 
+    if (insertErr?.code === '23505') {
+      const { data: racedOrder, error: racedErr } = await findPendingRepeat();
+      if (!racedErr && racedOrder) return repeatedOrder(racedOrder);
+    }
     if (insertErr) {
       logger.error('Error creating change order', { error: insertErr.message });
       return res.status(500).json({ error: 'Failed to create change order' });
@@ -6878,6 +6938,25 @@ function noShowEligibility(gig, userId, now = Date.now()) {
   return { can_report: false, reason: 'No grounds for no-show report' };
 }
 
+// A no-show cancel refused by a database guard that holds the task for another
+// in-flight operation: each guard gets its own plain reason.
+const NO_SHOW_REFUSALS = {
+  feeReserved: { code: 'NO_SHOW_REPORT_ACTIVE', error: 'A no-show report for this task is already being processed. Refresh the task to see its status.' },
+  stopActive: { code: 'STOP_ACTIVE', error: 'A cancellation for this task is already in progress. Refresh the task to see its status.' },
+  holdExpiring: { code: 'PAYMENT_HOLD_EXPIRING', error: 'This task\'s payment hold expired and is being released. Refresh the task to see its status.' },
+  completionPending: { code: 'COMPLETION_PENDING', error: 'This task\'s completion is being confirmed. Refresh the task to see its status.' },
+  changed: { code: 'NO_SHOW_NOT_ELIGIBLE', error: 'The task changed. Reopen it and check its status.' },
+};
+function noShowCancelRefusal(error) {
+  if (error?.code !== '23514') return null;
+  const message = String(error.message || '');
+  if (message.includes('reserved no-show fee')) return NO_SHOW_REFUSALS.feeReserved;
+  if (message.includes('saved stop request')) return NO_SHOW_REFUSALS.stopActive;
+  if (message.includes('Authorization expiry')) return NO_SHOW_REFUSALS.holdExpiring;
+  if (message.includes('completion')) return NO_SHOW_REFUSALS.completionPending;
+  return NO_SHOW_REFUSALS.changed;
+}
+
 /**
  * POST /api/gigs/:gigId/report-no-show
  * Report a no-show by the other party.
@@ -6937,8 +7016,7 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
     // from the poster's existing hold; the rest of the hold is released.
     const noShowFee = isPoster ? 0 : Math.round(gigPrice * 0.25 * 100) / 100;
     const noShowFeeCents = Math.round(noShowFee * 100);
-    const reportActive = () => res.status(409).json({ code: 'NO_SHOW_REPORT_ACTIVE',
-      error: 'A no-show report for this task is already being processed. Refresh the task to see its status.' });
+    const reportActive = () => res.status(409).json(NO_SHOW_REFUSALS.feeReserved);
 
     // The worker's report holds the task while its fee is captured; the poster's
     // report cannot cancel it in that window (the database fence also refuses it).
@@ -6965,16 +7043,10 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
     const feeFromHold = Boolean(feeReservation && !feeReservation.noHold && !feeReservation.belowMinimum);
     const feeBelowMinimum = !isPoster && noShowFeeCents > 0 && noShowFeeCents < 50;
 
-    // 1) Create the incident record (the worker's report reuses its own)
-    let incident = feeReservation?.incident || null;
-    if (!incident && !isPoster) {
-      const { data: existing, error: existingErr } = await supabaseAdmin.from('GigIncident').select('*')
-        .eq('gig_id', gigId).eq('reported_by', userId).eq('type', incidentType)
-        .order('created_at', { ascending: true }).limit(1).maybeSingle();
-      if (existingErr) return res.status(503).json({ error: 'The no-show report could not be checked. Please retry.' });
-      incident = existing;
-    }
-    if (!incident) {
+    // 1) Create the incident record (the worker's report reuses its own). The
+    // poster's incident is written only after its cancel succeeds, so a refused
+    // report leaves no incident behind.
+    const insertIncident = async () => {
       const { data: inserted, error: incidentErr } = await supabaseAdmin
         .from('GigIncident')
         .insert({
@@ -6988,12 +7060,17 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
         })
         .select()
         .single();
-
-      if (incidentErr) {
-        logger.error('Failed to create no-show incident', { error: incidentErr.message });
-        return res.status(500).json({ error: 'Failed to report no-show' });
-      }
-      incident = inserted;
+      if (incidentErr) logger.error('Failed to create no-show incident', { error: incidentErr.message });
+      return incidentErr ? null : inserted;
+    };
+    let incident = feeReservation?.incident || null;
+    if (!incident && !isPoster) {
+      const { data: existing, error: existingErr } = await supabaseAdmin.from('GigIncident').select('*')
+        .eq('gig_id', gigId).eq('reported_by', userId).eq('type', incidentType)
+        .order('created_at', { ascending: true }).limit(1).maybeSingle();
+      if (existingErr) return res.status(503).json({ error: 'The no-show report could not be checked. Please retry.' });
+      incident = existing || await insertIncident();
+      if (!incident) return res.status(500).json({ error: 'Failed to report no-show' });
     }
 
     // 2) Cancel the gig with zone 3 (no-show)
@@ -7051,8 +7128,9 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
         .maybeSingle();
 
       if (cancelErr) {
-        // The worker's report holds this task while its fee is captured.
-        if (cancelErr.code === '23514') return reportActive();
+        // A database guard holds this task for another in-flight operation.
+        const refusal = noShowCancelRefusal(cancelErr);
+        if (refusal) return res.status(409).json(refusal);
         return res.status(500).json({ error: 'Failed to cancel gig' });
       }
       if (!cancelled) {
@@ -7060,6 +7138,7 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
       }
       updatedGig = cancelled;
       cancelledHere = true;
+      if (!incident) incident = await insertIncident();
       if (!isPoster && (feeReservation?.noHold || feeReservation?.belowMinimum)) {
         const reason = feeReservation.belowMinimum ? 'FEE_BELOW_MINIMUM' : 'HOLD_UNAVAILABLE';
         feeCharge = { status: 'not_charged', reason, feeCents: 0 };

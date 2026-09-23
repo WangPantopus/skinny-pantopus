@@ -8,7 +8,7 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const stripeService = require('../stripe/stripeService');
-const { publicPayment, paymentRowAmounts } = require('../stripe/gigPaymentProof');
+const { publicPayment, paymentRowAmounts, publicGigFee, capturedFeeCents } = require('../stripe/gigPaymentProof');
 const verifyToken = require('../middleware/verifyToken');
 const { requireAdmin } = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -80,7 +80,7 @@ const AGGREGATE_SPENDING_LIMIT = 10000;
 async function aggregateSpending(userId, startDate = null, endDate = null) {
   let query = supabaseAdmin
     .from('Payment')
-    .select('amount_total, refunded_amount, payment_status, created_at')
+    .select('amount_total, refunded_amount, payment_status, created_at, metadata')
     .eq('payer_id', userId)
     .order('created_at', { ascending: false })
     .limit(AGGREGATE_SPENDING_LIMIT);
@@ -104,7 +104,8 @@ async function aggregateSpending(userId, startDate = null, endDate = null) {
   for (const row of (rows || [])) {
     const status = String(row?.payment_status || '');
     if (!SPENDING_PAID_STATUSES.has(status)) continue;
-    const amount = Number(row?.amount_total || 0) || 0;
+    // A charged poster-fault fee spent only the captured fee, not the authorized amount.
+    const amount = capturedFeeCents(row) ?? (Number(row?.amount_total || 0) || 0);
     const refunded = Number(row?.refunded_amount || 0) || 0;
     totalPayments += 1;
     totalSpent += amount;
@@ -1231,7 +1232,8 @@ router.get('/:paymentId', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    res.json({ payment: publicPayment(payment) });
+    // A charged poster-fault fee: the fee, the released rest and the worker share.
+    res.json({ payment: { ...publicPayment(payment), gig_fee: publicGigFee(payment) } });
 
   } catch (err) {
     logger.error('Get payment error', { error: err.message });

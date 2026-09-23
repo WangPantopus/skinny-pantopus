@@ -7,6 +7,7 @@ const { assertIntentBinding, providerId } = require('../stripe/gigPaymentProof')
 const refunds = require('./paymentRefundService');
 const { deliverStoredGigNotification, createNotification } = require('./notificationService');
 const logger = require('../utils/logger');
+const { sendAlert, SEVERITY } = require('./alertingService');
 const stripe = getStripeClient();
 const fail = (code, message, statusCode = 409) => Object.assign(new Error(message), { code, statusCode });
 async function rpc(name, args, allowNull = false) {
@@ -349,26 +350,45 @@ async function notifyPosterNoShow({ gigId, posterId, workerId, gigTitle = null, 
 }
 // Recovery for a reservation whose reporter did not return. Webhooks only record
 // an exact provider outcome (the hold captured or canceled). The scheduled replay
-// (replay: true) also completes the same reserved capture under its stable key;
-// it never creates a new capture or payment.
+// (replay: true) also completes the same reserved capture under its stable key,
+// only while the payment is still capture_pending; it never creates a new capture
+// or payment. A replay that fails definitively three times is parked for review.
 async function reconcileNoShowFee(paymentId, { replay = false } = {}) {
   const { data: payment, error } = await db.from('Payment').select('*').eq('id', paymentId).maybeSingle();
   if (error) throw noShowFail('NO_SHOW_FEE_UNKNOWN', 'The no-show fee could not be checked.', 503);
   const fee = payment?.metadata?.gig_fee;
   if (fee?.kind !== 'poster_no_show' || fee.state !== 'pending'
       || !['capture_pending', 'canceled', 'disputed'].includes(payment.payment_status)) return null;
-  let proof = await readFeeProof(payment, fee.fee_cents);
-  if (proof.status === 'requires_capture') {
-    if (!replay) return null;
-    proof = await captureFee(payment, fee.fee_cents);
+  if (replay && fee.review) return null;
+  try {
+    let proof = await readFeeProof(payment, fee.fee_cents);
+    if (proof.status === 'requires_capture') {
+      if (!replay || payment.payment_status !== 'capture_pending') return null;
+      proof = await captureFee(payment, fee.fee_cents);
+    }
+    if (!['succeeded', 'canceled'].includes(proof.status)) return null;
+    const recorded = await recordNoShowFee(payment, fee.actor_id, proof);
+    if (!recorded.reused && !recorded.review && recorded.gig?.status === 'cancelled') {
+      await notifyPosterNoShow({ gigId: recorded.gig.id, posterId: recorded.gig.user_id, workerId: fee.actor_id,
+        gigTitle: recorded.gig.title, feeCharge: recorded.outcome });
+    }
+    return recorded;
+  } catch (failure) {
+    if (replay && failure.statusCode && failure.statusCode < 500) await noteReplayFailure(payment, failure);
+    throw failure;
   }
-  if (!['succeeded', 'canceled'].includes(proof.status)) return null;
-  const recorded = await recordNoShowFee(payment, fee.actor_id, proof);
-  if (!recorded.reused && !recorded.review && recorded.gig?.status === 'cancelled') {
-    await notifyPosterNoShow({ gigId: recorded.gig.id, posterId: recorded.gig.user_id, workerId: fee.actor_id,
-      gigTitle: recorded.gig.title, feeCharge: recorded.outcome });
-  }
-  return recorded;
+}
+// A definitive replay failure (the provider or the record cannot prove the
+// reserved outcome) is counted; the third parks the reservation for support.
+async function noteReplayFailure(payment, failure) {
+  const { data, error } = await db.rpc('note_gig_fee_replay_failure', { p_payment_id: payment.id, p_error: failure.code || 'REVIEW' });
+  if (error || !data || data.error || !data.parked) return;
+  logger.error('Reserved no-show fee parked for support review', {
+    paymentId: payment.id, gigId: payment.gig_id, failures: data.failures, code: failure.code || null });
+  await sendAlert({ severity: SEVERITY.WARNING, title: 'No-show fee needs support review',
+    message: 'A reserved poster no-show fee could not be confirmed after three scheduled attempts. Its task stays held until support resolves it.',
+    metadata: { paymentId: payment.id, gigId: payment.gig_id, code: failure.code || null },
+    dedup_key: `gig-fee-parked:${payment.id}` }).catch(() => {});
 }
 // Webhook recovery for a late-cancel fee whose owner request did not finish:
 // the same read-only adoption as the scheduled reconciler, for one payment.

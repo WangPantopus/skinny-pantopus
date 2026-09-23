@@ -1095,6 +1095,9 @@ async function handleDisputeCreated(dispute) {
       const gigStop = require('../services/gigStopService');
       if (!(await gigStop.reconcileNoShowFee(payment.id))) await gigStop.reconcileFeeStop(payment.id);
     } catch (feeErr) {
+      // A transient failure is retried by the provider's redelivery before the
+      // dispute is stored; a definitive review outcome is logged and stored below.
+      if (!feeErr.statusCode || feeErr.statusCode >= 500) throw feeErr;
       logger.error('Dispute: pending fee capture could not be recorded', { paymentId: payment.id, error: feeErr.message });
     }
     payment = (await findPaymentByField('id', payment.id)) || payment;

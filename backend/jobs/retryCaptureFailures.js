@@ -23,6 +23,7 @@ const STALLED_FEE_RESERVATION_MS = 10 * 60 * 1000;
 async function replayStalledNoShowFees() {
   const { data: reservations, error } = await supabaseAdmin.from('Payment').select('id, gig_id')
     .eq('payment_type', 'gig_payment').eq('metadata->gig_fee->>kind', 'poster_no_show').eq('metadata->gig_fee->>state', 'pending')
+    .is('metadata->gig_fee->>review', null)
     .lt('updated_at', new Date(Date.now() - STALLED_FEE_RESERVATION_MS).toISOString())
     .order('updated_at', { ascending: true }).limit(BATCH_SIZE);
   if (error) {
