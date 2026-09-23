@@ -460,7 +460,7 @@ public struct TasksMapView: View {
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
                 .padding(.bottom, 5)
-            Text("Be the first to post one — verified neighbors within a half-mile will see it.")
+            Text("Be the first to post one — people nearby will see it.")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
