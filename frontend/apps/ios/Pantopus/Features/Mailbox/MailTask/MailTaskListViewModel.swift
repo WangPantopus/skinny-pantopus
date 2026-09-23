@@ -194,8 +194,16 @@ public final class MailTaskListViewModel {
             draftPriority = .medium
             mode = .list
             toast = "\u{201C}\(row.title)\u{201D} has been created"
-        case .failure:
-            alert = MailTaskListAlert(title: "Error", message: "Could not create task.")
+        case let .failure(error):
+            // A mail has one task. When it already has one (409), show the list, where that task is, and say why.
+            if case let .clientError(status, _) = error, status == 409 {
+                mode = .list
+                await fetch()
+            }
+            alert = MailTaskListAlert(
+                title: "Couldn't create task",
+                message: error.errorDescription ?? "Could not create task."
+            )
         }
     }
 
