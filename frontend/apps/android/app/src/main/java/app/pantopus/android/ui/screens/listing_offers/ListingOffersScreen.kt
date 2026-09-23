@@ -19,9 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +47,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.listing_offers.ListingOfferDto
 import app.pantopus.android.data.api.models.listing_offers.ListingOfferUserDto
+import app.pantopus.android.ui.components.ToastController
+import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.screens.transaction_reviews.TransactionReviewSheetContent
@@ -69,7 +73,8 @@ fun ListingOffersScreen(
     onBack: () -> Unit,
     onShareListing: () -> Unit = {},
     onOpenBuyer: (ListingOfferUserDto) -> Unit = {},
-    onOpenTransaction: (ListingOfferDto) -> Unit = {},
+    /** "Message buyer" on an accepted or completed offer: the host opens the chat with that buyer. */
+    onMessageBuyer: (ListingOfferDto) -> Unit = {},
     onEditPrice: () -> Unit = {},
     viewModel: ListingOffersViewModel = hiltViewModel(),
 ) {
@@ -79,13 +84,15 @@ fun ListingOffersScreen(
     val subtitle by viewModel.subtitle.collectAsStateWithLifecycle()
     val counterTarget by viewModel.counterTarget.collectAsStateWithLifecycle()
     val leaveReviewTarget by viewModel.leaveReviewTarget.collectAsStateWithLifecycle()
-    ListingOfferCheckoutEffect(viewModel)
+    val declineTarget by viewModel.declineTarget.collectAsStateWithLifecycle()
+    val toastController = remember { ToastController() }
+    ListingOfferCheckoutEffect(viewModel, onError = { toastController.error(it) })
 
     LaunchedEffect(Unit) {
         viewModel.bindCallbacks(
             onShareListing = onShareListing,
             onOpenBuyer = onOpenBuyer,
-            onOpenTransaction = onOpenTransaction,
+            onMessageBuyer = onMessageBuyer,
             onEditPrice = onEditPrice,
         )
         viewModel.load()
@@ -134,11 +141,24 @@ fun ListingOffersScreen(
                 )
             }
         }
+
+        declineTarget?.let { offer ->
+            DeclineOfferDialog(
+                buyerName = ListingOffersViewModel.displayName(offer.buyer),
+                onConfirm = { viewModel.confirmDecline() },
+                onDismiss = { viewModel.cancelDecline() },
+            )
+        }
+
+        ToastHost(controller = toastController)
     }
 }
 
 @Composable
-private fun ListingOfferCheckoutEffect(viewModel: ListingOffersViewModel) {
+private fun ListingOfferCheckoutEffect(
+    viewModel: ListingOffersViewModel,
+    onError: (String) -> Unit,
+) {
     val context = LocalContext.current
     val paymentSheet =
         rememberPaymentSheet { result ->
@@ -158,9 +178,35 @@ private fun ListingOfferCheckoutEffect(viewModel: ListingOffersViewModel) {
                                 publishableKey = event.params.publishableKey,
                             ),
                     )
+                is ListingOffersEvent.ShowError -> onError(event.message)
             }
         }
     }
+}
+
+/** "Decline" asks first: a declined offer can't be reopened. */
+@Composable
+private fun DeclineOfferDialog(
+    buyerName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Decline $buyerName's offer?") },
+        text = { Text("A declined offer can't be reopened.") },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                modifier = Modifier.testTag("listingOffers.declineConfirm"),
+            ) {
+                Text("Decline", color = PantopusColors.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Keep offer") }
+        },
+    )
 }
 
 @Composable

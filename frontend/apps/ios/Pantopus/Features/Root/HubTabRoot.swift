@@ -1058,7 +1058,10 @@ public struct HubTabRoot: View {
             _ = router.consume()
         case let .packageGig(mailId, isPreDelivery):
             path.append(.mailboxRoot)
-            path.append(.packageGig(mailId: mailId, isPreDelivery: isPreDelivery))
+            // While package tasks aren't available, the link opens the package's mail instead.
+            path.append(PackageGigAvailability.isAvailable
+                ? .packageGig(mailId: mailId, isPreDelivery: isPreDelivery)
+                : .mailItemDetail(mailId: mailId))
             _ = router.consume()
         case .earn:
             path.append(.mailboxRoot)
@@ -2363,6 +2366,18 @@ public struct HubTabRoot: View {
                     Task { @MainActor in
                         push(.editListing(listingId: dto.id, jumpToStep: nil))
                     }
+                },
+                onFindSimilar: {
+                    Task { @MainActor in
+                        // Back to the marketplace this listing was opened from, else open it.
+                        if path.contains(.marketplace) {
+                            while let last = path.last, last != .marketplace {
+                                path.removeLast()
+                            }
+                        } else {
+                            push(.marketplace)
+                        }
+                    }
                 }
             )
         case let .listingOffers(listingId, titleHint):
@@ -2379,8 +2394,11 @@ public struct HubTabRoot: View {
                     onOpenBuyer: { buyer in
                         Task { @MainActor in push(.publicProfile(userId: buyer.id)) }
                     },
-                    onOpenTransaction: { _ in
-                        Task { @MainActor in push(.placeholder(label: "Transaction detail")) }
+                    onMessageBuyer: { offer in
+                        guard let chat = ListingOffersViewModel.buyerChat(
+                            for: offer, listingId: listingId, listingTitle: titleHint
+                        ) else { return }
+                        Task { @MainActor in push(.chatConversation(chat)) }
                     },
                     onEditPrice: {
                         Task { @MainActor in
@@ -2717,7 +2735,8 @@ public struct HubTabRoot: View {
                 viewModel: ChatConversationViewModel(
                     mode: Self.chatMode(for: dest.mode),
                     counterparty: Self.chatCounterparty(for: dest),
-                    currentUserId: currentUserId
+                    currentUserId: currentUserId,
+                    initialTopic: dest.initialTopic
                 ),
                 mode: dest.kind
             ) { Task { @MainActor in pop() } }

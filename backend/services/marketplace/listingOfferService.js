@@ -216,11 +216,31 @@ async function acceptOffer({ offerId, userId }) {
   // 0. Verify listing is still active
   const { data: offerListing } = await supabaseAdmin
     .from('Listing')
-    .select('status')
+    .select('status, active_offer_count')
     .eq('id', offer.listing_id)
     .single();
 
-  if (!offerListing || (offerListing.status !== 'active' && offerListing.status !== 'reserved')) {
+  if (!offerListing || offerListing.status !== 'active') {
+    const err = new Error('Listing is no longer available');
+    err.status = 409;
+    throw err;
+  }
+
+  // 0b. Hold the listing for this buyer: active -> pending_pickup ("promised to a buyer, awaiting handoff"; the
+  // listing_status enum has no 'reserved'). The update only matches an active listing, so two accepts can't both
+  // win, and a failed write fails the accept instead of leaving the listing on sale.
+  const { data: held, error: holdErr } = await supabaseAdmin
+    .from('Listing')
+    .update({ status: 'pending_pickup', active_offer_count: 0, updated_at: new Date().toISOString() })
+    .eq('id', offer.listing_id)
+    .eq('status', 'active')
+    .select('id');
+
+  if (holdErr) {
+    logger.error('Failed to hold listing for accepted offer', { error: holdErr.message, offerId });
+    throw holdErr;
+  }
+  if (!held || held.length === 0) {
     const err = new Error('Listing is no longer available');
     err.status = 409;
     throw err;
@@ -246,14 +266,17 @@ async function acceptOffer({ offerId, userId }) {
 
   if (updateErr) {
     logger.error('Failed to accept offer', { error: updateErr.message, offerId });
+    // Give the listing back so it isn't left on hold for an offer that wasn't accepted.
+    const { error: releaseErr } = await supabaseAdmin
+      .from('Listing')
+      .update({ status: 'active', active_offer_count: offerListing.active_offer_count || 0, updated_at: new Date().toISOString() })
+      .eq('id', offer.listing_id)
+      .eq('status', 'pending_pickup');
+    if (releaseErr) logger.error('Failed to release listing after a failed accept', { error: releaseErr.message, offerId });
     throw updateErr;
   }
 
-  // 2. Reserve the listing and reset offer count (all others will be declined)
-  await supabaseAdmin
-    .from('Listing')
-    .update({ status: 'reserved', active_offer_count: 0, updated_at: new Date().toISOString() })
-    .eq('id', offer.listing_id);
+  // 2. (The listing was held above, with its offer count reset: all other offers are declined next.)
 
   // 3. Decline all other pending offers on the same listing
   const { data: otherOffers } = await supabaseAdmin
@@ -265,7 +288,7 @@ async function acceptOffer({ offerId, userId }) {
 
   if (otherOffers && otherOffers.length > 0) {
     const otherIds = otherOffers.map((o) => o.id);
-    await supabaseAdmin
+    const { error: declineErr } = await supabaseAdmin
       .from('ListingOffer')
       .update({
         status: 'declined',
@@ -273,6 +296,10 @@ async function acceptOffer({ offerId, userId }) {
         updated_at: new Date().toISOString(),
       })
       .in('id', otherIds);
+    if (declineErr) {
+      // The accept stands and the listing is on hold, so these offers can no longer be accepted.
+      logger.error('Failed to decline the other offers after an accept', { error: declineErr.message, offerId });
+    }
 
     // Fetch listing title for notifications
     const { data: listing } = await supabaseAdmin
@@ -380,13 +407,14 @@ async function declineOffer({ offerId, sellerId }) {
     .eq('id', offer.listing_id)
     .single();
 
-  await supabaseAdmin
+  const { error: countErr } = await supabaseAdmin
     .from('Listing')
     .update({
       active_offer_count: Math.max((listing?.active_offer_count || 1) - 1, 0),
       updated_at: new Date().toISOString(),
     })
     .eq('id', offer.listing_id);
+  if (countErr) logger.error('Failed to update the listing offer count', { error: countErr.message, offerId });
 
   // Notify buyer
   const { data: listingData } = await supabaseAdmin
@@ -449,13 +477,14 @@ async function withdrawOffer({ offerId, buyerId }) {
     .eq('id', offer.listing_id)
     .single();
 
-  await supabaseAdmin
+  const { error: countErr } = await supabaseAdmin
     .from('Listing')
     .update({
       active_offer_count: Math.max((listing?.active_offer_count || 1) - 1, 0),
       updated_at: new Date().toISOString(),
     })
     .eq('id', offer.listing_id);
+  if (countErr) logger.error('Failed to update the listing offer count', { error: countErr.message, offerId });
 
   return { offer: updated };
 }
@@ -497,10 +526,20 @@ async function completeTransaction({ offerId, completedBy }) {
   }
 
   // 2. Mark listing as sold
-  await supabaseAdmin
+  const { error: soldErr } = await supabaseAdmin
     .from('Listing')
     .update({ status: 'sold', sold_at: now, updated_at: now })
     .eq('id', offer.listing_id);
+
+  if (soldErr) {
+    logger.error('Failed to mark listing sold', { error: soldErr.message, offerId });
+    const { error: revertErr } = await supabaseAdmin
+      .from('ListingOffer')
+      .update({ status: 'accepted', completed_at: null, updated_at: new Date().toISOString() })
+      .eq('id', offerId);
+    if (revertErr) logger.error('Failed to reopen offer after a failed sale', { error: revertErr.message, offerId });
+    throw soldErr;
+  }
 
   // 3. Notify both parties to review
   const [buyerName, sellerName] = await Promise.all([

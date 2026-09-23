@@ -31,6 +31,9 @@ class ListingDetailViewModel
     ) : ViewModel() {
         companion object {
             const val LISTING_ID_KEY = "listingId"
+
+            /** The listing's public web page, the link the cover's share chip sends (as the gig detail's share does). */
+            fun shareUrl(listingId: String): String = "https://pantopus.com/listing/$listingId"
         }
 
         private val listingId: String = savedStateHandle.get<String>(LISTING_ID_KEY) ?: ""
@@ -39,6 +42,12 @@ class ListingDetailViewModel
         val state: StateFlow<ContentDetailUiState> = _state.asStateFlow()
 
         private var rawListing: ListingDto? = null
+
+        private val _saved = MutableStateFlow(false)
+
+        /** Whether the viewer has saved this listing (`userHasSaved`); drives the cover's bookmark chip. */
+        val saved: StateFlow<Boolean> = _saved.asStateFlow()
+        private var saveInFlight = false
 
         /** Current listing snapshot — null until the first fetch resolves. */
         fun listingSnapshot(): ListingDto? = rawListing
@@ -53,12 +62,37 @@ class ListingDetailViewModel
             return owner == me
         }
 
+        /** True when the loaded listing is sold; its dock then offers "Find similar" instead of an offer. */
+        fun isSold(): Boolean = rawListing?.let { Projection.isSold(it) } == true
+
+        /**
+         * The cover's bookmark chip. `POST /api/listings/:id/save` toggles the save and answers the new state:
+         * the chip flips at once and settles on that answer, or flips back and reports through [onError].
+         */
+        fun toggleSave(onError: (String) -> Unit = {}) {
+            if (saveInFlight || rawListing == null) return
+            saveInFlight = true
+            val target = !_saved.value
+            _saved.value = target
+            viewModelScope.launch {
+                when (val result = repo.save(listingId)) {
+                    is NetworkResult.Success -> _saved.value = result.data.saved ?: target
+                    is NetworkResult.Failure -> {
+                        _saved.value = !target
+                        onError(if (target) "Couldn't save this listing." else "Couldn't remove the save.")
+                    }
+                }
+                saveInFlight = false
+            }
+        }
+
         fun load() {
             _state.value = ContentDetailUiState.Loading
             viewModelScope.launch {
                 when (val result = repo.detail(listingId)) {
                     is NetworkResult.Success -> {
                         rawListing = result.data.listing
+                        _saved.value = result.data.listing.userHasSaved == true
                         _state.value =
                             ContentDetailUiState.Loaded(
                                 Projection.project(
@@ -102,6 +136,8 @@ class ListingDetailViewModel
             ): ContentDetailContent {
                 val isFree = listing.isFree ?: false
                 val sold = isSold(listing)
+                // An accepted offer or trade holds the listing for that buyer until the handoff.
+                val onHold = !sold && listing.status == "pending_pickup"
                 val priceLine = listingPriceLine(listing, isFree)
                 val imageUrl = listing.firstImage ?: listing.mediaUrls?.firstOrNull()
                 val cover =
@@ -151,26 +187,18 @@ class ListingDetailViewModel
                                 ),
                             )
                         }
-                        if (sold) {
-                            add(
-                                ContentDetailModule.Callout(
-                                    id = "alert-similar",
-                                    style = ContentDetailModule.Callout.Style.Banner,
-                                    tone = ContentDetailModule.Callout.Tone.Neutral,
-                                    icon = PantopusIcon.Bell,
-                                    iconTone = ContentDetailModule.Callout.IconTone.Primary,
-                                    title = "Alert me when similar appears",
-                                    subtitle = listing.title,
-                                    trailingActionLabel = "Set",
-                                ),
-                            )
-                        }
                     }
                 val dock =
                     if (sold) {
                         ContentDetailDock(
                             secondary = ContentDetailDockButton(label = "Seller", icon = PantopusIcon.ShoppingBag),
                             primary = ContentDetailDockButton(label = "Find similar", icon = PantopusIcon.Search),
+                        )
+                    } else if (onHold && !isViewerOwner) {
+                        // A held listing takes no new offers (the server refuses them); its seller still reaches the offers.
+                        ContentDetailDock(
+                            secondary = ContentDetailDockButton(label = "Message", icon = PantopusIcon.Send),
+                            primary = ContentDetailDockButton(label = "Pickup pending", icon = PantopusIcon.Clock, enabled = false),
                         )
                     } else {
                         ContentDetailDock(
@@ -181,17 +209,7 @@ class ListingDetailViewModel
                 return ContentDetailContent(
                     kind = ContentDetailKind.Listing,
                     cover = cover,
-                    statusPill =
-                        if (sold) {
-                            ContentDetailPill(
-                                id = "status",
-                                label = "Sold",
-                                icon = PantopusIcon.AlertCircle,
-                                tone = ContentDetailPill.Tone.Error,
-                            )
-                        } else {
-                            null
-                        },
+                    statusPill = statusPill(sold = sold, onHold = onHold),
                     hero =
                         ContentDetailHero(
                             title = listing.title ?: "Listing",
@@ -207,7 +225,30 @@ class ListingDetailViewModel
                 )
             }
 
-            private fun isSold(listing: ListingDto): Boolean = listing.soldAt != null || listing.status == "sold"
+            fun isSold(listing: ListingDto): Boolean = listing.soldAt != null || listing.status == "sold"
+
+            // "Pickup pending" is the My Listings vocabulary for a listing held for a buyer.
+            private fun statusPill(
+                sold: Boolean,
+                onHold: Boolean,
+            ): ContentDetailPill? =
+                if (sold) {
+                    ContentDetailPill(
+                        id = "status",
+                        label = "Sold",
+                        icon = PantopusIcon.AlertCircle,
+                        tone = ContentDetailPill.Tone.Error,
+                    )
+                } else if (onHold) {
+                    ContentDetailPill(
+                        id = "status",
+                        label = "Pickup pending",
+                        icon = PantopusIcon.Clock,
+                        tone = ContentDetailPill.Tone.Warning,
+                    )
+                } else {
+                    null
+                }
 
             private fun listingPriceLine(
                 listing: ListingDto,

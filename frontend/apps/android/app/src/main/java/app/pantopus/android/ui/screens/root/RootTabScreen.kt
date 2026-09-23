@@ -262,6 +262,7 @@ import app.pantopus.android.ui.screens.inbox.search.ChatSearchResult
 import app.pantopus.android.ui.screens.inbox.search.ChatSearchResultKind
 import app.pantopus.android.ui.screens.inbox.search.ChatSearchScreen
 import app.pantopus.android.ui.screens.listing_offers.ListingOffersScreen
+import app.pantopus.android.ui.screens.listing_offers.ListingOffersViewModel
 import app.pantopus.android.ui.screens.listings.MyListingsScreen
 import app.pantopus.android.ui.screens.mailbox.community.CommunityMailScreen
 import app.pantopus.android.ui.screens.mailbox.disambiguate.DISAMBIGUATE_MAIL_ID_KEY
@@ -281,6 +282,7 @@ import app.pantopus.android.ui.screens.mailbox.mail_task.MailTaskListScreen
 import app.pantopus.android.ui.screens.mailbox.mail_task.MailTaskScreen
 import app.pantopus.android.ui.screens.mailbox.mailbox_map.MailboxMapScreen
 import app.pantopus.android.ui.screens.mailbox.mailbox_root.MailboxRootScreen
+import app.pantopus.android.ui.screens.mailbox.package_gig.PACKAGE_GIG_AVAILABLE
 import app.pantopus.android.ui.screens.mailbox.package_gig.PACKAGE_GIG_MAIL_ID_KEY
 import app.pantopus.android.ui.screens.mailbox.package_gig.PACKAGE_GIG_MAIL_ID_NONE
 import app.pantopus.android.ui.screens.mailbox.package_gig.PACKAGE_GIG_MODE_KEY
@@ -4175,12 +4177,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenUnboxing = { sourceMailId ->
                             navController.navigate(ChildRoutes.unboxing(sourceMailId))
                         },
-                        onAskNeighbor = { sourceMailId, isPreDelivery ->
-                            // A17.8 → "Ask a Neighbor" (RN `mailbox/package.tsx:204`).
-                            navController.navigate(
-                                ChildRoutes.packageGig(mailId = sourceMailId, isPreDelivery = isPreDelivery),
-                            )
-                        },
+                        onAskNeighbor =
+                            { sourceMailId: String, isPreDelivery: Boolean ->
+                                // A17.8 → "Ask a Neighbor" (RN `mailbox/package.tsx:204`).
+                                navController.navigate(
+                                    ChildRoutes.packageGig(mailId = sourceMailId, isPreDelivery = isPreDelivery),
+                                )
+                            }.takeIf { PACKAGE_GIG_AVAILABLE },
                     )
                 }
                 composable(
@@ -4636,6 +4639,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onEditListing = { dto ->
                             navController.navigate(ChildRoutes.editListing(dto.id))
                         },
+                        onFindSimilar = {
+                            // Back to the marketplace this listing was opened from, else open it.
+                            if (!navController.popBackStack(ChildRoutes.MARKETPLACE, inclusive = false)) {
+                                navController.navigate(ChildRoutes.MARKETPLACE)
+                            }
+                        },
                     )
                 }
                 composable(
@@ -4650,6 +4659,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         ),
                 ) { entry ->
                     val listingId = entry.arguments?.getString(ChildRoutes.LISTING_OFFERS_ID_KEY).orEmpty()
+                    val listingTitle = entry.arguments?.getString(ChildRoutes.LISTING_OFFERS_TITLE_KEY).orEmpty()
                     ListingOffersScreen(
                         onBack = { navController.popBackStack() },
                         onShareListing = {
@@ -4659,7 +4669,24 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             )
                         },
                         onOpenBuyer = { buyer -> navController.navigate(ChildRoutes.publicProfile(buyer.id)) },
-                        onOpenTransaction = { navController.navigate(ChildRoutes.placeholder("Transaction detail")) },
+                        onMessageBuyer = { offer ->
+                            offer.buyer?.let { buyer ->
+                                // The chat is with the buyer; the listing is its topic.
+                                val name = ListingOffersViewModel.displayName(buyer)
+                                navController.navigate(
+                                    ChildRoutes.chatConversationFromPicker(
+                                        userId = buyer.id,
+                                        displayName = name,
+                                        initials = initialsFromName(name),
+                                        verified = false,
+                                        locality = null,
+                                        topicType = "listing",
+                                        topicRefId = listingId,
+                                        topicTitle = listingTitle.ifEmpty { "Listing" },
+                                    ),
+                                )
+                            }
+                        },
                         onEditPrice = {
                             navController.navigate(
                                 ChildRoutes.editListing(

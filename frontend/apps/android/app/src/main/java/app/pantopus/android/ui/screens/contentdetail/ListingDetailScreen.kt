@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.theme.PantopusColors
+import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
@@ -46,15 +48,20 @@ fun ListingDetailScreen(
     onOpenMessages: (app.pantopus.android.data.api.models.listings.ListingDto) -> Unit = {},
     onViewOffers: ((app.pantopus.android.data.api.models.listings.ListingDto) -> Unit)? = null,
     onEditListing: ((app.pantopus.android.data.api.models.listings.ListingDto) -> Unit)? = null,
+    /** A sold listing's "Find similar": the host opens the marketplace. */
+    onFindSimilar: (() -> Unit)? = null,
     viewModel: ListingDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val saved by viewModel.saved.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var sheetVisible by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
     // One offer request at a time; a refused offer keeps the sheet open with the server's reason.
     var offerSending by remember { mutableStateOf(false) }
     var offerError by remember { mutableStateOf<String?>(null) }
     var toastText by remember { mutableStateOf<String?>(null) }
+    var toastIsError by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toastText) {
@@ -93,7 +100,10 @@ fun ListingDetailScreen(
         onBack = onBack,
         onPrimaryAction = {
             val listing = viewModel.listingSnapshot()
-            if (listing != null && viewModel.isOwnedByMe() && onViewOffers != null) {
+            if (viewModel.isSold()) {
+                // A sold listing's "Find similar" browses the marketplace; a sold listing takes no offers.
+                onFindSimilar?.invoke()
+            } else if (listing != null && viewModel.isOwnedByMe() && onViewOffers != null) {
                 onViewOffers(listing)
             } else {
                 offerError = null
@@ -104,6 +114,13 @@ fun ListingDetailScreen(
         onRetry = { viewModel.load() },
         onMessageCounterparty = openMessages,
         overflowItems = overflowItems,
+        onGlassAction = { icon ->
+            onListingGlassAction(icon, context, viewModel) { message ->
+                toastIsError = true
+                toastText = message
+            }
+        },
+        activeGlassActions = setOfNotNull(PantopusIcon.Bookmark.takeIf { saved }),
     )
 
     if (sheetVisible) {
@@ -125,6 +142,7 @@ fun ListingDetailScreen(
                             offerSending = false
                             if (ok) {
                                 sheetVisible = false
+                                toastIsError = false
                                 toastText = if (isFree) "Interest sent" else "Offer sent"
                             }
                         }
@@ -144,7 +162,7 @@ fun ListingDetailScreen(
                     Modifier
                         .padding(Spacing.s4)
                         .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.success)
+                        .background(if (toastIsError) PantopusColors.error else PantopusColors.success)
                         .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                         .testTag("listing-detail-toast"),
             ) {
@@ -156,6 +174,36 @@ fun ListingDetailScreen(
             }
         }
     }
+}
+
+/** The cover's chips: share sends the listing's web link (as the gig detail shares); the bookmark saves or unsaves it. */
+private fun onListingGlassAction(
+    icon: PantopusIcon,
+    context: android.content.Context,
+    viewModel: ListingDetailViewModel,
+    onError: (String) -> Unit,
+) {
+    when (icon) {
+        PantopusIcon.Share -> viewModel.listingSnapshot()?.let { shareListing(context, it) }
+        PantopusIcon.Bookmark -> viewModel.toggleSave(onError)
+        else -> Unit
+    }
+}
+
+private fun shareListing(
+    context: android.content.Context,
+    listing: app.pantopus.android.data.api.models.listings.ListingDto,
+) {
+    val url = ListingDetailViewModel.shareUrl(listing.id)
+    val intent =
+        android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(
+                android.content.Intent.EXTRA_TEXT,
+                if (listing.title.isNullOrEmpty()) url else "${listing.title} — $url",
+            )
+        }
+    context.startActivity(android.content.Intent.createChooser(intent, "Share listing"))
 }
 
 @Composable

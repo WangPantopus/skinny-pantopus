@@ -67,7 +67,8 @@ function seedAcceptedListingOffer(overrides = {}) {
     id: LISTING_ID,
     user_id: SELLER_ID,
     title: 'Patio chair',
-    status: 'reserved',
+    // An accepted offer holds its listing as pending_pickup (listing_status has no 'reserved').
+    status: 'pending_pickup',
     ...overrides.listing,
   }]);
   seedTable('ListingOffer', [{

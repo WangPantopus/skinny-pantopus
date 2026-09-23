@@ -15,6 +15,10 @@ import Observation
 public final class ListingDetailViewModel {
     public private(set) var state: ContentDetailState = .loading
     public private(set) var rawListing: ListingDTO?
+    /// Whether the viewer has saved this listing (`userHasSaved`); drives
+    /// the cover's bookmark chip.
+    public private(set) var isSaved = false
+    private var isSaveInFlight = false
 
     private let listingId: String
     private let api: APIClient
@@ -53,6 +57,7 @@ public final class ListingDetailViewModel {
         do {
             let detail: ListingDetailResponse = try await api.request(ListingsEndpoints.detail(id: listingId))
             rawListing = detail.listing
+            isSaved = detail.listing.userHasSaved ?? false
             let viewerId = currentUserId()
             state = .loaded(Self.project(detail.listing, viewerUserId: viewerId))
         } catch {
@@ -78,6 +83,39 @@ public final class ListingDetailViewModel {
         }
     }
 
+    /// True when the loaded listing is sold; its dock then offers "Find
+    /// similar" instead of an offer.
+    public var isSold: Bool {
+        rawListing.map(Self.isSold) ?? false
+    }
+
+    /// The listing's public web page, the link the cover's share chip
+    /// sends (as the gig detail's share does).
+    public var shareURL: URL {
+        URL(string: "https://pantopus.com/listing/\(listingId)") ?? AppEnvironment.current.apiBaseURL
+    }
+
+    /// The cover's bookmark chip. `POST /api/listings/:id/save` toggles the
+    /// save and answers the new state: the chip flips at once and settles
+    /// on that answer, or flips back and returns `false` so the view can
+    /// say so.
+    @discardableResult
+    public func toggleSave() async -> Bool {
+        guard !isSaveInFlight, rawListing != nil else { return true }
+        isSaveInFlight = true
+        defer { isSaveInFlight = false }
+        let target = !isSaved
+        isSaved = target
+        do {
+            let response: ListingSaveResponse = try await api.request(ListingsEndpoints.save(id: listingId))
+            isSaved = response.saved ?? target
+            return true
+        } catch {
+            isSaved = !target
+            return false
+        }
+    }
+
     /// An amount as the buyer typed it: `25.50` or, in a comma-decimal locale, `25,50`.
     static func parseOfferAmount(_ text: String, locale: Locale = .current) -> Double? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "$", with: "")
@@ -99,10 +137,14 @@ public final class ListingDetailViewModel {
             return owner == viewer
         }()
         let sold = isSold(listing)
+        // An accepted offer or trade holds the listing for that buyer until the handoff.
+        let onHold = !sold && listing.status == "pending_pickup"
         return ContentDetailContent(
             kind: .listing,
             cover: cover(for: listing, sold: sold),
-            statusPill: sold ? ContentDetailPill(label: "Sold", icon: .alertCircle, tone: .error) : nil,
+            statusPill: sold
+                ? ContentDetailPill(label: "Sold", icon: .alertCircle, tone: .error)
+                : onHold ? ContentDetailPill(label: "Pickup pending", icon: .clock, tone: .warning) : nil,
             hero: ContentDetailHero(
                 title: listing.title ?? "Listing",
                 categoryChip: nil,
@@ -114,9 +156,9 @@ public final class ListingDetailViewModel {
             ),
             statStrip: [],
             counterparty: counterparty(for: listing),
-            modules: modules(for: listing, sold: sold),
+            modules: modules(for: listing),
             trustCapsules: [],
-            dock: dock(isViewerOwner: isViewerOwner, sold: sold)
+            dock: dock(isViewerOwner: isViewerOwner, sold: sold, onHold: onHold)
         )
     }
 
@@ -180,7 +222,7 @@ public final class ListingDetailViewModel {
         )
     }
 
-    private static func modules(for listing: ListingDTO, sold: Bool) -> [ContentDetailModule] {
+    private static func modules(for listing: ListingDTO) -> [ContentDetailModule] {
         var modules: [ContentDetailModule] = []
         if let body = listing.description, !body.isEmpty {
             modules.append(.description(ContentDetailDescription(
@@ -199,26 +241,21 @@ public final class ListingDetailViewModel {
         if !detailRows.isEmpty {
             modules.append(.detailsGrid(ContentDetailDetailsGrid(title: "Details", icon: .info, rows: detailRows)))
         }
-        if sold {
-            modules.append(.callout(ContentDetailCallout(
-                identifier: "alert-similar",
-                style: .banner,
-                tone: .neutral,
-                icon: .bell,
-                iconTone: .primary,
-                title: "Alert me when similar appears",
-                subtitle: listing.title,
-                trailingActionLabel: "Set"
-            )))
-        }
         return modules
     }
 
-    private static func dock(isViewerOwner: Bool, sold: Bool) -> ContentDetailDock {
+    private static func dock(isViewerOwner: Bool, sold: Bool, onHold: Bool) -> ContentDetailDock {
         if sold {
             return ContentDetailDock(
                 secondary: ContentDetailDockButton(label: "Seller", icon: .shoppingBag),
                 primary: ContentDetailDockButton(label: "Find similar", icon: .search)
+            )
+        }
+        // A held listing takes no new offers (the server refuses them); its seller still reaches the offers.
+        if onHold, !isViewerOwner {
+            return ContentDetailDock(
+                secondary: ContentDetailDockButton(label: "Message", icon: .send),
+                primary: ContentDetailDockButton(label: "Pickup pending", icon: .clock, enabled: false)
             )
         }
         return ContentDetailDock(
