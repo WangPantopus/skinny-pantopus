@@ -327,8 +327,9 @@ public final class ReviewSignupsViewModel: ListOfRowsDataSource {
                 }
             ])
         case "confirmed":
-            // A guest signup has no account to message.
-            r.isGuestSignup || (r.userId ?? "").isEmpty ? nil : RowFooter(actions: [
+            // A guest signup has no account to message. The list payload
+            // carries the helper's account as `user` (→ `helper`), not `user_id`.
+            r.isGuestSignup || (r.userId ?? r.helper?.id ?? "").isEmpty ? nil : RowFooter(actions: [
                 RowFooterAction(
                     title: "Message",
                     icon: .messageCircle,
