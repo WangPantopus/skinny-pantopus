@@ -98,14 +98,16 @@ public struct MarketplaceTabRoot: View {
                 onMessage: { listing in
                     Task { @MainActor in
                         guard let sellerId = listing.userId else { return }
-                        let name = listing.title ?? "Seller"
+                        // The chat is with the seller; the listing is its topic.
+                        let title = listing.title ?? "Listing"
+                        let name = listing.creator?.resolvedDisplayName ?? title
                         path.append(.chatConversation(InboxConversationDestination(
                             mode: .person(otherUserId: sellerId),
                             displayName: name,
                             initials: Self.initials(from: name),
                             identityKind: nil,
-                            verified: false,
-                            initialTopic: ChatInitialTopic(topicType: "listing", topicRefId: listing.id, title: name)
+                            verified: listing.creator?.resolvedVerified ?? false,
+                            initialTopic: ChatInitialTopic(topicType: "listing", topicRefId: listing.id, title: title)
                         )))
                     }
                 },
