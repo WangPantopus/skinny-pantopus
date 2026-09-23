@@ -5,6 +5,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Heart, ImagePlus, Smile, X } from 'lucide-react';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import EmojiPickerPopover from '@/components/chat/EmojiPickerPopover';
+import { confirmStore } from '@/components/ui/confirm-store';
 import FeedMediaImage from './FeedMediaImage';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import type { PostComment } from '@pantopus/types';
@@ -18,6 +19,8 @@ interface CommentThreadProps {
   isPosting?: boolean;
   canCompose?: boolean;
   composeDisabledMessage?: string | null;
+  /** Shown when there are no comments; null shows nothing (e.g. the load failed). */
+  emptyText?: string | null;
 }
 
 function isImageAttachment(mimeType?: string) {
@@ -38,6 +41,7 @@ export default function CommentThread({
   isPosting,
   canCompose = true,
   composeDisabledMessage,
+  emptyText = 'No comments yet — start the conversation',
 }: CommentThreadProps) {
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
@@ -92,8 +96,13 @@ export default function CommentThread({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  // Cmd/Ctrl+Enter can fire again before the parent's `isPosting` arrives.
+  const submittingRef = useRef(false);
+
   const handleSubmit = async () => {
     if (!newComment.trim() && selectedFiles.length === 0) return;
+    if (isPosting || submittingRef.current) return;
+    submittingRef.current = true;
     try {
       const saved = await onAddComment({
         text: newComment.trim(),
@@ -103,6 +112,8 @@ export default function CommentThread({
       if (saved !== false) resetComposer();
     } catch {
       // The caller reports the error. Keep the unsent draft available to retry.
+    } finally {
+      submittingRef.current = false;
     }
   };
 
@@ -267,7 +278,14 @@ export default function CommentThread({
               </button>
               {isOwn && (
                 <button
-                  onClick={() => void onDeleteComment(comment.id)}
+                  onClick={async () => {
+                    const yes = await confirmStore.open({
+                      title: 'Delete this comment?',
+                      confirmLabel: 'Delete',
+                      variant: 'destructive',
+                    });
+                    if (yes) void onDeleteComment(comment.id);
+                  }}
                   className="text-[10px] font-semibold text-red-400 hover:text-red-500 transition"
                 >
                   Delete
@@ -312,9 +330,11 @@ export default function CommentThread({
   return (
     <div>
       {comments.length === 0 ? (
-        <div className="text-center py-6">
-          <p className="text-xs text-app-muted">No comments yet — start the conversation</p>
-        </div>
+        emptyText ? (
+          <div className="text-center py-6">
+            <p className="text-xs text-app-muted">{emptyText}</p>
+          </div>
+        ) : null
       ) : (
         <div className="divide-y divide-app">
           {topLevel.map((c) => renderComment(c, 0))}

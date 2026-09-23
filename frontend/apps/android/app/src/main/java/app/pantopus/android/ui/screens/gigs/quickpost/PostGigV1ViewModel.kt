@@ -31,7 +31,9 @@ enum class PostGigV1PriceType(
 ) {
     Flat("Flat", "flat"),
     Hourly("Hourly", "/ hr"),
-    Free("Free", null),
+
+    // Posts `pay_type` "offers" with price 0: helpers suggest a price.
+    Free("Open to offers", null),
 }
 
 enum class PostGigV1PhotoTone { Sofa, Stairs, Street, Neutral }
@@ -619,7 +621,7 @@ class PostGigV1ViewModel
             if (form.priceType != PostGigV1PriceType.Free) {
                 val price = form.price.trim()
                 if (price.isEmpty()) {
-                    errors += PostGigV1ValidationError(PostGigV1Field.Price, "Enter a price, or pick Free.")
+                    errors += PostGigV1ValidationError(PostGigV1Field.Price, "Enter a price, or pick Open to offers.")
                 } else if ((price.toDoubleOrNull() ?: 0.0) <= 0.0) {
                     errors += PostGigV1ValidationError(PostGigV1Field.Price, "Price must be greater than zero.")
                 }

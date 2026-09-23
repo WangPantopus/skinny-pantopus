@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { getAuthToken } from '@pantopus/api';
 import { useHomeAccess } from '@/hooks/useHomeAccess';
-import { toast } from '@/components/ui/toast-store';
 import { removalLink } from '@/components/home/member-removals/removalModel';
 
 interface StatusConfig {
@@ -142,7 +141,7 @@ function WaitingRoomContent() {
           <button onClick={handleMoveOut} className="flex items-center justify-center gap-2 w-full py-3 text-sm font-medium text-red-600 hover:text-red-700">
             <LogOut className="w-4 h-4" /> This isn&apos;t my home
           </button>
-          <button onClick={() => toast.info('Contact support at help@pantopus.com')} className="flex items-center justify-center gap-2 w-full py-2.5 text-sm text-app-text-secondary hover:text-app-text">
+          <button onClick={() => window.open('mailto:help@pantopus.com?subject=Verification%20Help', '_blank')} className="flex items-center justify-center gap-2 w-full py-2.5 text-sm text-app-text-secondary hover:text-app-text">
             <HelpCircle className="w-4 h-4" /> Request help
           </button>
           <button onClick={() => router.push('/app/hub')} className="w-full py-3 border border-app-border rounded-xl text-sm font-semibold text-app-text-secondary hover:bg-app-hover transition">

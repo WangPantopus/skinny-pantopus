@@ -306,11 +306,12 @@ export default function SettingsPage() {
                   <p className="font-medium text-app">Email</p>
                   <p className="text-sm text-app-secondary">{user?.email}</p>
                 </div>
+                {/* There is no email-change flow yet; support changes it. */}
                 <button
-                  onClick={() => toast.info('Change email feature coming soon')}
+                  onClick={() => router.push('/contact')}
                   className="text-primary-600 hover:text-primary-700 font-medium"
                 >
-                  Change
+                  Contact support
                 </button>
               </div>
               <div className="flex items-center justify-between py-3 border-b border-app">
@@ -331,7 +332,7 @@ export default function SettingsPage() {
                   <p className="text-sm text-app-secondary capitalize">{user?.accountType || user?.account_type || 'Individual'}</p>
                 </div>
                 <button
-                  onClick={() => toast.info('Upgrade to business feature coming soon')}
+                  onClick={() => router.push('/app/business/new')}
                   className="text-primary-600 hover:text-primary-700 font-medium"
                 >
                   Upgrade

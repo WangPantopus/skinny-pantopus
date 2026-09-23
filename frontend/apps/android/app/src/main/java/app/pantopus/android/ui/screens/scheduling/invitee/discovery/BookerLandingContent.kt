@@ -105,14 +105,17 @@ private fun VerifiedCheck(
     }
 }
 
-/** Host avatar disc with initials + the verified badge. */
+/**
+ * Host avatar disc with initials. The verified badge shows only when a caller
+ * passes a real verification; the public page payload carries none.
+ */
 @Composable
 fun HostAvatar(
     pillar: SchedulingPillar,
     initials: String,
     modifier: Modifier = Modifier,
     size: androidx.compose.ui.unit.Dp = AVATAR_SIZE,
-    verified: Boolean = true,
+    verified: Boolean = false,
 ) {
     Box(modifier = modifier.size(size)) {
         Box(

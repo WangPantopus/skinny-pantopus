@@ -334,8 +334,8 @@ private fun SectionOverline(title: String) {
 private fun Disclaimer() {
     Text(
         text =
-            "Businesses pay to reach you. You get paid to engage.\n" +
-                "Earnings reflect after a short verification window.",
+            "Businesses pay to reach you.\n" +
+                "Offer earnings can't be cashed out yet.",
         color = PantopusColors.appTextMuted,
         fontSize = 10.5.sp,
         textAlign = TextAlign.Center,

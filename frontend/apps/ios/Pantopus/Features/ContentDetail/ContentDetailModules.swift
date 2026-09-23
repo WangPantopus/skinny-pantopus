@@ -320,7 +320,8 @@ public struct ContentDetailBidRow: Sendable, Hashable, Identifiable {
     public let initials: String
     public let displayName: String
     public let avatarColor: String
-    public let ratingLine: String
+    /// Trust line under the name ("4.8 · 12 jobs"); nil shows none.
+    public let ratingLine: String?
     public let amount: String
     public let verified: Bool
     /// Optional tag pill ("fastest reply" / "has van" — V2; "Winner" is
@@ -337,7 +338,7 @@ public struct ContentDetailBidRow: Sendable, Hashable, Identifiable {
         initials: String,
         displayName: String,
         avatarColor: String,
-        ratingLine: String,
+        ratingLine: String?,
         amount: String,
         verified: Bool,
         tag: String? = nil,

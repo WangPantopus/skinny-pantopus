@@ -239,6 +239,27 @@ public final class GigDetailViewModel {
         return "Check tip status"
     }
 
+    /// The state the shell renders. While a tip original is kept and not settled, the tip dock
+    /// reads "Check tip status", as on Android and web; everything else is `state` unchanged.
+    public var displayState: ContentDetailState {
+        guard hasTipOriginal, case let .loaded(content) = state,
+              content.dock.primary == Self.tipDock.primary else { return state }
+        return .loaded(ContentDetailContent(
+            kind: content.kind,
+            cover: content.cover,
+            statusPill: content.statusPill,
+            hero: content.hero,
+            statStrip: content.statStrip,
+            counterparty: content.counterparty,
+            modules: content.modules,
+            trustCapsules: content.trustCapsules,
+            dock: ContentDetailDock(
+                secondary: content.dock.secondary,
+                primary: ContentDetailDockButton(label: "Check tip status", icon: .handCoins)
+            )
+        ))
+    }
+
     private var tipScope: String {
         "gig-tip-original-v1|\(tipOpeningIdentity?.origin ?? "")|\(currentUserId ?? "")|\(gigId)"
     }
@@ -930,11 +951,15 @@ public final class GigDetailViewModel {
         return ["assigned", "in_progress"].contains((gig.status ?? "").lowercased())
     }
 
-    /// The server refuses a price change while the task's payment hold is live
-    /// (`PAID_PRICE_CHANGE_UNAVAILABLE`): a payment exists and it isn't canceled or fully refunded.
-    public var priceChangesAvailable: Bool {
-        guard let gig = rawGig, gig.paymentId != nil else { return true }
-        return ["canceled", "refunded_full"].contains((gig.paymentStatus ?? "").lowercased())
+    /// Why a price change can't be proposed or approved on this task. The server refuses every price
+    /// change for now (`PAID_PRICE_CHANGE_UNAVAILABLE`); the sentence says whether the task has a live
+    /// payment hold (a payment that isn't canceled or fully refunded).
+    public var priceChangeUnavailableReason: String {
+        let held = rawGig.map { gig in
+            gig.paymentId != nil && !["canceled", "refunded_full"].contains((gig.paymentStatus ?? "").lowercased())
+        } ?? false
+        return held ? "Price changes aren't available once a task has a payment hold."
+            : "Price changes aren't available for this task."
     }
 
     /// True when the signed-in viewer proposed this change order —
@@ -1123,9 +1148,18 @@ public final class GigDetailViewModel {
                 tipOriginal = result.request
                 try acceptTip(result, original: result.request)
             } else if !next.eligible {
-                tipMessage = "This task is not currently available for a tip. Reopen its details before continuing."
+                tipMessage = next.unavailableReason == "TIP_LIMIT"
+                    ? "You've reached the 3-tip limit for this task."
+                    : "This task is not currently available for a tip. Reopen its details before continuing."
             }
         } catch { failTip("Tip details could not be verified. Reopen the original before continuing.") }
+    }
+
+    /// On open, reads back a retained tip original (Android does the same) so the dock can say
+    /// "Check tip status" before the tip sheet opens. Nothing is read when no original is kept.
+    func prepareRetainedTip() async {
+        guard canTip, tipIsCurrent, (try? readStoredTip()) != nil else { return }
+        await prepareTip()
     }
 
     public func sendTip(amountCents: Int) async {
@@ -2431,7 +2465,8 @@ extension GigDetailViewModel {
             distanceLabel(gig.distanceMiles),
             relativeAge(gig.createdAt).map { $0 == "now" ? "Just posted" : "posted \($0) ago" }
         ].compactMap { $0 }
-        let priceLine = gig.price.map { gigPriceLabel($0, payType: gig.payType) }
+        let openToOffers = GigOffers.isOpen(payType: gig.payType, acceptedBy: gig.acceptedBy)
+        let priceLine = openToOffers ? GigOffers.label : gig.price.map { gigPriceLabel($0, payType: gig.payType) }
         let hero = ContentDetailHero(
             title: gig.title,
             categoryChip: ContentDetailCategoryChip(
@@ -2440,7 +2475,7 @@ extension GigDetailViewModel {
             ),
             meta: metaPieces.isEmpty ? nil : metaPieces.joined(separator: " · "),
             priceLine: priceLine,
-            priceCaption: gig.price != nil ? "budget" : nil
+            priceCaption: gig.price != nil && !openToOffers ? "budget" : nil
         )
         var modules: [ContentDetailModule] = []
         if let body = gig.description, !body.isEmpty {
@@ -2468,7 +2503,7 @@ extension GigDetailViewModel {
             // no-op — `gigDetail.bids` renders below the modules.
         } else if bidCount > 0, !bids.isEmpty {
             modules.append(.bids(ContentDetailBidsModule(
-                title: "\(bidCount) bids",
+                title: "\(bidCount) \(bidCount == 1 ? "bid" : "bids")",
                 sub: bidRangeSub(bids),
                 bids: bids.map { projectBid($0) }
             )))
@@ -2609,13 +2644,14 @@ extension GigDetailViewModel {
             distanceLabel(gig.distanceMiles),
             gig.scheduledStart.flatMap { $0.isEmpty ? nil : formatScheduledStart($0) }
         ].compactMap { $0 }
-        let priceLine = gig.price.map { gigPriceLabel($0, payType: gig.payType) }
+        let openToOffers = GigOffers.isOpen(payType: gig.payType, acceptedBy: gig.acceptedBy)
+        let priceLine = openToOffers ? GigOffers.label : gig.price.map { gigPriceLabel($0, payType: gig.payType) }
         let hero = ContentDetailHero(
             title: gig.title,
             categoryChip: nil,
             meta: metaPieces.isEmpty ? nil : metaPieces.joined(separator: " · "),
             priceLine: priceLine,
-            priceCaption: gig.price == nil ? nil : (awarded ? "winning bid" : "budget")
+            priceCaption: gig.price == nil || openToOffers ? nil : (awarded ? "winning bid" : "budget")
         )
         var modules: [ContentDetailModule] = []
         if awarded {
@@ -2641,7 +2677,7 @@ extension GigDetailViewModel {
         }
         if !bids.isEmpty, !suppressBidsModule {
             modules.append(.bids(ContentDetailBidsModule(
-                title: "\(bidCount) bids",
+                title: "\(bidCount) \(bidCount == 1 ? "bid" : "bids")",
                 sub: awarded ? "closed" : nil,
                 bids: bids.map { projectBid($0, acceptedBy: awarded ? gig.acceptedBy : nil) }
             )))
@@ -2722,12 +2758,23 @@ extension GigDetailViewModel {
             initials: initials.isEmpty ? "?" : initials,
             displayName: name,
             avatarColor: "primary",
-            ratingLine: "verified neighbor",
+            ratingLine: bidderTrustLine(bid.bidder),
             amount: amountLabel,
             verified: bid.bidder?.resolvedVerified ?? false,
             won: won,
             dimmed: dimmed
         )
+    }
+
+    /// A bid row's trust line, from the bid payload only: "Verified neighbor" when the bidder is
+    /// verified, else their rating ("4.8 · 12 jobs"), else no line.
+    static func bidderTrustLine(_ bidder: GigCreator?) -> String? {
+        guard let bidder else { return nil }
+        if bidder.resolvedVerified { return "Verified neighbor" }
+        guard let rating = bidder.averageRating, rating > 0 else { return nil }
+        let base = String(format: "%.1f", rating)
+        guard let jobs = bidder.gigsCompleted, jobs > 0 else { return base }
+        return "\(base) · \(jobs) \(jobs == 1 ? "job" : "jobs")"
     }
 
     private static func gigPriceLabel(_ price: Double, payType: String?) -> String {

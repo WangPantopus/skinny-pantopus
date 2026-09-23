@@ -226,13 +226,8 @@ export default function RosterPage() {
           onMessageAll={() => setNudgeOpen(true)}
           onAdjustCapacity={adjustCapacity}
           onAddAttendee={() => {
-            // Navigate to the manual booking wizard pre-scoped to this event type.
             // The manual booking wizard (E12) handles the full invite flow.
-            router.push(
-              `/app/scheduling/manual?et=${detail.booking.event_type_id ?? ""}&${
-                ownerQueryString(owner).replace(/^\?/, "")
-              }`,
-            );
+            router.push(`/app/scheduling/bookings/manual${ownerQueryString(owner)}`);
           }}
         />
       )}

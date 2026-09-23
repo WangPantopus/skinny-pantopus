@@ -16,10 +16,11 @@ import { CommentThread } from '@/components/feed';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import FeedMediaImage from '@/components/feed/FeedMediaImage';
 import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
-import { buildCanonicalShareUrlForPost } from '@pantopus/utils';
+import { buildCanonicalShareUrlForPost, getErrorMessage } from '@pantopus/utils';
 import Image from 'next/image';
 import { confirmStore } from '@/components/ui/confirm-store';
 import ReportModal from '@/components/ui/ReportModal';
+import ErrorState from '@/components/ui/ErrorState';
 
 // ─── Icon lookup (data from shared config, React icons stay local) ──
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -44,6 +45,10 @@ export default function PostDetailPage() {
   const [post, setPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<PostComment[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed load that isn't "this post is gone" (network, 5xx): retryable.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [commentsFailed, setCommentsFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [commentPosting, setCommentPosting] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -70,23 +75,47 @@ export default function PostDetailPage() {
   }, []);
 
   // ─── Load post + comments ──────────────────────────────────
+  // Loaded independently: a failed comments call must not hide a post that
+  // loaded, and only a missing or hidden post (404/403) reads "not found".
   useEffect(() => {
     if (!postId) return;
     (async () => {
       setLoading(true);
-      try {
-        const [postRes, commentsRes] = await Promise.all([
-          api.posts.getPost(postId),
-          api.posts.getComments(postId),
-        ]);
-        setPost(postRes.post);
-        setComments(commentsRes.comments || postRes.post.comments || []);
-      } catch (err) {
-        console.error('Failed to load post', err);
-      } finally {
-        setLoading(false);
+      setLoadError(null);
+      setCommentsFailed(false);
+      const [postResult, commentsResult] = await Promise.allSettled([
+        api.posts.getPost(postId),
+        api.posts.getComments(postId),
+      ]);
+      if (postResult.status === 'fulfilled') {
+        const loaded = postResult.value.post;
+        setPost(loaded);
+        if (commentsResult.status === 'fulfilled') {
+          setComments(commentsResult.value.comments || loaded.comments || []);
+        } else {
+          setComments(loaded.comments || []);
+          setCommentsFailed(true);
+        }
+      } else {
+        console.error('Failed to load post', postResult.reason);
+        setPost(null);
+        const status = (postResult.reason as { statusCode?: number } | null)?.statusCode;
+        if (status !== 404 && status !== 403) {
+          setLoadError(getErrorMessage(postResult.reason, "We couldn't load this post. Please try again."));
+        }
       }
+      setLoading(false);
     })();
+  }, [postId, reloadKey]);
+
+  const retryComments = useCallback(async () => {
+    try {
+      const res = await api.posts.getComments(postId);
+      setComments(res.comments || []);
+      setCommentsFailed(false);
+    } catch (err) {
+      console.error('Failed to load comments', err);
+    }
   }, [postId]);
 
   // ─── Load matched businesses ───────────────────────────────
@@ -118,7 +147,8 @@ export default function PostDetailPage() {
       setPost((p: Post | null) => (p ? { ...p, userHasLiked: res.liked, like_count: res.likeCount } : p));
     },
     onError: () => {
-      // Revert
+      // Revert, and say so — a silent revert looks like the tap did nothing.
+      showToast("Couldn't update your like. Please try again.");
       setPost((p) =>
         p
           ? { ...p, userHasLiked: !p.userHasLiked, like_count: p.userHasLiked ? Math.max(0, p.like_count - 1) : p.like_count + 1 }
@@ -210,6 +240,7 @@ export default function PostDetailPage() {
       );
     } catch {
       console.warn('Failed to toggle comment like');
+      showToast("Couldn't update your like. Please try again.");
     }
   };
 
@@ -335,6 +366,20 @@ export default function PostDetailPage() {
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (!post && loadError) {
+    return (
+      <div className="min-h-screen bg-app flex flex-col items-center justify-center">
+        <ErrorState message={loadError} onRetry={() => setReloadKey((k) => k + 1)} />
+        <button
+          onClick={() => router.push('/app/feed')}
+          className="px-4 py-2 text-sm font-medium text-app-muted hover:text-app transition"
+        >
+          Back to Feed
+        </button>
       </div>
     );
   }
@@ -755,6 +800,14 @@ export default function PostDetailPage() {
               Comments
             </h3>
           </div>
+          {commentsFailed && (
+            <div className="flex items-center justify-between gap-3 px-5 py-3 text-sm text-app-muted border-b border-gray-50">
+              <span>Couldn&apos;t load comments.</span>
+              <button onClick={retryComments} className="font-medium text-primary-600 hover:text-primary-700">
+                Try again
+              </button>
+            </div>
+          )}
           <div className="px-2">
             <CommentThread
               comments={comments}
@@ -763,6 +816,7 @@ export default function PostDetailPage() {
               onLikeComment={handleCommentLike}
               currentUserId={user?.id}
               isPosting={commentPosting}
+              emptyText={commentsFailed ? null : undefined}
             />
           </div>
         </div>

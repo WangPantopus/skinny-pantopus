@@ -60,6 +60,14 @@ public struct NotificationUnreadCountResponse: Decodable, Sendable {
         self.count = count
         self.byContext = byContext
     }
+
+    /// What the hub bell's dot counts: unread personal + platform
+    /// notifications, like the web personal-zone bell. Older deployments
+    /// only return the total.
+    public var personalBellCount: Int {
+        guard let byContext else { return count }
+        return byContext.personal + byContext.platform
+    }
 }
 
 public struct NotificationActionEcho: Decodable, Sendable {

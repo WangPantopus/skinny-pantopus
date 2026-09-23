@@ -2,17 +2,16 @@
 //  PrivacyViewModelTests.swift
 //  PantopusTests
 //
-//  P7.6 / A14.7 — the reshaped Privacy matrix. Covers the defaults +
-//  stealth frames, the RadioCard / fuzz / activity / data projection,
-//  the stealth banner, optimistic radio / toggle / fuzz mutations, and
-//  the helper-line parity contract (mirrored on Android).
+//  P7.6 / A14.7 — the Privacy matrix. Covers the defaults + stealth
+//  frames, the group projection (only backend-backed cards, S3-29), the
+//  data rows and the stealth banner (mirrored on Android).
 //
 //  T1 adds the backend-backed surfaces: the search-privacy card wired to
 //  `GET/PATCH /api/privacy/settings`, and the delete-account gate in
 //  front of `DELETE /api/users/account`.
 //
 
-// swiftlint:disable type_body_length file_length
+// swiftlint:disable type_body_length
 
 import XCTest
 @testable import Pantopus
@@ -90,53 +89,15 @@ final class PrivacyViewModelTests: XCTestCase {
 
     // MARK: - Defaults frame
 
-    func testPopulatedProducesEightGroupsInDesignOrder() async {
+    /// Profile visibility, Address on profile, Map location fuzz and
+    /// Activity have no backend field, so they are not shown (S3-29).
+    func testPopulatedShowsOnlyBackendBackedGroups() async {
         stubSettings()
         let vm = makeViewModel()
         let groups = await loadedGroups(vm)
-        XCTAssertEqual(
-            groups.map(\.id),
-            [
-                "biometricSecurity", "searchPrivacy", "visibility",
-                "address", "fuzz", "activity", "data", "delete"
-            ]
-        )
+        XCTAssertEqual(groups.map(\.id), ["biometricSecurity", "searchPrivacy", "data", "delete"])
         XCTAssertNil(vm.banner)
         XCTAssertFalse(vm.contentDimmed)
-    }
-
-    func testVisibilityAndAddressAreFourOptionRadioCards() async {
-        stubSettings()
-        let groups = await loadedGroups(makeViewModel())
-        let visibility = group(groups, "visibility")
-        let address = group(groups, "address")
-        XCTAssertEqual(visibility?.rows.count, 4)
-        XCTAssertEqual(address?.rows.count, 4)
-        XCTAssertEqual(selectedRadioId(visibility), "visibility.verified")
-        XCTAssertEqual(selectedRadioId(address), "address.street")
-        for row in visibility?.rows ?? [] {
-            guard case .radio = row.control else { return XCTFail("\(row.id) should be a radio row") }
-        }
-    }
-
-    func testFuzzGroupDefaultsToHalfMile() async {
-        stubSettings()
-        let groups = await loadedGroups(makeViewModel())
-        let fuzz = group(groups, "fuzz")
-        XCTAssertEqual(fuzz?.fuzz?.stop, .halfMile)
-        XCTAssertEqual(fuzz?.fuzz?.leadIn, "How exact your task and listing pins appear on the map.")
-        XCTAssertTrue(fuzz?.rows.isEmpty ?? false)
-    }
-
-    func testActivityHasFourTogglesAllOn() async {
-        stubSettings()
-        let groups = await loadedGroups(makeViewModel())
-        let activity = group(groups, "activity")
-        XCTAssertEqual(activity?.rows.map(\.id), ["online", "recent", "nearby", "ratings"])
-        for row in activity?.rows ?? [] {
-            guard case let .toggle(isOn) = row.control else { return XCTFail("\(row.id) should be a toggle") }
-            XCTAssertTrue(isOn, "\(row.id) defaults on in the populated frame")
-        }
     }
 
     func testDataRowsCarryLeadingIconsAndDeleteIsDestructive() async {
@@ -148,32 +109,6 @@ final class PrivacyViewModelTests: XCTestCase {
         let delete = group(groups, "delete")?.rows.first
         XCTAssertEqual(delete?.id, "deleteAccount")
         XCTAssertTrue(delete?.destructive ?? false)
-    }
-
-    // MARK: - Mutations (local-only design cards)
-
-    func testSelectRadioUpdatesSelection() async {
-        stubSettings()
-        let vm = makeViewModel()
-        _ = await loadedGroups(vm)
-        await vm.selectRadio("visibility.connections")
-        XCTAssertEqual(selectedRadioId(group(currentGroups(vm), "visibility")), "visibility.connections")
-    }
-
-    func testToggleActivityFlipsLocalState() async {
-        stubSettings()
-        let vm = makeViewModel()
-        _ = await loadedGroups(vm)
-        await vm.toggleRow("online", isOn: false)
-        XCTAssertEqual(toggleValue(group(currentGroups(vm), "activity"), "online"), false)
-    }
-
-    func testSetFuzzUpdatesStop() async {
-        stubSettings()
-        let vm = makeViewModel()
-        _ = await loadedGroups(vm)
-        await vm.setFuzz(PrivacySettingsViewModel.Group.fuzz, stop: .exact)
-        XCTAssertEqual(group(currentGroups(vm), "fuzz")?.fuzz?.stop, .exact)
     }
 
     // MARK: - Search privacy (GET / PATCH /api/privacy/settings)
@@ -248,11 +183,12 @@ final class PrivacyViewModelTests: XCTestCase {
         ]
         let vm = makeViewModel()
         let groups = await loadedGroups(vm)
-        XCTAssertEqual(groups.count, 8, "a failed settings fetch must not blank the screen")
+        XCTAssertEqual(groups.count, 4, "a failed settings fetch must not blank the screen")
         XCTAssertEqual(
             group(groups, "searchPrivacy")?.helper,
-            "Search privacy could not load. Pull to refresh before changing this setting."
+            "Search privacy could not load. Try again before changing this setting."
         )
+        XCTAssertEqual(group(groups, "searchPrivacy")?.rows.first?.id, "searchPrivacyRetry", "the card offers Try again")
     }
 
     // MARK: - Delete account (DELETE /api/users/account)
@@ -451,59 +387,21 @@ final class PrivacyViewModelTests: XCTestCase {
 
     // MARK: - Stealth frame
 
-    func testStealthShowsBannerAndStrictestControls() async {
+    func testStealthShowsBanner() async {
         stubSettings()
         let vm = makeViewModel(variant: .stealth)
-        let groups = await loadedGroups(vm)
+        _ = await loadedGroups(vm)
         XCTAssertEqual(vm.banner?.title, "Stealth mode is on")
         XCTAssertEqual(vm.banner?.subtitle, "Your profile is hidden from search. Existing connections still see you.")
         XCTAssertEqual(vm.banner?.icon, .eyeOff)
         XCTAssertEqual(vm.banner?.style, .stealth)
-        XCTAssertEqual(selectedRadioId(group(groups, "visibility")), "visibility.hidden")
-        XCTAssertEqual(selectedRadioId(group(groups, "address")), "address.hidden")
-        XCTAssertEqual(group(groups, "fuzz")?.fuzz?.stop, .neighborhood)
-        for row in group(groups, "activity")?.rows ?? [] {
-            if case let .toggle(isOn) = row.control { XCTAssertFalse(isOn, "\(row.id) off in stealth") }
-        }
-        XCTAssertEqual(vm.footerCaption, "Stealth · auto-applied May 26, 2026")
+        XCTAssertNil(vm.footerCaption)
     }
 
     // MARK: - Copy parity contract
 
-    func testFooterDefault() {
-        XCTAssertEqual(makeViewModel().footerCaption, "Last updated · Mar 12, 2024")
-    }
-
-    func testHelperCopyMatchesDesign() async {
-        stubSettings()
-        let populated = await loadedGroups(makeViewModel())
-        XCTAssertEqual(
-            group(populated, "visibility")?.helper,
-            "Verified neighbors can find you and start a conversation."
-        )
-        XCTAssertEqual(
-            group(populated, "address")?.helper,
-            "Street name shows on your profile; full address only to people you hire or sell to."
-        )
-        XCTAssertEqual(
-            group(populated, "fuzz")?.helper,
-            "Pins drop within a block of you. Exact address only shared after a task is accepted."
-        )
-        XCTAssertNil(group(populated, "activity")?.helper, "Activity card has no helper in the design")
-
-        stubSettings()
-        let stealth = await loadedGroups(makeViewModel(variant: .stealth))
-        XCTAssertEqual(
-            group(stealth, "visibility")?.helper,
-            "Hidden — your profile won't show in search or recommendations."
-        )
-        XCTAssertEqual(
-            group(stealth, "address")?.helper,
-            "Address hidden everywhere. Deliveries still route correctly."
-        )
-        XCTAssertEqual(
-            group(stealth, "fuzz")?.helper,
-            "Pins fuzz to your neighborhood — buyers see only \"Park Slope\", never your block."
-        )
+    /// No made-up "Last updated" date (S3-29).
+    func testNoFooter() {
+        XCTAssertNil(makeViewModel().footerCaption)
     }
 }

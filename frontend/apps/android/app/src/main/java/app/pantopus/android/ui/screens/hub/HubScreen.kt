@@ -63,6 +63,7 @@ fun HubScreen(
     val discoveryLoading by viewModel.discoveryLoading.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
         viewModel.load()
+        viewModel.refreshUnread()
         app.pantopus.android.data.analytics.Analytics.track(
             app.pantopus.android.data.analytics.AnalyticsEvent.ScreenHubViewed,
         )
@@ -228,7 +229,7 @@ private fun FirstRunLayout(
                         avatarInitials = content.avatarInitials,
                         identity = content.identity,
                         ringProgress = content.ringProgress,
-                        unreadCount = 0,
+                        unreadCount = content.unreadCount,
                     ),
                 onAvatarTap = { onIntent(HubNavigationIntent.OpenProfile) },
                 onBellTap = { onIntent(HubNavigationIntent.OpenNotifications) },

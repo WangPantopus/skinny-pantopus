@@ -105,6 +105,9 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     public let tabs: [ListOfRowsTab] = []
 
     public private(set) var state: ListOfRowsState = .loading
+    /// Set when a reload or next page fails while mail is on screen: it stays
+    /// and this shows as a toast. The view clears it after display.
+    public var refreshFailureMessage: String?
 
     public var topBarAction: TopBarAction? {
         TopBarAction(icon: .search, accessibilityLabel: "Search mail") { [weak self] in
@@ -480,7 +483,13 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         } catch {
             isLoadingPage = false
             guard generation == loadGeneration else { return }
-            state = .error(message: (error as? APIError)?.errorDescription ?? "Couldn't load mail.")
+            let message = (error as? APIError)?.errorDescription ?? "Couldn't load mail."
+            if loadedMail.isEmpty {
+                state = .error(message: message)
+            } else {
+                // Keep the mail on screen; a failed reload or page only toasts.
+                refreshFailureMessage = message
+            }
         }
     }
 
@@ -570,20 +579,20 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             ListOfRowsState.EmptyContent(
                 icon: .wallet,
                 headline: "No earn items yet",
-                subcopy: "Complete gigs to see payouts, 1099s, and tax docs land here automatically.",
+                subcopy: "Task earnings go to your wallet in Payments.",
                 ctaTitle: "Open Earn dashboard"
             ) { [weak self] in Task { @MainActor in self?.onOpenEarn() } }
         case (.earn, .counter):
             ListOfRowsState.EmptyContent(
                 icon: .wallet,
                 headline: "Nothing to action",
-                subcopy: "Payout approvals and tax to-dos for your gigs show up here."
+                subcopy: "Earn mail that needs you shows up here."
             )
         case (.earn, .vault):
             ListOfRowsState.EmptyContent(
                 icon: .archive,
                 headline: "No saved earn mail",
-                subcopy: "Save payout statements and 1099s to find them fast."
+                subcopy: "Earn mail you save shows up here."
             )
         default:
             ListOfRowsState.EmptyContent(

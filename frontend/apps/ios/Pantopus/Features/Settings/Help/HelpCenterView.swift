@@ -13,6 +13,8 @@ import SwiftUI
 public struct HelpCenterView: View {
     private let onBack: @MainActor () -> Void
 
+    @State private var showsEmailFallback = false
+
     public init(onBack: @escaping @MainActor () -> Void) {
         self.onBack = onBack
     }
@@ -27,6 +29,7 @@ public struct HelpCenterView: View {
         )
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("helpCenter")
+        .emailFallbackAlert(address: "support@pantopus.com", isPresented: $showsEmailFallback)
     }
 
     private var headerView: some View {
@@ -80,7 +83,7 @@ public struct HelpCenterView: View {
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             PrimaryButton(title: "Email support") {
-                if let url = URL(string: "mailto:support@pantopus.app?subject=Help") {
+                if let url = URL(string: "mailto:support@pantopus.com?subject=Help") {
                     await openURL(url)
                 }
             }
@@ -93,7 +96,11 @@ public struct HelpCenterView: View {
 
     @MainActor
     private func openURL(_ url: URL) async {
-        _ = await UIApplication.shared.open(url, options: [:])
+        // No mail app → say where to write instead of doing nothing.
+        let opened = await UIApplication.shared.open(url, options: [:])
+        if !opened {
+            showsEmailFallback = true
+        }
     }
 
     private struct Section {
@@ -115,8 +122,9 @@ public struct HelpCenterView: View {
             ),
             Item(
                 question: "Who can see my address?",
-                answer: "Only verified connections — and only at the precision you set under Settings → Privacy → Address sharing. " +
-                    "The default is street-level."
+                answer: "Your profile never shows your street address. People who can see your profile see the city " +
+                    "and state on it, and whether your home is verified. Posts, tasks, and listings show only the " +
+                    "location you add to them."
             )
         ]),
         Section(heading: "Mail & messages", items: [
@@ -139,9 +147,10 @@ public struct HelpCenterView: View {
             ),
             Item(
                 question: "How do I delete my account?",
-                answer: "Go to Settings → Privacy → Delete account. " +
+                answer: "Open the menu, tap Profile & Privacy, then Delete account at the bottom. " +
                     "You'll confirm in the app and verify your identity, then your account and its data are removed. " +
-                    "Finish or cancel any gigs in progress and resolve pending payments first — those block deletion."
+                    "Finish or cancel any gigs in progress and resolve pending payments first — those block deletion. " +
+                    "If your account has payment history, contact support to close it."
             )
         ])
     ]

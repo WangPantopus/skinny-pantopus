@@ -450,7 +450,8 @@ public struct CreatorInboxView: View {
     private var emptyFootnote: some View {
         HStack(spacing: 6) {
             Icon(.shieldCheck, size: 12, color: Theme.Color.primary600)
-            Text("Only verified fans can message. Spam is filtered out by default.")
+            // The real gate: a membership on a tier that includes messages.
+            Text("Only members on a tier with messaging can message you.")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.Color.appTextMuted)
                 .multilineTextAlignment(.center)

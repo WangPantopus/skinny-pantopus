@@ -66,6 +66,7 @@ struct PlaceDashboardView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
+        .refreshFailureToast($viewModel.refreshFailureMessage)
         .sheet(isPresented: $showSwitcher) {
             PlaceSwitcherSheet(
                 viewModel: PlaceSwitcherViewModel(

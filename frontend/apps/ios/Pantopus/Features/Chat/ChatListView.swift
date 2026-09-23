@@ -45,6 +45,7 @@ public struct ChatListView: View {
         }
         .background(Theme.Color.appSurface)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .refreshFailureToast($viewModel.refreshFailureMessage)
         .task { await viewModel.load() }
         .onDisappear { viewModel.teardown() }
         .accessibilityIdentifier("chatList")
@@ -78,7 +79,7 @@ public struct ChatListView: View {
             Text("No conversations yet")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
-            Text("Message someone you've verified nearby.")
+            Text("Message a neighbor to get started.")
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
@@ -99,7 +100,7 @@ public struct ChatListView: View {
             .accessibilityIdentifier("chatListNewMessage")
             HStack(spacing: Spacing.s2) {
                 Icon(.shieldCheck, size: 13, color: Theme.Color.primary600)
-                Text("Only verified neighbors can DM you")
+                Text("People you block can't message you")
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }

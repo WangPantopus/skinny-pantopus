@@ -32,10 +32,15 @@ import app.pantopus.android.ui.theme.Spacing
  */
 @Composable
 fun ContextBand(
-    email: String,
-    lastChanged: String,
+    email: String?,
+    lastChanged: String?,
     modifier: Modifier = Modifier,
 ) {
+    // Each line shows only when its value is known; with neither, no band.
+    if (email == null && lastChanged == null) return
+    val description =
+        listOfNotNull(email?.let { "Signed in as $it." }, lastChanged?.let { "Last changed $it." })
+            .joinToString(" ")
     Column(
         modifier = modifier.fillMaxWidth().testTag("passwordChangeContextBand"),
     ) {
@@ -46,41 +51,45 @@ fun ContextBand(
                     .background(PantopusColors.appSurfaceMuted)
                     .padding(horizontal = Spacing.s4, vertical = Spacing.s3)
                     .semantics(mergeDescendants = true) {
-                        contentDescription = "Signed in as $email. Last changed $lastChanged."
+                        contentDescription = description
                     },
             verticalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-            ) {
-                PantopusIconImage(
-                    icon = PantopusIcon.Mail,
-                    contentDescription = null,
-                    size = 14.dp,
-                    tint = PantopusColors.appTextSecondary,
-                )
-                Text(
-                    text = "Signed in as $email",
-                    style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
-                    color = PantopusColors.appTextStrong,
-                )
+            if (email != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                ) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.Mail,
+                        contentDescription = null,
+                        size = 14.dp,
+                        tint = PantopusColors.appTextSecondary,
+                    )
+                    Text(
+                        text = "Signed in as $email",
+                        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                        color = PantopusColors.appTextStrong,
+                    )
+                }
             }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-            ) {
-                PantopusIconImage(
-                    icon = PantopusIcon.Clock,
-                    contentDescription = null,
-                    size = 13.dp,
-                    tint = PantopusColors.appTextMuted,
-                )
-                Text(
-                    text = "Last changed $lastChanged",
-                    style = TextStyle(fontSize = 11.sp),
-                    color = PantopusColors.appTextMuted,
-                )
+            if (lastChanged != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                ) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.Clock,
+                        contentDescription = null,
+                        size = 13.dp,
+                        tint = PantopusColors.appTextMuted,
+                    )
+                    Text(
+                        text = "Last changed $lastChanged",
+                        style = TextStyle(fontSize = 11.sp),
+                        color = PantopusColors.appTextMuted,
+                    )
+                }
             }
         }
         HorizontalDivider(color = PantopusColors.appBorder, thickness = 1.dp)

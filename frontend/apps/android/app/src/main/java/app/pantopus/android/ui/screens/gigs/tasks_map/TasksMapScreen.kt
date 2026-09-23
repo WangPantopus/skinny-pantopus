@@ -958,7 +958,7 @@ internal fun TasksMapEmptyHero(
         )
         Spacer(modifier = Modifier.height(5.dp))
         Text(
-            text = "Be the first to post one — verified neighbors within a half-mile will see it.",
+            text = "Be the first to post one — people nearby will see it.",
             fontSize = 12.5.sp,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,
