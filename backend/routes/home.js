@@ -2358,6 +2358,35 @@ router.delete('/:id/public-data/:dataId', verifyToken, async (req, res) => {
 // ============================================================================
 
 
+// ============ HOME GIGS ============
+
+/**
+ * GET /api/homes/:id/gigs
+ * Tasks the household posted from this Home (Gig.origin_home_id), newest
+ * first. Drafts stay private to their poster.
+ */
+router.get('/:id/gigs', verifyToken, async (req, res) => {
+  if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
+  try {
+    const { id: homeId } = req.params;
+    const access = await checkHomePermission(homeId, req.user.id, 'home.view');
+    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
+    const { data: gigs, error } = await supabaseAdmin
+      .from('Gig')
+      .select('id, title, status, price, category, scheduled_start, created_at')
+      .eq('origin_home_id', homeId)
+      .neq('status', 'draft')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    res.json({ gigs: gigs || [] });
+  } catch (err) {
+    logger.error('Error fetching home gigs', { error: err.message, homeId: req.params.id });
+    res.status(500).json({ error: 'Failed to fetch home tasks' });
+  }
+});
+
 // ============ HOME NEARBY GIGS ============
 
 /**
@@ -2381,9 +2410,11 @@ router.get('/:id/nearby-gigs', verifyToken, async (req, res) => {
       .eq('id', homeId)
       .single();
 
-    if (homeError || !home || !home.location) {
+    if (homeError || !home) {
       return res.status(400).json({ error: 'Home location not found' });
     }
+    // A Home without coordinates has no nearby tasks yet: an empty list, not an error.
+    if (!home.location) return res.json({ gigs: [] });
 
     // Parse geography column (GeoJSON or WKT format)
     const coords = parsePostGISPoint(home.location);
