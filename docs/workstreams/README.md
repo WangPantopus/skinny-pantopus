@@ -7,7 +7,17 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — 2026-09-23T21:36:01Z (Codex coordinator takeover)
+## CURRENT RESUME POINT — 2026-09-23T21:39:56Z (isolated runtime recovery)
+
+- **Verified recovery boundary:** both local Docker contexts resolve to the same empty engine; old stream ports had no listeners. The coordinator approved fresh canonical replay and synthetic fixtures only, on the existing stream ports. No database archive restore, founder data repair, existing ledger rewrite or application schema change is authorized.
+- **Stream 3:** fresh owned API64531/SQL64532 replay succeeded, 89 canonical migrations through `20260923000300`, source `cef95ab67864ccca3ca243cc0d936a87d342cc8f`. Geo Android build and fresh fixture setup continue. Retain the accepted iOS evidence.
+- **Stream 2:** fresh `pantopus-stream2-native-resume-r2` on API64553/SQL64554 replay succeeded with the same canonical 89-entry schema. #325 checkout is pinned at `7034669ae72fdd19acfa5ad738d700625bb4bd1c`; simulator build and fresh auth/fixture recovery continue. The prior API health was 503; a listener alone is not acceptance.
+- **Stream 1:** released to replay its prepared synthetic `pantopus-stream1-resume-20260923` on API64561/SQL64562; Shares this with Shared UX later. Stream1 fixtures use `f9230b01`, Shared UX must use its distinct prefix. No data is recovered merely by recreating a schema.
+- **Batch preflight:** #356/#388 merge cleanly together at unchanged heads; no files overlap between them. Coordinator read current diffs and verified all 37/34 evidence-manifest files respectively. Current-head CI still running; #325 iOS and geo Android remain real-app gates. No batch PR published yet.
+- **Tool adaptations:** merge runner now uses the coordination checkout instead of the forbidden founder checkout. Batch-builder new commits no longer falsely attribute Codex-generated merge messages to Claude. Durable scripts updated here; prior authorship/history retained.
+- **Limits/next:** no fresh real-app pass yet. Complete pending journeys and green exact-head batch4 before progressing through unpublished groups. Founder queue unchanged. Agent identities, three coordinator decisions and hard limits are in the preceding takeover block. Keep evidence store/worktree intact.
+
+## Resume point history — 2026-09-23T21:36:01Z (Codex coordinator takeover)
 
 The founder resumed the paused effort. Read the final handoff below for preserved evidence and remaining scope; this block corrects its Git/runtime snapshot. Acceptance remains **13 closed / 67 partial**. No fresh app journey is claimed yet.
 

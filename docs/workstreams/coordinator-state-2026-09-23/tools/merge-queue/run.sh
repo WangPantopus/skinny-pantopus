@@ -2,7 +2,7 @@
 # Serial exact-head merge queue for WangPantopus/skinny-pantopus (coordinator-reviewed PRs only).
 # Reads the next PR number from $Q/queue.txt (one per line; append to add). Logs one line per event to $Q/log.txt.
 Q=/private/tmp/pantopus-tools/merge-queue
-cd /Users/yingpengwang/skinny-pantopus
+cd /Users/yingpengwang/pantopus-coordination || exit 1
 log(){ echo "$(date -u +%H:%M:%S) $*" >> $Q/log.txt; }
 log "QUEUE START"
 while true; do

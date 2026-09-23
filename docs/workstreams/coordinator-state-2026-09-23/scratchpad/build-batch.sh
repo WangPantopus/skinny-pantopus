@@ -13,7 +13,7 @@ for n in "$@"; do
     echo "SKIP $n ${head:0:9} conflict: $files" | tee -a "$out"; continue
   fi
   tree=$(echo "$res" | head -1)
-  msg=$(printf 'Merge PR #%s: %s\n\nHead %s, merged unchanged as part of a combined merge.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n' "$n" "$title" "$head")
+  msg=$(printf 'Merge PR #%s: %s\n\nHead %s, merged unchanged as part of a combined merge.\n' "$n" "$title" "$head")
   cur=$(git commit-tree "$tree" -p "$cur" -p "$head" -m "$msg")
   echo "OK $n $head $cur" | tee -a "$out"
 done
