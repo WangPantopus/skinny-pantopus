@@ -121,7 +121,12 @@ public final class MeViewModel {
         }
 
         let personal = Self.buildPersonal(profile: profile.user, stats: stats)
-        let home = Self.buildHome(homes: homes?.sharedHomes ?? [], profileLocality: Self.localityString(profile.user))
+        // `homes == nil` is a failed read; it must not read as "No shared Home".
+        let home = Self.buildHome(
+            homes: homes?.sharedHomes ?? [],
+            profileLocality: Self.localityString(profile.user),
+            homesFailed: homes == nil
+        )
         let business = Self.buildBusiness(profile: profile.user)
         state = .loaded(personal: personal, home: home, business: business)
         await fetchInsights()
@@ -278,15 +283,21 @@ private extension MeViewModel {
         )
     }
 
-    private static func buildHome(homes: [MyHome], profileLocality: String?) -> MeIdentityContent {
+    private static func buildHome(
+        homes: [MyHome],
+        profileLocality: String?,
+        homesFailed: Bool = false
+    ) -> MeIdentityContent {
         guard let primary = homes.first(where: { $0.isPrimaryOwner == true }) ?? homes.first else {
             return MeIdentityContent(
                 identity: .home,
                 displayName: "Your Homes",
                 initials: "H",
-                handle: "No shared Home",
+                handle: homesFailed ? "Couldn't load your homes" : "No shared Home",
                 locality: profileLocality,
-                tagline: "Open My homes for private tasks, invitations and verification progress.",
+                tagline: homesFailed
+                    ? "Check your connection, then open My homes to try again."
+                    : "Open My homes for private tasks, invitations and verification progress.",
                 verified: false,
                 stats: [
                     MeStat(id: "bills", value: "—", label: "Bills due"),
@@ -334,11 +345,11 @@ private extension MeViewModel {
         // and the user understands the destination.
         MeIdentityContent(
             identity: .business,
-            displayName: "Add a business",
+            displayName: "Your Businesses",
             initials: "B",
-            handle: "No business yet",
+            handle: "Business pages",
             locality: localityString(profile),
-            tagline: "Business identity is set up in the web app today; mobile read APIs land later.",
+            tagline: "Open My businesses to manage a business, create one, or claim a page that's already listed.",
             verified: false,
             stats: [
                 MeStat(id: "orders", value: "—", label: "Orders"),
