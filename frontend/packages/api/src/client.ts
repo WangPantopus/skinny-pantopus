@@ -755,13 +755,20 @@ apiClient.interceptors.response.use(
       : typeof responseData?.error === 'string' ? responseData.error : error.code;
     const userFacingMessage = typeof responseData?.message === 'string' ? responseData.message : '';
     const machineError = typeof responseData?.error === 'string' ? responseData.error : '';
+    // Transport and proxy failures carry no API envelope. Screens show this
+    // message, so use plain copy rather than axios's "Request failed with status
+    // code 500" or the request URL; the dev log below keeps the status and URL.
+    const transportMessage = error.code === 'ERR_CANCELED'
+      ? error.message
+      : isNetworkError
+        ? 'Network error. Please check your connection and try again.'
+        : 'Something went wrong. Please try again.';
     const errorMessage = isValidationError && validationErrors.length > 0
       ? validationErrors[0]
       : (
           userFacingMessage ||
           machineError ||
-          (isNetworkError ? `Network error: cannot reach API at ${requestUrl || API_BASE_URL}` : '') ||
-          error.message ||
+          transportMessage ||
           'An error occurred'
         );
 

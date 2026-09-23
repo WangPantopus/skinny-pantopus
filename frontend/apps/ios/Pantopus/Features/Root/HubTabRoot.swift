@@ -1025,6 +1025,12 @@ public struct HubTabRoot: View {
             path.append(.homeDashboard(homeId: homeId))
             path.append(.waitingRoom(homeId: homeId))
             _ = router.consume()
+        case let .bookingDetail(bookingId):
+            path.append(.scheduling(.bookingDetail(owner: .personal, bookingId: bookingId)))
+            _ = router.consume()
+        case .myBookings:
+            path.append(.scheduling(.customerMyBookings))
+            _ = router.consume()
         default:
             break
         }
