@@ -385,9 +385,26 @@ async function topBiddersByGig(gigIds) {
   return byGigId;
 }
 
+// `Gig.items` is jsonb. Older writers stored it as a JSON string ('[]' or '[{…}]'), which clients
+// reading an array can't decode. Serve the array: a string that holds one is parsed, and any other
+// value is served as no items. A missing or null value is left as it is.
+function normalizeGigItems(items) {
+  if (items == null || Array.isArray(items)) return items;
+  if (typeof items === 'string') {
+    try {
+      const parsed = JSON.parse(items);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 function redactGigTracking(gig, canViewPrivateWork = false) {
   if (!gig) return null;
   const safe = { ...gig };
+  if ('items' in safe) safe.items = normalizeGigItems(safe.items);
   // Share credentials belong only to the explicit share command. Exact helper
   // coordinates belong to the existing consent-gated active-status reader.
   for (const key of ['status_share_token', 'status_share_expires_at', 'helper_last_location']) delete safe[key];
@@ -1141,7 +1158,7 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
       is_urgent: is_urgent || false,
       tags: tags || [],
       ref_listing_id: ref_listing_id || null,
-      items: items && items.length > 0 ? JSON.stringify(items) : '[]',
+      items: Array.isArray(items) ? items : [],
       source_type: source_type || null,
       source_id: source_id || null,
       // Magic Task fields
@@ -2599,7 +2616,7 @@ router.get('/', optionalAuth, async (req, res) => {
           locationUnlocked,
           is_urgent: g.is_urgent,
           tags: g.tags,
-          items: g.items,
+          items: normalizeGigItems(g.items),
           scheduled_start: g.scheduled_start,
           attachments: g.attachments,
           first_image: extractFirstImage(g.attachments),
@@ -3901,10 +3918,6 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
       updateData.geocode_created_at = new Date().toISOString();
 
       delete updateData.location;
-    }
-
-    if (Array.isArray(updateData.items)) {
-      updateData.items = updateData.items.length ? JSON.stringify(updateData.items) : '[]';
     }
 
     const { data: updatedGig, error } = await supabaseAdmin
