@@ -115,7 +115,12 @@ async function ensureTodayItems(userId, today) {
       logger.error('Mail day: queue read failed', { userId, error: queueErr.message });
       return 0;
     }
-    const rows = queue || [];
+    // A triage piece carries its letter's subject and sender: materialize only
+    // mail this member may see (their own, or Home letters the Home mail rule
+    // in utils/homeMailAccess shows them; M01). A failed check writes nothing.
+    const { visibleMailIds } = require('../utils/homeMailAccess');
+    const visible = await visibleMailIds((queue || []).map((q) => q.mail_id), userId, homeIds);
+    const rows = (queue || []).filter((q) => visible.has(q.mail_id));
     if (rows.length === 0) return 0;
 
     const nowIso = new Date().toISOString();
