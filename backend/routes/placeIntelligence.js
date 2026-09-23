@@ -12,6 +12,7 @@
 // ============================================================
 
 const express = require('express');
+const Joi = require('joi');
 const router = express.Router();
 
 const verifyToken = require('../middleware/verifyToken');
@@ -22,6 +23,10 @@ const { PLACE_SECTION_IDS } = require('../serializers/placeIntelligenceSerialize
 const logger = require('../utils/logger');
 
 const VALID_SECTION_IDS = new Set(PLACE_SECTION_IDS);
+
+// A malformed Home id is a 400, as on GET /api/homes/:id, not a failed
+// permission lookup reported as a 500.
+const isHomeId = (id) => !Joi.string().uuid().validate(id).error;
 
 // `?sections=weather,flood` → validated id array (lazy section load),
 // null when the param is absent/empty (⇒ compose the full launch set).
@@ -40,6 +45,7 @@ function parseSectionsParam(raw) {
 router.get('/:id/intelligence', verifyToken, async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
+  if (!isHomeId(id)) return res.status(400).json({ error: 'Invalid Home id' });
   try {
     const { sectionIds, error: sectionsError } = parseSectionsParam(req.query.sections);
     if (sectionsError) {
@@ -79,6 +85,7 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
 router.put('/:id/systems/:key', verifyToken, async (req, res) => {
   const { id, key } = req.params;
   const userId = req.user.id;
+  if (!isHomeId(id)) return res.status(400).json({ error: 'Invalid Home id' });
 
   try {
     if (!SYSTEM_KEYS.includes(key)) {

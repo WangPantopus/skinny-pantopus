@@ -207,7 +207,7 @@ describe('GET /geo/autocomplete', () => {
     await autocompleteHandler(req, res);
 
     expect(res._status).toBe(500);
-    expect(res._json).toHaveProperty('error', 'Mapbox down');
+    expect(res._json).toHaveProperty('error', 'Server error');
   });
 
   it('logs telemetry for each request', async () => {
@@ -286,7 +286,7 @@ describe('POST /geo/resolve', () => {
     await resolveHandler(req, res);
 
     expect(res._status).toBe(500);
-    expect(res._json).toHaveProperty('error', 'resolve failed');
+    expect(res._json).toHaveProperty('error', 'Server error');
   });
 });
 
@@ -354,7 +354,7 @@ describe('GET /geo/reverse', () => {
     await reverseHandler(req, res);
 
     expect(res._status).toBe(500);
-    expect(res._json).toHaveProperty('error', 'connection timeout');
+    expect(res._json).toHaveProperty('error', 'Server error');
   });
 });
 

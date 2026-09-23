@@ -815,7 +815,9 @@ function DashboardTab({
             <TasksCardPreview tasks={tasks} members={members} activeTasks={activeTasks} onExpand={() => onExpandCard('tasks')} />
           )}
 
-          {(homeGigs.length > 0 || nearbyGigs.length > 0 || entityErrors.homeGigs || entityErrors.nearbyGigs) && (
+          {/* Shown whenever the member can view the Home, so "No tasks posted" and the card's
+              "Post Home Help Task" stay reachable when nothing is posted yet. */}
+          {can('home.view') && (
             <HomeSummaryBoundary title="Home help" error={entityErrors.homeGigs || entityErrors.nearbyGigs || null} loading={false} onRetry={onReloadData}><HomeHelpCardPreview homeGigs={homeGigs} nearbyGigs={nearbyGigs} onExpand={() => onExpandCard('homehelp')} /></HomeSummaryBoundary>
           )}
 

@@ -9,6 +9,8 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { getPublishRequirements } = require('../utils/businessConstants');
+const { getBusinessMemberIdsByRole } = require('../utils/businessPermissions');
+const notificationService = require('../services/notificationService');
 
 const MAX_REMINDERS = 3;
 
@@ -76,17 +78,23 @@ async function draftBusinessReminder() {
 
     const notifBody = `Your ${bizUser.name} profile is almost ready! ${missingText} It only takes a few minutes.`;
 
-    // Insert in-app notification
+    // In-app notification. The business account has no sign-in, so its
+    // owners and admins get it, with a link to the business dashboard.
     try {
-      await supabaseAdmin.from('Notification').insert({
-        user_id: businessId,
-        type: 'draft_business_reminder',
-        title: `${bizUser.name} is ${completeness}% complete`,
-        body: notifBody,
-        data: { business_id: businessId, completeness, missing },
-      });
+      const recipients = await getBusinessMemberIdsByRole(businessId, ['owner', 'admin']);
+      for (const userId of recipients) {
+        await notificationService.createNotification({
+          userId,
+          type: 'draft_business_reminder',
+          title: `${bizUser.name} is ${completeness}% complete`,
+          body: notifBody,
+          link: `/app/businesses/${businessId}/dashboard`,
+          metadata: { business_id: businessId, completeness, missing },
+          context: 'personal',
+        });
+      }
     } catch (notifErr) {
-      logger.warn('draftBusinessReminder: notification insert failed', { businessId, error: notifErr.message });
+      logger.warn('draftBusinessReminder: notification failed', { businessId, error: notifErr.message });
     }
 
     // Send email if available

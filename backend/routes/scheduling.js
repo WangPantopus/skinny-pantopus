@@ -17,11 +17,13 @@ const { asyncHandler } = require('../errorHandler');
 const logger = require('../utils/logger');
 const availabilityService = require('../services/scheduling/availabilityService');
 const bookingService = require('../services/scheduling/bookingService');
+const { hostBookingLink } = require('../services/scheduling/bookingNotifyService');
 const bookingMetrics = require('../services/scheduling/bookingMetricsService');
 const schedulingNotifyPrefs = require('../services/scheduling/schedulingNotifyPrefs');
 const packages = require('../services/scheduling/packageService');
 const notificationService = require('../services/notificationService');
 const emailService = require('../services/emailService');
+const { isBlocked } = require('../services/blockService');
 const { resolveOwner, assertCanManageOwner, ownerColumns, normalizeEmail, generateToken } = require('../services/scheduling/schedulingShared');
 
 router.use(verifyToken);
@@ -1267,12 +1269,25 @@ router.get('/invoices/:id', withOwner('view'), asyncHandler(async (req, res) => 
 router.post('/invoices/:id/send', withOwner('edit'), asyncHandler(async (req, res) => {
   const { data: inv } = await supabaseAdmin.from('BusinessInvoice').select('*').eq('id', req.params.id).maybeSingle();
   if (!inv || inv.business_user_id !== req.scheduling.ownerId) return res.status(404).json({ error: 'NOT_FOUND' });
+  // Same rule as creating the invoice: someone who has blocked the business
+  // (or whom it has blocked) can't be sent it, and a failed check refuses.
+  if (inv.recipient_user_id) {
+    let blocked;
+    try {
+      blocked = await isBlocked(inv.recipient_user_id, inv.business_user_id);
+    } catch (err) {
+      return res.status(503).json({ error: "Couldn't send the invoice right now. Please try again.", code: err.code });
+    }
+    if (blocked) return res.status(422).json({ error: 'Unable to send an invoice to this person.' });
+  }
   // Notify the recipient in-app (no status mutation — avoid touching the gig invoice state machine).
   if (inv.recipient_user_id) {
+    const currency = String(inv.currency || 'USD').toUpperCase();
+    const amount = (inv.total_cents / 100).toFixed(2);
     await notificationService.createNotification({
       userId: inv.recipient_user_id, type: 'invoice_sent', title: 'You have a new invoice',
-      body: `Invoice for ${(inv.total_cents / 100).toFixed(2)} ${inv.currency || 'USD'}`, icon: '🧾',
-      link: `/app/invoices/${inv.id}`, metadata: { invoice_id: inv.id }, context: 'personal',
+      body: currency === 'USD' ? `Invoice for $${amount}` : `Invoice for ${amount} ${currency}`, icon: '🧾',
+      link: `/app/invoice/${inv.id}`, metadata: { invoice_id: inv.id }, context: 'personal',
     });
   }
   res.json({ ok: true });
@@ -1387,7 +1402,7 @@ router.post('/bookings/:id/nudge', validate(Joi.object({ message: Joi.string().m
   if (booking.invitee_user_id) {
     // The host detail is owner-only; the invitee's destination is My bookings.
     const link = booking.invitee_user_id === booking.host_user_id
-      ? `/app/profile/schedule/bookings/${booking.id}` : '/app/scheduling/my-bookings';
+      ? hostBookingLink(booking) : '/app/scheduling/my-bookings';
     await notificationService.createNotification({ userId: booking.invitee_user_id, type: 'booking_nudge', title: 'A note about your booking', body: msg, icon: '📅', link, metadata: { booking_id: booking.id }, context: 'personal' });
   } else if (booking.invitee_email) {
     await emailService.sendEmail({ to: booking.invitee_email, subject: 'A note about your booking', html: `<p>${msg.replace(/</g, '&lt;')}</p>` });

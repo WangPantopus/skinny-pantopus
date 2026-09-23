@@ -5,7 +5,7 @@ const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
-const { getAccessibleHomeIds, canAccessMail, homeMailFilter, visibleMailFilter } = require('../utils/homeMailAccess');
+const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, homeMailFilter, visibleMailFilter } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -685,25 +685,28 @@ const getHomeForRouting = async (homeId) => {
   return home || null;
 };
 
+// Who may send a letter to a Home: anyone who can open the Home's mail (the
+// Home mail rule), and its owners, the same test as isUserLinkedToHome. It used
+// finance.view, which only owners hold, so a resident could not write to their
+// own Home.
 const hasHomeAccess = async (homeId, userId) => {
   const home = await getHomeForRouting(homeId);
   if (!home) {
     return { allowed: false, home: null };
   }
 
-  const mailAccess = await checkHomePermission(homeId, userId, 'finance.view');
-  if (mailAccess.hasAccess) {
-    return { allowed: true, home };
-  }
-
-  return { allowed: false, home };
+  return { allowed: await isUserLinkedToHome(home, userId), home };
 };
 
+// "Lives at this home" for a letter addressed to a person at a Home: they can
+// open this Home's mail under the Home mail rule (utils/homeMailAccess), or
+// they own it. It used finance.view, which only owners hold, so a letter to any
+// other resident was refused.
 const isUserLinkedToHome = async (home, userId) => {
   if (!home || !userId) return false;
-
-  const mailAccess = await checkHomePermission(home.id, userId, 'finance.view');
-  return mailAccess.hasAccess;
+  if ((await trustedHomeIdsOrThrow(userId)).includes(home.id)) return true;
+  const access = await checkHomePermission(home.id, userId);
+  return access.hasAccess === true && access.isOwner === true;
 };
 
 const hasVerifiedSenderHome = async (userId) => {
@@ -1224,6 +1227,13 @@ const autoFanoutMailTargets = async ({
   // Determine which fan-out targets to create based on type AND outcomes
   const targets = [];
 
+  // A letter meant for one person (attn_only) creates no household record: a
+  // HomeBill, HomeDocument, HomePackage or HomeTask is read by the household,
+  // so the attention person keeps the letter in their mailbox instead.
+  if (String(mail.delivery_visibility || '') === 'attn_only') {
+    return [];
+  }
+
   // Type-based fan-out
   if (rawType === 'bill' || rawType === 'statement' || mailType === 'bill' || oc.includes('pay_now')) {
     targets.push('bill');
@@ -1360,7 +1370,12 @@ router.get('/', verifyToken, async (req, res) => {
         priority,
         attachments,
         expires_at,
-        created_at
+        created_at,
+        sender:sender_user_id (
+          id,
+          username,
+          name
+        )
       `, { count: 'exact' })
       .eq('archived', archived === 'true')
       .order('created_at', { ascending: false })
@@ -1957,6 +1972,18 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     if (deliveryTargetType === 'user' && addressHomeId && recipientUserId) {
       const linkedToHome = await isUserLinkedToHome(addressHome, recipientUserId);
       if (!linkedToHome) {
+        return res.status(400).json({
+          error: 'That person doesn\u2019t live at the selected home address.'
+        });
+      }
+    }
+
+    // A Home letter's attention person must be able to open this Home's mail
+    // (the Home mail rule). Otherwise an attn_only letter was stored for nobody,
+    // or failed the attention foreign key when the person's account was gone.
+    if (deliveryTargetType === 'home' && attnUserId) {
+      const attnHomeIds = await trustedHomeIdsOrThrow(attnUserId);
+      if (!addressHome || !attnHomeIds.includes(addressHome.id)) {
         return res.status(400).json({
           error: 'That person doesn\u2019t live at the selected home address.'
         });
