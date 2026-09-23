@@ -729,11 +729,13 @@ class PulseFeedViewModel
         private fun fetchNextPage() {
             val cursorCreatedAt = nextCursorCreatedAt ?: return
             val cursorId = nextCursorId ?: return
+            val generation = fetchGeneration
             _isLoadingMore.value = true
             viewModelScope.launch {
                 try {
                     // Later pages stay in the area the first page used.
                     val area = lastArea ?: resolvedArea()
+                    if (generation != fetchGeneration) return@launch
                     when (
                         val result =
                             repo.feed(
@@ -750,6 +752,7 @@ class PulseFeedViewModel
                             )
                     ) {
                         is NetworkResult.Success -> {
+                            if (generation != fetchGeneration) return@launch
                             val known = loadedPosts.map { it.id }.toSet()
                             loadedPosts = loadedPosts + result.data.posts.filter { it.id !in known }
                             applyPagination(result.data.pagination)
@@ -758,7 +761,7 @@ class PulseFeedViewModel
                         is NetworkResult.Failure -> Unit // keep the loaded rows; retry on next appear
                     }
                 } finally {
-                    _isLoadingMore.value = false
+                    if (generation == fetchGeneration) _isLoadingMore.value = false
                 }
             }
         }
@@ -806,6 +809,7 @@ class PulseFeedViewModel
 
         private fun fetch(isRefresh: Boolean = false) {
             val generation = ++fetchGeneration
+            _isLoadingMore.value = false
             loading = true
             if (isRefresh) _isRefreshing.value = true
             if (_state.value !is PulseFeedUiState.Loaded) {
@@ -814,7 +818,7 @@ class PulseFeedViewModel
             viewModelScope.launch {
                 try {
                     val area = resolvedArea()
-                    lastArea = area
+                    if (generation != fetchGeneration) return@launch
                     val result =
                         repo.feed(
                             surface = _surface.value.backendSurface,
@@ -831,6 +835,7 @@ class PulseFeedViewModel
                     when (result) {
                         is NetworkResult.Success -> {
                             val response = result.data
+                            lastArea = area
                             scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
                             loadedPosts = response.posts
                             applyPagination(response.pagination)

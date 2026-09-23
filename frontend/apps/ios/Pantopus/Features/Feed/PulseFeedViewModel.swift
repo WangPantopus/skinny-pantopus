@@ -561,12 +561,13 @@ public final class PulseFeedViewModel {
     private func fetch() async {
         fetchGeneration += 1
         let generation = fetchGeneration
+        isLoadingMore = false
         isLoading = true
         defer { if generation == fetchGeneration { isLoading = false } }
         if case .loaded = state {} else { state = .loading }
         do {
             let area = await resolvedArea()
-            lastArea = area
+            guard generation == fetchGeneration else { return }
             let response: FeedResponse = try await api.request(
                 PostsEndpoints.feed(
                     surface: surface.backendSurface,
@@ -582,6 +583,7 @@ public final class PulseFeedViewModel {
             )
             // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
             guard generation == fetchGeneration else { return }
+            lastArea = area
             loadedItems = response.posts
             applyPagination(response.pagination)
             scopeLabel = response.posts.first?.locationName ?? scopeLabel
@@ -602,11 +604,13 @@ public final class PulseFeedViewModel {
     /// Keyset-paged follow-up fetch — appends below the loaded rows.
     private func fetchNextPage() async {
         guard let cursorCreatedAt = nextCursorCreatedAt, let cursorId = nextCursorId else { return }
+        let generation = fetchGeneration
         isLoadingMore = true
-        defer { isLoadingMore = false }
+        defer { if generation == fetchGeneration { isLoadingMore = false } }
         do {
             // Later pages stay in the area the first page used.
             let area = if let lastArea { lastArea } else { await resolvedArea() }
+            guard generation == fetchGeneration else { return }
             let response: FeedResponse = try await api.request(
                 PostsEndpoints.feed(
                     surface: surface.backendSurface,
@@ -622,12 +626,14 @@ public final class PulseFeedViewModel {
                     eventKey: isInSportsLane ? resolvedEventKey : nil
                 )
             )
+            guard generation == fetchGeneration else { return }
             // Seeded/system cards can repeat across pages — dedupe by id.
             let known = Set(loadedItems.map(\.id))
             loadedItems += response.posts.filter { !known.contains($0.id) }
             applyPagination(response.pagination)
             rebuildLoadedState()
         } catch {
+            guard generation == fetchGeneration else { return }
             // Leave the loaded rows alone; the next scroll retries.
             hasMore = true
         }
