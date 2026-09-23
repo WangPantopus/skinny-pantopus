@@ -176,6 +176,9 @@ public final class PulseFeedViewModel {
     private var resolvedLongitude: Double?
     private var loadedItems: [FeedPostDTO] = []
     private var isLoading = false
+    /// Bumped per fetch; only the latest fetch's response is applied, so a
+    /// filter tapped while a load is in flight still takes effect.
+    private var fetchGeneration = 0
     private var hasMore = false
     private var nextCursorCreatedAt: String?
     private var nextCursorId: String?
@@ -547,9 +550,10 @@ public final class PulseFeedViewModel {
     // MARK: - Fetch
 
     private func fetch() async {
-        if isLoading { return }
+        fetchGeneration += 1
+        let generation = fetchGeneration
         isLoading = true
-        defer { isLoading = false }
+        defer { if generation == fetchGeneration { isLoading = false } }
         if case .loaded = state {} else { state = .loading }
         do {
             let coords = await resolvedCoordinates()
@@ -565,12 +569,15 @@ public final class PulseFeedViewModel {
                     eventKey: isInSportsLane ? resolvedEventKey : nil
                 )
             )
+            // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
+            guard generation == fetchGeneration else { return }
             loadedItems = response.posts
             applyPagination(response.pagination)
             scopeLabel = response.posts.first?.locationName ?? scopeLabel
             recomputeRadiusSuggestion()
             rebuildLoadedState()
         } catch {
+            guard generation == fetchGeneration else { return }
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load posts."
             state = .error(message: message)
         }
@@ -728,7 +735,9 @@ public final class PulseFeedViewModel {
             authorName: post.creator?.displayName ?? "Pantopus user",
             authorInitials: initials,
             // Beacon credentials come from the public profile, never the surface.
-            authorVerified: surface == .beacons ? post.creator?.credential?.status == "verified" : isBusiness,
+            // Other surfaces carry no verification field, so no badge (being
+            // a business isn't being verified).
+            authorVerified: surface == .beacons && post.creator?.credential?.status == "verified",
             avatarTint: isBusiness ? .violet : .sky,
             meta: Self.metaString(post: post, intent: intent),
             intent: intent,
