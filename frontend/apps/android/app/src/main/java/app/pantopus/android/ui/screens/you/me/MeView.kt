@@ -73,6 +73,9 @@ fun MeView(
     val activeIdentity by viewModel.activeIdentity.collectAsStateWithLifecycle()
     val monthlyReceipt by viewModel.monthlyReceipt.collectAsStateWithLifecycle()
     val inviteProgress by viewModel.inviteProgress.collectAsStateWithLifecycle()
+    // The invite code loads after the progress card; collecting it recomposes
+    // the card so "Invite a neighbor" appears once a real code is in.
+    val inviteCode by viewModel.inviteCode.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) { viewModel.load() }
@@ -105,7 +108,10 @@ fun MeView(
                     onShareReceipt = {
                         viewModel.receiptShareMessage()?.let { shareText(context, it) }
                     },
-                    onShareInvite = { shareText(context, viewModel.inviteShareMessage()) },
+                    onShareInvite =
+                        inviteCode?.let { viewModel.inviteShareMessage() }?.let { message ->
+                            { shareText(context, message) }
+                        },
                 )
             }
         }
@@ -145,7 +151,7 @@ internal fun PopulatedFrame(
     expandMonthlyReceipt: Boolean = false,
     inviteProgress: InviteProgressDto? = null,
     onShareReceipt: () -> Unit = {},
-    onShareInvite: () -> Unit = {},
+    onShareInvite: (() -> Unit)? = {},
 ) {
     Column(
         modifier =

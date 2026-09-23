@@ -86,6 +86,11 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
             verified = nil
             profileVisibility = nil
         }
+        // "Stripe connected" chip on Payments & payouts: only when the
+        // connected account can take charges and pay out. No account (404)
+        // or a failed read shows the plain chevron.
+        let connect: ConnectAccountStatusResponse? = try? await api.request(ConnectEndpoints.accountStatus())
+        stripeConnected = connect.map { $0.account.chargesEnabled && $0.account.payoutsEnabled }
         rebuild()
     }
 
