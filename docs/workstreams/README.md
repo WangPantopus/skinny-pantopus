@@ -5,7 +5,70 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 07:24 UTC (coordinator session `92cc4526`)
+## CURRENT RESUME POINT — September 23, 2026, 07:52 UTC (coordinator session `92cc4526`)
+
+This updates the 07:24 block below; read both. The count is **10 closed / 70 partial**.
+
+### Merged
+- #218 → `4f41c4217` at 07:28 UTC.
+
+### Queue
+213 261 258 259 231 221 236 219 214 215 224 199 208 251 252 255 256 260 257 263.
+- #261 (a privacy fix) goes right after #213.
+- #260, #257 and #263 were added as their CI went green.
+
+### New PRs
+- **#260 (Stream 2): web route-drift cleanups.**
+  - Item 5: the Mail Day banner stays dismissed for the rest of the day in this browser.
+  - Item 7: the dead hub-context calls are removed.
+  - Item 8: the error copy now says "home help" instead of the internal key.
+  - Bundle `…-web-route-drift-cleanups-r1`, MANIFEST `71e127e7…`.
+- **#261 (Stream 2, PRIVACY): the `mail_extracted` compatibility retry is narrowed.**
+  - Before: the retry fired on any error that named a new column. An attn_only Home letter whose attention user had
+    been deleted hit `Mail_attn_user_id_fk` (23503). The retry dropped the attention and visibility fields, the send
+    returned 201, and every household member was notified and could open the letter.
+  - Now: the retry fires only on PGRST204 or 42703.
+  - Bundle `…-mail-compat-retry-narrow-r1`, MANIFEST `23d0f339…`.
+- **#263 (Stream 2):** a malformed Home id now gets 400, not 500, on the intelligence and systems routes. MANIFEST
+  `e245c1a7…`.
+
+### Fee repair: every review finding reproduced on #253's head with real Stripe TEST (harness 18136)
+- **F1a:** the poster's worker-no-show report arrives during the worker's fee capture. The fee is captured and the
+  payment stays stuck in `capture_pending`.
+- **F1b:** a Start Work in the same window produces `in_progress` with 25% captured.
+- **F3:** a report 3 h before the scheduled start charged 313.
+- **F4:** a lost capture followed by hold expiry leaves the gig `assigned` forever.
+- **F2:**
+  - the admin refund returns 409;
+  - a dashboard refund makes the webhook fail with 500 forever;
+  - the worker is still credited 266.
+- **F6:** Stripe TEST refuses `amount_to_capture` below 50¢ (`amount_too_small`).
+- **F5:** history shows the full 1250/1063 amounts.
+- **F8a:** a fee the webhook records sends no notice to the poster.
+
+The repairs are in progress. **FYI for the founder (coordinator-approved, revisitable):** fees under Stripe's $0.50
+minimum are waived. The owner's late cancel becomes a fee-free release; a worker no-show report cancels and releases
+the hold.
+
+### Coordinator-approved functional repairs (Stream 2)
+- **Defect A:** v1 "Person @ Home" failed for every non-owner resident. `isUserLinkedToHome` needs `finance.view`,
+  which only owners have, so the user saw the false "That person doesn't live at the selected home address".
+  - Fix: the Home mail rule, in the same PR as the attention-user validation (a clear 400).
+- **Defect B:** web compose errors render behind the modal overlay, so they are invisible. The error moves inside the
+  modal with the existing banner styling, and the modal is pixel-identical when there is no error.
+
+### Founder decisions added (not implemented)
+- **v1 mail sender gate:** `hasHomeAccess` needs `finance.view`, so a verified lease resident gets 403 sending a
+  household letter to their own Home. Options: owner-only (today), `mailbox.view`, or the Home mail rule.
+- **"N verified businesses" banner:** it counts pending and unverified businesses by design (the A08 mockup and the
+  tests), so an unverified owner sees "1 verified business". Options:
+  - (a) count only verified businesses;
+  - (b) drop the word "verified".
+- **Recommended:** the owner dashboard chip "Business · Verified" is hard-coded on iOS (`OwnerHeader.swift:258`) and
+  Android (`OwnerHeader.kt:253`) and shows for unverified businesses. Hide it unless the business is verified; no new
+  copy.
+
+## Resume point history — September 23, 2026, 07:24 UTC (coordinator session `92cc4526`)
 
 This updates the 07:21 block below; read both. The count is **10 closed / 70 partial**.
 
