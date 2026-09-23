@@ -95,9 +95,9 @@ private fun packageDefaultStatusTitle(status: PackageDeliveryStatus): String =
 
 private fun packageDefaultStatusDetail(status: PackageDeliveryStatus): String =
     when (status) {
-        PackageDeliveryStatus.Shipped -> "Label created by the sender."
-        PackageDeliveryStatus.InTransit -> "Moving through the carrier network."
-        PackageDeliveryStatus.OutForDelivery -> "Expected today by 3 PM."
+        PackageDeliveryStatus.Shipped -> "Package status: shipped."
+        PackageDeliveryStatus.InTransit -> "Package status: in transit."
+        PackageDeliveryStatus.OutForDelivery -> "Package status: out for delivery."
         PackageDeliveryStatus.Delivered -> "Package status: delivered."
     }
 
