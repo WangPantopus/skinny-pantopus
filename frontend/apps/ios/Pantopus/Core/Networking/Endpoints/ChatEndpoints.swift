@@ -21,6 +21,13 @@ public enum ChatEndpoints {
         )
     }
 
+    /// `GET /api/chat/rooms/:roomId` — the room's type and participants,
+    /// for participants only. A chat link carries only the room id; this
+    /// tells a direct room's other person apart.
+    public static func room(roomId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/chat/rooms/\(roomId)")
+    }
+
     /// `GET /api/chat/stats` — lightweight badge counts.
     /// Route `backend/routes/chats.js:2140`.
     public static func stats() -> Endpoint {
