@@ -252,6 +252,7 @@ fun GigComposeWizardScreen(
     WizardShell(
         model = viewModel,
         modifier = Modifier.testTag(GIG_COMPOSE_SCREEN_TAG),
+        chrome = viewModel.chromeFor(state),
     ) {
         when (state.form.currentStep) {
             GigComposeStep.Describe ->

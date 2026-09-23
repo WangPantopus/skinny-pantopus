@@ -163,6 +163,14 @@ open class GigComposeViewModel
         override val chrome: WizardChrome
             get() = computeChrome(_state.value)
 
+        /**
+         * Chrome for the state the screen just collected. The screen passes
+         * it to [WizardShell] so the footer and step readout follow the form;
+         * the default `model.chrome` is only read when the shell itself
+         * recomposes.
+         */
+        internal fun chromeFor(state: GigComposeUiState): WizardChrome = computeChrome(state)
+
         override fun onLeading() {
             val current = _state.value.form.currentStep
             when (leadingControl(current)) {
@@ -373,7 +381,7 @@ open class GigComposeViewModel
             _state.update { state ->
                 state.copy(
                     isParsingDraft = false,
-                    clarifyingQuestion = response.clarifyingQuestion?.takeIf { it.isNotBlank() },
+                    clarifyingQuestion = response.clarifyingQuestionText?.takeIf { it.isNotBlank() },
                     form = prefillFormFromDraft(state.form, draft),
                 )
             }
@@ -386,7 +394,7 @@ open class GigComposeViewModel
             draft: MagicDraftDto,
         ): GigComposeFormState {
             val category =
-                GigComposeCategory.fromRawKey(draft.category)
+                GigComposeCategory.fromBackendCategory(draft.category)
                     ?: GigComposeCategory.fromRawKey(draft.taskArchetype)
                     ?: detectArchetype(form.describeText)
             val budgetType =
