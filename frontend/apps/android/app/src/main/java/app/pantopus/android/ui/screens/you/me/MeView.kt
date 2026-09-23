@@ -105,7 +105,7 @@ fun MeView(
                     onShareReceipt = {
                         viewModel.receiptShareMessage()?.let { shareText(context, it) }
                     },
-                    onShareInvite = { shareText(context, viewModel.inviteShareMessage()) },
+                    onShareInvite = viewModel.inviteShareMessage()?.let { message -> { shareText(context, message) } },
                 )
             }
         }
@@ -145,7 +145,7 @@ internal fun PopulatedFrame(
     expandMonthlyReceipt: Boolean = false,
     inviteProgress: InviteProgressDto? = null,
     onShareReceipt: () -> Unit = {},
-    onShareInvite: () -> Unit = {},
+    onShareInvite: (() -> Unit)? = {},
 ) {
     Column(
         modifier =
