@@ -1,5 +1,16 @@
 # Appendix: every PR merged on 2026-09-23 (generated from GitHub)
 
+## Live additions — checked 2026-09-23T22:12:47Z
+
+The187-row table below is the original handoff snapshot on master1a15514cc. These later merges are also done; check both sections before starting a repair. Current master is `61c64f9c1778b9b11fda12dd0cfa4762fff3bef0`. Event times are GitHub-reported; merge SHAs are verified in Git.
+
+| PR | Merged (UTC) | Merge commit | Branch | Title |
+|---|---|---|---|---|
+| [#389](https://github.com/WangPantopus/skinny-pantopus/pull/389) | 21:09:55 | `cef95ab67864ccca3ca243cc0d936a87d342cc8f` | `claude/stream1-api-offer-error-copy` | fix(api): offer and completion routes stop echoing raw database errors |
+| [#391](https://github.com/WangPantopus/skinny-pantopus/pull/391) | 21:47:44 | `61c64f9c1778b9b11fda12dd0cfa4762fff3bef0` | `claude/docs-handoff-2026-09-23` | docs: session handoff and backlog status for 2026-09-23 |
+
+## Preserved original snapshot
+
 Check this list before starting any fix: if a matching PR is here, the work is done and on master `1a15514cc`. "via" says how each PR landed: a combined batch, or on its own.
 
 | PR | Merged (UTC) | Via | Branch | Title |

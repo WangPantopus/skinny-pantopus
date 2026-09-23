@@ -1,5 +1,10 @@
 # Pantopus UX inventory — unfinished actions and weak states (U05 / U03)
 
+## Disposition correction — 2026-09-23T22:12:47Z
+
+This is the existing 155-item UX inventory, not a whole-app E2E coverage measure. Recounting the final handoff's explicit IDs gives29 unpublished and62 not-started items (its summary said31/about60). PR389 is now merged, moving S1-21 from open to fixed/merged. Current planning disposition: **63 fixed/merged,30 in flight (29 unpublished + C-15/#356),62 not started;92 unfinished**. The fixed/merged category preserves prior accepted evidence and does not assert a fresh all-platform pass. Newly discovered work such as geo392 is recorded in the hub without silently changing this inventory denominator. Original findings below remain historical until their owners reconcile each item with accepted evidence.
+
+
 **Date:** 2026-09-23 · **Code:** `origin/master` **4f2983c5d** (Merge #281). Collection began on 27d45c027; every item was re-checked against 4f2983c5d after #231, #245, #256, #259, #260, #263, #265, #267–#277, #281 and #284 merged, and items those PRs fixed were dropped.
 **Scope:** web (`frontend/apps/web`), iOS (`frontend/apps/ios`), Android (`frontend/apps/android`), with backend routes where a control depends on them. Read-only code audit: nothing was run on a device, simulator, emulator or browser.
 
