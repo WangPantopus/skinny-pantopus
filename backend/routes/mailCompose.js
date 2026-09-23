@@ -13,6 +13,7 @@ const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
+const { escapeIlike } = require('../utils/escapeIlike');
 
 // ─── Helpers ───────────────────────────────────────────────
 
@@ -20,21 +21,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const HOME_ADDRESS_VERIFICATION_REQUIRED_CODE = 'HOME_ADDRESS_VERIFICATION_REQUIRED';
 const HOME_ADDRESS_VERIFICATION_REQUIRED_MESSAGE =
   'Verify your home address before sending mail. Open Homes and finish address verification, then try sending again.';
-
-/**
- * Escape special characters for PostgREST ILIKE patterns.
- * Prevents filter injection via commas, dots, parens in user input.
- */
-function escapeIlike(str) {
-  // Escape PostgREST special chars: backslash, percent, underscore
-  // Also escape commas and dots which are PostgREST filter syntax
-  return str
-    .replace(/\\/g, '\\\\')
-    .replace(/%/g, '\\%')
-    .replace(/_/g, '\\_')
-    .replace(/,/g, '\\,')
-    .replace(/\./g, '\\.');
-}
 
 /**
  * Get the sender's active home IDs (via HomeOccupancy + Home ownership).

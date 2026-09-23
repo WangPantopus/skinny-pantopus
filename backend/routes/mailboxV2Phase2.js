@@ -8,6 +8,7 @@ const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
+const { escapeIlike } = require('../utils/escapeIlike');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -1218,7 +1219,8 @@ router.get('/vault/search', async (req, res, next) => {
     }
     // General text search
     else {
-      query = query.or(`subject.ilike.%${q}%,content.ilike.%${q}%,sender_display.ilike.%${q}%`);
+      const escapedQ = escapeIlike(q);
+      query = query.or(`subject.ilike.%${escapedQ}%,content.ilike.%${escapedQ}%,sender_display.ilike.%${escapedQ}%`);
     }
 
     query = query.order('created_at', { ascending: false })

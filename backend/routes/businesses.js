@@ -61,6 +61,7 @@ const optionalAuth = require('../middleware/optionalAuth');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
+const { escapeIlike } = require('../utils/escapeIlike');
 const { geocodeAddress } = require('../utils/geocoding');
 const { validateBusinessAddress } = require('../services/businessAddressService');
 const { computeAddressHash } = require('../utils/normalizeAddress');
@@ -844,8 +845,8 @@ router.get('/discover', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Query must be at least 2 characters' });
     }
 
-    const fullSearchTerm = `%${queryText}%`;
-    const broadSearchTerm = `%${primaryToken}%`;
+    const fullSearchTerm = `%${escapeIlike(queryText)}%`;
+    const broadSearchTerm = `%${escapeIlike(primaryToken)}%`;
     const candidateLimit = Math.min(Math.max((safeOffset + safeLimit) * 8, 80), 400);
 
     // 1) Candidate business users
