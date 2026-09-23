@@ -2010,7 +2010,10 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       attn_user_id: attnUserId || null,
       attn_label: attnLabel || null,
       delivery_visibility: deliveryVisibility || null,
-      mail_extracted: extractedData || null
+      // The column is NOT NULL DEFAULT '{}'. null failed the insert, and the
+      // compatibility retry then stored the letter without its sender, delivery,
+      // attention and visibility fields.
+      mail_extracted: extractedData || {}
     };
 
     const { data: mail, error } = await insertMailWithCompatibility(mailData);
