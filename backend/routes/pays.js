@@ -325,7 +325,9 @@ async function resolveListingOfferCheckout({ payerId, listingId, offerId }) {
   if (listing.user_id !== offer.seller_id) {
     throw paymentRouteError(409, 'Offer seller does not match listing owner');
   }
-  if (!['active', 'reserved'].includes(listing.status)) {
+  // An accepted offer holds its listing as pending_pickup (the listing_status enum has no 'reserved'); listings
+  // accepted before that fix are still active.
+  if (!['active', 'pending_pickup'].includes(listing.status)) {
     throw paymentRouteError(409, 'Listing is not payable');
   }
 
