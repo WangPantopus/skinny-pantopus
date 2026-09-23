@@ -24,6 +24,8 @@ interface ProfileHeaderProps {
   reliabilityScore: number | null;
   // Actions
   followState: boolean;
+  /** False for a personally blocked target, or while that check is unavailable. */
+  canFollow?: boolean;
   actionLoading: boolean;
   shareCopied: boolean;
   onFollow: () => void;
@@ -61,6 +63,7 @@ export default function ProfileHeader({
   reliabilityLabel,
   reliabilityScore,
   followState,
+  canFollow = true,
   actionLoading,
   shareCopied,
   onFollow,
@@ -157,17 +160,19 @@ export default function ProfileHeader({
                 <>
                   <button onClick={onMessage} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium">Message</button>
                   <button onClick={onRequestHire} className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium">Request / Hire</button>
-                  <button
-                    onClick={onFollow}
-                    disabled={actionLoading}
-                    className={`px-4 py-2 border rounded-lg font-medium transition disabled:opacity-60 ${
-                      followState
-                        ? 'bg-primary-50 text-primary-700 border-primary-300 hover:bg-primary-100'
-                        : 'bg-surface text-app-strong border-app-strong hover:bg-surface-raised'
-                    }`}
-                  >
-                    {followState ? 'Following' : 'Follow'}
-                  </button>
+                  {canFollow && (
+                    <button
+                      onClick={onFollow}
+                      disabled={actionLoading}
+                      className={`px-4 py-2 border rounded-lg font-medium transition disabled:opacity-60 ${
+                        followState
+                          ? 'bg-primary-50 text-primary-700 border-primary-300 hover:bg-primary-100'
+                          : 'bg-surface text-app-strong border-app-strong hover:bg-surface-raised'
+                      }`}
+                    >
+                      {followState ? 'Following' : 'Follow'}
+                    </button>
+                  )}
                   <button onClick={onShare} className="px-4 py-2 bg-surface text-app-strong border border-app-strong rounded-lg hover:bg-surface-raised font-medium">
                     {shareCopied ? 'Copied' : 'Share'}
                   </button>
