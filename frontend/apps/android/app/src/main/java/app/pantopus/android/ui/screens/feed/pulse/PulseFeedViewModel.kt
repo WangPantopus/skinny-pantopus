@@ -38,7 +38,6 @@ import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
 
-/** Render state for the Pulse feed screen. */
 /** Where a feed request looks: coordinates plus the viewing radius, when known. */
 private data class FeedArea(
     val latitude: Double?,
@@ -46,6 +45,7 @@ private data class FeedArea(
     val radiusMiles: Double? = null,
 )
 
+/** Render state for the Pulse feed screen. */
 sealed interface PulseFeedUiState {
     data object Loading : PulseFeedUiState
 
