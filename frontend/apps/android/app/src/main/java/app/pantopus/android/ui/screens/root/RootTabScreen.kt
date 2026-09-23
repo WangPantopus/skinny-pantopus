@@ -1425,7 +1425,10 @@ private object ChildRoutes {
     fun postcardVerification(homeId: String): String = "homes/$homeId/verify-postcard"
 
     /** Build the generic placeholder path with an encoded label. */
-    fun placeholder(label: String): String = "_placeholder/generic?$PLACEHOLDER_LABEL_KEY=${java.net.URLEncoder.encode(label, "UTF-8")}"
+    // `%20`, not URLEncoder's `+`: Navigation decodes the query value
+    // literally, so "Edit dates" showed as "Edit+dates".
+    fun placeholder(label: String): String =
+        "_placeholder/generic?$PLACEHOLDER_LABEL_KEY=${java.net.URLEncoder.encode(label, "UTF-8").replace("+", "%20")}"
 
     /** Build the compose-post path with the pre-fill intent encoded. */
     fun composePost(
@@ -5332,8 +5335,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onEditSignup = { reservationId ->
                             navController.navigate(ChildRoutes.editSignup(reservationId))
                         },
-                        onMessageHelper = { reservationId ->
-                            navController.navigate(ChildRoutes.placeholder("Message helper · $reservationId"))
+                        onMessageHelper = { _ ->
+                            navController.navigate(ChildRoutes.placeholder("Message helper"))
                         },
                     )
                 }
@@ -5361,14 +5364,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     ManageTrainScreen(
                         onBack = { navController.popBackStack() },
-                        onOpenAnalytics = { id ->
-                            navController.navigate(ChildRoutes.placeholder("Train analytics · $id"))
+                        onOpenAnalytics = { _ ->
+                            navController.navigate(ChildRoutes.placeholder("Train analytics"))
                         },
-                        onEditDates = { id ->
-                            navController.navigate(ChildRoutes.placeholder("Edit dates · $id"))
+                        onEditDates = { _ ->
+                            navController.navigate(ChildRoutes.placeholder("Edit dates"))
                         },
-                        onInviteHelpers = { id ->
-                            navController.navigate(ChildRoutes.placeholder("Invite helpers · $id"))
+                        onInviteHelpers = { _ ->
+                            navController.navigate(ChildRoutes.placeholder("Invite helpers"))
                         },
                     )
                 }
@@ -5407,7 +5410,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         ),
                 ) { entry ->
                     val label = entry.arguments?.getString(ChildRoutes.PLACEHOLDER_LABEL_KEY) ?: "This"
-                    NotYetAvailableView(tabName = label, icon = PantopusIcon.Info)
+                    NotYetAvailableView(
+                        tabName = label,
+                        icon = PantopusIcon.Info,
+                        onBack = { navController.popBackStack() },
+                    )
                 }
                 // ---- Wave A bootstrap placeholders. Swap each body for the real
                 // screen when the matching A.x screen ships. ----

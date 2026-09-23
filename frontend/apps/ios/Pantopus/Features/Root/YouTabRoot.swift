@@ -1642,14 +1642,14 @@ public struct YouTabRoot: View {
             ManageTrainView(
                 viewModel: ManageTrainViewModel(trainId: trainId),
                 onClose: { Task { @MainActor in pop() } },
-                onOpenAnalytics: { id in
-                    Task { @MainActor in path.append(.placeholder(label: "Train analytics · \(id)")) }
+                onOpenAnalytics: { _ in
+                    Task { @MainActor in path.append(.placeholder(label: "Train analytics")) }
                 },
-                onEditDates: { id in
-                    Task { @MainActor in path.append(.placeholder(label: "Edit dates · \(id)")) }
+                onEditDates: { _ in
+                    Task { @MainActor in path.append(.placeholder(label: "Edit dates")) }
                 },
-                onInviteHelpers: { id in
-                    Task { @MainActor in path.append(.placeholder(label: "Invite helpers · \(id)")) }
+                onInviteHelpers: { _ in
+                    Task { @MainActor in path.append(.placeholder(label: "Invite helpers")) }
                 }
             )
         case .identityCenter:
