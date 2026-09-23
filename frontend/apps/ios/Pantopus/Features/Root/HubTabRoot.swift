@@ -231,7 +231,7 @@ public enum HubRoute: Hashable {
     /// `jumpToStep == .price`).
     case editListing(listingId: String, jumpToStep: ListingComposeStep?)
     /// Invoice detail (T2.6 TransactionalDetailShell · invoice variant).
-    /// Reached from wallet / payments surfaces when those land.
+    /// Reached from invoice notification links (`DeepLinkRouter.invoiceDetail`).
     case invoiceDetail(invoiceId: String)
     /// Bell icon target. Replaced by the real notifications screen in T4.1.
     case notifications
@@ -1030,6 +1030,9 @@ public struct HubTabRoot: View {
             _ = router.consume()
         case .myBookings:
             path.append(.scheduling(.customerMyBookings))
+            _ = router.consume()
+        case let .invoiceDetail(invoiceId):
+            path.append(.invoiceDetail(invoiceId: invoiceId))
             _ = router.consume()
         default:
             break

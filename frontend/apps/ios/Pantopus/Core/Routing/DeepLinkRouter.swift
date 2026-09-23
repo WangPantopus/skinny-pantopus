@@ -166,6 +166,11 @@ final class DeepLinkRouter {
         case bookingDetail(bookingId: String)
         /// `/app/scheduling/my-bookings` — the existing customer My bookings list.
         case myBookings
+        /// Invoice notification links: `/app/invoice/:id` (`invoice_received`,
+        /// `invoice_sent`) and the older `/app/invoices/:id`. They open the
+        /// existing recipient invoice detail, whose endpoint only returns an
+        /// invoice addressed to the signed-in user.
+        case invoiceDetail(invoiceId: String)
         case unknown(URL)
     }
 
@@ -537,6 +542,11 @@ final class DeepLinkRouter {
             return mailboxDestination(url: url, segments: segments, idQuery: idQuery)
         case "wallet":
             return .wallet
+        case "invoice", "invoices":
+            if segments.count == 2, UUID(uuidString: segments[1]) != nil {
+                return .invoiceDetail(invoiceId: segments[1].lowercased())
+            }
+            return .unknown(url)
         case "invite":
             if segments.dropFirst().first == "lease" {
                 guard segments.count == 3, let token = segments.last,

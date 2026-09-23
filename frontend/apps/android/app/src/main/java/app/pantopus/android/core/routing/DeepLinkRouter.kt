@@ -289,6 +289,13 @@ object DeepLinkRouter {
         /** `/app/scheduling/my-bookings` — the existing customer My bookings list. */
         data object MyBookings : Destination
 
+        /**
+         * Invoice notification links: `/app/invoice/:id` (`invoice_received`, `invoice_sent`)
+         * and the older `/app/invoices/:id`. They open the existing recipient invoice detail,
+         * whose endpoint only returns an invoice addressed to the signed-in user.
+         */
+        data class InvoiceDetail(val invoiceId: String) : Destination
+
         data class Unknown(val uri: String) : Destination
     }
 
@@ -537,6 +544,10 @@ object DeepLinkRouter {
             "beacons", "beacon-updates", "beacon_updates" -> Destination.Beacons
             "discover-hub", "discover_hub", "discoverhub" -> Destination.DiscoverHub
             "wallet" -> Destination.Wallet
+            "invoice", "invoices" ->
+                HomeTaskNotificationRoute.canonicalId(segments.getOrNull(1))
+                    ?.takeIf { segments.size == 2 }
+                    ?.let { Destination.InvoiceDetail(it) } ?: Destination.Unknown(raw)
             "support-trains", "support_train" -> {
                 val id = segments.getOrNull(1)
                 when {
