@@ -1,7 +1,8 @@
 import { get, post } from '../client';
 
 export type GigStopAction = 'cancel' | 'reopen_bidding' | 'worker_release' | 'close';
-export type GigStopFinancialAction = 'none' | 'release' | 'refund';
+/** 'fee': the owner's late cancel charges only the policy fee from the payment hold. */
+export type GigStopFinancialAction = 'none' | 'release' | 'refund' | 'fee';
 export type GigStopReason = 'changed_plans' | 'found_someone_else' | 'too_expensive'
   | 'emergency' | 'other' | 'schedule_conflict' | 'unable_to_complete' | 'safety_concern';
 
@@ -54,7 +55,12 @@ export interface GigStopReceipt {
   currency: 'usd';
   action: GigStopAction;
   gigStatus: 'open' | 'cancelled';
-  financialStatus: 'none' | 'released' | 'refunded';
+  financialStatus: 'none' | 'released' | 'refunded' | 'fee_charged';
+  /** Fee requests only: the charged fee and the released rest of the hold. */
+  feeStatus?: 'charged' | 'not_charged';
+  feeCents?: number;
+  releasedCents?: number;
+  feeReason?: 'HOLD_UNAVAILABLE';
 }
 
 export interface GigStopProgress {
@@ -63,7 +69,8 @@ export interface GigStopProgress {
   requestId: string;
   action: GigStopAction;
   status: 'pending' | 'needs_review' | 'completed';
-  financialStatus: 'none' | 'release_pending' | 'released' | 'refund_pending' | 'refunded' | 'needs_review';
+  financialStatus: 'none' | 'release_pending' | 'released' | 'refund_pending' | 'refunded' | 'fee_pending'
+    | 'fee_charged' | 'needs_review';
   canRetry: boolean;
   request: GigStopRequest;
   receipt: GigStopReceipt | null;
