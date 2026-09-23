@@ -19,11 +19,11 @@ import app.pantopus.android.ui.screens.marketplace.ListingGradient
 import app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @HiltViewModel
 class ListingDetailViewModel
@@ -52,7 +52,6 @@ class ListingDetailViewModel
         private var checkoutReadFailed = false
         private var isCheckingOut = false
         private var readInFlight = false
-
 
         private val _saved = MutableStateFlow(false)
 
@@ -110,18 +109,7 @@ class ListingDetailViewModel
                     is NetworkResult.Success -> {
                         rawListing = result.data.listing
                         _saved.value = result.data.listing.userHasSaved == true
-                        acceptedOffer = null
-                        checkoutReadFailed = false
-                        val viewerId = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id
-                        if (!isOwnedByMe() && !isSold() && viewerId != null) {
-                            when (val offers = offersRepo.listOffers(listingId)) {
-                                is NetworkResult.Success ->
-                                    acceptedOffer = offers.data.offers.firstOrNull {
-                                        it.status == "accepted" && (it.buyerId ?: it.buyer?.id) == viewerId
-                                    }
-                                is NetworkResult.Failure -> checkoutReadFailed = true
-                            }
-                        }
+                        refreshCheckout()
                         rebuild()
                     }
                     is NetworkResult.Failure ->
@@ -129,6 +117,19 @@ class ListingDetailViewModel
                 }
             } finally {
                 readInFlight = false
+            }
+        }
+
+        private suspend fun refreshCheckout() {
+            acceptedOffer = null
+            checkoutReadFailed = false
+            val viewerId = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id ?: return
+            if (isOwnedByMe() || isSold()) return
+            when (val offers = offersRepo.listOffers(listingId)) {
+                is NetworkResult.Success -> acceptedOffer = offers.data.offers.firstOrNull {
+                    it.status == "accepted" && (it.buyerId ?: it.buyer?.id) == viewerId
+                }
+                is NetworkResult.Failure -> checkoutReadFailed = true
             }
         }
 
@@ -143,26 +144,32 @@ class ListingDetailViewModel
                 summary == null -> ContentDetailDockButton("Check payment", PantopusIcon.Clock)
                 summary.canContinue && summary.state in setOf("ready", "retry", "pending") ->
                     ContentDetailDockButton(if (summary.state == "retry") "Retry checkout" else "Continue checkout")
-                else -> {
-                    val label =
-                        when (summary.state) {
-                            "authorized" -> "Payment authorized"
-                            "processing" -> "Payment processing"
-                            "paid" -> "Payment received"
-                            "refund_pending" -> "Refund processing"
-                            "partially_refunded" -> "Partially refunded"
-                            "refunded" -> "Payment refunded"
-                            "disputed" -> "Payment disputed"
-                            "not_payable" -> "Pickup pending"
-                            else -> null
-                        }
-                    if (label == null) {
-                        ContentDetailDockButton("Check payment", PantopusIcon.Clock)
-                    } else {
-                        ContentDetailDockButton(label, PantopusIcon.Clock, enabled = false)
-                    }
-                }
+                else -> checkoutStatusButton(summary.state)
             }
+        }
+
+        private fun checkoutStatusButton(state: String): ContentDetailDockButton {
+            val label = when (state) {
+                "authorized" -> "Payment authorized"
+                "processing" -> "Payment processing"
+                "paid" -> "Payment received"
+                "refund_pending" -> "Refund processing"
+                "partially_refunded" -> "Partially refunded"
+                "refunded" -> "Payment refunded"
+                "disputed" -> "Payment disputed"
+                "not_payable" -> "Pickup pending"
+                else -> null
+            }
+            return if (label == null) {
+                ContentDetailDockButton("Check payment", PantopusIcon.Clock)
+            } else {
+                ContentDetailDockButton(label, PantopusIcon.Clock, enabled = false)
+            }
+        }
+
+        private fun canContinueCheckout(): Boolean {
+            val summary = acceptedOffer?.checkout ?: return false
+            return !checkoutReadFailed && summary.canContinue && summary.state in setOf("ready", "retry", "pending")
         }
 
         private fun rebuild() {
@@ -176,10 +183,7 @@ class ListingDetailViewModel
         ) {
             if (isCheckingOut || readInFlight) return
             val offer = acceptedOffer
-            val summary = offer?.checkout
-            if (offer == null || summary?.canContinue != true ||
-                summary.state !in setOf("ready", "retry", "pending") || checkoutReadFailed
-            ) {
+            if (offer == null || !canContinueCheckout()) {
                 viewModelScope.launch {
                     refreshContent()
                     if (checkoutReadFailed || acceptedOffer?.checkout == null || acceptedOffer?.checkout?.state == "unavailable") {
@@ -191,7 +195,12 @@ class ListingDetailViewModel
             isCheckingOut = true
             rebuild()
             viewModelScope.launch {
-                when (val result = paymentsRepo.createPaymentIntent(CreatePaymentIntentRequest(listingId = listingId, offerId = offer.id))) {
+                when (
+                    val result =
+                        paymentsRepo.createPaymentIntent(
+                            CreatePaymentIntentRequest(listingId = listingId, offerId = offer.id),
+                        )
+                ) {
                     is NetworkResult.Success -> {
                         if (result.data.clientSecret.isNullOrBlank()) {
                             isCheckingOut = false
@@ -210,7 +219,10 @@ class ListingDetailViewModel
             }
         }
 
-        fun onCheckoutOutcome(outcome: CheckoutOutcome, onError: (String) -> Unit) {
+        fun onCheckoutOutcome(
+            outcome: CheckoutOutcome,
+            onError: (String) -> Unit,
+        ) {
             viewModelScope.launch {
                 if (outcome == CheckoutOutcome.Paid) {
                     // The sheet result is not durable payment proof. Re-read server state.
@@ -303,8 +315,33 @@ class ListingDetailViewModel
                             )
                         }
                     }
-                val dock =
-                    if (sold) {
+                val dock = dock(sold, onHold, isViewerOwner, checkoutButton)
+                return ContentDetailContent(
+                    kind = ContentDetailKind.Listing,
+                    cover = cover,
+                    statusPill = statusPill(sold = sold, onHold = onHold),
+                    hero =
+                        ContentDetailHero(
+                            title = listing.title ?: "Listing",
+                            priceLine = priceLine,
+                            priceCaption = if (listing.layer == "rentals") "per week" else null,
+                            priceStrikethrough = sold,
+                            inlinePills = inlinePills(listing, isFree),
+                        ),
+                    counterparty = counterparty,
+                    modules = modules,
+                    trustCapsules = emptyList(),
+                    dock = dock,
+                )
+            }
+
+            private fun dock(
+                sold: Boolean,
+                onHold: Boolean,
+                isViewerOwner: Boolean,
+                checkoutButton: ContentDetailDockButton?,
+            ): ContentDetailDock =
+                if (sold) {
                         ContentDetailDock(
                             secondary = ContentDetailDockButton(label = "Seller", icon = PantopusIcon.ShoppingBag),
                             primary = ContentDetailDockButton(label = "Find similar", icon = PantopusIcon.Search),
@@ -326,24 +363,6 @@ class ListingDetailViewModel
                             primary = ContentDetailDockButton(label = if (isViewerOwner) "View offers" else "Make offer"),
                         )
                     }
-                return ContentDetailContent(
-                    kind = ContentDetailKind.Listing,
-                    cover = cover,
-                    statusPill = statusPill(sold = sold, onHold = onHold),
-                    hero =
-                        ContentDetailHero(
-                            title = listing.title ?: "Listing",
-                            priceLine = priceLine,
-                            priceCaption = if (listing.layer == "rentals") "per week" else null,
-                            priceStrikethrough = sold,
-                            inlinePills = inlinePills(listing, isFree),
-                        ),
-                    counterparty = counterparty,
-                    modules = modules,
-                    trustCapsules = emptyList(),
-                    dock = dock,
-                )
-            }
 
             fun isSold(listing: ListingDto): Boolean = listing.soldAt != null || listing.status == "sold"
 
