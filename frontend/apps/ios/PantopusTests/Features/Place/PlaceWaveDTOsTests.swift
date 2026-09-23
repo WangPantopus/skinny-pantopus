@@ -298,10 +298,10 @@ final class PlaceWaveDTOsTests: XCTestCase {
     /// The gate is the whole product, so the copy has to name it rather
     /// than fall through to the generic "You don't have permission".
     func testRentWriteNamesTheVerificationGateOnA403() {
-        let message = PlaceRealRentViewModel.writeFailureMessage(.forbidden, fallback: "Couldn't save your rent.")
+        let message = PlaceRealRentViewModel.writeFailureMessage(.forbidden(), fallback: "Couldn't save your rent.")
         XCTAssertEqual(message, PlaceRealRentViewModel.verificationRequiredMessage)
         XCTAssertTrue(message.lowercased().contains("verify your address"))
-        XCTAssertNotEqual(message, APIError.forbidden.errorDescription)
+        XCTAssertNotEqual(message, APIError.forbidden().errorDescription)
 
         // A 4xx that DOES keep its body is matched on the code too.
         let viaCode = PlaceRealRentViewModel.writeFailureMessage(
@@ -344,7 +344,7 @@ final class PlaceWaveDTOsTests: XCTestCase {
         XCTAssertTrue(vendor.contains("nothing was mailed"))
 
         XCTAssertTrue(
-            PlaceBlockFoundersViewModel.inviteFailureMessage(.forbidden).lowercased().contains("verify your address")
+            PlaceBlockFoundersViewModel.inviteFailureMessage(.forbidden()).lowercased().contains("verify your address")
         )
     }
 
