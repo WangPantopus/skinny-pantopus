@@ -1,12 +1,12 @@
 "use client";
 
 // C5 — Booking landing / booker profile header. Pillar-themed gradient banner,
-// host avatar with a verified check, name + headline + blurb, a share affordance
+// host avatar, name + headline + blurb, a share affordance
 // (opens the W0 ShareLink in a bottom sheet) and the dismissible open-in-app
 // banner. Reuses W0 ShareLink + pillarTokens; never hardcodes colors.
 
 import { useState } from "react";
-import { Check, Share2, Smartphone, X } from "lucide-react";
+import { Share2, Smartphone, X } from "lucide-react";
 import clsx from "clsx";
 import type { PublicPageView } from "@pantopus/types";
 import { ShareLink, pillarTokens, type Pillar } from "@/components/scheduling";
@@ -87,16 +87,6 @@ export default function BookerProfileHeader({
                   {initialsFromName(name)}
                 </span>
               )}
-              <span
-                className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-app-surface bg-app-success-solid"
-                aria-label="Verified host"
-              >
-                <Check
-                  className="h-2.5 w-2.5 text-white"
-                  strokeWidth={4}
-                  aria-hidden
-                />
-              </span>
             </div>
 
             <button
