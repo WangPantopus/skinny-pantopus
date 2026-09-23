@@ -1,6 +1,25 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — September 23, 2026, 01:55 UTC
+## CURRENT RESUME POINT — September 23, 2026, 06:58 UTC
+
+The live state is the top block of the [coordination summary](workstreams/README.md) (06:52 UTC) and the
+[end-of-session handoff](workstreams/HANDOFF-2026-09-23.md) it builds on.
+- **Operating model:**
+  - Coordinator session `92cc4526` owns reviews, the serial merge queue and this hub.
+  - Streams 1, 2 and 3 run as its background agents under `/private/tmp/pantopus-tools/AGENT-RULES-2026-09-23.md`:
+    heavy-build slot, 3-slot device limiter, founder environment untouchable.
+- **Merged since the handoff:** #241 (iOS tip refresh), #248, #247, #249, #250. The runner keeps draining
+  218 231 221 236 219 213 214 215 224 199 208 251 252.
+- **Opened this session (CI first, then queue):**
+  - #253 / #254: the P04/P05 poster-fault fee (backend + migration `20260923000100`; fee line on all three clients).
+    The bundle is sealed; Android pixel identity is complete.
+  - #255: search terms escaped with the existing `escapeIlike()`. A plain defensive edit; the search-filter audit
+    stays closed.
+- **Count:** 10 closed / 70 partial of 80. P03 closed after #241 merged.
+- **Evidence:** new bundles are in the coordinator worktree store (see the summary). Copy them into
+  `skinny-pantopus/.pantopus-recovery/audits/` before that worktree is removed.
+
+## Resume point history — September 23, 2026, 01:55 UTC (superseded)
 
 The live state is the top block of the [coordination summary](workstreams/README.md): merged PRs, the ordered open queue, evidence bundles, founder decisions and open questions.
 - **Operating model:** a Claude coordinator session runs Stream 1 and coordination. Claude background agents run Streams 2 and 3, one PR per reproduced defect. Only the coordinator reviews, merges and edits this hub.
