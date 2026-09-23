@@ -4193,12 +4193,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.privacyHandshake(handle, tierRank))
                         },
                         onOpenMessages = { profile ->
+                            // Verified residency is the fact behind "Verified neighbor";
+                            // `profile.verified` is the account flag sign-in sets.
                             navController.navigate(
                                 ChildRoutes.chatConversationFromPicker(
                                     userId = profile.id,
                                     displayName = profile.displayName,
                                     initials = initialsFromName(profile.displayName),
-                                    verified = profile.verified == true,
+                                    verified = profile.residency?.get("verified") == true,
                                     locality = profile.locality,
                                 ),
                             )
