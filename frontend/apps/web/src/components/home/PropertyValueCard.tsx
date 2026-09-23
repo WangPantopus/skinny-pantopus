@@ -87,10 +87,10 @@ export default function PropertyValueCard({ data, loading }: PropertyValueCardPr
         <div className="flex flex-col items-center gap-1 py-4">
           <TrendingUp className="h-7 w-7 text-primary" />
           <p className="mt-1 text-sm font-medium text-app-text-primary">
-            Property insights coming soon
+            No estimate available
           </p>
           <p className="text-xs text-app-text-secondary text-center">
-            Property value information is not available for this home yet.
+            No property estimate is available for this Home right now.
           </p>
         </div>
       </div>
