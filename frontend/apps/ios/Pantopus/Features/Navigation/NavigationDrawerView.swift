@@ -24,7 +24,7 @@ struct NavigationDrawerView: View {
             ZStack(alignment: .leading) {
                 if isPresented {
                     scrim
-                    panel
+                    panel(bottomInset: geo.safeAreaInsets.bottom)
                         .frame(width: geo.size.width * 0.82)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .transition(.move(edge: .leading))
@@ -53,7 +53,11 @@ struct NavigationDrawerView: View {
 
     // MARK: Panel
 
-    private var panel: some View {
+    /// `bottomInset` is the host's bottom safe area (home indicator plus the
+    /// floating tab bar). The panel ignores it so its surface reaches the
+    /// screen edge; the scroll content adds it back so the last row can
+    /// scroll clear of the tab bar.
+    private func panel(bottomInset: CGFloat) -> some View {
         VStack(spacing: Spacing.s0) {
             contextPill
             ScrollView {
@@ -67,7 +71,7 @@ struct NavigationDrawerView: View {
                     // Bottom inset so the last row clears the home indicator —
                     // otherwise it renders flush against the screen edge where
                     // XCUITest's scroll-to-visible can't settle.
-                    Spacer(minLength: Spacing.s10)
+                    Spacer(minLength: Spacing.s10 + bottomInset)
                 }
             }
             .accessibilityIdentifier("navDrawer.scroll")
