@@ -1479,6 +1479,8 @@ export interface MagicPostRequest {
   source_flow?: TaskSourceFlow;
   engagement_mode?: 'instant_accept' | 'curated_offers' | 'quotes' | null;
   task_archetype?: TaskArchetype;
+  /** Helper-engagement format; the backend defaults a missing one to in_person. */
+  task_format?: 'in_person' | 'drop_off' | 'remote' | 'hybrid' | null;
   ai_confidence?: number | null;
   ai_draft_json?: Record<string, unknown> | null;
 }
