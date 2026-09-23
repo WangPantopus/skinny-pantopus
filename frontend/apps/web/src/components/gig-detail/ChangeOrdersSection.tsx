@@ -23,6 +23,9 @@ interface ChangeOrdersSectionProps {
   isMyGig: boolean;
   iAmWorker: boolean;
   currentUserId?: string;
+  /** The gig's payment; while its hold is live the server refuses price changes. */
+  paymentId?: string | null;
+  paymentStatus?: string | null;
 }
 
 // ─── Constants ───
@@ -36,11 +39,17 @@ const CHANGE_ORDER_TYPES = [
   { value: 'other', label: 'Other', icon: <PenLine className="w-4 h-4" />, hint: 'Something else' },
 ];
 
+const PRICE_CHANGE_TYPES = new Set(['price_increase', 'price_decrease']);
+
 // ─── Component ───
 
 export default function ChangeOrdersSection({
-  gigId, isMyGig, iAmWorker, currentUserId,
+  gigId, isMyGig, iAmWorker, currentUserId, paymentId, paymentStatus,
 }: ChangeOrdersSectionProps) {
+  // A live payment hold (a payment that isn't canceled or fully refunded) rules out price changes
+  // (server: 409 PAID_PRICE_CHANGE_UNAVAILABLE), so the form doesn't offer them.
+  const priceChangesAvailable = !paymentId || ['canceled', 'refunded_full'].includes(String(paymentStatus || '').toLowerCase());
+  const offeredTypes = CHANGE_ORDER_TYPES.filter((t) => priceChangesAvailable || !PRICE_CHANGE_TYPES.has(t.value));
   const [orders, setOrders] = useState<GigChangeOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -70,7 +79,7 @@ export default function ChangeOrdersSection({
       await api.gigs.createChangeOrder(gigId, {
         type: formType,
         description: formDesc.trim(),
-        amount_change: formAmount ? parseFloat(formAmount) : undefined,
+        amount_change: priceChangesAvailable && formAmount ? parseFloat(formAmount) : undefined,
         time_change_minutes: formTime ? parseInt(formTime) : undefined,
       });
       setShowForm(false);
@@ -235,9 +244,15 @@ export default function ChangeOrdersSection({
         <div className="border border-app-border rounded-lg p-4 space-y-3">
           <p className="text-sm font-medium text-app-text-strong">Request a Change</p>
 
+          {!priceChangesAvailable && (
+            <p className="text-xs text-app-text-secondary">
+              Price changes aren&apos;t available once a task has a payment hold.
+            </p>
+          )}
+
           {/* Type picker */}
           <div className="grid grid-cols-2 gap-1.5">
-            {CHANGE_ORDER_TYPES.map((t) => (
+            {offeredTypes.map((t) => (
               <button
                 key={t.value}
                 type="button"
@@ -265,18 +280,20 @@ export default function ChangeOrdersSection({
           />
 
           {/* Amount + Time */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-app-text-secondary mb-0.5 block">Price change ($)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={formAmount}
-                onChange={(e) => setFormAmount(e.target.value)}
-                placeholder="e.g. 25 or -10"
-                className="w-full border border-app-border rounded-lg px-3 py-1.5 text-sm"
-              />
-            </div>
+          <div className={`grid ${priceChangesAvailable ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+            {priceChangesAvailable && (
+              <div>
+                <label className="text-xs text-app-text-secondary mb-0.5 block">Price change ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formAmount}
+                  onChange={(e) => setFormAmount(e.target.value)}
+                  placeholder="e.g. 25 or -10"
+                  className="w-full border border-app-border rounded-lg px-3 py-1.5 text-sm"
+                />
+              </div>
+            )}
             <div>
               <label className="text-xs text-app-text-secondary mb-0.5 block">Extra time (min)</label>
               <input

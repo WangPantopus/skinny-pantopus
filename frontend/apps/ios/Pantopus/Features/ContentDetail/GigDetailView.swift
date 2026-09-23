@@ -883,6 +883,7 @@ private struct GigLifecycleSheets: ViewModifier {
             }
             .sheet(isPresented: $showChangeOrderSheet) {
                 GigChangeOrderSheet(
+                    priceChangesAvailable: viewModel.priceChangesAvailable,
                     onSubmit: { type, description, amountChange, timeChangeMinutes in
                         let error = await viewModel.proposeChangeOrder(
                             type: type,

@@ -742,6 +742,8 @@ function GigDetailV2Content() {
             isMyGig={isMyGig}
             iAmWorker={iAmWorker}
             currentUserId={currentUserId}
+            paymentId={gig?.payment_id}
+            paymentStatus={gig?.payment_status}
           />
         </div>
 

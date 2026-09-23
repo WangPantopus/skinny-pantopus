@@ -222,48 +222,70 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
 
     GigReviewSection(
         state = reviewState,
-        onSubmit = { rating, comment -> viewModel.submitGigReview(rating, comment) },
+        onSubmit = { rating, comment, onFailure -> viewModel.submitGigReview(rating, comment, onFailure) },
     )
 
     if (runningLateSheetVisible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val submit = remember { SheetSubmit() }
         ModalBottomSheet(onDismissRequest = { runningLateSheetVisible = false }, sheetState = sheetState) {
             GigRunningLateSheetContent(
                 onSubmit = { etaMinutes, note ->
-                    viewModel.workerRunningLate(etaMinutes, note) { ok ->
-                        if (ok) runningLateSheetVisible = false
+                    if (submit.begin()) {
+                        viewModel.workerRunningLate(etaMinutes, note, onFailure = submit::fail) { ok ->
+                            submit.end()
+                            if (ok) runningLateSheetVisible = false
+                        }
                     }
                 },
                 onCancel = { runningLateSheetVisible = false },
+                errorText = submit.error,
             )
         }
     }
 
     if (proposeChangeSheetVisible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val submit = remember { SheetSubmit() }
         ModalBottomSheet(onDismissRequest = { proposeChangeSheetVisible = false }, sheetState = sheetState) {
             GigProposeChangeSheetContent(
                 onSubmit = { type, description, amountChange, timeChangeMinutes ->
-                    viewModel.proposeChangeOrder(type, description, amountChange, timeChangeMinutes) { ok ->
-                        if (ok) proposeChangeSheetVisible = false
+                    if (submit.begin()) {
+                        viewModel.proposeChangeOrder(
+                            type,
+                            description,
+                            amountChange,
+                            timeChangeMinutes,
+                            onFailure = submit::fail,
+                        ) { ok ->
+                            submit.end()
+                            if (ok) proposeChangeSheetVisible = false
+                        }
                     }
                 },
                 onCancel = { proposeChangeSheetVisible = false },
+                errorText = submit.error,
+                priceChangesAvailable = viewModel.priceChangesAvailable(),
             )
         }
     }
 
     counterTarget?.let { target ->
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val submit = remember(target.id) { SheetSubmit() }
         ModalBottomSheet(onDismissRequest = { counterTarget = null }, sheetState = sheetState) {
             GigCounterSheetContent(
                 bid = target,
                 onSubmit = { amount, message ->
-                    viewModel.counterBidAsOwner(target.id, amount, message) { ok ->
-                        if (ok) counterTarget = null
+                    if (submit.begin()) {
+                        viewModel.counterBidAsOwner(target.id, amount, message, onFailure = submit::fail) { ok ->
+                            submit.end()
+                            if (ok) counterTarget = null
+                        }
                     }
                 },
                 onCancel = { counterTarget = null },
+                errorText = submit.error,
             )
         }
     }
@@ -284,14 +306,19 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
 
     if (noShowSheetVisible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val submit = remember { SheetSubmit() }
         ModalBottomSheet(onDismissRequest = { noShowSheetVisible = false }, sheetState = sheetState) {
             GigNoShowSheetContent(
                 onSubmit = { description ->
-                    viewModel.reportNoShow(description) { ok ->
-                        if (ok) noShowSheetVisible = false
+                    if (submit.begin()) {
+                        viewModel.reportNoShow(description, onFailure = submit::fail) { ok ->
+                            submit.end()
+                            if (ok) noShowSheetVisible = false
+                        }
                     }
                 },
                 onCancel = { noShowSheetVisible = false },
+                errorText = submit.error,
             )
         }
     }
@@ -601,6 +628,7 @@ fun GigCounterSheetContent(
     bid: GigBidDto,
     onSubmit: (amount: Double, message: String?) -> Unit,
     onCancel: () -> Unit,
+    errorText: String? = null,
 ) {
     var amountText by remember { mutableStateOf("") }
     var messageText by remember { mutableStateOf("") }
@@ -690,6 +718,7 @@ fun GigCounterSheetContent(
                 },
             )
         }
+        SheetInlineError(errorText, testTag = "gigDetail.counterSheet.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(
                 label = "Cancel",
@@ -1028,6 +1057,7 @@ private fun ActivePanelButton(
 private fun GigNoShowSheetContent(
     onSubmit: (String?) -> Unit,
     onCancel: () -> Unit,
+    errorText: String? = null,
 ) {
     var description by remember { mutableStateOf("") }
     Column(
@@ -1080,6 +1110,7 @@ private fun GigNoShowSheetContent(
                 },
             )
         }
+        SheetInlineError(errorText, testTag = "gigDetail.noShowSheet.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(label = "Back", modifier = Modifier.weight(1f), onClick = onCancel)
             SheetDestructiveButton(
@@ -1100,6 +1131,7 @@ private val LATE_ETA_CHOICES_MINUTES = listOf(10, 20, 30, 45, 60)
 fun GigRunningLateSheetContent(
     onSubmit: (etaMinutes: Int?, note: String?) -> Unit,
     onCancel: () -> Unit,
+    errorText: String? = null,
 ) {
     var selectedEta by remember { mutableStateOf<Int?>(null) }
     var note by remember { mutableStateOf("") }
@@ -1174,6 +1206,7 @@ fun GigRunningLateSheetContent(
                 },
             )
         }
+        SheetInlineError(errorText, testTag = "gigDetail.runningLateSheet.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(label = "Back", modifier = Modifier.weight(1f), onClick = onCancel)
             SheetPrimaryButton(
@@ -1343,11 +1376,17 @@ private fun changeAmountLabel(order: GigChangeOrderDto): String? {
     return null
 }
 
-/** Propose-a-change sheet → `POST /change-orders`. */
+/**
+ * Propose-a-change sheet → `POST /change-orders`. While the task's payment hold is live the
+ * server refuses price changes, so [priceChangesAvailable] false leaves out the two price types
+ * and the amount field and says why in their place.
+ */
 @Composable
 fun GigProposeChangeSheetContent(
     onSubmit: (GigChangeOrderType, String, Double?, Int?) -> Unit,
     onCancel: () -> Unit,
+    errorText: String? = null,
+    priceChangesAvailable: Boolean = true,
 ) {
     var selectedType by remember { mutableStateOf<GigChangeOrderType?>(null) }
     var description by remember { mutableStateOf("") }
@@ -1376,7 +1415,15 @@ fun GigProposeChangeSheetContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            GigChangeOrderType.entries.forEach { type ->
+            if (!priceChangesAvailable) {
+                Text(
+                    text = "Price changes aren't available once a task has a payment hold.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("gigDetail.changesSheet.priceUnavailable"),
+                )
+            }
+            GigChangeOrderType.entries.filter { priceChangesAvailable || it !in PRICE_CHANGE_TYPES }.forEach { type ->
                 ReasonRadioRow(
                     label = type.label,
                     selected = selectedType == type,
@@ -1415,33 +1462,35 @@ fun GigProposeChangeSheetContent(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            Row(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(Radii.md))
-                        .background(PantopusColors.appSurfaceSunken)
-                        .padding(horizontal = Spacing.s3),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-            ) {
-                Text(text = "±$", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextSecondary)
-                BasicTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    textStyle = PantopusTextStyle.body.copy(color = PantopusColors.appText, fontWeight = FontWeight.SemiBold),
-                    cursorBrush = SolidColor(PantopusColors.primary600),
-                    modifier = Modifier.weight(1f).testTag("gigDetail.changesSheet.amount"),
-                    decorationBox = { inner ->
-                        if (amountText.isEmpty()) {
-                            Text(text = "0.00", style = PantopusTextStyle.body, color = PantopusColors.appTextMuted)
-                        }
-                        inner()
-                    },
-                )
+            if (priceChangesAvailable) {
+                Row(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(Radii.md))
+                            .background(PantopusColors.appSurfaceSunken)
+                            .padding(horizontal = Spacing.s3),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+                ) {
+                    Text(text = "±$", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextSecondary)
+                    BasicTextField(
+                        value = amountText,
+                        onValueChange = { amountText = it },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        textStyle = PantopusTextStyle.body.copy(color = PantopusColors.appText, fontWeight = FontWeight.SemiBold),
+                        cursorBrush = SolidColor(PantopusColors.primary600),
+                        modifier = Modifier.weight(1f).testTag("gigDetail.changesSheet.amount"),
+                        decorationBox = { inner ->
+                            if (amountText.isEmpty()) {
+                                Text(text = "0.00", style = PantopusTextStyle.body, color = PantopusColors.appTextMuted)
+                            }
+                            inner()
+                        },
+                    )
+                }
             }
             Row(
                 modifier =
@@ -1472,6 +1521,7 @@ fun GigProposeChangeSheetContent(
                 Text(text = "min", fontSize = 13.sp, color = PantopusColors.appTextSecondary)
             }
         }
+        SheetInlineError(errorText, testTag = "gigDetail.changesSheet.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(label = "Cancel", modifier = Modifier.weight(1f), onClick = onCancel)
             SheetPrimaryButton(
@@ -1483,7 +1533,7 @@ fun GigProposeChangeSheetContent(
                     onSubmit(
                         type,
                         description.trim(),
-                        normalizedAmountChange(type, amount),
+                        if (priceChangesAvailable) normalizedAmountChange(type, amount) else null,
                         minutes,
                     )
                 },
@@ -1491,6 +1541,8 @@ fun GigProposeChangeSheetContent(
         }
     }
 }
+
+private val PRICE_CHANGE_TYPES = setOf(GigChangeOrderType.PriceIncrease, GigChangeOrderType.PriceDecrease)
 
 /** Price-increase amounts go up, price-decrease amounts go down. */
 private fun normalizedAmountChange(
@@ -1619,7 +1671,7 @@ private fun formatCents(cents: Int): String = String.format(Locale.US, "$%.2f", 
 @Composable
 private fun GigReviewSection(
     state: GigReviewState,
-    onSubmit: suspend (rating: Int, comment: String?) -> Boolean,
+    onSubmit: suspend (rating: Int, comment: String?, onFailure: (String) -> Unit) -> Boolean,
 ) {
     if (state is GigReviewState.Hidden) return
     var sheetVisible by remember { mutableStateOf(false) }
@@ -1694,16 +1746,19 @@ private fun GigReviewSection(
 
     if (sheetVisible && state is GigReviewState.Available) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val submit = remember { SheetSubmit() }
         ModalBottomSheet(onDismissRequest = { sheetVisible = false }, sheetState = sheetState) {
             GigReviewSheetContent(
                 initialRating = presetRating,
                 revieweeName = state.revieweeName,
                 onSubmit = { rating, comment ->
-                    val ok = onSubmit(rating, comment)
+                    submit.error = null
+                    val ok = onSubmit(rating, comment, submit::fail)
                     if (ok) sheetVisible = false
                     ok
                 },
                 onCancel = { sheetVisible = false },
+                errorText = submit.error,
             )
         }
     }
@@ -1716,6 +1771,7 @@ private fun GigReviewSheetContent(
     revieweeName: String?,
     onSubmit: suspend (rating: Int, comment: String?) -> Boolean,
     onCancel: () -> Unit,
+    errorText: String? = null,
 ) {
     val scope = rememberCoroutineScope()
     var rating by remember { mutableStateOf(initialRating) }
@@ -1784,6 +1840,7 @@ private fun GigReviewSheetContent(
                 },
             )
         }
+        SheetInlineError(errorText, testTag = "gigDetail.review.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(label = "Not now", modifier = Modifier.weight(1f), onClick = onCancel)
             SheetPrimaryButton(
@@ -1813,6 +1870,7 @@ private fun GigReviewSheetContent(
 fun GigReportSheetContent(
     onSubmit: (GigReportReason, String?) -> Unit,
     onCancel: () -> Unit,
+    errorText: String? = null,
 ) {
     var selected by remember { mutableStateOf<GigReportReason?>(null) }
     var details by remember { mutableStateOf("") }
@@ -1869,6 +1927,7 @@ fun GigReportSheetContent(
                 },
             )
         }
+        SheetInlineError(errorText, testTag = "gigDetail.reportSheet.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(label = "Cancel", modifier = Modifier.weight(1f), onClick = onCancel)
             SheetDestructiveButton(
@@ -2005,6 +2064,7 @@ fun GigRescheduleSheetContent(
     initialStart: LocalDateTime?,
     onConfirm: (LocalDateTime, String?) -> Unit,
     onCancel: () -> Unit,
+    errorText: String? = null,
 ) {
     var pickedStart by remember { mutableStateOf<LocalDateTime?>(null) }
     var note by remember { mutableStateOf("") }
@@ -2090,6 +2150,7 @@ fun GigRescheduleSheetContent(
                 },
             )
         }
+        SheetInlineError(errorText, testTag = "gigDetail.rescheduleSheet.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(
                 label = "Back",
@@ -2120,6 +2181,48 @@ private val RescheduleStartFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a", Locale.US)
 
 // MARK: - Shared bits
+
+/**
+ * One open sheet's submit. A tap while the request is in flight is ignored
+ * (the button keeps its look), and the last failure stays on the sheet —
+ * the screen toast is drawn beneath the sheet's window, so it is not enough.
+ */
+internal class SheetSubmit {
+    var inFlight by mutableStateOf(false)
+        private set
+    var error by mutableStateOf<String?>(null)
+
+    fun begin(): Boolean {
+        if (inFlight) return false
+        inFlight = true
+        error = null
+        return true
+    }
+
+    fun end() {
+        inFlight = false
+    }
+
+    fun fail(message: String) {
+        error = message
+    }
+}
+
+/** A failed sheet action's message, in the Edit bid sheet's inline-error treatment. */
+@Composable
+internal fun SheetInlineError(
+    text: String?,
+    testTag: String,
+) {
+    if (!text.isNullOrEmpty()) {
+        Text(
+            text = text,
+            style = PantopusTextStyle.small,
+            color = PantopusColors.error,
+            modifier = Modifier.testTag(testTag),
+        )
+    }
+}
 
 @Composable
 private fun ReasonRadioRow(
