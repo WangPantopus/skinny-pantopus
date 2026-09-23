@@ -224,3 +224,15 @@ sealed interface GigsFeedUiState {
         val message: String,
     ) : GigsFeedUiState
 }
+
+/** Shown instead of a price while an offers-priced task hasn't accepted anyone. */
+const val OPEN_TO_OFFERS_LABEL = "Open to offers"
+
+/**
+ * An offers-priced task (`pay_type` "offers") has no price until a bid is accepted: its stored price
+ * is only the database floor ($1). True until someone is accepted.
+ */
+fun isOpenToOffers(
+    payType: String?,
+    acceptedBy: String?,
+): Boolean = payType == "offers" && acceptedBy.isNullOrBlank()
