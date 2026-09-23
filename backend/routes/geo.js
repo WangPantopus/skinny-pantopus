@@ -128,7 +128,9 @@ router.get('/autocomplete', optionalAuth, geocodeLimiter, async (req, res) => {
       provider: providerLabel,
       cache_hit: false,
     });
-    res.status(500).json({ error: e.message || 'Server error' });
+    // The provider's detail (a missing key, an upstream error) stays in the log.
+    logger.warn('geo_failure', { endpoint: '/geo/autocomplete', error: e.message });
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -193,7 +195,9 @@ router.post('/resolve', optionalAuth, geocodeLimiter, async (req, res) => {
       provider: providerLabel,
       cache_hit: false,
     });
-    res.status(500).json({ error: e.message || 'Server error' });
+    // The provider's detail (a missing key, an upstream error) stays in the log.
+    logger.warn('geo_failure', { endpoint: '/geo/resolve', error: e.message });
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -261,7 +265,8 @@ router.get('/reverse', verifyToken, geocodeLimiter, async (req, res) => {
       provider: providerLabel,
       cache_hit: false,
     });
-    res.status(status).json({ error: e.message || 'Server error' });
+    if (status === 500) logger.warn('geo_failure', { endpoint: '/geo/reverse', error: e.message });
+    res.status(status).json({ error: status === 404 ? e.message : 'Server error' });
   }
 });
 
@@ -334,7 +339,9 @@ router.get('/places/nearby', async (req, res) => {
       provider: providerLabel,
       cache_hit: false,
     });
-    res.status(500).json({ error: e.message || 'Server error' });
+    // The provider's detail (a missing key, an upstream error) stays in the log.
+    logger.warn('geo_failure', { endpoint: '/geo/places/nearby', error: e.message });
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -411,7 +418,9 @@ router.get('/places/search', async (req, res) => {
       provider: providerLabel,
       cache_hit: false,
     });
-    res.status(500).json({ error: e.message || 'Server error' });
+    // The provider's detail (a missing key, an upstream error) stays in the log.
+    logger.warn('geo_failure', { endpoint: '/geo/places/search', error: e.message });
+    res.status(500).json({ error: 'Server error' });
   }
 });
 

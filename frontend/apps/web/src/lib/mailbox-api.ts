@@ -759,12 +759,6 @@ export async function getMailDaySummary(): Promise<MailDaySummary> {
   });
 }
 
-export async function dismissMailDaySummary(): Promise<void> {
-  return call(async () => {
-    await post('/api/mailbox/v2/p3/mailday/summary/dismiss', {});
-  });
-}
-
 export async function getMailDaySettings(): Promise<MailDaySettings> {
   return call(async () => {
     return get<MailDaySettings>('/api/mailbox/v2/p3/mailday/settings');
