@@ -4686,11 +4686,12 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
   try {
     // ── 1. Pre-checks ────────────────────────────────────────────
     // Block deletion if user has gigs currently in progress
-    const { data: activeGigs } = await supabaseAdmin
+    const { data: activeGigs, error: activeGigsError } = await supabaseAdmin
       .from('Gig')
       .select('id, status')
       .eq('user_id', userId)
       .in('status', ['in_progress', 'assigned', 'pending_completion']);
+    if (activeGigsError) throw activeGigsError;
 
     if (activeGigs && activeGigs.length > 0) {
       return res.status(409).json({
@@ -4700,11 +4701,12 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
     }
 
     // Block if user is assigned to someone else's gig that is in progress
-    const { data: assignedGigs } = await supabaseAdmin
+    const { data: assignedGigs, error: assignedGigsError } = await supabaseAdmin
       .from('Gig')
       .select('id, status')
       .eq('accepted_by', userId)
       .in('status', ['in_progress', 'assigned', 'pending_completion']);
+    if (assignedGigsError) throw assignedGigsError;
 
     if (assignedGigs && assignedGigs.length > 0) {
       return res.status(409).json({
@@ -4713,17 +4715,32 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       });
     }
 
-    // Block if user has payments held in escrow
-    const { data: escrowPayments } = await supabaseAdmin
+    // Block if user has payments held in escrow. Payment has payment_status
+    // (not status): money that is authorized, captured and held, moving,
+    // disputed or being refunded, or a partial refund whose remaining
+    // earnings are not yet released, must finish first, as must a payout in
+    // flight. The deletion below removes these rows, so an unreadable list
+    // must never look like "no payments".
+    const moneyInFlight = new Set(['setup_pending', 'ready_to_authorize', 'authorize_pending', 'authorized',
+      'capture_pending', 'captured_hold', 'transfer_scheduled', 'transfer_pending', 'disputed', 'refund_pending']);
+    const { data: userPaymentStates, error: paymentStateError } = await supabaseAdmin
       .from('Payment')
+      .select('id, payment_status, transfer_completed_at')
+      .or(`payer_id.eq.${userId},payee_id.eq.${userId}`);
+    if (paymentStateError) throw paymentStateError;
+    const escrowPayments = (userPaymentStates || []).filter((p) => moneyInFlight.has(p.payment_status)
+      || (p.payment_status === 'refunded_partial' && !p.transfer_completed_at));
+    const { data: payoutsInFlight, error: payoutError } = await supabaseAdmin
+      .from('Payout')
       .select('id')
-      .or(`payer_id.eq.${userId},payee_id.eq.${userId}`)
-      .in('status', ['escrow', 'pending', 'processing']);
+      .eq('user_id', userId)
+      .in('payout_status', ['pending', 'in_transit']);
+    if (payoutError) throw payoutError;
 
-    if (escrowPayments && escrowPayments.length > 0) {
+    if (escrowPayments.length > 0 || (payoutsInFlight || []).length > 0) {
       return res.status(409).json({
         error: 'Cannot delete account while you have pending or escrowed payments. Please resolve them first.',
-        pendingPaymentCount: escrowPayments.length,
+        pendingPaymentCount: escrowPayments.length + (payoutsInFlight || []).length,
       });
     }
 
