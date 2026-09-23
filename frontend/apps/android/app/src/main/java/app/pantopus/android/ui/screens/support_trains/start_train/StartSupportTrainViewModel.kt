@@ -219,10 +219,11 @@ class StartSupportTrainViewModel
          *  contact-picker is out of scope); only the typed name is live. */
         fun inviteCandidate(): StartSupportTrainInviteCandidate? {
             if (!isInviteRecipientBranch()) return null
+            // No contact handles: sample ones must never reach the live card.
             return StartSupportTrainInviteCandidate(
                 typedName = _form.value.beneficiaryQuery.trim(),
-                phone = StartSupportTrainSampleData.inviteCandidate.phone,
-                email = StartSupportTrainSampleData.inviteCandidate.email,
+                phone = "",
+                email = "",
             )
         }
 
@@ -313,7 +314,8 @@ class StartSupportTrainViewModel
         private fun primaryCtaLabelFor(step: StartSupportTrainStep): String =
             when (step) {
                 StartSupportTrainStep.WhoAndWhy ->
-                    if (isInviteRecipientBranch()) "Send invite & continue" else "Continue"
+                    // No invite is sent from the wizard, so the CTA doesn't promise one.
+                    "Continue"
                 StartSupportTrainStep.WhatAndWhen -> "Continue"
                 StartSupportTrainStep.ReviewAndLaunch -> "Launch train"
                 StartSupportTrainStep.Success -> "Open train"
