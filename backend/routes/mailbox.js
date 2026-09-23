@@ -2067,6 +2067,9 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       delivery_target_id: deliveryTargetId,
       recipient_type: deliveryTargetType,
       recipient_id: deliveryTargetId,
+      // Mail for a Home is Home mail. Left to the column default ('personal'), a household letter had no personal
+      // recipient and sat outside the Home drawer, so the Mailbox drawers (native apps) listed it for nobody.
+      drawer: deliveryTargetType === 'home' ? 'home' : 'personal',
       address_id: addressHomeId || recipientHomeId || null,
       address_home_id: addressHomeId || recipientHomeId || null,
       attn_user_id: attnUserId || null,
