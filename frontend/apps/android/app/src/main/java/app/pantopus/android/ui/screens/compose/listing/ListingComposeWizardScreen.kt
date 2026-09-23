@@ -144,6 +144,7 @@ fun ListingComposeWizardScreen(
     WizardShell(
         model = viewModel,
         modifier = Modifier.testTag(screenTag),
+        chrome = viewModel.chromeFor(state),
     ) {
         ListingComposeWizardBody(
             state = state,

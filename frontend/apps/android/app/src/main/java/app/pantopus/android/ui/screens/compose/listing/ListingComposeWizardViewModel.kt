@@ -132,6 +132,14 @@ open class ListingComposeWizardViewModel
         override val chrome: WizardChrome
             get() = computeChrome(_state.value)
 
+        /**
+         * Chrome for the state the screen just collected. The screen passes
+         * it to [WizardShell] so the footer and step readout follow the form;
+         * the default `model.chrome` is only read when the shell itself
+         * recomposes.
+         */
+        internal fun chromeFor(state: ListingComposeUiState): WizardChrome = computeChrome(state)
+
         override fun onLeading() {
             val current = _state.value.form.currentStep
             when (leadingControl(current)) {
