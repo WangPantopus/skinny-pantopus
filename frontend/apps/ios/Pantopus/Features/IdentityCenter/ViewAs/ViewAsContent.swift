@@ -231,12 +231,12 @@ public struct ViewAsRender: Sendable, Hashable, Identifiable {
 
 // MARK: - State
 
-/// Top-level render state. The screen ships a loading (shimmer) frame and
-/// the resolved preview; there's no empty/error path because the data is
-/// local sample content, not a fetch.
+/// Top-level render state: loading (shimmer), the resolved preview, or a
+/// failed live fetch (error with Try again).
 public enum ViewAsState: Sendable {
     case loading
     case loaded(ViewAsLoaded)
+    case failed
 }
 
 public struct ViewAsLoaded: Sendable, Hashable {

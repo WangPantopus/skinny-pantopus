@@ -744,7 +744,8 @@ class PublicProfileViewModel
                     avatarUrl = profile.profilePictureUrl ?: profile.avatarUrl,
                     isVerified = profile.verified == true,
                     identityBadges = buildBadges(profile),
-                    tierLabel = if (kind == PublicProfileKind.Persona) "Persona · Verified" else null,
+                    // No server field verifies a persona, so the chip names the kind only.
+                    tierLabel = if (kind == PublicProfileKind.Persona) "Persona" else null,
                     isVerifiedNeighbor = kind == PublicProfileKind.Local,
                 )
             val stats = buildStatCells(profile)
@@ -860,9 +861,10 @@ class PublicProfileViewModel
                         iconColor = if (reviewCount > 0) PantopusColors.warning else PantopusColors.appTextMuted,
                     ),
                     NeighborStat(id = "jobs", value = "$jobs", label = "Jobs done"),
+                    // No response-time data exists yet; "—" until it does.
                     NeighborStat(
                         id = "response",
-                        value = if (isNew) "New" else "~45m",
+                        value = if (isNew) "New" else "—",
                         label = "Response",
                         valueColor = if (isNew) PantopusColors.primary600 else PantopusColors.appText,
                     ),
@@ -873,9 +875,7 @@ class PublicProfileViewModel
                 if (isNew) {
                     NeighborWelcome(
                         title = "Be the welcome wagon",
-                        body =
-                            "$firstName just moved in. A quick hello goes a long way — " +
-                                "and first messages from verified neighbors travel fast.",
+                        body = "$firstName just moved in. A quick hello goes a long way.",
                     )
                 } else {
                     null
@@ -897,7 +897,8 @@ class PublicProfileViewModel
                 verifications = neighborVerifications(profile, isNew),
                 reviews = reviews,
                 reviewCount = reviewCount,
-                mutuals = if (isNew) neighborMutuals(profile) else null,
+                // No mutual-neighbor data comes from the server, so no strip.
+                mutuals = null,
                 welcome = welcome,
                 posts = feed,
                 isNewNeighbor = isNew,
@@ -912,31 +913,16 @@ class PublicProfileViewModel
             val tile = if (isNew) NeighborVerification.Tile.Success else NeighborVerification.Tile.Primary
             val trailing: NeighborVerification.Trailing =
                 if (isNew) NeighborVerification.Trailing.Status("Recent") else NeighborVerification.Trailing.Check
+            // Only what the payload shows: verified residency (method unknown) and
+            // the account's confirmed email. No server field records an ID check.
             val items = mutableListOf<NeighborVerification>()
             if (hasHomeResidency(profile)) {
-                items += NeighborVerification("address", PantopusIcon.Home, "Address", "Verified · postcard", tile, trailing)
+                items += NeighborVerification("address", PantopusIcon.Home, "Address", "Verified", tile, trailing)
             }
             if (profile.verified == true) {
-                items += NeighborVerification("identity", PantopusIcon.BadgeCheck, "Identity", "Government ID", tile, trailing)
+                items += NeighborVerification("email", PantopusIcon.Mail, "Email", "Confirmed", tile, trailing)
             }
-            val emailMeta = if (profile.username.isEmpty()) "Confirmed" else "${profile.username}@…"
-            items += NeighborVerification("email", PantopusIcon.Mail, "Email", emailMeta, tile, trailing)
             return items
-        }
-
-        private fun neighborMutuals(profile: PublicProfileDto): NeighborMutuals {
-            val seed = profile.id.sumOf { it.code }
-            val names =
-                listOf(
-                    listOf("Jamal", "Ravi", "Lena", "Amina"),
-                    listOf("Maya", "Chen", "Priya", "Owen"),
-                    listOf("Noah", "Iris", "Sam", "Leah"),
-                )[seed % 3]
-            return NeighborMutuals(
-                count = names.size,
-                names = names.joinToString(", "),
-                initials = names.map { it.take(1) },
-            )
         }
 
         private fun neighborSince(

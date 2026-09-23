@@ -30,7 +30,7 @@ import org.junit.Test
 /**
  * B5.2 (A18.5) / P1-F — covers the "View as" preview: the local privacy
  * matrix (Public redacts most, Connection least; instant re-resolve on chip
- * change) and the live `view-as` projection / error fallback.
+ * change) and the live `view-as` projection / error state.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ViewAsViewModelTest {
@@ -149,7 +149,7 @@ class ViewAsViewModelTest {
         }
 
     @Test
-    fun liveLoadErrorFallsBackToSample() =
+    fun liveLoadErrorShowsFailedNotSample() =
         runTest {
             coEvery { repository.viewAs(any(), any(), any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
@@ -157,6 +157,6 @@ class ViewAsViewModelTest {
             val vm = ViewAsViewModel(repository)
             vm.load()
 
-            assertEquals(ViewerAudience.Connection, render(vm)?.viewer)
+            assertEquals(ViewAsUiState.Failed, vm.state.value)
         }
 }

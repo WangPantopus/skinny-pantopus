@@ -289,7 +289,7 @@ final class PublicProfileViewModelTests: XCTestCase {
             return
         }
         XCTAssertEqual(content.kind, .persona)
-        XCTAssertEqual(content.header.tierLabel, "Persona · Verified")
+        XCTAssertEqual(content.header.tierLabel, "Persona")
         XCTAssertFalse(content.header.isVerifiedNeighbor)
     }
 
