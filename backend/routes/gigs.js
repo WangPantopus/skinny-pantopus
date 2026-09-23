@@ -242,6 +242,29 @@ function excludeUserOwnedGigs(gigs, userId) {
   return gigs.filter((gig) => String(gig?.user_id || '') !== String(userId));
 }
 
+/**
+ * Leave out tasks from anyone the viewer blocked or who blocked the viewer (UserBlock,
+ * both directions), matching the poster (user_id) and whoever created the task
+ * (created_by). Anonymous viewers are unaffected. A failed block read throws
+ * (blockService's unavailable contract), so a caller never lists unfiltered tasks.
+ */
+async function excludeBlockedPosters(gigs, viewerId) {
+  if (!viewerId || !Array.isArray(gigs) || gigs.length === 0) return gigs;
+  const blocked = await blockService.blockedUserIds(viewerId);
+  if (blocked.size === 0) return gigs;
+  const isBlocked = (id) => id != null && blocked.has(String(id));
+  let kept = gigs.filter((gig) => !isBlocked(gig?.user_id) && !isBlocked(gig?.created_by));
+  // List RPCs return user_id only; read created_by for the rest.
+  const unread = kept.filter((gig) => gig && gig.created_by === undefined && gig.id).map((gig) => gig.id);
+  if (unread.length > 0) {
+    const { data, error } = await supabaseAdmin.from('Gig').select('id').in('id', unread).in('created_by', [...blocked]);
+    if (error) throw blockService.blockCheckUnavailable();
+    const drop = new Set((data || []).map((row) => String(row.id)));
+    if (drop.size > 0) kept = kept.filter((gig) => !drop.has(String(gig.id)));
+  }
+  return kept;
+}
+
 function summarizeGigBids(bids) {
   const byGigId = {};
 
@@ -2383,6 +2406,13 @@ router.get('/', optionalAuth, async (req, res) => {
 
       let rows = data || [];
 
+      try {
+        rows = await excludeBlockedPosters(rows, currentUserId);
+      } catch (blockErr) {
+        logger.warn('Gig list block check unavailable', { error: blockErr.message });
+        return res.status(503).json({ error: 'Failed to fetch gigs' });
+      }
+
       if (shouldExcludeOwnGigs) {
         rows = excludeUserOwnedGigs(rows, currentUserId);
       }
@@ -2725,11 +2755,19 @@ router.get('/', optionalAuth, async (req, res) => {
 
     query = query.range(parsedOffset, parsedOffset + parsedLimit - 1);
 
-    const { data: gigs, error, count } = await query;
+    const { data: fetchedGigs, error, count } = await query;
 
     if (error) {
       logger.error('Error fetching gigs', { error: error.message });
       return res.status(500).json({ error: 'Failed to fetch gigs' });
+    }
+
+    let gigs;
+    try {
+      gigs = await excludeBlockedPosters(fetchedGigs || [], currentUserId);
+    } catch (blockErr) {
+      logger.warn('Gig list block check unavailable', { error: blockErr.message });
+      return res.status(503).json({ error: 'Failed to fetch gigs' });
     }
 
     const gigIdsFromGigs = (gigs || []).map((g) => g.id).filter(Boolean);
@@ -2838,7 +2876,13 @@ router.get('/in-bounds', optionalAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch gigs in bounds' });
     }
 
-    const rows = data || [];
+    let rows;
+    try {
+      rows = await excludeBlockedPosters(data || [], currentUserId);
+    } catch (blockErr) {
+      logger.warn('Gig map block check unavailable', { error: blockErr.message });
+      return res.status(503).json({ error: 'Failed to fetch gigs in bounds' });
+    }
     const savedGigIds = await getViewerSavedGigIds(
       currentUserId,
       rows.map((gig) => gig.id).filter(Boolean)
@@ -3436,7 +3480,14 @@ router.get('/browse', optionalAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch gigs' });
     }
 
-    const visibleGigs = excludeUserOwnedGigs(allGigs || [], userId);
+    let unblockedGigs;
+    try {
+      unblockedGigs = await excludeBlockedPosters(allGigs || [], userId);
+    } catch (blockErr) {
+      logger.warn('Browse block check unavailable', { error: blockErr.message });
+      return res.status(503).json({ error: 'Failed to fetch gigs' });
+    }
+    const visibleGigs = excludeUserOwnedGigs(unblockedGigs, userId);
 
     // ── Fetch user context (optional, non-blocking) ──
     let userAffinities = [];
