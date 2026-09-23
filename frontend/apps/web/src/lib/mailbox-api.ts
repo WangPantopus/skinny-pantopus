@@ -572,9 +572,12 @@ export async function createAsset(data: {
   model_number?: string;
 }): Promise<HomeAsset> {
   return call(async () => {
+    // The Home's existing asset route (POST /api/homes/:id/assets); there is no
+    // POST on /p3/records/assets. Its columns are brand and model.
+    const { homeId, manufacturer, model_number: modelNumber, ...fields } = data;
     const res = await post<{ asset: HomeAsset }>(
-      '/api/mailbox/v2/p3/records/assets',
-      data,
+      `/api/homes/${homeId}/assets`,
+      { ...fields, brand: manufacturer, model: modelNumber },
     );
     return res.asset;
   });

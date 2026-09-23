@@ -9,11 +9,8 @@ import {
   useEscalateTaskToGig,
 } from '@/lib/mailbox-queries';
 import { TaskCard, GigCreationModal } from '@/components/mailbox';
-
-// ── Stub: home context ───────────────────────────────────────
-function useHomeProfile() {
-  return { homeId: 'home_1', address: 'Camas, WA' };
-}
+// The user's Home; each page used a hard-coded 'home_1' stub.
+import useHomeProfile from '../_components/useMailboxHome';
 
 // ── Priority sort weight (high > medium > low) ──────────────
 const PRIORITY_WEIGHT: Record<string, number> = { high: 3, medium: 2, low: 1 };
@@ -394,7 +391,7 @@ function TaskDetailPanel({
 
 export default function MailTasksPage() {
   const home = useHomeProfile();
-  const { data: taskData, isLoading } = useTasks(home.homeId);
+  const { data: taskData, isLoading } = useTasks(home.homeId, { enabled: !!home.homeId });
   const updateTask = useUpdateTask();
   const escalateGig = useEscalateTaskToGig();
 
