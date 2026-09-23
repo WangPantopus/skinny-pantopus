@@ -5,7 +5,28 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 13:34 UTC (coordinator session `92cc4526`)
+## CURRENT RESUME POINT — September 23, 2026, 14:34 UTC (coordinator session `92cc4526`)
+
+This updates the 13:34 block below; read both. The count is **13 closed / 67 partial**.
+
+### Merged since the last block
+- #289: approve route price write.
+- #311: web ApiRequestError. Real reasons are shown, and 4xx responses are not retried.
+- #322: web offline banner.
+- #323: Records photo button hidden.
+- #324: record "Post Gig" uses the real form.
+- #326: honest coupon page.
+- #327: mailbox Tasks "Post as Gig" uses the real flow.
+
+### Queue
+310 317 318 319 343 292 221 236 219 214 215 224 199 208 251 252 257 279 262 264 287 266 285 286 301 303 305 306 302 313 
+
+### Notes since the last block
+- Stream 1: magic compose E2E PASSES on Android + iOS ('Mow my lawn this weekend' low-confidence draft -> 201, in_person, task opens). Shared WizardShell fix verified on 7 Android wizards (magic, listing, CreateBusiness, AddBill, ClaimOwnership, InviteTeammate, FirstRun; X on dirty form now asks). NEW BUG: Gig.items written double-encoded (JSON.stringify into jsonb) by magic-post AND classic create/update (gigs.js:1144, :3907) -> Android can't open those tasks ('Expected BEGIN_ARRAY but was STRING at $.gig.items' -> 'Couldn't load detail'); decision: fix writers + normalize items on read in gig serializers (repairs existing rows without a data migration) + tolerant Android decode. UX: offers-priced tasks show '$1 budget' -> show 'Open to offers'. 6 PRs coming (shared chrome, decode, category mapping, post category, gigs/new, magic-post items).
+- Stream 1 published: #337 shared WizardShell chrome, #339 magic-draft decode (iOS+Android), #340 Android category mapping, #341 Android post category, #342 gigs/new link (iOS+Android). Items double-encode backend PR in progress (writers + normalize on read + tolerant Android decode), then 'Open to offers' label, then S1-01/S1-07/price rule.
+- Shared-UX: #338 Settings asks before signing out (C-27); #343 Hub Discover Businesses rail fixed (hub.js selected BusinessProfile.category, table has categories -> 42703 swallowed -> Businesses rail empty on every client) + Discover links. PRIVACY decision: Discover 'People' rail has always been empty (filter account_type='personal' vs CHECK individual/business/curator); correcting it would list every member (name, city, rating) to everyone, ignoring visibility and distance -> coordinator: (a) hide the People tab on all clients; FOUNDER: if wanted, which visibility setting + proximity rule governs people discovery. Other findings: posts.js matched-businesses hydrate selects nonexistent BusinessProfile columns (500 when cache empty); web Hub 'Jump back in' renders icon keys as text; support-train empty-dates dialog 'Something went wrong'; Vacation hold date rows inert + 'From' defaults to a past date (Stream 2).
+
+## Resume point history — September 23, 2026, 13:34 UTC (coordinator session `92cc4526`)
 
 This updates the 12:34 block below; read both. The count is **13 closed / 67 partial**.
 
