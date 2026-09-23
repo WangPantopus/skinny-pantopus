@@ -735,7 +735,7 @@ final class MembersListViewModelTests: XCTestCase {
             if calls == 2 { return await withCheckedContinuation { release = $0
                 held.fulfill()
             } }
-            if calls == 3 { throw APIError.forbidden }
+            if calls == 3 { throw APIError.forbidden() }
             return rows
         }
         await vm.load()

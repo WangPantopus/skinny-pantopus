@@ -404,11 +404,11 @@ final class HomeDashboardViewModel {
 
     private func authorize(_ revision: Int) async throws {
         try requireCurrent(revision)
-        guard let accessFingerprint else { throw APIError.forbidden }
+        guard let accessFingerprint else { throw APIError.forbidden() }
         let snapshot = try await authority.read()
         try requireCurrent(revision)
         guard snapshot.access?.can("home.view") == true, snapshot.fingerprint == accessFingerprint else {
-            throw APIError.forbidden
+            throw APIError.forbidden()
         }
     }
 
