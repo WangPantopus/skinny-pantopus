@@ -12,6 +12,8 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { checkHomePermission } = require('../utils/homePermissions');
+const { getBusinessIdsWithPermissions } = require('../utils/businessPermissions');
+const { VERIFICATION_RANK } = require('../utils/businessConstants');
 const s3 = require('../services/s3Service');
 const notificationService = require('../services/notificationService');
 const emailService = require('../services/emailService');
@@ -741,6 +743,37 @@ const sendHomeVerificationRequired = (res) =>
     message: HOME_ADDRESS_VERIFICATION_REQUIRED_DETAIL,
     code: HOME_ADDRESS_VERIFICATION_REQUIRED_CODE,
   });
+
+const normalizeBusinessName = (name) => String(name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+// A letter names a business as its sender only when the sender may send mail for that business (business IAM
+// 'mail.send'; owners always may). Compose sends a typed name, which only picks among those businesses; the letter
+// then carries the business's own name. It is 'verified_business' only when that business is document- or
+// government-verified. Otherwise the letter goes out under the sender's own name and the typed name is not stored.
+const resolveSenderBusiness = async (senderId, requestedName) => {
+  const wanted = normalizeBusinessName(requestedName);
+  if (!wanted) return null;
+  const businessIds = await getBusinessIdsWithPermissions(senderId, ['mail.send']);
+  if (businessIds.length === 0) return null;
+  const { data: businesses, error } = await supabaseAdmin
+    .from('User')
+    .select('id, name')
+    .in('id', businessIds)
+    .eq('account_type', 'business');
+  if (error) {
+    logger.warn('Sender business lookup failed', { senderId, error: error.message });
+    return null;
+  }
+  const business = (businesses || []).find((candidate) => normalizeBusinessName(candidate.name) === wanted);
+  if (!business) return null;
+  const { data: profile } = await supabaseAdmin
+    .from('BusinessProfile')
+    .select('verification_status')
+    .eq('business_user_id', business.id)
+    .maybeSingle();
+  const rank = VERIFICATION_RANK[profile?.verification_status] || 0;
+  return { id: business.id, name: business.name.trim(), verified: rank >= VERIFICATION_RANK.document_verified };
+};
 
 
 // Home letters are filtered by the Home mail rule (utils/homeMailAccess, M01):
@@ -1773,7 +1806,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       subject,
       content,
       attachments,
-      senderBusinessName,
+      senderBusinessName: requestedSenderBusinessName,
       senderAddress,
       payoutAmount,
       category,
@@ -1789,13 +1822,17 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       .select('name, username')
       .eq('id', senderId)
       .maybeSingle();
+    // The client's senderBusinessName is only a request: see resolveSenderBusiness.
+    const senderBusiness = await resolveSenderBusiness(senderId, requestedSenderBusinessName);
+    const senderBusinessName = senderBusiness ? senderBusiness.name : null;
+    objectPayload.envelope.senderBusinessName = senderBusinessName;
     const senderDisplayName = (
       senderBusinessName ||
       senderProfile?.name ||
       senderProfile?.username ||
       'Someone'
     ).trim();
-    const senderTrust = senderBusinessName ? 'verified_business' : 'pantopus_user';
+    const senderTrust = senderBusiness?.verified ? 'verified_business' : 'pantopus_user';
 
     // ── Non-user escrow path ──────────────────────────────────
     const escrowContact = normalizeEscrowContact(req.body.recipientEmail || req.body.recipientPhone || null);
