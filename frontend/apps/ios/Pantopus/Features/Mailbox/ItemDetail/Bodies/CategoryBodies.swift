@@ -86,12 +86,12 @@ public struct PackageBody: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             PackageStatusCard(content: content)
-            if let photo = content.deliveryPhoto {
-                PackageDeliveryPhotoCard(photo: photo)
-            }
-            PackageInsightCard(status: content.status)
+            // The photo DTO has no image URL or verification evidence.
+            // Keep the sample illustration out of live package details.
             PackageTimelineCard(content: content)
-            PackageHandoffCard(steps: content.handoffSteps)
+            if !content.handoffSteps.isEmpty {
+                PackageHandoffCard(steps: content.handoffSteps)
+            }
             if let contents = content.contents {
                 PackageContentsCard(contents: contents)
             }
@@ -221,77 +221,6 @@ private struct EtaProgressBar: View {
                 .foregroundStyle(Theme.Color.primary700)
         }
         .accessibilityLabel("Delivery progress from branch to porch, about 68 percent")
-    }
-}
-
-private struct PackageInsightCard: View {
-    let status: PackageDeliveryStatus
-
-    var body: some View {
-        PackageCard {
-            HStack(alignment: .top, spacing: Spacing.s2) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                        .fill(Theme.Color.primary600)
-                    Icon(.sparkles, size: 14, color: Theme.Color.appTextInverse)
-                }
-                .frame(width: 26, height: 26)
-                VStack(alignment: .leading, spacing: Spacing.s2) {
-                    Text(headline)
-                        .pantopusTextStyle(.body)
-                        .foregroundStyle(Theme.Color.primary800)
-                    Text(summary)
-                        .pantopusTextStyle(.small)
-                        .foregroundStyle(Theme.Color.primary900)
-                    VStack(alignment: .leading, spacing: Spacing.s1) {
-                        bullet(icon: .camera, text: firstBullet)
-                        bullet(icon: .mapPin, text: secondBullet)
-                        bullet(icon: .shieldCheck, text: thirdBullet)
-                    }
-                }
-            }
-        }
-        .background(Theme.Color.primary50)
-        .overlay(
-            RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
-                .stroke(Theme.Color.primary200, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
-        .accessibilityIdentifier("packageBody.insight")
-    }
-
-    private func bullet(icon: PantopusIcon, text: String) -> some View {
-        HStack(alignment: .top, spacing: Spacing.s2) {
-            Icon(icon, size: 12, color: Theme.Color.primary700)
-                .frame(width: 18, height: 18)
-                .background(Theme.Color.appSurface)
-                .clipShape(RoundedRectangle(cornerRadius: Radii.xs, style: .continuous))
-            Text(text)
-                .pantopusTextStyle(.caption)
-                .foregroundStyle(Theme.Color.appTextStrong)
-        }
-    }
-
-    private var headline: String {
-        status == .delivered ? "On your porch, photo looks right" : "Pantopus is watching this for you"
-    }
-
-    private var summary: String {
-        status == .delivered
-            ? "The carrier scan and proof photo match your verified address and normal drop spot."
-            : "Carrier handoff is active. Pantopus will keep the delivery window and scan trail together."
-    }
-
-    private var firstBullet: String {
-        status == .delivered ? "Photo matches your porch" : "Carrier route is moving toward your block"
-    }
-
-    private var secondBullet: String {
-        status == .delivered ? "Delivered to 1428 Elm St" : "ETA window stays visible here"
-    }
-
-    private var thirdBullet: String {
-        status == .delivered ? "No signature required" : "No signature required"
     }
 }
 
