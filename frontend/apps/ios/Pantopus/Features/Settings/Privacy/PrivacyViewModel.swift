@@ -322,10 +322,21 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
             }
         }
 
+        // The server revokes this account's sessions before it answers; keep
+        // that from ending the session as a security sign-out.
+        let deletedUserID = signedInUserID
+        auth.accountDeletionInFlight = true
+        defer { auth.accountDeletionInFlight = false }
         do {
             _ = try await api.request(AuthMethodsEndpoints.deleteAccount(stepUpToken: stepUpToken))
             isDeleteSheetPresented = false
-            await auth.signOut()
+            // An explicit sign-out that also forgets the deleted account's
+            // remembered "Welcome back" hint.
+            if let deletedUserID {
+                await auth.removeRememberedAccount(userId: deletedUserID)
+            } else {
+                await auth.signOut()
+            }
             appLock.clearTransientState()
         } catch {
             deleteAccountError = Self.message(

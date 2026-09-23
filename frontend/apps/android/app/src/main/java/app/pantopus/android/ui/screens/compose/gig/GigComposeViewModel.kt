@@ -386,7 +386,7 @@ open class GigComposeViewModel
             draft: MagicDraftDto,
         ): GigComposeFormState {
             val category =
-                GigComposeCategory.fromRawKey(draft.category)
+                GigComposeCategory.fromBackendCategory(draft.category)
                     ?: GigComposeCategory.fromRawKey(draft.taskArchetype)
                     ?: detectArchetype(form.describeText)
             val budgetType =
@@ -1595,7 +1595,7 @@ open class GigComposeViewModel
                     MagicDraftDto(
                         title = title,
                         description = description,
-                        category = form.category?.key,
+                        category = form.category?.backendLabel,
                         taskArchetype = archetype,
                         payType = budgetType.wireValue,
                         budgetFixed = if (budgetType == GigComposeBudgetType.Fixed) amount else null,

@@ -13,6 +13,7 @@
 //  submission since the backend doesn't carry a dedicated `terms` field.
 //
 
+import Observation
 import SwiftUI
 
 /// Presentation handed to the sheet. `bidId` is `nil` when placing a new
@@ -68,6 +69,31 @@ public struct EditBidDraft: Sendable, Equatable {
     }
 }
 
+/// A failed submit as the server explained it: its message, and whether it asked the
+/// helper to set up payouts first (`payout_onboarding_required`). The host records the
+/// failed request here; the sheet shows it.
+@MainActor @Observable
+public final class EditBidFailure {
+    public private(set) var message: String?
+    public private(set) var needsPayoutSetup = false
+
+    public init() {}
+
+    public func record(_ error: Error) {
+        message = (error as? LocalizedError)?.errorDescription
+        if case let APIError.clientError(_, body) = error {
+            needsPayoutSetup = APIError.code(in: body) == "payout_onboarding_required"
+        } else {
+            needsPayoutSetup = false
+        }
+    }
+
+    public func clear() {
+        message = nil
+        needsPayoutSetup = false
+    }
+}
+
 /// Reusable bid-entry sheet. The host owns the network roundtrip; the
 /// sheet just collects values and reports a result.
 @MainActor
@@ -77,6 +103,8 @@ public struct EditBidSheetView: View {
     private let target: EditBidSheetTarget
     private let onSubmit: Submit
     private let onCancel: @MainActor () -> Void
+    private let failure: EditBidFailure?
+    private let onSetUpPayouts: (@MainActor () -> Void)?
 
     @State private var amount: String
     @State private var message: String
@@ -88,11 +116,15 @@ public struct EditBidSheetView: View {
     public init(
         target: EditBidSheetTarget,
         onSubmit: @escaping Submit,
-        onCancel: @escaping @MainActor () -> Void
+        onCancel: @escaping @MainActor () -> Void,
+        onSetUpPayouts: (@MainActor () -> Void)? = nil,
+        failure: EditBidFailure? = nil
     ) {
         self.target = target
         self.onSubmit = onSubmit
         self.onCancel = onCancel
+        self.failure = failure
+        self.onSetUpPayouts = onSetUpPayouts
         let amountString: String = if let initial = target.initialAmount {
             initial.truncatingRemainder(dividingBy: 1) == 0
                 ? "\(Int(initial))"
@@ -120,12 +152,32 @@ public struct EditBidSheetView: View {
                         .foregroundStyle(Theme.Color.error)
                         .accessibilityIdentifier("edit-bid-error")
                 }
+                if failure?.needsPayoutSetup == true, let onSetUpPayouts {
+                    Button {
+                        onSetUpPayouts()
+                    } label: {
+                        Text("Go to Wallet")
+                            .pantopusTextStyle(.body)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Theme.Color.appText)
+                            .padding(.vertical, Spacing.s3)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                                    .stroke(Theme.Color.appBorder, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(submitting)
+                    .accessibilityIdentifier("edit-bid-set-up-payouts")
+                }
                 actions
             }
             .padding(Spacing.s4)
         }
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("edit-bid-sheet")
+        .onAppear { failure?.clear() }
     }
 
     // MARK: - Sections
@@ -266,6 +318,7 @@ public struct EditBidSheetView: View {
         submitting = true
         defer { submitting = false }
         errorText = nil
+        failure?.clear()
         let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedTerms = terms.trimmingCharacters(in: .whitespacesAndNewlines)
         let composedMessage = Self.composeMessage(message: trimmedMessage, terms: trimmedTerms)
@@ -277,7 +330,7 @@ public struct EditBidSheetView: View {
         )
         let ok = await onSubmit(draft)
         if !ok {
-            errorText = "Couldn't submit. Try again in a moment."
+            errorText = failure?.message ?? "Couldn't submit. Try again in a moment."
         }
     }
 

@@ -94,7 +94,6 @@ private struct BusinessesIntroCard: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                // Counts every business the user runs, verified or not.
                 Text(count == 1 ? "1 business" : "\(count) businesses")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)

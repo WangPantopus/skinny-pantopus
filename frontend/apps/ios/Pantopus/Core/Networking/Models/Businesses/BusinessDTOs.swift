@@ -527,10 +527,13 @@ public struct BusinessOnboardingDTO: Decodable, Sendable, Hashable {
 public struct BusinessDashboardProfileDTO: Decodable, Sendable, Hashable {
     public let isPublished: Bool?
     public let updatedAt: String?
+    /// Same field the My businesses card reads for its verified mark.
+    public let identityVerificationTier: String?
 
     private enum CodingKeys: String, CodingKey {
         case isPublished = "is_published"
         case updatedAt = "updated_at"
+        case identityVerificationTier = "identity_verification_tier"
     }
 }
 

@@ -149,7 +149,7 @@ class OwnersListViewModelTest {
                 val error = awaitItem() as ListOfRowsUiState.Error
                 assertTrue(
                     "Expected user-readable error copy, got '${error.message}'",
-                    error.message.contains("Server error", ignoreCase = true),
+                    error.message.contains("Something went wrong", ignoreCase = true),
                 )
                 cancelAndConsumeRemainingEvents()
             }

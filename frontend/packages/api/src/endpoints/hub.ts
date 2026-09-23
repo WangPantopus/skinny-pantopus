@@ -169,6 +169,8 @@ export interface DiscoveryItem {
   meta: string | null;
   category?: string;
   avatarUrl?: string;
+  /** Businesses only: the handle for the public page (/b/:username). */
+  username?: string | null;
   route: string;
 }
 

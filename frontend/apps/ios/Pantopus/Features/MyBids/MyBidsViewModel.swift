@@ -591,7 +591,7 @@ public final class MyBidsViewModel: ListOfRowsDataSource {
     /// Mutates the cached bid optimistically when the PUT succeeds so
     /// the row reflects the new amount + message without a full refetch.
     @discardableResult
-    public func submitEditBid(_ draft: EditBidDraft) async -> Bool {
+    public func submitEditBid(_ draft: EditBidDraft, failure: EditBidFailure? = nil) async -> Bool {
         guard let target = editBidTarget,
               let bidId = target.bidId
         else { return false }
@@ -617,6 +617,7 @@ public final class MyBidsViewModel: ListOfRowsDataSource {
                 text: (error as? APIError)?.errorDescription ?? "Couldn't update bid.",
                 kind: .error
             )
+            failure?.record(error)
             return false
         }
     }

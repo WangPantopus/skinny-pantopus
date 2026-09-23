@@ -297,6 +297,9 @@ public struct TasksTabRoot: View {
                 path.append(.chatConversation(destination))
             }
         }
+        // A gig link that replaces the open gig (a deep link while a detail is shown) must build a new
+        // detail; without its own identity SwiftUI keeps the previous gig's view and model on screen.
+        .id(gigId)
     }
 
     private func listingDetailDestination(listingId: String) -> some View {

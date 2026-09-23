@@ -300,6 +300,8 @@ data class BusinessOnboardingDto(
 data class BusinessDashboardProfileDto(
     @Json(name = "is_published") val isPublished: Boolean? = null,
     @Json(name = "updated_at") val updatedAt: String? = null,
+    /** Same field the My businesses card reads for its verified mark. */
+    @Json(name = "identity_verification_tier") val identityVerificationTier: String? = null,
 )
 
 /**

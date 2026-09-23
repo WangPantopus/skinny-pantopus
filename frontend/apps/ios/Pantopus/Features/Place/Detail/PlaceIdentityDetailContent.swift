@@ -62,8 +62,14 @@ final class PlaceResidencyLetterViewModel {
             ) as ResidencyLetterResponse
             purpose = ""
             await load()
+        } catch let error as APIError {
+            // A refused issue (403, daily limit, outage) must not look like a
+            // no-op: the list reload succeeds, so say why. The purpose stays
+            // for a retry.
+            toast = (error.errorDescription ?? "Couldn't issue the letter.", true)
+            await load()
         } catch {
-            // Surface via a reload; the list error state will show.
+            toast = ("Couldn't issue the letter.", true)
             await load()
         }
     }
