@@ -1,6 +1,52 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — September 23, 2026, 03:45 UTC
+## CURRENT RESUME POINT — September 23, 2026, 05:00 UTC
+
+This updates the 03:45 block below; read both. The count is still **9 closed / 71 partial**.
+
+### Whole-backend schema-drift scan (coordinator, new tool)
+
+`/private/tmp/pantopus-coord-schema/scan.cjs` parses every supabase-js chain in `backend/`: 478 files, 3,129 chains
+and 135 RPC calls. It checks them against a DB-only replay of master's 86 migrations (`supabase db start`, project
+`pantopus-coord-schema`, SQL 64592; maps in `columns.json` / `fks.json` / `functions.json`). It found 148 candidates:
+queries naming tables, columns or RPCs that don't exist, which usually fail silently as false-empties or failing
+writes.
+- **Per-stream lists:** `findings-stream{1,2,3}.md` in the same folder. Streams 2 and 3 are working theirs by user
+  impact.
+- **Rule for every repair:** check whether the fix unmasks data (the #212 → #217 lesson), and gate first if it
+  does. Rerun the scan after merges to see what remains.
+
+Stream 1 results:
+- **#235: money-safety repair, merged `02bdef415`.** Account deletion's escrow guard filtered a nonexistent
+  `Payment.status`, so deleting an account erased in-flight payments for both parties: held escrow, live holds,
+  owed partial-refund earnings and payouts in transit. Bundle `20260923-stream1-account-delete-money-guard-r1`.
+- **#237:** gig-search title suggestions and the AI assistant's activity counts were always empty. Verified in the
+  web UI.
+- **#238:** retires `PATCH /api/gigs/:id/status`, a dormant bypass that let owners write completed/in_progress
+  without Start Work, capture or settlement. It was blocked only by the drift 404.
+- **Recorded, no change:**
+  - the dead public previews `/api/public/gigs|listings|posts` (if revived they must honour visibility);
+  - urgent-task neighbor fan-out, which never worked (missing `find_homes_nearby`; enabling it is a founder
+    decision);
+  - the legacy `/api/offers`;
+  - the unused geo helpers;
+  - the anomaly-job fallback.
+
+### Merged since 03:45 UTC
+- #222 / #223 / #225 / #228: mailbox Home scope, readers, settings and Hub Today calendar.
+- #232: blocked viewers can't open the blocker's profile.
+- **#233: critical v2 mailbox IDOR; outsiders could read, mark opened and take any letter.**
+- #234: party join Home gate.
+- #235: account-deletion money guard.
+- #229: bids refused across personal blocks.
+
+### Founder questions added (not implemented)
+- **Account deletion:** retain terminal payment history and the wallet ledger? Require withdrawing a positive
+  wallet balance first?
+- **Urgent-task fan-out:** build `find_homes_nearby` and start neighbor pushes?
+- **Mailbox:** should admins see `attn_plus_admins` letters? `/party/assign` assignee membership.
+
+## Resume point history — September 23, 2026, 03:45 UTC
 
 This updates the 01:55 block below; read both. The count is still **9 closed / 71 partial**.
 
