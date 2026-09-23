@@ -91,6 +91,8 @@ struct HubView: View {
                         Task { await viewModel.selectDiscoveryFilter(filter) }
                     },
                     isLoading: viewModel.discoveryLoading,
+                    loadFailed: viewModel.discoveryFailed,
+                    onRetry: { Task { await viewModel.refreshDiscovery() } },
                     onSeeAll: { onNavigate(.openDiscoverHub) },
                     onExploreMap: { onNavigate(.openExploreMap) },
                     onFindBusinesses: { onNavigate(.openFindBusinesses) }
@@ -135,6 +137,8 @@ struct HubView: View {
                             Task { await viewModel.selectDiscoveryFilter(filter) }
                         },
                         isLoading: viewModel.discoveryLoading,
+                        loadFailed: viewModel.discoveryFailed,
+                        onRetry: { Task { await viewModel.refreshDiscovery() } },
                         onSeeAll: { onNavigate(.openDiscoverHub) },
                         onExploreMap: { onNavigate(.openExploreMap) },
                         onFindBusinesses: { onNavigate(.openFindBusinesses) }

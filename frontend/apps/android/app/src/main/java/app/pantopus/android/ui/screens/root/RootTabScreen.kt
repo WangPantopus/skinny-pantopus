@@ -4837,6 +4837,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     navController.navigate(ChildRoutes.pulsePost(destination.id))
                                 is RecentActivityDestination.HomeDashboard ->
                                     navController.navigate(ChildRoutes.homeDashboard(destination.id))
+                                is RecentActivityDestination.Link ->
+                                    if (DeepLinkRouter.canRoute(destination.path)) {
+                                        DeepLinkRouter.handle(destination.path)
+                                    } else {
+                                        navController.navigate(ChildRoutes.placeholder(destination.label))
+                                    }
                                 is RecentActivityDestination.Placeholder ->
                                     navController.navigate(ChildRoutes.placeholder(destination.label))
                             }
