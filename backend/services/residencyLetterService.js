@@ -28,6 +28,7 @@ const crypto = require('crypto');
 const PDFDocument = require('pdfkit');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { currentOccupancy } = require('../utils/homeAccessPolicy');
 
 const PURPOSE_MAX_LEN = 140;
 const DEFAULT_PURPOSE = 'General verification of residency';
@@ -326,7 +327,7 @@ async function verifyByCode(code) {
 
   const { data, error } = await supabaseAdmin
     .from('ResidencyLetter')
-    .select('id, status, resident_name, address_line1, city, state, zipcode, purpose, issued_at, revoked_at, expires_at, verify_count')
+    .select('id, home_id, user_id, status, resident_name, address_line1, city, state, zipcode, purpose, issued_at, revoked_at, expires_at, verify_count')
     .eq('letter_code', normalized)
     .maybeSingle();
   if (error || !data) return { valid: false };
@@ -351,6 +352,27 @@ async function verifyByCode(code) {
     }
 
     return { valid: false, status: reason };
+  }
+
+  // The letter attests CURRENT residency, so it stops verifying when the
+  // issuer's admission to this home ends — including endings that write no
+  // revocation, such as an invited member's access window lapsing. Retiring
+  // it mirrors the removal/move-out transactions (revoke_reason
+  // residency_ended), so a later re-admission does not revive it.
+  const { data: occupancy, error: occupancyErr } = await supabaseAdmin
+    .from('HomeOccupancy')
+    .select('is_active, verification_status, start_at, end_at, access_start_at, access_end_at')
+    .eq('home_id', data.home_id)
+    .eq('user_id', data.user_id)
+    .maybeSingle();
+  if (occupancyErr) throw new Error('Could not confirm current residency');
+  if (!occupancy || occupancy.verification_status !== 'verified' || !currentOccupancy(occupancy)) {
+    await supabaseAdmin
+      .from('ResidencyLetter')
+      .update({ status: 'revoked', revoked_at: new Date().toISOString(), revoke_reason: 'residency_ended' })
+      .eq('id', data.id)
+      .eq('status', 'issued');
+    return { valid: false, status: 'revoked' };
   }
 
   // Telemetry (best-effort; the read result is what matters).
