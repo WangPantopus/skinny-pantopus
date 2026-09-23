@@ -329,6 +329,9 @@ public final class PublicProfileViewModel {
     /// The resolved `User.id`, known only after the profile loads. Every
     /// user-scoped mutation must use this, never `routeIdentifier`.
     private var resolvedUserId: String
+    /// The loaded profile's archetype; decides which block scope gates the
+    /// Follow / Connect affordances in `loadRelationship(id:)`.
+    private var profileKind: PublicProfileKind = .persona
     private let currentUserId: String?
     private let client: APIClient
     private let logger = Logger(label: "app.pantopus.ios.PublicProfile")
@@ -594,6 +597,7 @@ public final class PublicProfileViewModel {
             let profile = try await client.request(profileEndpoint, as: PublicProfile.self)
             resolvedUserId = profile.id
             let kind = derivedKind(from: profile)
+            profileKind = kind
             // A21.2 — the Local archetype renders a real neighbourhood post
             // feed, so pull the author's posts the way the RN `PostsTab`
             // does (`GET /api/posts/user/:id`). Persona profiles keep an
@@ -628,11 +632,45 @@ public final class PublicProfileViewModel {
     /// poses. Requires auth, so a signed-out viewer just gets the resting
     /// state (and no Follow affordance).
     private func loadRelationship(id: String) async {
-        canFollow = currentUserId != nil && currentUserId != id
-        guard canFollow else {
+        guard currentUserId != nil, currentUserId != id else {
+            canFollow = false
             isFollowing = false
             return
         }
+
+        // Personal UserBlock rows are deliberately distinct from the
+        // Relationship graph: GET /:id/relationship reports only the
+        // latter. The local-neighbor Follow/Connect row is the scope that
+        // uses personal block visibility; Persona and Relationship
+        // affordances retain their established independent policy.
+        if profileKind == .local {
+            // Resolve the existing personal block list before offering any
+            // affordance, so a fresh profile navigation cannot restore
+            // Follow/Connect for a user this account has already blocked.
+            // A failed read fails closed by leaving the profile
+            // non-actionable; it must never turn an unavailable
+            // authorization check into an affordance.
+            do {
+                let personal = try await client.request(
+                    BlocksEndpoints.blocked,
+                    as: UserBlocksResponse.self
+                )
+                if personal.blocked.contains(where: { $0.userId == id }) {
+                    canFollow = false
+                    isFollowing = false
+                    connection = .blocked
+                    return
+                }
+            } catch {
+                logger.warning("Blocked-list load failed: \(error)")
+                canFollow = false
+                isFollowing = false
+                toastMessage = "Couldn't verify block status. Actions are unavailable."
+                return
+            }
+        }
+
+        canFollow = true
         do {
             let relationship = try await client.request(
                 UserSocialEndpoints.relationship(userId: id),
