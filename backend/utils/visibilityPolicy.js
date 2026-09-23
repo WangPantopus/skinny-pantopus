@@ -32,9 +32,12 @@ const logger = require('./logger');
  * Get the relationship status between two users.
  * @param {string} userA
  * @param {string} userB
+ * @param {{ forViewer?: boolean }} [options] `forViewer`: userA is the person
+ *   looking, so a block made by userB reads as 'none' (block concealment).
+ *   Enforcement callers (isBlocked, isConnected) keep both directions.
  * @returns {Promise<'none'|'pending_sent'|'pending_received'|'connected'|'blocked'>}
  */
-async function getRelationshipStatus(userA, userB) {
+async function getRelationshipStatus(userA, userB, { forViewer = false } = {}) {
   if (!userA || !userB || userA === userB) return 'none';
   const { data, error } = await supabaseAdmin
     .from('Relationship')
@@ -47,7 +50,7 @@ async function getRelationshipStatus(userA, userB) {
   if (error) throw error;
   if (!data) return 'none';
 
-  if (data.status === 'blocked') return 'blocked';
+  if (data.status === 'blocked') return !forViewer || data.blocked_by === userA ? 'blocked' : 'none';
   if (data.status === 'accepted') return 'connected';
   if (data.status === 'pending') {
     return data.requester_id === userA ? 'pending_sent' : 'pending_received';
