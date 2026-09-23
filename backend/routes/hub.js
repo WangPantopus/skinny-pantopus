@@ -15,6 +15,8 @@ const Joi = require('joi');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 const homeListService = require('../services/homeListService');
+const { unreadMailQuery } = require('../services/homeDashboardService');
+const { staleAffectsTrust } = require('../utils/verificationAge');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
@@ -241,12 +243,15 @@ router.get('/', verifyToken, async (req, res) => {
           .eq('user_id', userId)
           .eq('is_read', false)
       ).catch(() => ({ count: 0 })),
+      // Unread personal mail, as the mailbox counts it (Mail has no status or
+      // is_read column; those names made this read fail and show nothing).
       personalMail: Promise.resolve(
         supabaseAdmin
           .from('Mail')
-          .select('id, type, is_read')
-          .eq('recipient_id', userId)
-          .eq('status', 'pending')
+          .select('id, type')
+          .eq('recipient_user_id', userId)
+          .eq('viewed', false)
+          .eq('archived', false)
       ).catch(() => ({ data: null })),
       gigsNearby: Promise.resolve(
         supabaseAdmin
@@ -278,13 +283,15 @@ router.get('/', verifyToken, async (req, res) => {
       // The same permission gates as the Home dashboard: bills need
       // finance.view, mail needs mailbox.view, the roster needs members.view.
       const homeCan = (permission) => primaryPermissions.has(permission);
-      if (homeCan('mailbox.view')) batch2.homeMail = Promise.resolve(
-        supabaseAdmin
-          .from('Mail')
-          .select('id', { count: 'exact', head: true })
-          .eq('home_id', primaryHome.id)
-          .eq('status', 'pending')
-      ).catch(() => ({ count: 0 }));
+      // Home mail uses the dashboard's unread badge and gate (mailbox.view on a
+      // current, verified occupancy), which also hides other members' private
+      // and attention-only mail. Mail has no home_id or status column.
+      const primaryOccupancy = homeStates[primaryIndex].access.occupancy;
+      if (homeCan('mailbox.view') && primaryOccupancy?.verification_status === 'verified'
+        && !staleAffectsTrust(primaryOccupancy.verified_at)) {
+        batch2.homeMail = Promise.resolve(unreadMailQuery(primaryHome.id, userId, now.toISOString()))
+          .catch(() => ({ count: 0 }));
+      }
       if (homeCan('finance.view')) batch2.dueBills = Promise.resolve(
         supabaseAdmin
           .from('HomeBill')
@@ -424,7 +431,7 @@ router.get('/', verifyToken, async (req, res) => {
 
     // Personal inbox
     const mailItems = b2.personalMail.data || [];
-    const unreadPersonal = mailItems.filter((m) => !m.is_read).length;
+    const unreadPersonal = mailItems.length;
     const offerItems = mailItems.filter((m) => m.type === 'ad' || m.type === 'newsletter');
     if (unreadPersonal > 0) {
       statusItems.push({
@@ -466,7 +473,9 @@ router.get('/', verifyToken, async (req, res) => {
     let homeCard = null;
     if (primaryHome) {
       homeCard = {
-        newMail: statusItems.find((i) => i.type === 'mail_new')?.count || 0,
+        // The Home card counts Home mail only (the personal inbox item shares
+        // the mail_new type).
+        newMail: b2.homeMail?.count || 0,
         billsDue: dueBills
           .filter((b) => b.status !== 'paid')
           .slice(0, 2)

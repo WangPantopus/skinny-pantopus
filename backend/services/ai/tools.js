@@ -493,10 +493,12 @@ async function _getUserContext(userId) {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const [gigsRes, listingsRes, postsRes] = await Promise.all([
+      // Gig and Listing name their owner user_id (posted_by / seller_id do not
+      // exist, which made both counts read as zero).
       supabaseAdmin.from('Gig').select('id', { count: 'exact', head: true })
-        .eq('posted_by', userId).gte('created_at', thirtyDaysAgo),
+        .eq('user_id', userId).gte('created_at', thirtyDaysAgo),
       supabaseAdmin.from('Listing').select('id', { count: 'exact', head: true })
-        .eq('seller_id', userId).gte('created_at', thirtyDaysAgo),
+        .eq('user_id', userId).gte('created_at', thirtyDaysAgo),
       supabaseAdmin.from('Post').select('id', { count: 'exact', head: true })
         .eq('user_id', userId).gte('created_at', thirtyDaysAgo),
     ]);
