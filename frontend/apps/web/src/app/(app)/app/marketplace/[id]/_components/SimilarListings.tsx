@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
+import { toast } from '@/components/ui/toast-store';
 import ListingCard from '../../ListingCard';
 
 type SimilarListingsProps = {
@@ -44,6 +45,21 @@ export default function SimilarListings({ listingId }: SimilarListingsProps) {
     );
   }
 
+  // The heart saves through the same toggle as the marketplace grid: flip at once, settle on the answer, undo on failure.
+  const handleSave = async (id: string) => {
+    const flip = (saved?: boolean) =>
+      setListings((prev) => prev.map((l) => (l.id === id ? { ...l, userHasSaved: saved ?? !l.userHasSaved } : l)));
+    const wasSaved = listings.find((l) => l.id === id)?.userHasSaved ?? false;
+    flip();
+    try {
+      const { saved } = await api.listings.toggleSave(id);
+      flip(saved);
+    } catch {
+      flip(wasSaved);
+      toast.error("Couldn't update your saved listings.");
+    }
+  };
+
   if (listings.length === 0) return null;
 
   return (
@@ -55,7 +71,7 @@ export default function SimilarListings({ listingId }: SimilarListingsProps) {
             <ListingCard
               item={item}
               onClick={() => router.push(`/app/marketplace/${item.id}`)}
-              onSave={() => {}}
+              onSave={() => void handleSave(item.id)}
             />
           </div>
         ))}
