@@ -1589,6 +1589,49 @@ router.get('/:id', verifyToken, async (req, res) => {
       mail.content_format = mail.content?.includes('<') ? 'html' : 'plain_text';
     }
 
+    // Native detail decoders read this existing object envelope. Reuse the
+    // authorized package records already used by V2; storage metadata alone
+    // cannot describe a delivery. Unsupported lifecycle states keep the generic
+    // layout rather than being misrepresented by native enum fallbacks.
+    if ((mail.mail_type || mail.type) === 'package' || mail.mail_object_type === 'package') {
+      const { data: pkg, error: packageError } = await supabaseAdmin.from('MailPackage')
+        .select('id, carrier, tracking_id_masked, status, delivery_location_note, weight_lbs, dimensions_l, dimensions_w, dimensions_h')
+        .eq('mail_id', id).maybeSingle();
+      if (packageError) return res.status(503).json({ error: 'Package details are temporarily unavailable. Please try again.' });
+      const titles = { in_transit: 'In transit', out_for_delivery: 'Out for delivery', delivered: 'Delivered' };
+      if (pkg && titles[pkg.status]) {
+        const { data: events, error: eventsError } = await supabaseAdmin.from('PackageEvent')
+          .select('id, status, location, occurred_at').eq('package_id', pkg.id).order('occurred_at', { ascending: true });
+        if (eventsError) return res.status(503).json({ error: 'Package tracking is temporarily unavailable. Please try again.' });
+        const steps = (events || []).map((event, index) => ({
+          id: event.id,
+          title: titles[event.status] || (event.status === 'pre_receipt' ? 'Awaiting package' : event.status === 'exception' ? 'Delivery exception' : 'Tracking update'),
+          subtitle: [event.location, event.occurred_at].filter(Boolean).join(' · '),
+          state: index === events.length - 1 ? 'current' : 'done',
+        }));
+        if (steps.length && events[events.length - 1].status !== pkg.status) {
+          steps[steps.length - 1].state = 'done';
+          steps.push({ id: pkg.id, title: titles[pkg.status], subtitle: '', state: 'current' });
+        }
+        const metadata = mail.object || {};
+        mail.object = {
+          ...metadata,
+          ...(metadata.status ? { storage_status: metadata.status } : {}),
+          carrier: pkg.carrier,
+          tracking_number: pkg.tracking_id_masked,
+          status: pkg.status,
+          status_title: titles[pkg.status],
+          status_detail: pkg.delivery_location_note || `Carrier status: ${titles[pkg.status].toLowerCase()}.`,
+          ...(pkg.weight_lbs != null ? { weight: `${pkg.weight_lbs} lb` } : {}),
+          ...([pkg.dimensions_l, pkg.dimensions_w, pkg.dimensions_h].every(value => value != null)
+            ? { dimensions: `${pkg.dimensions_l} × ${pkg.dimensions_w} × ${pkg.dimensions_h} in` } : {}),
+          // With no event history, show only the stored current state; do not
+          // let the client invent earlier shipping steps or a future ETA.
+          tracking_steps: steps.length ? steps : [{ id: pkg.id, title: titles[pkg.status], subtitle: '', state: 'current' }],
+        };
+      }
+    }
+
     mail.links = await getMailLinksSafely(mail.id);
 
     res.json({ mail });
