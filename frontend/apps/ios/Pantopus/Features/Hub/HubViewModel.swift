@@ -75,35 +75,7 @@ final class HubViewModel {
             try await self.api.request(NotificationsEndpoints.unreadCount)
         }
         guard let unread else { return }
-        switch state {
-        case let .populated(content):
-            let bar = content.topBar
-            state = .populated(HubState.PopulatedContent(
-                topBar: TopBarContent(
-                    greeting: bar.greeting,
-                    name: bar.name,
-                    avatarInitials: bar.avatarInitials,
-                    identity: bar.identity,
-                    ringProgress: bar.ringProgress,
-                    unreadCount: Self.personalUnread(unread),
-                    audienceUnreadCount: unread.byContext?.audience ?? 0
-                ),
-                actionChips: content.actionChips,
-                statusItems: content.statusItems,
-                neighborDensity: content.neighborDensity,
-                setupBanner: content.setupBanner,
-                today: content.today,
-                pillars: content.pillars,
-                discovery: content.discovery,
-                jumpBackIn: content.jumpBackIn,
-                activity: content.activity
-            ))
-        case var .firstRun(content):
-            content.unreadCount = Self.personalUnread(unread)
-            state = .firstRun(content)
-        default:
-            break
-        }
+        state = state.withUnread(personal: unread.personalBellCount, audience: unread.byContext?.audience ?? 0)
     }
 
     /// Dismiss the amber setup banner; persists across launches.
@@ -221,19 +193,10 @@ final class HubViewModel {
             hub: hub,
             today: today,
             discovery: discovery,
-            personalUnread: Self.personalUnread(unread),
+            personalUnread: unread?.personalBellCount ?? 0,
             audienceUnread: unread?.byContext?.audience ?? 0,
             rebookable: rebookable?.rebookable ?? []
         )
-    }
-
-    /// The bell's dot counts unread personal notifications (personal +
-    /// platform, like the web personal-zone bell); the megaphone counts the
-    /// audience zone. Older deployments only return the total.
-    static func personalUnread(_ unread: NotificationUnreadCountResponse?) -> Int {
-        guard let unread else { return 0 }
-        guard let split = unread.byContext else { return unread.count }
-        return split.personal + split.platform
     }
 
     /// Run a throwing async request and swallow its failure, returning nil.
