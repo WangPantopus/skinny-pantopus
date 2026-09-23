@@ -120,6 +120,10 @@ public struct MarketplaceTabRoot: View {
                     Task { @MainActor in
                         path.append(.editListing(listingId: dto.id, jumpToStep: nil))
                     }
+                },
+                onFindSimilar: {
+                    // This stack's root is the marketplace.
+                    Task { @MainActor in path.removeAll { _ in true } }
                 }
             )
         case .composeListing:
