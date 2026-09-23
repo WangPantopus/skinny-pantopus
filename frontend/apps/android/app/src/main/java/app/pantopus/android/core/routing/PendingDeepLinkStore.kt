@@ -20,6 +20,7 @@ internal data class PendingContentArrival(
 )
 
 /** Device-only encrypted handoff. Legacy links migrate without extending their original lifetime. */
+@Suppress("TooManyFunctions")
 object PendingDeepLinkStore {
     private val adapter = Moshi.Builder().build().adapter(PendingContentArrival::class.java).serializeNulls()
     private val storage = PendingContentArrivalPreferences()
