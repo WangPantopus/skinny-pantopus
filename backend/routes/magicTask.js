@@ -516,8 +516,9 @@ router.post('/magic-post', verifyToken, validate(magicPostSchema), async (req, r
       // Source tracking
       source_flow: source_flow || 'magic',
       engagement_mode: resolvedEngagementMode,
-      // T6.0b — helper-engagement format. Defaults to in_person via DB.
-      task_format: task_format || null,
+      // T6.0b — helper-engagement format. Gig.task_format is NOT NULL and an
+      // explicit null skips the column default, so default it here as gigs.js does.
+      task_format: task_format || 'in_person',
       ai_confidence: ai_confidence || null,
       ai_draft_json: ai_draft_json || null,
       // Task archetype + module fields
