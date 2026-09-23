@@ -236,6 +236,7 @@ private struct StartSupportTrainWhoAndWhyStep: View {
                     }
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, 10)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("startSupportTrainResult_\(recipient.userId)")
