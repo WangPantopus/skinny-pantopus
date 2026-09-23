@@ -10,6 +10,10 @@ const LEGACY_ROLES = Object.freeze({
   roommate: 'member', family: 'member', member: 'member', caregiver: 'restricted_member',
   restricted_member: 'restricted_member', guest: 'guest', service_provider: 'service_provider',
 });
+// Roles whose verified access does not make someone a resident of the home:
+// guest access (visitors; the airbnb_guest / cleaner_vendor presets) and
+// service providers. Residency attestations (letters, passes) exclude them.
+const NON_RESIDENT_ROLES = Object.freeze(new Set(['guest', 'service_provider']));
 const OLD_TO_NEW_PERM = Object.freeze({
   can_manage_home: ['home.edit'], can_manage_finance: ['finance.manage'],
   can_manage_access: ['access.manage', 'members.manage'],
@@ -71,4 +75,4 @@ function effectiveRole(role, age) {
 }
 
 module.exports = { ROLE_RANK, OLD_TO_NEW_PERM, HOME_PERMISSIONS, resolveHomeRole,
-  currentOccupancy, ageAllows, effectiveRole };
+  currentOccupancy, ageAllows, effectiveRole, NON_RESIDENT_ROLES };
