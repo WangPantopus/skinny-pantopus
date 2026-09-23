@@ -867,8 +867,9 @@ private fun EmptyFrame(
                 strokeWidth = 2f,
                 tint = PantopusColors.primary600,
             )
+            // The real gate: a membership on a tier that includes messages.
             Text(
-                text = "Only verified fans can message. Spam is filtered out by default.",
+                text = "Only members on a tier with messaging can message you.",
                 fontSize = 11.sp,
                 color = PantopusColors.appTextMuted,
             )

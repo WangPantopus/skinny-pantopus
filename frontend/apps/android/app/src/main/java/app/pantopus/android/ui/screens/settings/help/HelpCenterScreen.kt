@@ -140,8 +140,9 @@ private val Sections =
                     Item(
                         question = "Who can see my address?",
                         answer =
-                            "Only verified connections — and only at the precision you set under " +
-                                "Settings → Privacy → Address sharing. The default is street-level.",
+                            "Your profile never shows your street address. People who can see your profile see the city " +
+                                "and state on it, and whether your home is verified. Posts, tasks, and listings show only the " +
+                                "location you add to them.",
                     ),
                 ),
         ),
