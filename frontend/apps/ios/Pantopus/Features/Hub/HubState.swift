@@ -348,6 +348,10 @@ public enum HubDiscoveryFilter: String, Sendable, Hashable, CaseIterable, Identi
     public var queryValue: String {
         rawValue
     }
+
+    /// Tabs the Hub shows. People is left out: `filter=people` never returns
+    /// anyone today, so the tab could only ever be empty.
+    public static let visibleTabs: [HubDiscoveryFilter] = [.gigs, .businesses, .posts]
 }
 
 /// Discovery rail card.

@@ -107,7 +107,8 @@ class RecentActivityViewModel
                     mailId != null -> RecentActivityDestination.MailItemDetail(mailId)
                     postId != null -> RecentActivityDestination.PulsePost(postId)
                     homeId != null -> RecentActivityDestination.HomeDashboard(homeId)
-                    else -> RecentActivityDestination.Placeholder(item.title)
+                    path.isBlank() -> RecentActivityDestination.Placeholder(item.title)
+                    else -> RecentActivityDestination.Link(path, item.title)
                 }
             }
 

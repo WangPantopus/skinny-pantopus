@@ -377,6 +377,16 @@ object DeepLinkRouter {
         return (resolveString(normalized) as? Destination.Gig)?.id
     }
 
+    /**
+     * True when [path] resolves to a destination the app can open (not
+     * [Destination.Unknown]). Lets list hosts route a link or fall back to
+     * their own placeholder instead of dropping the tap.
+     */
+    fun canRoute(path: String): Boolean {
+        val normalized = Paths.normalizeIncoming(path)
+        return !Paths.isOAuthCallback(normalized) && resolveString(normalized) !is Destination.Unknown
+    }
+
     fun consume(): Destination? {
         val current = _pending.value
         _pending.value = null
