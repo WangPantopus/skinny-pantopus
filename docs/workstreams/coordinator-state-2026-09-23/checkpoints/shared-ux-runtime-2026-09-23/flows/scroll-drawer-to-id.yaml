@@ -1,0 +1,10 @@
+appId: app.pantopus.ios
+---
+- scrollUntilVisible:
+    element:
+      id: ${ID}
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: ${ID}
+- waitForAnimationToEnd

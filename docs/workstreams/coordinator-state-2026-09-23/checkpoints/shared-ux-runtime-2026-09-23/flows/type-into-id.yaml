@@ -1,0 +1,6 @@
+appId: app.pantopus.ios
+---
+- tapOn:
+    id: ${ID}
+- inputText: ${T}
+- waitForAnimationToEnd

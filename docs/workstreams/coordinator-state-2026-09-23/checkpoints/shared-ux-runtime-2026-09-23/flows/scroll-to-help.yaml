@@ -1,0 +1,9 @@
+appId: app.pantopus.ios
+---
+- scrollUntilVisible:
+    element:
+      id: "meSectionRow_help_legal_help"
+    direction: DOWN
+- tapOn:
+    id: "meSectionRow_help_legal_help"
+- waitForAnimationToEnd

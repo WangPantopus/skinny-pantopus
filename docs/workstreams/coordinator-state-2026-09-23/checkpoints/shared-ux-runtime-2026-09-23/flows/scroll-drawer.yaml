@@ -1,0 +1,9 @@
+appId: app.pantopus.ios
+---
+- scrollUntilVisible:
+    element:
+      id: "navDrawer.item.settings"
+    direction: DOWN
+- tapOn:
+    id: "navDrawer.item.settings"
+- waitForAnimationToEnd

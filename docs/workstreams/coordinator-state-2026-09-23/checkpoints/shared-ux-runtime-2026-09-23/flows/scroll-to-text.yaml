@@ -1,0 +1,9 @@
+appId: app.pantopus.ios
+---
+- scrollUntilVisible:
+    element:
+      text: ${T}
+    direction: DOWN
+    timeout: 20000
+    speed: 40
+- waitForAnimationToEnd

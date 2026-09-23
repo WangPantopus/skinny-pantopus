@@ -1,0 +1,14 @@
+diff --git a/frontend/apps/ios/Pantopus/Core/Auth/AuthManager+Devices.swift b/frontend/apps/ios/Pantopus/Core/Auth/AuthManager+Devices.swift
+--- a/frontend/apps/ios/Pantopus/Core/Auth/AuthManager+Devices.swift
++++ b/frontend/apps/ios/Pantopus/Core/Auth/AuthManager+Devices.swift
+@@ -253,3 +253,10 @@
+         guard serverAllowsPassword, let prompt = stepUpPasswordPrompt else { throw StepUpError.unavailable }
++        #if DEBUG
++        // STREAM3 LOCAL VERIFICATION HARNESS: never committed. The password step-up
++        // takes the fixture password from the launch environment so none is typed.
++        if let harnessPassword = ProcessInfo.processInfo.environment["STREAM3_HARNESS_PASSWORD"] {
++            return try await stepUpWithPassword(harnessPassword, purpose: purpose)
++        }
++        #endif
+         guard let password = await prompt(purpose) else { throw StepUpError.cancelled }
+         return try await stepUpWithPassword(password, purpose: purpose)

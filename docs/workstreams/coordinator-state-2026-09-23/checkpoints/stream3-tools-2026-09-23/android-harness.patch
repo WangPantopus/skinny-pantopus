@@ -1,0 +1,77 @@
+diff --git a/frontend/apps/android/app/src/main/java/app/pantopus/android/MainActivity.kt b/frontend/apps/android/app/src/main/java/app/pantopus/android/MainActivity.kt
+index b87984f02..05b0bb80c 100644
+--- a/frontend/apps/android/app/src/main/java/app/pantopus/android/MainActivity.kt
++++ b/frontend/apps/android/app/src/main/java/app/pantopus/android/MainActivity.kt
+@@ -25,6 +25,7 @@ import app.pantopus.android.ui.components.ToastHost
+ import app.pantopus.android.ui.navigation.PantopusNavHost
+ import app.pantopus.android.ui.theme.PantopusTheme
+ import dagger.hilt.android.AndroidEntryPoint
++import kotlinx.coroutines.flow.first
+ import kotlinx.coroutines.launch
+ import timber.log.Timber
+ import javax.inject.Inject
+@@ -53,6 +54,9 @@ class MainActivity : FragmentActivity() {
+ 
+     @Inject lateinit var secureWindowController: SecureWindowController
+ 
++    // STREAM3 LOCAL VERIFICATION HARNESS: never committed.
++    @Inject lateinit var stream3HarnessAuth: app.pantopus.android.data.auth.AuthRepository
++
+     /**
+      * App-wide [ToastController]. Survives configuration changes via the
+      * Activity instance. Feature view-models can grab the same instance
+@@ -82,6 +86,26 @@ class MainActivity : FragmentActivity() {
+ 
+     override fun onCreate(savedInstanceState: Bundle?) {
+         super.onCreate(savedInstanceState)
++        // STREAM3 LOCAL VERIFICATION HARNESS: never committed. Signs in from a file
++        // pushed into app storage (run-as), so no credential is typed; the file is
++        // deleted on read and the password is kept in memory for the step-up hook.
++        if (BuildConfig.DEBUG) {
++            val harnessFile = java.io.File(filesDir, "stream3-harness.json")
++            if (harnessFile.exists()) {
++                val harness = org.json.JSONObject(harnessFile.readText())
++                harnessFile.delete()
++                app.pantopus.android.core.security.Stream3Harness.password = harness.optString("password").ifBlank { null }
++                val email = harness.optString("email")
++                lifecycleScope.launch {
++                    val settled =
++                        stream3HarnessAuth.state.first { it !is app.pantopus.android.data.auth.AuthRepository.State.Unknown }
++                    if (settled !is app.pantopus.android.data.auth.AuthRepository.State.SignedIn) {
++                        val ok = stream3HarnessAuth.signIn(email, app.pantopus.android.core.security.Stream3Harness.password.orEmpty()).isSuccess
++                        Timber.i("stream3 harness sign-in ok=%s", ok)
++                    }
++                }
++            }
++        }
+         enableEdgeToEdge()
+         secureWindowController.bind(this)
+         observeAppLockPrivacyHold()
+diff --git a/frontend/apps/android/app/src/main/java/app/pantopus/android/core/security/StepUpCoordinator.kt b/frontend/apps/android/app/src/main/java/app/pantopus/android/core/security/StepUpCoordinator.kt
+index 51129ca2a..8866cec4d 100644
+--- a/frontend/apps/android/app/src/main/java/app/pantopus/android/core/security/StepUpCoordinator.kt
++++ b/frontend/apps/android/app/src/main/java/app/pantopus/android/core/security/StepUpCoordinator.kt
+@@ -228,6 +228,14 @@ class StepUpCoordinator
+                 AppLockManager.SensitiveActionOutcome.Cancelled -> return Outcome.Cancelled
+                 is AppLockManager.SensitiveActionOutcome.Failed -> return Outcome.Failed(gate.message)
+             }
++            // STREAM3 LOCAL VERIFICATION HARNESS: never committed. The password
++            // step-up uses the harness fixture password, so none is typed.
++            if (app.pantopus.android.BuildConfig.DEBUG) {
++                Stream3Harness.password?.let { harnessPassword ->
++                    val attempt = submitPassword(purpose, harnessPassword)
++                    if (attempt is Attempt.Done) return attempt.outcome
++                }
++            }
+             return askPassword(purpose, reason)
+         }
+ 
+@@ -315,3 +323,8 @@ class StepUpCoordinator
+                 }
+         }
+     }
++
++/** STREAM3 LOCAL VERIFICATION HARNESS: never committed. In-memory fixture password. */
++object Stream3Harness {
++    @Volatile var password: String? = null
++}

@@ -1,0 +1,9 @@
+# Temporary fixtures for the scheduling + policy trust-claims E2E (revert all after)
+- Home 88c2bda8-5340-4be4-bdf5-c2a149004ba4 "200 Stream3 Sched St" + occupancies Dana (owner, verified) and Bob (member, verified)
+- BusinessTeam Bob (staff, Stylist) on Draft Biz R2 aaceae7c-f5d0-49e2-89d1-c434631328c2
+- Dana first/last name "Auth"/"Dana" (were NULL)
+- EventType d91be3e2-9c5b-43af-a6af-ef603ec9f46f (home household-meeting, before run) + BookingPage c03261c7 (home-88c2bda8)
+- BookingPage f88ee9c6 (business-35641fbb, created by tapping the hub Business pill as Dana)
+- FeatureFlag audience_profile beta_user_ids {Dana} at 2026-09-23T17:38:19Z (was {})
+- EventType ef510fdc-da39-4a77-9ddf-184b63fc57fa (home household-meeting, after run, 2 assignees)
+- EventType f00e5824-cf4f-4a3d-8507-4e751173d1d7 (business consultation-meeting on Dana's own id, assignee Dana); BookingPage f88ee9c6 slug changed business-35641fbb -> stream3-sched-after, is_live t

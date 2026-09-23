@@ -1,0 +1,33 @@
+// node offline.cjs <label> : load pages online, go offline, try to refresh; capture what the user sees.
+const fs = require('fs');
+const { chromium } = require('/private/tmp/pantopus-shared-ux-edit/frontend/apps/web/node_modules/@playwright/test');
+const { BASE, OUT, shot } = require('./lib.cjs');
+const label = process.argv[2];
+(async () => {
+  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, storageState: '/private/tmp/pantopus-shared-ux-runtime/web/.alice-state.json' });
+  const page = await context.newPage();
+  const log = [];
+  await page.goto(`${BASE}/app/today`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(8000);
+  log.push(`online /app/today: ${(await page.locator('main').innerText()).split('\n').filter(Boolean).slice(0, 6).join(' | ')}`);
+  await context.setOffline(true);
+  log.push(`offline at ${new Date().toISOString()}`);
+  await page.waitForTimeout(1500);
+  await page.getByRole('button', { name: 'Refresh' }).click().catch((e) => log.push('refresh click failed: ' + e.message));
+  await page.waitForTimeout(6000);
+  await shot(page, `${label}-mobile-offline-today`);
+  const body = await page.locator('body').innerText();
+  const offlineLines = body.split('\n').filter((l) => /offline|connection|reconnect|network/i.test(l));
+  log.push(`offline /app/today lines mentioning offline/connection: ${JSON.stringify(offlineLines)}`);
+  log.push(`offline /app/today main: ${(await page.locator('main').innerText()).split('\n').filter(Boolean).slice(0, 8).join(' | ')}`);
+  await context.setOffline(false);
+  log.push(`online again at ${new Date().toISOString()}`);
+  await page.waitForTimeout(4000);
+  const body2 = await page.locator('body').innerText();
+  log.push(`after reconnect, lines mentioning offline: ${JSON.stringify(body2.split('\n').filter((l) => /offline/i.test(l)))}`);
+  await shot(page, `${label}-mobile-online-again`);
+  fs.writeFileSync(`${OUT}/${label}-mobile-offline.log`, log.join('\n') + '\n');
+  console.log(log.join('\n'));
+  await browser.close();
+})().catch((e) => { console.error('ERR', e.message); process.exit(1); });

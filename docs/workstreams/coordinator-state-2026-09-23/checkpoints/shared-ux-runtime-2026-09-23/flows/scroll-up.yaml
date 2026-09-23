@@ -1,0 +1,11 @@
+appId: app.pantopus.ios
+---
+- swipe:
+    start: 50%, 25%
+    end: 50%, 85%
+    duration: 400
+- swipe:
+    start: 50%, 25%
+    end: 50%, 85%
+    duration: 400
+- waitForAnimationToEnd

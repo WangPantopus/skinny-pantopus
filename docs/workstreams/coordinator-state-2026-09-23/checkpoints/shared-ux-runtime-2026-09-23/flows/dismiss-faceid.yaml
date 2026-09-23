@@ -1,0 +1,5 @@
+appId: app.pantopus.ios
+---
+- tapOn:
+    id: "appLockSetupPromptDismiss"
+    optional: true

@@ -1,0 +1,6 @@
+appId: app.pantopus.ios
+---
+- hideKeyboard
+- tapOn:
+    id: "loginSubmitButton"
+- waitForAnimationToEnd

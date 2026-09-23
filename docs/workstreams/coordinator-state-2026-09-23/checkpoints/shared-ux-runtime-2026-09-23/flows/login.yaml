@@ -1,0 +1,7 @@
+appId: app.pantopus.ios
+---
+- tapOn:
+    text: "Don.t Allow"
+    optional: true
+- tapOn: "Sign in"
+- waitForAnimationToEnd

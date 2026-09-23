@@ -1,0 +1,9 @@
+appId: app.pantopus.ios
+---
+- scrollUntilVisible:
+    element:
+      text: "Hang two shelves.*"
+    direction: DOWN
+- tapOn:
+    text: "Hang two shelves.*"
+- waitForAnimationToEnd

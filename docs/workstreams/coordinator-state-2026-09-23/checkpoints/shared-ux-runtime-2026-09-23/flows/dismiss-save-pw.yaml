@@ -1,0 +1,5 @@
+appId: app.pantopus.ios
+---
+- tapOn:
+    text: "Not Now"
+    optional: true

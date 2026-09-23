@@ -1,0 +1,9 @@
+appId: app.pantopus.ios
+---
+- scrollUntilVisible:
+    element:
+      id: "groupedListRow_signOut"
+    direction: DOWN
+- tapOn:
+    id: "groupedListRow_signOut"
+- waitForAnimationToEnd

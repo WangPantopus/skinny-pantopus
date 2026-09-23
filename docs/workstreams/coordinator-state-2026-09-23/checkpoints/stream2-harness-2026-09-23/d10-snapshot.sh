@@ -1,0 +1,5 @@
+#!/bin/zsh
+# Counts of rows tied to the disposable D10 Home (by home id / member id), plus the public letter check.
+P=/private/tmp/pantopus-stream2-r06-runtime/psql.sh
+H='8954f7c7-7c40-40e4-b2ca-6c972685cec8'
+$P -At -c "select 'Home', count(*) from \"Home\" where id='$H'" -c "select 'HomeOccupancy', count(*) from \"HomeOccupancy\" where home_id='$H'" -c "select 'HomeOwner', count(*) from \"HomeOwner\" where home_id='$H'" -c "select 'HomeInvite', count(*) from \"HomeInvite\" where home_id='$H'" -c "select 'HomeBill', count(*) from \"HomeBill\" where home_id='$H'" -c "select 'ResidencyLetter', count(*) from \"ResidencyLetter\" where home_id='$H'" -c "select 'Mail(recipient_home)', count(*) from \"Mail\" where recipient_home_id='$H'" -c "select 'HomeAuditLog', count(*) from \"HomeAuditLog\" where home_id='$H'" -c "select 'Notification(member)', count(*) from \"Notification\" where user_id='8df5e799-07dc-4625-bc48-dc03d767905b'" -c "select 'Notification(owner)', count(*) from \"Notification\" where user_id='23f1fd49-2c50-41c5-8adb-e225030e7abc'"

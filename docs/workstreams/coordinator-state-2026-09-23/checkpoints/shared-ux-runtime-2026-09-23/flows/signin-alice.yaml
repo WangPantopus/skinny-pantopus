@@ -1,0 +1,11 @@
+appId: app.pantopus.ios
+---
+- tapOn:
+    id: "loginEmailField"
+- inputText: "sux.alice.0923@example.com"
+- tapOn:
+    id: "loginPasswordField"
+- inputText: ${PW}
+- tapOn:
+    id: "loginSubmitButton"
+- waitForAnimationToEnd

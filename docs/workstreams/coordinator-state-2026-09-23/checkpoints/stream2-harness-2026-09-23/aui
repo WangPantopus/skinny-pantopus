@@ -1,0 +1,2 @@
+#!/bin/zsh
+ANDROID_SERIAL=emulator-5556 exec python3 /private/tmp/pantopus-tools/aui.py "$@"
