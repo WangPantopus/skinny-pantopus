@@ -167,17 +167,15 @@ async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS
   };
 }
 
-// Load the home row the calendar needs, then compose. Used by the
-// briefing orchestrator, which only holds a home id.
-async function composeForHomeId(homeId, options = {}) {
-  const { data: home, error } = await supabaseAdmin
-    .from('Home')
-    .select('id, city, state, county, timezone')
-    .eq('id', homeId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!home) return null;
-  return composeForHome(home, options);
+// Compose the caller's calendar for a home id. Used by the briefing
+// orchestrator (Hub Today, morning/evening briefings). It reads through the
+// same authorized pickup context as GET /api/homes/:id/calendar: household
+// rules are calendar data, so a caller without calendar access gets an error
+// (the orchestrator then shows no calendar). The old direct read also named
+// Home.county/timezone, which do not exist, so it never returned a calendar.
+async function composeForHomeId(homeId, { userId, ...options } = {}) {
+  const { home, rules } = await getPickupContext(homeId, userId);
+  return composeForHome(home, { ...options, rules });
 }
 
 // ── Resident override: "my pickup day is Thursday" ──────────
