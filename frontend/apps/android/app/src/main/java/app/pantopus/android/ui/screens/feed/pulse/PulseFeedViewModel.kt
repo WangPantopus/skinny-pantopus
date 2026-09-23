@@ -225,6 +225,12 @@ class PulseFeedViewModel
         private var resolvedLongitude: Double? = null
         private var loading = false
 
+        /**
+         * Bumped per fetch; only the latest fetch's response is applied, so a
+         * filter tapped while a load is in flight still takes effect.
+         */
+        private var fetchGeneration = 0
+
         /** All pages loaded so far — search filters project from this. */
         private var loadedPosts: List<FeedPost> = emptyList()
         private var nextCursorCreatedAt: String? = null
@@ -784,7 +790,7 @@ class PulseFeedViewModel
         }
 
         private fun fetch(isRefresh: Boolean = false) {
-            if (loading) return
+            val generation = ++fetchGeneration
             loading = true
             if (isRefresh) _isRefreshing.value = true
             if (_state.value !is PulseFeedUiState.Loaded) {
@@ -793,18 +799,19 @@ class PulseFeedViewModel
             viewModelScope.launch {
                 try {
                     val (lat, lng) = resolvedCoordinates()
-                    when (
-                        val result =
-                            repo.feed(
-                                surface = _surface.value.backendSurface,
-                                latitude = lat,
-                                longitude = lng,
-                                postType = if (isInSportsLane) null else _activeIntent.value.postType,
-                                topic = topicQueryValue(),
-                                sportsMode = if (isInSportsLane) _sportsMode.value.key else null,
-                                eventKey = if (isInSportsLane) resolvedEventKey() else null,
-                            )
-                    ) {
+                    val result =
+                        repo.feed(
+                            surface = _surface.value.backendSurface,
+                            latitude = lat,
+                            longitude = lng,
+                            postType = if (isInSportsLane) null else _activeIntent.value.postType,
+                            topic = topicQueryValue(),
+                            sportsMode = if (isInSportsLane) _sportsMode.value.key else null,
+                            eventKey = if (isInSportsLane) resolvedEventKey() else null,
+                        )
+                    // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
+                    if (generation != fetchGeneration) return@launch
+                    when (result) {
                         is NetworkResult.Success -> {
                             val response = result.data
                             scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
@@ -829,8 +836,10 @@ class PulseFeedViewModel
                         }
                     }
                 } finally {
-                    loading = false
-                    _isRefreshing.value = false
+                    if (generation == fetchGeneration) {
+                        loading = false
+                        _isRefreshing.value = false
+                    }
                 }
             }
         }
@@ -899,7 +908,9 @@ class PulseFeedViewModel
                 authorName = authorName,
                 authorInitials = initials(authorName),
                 // Beacon credentials come from the public profile, never the surface.
-                authorVerified = if (surfaceValue == FeedSurface.Beacons) post.creator?.credential?.status == "verified" else isBusiness,
+                // Other surfaces carry no verification field, so no badge (being
+                // a business isn't being verified).
+                authorVerified = surfaceValue == FeedSurface.Beacons && post.creator?.credential?.status == "verified",
                 avatarTint = if (isBusiness) FeedAvatarTint.Violet else FeedAvatarTint.Sky,
                 meta = metaString(post),
                 intent = intent,
