@@ -1385,7 +1385,10 @@ router.post('/bookings/:id/nudge', validate(Joi.object({ message: Joi.string().m
   await assertCanManageOwner(booking.owner_type, booking.owner_id, req.user.id, 'edit');
   const msg = req.body.message || 'A reminder about your upcoming booking.';
   if (booking.invitee_user_id) {
-    await notificationService.createNotification({ userId: booking.invitee_user_id, type: 'booking_nudge', title: 'A note about your booking', body: msg, icon: '📅', link: `/app/profile/schedule/bookings/${booking.id}`, metadata: { booking_id: booking.id }, context: 'personal' });
+    // The host detail is owner-only; the invitee's destination is My bookings.
+    const link = booking.invitee_user_id === booking.host_user_id
+      ? `/app/profile/schedule/bookings/${booking.id}` : '/app/scheduling/my-bookings';
+    await notificationService.createNotification({ userId: booking.invitee_user_id, type: 'booking_nudge', title: 'A note about your booking', body: msg, icon: '📅', link, metadata: { booking_id: booking.id }, context: 'personal' });
   } else if (booking.invitee_email) {
     await emailService.sendEmail({ to: booking.invitee_email, subject: 'A note about your booking', html: `<p>${msg.replace(/</g, '&lt;')}</p>` });
   }

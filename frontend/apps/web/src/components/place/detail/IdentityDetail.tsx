@@ -23,6 +23,7 @@ import { BadgeCheck, Check, FileText, ScanFace, Mailbox, Download, ChevronRight,
 import Chip from '@/components/archetypes/primitives/Chip';
 import { LockedCard, DetailHeader, DetailSectionLabel, SourceNote, InfoNote } from '@/components/archetypes/place';
 import { toast } from '@/components/ui/toast-store';
+import { failureMessage } from '@/components/home/share/shareFailure';
 import { queryKeys } from '@/lib/query-keys';
 import { detailAddress } from './sections';
 import {
@@ -279,7 +280,9 @@ function ResidencyLetterLeaf({ facts, homeId, address, onBack }: { facts: Omit<L
         /* the issued card's PDF button is the retry path */
       }
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not issue the letter. Try again.'),
+    // The API client rejects with a plain object, never an Error; keep the
+    // server's reason (e.g. a role refusal or the daily limit) instead of "Try again".
+    onError: (err) => toast.error(failureMessage(err, 'Could not issue the letter. Try again.')),
   });
 
   const letters = lettersQuery.data ?? [];
@@ -523,7 +526,8 @@ function ResidencyPassLeaf({ homeId, address, onBack }: { homeId: string; addres
         /* the claim card's Copy button is the retry path */
       }
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not issue the claim. Try again.'),
+    // Same plain-object rejection as the letter: keep the server's reason.
+    onError: (err) => toast.error(failureMessage(err, 'Could not issue the claim. Try again.')),
   });
 
   const claims = claimsQuery.data ?? [];

@@ -14,7 +14,8 @@
 // Gates:
 //   * every route needs home access (checkHomePermission);
 //   * ISSUING needs verified occupancy (T4) — ownership alone is not
-//     residency, so an unverified owner cannot issue;
+//     residency, so an unverified owner cannot issue — in a resident
+//     role (guest and service-provider access cannot issue);
 //   * letters are personal: list/pdf/revoke are scoped to the issuing
 //     user inside the service (a member never sees another's letters).
 //
@@ -29,6 +30,7 @@ const verifyToken = require('../middleware/verifyToken');
 const { residencyLetterIssueLimiter } = require('../middleware/rateLimiter');
 const { checkHomePermission, isVerifiedResident } = require('../utils/homePermissions');
 const residencyLetterService = require('../services/residencyLetterService');
+const { NON_RESIDENT_ROLES } = require('../utils/homeAccessPolicy');
 const logger = require('../utils/logger');
 
 // POST /api/homes/:id/residency-letters — issue
@@ -44,6 +46,15 @@ router.post('/:id/residency-letters', verifyToken, residencyLetterIssueLimiter, 
       return res.status(403).json({
         error: 'Verify your address to issue a residency letter.',
         code: 'VERIFICATION_REQUIRED',
+      });
+    }
+    // The letter certifies residency. An accepted invitation verifies every
+    // role, but guest access (visitors, the airbnb_guest/cleaner_vendor
+    // presets) and service-provider access are not residency.
+    if (NON_RESIDENT_ROLES.has(access.role_base)) {
+      return res.status(403).json({
+        error: 'Only residents of this home can issue a residency letter.',
+        code: 'RESIDENT_ROLE_REQUIRED',
       });
     }
 
