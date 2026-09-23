@@ -1439,6 +1439,7 @@ class GigDetailViewModel
             description: String,
             amountChange: Double?,
             timeChangeMinutes: Int?,
+            onFailure: (String) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             viewModelScope.launch {
@@ -1458,6 +1459,7 @@ class GigDetailViewModel
                     }
                     is NetworkResult.Failure -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error.message)
                         onResult(false)
                     }
                 }
@@ -1718,6 +1720,7 @@ class GigDetailViewModel
             bidId: String,
             amount: Double,
             message: String?,
+            onFailure: (String) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             if (_bidActionInFlight.value != null || bidCheckout.state.value.blocksNewBidActions) {
@@ -1736,6 +1739,7 @@ class GigDetailViewModel
                     is NetworkResult.Failure -> {
                         _bidActionInFlight.value = null
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error.message)
                         onResult(false)
                     }
                 }
@@ -1870,6 +1874,7 @@ class GigDetailViewModel
         fun workerRunningLate(
             etaMinutes: Int?,
             note: String?,
+            onFailure: (String) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             viewModelScope.launch {
@@ -1888,6 +1893,7 @@ class GigDetailViewModel
                     }
                     is NetworkResult.Failure -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error.message)
                         onResult(false)
                     }
                 }
@@ -2009,6 +2015,7 @@ class GigDetailViewModel
         /** Either party `POST /report-no-show` — cancels the task with an incident. */
         fun reportNoShow(
             description: String?,
+            onFailure: (String) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             viewModelScope.launch {
@@ -2020,6 +2027,7 @@ class GigDetailViewModel
                     }
                     is NetworkResult.Failure -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error.message)
                         onResult(false)
                     }
                 }
@@ -2032,6 +2040,7 @@ class GigDetailViewModel
         suspend fun submitGigReview(
             rating: Int,
             comment: String?,
+            onFailure: (String) -> Unit = {},
         ): Boolean {
             val target = _reviewState.value as? GigReviewState.Available ?: return false
             val body =
@@ -2049,6 +2058,7 @@ class GigDetailViewModel
                 }
                 is NetworkResult.Failure -> {
                     _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                    onFailure(result.error.message)
                     false
                 }
             }
@@ -2060,6 +2070,7 @@ class GigDetailViewModel
         fun submitReport(
             reason: GigReportReason,
             details: String?,
+            onFailure: (String) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             viewModelScope.launch {
@@ -2070,6 +2081,7 @@ class GigDetailViewModel
                     }
                     is NetworkResult.Failure -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error.message)
                         onResult(false)
                     }
                 }
@@ -2136,6 +2148,7 @@ class GigDetailViewModel
         fun rescheduleTask(
             scheduledStartIso: String,
             note: String?,
+            onFailure: (String) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             viewModelScope.launch {
@@ -2147,6 +2160,7 @@ class GigDetailViewModel
                     }
                     is NetworkResult.Failure -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error.message)
                         onResult(false)
                     }
                 }
