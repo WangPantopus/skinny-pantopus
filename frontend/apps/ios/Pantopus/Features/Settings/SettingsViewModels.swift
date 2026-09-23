@@ -248,8 +248,8 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
         case "about": onNavigate(.about)
         case "reviewClaims": onNavigate(.reviewClaims)
         case "signOut":
-            await auth.signOut()
-            onNavigate(.didSignOut)
+            // Ask first, as the You screen does; the host signs out on confirm.
+            onNavigate(.confirmSignOut)
         default: break
         }
     }
@@ -296,5 +296,7 @@ public enum SettingsRoute: Sendable, Hashable {
     /// Admin Review-claims queue. Only emitted when the signed-in user
     /// has `isAdmin == true`; the host pushes `HubRoute.reviewClaims`.
     case reviewClaims
+    /// The Log out row: the host asks "Sign out of Pantopus?" first.
+    case confirmSignOut
     case didSignOut
 }
