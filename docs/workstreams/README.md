@@ -1,6 +1,76 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — September 23, 2026, 01:55 UTC
+## CURRENT RESUME POINT — September 23, 2026, 03:45 UTC
+
+This updates the 01:55 block below; read both. The count is still **9 closed / 71 partial**.
+
+### Operating model
+- The coordinator session reviews, merges and edits this hub.
+- Four Claude agents, one PR per reproduced defect, each with an evidence bundle:
+  - Stream 2 (Home);
+  - Stream 3 (accounts/social);
+  - Stream 1 fee agent: P04/P05 poster-fault fee execution, working in its own worktree `/private/tmp/pantopus-stream1-fee` and a private disposable full-schema DB. It uses Stream 1's port 18132, emulator-5558 and simulator C2BCF36A; the coordinator no longer uses them.
+- **Merge queue:** `/private/tmp/pantopus-tools/merge-queue/run.sh` runs detached.
+  - It reads `queue.txt` in order, updates each branch, waits for "CI OK" on that exact head, then merges with `--match-head-commit`.
+  - It logs to `log.txt`. Append a PR number to `queue.txt` to add it.
+  - It stops a PR on a conflict, CI failure or 90 min timeout.
+  - Only coordinator-reviewed PRs go in.
+
+### Founder decisions (2026-09-23, second round)
+- **P04 worker share: 85% of the fee**, the normal split (`floor(fee*amount_to_payee/amount_total)`).
+- **Late-cancel scope: before work starts only.** After-start stays `STARTED_POLICY_REVIEW`.
+- **Fee display: a minimal fee line is approved** on web, iOS and Android. Every other state stays pixel-identical.
+- **D07 "Set expiry": hide the control.** Stream 2 is implementing it.
+
+### Merged since 01:55 UTC
+- #206 (`7e728e081`)
+- #212 (`d3bbfee06`, hub Home columns)
+- #207 (`f0cbe9971`)
+- #217 (`c0dee7a08`): the hub household gate. It closes a privacy leak that #212 had unmasked: applicants and members without `finance.view` saw household bills.
+
+### Queue (in merge order at 03:45)
+- 220 / 222: phase-3 mailbox Home-scope privacy fixes. The outsider read and write leak is **live in production**.
+- 223 / 225: Mail Day readers and settings.
+- 228: Hub Today calendar.
+- 229: **bids refused across a personal block** (Stream 1). Verified on Android.
+- 216: invitee booking link.
+- 226 / 227 / 209: web error surfacing and role payload.
+- 211 / 210: Stream 1 no-show release and Android a11y.
+- 218: Android verify banner.
+- 221: **iOS decodes null names**; every new iOS email signup could not open You.
+- 219: iOS verify banner.
+- 213 / 214 / 215 / 224 / 199 / 208: native routing, cold-start, blocked count, Face ID sequencing, block state and letter errors.
+
+### New privacy findings in progress (coordinator-approved)
+- **v2 mailbox per-item IDOR (Stream 2, live):** `GET /api/mailbox/v2/item/:id` and five other v2 handlers read or change any mail by id. The item read also marks it opened for the real recipient. The fix reuses v1 `canAccessMail`, with 404 denials.
+- **M01 (a) (Stream 2):** members could read other members' `private_to_person` / `attn_only` home mail. The fix applies the dashboard's existing visibility predicates. v1 no-recipient letters are treated as household mail.
+- **Blocked viewer can open or search the blocker's personal profile (Stream 3):** directional refusal on `GET /api/users/id/:id` and people search. Persona surfaces stay a founder call.
+- **Android DM block/report failures show nothing (Stream 3):** existing AlertDialogs with the iOS copy.
+
+### Open questions for the founder (not implemented)
+1. **M01 (b):** require `mailbox.view` for home mail. This is the DB policy, and it would remove lease residents' home mail.
+2. **Mailbox records:**
+   - Unlink scope: any member of the asset's Home (current #222), or only the member who linked it?
+   - Pin `visible_to` is not enforced among members.
+   - Canonical Mail Day defaults.
+3. **D10 household delete:**
+   - Should members be notified or given a consent window?
+   - A deletion receipt outside the cascade.
+   - Revoke letters/passes with a reason instead of deleting them.
+   - Retention of household mail and bills.
+4. **iOS:**
+   - The "You" cover has no close control.
+   - Dynamic Type adoption: 4,746 fixed-size fonts, so AX5 is ignored.
+   - The dark-mode BEST MATCH pill is about 2.9:1.
+5. Carried over: persona surfaces vs personal UserBlock; R06 native Identity entry, letter PDF, guest copy and manager role; tips on disputed tasks; the viewer bid count during payment; duplicate PostReport rows; the booking host lifecycle link is a 404 on web.
+
+### Stream 1 evidence since 01:55 (cleanup verified in each)
+- `20260923-stream1-p08-ios-account-r1`: iOS checkout lifetime.
+- `20260923-stream1-u02-ios-a11y-r1`: iOS dark mode is fine; Dynamic Type proposal.
+- `20260923-stream1-p03-storage-loss-r1`: native tip recovery after local-storage loss. Android pays and iOS cancels, both on the same intent.
+- `20260923-stream1-bid-block-gate-r1`: PR229.
+
+## Resume point history — September 23, 2026, 01:55 UTC
 
 The operating model from 23:50 UTC (below) still holds:
 - Claude coordinator session: Stream 1 developer and coordinator.
