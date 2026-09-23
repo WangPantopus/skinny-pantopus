@@ -98,6 +98,12 @@ data class GigActiveTaskUi(
     val showCantMakeIt: Boolean = false,
 )
 
+/** What the owner confirms: the worker's name and, on a paid task, the held amount confirming releases. */
+data class CompletionConfirmation(
+    val workerName: String,
+    val amountCents: Int?,
+)
+
 @HiltViewModel
 @Suppress("LargeClass")
 class GigDetailViewModel
@@ -1997,6 +2003,25 @@ class GigDetailViewModel
         }
 
         /** Confirm the loaded work only within the original account and screen. */
+        private val _confirmingCompletion = MutableStateFlow(false)
+
+        /** True while the owner's confirm-completion request runs. */
+        val confirmingCompletion: StateFlow<Boolean> = _confirmingCompletion.asStateFlow()
+
+        /**
+         * The check shown before [confirmCompletion]: the worker's name and, while the task's payment is still an
+         * authorization hold, the amount that confirming charges.
+         */
+        fun completionConfirmation(): CompletionConfirmation? {
+            val gig = rawGig ?: return null
+            val payment = _payment.value?.payment
+            val held = payment?.takeIf { gig.paymentId != null && it.paymentStatus == "authorized" }?.amountTotal
+            return CompletionConfirmation(
+                workerName = Projection.awardWinnerName(gig, _bids.value) ?: "the worker",
+                amountCents = held,
+            )
+        }
+
         fun confirmCompletion() {
             val gig = rawGig ?: return
             val actor = currentUserId() ?: return
@@ -2005,6 +2030,7 @@ class GigDetailViewModel
             val generation = completionGeneration
             val marker = checkoutIdentities.scopeMarker()
             completionInFlight = true
+            _confirmingCompletion.value = true
             completionJob =
                 viewModelScope.launch {
                     try {
@@ -2036,6 +2062,7 @@ class GigDetailViewModel
                                 _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
                         }
                     } finally {
+                        _confirmingCompletion.value = false
                         finishCompletionAttempt(false, actor, marker, generation)
                     }
                 }
@@ -2738,7 +2765,7 @@ class GigDetailViewModel
                 return gig.status in listOf("accepted", "awarded", "completed", "in_progress")
             }
 
-            private fun awardWinnerName(
+            internal fun awardWinnerName(
                 gig: GigDto,
                 bids: List<GigBidDto>,
             ): String? {

@@ -959,6 +959,20 @@ public final class GigDetailViewModel {
             && (gig.ownerConfirmedAt ?? "").isEmpty
     }
 
+    /// True while the owner's confirm-completion request runs; the panel button shows it.
+    public var confirmingCompletion: Bool {
+        viewerIsOwner && completionAttempt != nil
+    }
+
+    /// The check shown before `confirmCompletion()`: the worker's name and, while the task's
+    /// payment is still an authorization hold, the amount that confirming charges.
+    public func completionConfirmation() -> GigCompletionConfirmation? {
+        guard let gig = rawGig else { return nil }
+        let worker = ownerBids.first { $0.userId == gig.acceptedBy }?.bidder?.resolvedDisplayName
+        let held = gig.paymentId != nil && payment?.paymentStatus == "authorized" ? payment?.amountTotal : nil
+        return GigCompletionConfirmation(workerName: worker ?? "the worker", amountCents: held)
+    }
+
     /// "Cancel task" overflow gate — the poster on a live gig.
     ///
     /// The shared task-action sheet verifies current policy and retains any
