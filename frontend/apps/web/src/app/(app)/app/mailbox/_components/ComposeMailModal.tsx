@@ -15,6 +15,13 @@ import {
 
 type RecipientUser = { id: string; name?: string; username?: string; city?: string | null; state?: string | null };
 
+// The Home records a sent letter could not be added to (the send's fanoutFailed).
+const FANOUT_LABELS: Record<string, string> = { bill: 'bills', document: 'documents', package: 'packages', task: 'tasks' };
+function fanoutFailureLabel(failed: unknown): string {
+  if (!Array.isArray(failed) || failed.length === 0) return '';
+  return [...new Set(failed.map((target) => FANOUT_LABELS[String(target)] || 'records'))].join(' and ');
+}
+
 function getApiErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error && err.message) return err.message;
   if (err && typeof err === 'object') {
@@ -295,10 +302,12 @@ export default function ComposeMailModal({
     setComposeLoading(true);
     try {
       const payload = composeMode === 'quick' ? buildQuickPayload() : buildStructuredPayload();
-      await api.mailbox.sendMail(payload);
+      const sent = await api.mailbox.sendMail(payload);
       onClose();
       onSent();
-      setActionSuccess('Mail sent successfully.');
+      const notAdded = fanoutFailureLabel((sent as { fanoutFailed?: unknown }).fanoutFailed);
+      if (notAdded) setActionError(`Mail sent, but it couldn't be added to this Home's ${notAdded}.`);
+      else setActionSuccess('Mail sent successfully.');
     } catch (err: unknown) {
       setActionError(getApiErrorMessage(err, 'Failed to send mail.'));
     } finally { setComposeLoading(false); }
