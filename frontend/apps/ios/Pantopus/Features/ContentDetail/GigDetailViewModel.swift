@@ -238,6 +238,27 @@ public final class GigDetailViewModel {
         return "Check tip status"
     }
 
+    /// The state the shell renders. While a tip original is kept and not settled, the tip dock
+    /// reads "Check tip status", as on Android and web; everything else is `state` unchanged.
+    public var displayState: ContentDetailState {
+        guard hasTipOriginal, case let .loaded(content) = state,
+              content.dock.primary == Self.tipDock.primary else { return state }
+        return .loaded(ContentDetailContent(
+            kind: content.kind,
+            cover: content.cover,
+            statusPill: content.statusPill,
+            hero: content.hero,
+            statStrip: content.statStrip,
+            counterparty: content.counterparty,
+            modules: content.modules,
+            trustCapsules: content.trustCapsules,
+            dock: ContentDetailDock(
+                secondary: content.dock.secondary,
+                primary: ContentDetailDockButton(label: "Check tip status", icon: .handCoins)
+            )
+        ))
+    }
+
     private var tipScope: String {
         "gig-tip-original-v1|\(tipOpeningIdentity?.origin ?? "")|\(currentUserId ?? "")|\(gigId)"
     }
@@ -1108,9 +1129,18 @@ public final class GigDetailViewModel {
                 tipOriginal = result.request
                 try acceptTip(result, original: result.request)
             } else if !next.eligible {
-                tipMessage = "This task is not currently available for a tip. Reopen its details before continuing."
+                tipMessage = next.unavailableReason == "TIP_LIMIT"
+                    ? "You've reached the 3-tip limit for this task."
+                    : "This task is not currently available for a tip. Reopen its details before continuing."
             }
         } catch { failTip("Tip details could not be verified. Reopen the original before continuing.") }
+    }
+
+    /// On open, reads back a retained tip original (Android does the same) so the dock can say
+    /// "Check tip status" before the tip sheet opens. Nothing is read when no original is kept.
+    func prepareRetainedTip() async {
+        guard canTip, tipIsCurrent, (try? readStoredTip()) != nil else { return }
+        await prepareTip()
     }
 
     public func sendTip(amountCents: Int) async {

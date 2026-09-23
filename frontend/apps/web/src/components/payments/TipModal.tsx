@@ -223,7 +223,8 @@ export default function TipModal({ actorId, workerId, recoveryRequestId, gigId, 
       if (next.legacyPaymentId && value.request.source !== 'legacy') throw new Error('The earlier tip identity could not be verified.');
       original = await slot.current.retain(originalOnly(value.request), valid);
       if (!valid()) return; remember(original); await accept(value, original, valid);
-    } else if (!next.eligible || next.terms.payeeId !== workerId) setError('The current task is not available for this tip. Reopen its details before continuing.');
+    } else if (next.unavailableReason === 'TIP_LIMIT') setError("You've reached the 3-tip limit for this task.");
+    else if (!next.eligible || next.terms.payeeId !== workerId) setError('The current task is not available for this tip. Reopen its details before continuing.');
   }
 
   useEffect(() => {
