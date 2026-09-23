@@ -95,17 +95,24 @@ export default function SchedulingHub() {
       if (generation !== loadGeneration.current) return;
       setCanEdit(editable);
       setPage(loaded);
-      // Enrichment — tolerate failures (e.g. view-only contexts).
+      // Failed reads must not look like first-run setup or an empty agenda.
       const [etRes, upRes, pendRes] = await Promise.allSettled([
         api.scheduling.listEventTypes(owner),
         api.scheduling.listBookings({ status: "upcoming" }, owner),
         api.scheduling.listBookings({ status: "pending" }, owner),
       ]);
       if (generation !== loadGeneration.current) return;
-      setEventTypes(etRes.status === "fulfilled" ? etRes.value.eventTypes : []);
-      const upcoming = upRes.status === "fulfilled" ? upRes.value.bookings : [];
-      const pending =
-        pendRes.status === "fulfilled" ? pendRes.value.bookings : [];
+      if (etRes.status === "rejected") {
+        setError("Couldn't load event types. Try again.");
+        return;
+      }
+      if (upRes.status === "rejected" || pendRes.status === "rejected") {
+        setError("Couldn't load your bookings. Try again.");
+        return;
+      }
+      setEventTypes(etRes.value.eventTypes);
+      const upcoming = upRes.value.bookings;
+      const pending = pendRes.value.bookings;
       setPendingCount(pending.length);
       setBookings([...upcoming, ...pending].slice(0, 12));
     } catch (err) {
