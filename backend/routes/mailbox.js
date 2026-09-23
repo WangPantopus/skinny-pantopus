@@ -1693,11 +1693,11 @@ router.get('/:id', verifyToken, async (req, res) => {
         mail.object = {
           ...metadata,
           ...(metadata.status ? { storage_status: metadata.status } : {}),
-          carrier: pkg.carrier,
+          carrier: pkg.carrier?.trim() || 'Carrier not provided',
           tracking_number: pkg.tracking_id_masked,
           status: pkg.status,
           status_title: titles[pkg.status],
-          status_detail: pkg.delivery_location_note || `Carrier status: ${titles[pkg.status].toLowerCase()}.`,
+          status_detail: pkg.delivery_location_note || `Package status: ${titles[pkg.status].toLowerCase()}.`,
           ...(pkg.weight_lbs != null ? { weight: `${pkg.weight_lbs} lb` } : {}),
           ...([pkg.dimensions_l, pkg.dimensions_w, pkg.dimensions_h].every(value => value != null)
             ? { dimensions: `${pkg.dimensions_l} × ${pkg.dimensions_w} × ${pkg.dimensions_h} in` } : {}),
