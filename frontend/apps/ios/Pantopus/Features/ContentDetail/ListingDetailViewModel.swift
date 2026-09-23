@@ -164,12 +164,16 @@ public final class ListingDetailViewModel {
         )
     }
 
+    /// The real seller (name, photo, verification) from the listing's creator identity.
     private static func counterparty(for listing: ListingDTO) -> ContentDetailCounterparty {
-        ContentDetailCounterparty(
-            displayName: "Seller",
-            initials: "S",
+        let seller = listing.creator
+        let name = seller?.resolvedDisplayName ?? "Seller"
+        return ContentDetailCounterparty(
+            displayName: name,
+            initials: GigDetailViewModel.initialsFromName(name),
+            avatarUrl: seller?.resolvedAvatarURL,
             identityKind: "personal",
-            verified: true,
+            verified: seller?.resolvedVerified ?? false,
             rating: nil,
             trailing: listing.locationName,
             showsMessageButton: true

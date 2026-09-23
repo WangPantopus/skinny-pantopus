@@ -4500,17 +4500,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onBack = { navController.popBackStack() },
                         onOpenMessages = { listing ->
                             listing.userId?.let { sellerId ->
-                                val name = listing.title ?: "Seller"
+                                // The chat is with the seller; the listing is its topic.
+                                val title = listing.title ?: "Listing"
+                                val name = listing.creator?.resolvedDisplayName() ?: title
                                 navController.navigate(
                                     ChildRoutes.chatConversationFromPicker(
                                         userId = sellerId,
                                         displayName = name,
                                         initials = initialsFromName(name),
-                                        verified = false,
+                                        verified = listing.creator?.resolvedVerified() == true,
                                         locality = listing.locationName,
                                         topicType = "listing",
                                         topicRefId = listing.id,
-                                        topicTitle = name,
+                                        topicTitle = title,
                                     ),
                                 )
                             }

@@ -114,12 +114,16 @@ class ListingDetailViewModel
                         sold = sold,
                         glassActions = listOf(PantopusIcon.Share, PantopusIcon.Bookmark),
                     )
+                // The real seller (name, photo, verification) from the listing's creator identity.
+                val seller = listing.creator
+                val sellerName = seller?.resolvedDisplayName() ?: "Seller"
                 val counterparty =
                     ContentDetailCounterparty(
-                        displayName = "Seller",
-                        initials = "S",
+                        displayName = sellerName,
+                        initials = GigDetailViewModel.Projection.initialsFromName(sellerName),
+                        avatarUrl = seller?.resolvedAvatarUrl(),
                         identityKind = "personal",
-                        verified = true,
+                        verified = seller?.resolvedVerified() == true,
                         rating = null,
                         trailing = listing.locationName,
                     )
