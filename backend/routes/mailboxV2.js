@@ -749,23 +749,38 @@ router.post('/package/:mailId/share-eta', verifyToken, async (req, res) => {
     const homeId = mail.recipient_home_id || mail.address_home_id;
     if (!homeId) return res.status(400).json({ error: 'No home associated' });
 
-    // Get household members
-    const residents = await getHomeResidents(homeId);
-    const otherResidents = residents.filter(r => r.user_id !== userId);
+    // Household members to notify. The User embed names the user_id FK:
+    // HomeOccupancy also references User through added_by_user_id, and the
+    // unqualified embed failed as ambiguous (PGRST201), so nobody was notified.
+    const { data: residents, error: residentsError } = await supabaseAdmin
+      .from('HomeOccupancy')
+      .select('user_id, User!HomeOccupancy_user_id_fkey!inner(id)')
+      .eq('home_id', homeId)
+      .eq('is_active', true);
+    if (residentsError) throw residentsError;
+    const otherResidents = (residents || []).filter(r => r.user_id !== userId);
 
     // Create notification mail items for all household members (batch insert)
     if (otherResidents.length > 0) {
+      // The notice comes from the member who shared it, as an ordinary
+      // Pantopus user; it is not a verified business message.
+      const { data: sharer } = await supabaseAdmin
+        .from('User')
+        .select('name, username')
+        .eq('id', userId)
+        .maybeSingle();
+      const sharerName = (sharer?.name || sharer?.username || 'A household member').trim();
       const mailRows = otherResidents.map((resident) => ({
         recipient_user_id: resident.user_id,
         recipient_home_id: homeId,
         drawer: 'home',
         mail_object_type: 'envelope',
-        sender_display: 'Pantopus',
-        sender_trust: 'verified_business',
+        sender_display: sharerName,
+        sender_trust: 'pantopus_user',
         type: 'notice',
         category: 'notice',
         subject: `Package from ${mail.sender_display} arriving soon`,
-        content: `A household member shared an ETA update for a package from ${mail.sender_display}.`,
+        content: `${sharerName} shared an ETA update for a package from ${mail.sender_display}.`,
         urgency: 'none',
         privacy: 'shared_household',
         lifecycle: 'delivered',
