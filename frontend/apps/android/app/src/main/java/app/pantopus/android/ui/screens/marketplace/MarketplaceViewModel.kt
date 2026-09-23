@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.listings.ListingsRepository
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
+import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +40,7 @@ class MarketplaceViewModel
     constructor(
         private val repo: ListingsRepository,
         private val location: LocationProvider,
+        private val viewingLocation: ViewingLocationRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<MarketplaceUiState>(MarketplaceUiState.Loading)
         val state: StateFlow<MarketplaceUiState> = _state.asStateFlow()
@@ -64,6 +66,7 @@ class MarketplaceViewModel
 
         private var radiusMiles: Double = 2.0
         private var loadedItems: List<ListingDto> = emptyList()
+        private var viewingCenter: UserCoordinate? = null
         private var hasMore = false
 
         /** Monotonic fetch token. A response only applies when its
@@ -129,7 +132,17 @@ class MarketplaceViewModel
             val generation = fetchGeneration
             _isLoadingMore.value = false
             viewModelScope.launch {
-                val result = nearbyPage(offset = 0)
+                val center = resolveCenter()
+                if (generation != fetchGeneration) return@launch
+                viewingCenter = center
+                if (center == null) {
+                    _isRefreshing.value = false
+                    hasLoadedOnce = true
+                    hasMore = false
+                    _state.value = MarketplaceUiState.Error("Choose an area or turn on location to browse nearby listings.")
+                    return@launch
+                }
+                val result = nearbyPage(center, offset = 0)
                 if (generation != fetchGeneration) return@launch
                 _isRefreshing.value = false
                 hasLoadedOnce = true
@@ -152,11 +165,12 @@ class MarketplaceViewModel
         }
 
         private fun fetchNextPage() {
+            val center = viewingCenter ?: return
             fetchGeneration += 1
             val generation = fetchGeneration
             _isLoadingMore.value = true
             viewModelScope.launch {
-                val result = nearbyPage(offset = loadedItems.size)
+                val result = nearbyPage(center, offset = loadedItems.size)
                 if (generation != fetchGeneration) return@launch
                 _isLoadingMore.value = false
                 when (result) {
@@ -177,9 +191,15 @@ class MarketplaceViewModel
             }
         }
 
-        private suspend fun nearbyPage(offset: Int): NetworkResult<ListingsNearbyResponse> {
-            val coord = location.cachedCoordinate() ?: location.requestCurrent()
-            val center = coord ?: UserCoordinate(40.7484, -73.9857, 100.0)
+        private suspend fun resolveCenter(): UserCoordinate? {
+            val payload = viewingLocation.current()
+            if (payload is NetworkResult.Success) {
+                payload.data.viewingLocation?.let { return UserCoordinate(it.latitude, it.longitude, 0.0) }
+            }
+            return location.cachedCoordinate() ?: location.requestCurrent(timeoutMillis = 4_000L)
+        }
+
+        private suspend fun nearbyPage(center: UserCoordinate, offset: Int): NetworkResult<ListingsNearbyResponse> {
             val category = _activeCategory.value
             return repo.nearby(
                 latitude = center.latitude,

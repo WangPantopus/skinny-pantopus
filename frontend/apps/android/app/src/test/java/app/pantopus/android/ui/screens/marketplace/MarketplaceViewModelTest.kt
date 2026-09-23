@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.marketplace
 
+import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.models.listings.ListingDto
 import app.pantopus.android.data.api.models.listings.ListingsNearbyResponse
 import app.pantopus.android.data.api.models.listings.ListingsPagination
@@ -10,6 +11,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.listings.ListingsRepository
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
+import app.pantopus.android.data.location.ViewingLocationRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -38,10 +40,12 @@ import org.junit.Test
 class MarketplaceViewModelTest {
     private val repo: ListingsRepository = mockk()
     private val location: LocationProvider = mockk()
+    private val viewingLocation: ViewingLocationRepository = mockk()
     private val center = UserCoordinate(40.7484, -73.9857, 50.0)
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { viewingLocation.current() } returns NetworkResult.Success(ViewingLocationPayload())
         every { location.cachedCoordinate() } returns center
         coEvery { location.requestCurrent(any()) } returns center
     }
@@ -97,7 +101,7 @@ class MarketplaceViewModelTest {
             createdAt = "2026-05-13T08:00:00Z",
         )
 
-    private fun makeVm(): MarketplaceViewModel = MarketplaceViewModel(repo, location)
+    private fun makeVm(): MarketplaceViewModel = MarketplaceViewModel(repo, location, viewingLocation)
 
     @Test fun load_with_listings_transitions_loaded() =
         runTest {
