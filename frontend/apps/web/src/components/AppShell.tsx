@@ -46,7 +46,8 @@ import { FEED_COMPOSER_OPEN_EVENT, MAGIC_TASK_OPEN_EVENT, notifyFeedPostCreated 
 import { webFeatureFlags } from '@/lib/featureFlags';
 import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import type { CSSProperties } from 'react';
-import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, type LucideIcon } from 'lucide-react';
+import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, type LucideIcon } from 'lucide-react';
+import { useOnlineStatus } from '@/components/map/OfflineIndicator';
 
 // ── Constants ──────────────────────────────────────────────────
 const SIDEBAR_EXPANDED = 240;
@@ -164,6 +165,9 @@ const INITIAL_APP_STATE: AppShellState = {
 // AppShellInner
 // ────────────────────────────────────────────────────────────────
 function AppShellInner({ children }: { children: React.ReactNode }) {
+  // Queries pause while offline; say so instead of leaving skeletons or stale
+  // content unexplained. They refetch on reconnect.
+  const { isOnline } = useOnlineStatus();
   useDesktopNotifications();
   const router = useRouter();
   const pathname = usePathname();
@@ -552,6 +556,12 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
        *  MAIN CONTENT
        * ═══════════════════════════════════════════════════════ */}
       <main className={`pt-14 min-h-screen transition-[margin-left] duration-200 ease-in-out relative z-0${showMobileTabs ? ' pb-20' : ''}`} style={contentStyle}>
+        {!isOnline && (
+          <div role="status" className="sticky top-14 z-40 flex items-center justify-center gap-2 bg-amber-500/95 px-3 py-1.5 text-xs font-semibold text-white">
+            <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>You&apos;re offline. Pantopus will refresh when you reconnect.</span>
+          </div>
+        )}
         {children}
       </main>
 

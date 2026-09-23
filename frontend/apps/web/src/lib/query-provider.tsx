@@ -11,8 +11,9 @@ function createQueryClient() {
       queries: {
         staleTime: 30 * 1000,
         retry: (failureCount, error) => {
-          // Don't retry on 4xx errors
-          const status = (error as { status?: number })?.status;
+          // Don't retry on 4xx errors. The API client rejects with `statusCode`.
+          const failure = error as { statusCode?: number; status?: number } | null;
+          const status = failure?.statusCode ?? failure?.status;
           if (status && status >= 400 && status < 500) return false;
           return failureCount < 2;
         },
