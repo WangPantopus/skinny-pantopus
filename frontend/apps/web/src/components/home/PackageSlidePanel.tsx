@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import SlidePanel from './SlidePanel';
-import FileUpload from '@/components/FileUpload';
 
 const CARRIERS = [
   'USPS',
@@ -45,7 +44,6 @@ export default function PackageSlidePanel({
   const [status, setStatus] = useState('expected');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (pkg) {
@@ -55,7 +53,6 @@ export default function PackageSlidePanel({
       setDescription(pkg.description || '');
       setExpectedAt(pkg.expected_at ? pkg.expected_at.split('T')[0] : '');
       setStatus(pkg.status || 'expected');
-      setMediaFiles([]);
     } else {
       setCarrier('');
       setTrackingNumber('');
@@ -63,7 +60,6 @@ export default function PackageSlidePanel({
       setDescription('');
       setExpectedAt('');
       setStatus('expected');
-      setMediaFiles([]);
     }
     setError('');
   }, [pkg, open]);
@@ -80,7 +76,6 @@ export default function PackageSlidePanel({
         vendor_name: vendorName.trim() || undefined,
         description: description.trim() || undefined,
         expected_at: expectedAt ? new Date(expectedAt).toISOString() : undefined,
-        _mediaFiles: mediaFiles.length > 0 ? mediaFiles : undefined,
       };
       if (isEdit) {
         payload.status = status;
@@ -178,18 +173,6 @@ export default function PackageSlidePanel({
             className="w-full px-3 py-2 border border-app-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-
-        {/* Photos (optional) */}
-        <FileUpload
-          label="Photos (optional)"
-          accept={['image']}
-          maxFiles={5}
-          maxSize={100 * 1024 * 1024}
-          files={mediaFiles}
-          onFilesSelected={setMediaFiles}
-          helperText="Upload a screenshot of the order or delivery notification."
-          compact
-        />
 
         {/* Status (edit only) */}
         {isEdit && (

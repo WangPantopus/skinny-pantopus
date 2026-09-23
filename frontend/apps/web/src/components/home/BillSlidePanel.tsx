@@ -3,7 +3,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { Home, Landmark, Zap, Flame, Droplets, Pipette, Trash2, Satellite, Tv, Building2, ShieldCheck, Package, CreditCard } from 'lucide-react';
 import SlidePanel from './SlidePanel';
-import FileUpload from '@/components/FileUpload';
 
 const BILL_TYPES: { value: string; label: string; icon: ReactNode }[] = [
   { value: 'rent', label: 'Rent', icon: <Home className="w-4 h-4" /> },
@@ -50,7 +49,6 @@ export default function BillSlidePanel({
   const [status, setStatus] = useState('due');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (bill) {
@@ -61,7 +59,6 @@ export default function BillSlidePanel({
       setPeriodStart(bill.period_start ? bill.period_start.split('T')[0] : '');
       setPeriodEnd(bill.period_end ? bill.period_end.split('T')[0] : '');
       setStatus(bill.status || 'due');
-      setMediaFiles([]);
     } else {
       setBillType('other');
       setProviderName('');
@@ -70,7 +67,6 @@ export default function BillSlidePanel({
       setPeriodStart('');
       setPeriodEnd('');
       setStatus('due');
-      setMediaFiles([]);
     }
     setError('');
   }, [bill, open]);
@@ -92,7 +88,6 @@ export default function BillSlidePanel({
         due_date: dueDate || undefined,
         period_start: periodStart || undefined,
         period_end: periodEnd || undefined,
-        _mediaFiles: mediaFiles.length > 0 ? mediaFiles : undefined,
       };
       if (isEdit) {
         payload.status = status;
@@ -204,18 +199,6 @@ export default function BillSlidePanel({
             />
           </div>
         </div>
-
-        {/* Attachments (optional) */}
-        <FileUpload
-          label="Bill / Receipt (optional)"
-          accept={['image', 'document']}
-          maxFiles={5}
-          maxSize={100 * 1024 * 1024}
-          files={mediaFiles}
-          onFilesSelected={setMediaFiles}
-          helperText="Upload a photo or PDF of the bill."
-          compact
-        />
 
         {/* Status (edit only) */}
         {isEdit && (
