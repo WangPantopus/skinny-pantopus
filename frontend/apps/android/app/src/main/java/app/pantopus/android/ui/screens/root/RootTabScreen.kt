@@ -2604,6 +2604,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                         onOpenHomeOwners = { homeId -> navController.navigate(ChildRoutes.homeOwners(homeId)) },
                         onOpenHomeMembers = { homeId -> navController.navigate(ChildRoutes.homeMembers(homeId)) },
+                        onOpenHomeDocs = { homeId -> navController.navigate(ChildRoutes.homeDocs(homeId)) },
+                        onOpenHomeEmergency = { homeId ->
+                            navController.navigate(ChildRoutes.homeEmergency(homeId))
+                        },
                         onOpenMyHomes = { navController.navigate(ChildRoutes.MY_HOMES) },
                         onOpenMyListings = { navController.navigate(ChildRoutes.MY_LISTINGS) },
                         onOpenMyBusinesses = { navController.navigate(ChildRoutes.MY_BUSINESSES) },

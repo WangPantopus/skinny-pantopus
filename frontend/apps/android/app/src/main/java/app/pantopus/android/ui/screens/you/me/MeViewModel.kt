@@ -111,6 +111,8 @@ class MeViewModel
                         }
                 val homes: List<MyHome> =
                     (homesResult as? NetworkResult.Success)?.data?.sharedHomes.orEmpty()
+                // A failed homes read must not read as "No shared Home".
+                val homesFailed = homesResult is NetworkResult.Failure
 
                 val stats =
                     (profileRepo.stats(profile.id) as? NetworkResult.Success)?.data
@@ -118,7 +120,7 @@ class MeViewModel
                 _state.value =
                     MeUiState.Loaded(
                         personal = buildPersonal(profile, stats),
-                        home = buildHome(homes, profileLocality = localityOf(profile)),
+                        home = buildHome(homes, profileLocality = localityOf(profile), homesFailed = homesFailed),
                         business = buildBusiness(profile),
                     )
                 fetchInsights()
@@ -275,6 +277,7 @@ class MeViewModel
         private fun buildHome(
             homes: List<MyHome>,
             profileLocality: String?,
+            homesFailed: Boolean = false,
         ): MeIdentityContent {
             val primary = homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull()
             if (primary == null) {
@@ -282,9 +285,14 @@ class MeViewModel
                     identity = MeIdentity.Home,
                     displayName = "Your Homes",
                     initials = "H",
-                    handle = "No shared Home",
+                    handle = if (homesFailed) "Couldn't load your homes" else "No shared Home",
                     locality = profileLocality,
-                    tagline = "Open My homes for private tasks, invitations and verification progress.",
+                    tagline =
+                        if (homesFailed) {
+                            "Check your connection, then open My homes to try again."
+                        } else {
+                            "Open My homes for private tasks, invitations and verification progress."
+                        },
                     verified = false,
                     stats =
                         listOf(
@@ -337,11 +345,11 @@ class MeViewModel
         private fun buildBusiness(profile: UserProfile): MeIdentityContent =
             MeIdentityContent(
                 identity = MeIdentity.Business,
-                displayName = "Add a business",
+                displayName = "Your Businesses",
                 initials = "B",
-                handle = "No business yet",
+                handle = "Business pages",
                 locality = localityOf(profile),
-                tagline = "Business identity is set up in the web app today; mobile read APIs land later.",
+                tagline = "Open My businesses to manage a business, create one, or claim a page that's already listed.",
                 verified = false,
                 stats =
                     listOf(
