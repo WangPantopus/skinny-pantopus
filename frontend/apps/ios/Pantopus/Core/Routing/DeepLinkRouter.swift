@@ -137,6 +137,15 @@ final class DeepLinkRouter {
         case packageGig(mailId: String, isPreDelivery: Bool)
         /// `pantopus://mailbox/earn` — A10.11 Earn dashboard (Wallet sibling).
         case earn
+        /// `/app/mailbox/:mailId` — the letter a mail notification points at
+        /// (mail_delivered / mail_claimed / mail_escrow_*), opened in the
+        /// existing mail item detail.
+        case mailItem(mailId: String)
+        /// `/mailbox` — the Mail tab (the Mail Day summary notification).
+        case mailbox
+        /// `/app/place/neighbor-message/:id` — a received neighbor message, in
+        /// the existing Place message screen.
+        case neighborMessage(messageId: String)
         /// `pantopus://businesses/:id` — A10.7 Business owner view. The public
         /// profile (A10.6) lives at the singular `pantopus://business/:username`.
         case businessOwner(businessId: String)
@@ -709,11 +718,16 @@ final class DeepLinkRouter {
     /// `pantopus://place/<homeId>/<slug>`       → a group-detail page
     /// `pantopus://place?id=<homeId>&section=<slug>`
     private func placeDestination(
-        url _: URL,
+        url: URL,
         segments: [String],
         idQuery: String?,
         comps: URLComponents?
     ) -> Destination {
+        // `place/neighbor-message/:id` is a received message, not a Home id.
+        if segments.dropFirst().first == "neighbor-message" {
+            guard segments.count == 3, let id = segments.last, UUID(uuidString: id) != nil else { return .unknown(url) }
+            return .neighborMessage(messageId: id)
+        }
         let pathHomeId = segments.dropFirst().first.flatMap { $0.isEmpty ? nil : $0 }
         let homeId = pathHomeId ?? idQuery.flatMap { $0.isEmpty ? nil : $0 }
 
@@ -727,18 +741,23 @@ final class DeepLinkRouter {
     private func mailboxDestination(url: URL, segments: [String], idQuery: String?) -> Destination {
         // `pantopus://mailbox/vacation` opens A14.8; `pantopus://mailbox/mailday`
         // opens the A13.16 My Mail Day editor. B1.6 adds the batch-2 mailbox
-        // sub-screens (stamps / tasks / translation / unboxing / earn). Other
-        // mailbox paths fall through to `.unknown` until they have routes.
-        switch segments.dropFirst().first {
-        case "vacation": .vacationHold
-        case "mailday": .mailDay
-        case "stamps": .stamps
-        case "earn": .earn
-        case "unboxing": .unboxing(mailId: idQuery)
-        case "gig": packageGigDestination(url: url, idQuery: idQuery)
-        case "translation": .mailTranslation(mailId: idQuery ?? "")
-        case "tasks": mailTaskDestination(url: url, segments: segments)
-        default: .unknown(url)
+        // sub-screens (stamps / tasks / translation / unboxing / earn). A bare
+        // `mailbox` opens the Mail tab and `mailbox/:mailId` (the server's mail
+        // notification link) the letter. Other mailbox paths fall through to
+        // `.unknown` until they have routes.
+        guard let sub = segments.dropFirst().first else { return .mailbox }
+        switch sub {
+        case "vacation": return .vacationHold
+        case "mailday": return .mailDay
+        case "stamps": return .stamps
+        case "earn": return .earn
+        case "unboxing": return .unboxing(mailId: idQuery)
+        case "gig": return packageGigDestination(url: url, idQuery: idQuery)
+        case "translation": return .mailTranslation(mailId: idQuery ?? "")
+        case "tasks": return mailTaskDestination(url: url, segments: segments)
+        default:
+            guard segments.count == 2, UUID(uuidString: sub) != nil else { return .unknown(url) }
+            return .mailItem(mailId: sub)
         }
     }
 

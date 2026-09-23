@@ -100,6 +100,7 @@ class BusinessProfileViewModelTest {
                         ),
                     isPublished = true,
                     verificationStatus = "address_verified",
+                    identityVerificationTier = "bi1_basic",
                     primaryLocation =
                         BusinessLocationDto(
                             id = "loc-1",

@@ -32,7 +32,8 @@ public enum PostGigV1PriceType: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .flat: "Flat"
         case .hourly: "Hourly"
-        case .free: "Free"
+        // Posts `pay_type` "offers" with price 0: helpers suggest a price.
+        case .free: "Open to offers"
         }
     }
 
@@ -712,7 +713,7 @@ extension PostGigV1ViewModel {
         if form.priceType != .free {
             let trimmed = form.price.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty {
-                errors.append(.init(field: .price, message: "Enter a price, or pick Free."))
+                errors.append(.init(field: .price, message: "Enter a price, or pick Open to offers."))
             } else if (Double(trimmed) ?? 0) <= 0 {
                 errors.append(.init(field: .price, message: "Price must be greater than zero."))
             }

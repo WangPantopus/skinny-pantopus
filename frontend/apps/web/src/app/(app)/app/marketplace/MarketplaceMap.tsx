@@ -16,6 +16,7 @@ import { Store, Camera } from 'lucide-react';
 import Image from 'next/image';
 import { formatTimeAgo } from '@pantopus/ui-utils';
 import type { Listing } from '@pantopus/api';
+import { sellerIsVerifiedNeighbor } from './constants';
 
 // ── Leaflet icon fix ─────────────────────────────────────────
 delete (L.Icon.Default.prototype as unknown as Record<string, any>)._getIconUrl;
@@ -55,7 +56,7 @@ function makePriceIcon(listing: Listing, isSelected: boolean): L.DivIcon {
   const label = isWanted ? 'WANTED' : isFree ? 'FREE' : `$${price.toFixed(0)}`;
   const layerColor = listing?.layer ? (LAYER_COLORS[listing.layer] || '#7c3aed') : '#7c3aed';
   const bg = isFree ? '#16a34a' : isWanted ? '#d97706' : layerColor;
-  const trusted = listing?.is_address_attached;
+  const trusted = sellerIsVerifiedNeighbor(listing?.creator);
   const scale = isSelected ? 'scale(1.2)' : '';
   const zIndex = isSelected ? 'z-index: 100;' : '';
   const ring = isSelected ? 'box-shadow: 0 0 0 3px #3b82f6, 0 2px 8px rgba(0,0,0,.25);' : 'box-shadow: 0 2px 8px rgba(0,0,0,.25);';
