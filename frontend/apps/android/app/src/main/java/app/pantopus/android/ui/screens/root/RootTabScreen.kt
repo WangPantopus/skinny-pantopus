@@ -262,6 +262,7 @@ import app.pantopus.android.ui.screens.inbox.search.ChatSearchResult
 import app.pantopus.android.ui.screens.inbox.search.ChatSearchResultKind
 import app.pantopus.android.ui.screens.inbox.search.ChatSearchScreen
 import app.pantopus.android.ui.screens.listing_offers.ListingOffersScreen
+import app.pantopus.android.ui.screens.listing_offers.ListingOffersViewModel
 import app.pantopus.android.ui.screens.listings.MyListingsScreen
 import app.pantopus.android.ui.screens.mailbox.community.CommunityMailScreen
 import app.pantopus.android.ui.screens.mailbox.disambiguate.DISAMBIGUATE_MAIL_ID_KEY
@@ -4634,6 +4635,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         ),
                 ) { entry ->
                     val listingId = entry.arguments?.getString(ChildRoutes.LISTING_OFFERS_ID_KEY).orEmpty()
+                    val listingTitle = entry.arguments?.getString(ChildRoutes.LISTING_OFFERS_TITLE_KEY).orEmpty()
                     ListingOffersScreen(
                         onBack = { navController.popBackStack() },
                         onShareListing = {
@@ -4643,7 +4645,24 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             )
                         },
                         onOpenBuyer = { buyer -> navController.navigate(ChildRoutes.publicProfile(buyer.id)) },
-                        onOpenTransaction = { navController.navigate(ChildRoutes.placeholder("Transaction detail")) },
+                        onMessageBuyer = { offer ->
+                            offer.buyer?.let { buyer ->
+                                // The chat is with the buyer; the listing is its topic.
+                                val name = ListingOffersViewModel.displayName(buyer)
+                                navController.navigate(
+                                    ChildRoutes.chatConversationFromPicker(
+                                        userId = buyer.id,
+                                        displayName = name,
+                                        initials = initialsFromName(name),
+                                        verified = false,
+                                        locality = null,
+                                        topicType = "listing",
+                                        topicRefId = listingId,
+                                        topicTitle = listingTitle.ifEmpty { "Listing" },
+                                    ),
+                                )
+                            }
+                        },
                         onEditPrice = {
                             navController.navigate(
                                 ChildRoutes.editListing(

@@ -160,7 +160,12 @@ public struct MarketplaceTabRoot: View {
                     onOpenBuyer: { buyer in
                         Task { @MainActor in path.append(.publicProfile(userId: buyer.id)) }
                     },
-                    onOpenTransaction: { _ in },
+                    onMessageBuyer: { offer in
+                        guard let chat = ListingOffersViewModel.buyerChat(
+                            for: offer, listingId: listingId, listingTitle: titleHint
+                        ) else { return }
+                        Task { @MainActor in path.append(.chatConversation(chat)) }
+                    },
                     onEditPrice: {
                         Task { @MainActor in
                             path.append(.editListing(listingId: listingId, jumpToStep: .price))

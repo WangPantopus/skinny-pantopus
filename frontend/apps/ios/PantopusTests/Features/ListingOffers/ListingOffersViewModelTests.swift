@@ -142,9 +142,10 @@ final class ListingOffersViewModelTests: ListingOffersViewModelTestCase {
             return
         }
         let pending = sections.first?.rows.first { $0.id == "o-anika" }
-        XCTAssertEqual(pending?.footer?.actions.count, 2)
-        XCTAssertEqual(pending?.footer?.actions.first?.title, "Counter")
+        XCTAssertEqual(pending?.footer?.actions.count, 3)
+        XCTAssertEqual(pending?.footer?.actions.first?.title, "Decline")
         XCTAssertEqual(pending?.footer?.actions.first?.variant, .ghost)
+        XCTAssertEqual(pending?.footer?.actions.dropFirst().first?.title, "Counter")
         XCTAssertEqual(pending?.footer?.actions.last?.title, "Accept")
         XCTAssertEqual(pending?.footer?.actions.last?.variant, .primary)
     }
@@ -162,7 +163,7 @@ final class ListingOffersViewModelTests: ListingOffersViewModelTestCase {
         }
         let countered = sections.first?.rows.first { $0.id == "o-marcus" }
         XCTAssertEqual(countered?.footer?.actions.count, 2)
-        XCTAssertEqual(countered?.footer?.actions.first?.title, "Withdraw counter")
+        XCTAssertEqual(countered?.footer?.actions.first?.title, "Decline offer")
         XCTAssertEqual(countered?.footer?.actions.first?.variant, .destructive)
         XCTAssertEqual(countered?.footer?.actions.last?.title, "Send counter")
         XCTAssertEqual(countered?.footer?.actions.last?.variant, .primary)
@@ -201,7 +202,7 @@ final class ListingOffersViewModelTests: ListingOffersViewModelTestCase {
         }
         let accepted = sections.first?.rows.first
         XCTAssertEqual(accepted?.footer?.actions.count, 1)
-        XCTAssertEqual(accepted?.footer?.actions.first?.title, "View transaction")
+        XCTAssertEqual(accepted?.footer?.actions.first?.title, "Message buyer")
     }
 
     func testRowMapping_CompletedHasReviewFooter() async {
@@ -226,7 +227,7 @@ final class ListingOffersViewModelTests: ListingOffersViewModelTestCase {
         }
         let row = sections.first?.rows.first
         XCTAssertEqual(row?.footer?.actions.count, 2)
-        XCTAssertEqual(row?.footer?.actions.first?.title, "View transaction")
+        XCTAssertEqual(row?.footer?.actions.first?.title, "Message buyer")
         XCTAssertEqual(row?.footer?.actions.last?.title, "Leave a review")
     }
 
@@ -344,9 +345,9 @@ final class ListingOffersViewModelTests: ListingOffersViewModelTestCase {
             return
         }
         XCTAssertEqual(sections.first?.rows.first?.chips?.first?.text, "Accepted")
-        // Accepted footer = single "View transaction" button.
+        // Accepted footer = single "Message buyer" button.
         XCTAssertEqual(sections.first?.rows.first?.footer?.actions.count, 1)
-        XCTAssertEqual(sections.first?.rows.first?.footer?.actions.first?.title, "View transaction")
+        XCTAssertEqual(sections.first?.rows.first?.footer?.actions.first?.title, "Message buyer")
     }
 
     func testAccept_ByBuyerOfCounteredOfferPresentsCheckout() async {
