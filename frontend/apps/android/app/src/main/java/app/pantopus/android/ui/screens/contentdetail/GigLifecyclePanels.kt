@@ -1541,16 +1541,29 @@ private fun GigPaymentCard(payment: GigPaymentResponse) {
                     .padding(Spacing.s3),
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
-            PaymentLine(label = "Platform fee (included)", amount = formatCents(row.amountPlatformFee ?: 0))
+            val gigFee = row.gigFee
+            // A fee charge replaces the full-task platform fee and total.
+            if (gigFee == null) {
+                PaymentLine(label = "Platform fee (included)", amount = formatCents(row.amountPlatformFee ?: 0))
+            }
             if ((row.tipAmount ?: 0) > 0) {
                 PaymentLine(label = "Tip", amount = formatCents(row.tipAmount ?: 0))
             }
-            PaymentLine(
-                label = app.pantopus.android.ui.screens.gigs.refunds.gigPaymentAmountLabel(row),
-                amount = formatCents(row.amountTotal ?: 0),
-                emphasized = true,
-                modifier = Modifier.testTag("gigDetail.payment.total"),
-            )
+            if (gigFee != null) {
+                PaymentLine(
+                    label = app.pantopus.android.ui.screens.gigs.refunds.gigPaymentFeeLine(gigFee),
+                    amount = "",
+                    emphasized = true,
+                    modifier = Modifier.testTag("gigDetail.payment.fee"),
+                )
+            } else {
+                PaymentLine(
+                    label = app.pantopus.android.ui.screens.gigs.refunds.gigPaymentAmountLabel(row),
+                    amount = formatCents(row.amountTotal ?: 0),
+                    emphasized = true,
+                    modifier = Modifier.testTag("gigDetail.payment.total"),
+                )
+            }
         }
     }
 }

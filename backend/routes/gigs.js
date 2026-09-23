@@ -565,9 +565,10 @@ const createGigSchema = Joi.object({
   title: Joi.string().min(5).max(255).required(),
   description: Joi.string().min(10).required(),
   price: Joi.number().min(0).when('home_task_source', { is: Joi.exist(), then: Joi.number().precision(2).max(99999999.99).strict() }).required(),
-  category: Joi.string().max(100).optional(),
-  deadline: Joi.date().iso().when('home_task_source', { is: Joi.exist(), then: Joi.optional(), otherwise: Joi.date().min('now').optional() }),
-  estimated_duration: Joi.number().positive().optional(), // hours
+  // Clients send an optional field they left empty as null; treat it as not provided.
+  category: Joi.string().max(100).allow(null).optional(),
+  deadline: Joi.date().iso().allow(null).when('home_task_source', { is: Joi.exist(), then: Joi.optional(), otherwise: Joi.date().min('now').allow(null).optional() }),
+  estimated_duration: Joi.number().positive().allow(null).optional(), // hours
   attachments: Joi.array().items(Joi.string().uri()).max(10).optional(),
 
   // Proxy posting: post a gig on behalf of a business account
@@ -580,7 +581,7 @@ const createGigSchema = Joi.object({
     .optional(),
 
   // Scheduled start time (used for grace window calculations)
-  scheduled_start: Joi.date().iso().optional(),
+  scheduled_start: Joi.date().iso().allow(null).optional(),
 
   // Tasks surface: new fields
   location_precision: Joi.string()
@@ -781,9 +782,10 @@ const updateGigSchema = Joi.object({
   title: Joi.string().min(5).max(255),
   description: Joi.string().min(10),
   price: Joi.number().min(0),
-  category: Joi.string().max(100),
-  deadline: Joi.date().iso().min('now'),
-  estimated_duration: Joi.number().positive(),
+  // null clears an optional field the editor emptied.
+  category: Joi.string().max(100).allow(null),
+  deadline: Joi.date().iso().min('now').allow(null),
+  estimated_duration: Joi.number().positive().allow(null),
   attachments: Joi.array().items(Joi.string().uri()).max(10),
   cancellation_policy: Joi.string().valid('flexible', 'standard', 'strict'),
   is_urgent: Joi.boolean(),

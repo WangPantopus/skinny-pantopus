@@ -67,6 +67,11 @@ data class GigStopReceipt(
     val action: String,
     val gigStatus: String,
     val financialStatus: String,
+    /** Fee requests only: the charged fee and the released rest of the hold. */
+    val feeStatus: String? = null,
+    val feeCents: Int? = null,
+    val releasedCents: Int? = null,
+    val feeReason: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

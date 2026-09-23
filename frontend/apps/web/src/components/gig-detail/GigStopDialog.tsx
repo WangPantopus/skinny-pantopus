@@ -75,9 +75,11 @@ export default function GigStopDialog(props: Props) {
                 : state.preview?.eligible === false ? 'Cancellation details need review' : 'No cancellation fee'}
             </p>
             <p className={`text-xs mt-1 ${terms.policyFeeCents > 0 || state.preview?.eligible === false ? 'text-red-700' : 'text-green-700'}`}>
-              {terms.policyFeeCents > 0 || state.preview?.eligible === false
-                ? 'This action requires review. No fee has been confirmed as charged.'
-                : 'This policy does not charge a fee at this stage.'}
+              {financial === 'fee' && state.preview?.eligible !== false
+                ? 'This fee is charged from the payment hold. The rest of the hold is released.'
+                : terms.policyFeeCents > 0 || state.preview?.eligible === false
+                  ? 'This action requires review. No fee has been confirmed as charged.'
+                  : 'This policy does not charge a fee at this stage.'}
             </p>
           </div>
           <p className="text-sm text-app-text-secondary">Task amount: ${(terms.amountCents / 100).toFixed(2)} USD.</p>
