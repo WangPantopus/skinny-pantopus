@@ -6,10 +6,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.listings.ListingDto
-import app.pantopus.android.data.api.models.listings.MessageListingBody
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.listing_offers.ListingOffersRepository
 import app.pantopus.android.data.listings.ListingsRepository
 import app.pantopus.android.ui.screens.marketplace.ListingGradient
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -25,6 +25,7 @@ class ListingDetailViewModel
     @Inject
     constructor(
         private val repo: ListingsRepository,
+        private val offersRepo: ListingOffersRepository,
         private val auth: AuthRepository,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
@@ -73,18 +74,24 @@ class ListingDetailViewModel
             }
         }
 
-        fun sendMessage(
-            text: String,
-            offerAmount: Double? = null,
+        /**
+         * The buyer's offer → `POST /api/listings/:id/offers`, the route whose offers the seller sees under
+         * "View offers". [onFailure] gets the server's reason (e.g. an offer is already pending).
+         */
+        fun makeOffer(
+            amount: Double?,
+            message: String?,
+            onFailure: (String) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             viewModelScope.launch {
-                val result =
-                    repo.messageListing(
-                        id = listingId,
-                        body = MessageListingBody(message = text, offerAmount = offerAmount),
-                    )
-                onResult(result is NetworkResult.Success)
+                when (val result = offersRepo.create(listingId, amount, message)) {
+                    is NetworkResult.Success -> onResult(true)
+                    is NetworkResult.Failure -> {
+                        onFailure(result.error.displayMessage("Couldn't send your offer. Please try again."))
+                        onResult(false)
+                    }
+                }
             }
         }
 
