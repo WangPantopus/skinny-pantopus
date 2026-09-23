@@ -9,9 +9,6 @@ import {
   useLinkMailToAsset,
   useDrawerItems,
 } from '@/lib/mailbox-queries';
-import { GigCreationModal } from '@/components/mailbox';
-// The user's Home; each page used a hard-coded 'home_1' stub.
-import useHomeProfile from '../../_components/useMailboxHome';
 
 // ── Category icons ───────────────────────────────────────────
 const categoryIcons: Record<string, string> = {
@@ -133,11 +130,9 @@ export default function AssetDetailPage() {
   const params = useParams<{ asset_id?: string | string[] }>();
   const rawAssetId = params?.asset_id;
   const assetId = Array.isArray(rawAssetId) ? rawAssetId[0] || '' : rawAssetId || '';
-  const home = useHomeProfile();
   const router = useRouter();
   const { data: fullDetail, isLoading } = useAssetFullDetail(assetId);
   const [showLinkDrawer, setShowLinkDrawer] = useState(false);
-  const [showGigModal, setShowGigModal] = useState(false);
 
   const asset = fullDetail?.asset;
   const linkedMail = fullDetail?.mail || [];
@@ -219,7 +214,15 @@ export default function AssetDetailPage() {
         <div className="flex items-center gap-2 mb-6">
           <button
             type="button"
-            onClick={() => setShowGigModal(true)}
+            onClick={() => {
+              // The real task form, prefilled; the modal here only pretended to post.
+              const details = [asset.manufacturer, asset.model_number].filter(Boolean).join(' ');
+              const prefill = {
+                title: `Help with ${asset.name}`,
+                description: `Help needed with ${asset.name} (${asset.category}${details ? `, ${details}` : ''}).`,
+              };
+              router.push(`/app/gigs/new?prefill=${encodeURIComponent(JSON.stringify(prefill))}`);
+            }}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-app-text-secondary dark:text-app-text-muted border border-app-border rounded-lg hover:bg-app-hover dark:hover:bg-gray-800 transition-colors"
           >
             <span>🤝</span>
@@ -407,22 +410,6 @@ export default function AssetDetailPage() {
         <LinkMailDrawer
           assetId={assetId}
           onClose={() => setShowLinkDrawer(false)}
-        />
-      )}
-
-      {/* ── Gig Creation Modal ───────────────────────────────── */}
-      {showGigModal && (
-        <GigCreationModal
-          source="post_delivery"
-          packageTitle={asset.name}
-          packageDescription={`${asset.category} — ${asset.manufacturer || ''} ${asset.model_number || ''}`.trim()}
-          homeAddress={home.address}
-          onGigCreated={() => setShowGigModal(false)}
-          onClose={() => setShowGigModal(false)}
-          createGig={async () => {
-            // In production this would call the actual gig API
-            return { gigId: `gig_${Date.now()}` };
-          }}
         />
       )}
     </div>
