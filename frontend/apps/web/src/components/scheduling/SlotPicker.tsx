@@ -74,6 +74,11 @@ interface SlotPickerProps {
   /** Disable picking (e.g. past the reschedule cutoff). */
   disabled?: boolean;
   /**
+   * "Get notified when times open" in an empty month. The button renders only
+   * when a handler is passed, so it never shows without doing anything.
+   */
+  onNotifyMe?: () => void;
+  /**
    * DST/timezone hint copy to show between the timezone chip and calendar.
    * When set, renders an INFO banner (design Frame 5).
    * Typically "Clocks change this weekend — times are adjusted."
@@ -329,6 +334,7 @@ export default function SlotPicker({
   selected,
   pillar = "personal",
   disabled = false,
+  onNotifyMe,
   dstHint,
   takenSlots,
   composing = false,
@@ -699,14 +705,17 @@ export default function SlotPicker({
                 <ArrowRight className="h-[15px] w-[15px]" aria-hidden />
                 See {MONTH_NAMES[(cursor.month + 1) % 12]}
               </button>
-              {/* Secondary CTA — ghost */}
-              <button
-                type="button"
-                className="inline-flex h-10 w-full items-center justify-center gap-[7px] rounded-[11px] border border-app-border bg-app-surface text-[12.5px] font-bold tracking-tight text-app-text"
-              >
-                <Bell className="h-[14px] w-[14px]" aria-hidden />
-                Get notified when times open
-              </button>
+              {/* Secondary CTA — ghost; only with a handler. */}
+              {onNotifyMe && (
+                <button
+                  type="button"
+                  onClick={onNotifyMe}
+                  className="inline-flex h-10 w-full items-center justify-center gap-[7px] rounded-[11px] border border-app-border bg-app-surface text-[12.5px] font-bold tracking-tight text-app-text"
+                >
+                  <Bell className="h-[14px] w-[14px]" aria-hidden />
+                  Get notified when times open
+                </button>
+              )}
             </div>
           </div>
         ) : daySlots.length === 0 && composedEmpty ? (

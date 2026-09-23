@@ -38,6 +38,7 @@ function EmergencyContent() {
   const [newDetails, setNewDetails] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [creating, setCreating] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   // A superseded list read must never replace a newer one.
   const generation = useRef(0);
 
@@ -49,9 +50,11 @@ function EmergencyContent() {
     try {
       const res = await api.homeProfile.getHomeEmergencies(homeId);
       if (request !== generation.current) return;
+      setLoadError(null);
       setItems((res?.emergencies || []) as HomeEmergency[]);
     } catch (err: unknown) {
       if (request !== generation.current) return;
+      setLoadError('Current emergency info could not be loaded. Retry to check current information.');
       toast.error(failureMessage(err, 'Failed to load emergency info'));
     }
   }, [homeId]);
@@ -154,7 +157,12 @@ function EmergencyContent() {
         </div>
       )}
 
-      {items.length === 0 ? (
+      {loadError ? (
+        <div className="text-center py-16">
+          <p className="text-sm text-app-text-secondary">{loadError}</p>
+          <button type="button" onClick={() => { setLoading(true); fetchItems().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+        </div>
+      ) : items.length === 0 ? (
         <div className="text-center py-16">
           <HeartPulse className="w-10 h-10 mx-auto text-app-text-muted mb-3" />
           <p className="text-sm text-app-text-secondary">No emergency info</p>

@@ -22,10 +22,57 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
+const blockService = require('../services/blockService');
 const { isBlocked, getRelationshipStatus } = require('../utils/visibilityPolicy');
 const { invalidateFilterCache } = require('../services/feedService');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const rateLimit = require('express-rate-limit');
+
+// A blocked relationship exists only for the person who blocked. To the
+// blocked person the routes below answer as if there were no relationship,
+// so none of them can confirm who blocked whom.
+function isHiddenBlock(rel, userId) {
+  return rel?.status === 'blocked' && rel.blocked_by !== userId;
+}
+
+// The caller asked to block someone who already blocked them. Their own block
+// is recorded as a personal UserBlock, which every client uses and which stays
+// in force if the other person unblocks later. The answer is a plain success
+// that does not return the other person's relationship row.
+async function blockSomeoneWhoBlockedYou(req, res, userId, otherUserId, reason) {
+  const { error } = await supabaseAdmin
+    .from('UserBlock')
+    .upsert(
+      { blocker_user_id: userId, blocked_user_id: otherUserId, reason: reason || null },
+      { onConflict: 'blocker_user_id,blocked_user_id', ignoreDuplicates: true }
+    );
+  if (error) {
+    logger.error('Error recording block', { error: error.message });
+    return res.status(500).json({ error: 'Failed to block user' });
+  }
+  blockService.invalidateBlockCache(userId, otherUserId);
+  invalidateFilterCache(userId);
+  invalidateFilterCache(otherUserId);
+  // Same personal-block cascade as POST /api/users/:userId/block (P1.14).
+  setImmediate(async () => {
+    try {
+      await require('../services/personaBlockService')
+        .propagatePersonalBlock({ blockerUserId: userId, blockedUserId: otherUserId });
+    } catch (err) {
+      logger.error('block.persona_propagation_async_error', { error: err.message });
+    }
+  });
+  await writeIdentityAuditLog({
+    req,
+    actorUserId: userId,
+    targetUserId: otherUserId,
+    action: 'user.blocked',
+    targetType: 'UserBlock',
+    targetId: otherUserId,
+    metadata: { has_reason: !!reason, via: 'relationships.block_user' },
+  });
+  return res.json({ message: 'User blocked' });
+}
 
 // ============ RATE LIMITERS ============
 
@@ -93,6 +140,14 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
     // Exclude curator accounts — platform-owned, not a real neighbor
     if (targetUser.account_type === 'curator') {
       return res.status(403).json({ error: 'Cannot send connection requests to this account' });
+    }
+
+    // A personal UserBlock in either direction refuses new connection
+    // requests, like follows and direct messages, before any relationship
+    // row or notification is written. Existing Relationship rows and the
+    // PersonaBlock scope are unchanged.
+    if (await blockService.isBlocked(requesterId, addressee_id)) {
+      return res.status(403).json({ error: 'Cannot send a connection request to this user' });
     }
 
     // Check for existing relationship (the unique pair index enforces one row)
@@ -206,6 +261,7 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
       relationship,
     });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Connection request error', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Failed to send connection request' });
   }
@@ -233,6 +289,10 @@ router.post('/:id/accept', verifyToken, async (req, res) => {
     // Only the addressee can accept
     if (rel.addressee_id !== userId) {
       return res.status(403).json({ error: 'Only the recipient can accept this request' });
+    }
+
+    if (isHiddenBlock(rel, userId)) {
+      return res.status(404).json({ error: 'Connection request not found' });
     }
 
     if (rel.status !== 'pending') {
@@ -311,6 +371,10 @@ router.post('/:id/reject', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Only the recipient can reject this request' });
     }
 
+    if (isHiddenBlock(rel, userId)) {
+      return res.status(404).json({ error: 'Connection request not found' });
+    }
+
     if (rel.status !== 'pending') {
       return res.status(400).json({ error: `Cannot reject a ${rel.status} request` });
     }
@@ -355,6 +419,10 @@ router.post('/:id/block', verifyToken, async (req, res) => {
     // Must be one of the two parties
     if (rel.requester_id !== userId && rel.addressee_id !== userId) {
       return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    if (isHiddenBlock(rel, userId)) {
+      return res.status(404).json({ error: 'Relationship not found' });
     }
 
     if (rel.status === 'blocked') {
@@ -422,13 +490,16 @@ router.post('/block-user', verifyToken, async (req, res) => {
     // Check existing relationship
     const { data: existing } = await supabaseAdmin
       .from('Relationship')
-      .select('id, status')
+      .select('id, status, blocked_by')
       .or(
         `and(requester_id.eq.${userId},addressee_id.eq.${targetId}),and(requester_id.eq.${targetId},addressee_id.eq.${userId})`
       )
       .single();
 
     if (existing) {
+      if (isHiddenBlock(existing, userId)) {
+        return blockSomeoneWhoBlockedYou(req, res, userId, targetId, reason);
+      }
       if (existing.status === 'blocked') {
         return res.status(400).json({ error: 'Already blocked' });
       }
@@ -530,17 +601,10 @@ router.post('/:id/unblock', verifyToken, async (req, res) => {
       .eq('id', relationshipId)
       .single();
 
-    if (!rel) {
+    // Only the blocker can unblock. Everyone else, participant or not, gets
+    // the same not-found answer, so this route never confirms a block.
+    if (!rel || rel.status !== 'blocked' || rel.blocked_by !== userId) {
       return res.status(404).json({ error: 'Relationship not found' });
-    }
-
-    if (rel.status !== 'blocked') {
-      return res.status(400).json({ error: 'This relationship is not blocked' });
-    }
-
-    // Only the blocker can unblock
-    if (rel.blocked_by !== userId) {
-      return res.status(403).json({ error: 'Only the person who blocked can unblock' });
     }
 
     // Delete the relationship entirely (they can re-request if desired)
@@ -595,6 +659,10 @@ router.delete('/:id', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
+    if (isHiddenBlock(rel, userId)) {
+      return res.status(404).json({ error: 'Connection not found' });
+    }
+
     if (rel.status === 'blocked') {
       return res.status(400).json({ error: 'Cannot disconnect a blocked relationship. Unblock first.' });
     }
@@ -632,6 +700,8 @@ router.get('/', verifyToken, async (req, res) => {
         addressee:addressee_id (${USER_SELECT})
       `)
       .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
+      // A blocked row is listed only for the person who blocked.
+      .or(`status.neq.blocked,blocked_by.eq.${userId}`)
       .order('created_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 

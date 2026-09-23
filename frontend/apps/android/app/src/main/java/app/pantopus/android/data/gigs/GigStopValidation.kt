@@ -47,7 +47,9 @@ object GigStopValidation {
             (value.reason == null || value.reason in reasons) &&
             (value.reasonNoteHash == null || (value.reason == "other" && Regex("^[a-f0-9]{64}$").matches(value.reasonNoteHash))) &&
             (value.rollbackMode == null || (value.action == "reopen_bidding" && value.rollbackMode == "payment_setup_aborted")) &&
-            value.financialAction in setOf("none", "release", "refund")
+            value.financialAction in setOf("none", "release", "refund", "fee") &&
+            // Only an owner cancel with a policy fee charges it from the hold.
+            (value.financialAction != "fee" || (value.action == "cancel" && value.terms.policyFeeCents > 0))
 
     fun scope(
         actor: String,
@@ -70,8 +72,11 @@ object GigStopValidation {
         scope(value.actorId, value.sessionScope, actorId, opening)
         check(
             terms(value.terms, gigId) && value.action == action && optionalId(value.activeRequestId) &&
-                value.financialAction in setOf("none", "release", "refund", "review") &&
-                (!value.eligible || (value.financialAction != "review" && value.terms.policyFeeCents == 0)),
+                value.financialAction in setOf("none", "release", "refund", "review", "fee") &&
+                (
+                    !value.eligible ||
+                        (value.financialAction != "review" && (value.financialAction == "fee") == (value.terms.policyFeeCents > 0))
+                ),
         ) {
             "Task action details could not be verified. Check again before continuing."
         }
@@ -90,7 +95,8 @@ object GigStopValidation {
         check(
             request(saved, gigId) && value.requestId == requestId && saved.requestId == requestId && value.action == saved.action &&
                 (expected == null || saved == expected) && value.status in setOf("pending", "needs_review", "completed") &&
-                value.financialStatus in setOf("none", "release_pending", "released", "refund_pending", "refunded", "needs_review") &&
+                value.financialStatus in
+                setOf("none", "release_pending", "released", "refund_pending", "refunded", "fee_pending", "fee_charged", "needs_review") &&
                 (!value.canRetry || saved.actorId == actorId),
         ) { "The task action is not confirmed. Check its original request." }
         if (value.status != "completed") {
@@ -106,15 +112,39 @@ object GigStopValidation {
         requestId: String,
     ) {
         val saved = value.request
-        val financial = mapOf("none" to "none", "release" to "released", "refund" to "refunded")[saved.financialAction]
+        val financial =
+            if (saved.financialAction == "fee") {
+                feeCompletion(value.receipt, saved)
+            } else {
+                mapOf("none" to "none", "release" to "released", "refund" to "refunded")[saved.financialAction]
+            }
         val status = if (saved.action in setOf("reopen_bidding", "worker_release")) "open" else "cancelled"
         val receipt =
             GigStopReceipt(
                 requestId, gigId, saved.terms.paymentId, saved.terms.ownerId, saved.terms.workerId,
-                saved.terms.amountCents, "usd", saved.action, status, checkNotNull(financial),
+                saved.terms.amountCents, "usd", saved.action, status, checkNotNull(financial) { "Completion is not confirmed." },
+                feeStatus = value.receipt?.feeStatus.takeIf { saved.financialAction == "fee" },
+                feeCents = value.receipt?.feeCents.takeIf { saved.financialAction == "fee" },
+                releasedCents = value.receipt?.releasedCents.takeIf { saved.financialAction == "fee" },
+                feeReason = value.receipt?.feeReason.takeIf { saved.financialAction == "fee" },
             )
         check(
             !value.canRetry && value.receipt == receipt && value.financialStatus == financial,
         ) { "Completion is not confirmed. Check the original request." }
+    }
+
+    /** A fee request completes charged, or released with nothing charged when the hold was gone. */
+    private fun feeCompletion(
+        receipt: GigStopReceipt?,
+        saved: GigStopRequest,
+    ): String? {
+        val fee = saved.terms.policyFeeCents
+        return when {
+            receipt == null -> null
+            receipt.financialStatus == "fee_charged" && receipt.feeStatus == "charged" && receipt.feeCents == fee &&
+                receipt.releasedCents == saved.terms.amountCents - fee -> "fee_charged"
+            receipt.financialStatus == "released" && receipt.feeStatus == "not_charged" && receipt.feeCents == 0 -> "released"
+            else -> null
+        }
     }
 }

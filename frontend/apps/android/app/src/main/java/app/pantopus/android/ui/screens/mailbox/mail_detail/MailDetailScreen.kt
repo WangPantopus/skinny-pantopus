@@ -431,9 +431,15 @@ private fun LoadedLayout(
                     MailCategoryActions.actions(
                         rawCategory = content.mailCategoryKey,
                         isSenderUnknown = content.isSenderUnknown,
-                    ),
+                    ).filter { it != MailCategoryAction.CreateTask || onCreateTask != null },
                 categoryActionInFlight = categoryActionInFlight,
-                onCategoryAction = onCategoryAction,
+                // Create Task runs the real create-task flow; the rest post the item action.
+                onCategoryAction =
+                    onCategoryAction?.let { perform ->
+                        { action: MailCategoryAction ->
+                            if (action == MailCategoryAction.CreateTask) onCreateTask?.invoke() else perform(action)
+                        }
+                    },
             )
     }
 }

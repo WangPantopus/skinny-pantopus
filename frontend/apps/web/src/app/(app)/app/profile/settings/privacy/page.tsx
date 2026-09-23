@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import ErrorState from '@/components/ui/ErrorState';
 import type {
   UserPrivacySettings,
   UserProfileBlock,
@@ -17,6 +18,7 @@ import type {
 export default function PrivacySettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [_settings, setSettings] = useState<UserPrivacySettings | null>(null);
   const [blocks, setBlocks] = useState<UserProfileBlock[]>([]);
@@ -32,6 +34,8 @@ export default function PrivacySettingsPage() {
   const [showHomeAffiliation, setShowHomeAffiliation] = useState<ProfileVisibilityLevel>('followers');
 
   const loadSettings = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const token = getAuthToken();
       if (!token) { router.push('/login'); return; }
@@ -46,9 +50,10 @@ export default function PrivacySettingsPage() {
       setShowGigHistory(s.show_gig_history);
       setShowNeighborhood(s.show_neighborhood);
       setShowHomeAffiliation(s.show_home_affiliation);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to load privacy settings';
-      toast.error(msg);
+    } catch {
+      // Never show the form on defaults: saving it would overwrite the real
+      // settings with the most public ones.
+      setLoadError("We couldn't load your privacy settings. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -120,6 +125,23 @@ export default function PrivacySettingsPage() {
               <p className="mt-4 text-app-secondary">Loading privacy settings…</p>
             </div>
           </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="bg-app min-h-screen">
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <button
+            onClick={() => router.push('/app/profile/settings')}
+            className="flex items-center gap-1.5 text-sm text-app-secondary hover:text-app mb-4 transition"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Settings
+          </button>
+          <ErrorState message={loadError} onRetry={loadSettings} />
         </main>
       </div>
     );

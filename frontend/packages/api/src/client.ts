@@ -113,8 +113,62 @@ function requestSessionChanged(request?: InternalAxiosRequestConfig): boolean {
   return _isWeb && marker !== undefined && marker !== currentRequestSession();
 }
 
+/**
+ * The rejection of every failed API call. It is an `Error`, so handlers written as
+ * `err instanceof Error ? err.message : fallback` show the server's reason instead
+ * of their generic fallback. The fields callers read (`code`, `statusCode`, `data`,
+ * `validationErrors`, ...) stay on the instance, and `message` stays enumerable so
+ * spreads and logs keep it.
+ */
+export class ApiRequestError extends Error {
+  code?: string;
+  statusCode?: number;
+  [field: string]: unknown;
+
+  constructor(fields: { message: string; [field: string]: unknown }) {
+    super(fields.message);
+    this.name = 'ApiRequestError';
+    Object.assign(this, fields);
+    Object.defineProperty(this, 'message', {
+      value: fields.message,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+}
+
 function sessionChangedError() {
-  return { message: 'Your account changed. Please try again.', code: 'AUTH_SESSION_CHANGED', statusCode: 409 };
+  return new ApiRequestError({
+    message: 'Your account changed. Please try again.',
+    code: 'AUTH_SESSION_CHANGED',
+    statusCode: 409,
+  });
+}
+
+/** `NOT_FOUND`, `SLOT_FULL`: a machine code, never user copy. */
+function looksLikeMachineCode(value: string): boolean {
+  return /^[A-Z][A-Z0-9_]*$/.test(value);
+}
+
+/** Plain copy for a failure whose body carries no human message. */
+function plainMessageForStatus(status: number | undefined): string {
+  if (typeof status !== 'number') return 'Something went wrong. Please try again.';
+  if (status >= 500) return 'Something went wrong on our side. Please try again.';
+  switch (status) {
+    case 403:
+      return "You don't have permission to do that.";
+    case 404:
+      return "We couldn't find what you were looking for.";
+    case 409:
+      return 'This changed while you were working. Refresh and try again.';
+    case 413:
+      return 'That file is too large.';
+    case 429:
+      return 'Too many attempts. Please wait a moment and try again.';
+    default:
+      return 'Something went wrong. Please try again.';
+  }
 }
 
 /**
@@ -755,13 +809,28 @@ apiClient.interceptors.response.use(
       : typeof responseData?.error === 'string' ? responseData.error : error.code;
     const userFacingMessage = typeof responseData?.message === 'string' ? responseData.message : '';
     const machineError = typeof responseData?.error === 'string' ? responseData.error : '';
+    // Transport and proxy failures carry no API envelope. Screens show this
+    // message, so use plain copy rather than axios's "Request failed with status
+    // code 500" or the request URL; the dev log below keeps the status and URL.
+    const transportMessage = error.code === 'ERR_CANCELED'
+      ? error.message
+      : isNetworkError
+        ? 'Network error. Please check your connection and try again.'
+        : plainMessageForStatus(status);
+    // A bare `error` field is shown only when it reads as copy: machine codes
+    // (`NOT_FOUND`) and 5xx internals (driver or provider text) get plain copy.
+    // A 503's text is the backend's deliberate "try again" wording, so it stays.
+    // `message` is the backend's deliberate user-facing field and always wins.
+    const isServerInternal = typeof status === 'number' && status >= 500 && status !== 503;
+    const readableMachineError = machineError && !looksLikeMachineCode(machineError) && !isServerInternal
+      ? machineError
+      : '';
     const errorMessage = isValidationError && validationErrors.length > 0
       ? validationErrors[0]
       : (
           userFacingMessage ||
-          machineError ||
-          (isNetworkError ? `Network error: cannot reach API at ${requestUrl || API_BASE_URL}` : '') ||
-          error.message ||
+          readableMachineError ||
+          transportMessage ||
           'An error occurred'
         );
 
@@ -793,7 +862,7 @@ apiClient.interceptors.response.use(
       }
     }
 
-    return Promise.reject({
+    return Promise.reject(new ApiRequestError({
       message: errorMessage,
       code: errorCode,
       statusCode: status,
@@ -804,7 +873,7 @@ apiClient.interceptors.response.use(
       authRefreshCode: refreshResult?.code,
       authRefreshStatusCode: refreshResult?.statusCode,
       authInvalidated: didInvalidateSession,
-    });
+    }));
   }
 );
 

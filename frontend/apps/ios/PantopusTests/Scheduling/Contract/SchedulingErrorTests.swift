@@ -98,7 +98,7 @@ final class SchedulingErrorTests: XCTestCase {
     }
 
     func test403MapsToForbidden() {
-        guard case .forbidden = SchedulingError.from(.forbidden) else {
+        guard case .forbidden = SchedulingError.from(.forbidden()) else {
             return XCTFail("Expected .forbidden")
         }
     }

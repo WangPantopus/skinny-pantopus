@@ -37,6 +37,9 @@ const logger = require('../utils/logger');
 // with a single caller, which made GET /today the only writer of
 // MailDayItem and silently gated the daily push on having opened the screen.
 const { ensureTodayItems, getAccessibleHomeIds, kindFor } = require('../services/mailDayService');
+// readableMail: the mailbox's per-item rule (own mail, or mail for a Home whose
+// mail the caller may read), checked before a triage piece links or changes a Mail.
+const { readableMail } = require('../utils/homeMailAccess');
 
 const UNDO_SECONDS = 5;
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -256,6 +259,7 @@ async function setupNudges(userId) {
 async function resolveLinkedMail(item, action, drawer, userId) {
   if (!item.mail_id) return;
   try {
+    if (!(await readableMail(item.mail_id, userId))) return;
     const nowIso = new Date().toISOString();
     if (action === 'routed') {
       const privacyMap = { personal: 'private_to_person', home: 'shared_household', business: 'business_team' };
@@ -366,6 +370,9 @@ router.post('/items', verifyToken, validate(createItemSchema), async (req, res) 
       if (!homeIds.includes(b.home_id)) {
         return res.status(403).json({ error: 'Not a member of that home' });
       }
+    }
+    if (b.mail_id && !(await readableMail(b.mail_id, userId))) {
+      return res.status(404).json({ error: 'Mail not found' });
     }
 
     const nowIso = new Date().toISOString();

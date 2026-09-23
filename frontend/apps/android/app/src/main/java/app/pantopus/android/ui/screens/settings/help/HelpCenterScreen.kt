@@ -140,8 +140,9 @@ private val Sections =
                     Item(
                         question = "Who can see my address?",
                         answer =
-                            "Only verified connections — and only at the precision you set under " +
-                                "Settings → Privacy → Address sharing. The default is street-level.",
+                            "Your profile never shows your street address. People who can see your profile see the city " +
+                                "and state on it, and whether your home is verified. Posts, tasks, and listings show only the " +
+                                "location you add to them.",
                     ),
                 ),
         ),
@@ -177,10 +178,11 @@ private val Sections =
                     Item(
                         question = "How do I delete my account?",
                         answer =
-                            "Go to Settings → Privacy → Delete account. " +
+                            "Open the menu, tap Profile & Privacy, then Delete account at the bottom. " +
                                 "You'll confirm in the app and verify your identity, then your account and its " +
                                 "data are removed. Finish or cancel any gigs in progress and resolve pending " +
-                                "payments first — those block deletion.",
+                                "payments first — those block deletion. If your account has payment history, " +
+                                "contact support to close it.",
                     ),
                 ),
         ),

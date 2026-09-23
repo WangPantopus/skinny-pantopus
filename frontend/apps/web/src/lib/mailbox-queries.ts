@@ -85,12 +85,6 @@ export const mailboxKeys = {
   walletTransactions: (params?: Record<string, any>) =>
     [...mailboxKeys.all, 'earn', 'transactions', params] as const,
 
-  // Translation
-  translation: (itemId: string) =>
-    [...mailboxKeys.all, 'translation', itemId] as const,
-  languageDetect: (itemId: string) =>
-    [...mailboxKeys.all, 'language', itemId] as const,
-
   // Records
   homeAssets: (homeId: string) =>
     [...mailboxKeys.all, 'records', 'assets', homeId] as const,
@@ -184,10 +178,17 @@ export function useMarkItemOpened(
 ) {
   const qc = useQueryClient();
   return useMutation<void, MailboxApiError, string>({
-    mutationFn: api.markItemOpened,
-    onSuccess: (_data, itemId) => {
+    // Loading a letter (GET /api/mailbox/v2/item/:id) is what marks it opened; the item action route has no
+    // "open" action. So wait for that load, sharing the detail query's request, then refresh the lists and counts.
+    mutationFn: async (itemId) => {
+      await qc.fetchQuery({
+        queryKey: mailboxKeys.itemDetail(itemId),
+        queryFn: () => api.getItemDetail(itemId),
+        staleTime: STALE_1M,
+      });
+    },
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: mailboxKeys.drawers() });
-      qc.invalidateQueries({ queryKey: mailboxKeys.itemDetail(itemId) });
       qc.invalidateQueries({ queryKey: mailboxKeys.counter() });
       // Invalidate all drawer item lists
       qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'drawer'] });
@@ -449,47 +450,6 @@ export function useRedeemOffer(
       qc.invalidateQueries({ queryKey: mailboxKeys.earnWallet() });
       qc.invalidateQueries({ queryKey: mailboxKeys.walletTransactions() });
       qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'drawer', 'earn'] });
-    },
-    ...options,
-  });
-}
-
-// ============================================================
-// TRANSLATION HOOKS
-// ============================================================
-
-export function useDetectLanguage(
-  itemId: string,
-  options?: Omit<
-    UseQueryOptions<{ detected_language: string; confidence: number }, MailboxApiError>,
-    'queryKey' | 'queryFn'
-  >,
-) {
-  return useQuery<{ detected_language: string; confidence: number }, MailboxApiError>({
-    queryKey: mailboxKeys.languageDetect(itemId),
-    queryFn: () => api.detectLanguage(itemId),
-    staleTime: STALE_5M,
-    enabled: !!itemId,
-    ...options,
-  });
-}
-
-export function useTranslateItem(
-  options?: UseMutationOptions<
-    { translated_content: string; from_language: string },
-    MailboxApiError,
-    { itemId: string; targetLang?: string }
-  >,
-) {
-  const qc = useQueryClient();
-  return useMutation<
-    { translated_content: string; from_language: string },
-    MailboxApiError,
-    { itemId: string; targetLang?: string }
-  >({
-    mutationFn: ({ itemId, targetLang }) => api.translateItem(itemId, targetLang),
-    onSuccess: (_data, { itemId }) => {
-      qc.invalidateQueries({ queryKey: mailboxKeys.translation(itemId) });
     },
     ...options,
   });
@@ -814,19 +774,6 @@ export function useUpdateMailDaySettings(
     mutationFn: api.updateMailDaySettings,
     onSuccess: (data) => {
       qc.setQueryData(mailboxKeys.mailDaySettings(), data);
-      qc.invalidateQueries({ queryKey: mailboxKeys.mailDaySummary() });
-    },
-    ...options,
-  });
-}
-
-export function useDismissMailDaySummary(
-  options?: UseMutationOptions<void, MailboxApiError, void>,
-) {
-  const qc = useQueryClient();
-  return useMutation<void, MailboxApiError, void>({
-    mutationFn: api.dismissMailDaySummary,
-    onSuccess: () => {
       qc.invalidateQueries({ queryKey: mailboxKeys.mailDaySummary() });
     },
     ...options,

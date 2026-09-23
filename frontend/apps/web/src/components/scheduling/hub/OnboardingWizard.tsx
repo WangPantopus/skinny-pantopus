@@ -937,7 +937,7 @@ function BusinessOnboarding({
                 })
               }
               pillar={pillar}
-              inviteHref={`/app/businesses/${ownerId}`}
+              inviteHref={`/app/business/${ownerId}/team/invite`}
             />
           ) : (
             <p className="rounded-xl border border-app-border bg-app-surface px-4 py-6 text-center text-sm text-app-text-secondary">

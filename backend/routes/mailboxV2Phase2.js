@@ -1,11 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
-const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+// canAccessMail / readableMail: the mailbox's per-item rule (own mail, or mail
+// for a Home whose mail the caller may read), checked before any read or change.
+const { getAccessibleHomeIds, canAccessMail, readableMail } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
+const { escapeIlike } = require('../utils/escapeIlike');
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -91,15 +94,6 @@ const packageGigSchema = Joi.object({
 
 const couponBrowseSchema = Joi.object({
   offerId: Joi.string().uuid().required(),
-});
-
-const couponOrderSchema = Joi.object({
-  offerId: Joi.string().uuid().required(),
-  items: Joi.array().items(Joi.object({
-    name: Joi.string().required(),
-    price: Joi.number().required(),
-    quantity: Joi.number().integer().min(1).default(1),
-  })).min(1).required(),
 });
 
 const riskAppealSchema = Joi.object({
@@ -403,7 +397,7 @@ router.get('/booklet/:mailId', async (req, res, next) => {
       .eq('mail_object_type', 'booklet')
       .single();
 
-    if (!mail) return res.status(404).json({ error: 'Booklet not found' });
+    if (!mail || !(await canAccessMail(mail, req.user.id))) return res.status(404).json({ error: 'Booklet not found' });
 
     const { data: pages } = await supabaseAdmin
       .from('BookletPage')
@@ -421,6 +415,7 @@ router.get('/booklet/:mailId', async (req, res, next) => {
 router.get('/booklet/:mailId/page/:pageNumber', async (req, res, next) => {
   try {
     const { mailId, pageNumber } = req.params;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Page not found' });
     const { data: page } = await supabaseAdmin
       .from('BookletPage')
       .select('*')
@@ -442,11 +437,11 @@ router.post('/booklet/:mailId/download', async (req, res, next) => {
     const { mailId } = req.params;
     const { data: mail } = await supabaseAdmin
       .from('Mail')
-      .select('download_url, download_size_bytes')
+      .select('id, download_url, download_size_bytes, recipient_user_id, recipient_home_id')
       .eq('id', mailId)
       .single();
 
-    if (!mail?.download_url) return res.status(404).json({ error: 'Download not available' });
+    if (!mail?.download_url || !(await canAccessMail(mail, req.user.id))) return res.status(404).json({ error: 'Download not available' });
 
     await logMailEvent(req.user.id, 'booklet_downloaded', mailId, {
       size_bytes: mail.download_size_bytes,
@@ -469,7 +464,7 @@ router.get('/bundle/:bundleId/items', async (req, res, next) => {
       .eq('mail_object_type', 'bundle')
       .single();
 
-    if (!bundle) return res.status(404).json({ error: 'Bundle not found' });
+    if (!bundle || !(await canAccessMail(bundle, req.user.id))) return res.status(404).json({ error: 'Bundle not found' });
 
     const { data: items } = await supabaseAdmin
       .from('Mail')
@@ -490,9 +485,25 @@ router.get('/bundle/:bundleId/items', async (req, res, next) => {
 router.post('/bundle/action', validate(bundleActionSchema), async (req, res, next) => {
   try {
     const { bundleId, action, folderId, itemId } = req.body;
+    // Only a bundle the caller may read (the mailbox per-item rule).
+    const { data: bundleMail } = await supabaseAdmin
+      .from('Mail')
+      .select('id, recipient_user_id, recipient_home_id')
+      .eq('id', bundleId)
+      .eq('mail_object_type', 'bundle')
+      .maybeSingle();
+    if (!bundleMail || !(await canAccessMail(bundleMail, req.user.id))) return res.status(404).json({ error: 'Bundle not found' });
 
     if (action === 'file_all') {
       if (!folderId) return res.status(400).json({ error: 'folderId required for file_all' });
+      // Vault folders are per user (GET /vault/folders lists user_id = caller).
+      const { data: ownFolder } = await supabaseAdmin
+        .from('VaultFolder')
+        .select('id')
+        .eq('id', folderId)
+        .eq('user_id', req.user.id)
+        .maybeSingle();
+      if (!ownFolder) return res.status(404).json({ error: 'Folder not found' });
       const { data: items } = await supabaseAdmin
         .from('Mail')
         .select('id')
@@ -543,7 +554,8 @@ router.post('/bundle/action', validate(bundleActionSchema), async (req, res, nex
       await supabaseAdmin
         .from('Mail')
         .update({ bundle_id: null })
-        .eq('id', itemId);
+        .eq('id', itemId)
+        .eq('bundle_id', bundleId);
 
       // Update bundle item count
       const { data: remaining } = await supabaseAdmin
@@ -706,6 +718,10 @@ router.get('/certified/:mailId/proof', async (req, res, next) => {
       .single();
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
+    // Same rule as the other certified routes: only the named recipient.
+    if (mail.recipient_user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the named recipient can download proof' });
+    }
     if (!mail.acknowledged_at) {
       return res.status(400).json({ error: 'Must acknowledge before downloading proof' });
     }
@@ -742,7 +758,7 @@ router.post('/party/create', validate(createPartySchema), async (req, res, next)
       .eq('id', mailId)
       .single();
 
-    if (!mail) return res.status(404).json({ error: 'Mail not found' });
+    if (!mail || !(await canAccessMail(mail, req.user.id))) return res.status(404).json({ error: 'Mail not found' });
     if (mail.drawer !== 'home') {
       return res.status(400).json({ error: 'Mail Party only for Home drawer items' });
     }
@@ -816,7 +832,10 @@ router.post('/party/join', validate(joinPartySchema), async (req, res, next) => 
       .in('status', ['pending', 'active'])
       .single();
 
-    if (!session) return res.status(404).json({ error: 'Session not found or expired' });
+    // Only the session's household may join (the rule GET /party/active lists by).
+    if (!session || !(await getAccessibleHomeIds(req.user.id)).includes(session.home_id)) {
+      return res.status(404).json({ error: 'Session not found or expired' });
+    }
 
     // Check 90-second expiry
     const elapsed = Date.now() - new Date(session.created_at).getTime();
@@ -880,6 +899,7 @@ router.post('/party/reaction', validate(partyReactionSchema), async (req, res, n
 router.post('/party/assign', validate(partyAssignSchema), async (req, res, next) => {
   try {
     const { sessionId, mailId, assignToUserId } = req.body;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Mail not found' });
 
     // Move to assigned user's Counter
     await supabaseAdmin
@@ -1027,6 +1047,14 @@ router.get('/vault/folder/:folderId/items', async (req, res, next) => {
   try {
     const { folderId } = req.params;
     const { limit = 20, offset = 0 } = req.query;
+    // Vault folders are per user (GET /vault/folders lists user_id = caller).
+    const { data: ownFolder } = await supabaseAdmin
+      .from('VaultFolder')
+      .select('id')
+      .eq('id', folderId)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (!ownFolder) return res.status(404).json({ error: 'Folder not found' });
 
     const { data: items, count } = await supabaseAdmin
       .from('Mail')
@@ -1047,6 +1075,15 @@ router.get('/vault/folder/:folderId/items', async (req, res, next) => {
 router.post('/vault/file', validate(fileToVaultSchema), async (req, res, next) => {
   try {
     const { mailId, folderId } = req.body;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Mail not found' });
+    // Vault folders are per user (GET /vault/folders lists user_id = caller).
+    const { data: ownFolder } = await supabaseAdmin
+      .from('VaultFolder')
+      .select('id')
+      .eq('id', folderId)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (!ownFolder) return res.status(404).json({ error: 'Folder not found' });
 
     await supabaseAdmin
       .from('Mail')
@@ -1173,7 +1210,8 @@ router.get('/vault/search', async (req, res, next) => {
     }
     // General text search
     else {
-      query = query.or(`subject.ilike.%${q}%,content.ilike.%${q}%,sender_display.ilike.%${q}%`);
+      const escapedQ = escapeIlike(q);
+      query = query.or(`subject.ilike.%${escapedQ}%,content.ilike.%${escapedQ}%,sender_display.ilike.%${escapedQ}%`);
     }
 
     query = query.order('created_at', { ascending: false })
@@ -1210,6 +1248,7 @@ router.get('/vault/search', async (req, res, next) => {
 router.post('/package/:mailId/unboxing', validate(packageUnboxingSchema), async (req, res, next) => {
   try {
     const { mailId } = req.params;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Package not found' });
     const { conditionPhotoUrl, unboxingVideoUrl, skip } = req.body;
 
     const updates = {};
@@ -1239,6 +1278,7 @@ router.post('/package/:mailId/unboxing', validate(packageUnboxingSchema), async 
 router.post('/package/:mailId/save-warranty', async (req, res, next) => {
   try {
     const { mailId } = req.params;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Package not found' });
     const { type } = req.body; // 'warranty' | 'manual'
 
     const updates = {};
@@ -1269,74 +1309,19 @@ router.post('/package/:mailId/save-warranty', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /package/:mailId/gig — create a gig from package
-router.post('/package/:mailId/gig', validate(packageGigSchema), async (req, res, next) => {
-  try {
-    const { mailId } = req.params;
-    const { gigType, title, description, suggestedStart, compensation } = req.body;
+// Posting a task for a package isn't built yet. These routes used to answer "Gig created" with a made-up id (and
+// store whatever neighbor the client named as the one who accepted), while no task existed, so the apps said "Task
+// Posted!" for nothing. Until package tasks are real, refuse and write nothing.
+const PACKAGE_GIG_UNAVAILABLE = "Posting a task for a package isn't available yet.";
 
-    const { data: pkg } = await supabaseAdmin
-      .from('MailPackage')
-      .select('*, Mail!inner(sender_display, recipient_address_id)')
-      .eq('mail_id', mailId)
-      .single();
-
-    if (!pkg) return res.status(404).json({ error: 'Package not found' });
-
-    const isPreDelivery = pkg.status !== 'delivered';
-    const gigTitle = title || (isPreDelivery
-      ? `${gigType === 'hold' ? 'Hold' : gigType === 'inside' ? 'Bring inside' : gigType === 'sign' ? 'Sign for' : 'Help with'} my package`
-      : `Help assembling ${pkg.inferred_item_name || 'package item'}`);
-
-    // Placeholder: in production this creates an actual Gig record
-    const gigId = require('crypto').randomUUID();
-
-    await supabaseAdmin
-      .from('MailPackage')
-      .update({
-        gig_id: gigId,
-        gig_type: isPreDelivery ? `pre_${gigType}` : `post_${gigType}`,
-      })
-      .eq('mail_id', mailId);
-
-    const eventType = isPreDelivery
-      ? 'package_gig_pre_delivery_created'
-      : 'package_gig_post_delivery_created';
-
-    await logMailEvent(req.user.id, eventType, mailId, {
-      gig_id: gigId, gig_type: gigType,
-    });
-
-    res.json({
-      message: 'Gig created',
-      gigId,
-      title: gigTitle,
-      preDelivery: isPreDelivery,
-    });
-  } catch (err) { next(err); }
+// POST /package/:mailId/gig — create a gig from package (not available yet)
+router.post('/package/:mailId/gig', validate(packageGigSchema), (req, res) => {
+  res.status(501).json({ error: PACKAGE_GIG_UNAVAILABLE });
 });
 
-// POST /package/:mailId/gig-accepted — mark gig as accepted by neighbor
-router.post('/package/:mailId/gig-accepted', async (req, res, next) => {
-  try {
-    const { mailId } = req.params;
-    const { neighborId, neighborName } = req.body;
-
-    await supabaseAdmin
-      .from('MailPackage')
-      .update({
-        gig_accepted_by: neighborId,
-        gig_accepted_at: new Date().toISOString(),
-        neighbor_helper_name: neighborName,
-      })
-      .eq('mail_id', mailId);
-
-    await logMailEvent(req.user.id, 'package_gig_accepted', mailId, {
-      neighbor_id: neighborId,
-    });
-
-    res.json({ message: `${neighborName || 'Neighbor'} accepted the gig` });
-  } catch (err) { next(err); }
+// POST /package/:mailId/gig-accepted — mark a package gig accepted (not available yet)
+router.post('/package/:mailId/gig-accepted', (req, res) => {
+  res.status(501).json({ error: PACKAGE_GIG_UNAVAILABLE });
 });
 
 // ── COUPON → ORDER PIPELINE ───────────────────────────────
@@ -1367,113 +1352,18 @@ router.post('/coupon/browse', validate(couponBrowseSchema), async (req, res, nex
   } catch (err) { next(err); }
 });
 
-// POST /coupon/order — place an order with coupon
-router.post('/coupon/order', validate(couponOrderSchema), async (req, res, next) => {
-  try {
-    const { offerId, items } = req.body;
-
-    const { data: offer } = await supabaseAdmin
-      .from('EarnOffer')
-      .select('*')
-      .eq('id', offerId)
-      .single();
-
-    if (!offer) return res.status(404).json({ error: 'Offer not found' });
-
-    const subtotal = items.reduce((s, i) => s + i.price * (i.quantity || 1), 0);
-    let discount = 0;
-    if (offer.discount_type === 'percentage' && offer.discount_value) {
-      discount = +(subtotal * offer.discount_value / 100).toFixed(2);
-    } else if (offer.discount_type === 'fixed' && offer.discount_value) {
-      discount = Math.min(offer.discount_value, subtotal);
-    }
-    const total = +(subtotal - discount).toFixed(2);
-
-    const orderId = require('crypto').randomUUID();
-
-    // Create redemption record
-    const { data: redemption } = await supabaseAdmin
-      .from('OfferRedemption')
-      .insert({
-        offer_id: offerId,
-        user_id: req.user.id,
-        merchant_id: offer.merchant_id,
-        redemption_type: 'in_app_order',
-        order_id: orderId,
-        order_total: total,
-        discount_applied: discount,
-        status: 'redeemed',
-        redeemed_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    // Release earn payout immediately for converted offers
-    await supabaseAdmin
-      .from('EarnTransaction')
-      .update({
-        status: 'available',
-        verified_at: new Date().toISOString(),
-      })
-      .eq('user_id', req.user.id)
-      .eq('offer_id', offerId);
-
-    // Auto-create receipt in personal drawer
-    const { data: receipt } = await supabaseAdmin
-      .from('Mail')
-      .insert({
-        recipient_user_id: req.user.id,
-        drawer: 'personal',
-        mail_object_type: 'envelope',
-        type: 'receipt',
-        category: 'receipt',
-        sender_display: offer.business_name,
-        sender_trust: 'verified_business',
-        subject: `Order receipt from ${offer.business_name}`,
-        content: `Order #${orderId.slice(0, 8)} · Total: $${total} · Saved: $${discount}`,
-        preview_text: `$${total} order · Saved $${discount} with mailbox coupon`,
-        lifecycle: 'delivered',
-        urgency: 'none',
-        key_facts: JSON.stringify([
-          { field: 'Amount', value: `$${total}`, confidence: 1 },
-          { field: 'Discount', value: `$${discount}`, confidence: 1 },
-          { field: 'Order ID', value: orderId.slice(0, 8), confidence: 1 },
-        ]),
-      })
-      .select()
-      .single();
-
-    // Auto-file receipt to Receipts folder
-    if (receipt) {
-      const { data: receiptFolder } = await supabaseAdmin
-        .from('VaultFolder')
-        .select('id')
-        .eq('user_id', req.user.id)
-        .eq('label', 'Receipts')
-        .eq('drawer', 'personal')
-        .single();
-
-      if (receiptFolder) {
-        await supabaseAdmin
-          .from('Mail')
-          .update({ vault_folder_id: receiptFolder.id, lifecycle: 'filed' })
-          .eq('id', receipt.id);
-      }
-    }
-
-    await logMailEvent(req.user.id, 'coupon_order_placed', null, {
-      offer_id: offerId, order_id: orderId, total, discount_applied: discount,
-    });
-
-    res.json({
-      orderId,
-      subtotal,
-      discount,
-      total,
-      receiptMailId: receipt?.id,
-      earnPayoutReleased: true,
-    });
-  } catch (err) { next(err); }
+// POST /coupon/order — disabled: coupon orders aren't available yet, and no app calls this route.
+// The previous handler set the caller's EarnTransaction for any existing offer to `available`. It did so with no
+// checks, lifting risk holds (flagged, under_review, rejected), and it could be repeated. Nothing here writes
+// EarnTransaction now. A real implementation needs at least:
+//   - ownership: the offer was delivered to the caller and they opened it;
+//   - a status filter: release only a transaction that passed the dwell check (`verified`), never a held
+//     (`flagged`, `under_review`, `suspended`) or `rejected` one;
+//   - idempotency: one order per user and offer, so a repeat can't add redemptions or re-release a payout;
+//   - a price minimum: every item price must be positive;
+//   - a valid receipt type: `Mail.type` 'receipt' fails Mail_type_check, so the receipt letter was never created.
+router.post('/coupon/order', (req, res) => {
+  res.status(410).json({ error: "Coupon orders aren't available yet." });
 });
 
 // POST /coupon/save — save offer for later/in-store use

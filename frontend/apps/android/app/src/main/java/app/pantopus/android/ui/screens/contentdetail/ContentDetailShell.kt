@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -1532,18 +1533,19 @@ private fun BidRow(bid: ContentDetailBidRow) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         AvatarView(initials = bid.initials, verified = bid.verified, size = 36.dp)
+        // With large text the pill moves under the name instead of squeezing it.
+        val largeText = LocalDensity.current.fontScale >= 1.3f
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(text = bid.displayName, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-                if (bid.won) {
-                    BidTagPill("Winner", PantopusColors.success, PantopusColors.successBg)
-                } else {
-                    bid.tag?.let { BidTagPill(it, PantopusColors.primary700, PantopusColors.primary50) }
-                }
+                if (!largeText) BidRowTag(bid)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                PantopusIconImage(icon = PantopusIcon.Star, contentDescription = null, size = 9.dp, tint = PantopusColors.warning)
-                Text(text = bid.ratingLine, fontSize = 10.5.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextSecondary)
+            if (largeText) BidRowTag(bid)
+            bid.ratingLine?.let { line ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                    PantopusIconImage(icon = PantopusIcon.Star, contentDescription = null, size = 9.dp, tint = PantopusColors.warning)
+                    Text(text = line, fontSize = 10.5.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextSecondary)
+                }
             }
         }
         Text(
@@ -1553,6 +1555,15 @@ private fun BidRow(bid: ContentDetailBidRow) {
             color = amountColor,
             textDecoration = if (bid.dimmed) TextDecoration.LineThrough else null,
         )
+    }
+}
+
+@Composable
+private fun BidRowTag(bid: ContentDetailBidRow) {
+    if (bid.won) {
+        BidTagPill("Winner", PantopusColors.success, PantopusColors.successBg)
+    } else {
+        bid.tag?.let { BidTagPill(it, PantopusColors.primary700, PantopusColors.primary50) }
     }
 }
 

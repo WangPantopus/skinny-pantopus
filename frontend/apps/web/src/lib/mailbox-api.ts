@@ -200,12 +200,6 @@ export async function getItemDetail(itemId: string): Promise<MailItemDetailRespo
   });
 }
 
-export async function markItemOpened(itemId: string): Promise<void> {
-  return call(async () => {
-    await post(`/api/mailbox/v2/item/${itemId}/action`, { action: 'open' });
-  });
-}
-
 export async function fileItemToVault(itemId: string, folderId: string): Promise<void> {
   return call(async () => {
     await post('/api/mailbox/v2/p2/vault/file', { mailId: itemId, folderId });
@@ -218,8 +212,12 @@ export async function fileItemToVault(itemId: string, folderId: string): Promise
 
 export async function getCounterItems(): Promise<MailItemV2[]> {
   return call(async () => {
-    const res = await get<{ items: MailItemV2[] }>('/api/mailbox/v2/counter');
-    return res.items;
+    // The Counter is each drawer's existing `tab=counter` list (items with a due
+    // date, delivered or opened, not archived); there is no /v2/counter route.
+    const drawers = ['personal', 'home', 'business'] as const;
+    const pages = await Promise.all(drawers.map((drawer) =>
+      get<{ mail: MailItemV2[] }>(`/api/mailbox/v2/drawer/${drawer}`, { tab: 'counter', limit: 50 })));
+    return pages.flatMap((page) => page.mail ?? []);
   });
 }
 
@@ -481,49 +479,6 @@ export async function redeemOffer(
 }
 
 // ============================================================
-// TRANSLATION
-// ============================================================
-
-export async function detectLanguage(
-  itemId: string,
-): Promise<{ detected_language: string; confidence: number }> {
-  return call(async () => {
-    // The translate endpoint auto-detects
-    const res = await post<{
-      translated_text: string;
-      from_language: string;
-      to_language: string;
-      cached: boolean;
-    }>('/api/mailbox/v2/p3/translate', { mailId: itemId });
-    return {
-      detected_language: res.from_language,
-      confidence: 1.0,
-    };
-  });
-}
-
-export async function translateItem(
-  itemId: string,
-  targetLang?: string,
-): Promise<{ translated_content: string; from_language: string }> {
-  return call(async () => {
-    const res = await post<{
-      translated_text: string;
-      from_language: string;
-      to_language: string;
-      cached: boolean;
-    }>('/api/mailbox/v2/p3/translate', {
-      mailId: itemId,
-      ...(targetLang ? { targetLang } : {}),
-    });
-    return {
-      translated_content: res.translated_text,
-      from_language: res.from_language,
-    };
-  });
-}
-
-// ============================================================
 // RECORDS (Phase 3)
 // ============================================================
 
@@ -572,9 +527,12 @@ export async function createAsset(data: {
   model_number?: string;
 }): Promise<HomeAsset> {
   return call(async () => {
+    // The Home's existing asset route (POST /api/homes/:id/assets); there is no
+    // POST on /p3/records/assets. Its columns are brand and model.
+    const { homeId, manufacturer, model_number: modelNumber, ...fields } = data;
     const res = await post<{ asset: HomeAsset }>(
-      '/api/mailbox/v2/p3/records/assets',
-      data,
+      `/api/homes/${homeId}/assets`,
+      { ...fields, brand: manufacturer, model: modelNumber },
     );
     return res.asset;
   });
@@ -749,12 +707,6 @@ export async function escalateTaskToGig(
 export async function getMailDaySummary(): Promise<MailDaySummary> {
   return call(async () => {
     return get<MailDaySummary>('/api/mailbox/v2/p3/mailday/summary');
-  });
-}
-
-export async function dismissMailDaySummary(): Promise<void> {
-  return call(async () => {
-    await post('/api/mailbox/v2/p3/mailday/summary/dismiss', {});
   });
 }
 

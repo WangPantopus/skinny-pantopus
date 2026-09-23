@@ -329,6 +329,9 @@ public final class PublicProfileViewModel {
     /// The resolved `User.id`, known only after the profile loads. Every
     /// user-scoped mutation must use this, never `routeIdentifier`.
     private var resolvedUserId: String
+    /// The loaded profile's archetype; decides which block scope gates the
+    /// Follow / Connect affordances in `loadRelationship(id:)`.
+    private var profileKind: PublicProfileKind = .persona
     private let currentUserId: String?
     private let client: APIClient
     private let logger = Logger(label: "app.pantopus.ios.PublicProfile")
@@ -594,6 +597,7 @@ public final class PublicProfileViewModel {
             let profile = try await client.request(profileEndpoint, as: PublicProfile.self)
             resolvedUserId = profile.id
             let kind = derivedKind(from: profile)
+            profileKind = kind
             // A21.2 — the Local archetype renders a real neighbourhood post
             // feed, so pull the author's posts the way the RN `PostsTab`
             // does (`GET /api/posts/user/:id`). Persona profiles keep an
@@ -628,11 +632,45 @@ public final class PublicProfileViewModel {
     /// poses. Requires auth, so a signed-out viewer just gets the resting
     /// state (and no Follow affordance).
     private func loadRelationship(id: String) async {
-        canFollow = currentUserId != nil && currentUserId != id
-        guard canFollow else {
+        guard currentUserId != nil, currentUserId != id else {
+            canFollow = false
             isFollowing = false
             return
         }
+
+        // Personal UserBlock rows are deliberately distinct from the
+        // Relationship graph: GET /:id/relationship reports only the
+        // latter. The local-neighbor Follow/Connect row is the scope that
+        // uses personal block visibility; Persona and Relationship
+        // affordances retain their established independent policy.
+        if profileKind == .local {
+            // Resolve the existing personal block list before offering any
+            // affordance, so a fresh profile navigation cannot restore
+            // Follow/Connect for a user this account has already blocked.
+            // A failed read fails closed by leaving the profile
+            // non-actionable; it must never turn an unavailable
+            // authorization check into an affordance.
+            do {
+                let personal = try await client.request(
+                    BlocksEndpoints.blocked,
+                    as: UserBlocksResponse.self
+                )
+                if personal.blocked.contains(where: { $0.userId == id }) {
+                    canFollow = false
+                    isFollowing = false
+                    connection = .blocked
+                    return
+                }
+            } catch {
+                logger.warning("Blocked-list load failed: \(error)")
+                canFollow = false
+                isFollowing = false
+                toastMessage = "Couldn't verify block status. Actions are unavailable."
+                return
+            }
+        }
+
+        canFollow = true
         do {
             let relationship = try await client.request(
                 UserSocialEndpoints.relationship(userId: id),
@@ -751,9 +789,12 @@ public final class PublicProfileViewModel {
             handle: profile.username.isEmpty ? nil : profile.username,
             locality: profile.locality,
             avatarURL: (profile.profilePictureURL ?? profile.avatarURL).flatMap(URL.init(string:)),
-            isVerified: profile.verified ?? false,
+            // No avatar check: `verified` is the account email flag that sign-in
+            // sets, and a check reads as identity or residency verification.
+            isVerified: false,
             identityBadges: buildBadges(profile),
-            tierLabel: kind == .persona ? "Persona · Verified" : nil,
+            // No server field verifies a persona, so the chip names the kind only.
+            tierLabel: kind == .persona ? "Persona" : nil,
             isVerifiedNeighbor: kind == .local
         )
 
@@ -850,9 +891,10 @@ public final class PublicProfileViewModel {
         let stats = [
             ratingStat,
             NeighborStat(id: "jobs", value: "\(jobs)", label: "Jobs done"),
+            // No response-time data exists yet; "—" until it does.
             NeighborStat(
                 id: "response",
-                value: isNew ? "New" : "~45m",
+                value: isNew ? "New" : "—",
                 label: "Response",
                 valueColor: isNew ? Theme.Color.primary600 : Theme.Color.appText
             )
@@ -862,7 +904,9 @@ public final class PublicProfileViewModel {
             name: profile.displayName,
             locality: profile.locality,
             avatarURL: (profile.profilePictureURL ?? profile.avatarURL).flatMap(URL.init(string:)),
-            isVerified: profile.verified ?? false,
+            // No avatar check: `verified` is the account email flag that sign-in
+            // sets, and a check reads as identity or residency verification.
+            isVerified: false,
             identity: isNew ? .fresh : .personal,
             kicker: neighborSince(profile.createdAt, isNew: isNew)
         )
@@ -870,8 +914,7 @@ public final class PublicProfileViewModel {
         let welcome = isNew
             ? NeighborWelcome(
                 title: "Be the welcome wagon",
-                body: "\(firstName(profile.displayName)) just moved in. A quick hello goes a long way — "
-                    + "and first messages from verified neighbors travel fast."
+                body: "\(firstName(profile.displayName)) just moved in. A quick hello goes a long way."
             )
             : nil
 
@@ -883,7 +926,8 @@ public final class PublicProfileViewModel {
             verifications: neighborVerifications(profile, isNew: isNew),
             reviews: reviews,
             reviewCount: reviewCount,
-            mutuals: isNew ? neighborMutuals(for: profile) : nil,
+            // No mutual-neighbor data comes from the server, so no strip.
+            mutuals: nil,
             welcome: welcome,
             posts: posts,
             isNewNeighbor: isNew,
@@ -895,38 +939,21 @@ public final class PublicProfileViewModel {
         let tile: NeighborVerification.Tile = isNew ? .success : .primary
         let trailing: NeighborVerification.Trailing = isNew ? .status("Recent") : .check
         var items: [NeighborVerification] = []
+        // Only what the payload shows: verified residency (method unknown) and
+        // the account's confirmed email. No server field records an ID check.
         if hasHomeResidency(profile) {
             items.append(NeighborVerification(
                 id: "address", icon: .home, label: "Address",
-                meta: "Verified · postcard", tile: tile, trailing: trailing
+                meta: "Verified", tile: tile, trailing: trailing
             ))
         }
         if profile.verified ?? false {
             items.append(NeighborVerification(
-                id: "identity", icon: .badgeCheck, label: "Identity",
-                meta: "Government ID", tile: tile, trailing: trailing
+                id: "email", icon: .mail, label: "Email",
+                meta: "Confirmed", tile: tile, trailing: trailing
             ))
         }
-        items.append(NeighborVerification(
-            id: "email", icon: .mail, label: "Email",
-            meta: profile.username.isEmpty ? "Confirmed" : "\(profile.username)@…",
-            tile: tile, trailing: trailing
-        ))
         return items
-    }
-
-    private func neighborMutuals(for profile: PublicProfile) -> NeighborMutuals {
-        let seed = profile.id.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        let names = [
-            ["Jamal", "Ravi", "Lena", "Amina"],
-            ["Maya", "Chen", "Priya", "Owen"],
-            ["Noah", "Iris", "Sam", "Leah"]
-        ][seed % 3]
-        return NeighborMutuals(
-            count: names.count,
-            names: names.joined(separator: ", "),
-            initials: names.map { String($0.prefix(1)) }
-        )
     }
 
     private func neighborSince(_ iso: String?, isNew: Bool) -> String? {

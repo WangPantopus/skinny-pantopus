@@ -6,11 +6,15 @@
 // Mounted at /api/mailbox/v2/p3
 // ============================================================
 
+const crypto = require('crypto');
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
-const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+const taskMediaStorage = require('../services/homeTaskMediaStorage');
+const { checkHomePermission } = require('../utils/homePermissions');
+const { getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -88,7 +92,8 @@ const taskToGigSchema = Joi.object({
 
 // ── MailDay ──
 const updateMailDaySchema = Joi.object({
-  delivery_time: Joi.string().pattern(/^\d{2}:\d{2}$/).optional(),
+  // The GET returns the stored time column as HH:MM:SS; accept it back.
+  delivery_time: Joi.string().pattern(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
   timezone: Joi.string().max(50).optional(),
   enabled: Joi.boolean().optional(),
   sound_enabled: Joi.boolean().optional(),
@@ -129,12 +134,6 @@ const cancelVacationSchema = Joi.object({
   holdId: Joi.string().uuid().required(),
 });
 
-// ── Translation ──
-const translateSchema = Joi.object({
-  mailId: Joi.string().uuid().required(),
-  targetLang: Joi.string().max(10).optional(),
-});
-
 // ============ HELPERS ============
 
 async function logMailEvent(userId, eventType, mailId, metadata = {}) {
@@ -168,17 +167,85 @@ function warrantyStatus(expiresAt) {
   return 'active';
 }
 
+// HomeAsset stores brand, model, purchase_date and warranty_expires_at. The
+// records responses have always named them manufacturer, model_number,
+// purchased_at and warranty_expires; those keys read columns that don't exist,
+// so they were always empty and the warranty always "none".
+function assetRecordFields(asset) {
+  return {
+    manufacturer: asset.brand,
+    model_number: asset.model,
+    purchased_at: asset.purchase_date,
+    warranty_expires: asset.warranty_expires_at,
+    warranty_status: warrantyStatus(asset.warranty_expires_at),
+  };
+}
+
 // ====================================================================
 //                      RECORDS ENDPOINTS
 // ====================================================================
+
+// ── Record photos ──
+// A record's photos are stored in the private Home documents bucket, never at a public URL. AssetPhoto.url holds
+// `storage:<object key>`. Reads replace it with a short-lived signed URL, and only for viewers with assets.view on the
+// asset's Home; everyone else gets no photos.
+const PHOTO_REF = 'storage:';
+const PHOTO_URL_TTL_SECONDS = 300;
+const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+const photoMultipart = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: taskMediaStorage.MAX_BYTES, files: 1, fields: 1, fieldSize: 100, parts: 3 },
+}).single('file');
+
+async function photoBucket() {
+  const name = (process.env.HOME_DOCUMENTS_BUCKET || '').trim();
+  if (!/^[a-z0-9][a-z0-9-]{2,62}$/.test(name)) return null;
+  const { data, error } = await supabaseAdmin.storage.getBucket(name);
+  // A public bucket would serve every photo without a Home permission check.
+  if (error || !data || data.public !== false) return null;
+  return supabaseAdmin.storage.from(name);
+}
+
+// The Homes, of those given, where the viewer may see records' photos.
+async function photoViewHomes(homeIds, userId) {
+  const allowed = new Set();
+  await Promise.all([...new Set(homeIds)].map(async (homeId) => {
+    if ((await checkHomePermission(homeId, userId, 'assets.view')).hasAccess) allowed.add(homeId);
+  }));
+  return allowed;
+}
+
+// The photos a viewer may see, each stored photo with a fresh signed URL. A photo whose URL can't be signed is left out.
+async function presentPhotos(photos, homeOfAsset, viewHomes) {
+  const visible = (photos || []).filter((p) => viewHomes.has(homeOfAsset(p.asset_id)));
+  const isStored = (p) => typeof p.url === 'string' && p.url.startsWith(PHOTO_REF);
+  const stored = visible.filter(isStored);
+  const signed = new Map();
+  if (stored.length) {
+    const bucket = await photoBucket();
+    if (bucket) {
+      const { data, error } = await bucket.createSignedUrls(stored.map((p) => p.url.slice(PHOTO_REF.length)), PHOTO_URL_TTL_SECONDS);
+      if (!error) (data || []).forEach((d, i) => { if (d && d.signedUrl && !d.error) signed.set(stored[i].id, d.signedUrl); });
+    }
+  }
+  return visible.flatMap((p) => {
+    if (!isStored(p)) return [p];
+    return signed.has(p.id) ? [{ ...p, url: signed.get(p.id) }] : [];
+  });
+}
+
+function photoError(res, status, message) {
+  return res.status(status).json({ error: message });
+}
 
 // GET /records/assets — list home assets with mail link counts
 router.get('/records/assets', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const homeId = req.query.homeId;
-    const homeIds =
-      homeId && isUuid(homeId) ? [homeId] : await getAccessibleHomeIds(userId);
+    // A requested Home narrows the caller's accessible Homes; it never widens them.
+    const accessible = await getAccessibleHomeIds(userId);
+    const homeIds = homeId && isUuid(homeId) ? accessible.filter((id) => id === homeId) : accessible;
     if (!homeIds.length) return res.json({ assets: [], rooms: [] });
 
     const { data: assets, error } = await supabaseAdmin
@@ -203,6 +270,24 @@ router.get('/records/assets', verifyToken, async (req, res) => {
       });
     }
 
+    // The assets' photos (AssetPhoto), newest first; cards show the first. Only viewers with assets.view see them.
+    const photosByAsset = {};
+    if (assetIds.length) {
+      const { data: rows, error: photoReadError } = await supabaseAdmin
+        .from('AssetPhoto')
+        .select('id, asset_id, url, caption, taken_at')
+        .in('asset_id', assetIds)
+        .order('taken_at', { ascending: false });
+      if (photoReadError) throw photoReadError;
+      const homeOf = new Map((assets || []).map((a) => [a.id, a.home_id]));
+      const viewHomes = await photoViewHomes([...homeOf.values()], userId);
+      const photos = await presentPhotos(rows, (assetId) => homeOf.get(assetId), viewHomes);
+      photos.forEach((p) => {
+        (photosByAsset[p.asset_id] = photosByAsset[p.asset_id] || [])
+          .push({ id: p.id, url: p.url, caption: p.caption, taken_at: p.taken_at });
+      });
+    }
+
     const rooms = [...new Set((assets || []).map(a => a.room).filter(Boolean))];
 
     const enriched = (assets || []).map(a => ({
@@ -210,14 +295,11 @@ router.get('/records/assets', verifyToken, async (req, res) => {
       name: a.name,
       category: a.category || 'other',
       room: a.room,
-      manufacturer: a.manufacturer,
-      model_number: a.model_number,
-      purchased_at: a.purchased_at,
-      warranty_expires: a.warranty_expires,
-      warranty_status: warrantyStatus(a.warranty_expires),
+      ...assetRecordFields(a),
       linked_mail_count: linkCounts[a.id] || 0,
       linked_gig_count: gigCounts[a.id] || 0,
-      photo_url: a.photo_url,
+      photo_url: photosByAsset[a.id]?.[0]?.url || null,
+      photos: photosByAsset[a.id] || [],
     }));
 
     logMailEvent(userId, 'records_viewed', null, { homeIds });
@@ -255,27 +337,33 @@ router.get('/records/asset/:id/mail', verifyToken, async (req, res) => {
       .eq('asset_id', assetId)
       .order('created_at', { ascending: false });
 
+    // Only linked mail the caller may see: their own, or Home letters the Home
+    // mail rule shows them (utils/homeMailAccess, M01).
     const mailIds = (links || []).map(l => l.mail_id);
     let mail = [];
     if (mailIds.length) {
-      const { data: mailItems } = await supabaseAdmin
+      const { data: mailItems, error: mailError } = await supabaseAdmin
         .from('Mail')
         .select('*')
-        .in('id', mailIds);
+        .in('id', mailIds)
+        .or(visibleMailFilter(userId, homeIds));
+      if (mailError) throw mailError;
       mail = mailItems || [];
     }
 
-    // Get photos
-    const { data: photos } = await supabaseAdmin
+    // Get photos: only for viewers with assets.view on this Home, each with a fresh signed URL.
+    const { data: photoRows, error: photoReadError } = await supabaseAdmin
       .from('AssetPhoto')
-      .select('*')
+      .select('id, asset_id, url, caption, taken_at, uploaded_by, created_at')
       .eq('asset_id', assetId)
       .order('taken_at', { ascending: false });
+    if (photoReadError) throw photoReadError;
+    const photos = await presentPhotos(photoRows, () => asset.home_id, await photoViewHomes([asset.home_id], userId));
 
     const enrichedAsset = {
       ...asset,
-      warranty_status: warrantyStatus(asset.warranty_expires),
-      linked_mail_count: mailIds.length,
+      ...assetRecordFields(asset),
+      linked_mail_count: mail.length,
       linked_gig_count: 0,
     };
 
@@ -286,11 +374,92 @@ router.get('/records/asset/:id/mail', verifyToken, async (req, res) => {
   }
 });
 
+// POST /records/asset/:id/photos — add a photo to a record (multipart field `file`). Needs assets.manage on the
+// asset's Home. The photo goes to private storage; the response carries a signed URL for it.
+router.post('/records/asset/:id/photos', verifyToken, async (req, res, next) => {
+  try {
+    if (!isUuid(req.params.id)) return photoError(res, 404, 'Record not found');
+    const { data: asset, error } = await supabaseAdmin
+      .from('HomeAsset').select('id, home_id').eq('id', req.params.id).maybeSingle();
+    if (error) throw error;
+    // Someone outside the Home can't learn that the record exists.
+    if (!asset || !(await checkHomePermission(asset.home_id, req.user.id)).hasAccess) {
+      return photoError(res, 404, 'Record not found');
+    }
+    if (!(await checkHomePermission(asset.home_id, req.user.id, 'assets.manage')).hasAccess) {
+      return photoError(res, 403, "You don't have permission to add photos to this record.");
+    }
+    req.photoAsset = asset;
+    return next();
+  } catch (err) {
+    logger.error('[P3] POST /records/asset/:id/photos access check failed', { error: err.message });
+    return photoError(res, 500, "Couldn't add this photo. Try again.");
+  }
+}, (req, res, next) => photoMultipart(req, res, (err) => {
+  if (!err) return next();
+  logger.warn('[P3] record photo upload rejected', { code: err.code, message: err.message });
+  return err.code === 'LIMIT_FILE_SIZE'
+    ? photoError(res, 413, 'Choose a photo of 25 MB or less.')
+    : photoError(res, 400, 'Choose one photo to upload.');
+}), async (req, res) => {
+  const asset = req.photoAsset;
+  try {
+    if (!req.file) return photoError(res, 400, 'Choose one photo to upload.');
+    let meta;
+    try {
+      meta = taskMediaStorage.inspect(req.file);
+    } catch (e) {
+      if (e.status === 413) return photoError(res, 413, 'Choose a photo of 25 MB or less.');
+      if (e.status === 415) return photoError(res, 415, 'Choose a JPEG, PNG, WebP or HEIC photo.');
+      return photoError(res, 400, 'Choose one photo to upload.');
+    }
+    // inspect() has checked the bytes match the declared type; photos must also be images.
+    if (!PHOTO_TYPES.has(meta.mime_type)) return photoError(res, 415, 'Choose a JPEG, PNG, WebP or HEIC photo.');
+    const bucket = await photoBucket();
+    if (!bucket) return photoError(res, 503, 'Photo storage is unavailable. Try again later.');
+    const photoId = crypto.randomUUID();
+    const key = `asset-photos/${asset.home_id}/${asset.id}/${photoId}/${meta.sha256}`;
+    const uploaded = await bucket.upload(key, req.file.buffer, { contentType: meta.mime_type, cacheControl: '0', upsert: false });
+    if (!uploaded || uploaded.error) return photoError(res, 503, "Couldn't upload this photo. Try again.");
+    const { data: row, error: insertError } = await supabaseAdmin
+      .from('AssetPhoto')
+      .insert({ id: photoId, asset_id: asset.id, url: PHOTO_REF + key, uploaded_by: req.user.id })
+      .select('id, asset_id, url, caption, taken_at')
+      .single();
+    if (insertError || !row) {
+      await bucket.remove([key]).catch(() => {});
+      return photoError(res, 500, "Couldn't save this photo. Try again.");
+    }
+    const [photo] = await presentPhotos([row], () => asset.home_id, new Set([asset.home_id]));
+    return res.status(201).json({ photo: photo || { ...row, url: null } });
+  } catch (err) {
+    logger.error('[P3] POST /records/asset/:id/photos failed', { error: err.message });
+    return photoError(res, 500, "Couldn't add this photo. Try again.");
+  }
+});
+
 // POST /records/link — link a mail item to an asset
 router.post('/records/link', verifyToken, validate(linkAssetSchema), async (req, res) => {
   try {
     const userId = req.user.id;
     const { mailId, assetId, linkType } = req.body;
+
+    // Link only mail the caller may read (utils/homeMailAccess canAccessMail:
+    // their own mail, or their accessible Home's letters the Home mail rule
+    // shows them) to an asset of a Home they can access.
+    const accessible = await getAccessibleHomeIds(userId);
+    const [assetRes, mailRes] = await Promise.all([
+      supabaseAdmin.from('HomeAsset').select('home_id').eq('id', assetId).maybeSingle(),
+      supabaseAdmin.from('Mail').select('id, recipient_user_id, recipient_home_id').eq('id', mailId).maybeSingle(),
+    ]);
+    if (assetRes.error || mailRes.error) throw assetRes.error || mailRes.error;
+    if (!assetRes.data || !accessible.includes(assetRes.data.home_id)) {
+      return res.status(404).json({ error: 'Asset not found' });
+    }
+    const mail = mailRes.data;
+    if (!mail || !(await canAccessMail(mail, userId))) {
+      return res.status(404).json({ error: 'Mail not found' });
+    }
 
     const { data: link, error } = await supabaseAdmin
       .from('MailAssetLink')
@@ -316,6 +485,23 @@ router.post('/records/link', verifyToken, validate(linkAssetSchema), async (req,
 // DELETE /records/unlink/:id — remove a link
 router.delete('/records/unlink/:id', verifyToken, async (req, res) => {
   try {
+    // Only the household whose asset carries the link may remove it.
+    if (!isUuid(req.params.id)) return res.status(404).json({ error: 'Link not found' });
+    const { data: link, error: linkErr } = await supabaseAdmin
+      .from('MailAssetLink')
+      .select('asset_id')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (linkErr) throw linkErr;
+    const assetRes = link
+      ? await supabaseAdmin.from('HomeAsset').select('home_id').eq('id', link.asset_id).maybeSingle()
+      : { data: null, error: null };
+    if (assetRes.error) throw assetRes.error;
+    const accessible = await getAccessibleHomeIds(req.user.id);
+    if (!assetRes.data || !accessible.includes(assetRes.data.home_id)) {
+      return res.status(404).json({ error: 'Link not found' });
+    }
+
     const { error } = await supabaseAdmin
       .from('MailAssetLink')
       .delete()
@@ -335,13 +521,17 @@ router.post('/records/auto-detect', verifyToken, validate(autoDetectSchema), asy
     const { homeId } = req.body;
 
     // Get recent mail with key_facts
-    const { data: recentMail } = await supabaseAdmin
+    // Mail has no delivered_at/sender_name columns: read created_at and
+    // sender_display (aliased to the existing response keys) and fail loudly
+    // instead of reporting no detections.
+    const { data: recentMail, error: recentErr } = await supabaseAdmin
       .from('Mail')
-      .select('id, subject, key_facts, sender_name')
+      .select('id, subject, key_facts, sender_name:sender_display')
       .eq('recipient_user_id', userId)
       .not('key_facts', 'is', null)
-      .order('delivered_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(50);
+    if (recentErr) throw recentErr;
 
     // Simple keyword detection for appliances / assets
     const ASSET_KEYWORDS = ['warranty', 'appliance', 'model', 'serial number', 'installation', 'repair', 'maintenance', 'manual'];
@@ -377,18 +567,20 @@ router.get('/records/suggestions', verifyToken, async (req, res) => {
     const homeId = req.query.homeId;
 
     // Find mail items with warranty/appliance keywords that aren't linked yet
-    const { data: linkedMailIds } = await supabaseAdmin
+    const { data: linkedMailIds, error: linkedErr } = await supabaseAdmin
       .from('MailAssetLink')
       .select('mail_id');
+    if (linkedErr) throw linkedErr;
     const excludeIds = (linkedMailIds || []).map(l => l.mail_id);
 
-    const { data: candidates } = await supabaseAdmin
+    const { data: candidates, error: candidatesErr } = await supabaseAdmin
       .from('Mail')
-      .select('id, subject, key_facts, sender_name, category')
+      .select('id, subject, key_facts, sender_name:sender_display, category')
       .eq('recipient_user_id', userId)
       .not('key_facts', 'is', null)
-      .order('delivered_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(30);
+    if (candidatesErr) throw candidatesErr;
 
     const ASSET_KEYWORDS = ['warranty', 'appliance', 'model', 'serial', 'installation', 'repair'];
     const suggestions = [];
@@ -427,8 +619,9 @@ router.get('/map/pins', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const homeId = req.query.homeId;
     const pinType = req.query.type;
-    const homeIds =
-      homeId && isUuid(homeId) ? [homeId] : await getAccessibleHomeIds(userId);
+    // A requested Home narrows the caller's accessible Homes; it never widens them.
+    const accessible = await getAccessibleHomeIds(userId);
+    const homeIds = homeId && isUuid(homeId) ? accessible.filter((id) => id === homeId) : accessible;
     if (!homeIds.length) return res.json({ pins: [] });
 
     let query = supabaseAdmin
@@ -473,6 +666,8 @@ router.post('/map/pin', verifyToken, validate(createPinSchema), async (req, res)
     if (!homeIds.includes(homeId)) {
       return res.status(403).json({ error: 'Not a member of this home' });
     }
+    // A pin may only link mail the caller may read (the mailbox per-item rule).
+    if (mailId && !(await readableMail(mailId, userId))) return res.status(404).json({ error: 'Mail not found' });
 
     const { data: pin, error } = await supabaseAdmin
       .from('HomeMapPin')
@@ -511,6 +706,9 @@ router.get('/map/pin/:id', verifyToken, async (req, res) => {
       .single();
 
     if (error || !pin) return res.status(404).json({ error: 'Pin not found' });
+    // Same gate as creating a pin: only the pin's own household may read it.
+    const accessible = await getAccessibleHomeIds(req.user.id);
+    if (!accessible.includes(pin.home_id)) return res.status(404).json({ error: 'Pin not found' });
 
     // If linked to mail, fetch it
     let linked_mail = null;
@@ -876,30 +1074,35 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    // Get today's new mail
-    const { data: newMail } = await supabaseAdmin
+    // Mail has no delivered_at/read columns (created_at and viewed are the
+    // delivery time and read state); a failed read must not become "no mail".
+    const { data: newMail, error: newErr } = await supabaseAdmin
       .from('Mail')
       .select('*')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', todayStart.toISOString())
-      .order('delivered_at', { ascending: false });
+      .gte('created_at', todayStart.toISOString())
+      .order('created_at', { ascending: false });
+    if (newErr) throw newErr;
 
     // Get needs attention (unread, overdue, certified)
-    const { data: attention } = await supabaseAdmin
+    const { data: attention, error: attentionErr } = await supabaseAdmin
       .from('Mail')
       .select('*')
       .eq('recipient_user_id', userId)
-      .eq('read', false)
+      .eq('viewed', false)
       .in('category', ['certified', 'government', 'bill', 'legal'])
-      .order('delivered_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(5);
+    if (attentionErr) throw attentionErr;
 
-    // Earn count
-    const { count: earnCount } = await supabaseAdmin
+    // Earn count: the same active, unexpired offers the Earn list shows
+    // (EarnOffer has no is_published column).
+    const { count: earnCount, error: earnErr } = await supabaseAdmin
       .from('EarnOffer')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active')
-      .eq('is_published', true);
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+    if (earnErr) throw earnErr;
 
     // Community count (today)
     let communityCount = 0;
@@ -924,13 +1127,14 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     const dayStr = `${oneYearAgo.getMonth() + 1}-${oneYearAgo.getDate()}`;
-    const { data: oldMail } = await supabaseAdmin
+    const { data: oldMail, error: oldErr } = await supabaseAdmin
       .from('Mail')
-      .select('id, subject, sender_name, delivered_at')
+      .select('id, subject, sender_name:sender_display, delivered_at:created_at')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate()).toISOString())
-      .lt('delivered_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate() + 1).toISOString())
+      .gte('created_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate()).toISOString())
+      .lt('created_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate() + 1).toISOString())
       .limit(3);
+    if (oldErr) throw oldErr;
 
     if (oldMail && oldMail.length > 0) {
       memory = {
@@ -1004,12 +1208,15 @@ router.patch('/mailday/settings', verifyToken, validate(updateMailDaySchema), as
   try {
     const userId = req.user.id;
 
-    // Upsert
-    const { data: existing } = await supabaseAdmin
+    // Upsert. MailDaySettings is keyed by user_id and has no id column: the
+    // old select('id') always failed, so every save after the first tried a
+    // second insert and hit the primary key.
+    const { data: existing, error: existingErr } = await supabaseAdmin
       .from('MailDaySettings')
-      .select('id')
+      .select('user_id')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+    if (existingErr) throw existingErr;
 
     let settings;
     if (existing) {
@@ -1173,14 +1380,15 @@ router.get('/memory/on-this-day', verifyToken, async (req, res) => {
       const nextDay = new Date(targetDate);
       nextDay.setDate(nextDay.getDate() + 1);
 
-      const { data: items } = await supabaseAdmin
+      const { data: items, error: itemsErr } = await supabaseAdmin
         .from('Mail')
-        .select('id, subject, sender_name, category, delivered_at')
+        .select('id, subject, sender_name:sender_display, category, delivered_at:created_at')
         .eq('recipient_user_id', userId)
-        .gte('delivered_at', targetDate.toISOString())
-        .lt('delivered_at', nextDay.toISOString())
+        .gte('created_at', targetDate.toISOString())
+        .lt('created_at', nextDay.toISOString())
         // Positive items only
         .in('category', ['postcard', 'package', 'personal', 'greeting', 'gift']);
+      if (itemsErr) throw itemsErr;
 
       if (items && items.length > 0) {
         memories.push({
@@ -1223,21 +1431,24 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
     const yearStart = new Date(year, 0, 1).toISOString();
     const yearEnd = new Date(year + 1, 0, 1).toISOString();
 
-    // Total items
-    const { count: totalItems } = await supabaseAdmin
+    // Total items (Mail's delivery time is created_at; a failed read must not
+    // become an empty year).
+    const { count: totalItems, error: totalErr } = await supabaseAdmin
       .from('Mail')
       .select('*', { count: 'exact', head: true })
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd);
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd);
+    if (totalErr) throw totalErr;
 
     // By drawer
-    const { data: byDrawer } = await supabaseAdmin
+    const { data: byDrawer, error: drawerErr } = await supabaseAdmin
       .from('Mail')
       .select('drawer')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd);
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd);
+    if (drawerErr) throw drawerErr;
 
     const drawerCounts = {};
     (byDrawer || []).forEach(m => {
@@ -1245,12 +1456,13 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
     });
 
     // By type
-    const { data: byType } = await supabaseAdmin
+    const { data: byType, error: typeErr } = await supabaseAdmin
       .from('Mail')
       .select('category')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd);
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd);
+    if (typeErr) throw typeErr;
 
     const typeCounts = {};
     (byType || []).forEach(m => {
@@ -1258,12 +1470,13 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
     });
 
     // Top senders
-    const { data: senders } = await supabaseAdmin
+    const { data: senders, error: sendersErr } = await supabaseAdmin
       .from('Mail')
-      .select('sender_name, sender_trust, category')
+      .select('sender_name:sender_display, sender_trust, category')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd);
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd);
+    if (sendersErr) throw sendersErr;
 
     const senderMap = {};
     (senders || []).forEach(m => {
@@ -1290,14 +1503,15 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
       .lt('created_at', yearEnd);
 
     // First mail date
-    const { data: firstMail } = await supabaseAdmin
+    const { data: firstMail, error: firstErr } = await supabaseAdmin
       .from('Mail')
-      .select('delivered_at')
+      .select('delivered_at:created_at')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd)
-      .order('delivered_at')
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd)
+      .order('created_at')
       .limit(1);
+    if (firstErr) throw firstErr;
 
     logMailEvent(userId, 'year_in_mail_viewed', null, { year });
     res.json({
@@ -1483,58 +1697,14 @@ router.post('/vacation/cancel', verifyToken, validate(cancelVacationSchema), asy
 //                     TRANSLATION ENDPOINTS
 // ====================================================================
 
-// POST /translate — translate a mail item
-router.post('/translate', verifyToken, validate(translateSchema), async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { mailId, targetLang } = req.body;
-    const lang = targetLang || 'en';
-
-    // Check cache
-    const { data: mail } = await supabaseAdmin
-      .from('Mail')
-      .select('id, subject, key_facts, translation_text, translation_lang, translation_cached_at')
-      .eq('id', mailId)
-      .eq('recipient_user_id', userId)
-      .single();
-
-    if (!mail) return res.status(404).json({ error: 'Mail not found' });
-
-    // If cached translation exists and target matches
-    if (mail.translation_text && mail.translation_lang === lang) {
-      return res.json({
-        translated_text: mail.translation_text,
-        from_language: 'auto',
-        to_language: lang,
-        cached: true,
-      });
-    }
-
-    // Mock translation (Phase 3 placeholder — real translation would use an API)
-    const originalText = typeof mail.key_facts === 'string' ? mail.key_facts : JSON.stringify(mail.key_facts || {});
-    const translatedText = `[Translated to ${lang}] ${mail.subject || ''}\n\n${originalText}`;
-
-    // Cache
-    await supabaseAdmin
-      .from('Mail')
-      .update({
-        translation_text: translatedText,
-        translation_lang: lang,
-        translation_cached_at: new Date().toISOString(),
-      })
-      .eq('id', mailId);
-
-    logMailEvent(userId, 'mail_translated', mailId, { targetLang: lang });
-    res.json({
-      translated_text: translatedText,
-      from_language: 'auto',
-      to_language: lang,
-      cached: false,
-    });
-  } catch (err) {
-    logger.error('[P3] POST /translate failed', { error: err.message });
-    res.status(500).json({ error: 'Translation failed' });
-  }
+// POST /translate — disabled: there is no translation provider yet, and no app should show a translation.
+// The route used to answer with a mock ("[Translated to <lang>] <subject>" followed by the letter's key facts), cache
+// it on the Mail row (translation_text, translation_lang, translation_cached_at) and serve that cache later; the apps
+// showed it as the letter's translation. It now answers 501 for every signed-in call, writes nothing and never reads
+// those cached columns. A real implementation needs a translation provider (and its cost) and the Home mail read rule
+// (utils/homeMailAccess) instead of the recipient_user_id-only lookup.
+router.post('/translate', verifyToken, (req, res) => {
+  res.status(501).json({ error: "Translation isn't available yet." });
 });
 
 // ====================================================================

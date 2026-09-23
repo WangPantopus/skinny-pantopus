@@ -56,7 +56,9 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
     /// `home` / `business`). `nil` for `.room` entries.
     public let identityKind: String?
     /// Whether the other participant is verified (for `.conversation`
-    /// rows). `nil` for rooms.
+    /// rows). The identity serializer reports it as a `verified_resident`
+    /// badge (hidden when the person turns the badge off); an explicit
+    /// `verified` flag wins when present. `nil` for rooms.
     public let isVerified: Bool?
 
     private enum RootKeys: String, CodingKey {
@@ -84,6 +86,7 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
     private enum IdentityKeys: String, CodingKey {
         case identityKind = "identity_kind"
         case verified
+        case badges
     }
 
     public init(from decoder: any Decoder) throws {
@@ -119,7 +122,9 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
                 keyedBy: IdentityKeys.self, forKey: .otherParticipantIdentity
             ) {
                 identityKind = try identityContainer.decodeIfPresent(String.self, forKey: .identityKind)
+                let badges = try? identityContainer.decodeIfPresent([String].self, forKey: .badges)
                 isVerified = try identityContainer.decodeIfPresent(Bool.self, forKey: .verified)
+                    ?? badges?.contains("verified_resident")
             } else {
                 identityKind = nil
                 isVerified = nil
@@ -135,6 +140,32 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
             isVerified = nil
         }
     }
+}
+
+/// `GET /api/chat/rooms/:roomId` — only what a chat link needs to find a
+/// direct room's other participant.
+public struct ChatRoomDetailResponse: Decodable, Sendable {
+    public struct Room: Decodable, Sendable {
+        public let type: String?
+        public let participants: [Participant]?
+    }
+
+    public struct Participant: Decodable, Sendable {
+        public let userId: String?
+        /// The local-identity projection (`serializeUserAsLocalIdentity`).
+        public let user: Identity?
+
+        private enum CodingKeys: String, CodingKey {
+            case userId = "user_id"
+            case user
+        }
+    }
+
+    public struct Identity: Decodable, Sendable {
+        public let displayName: String?
+    }
+
+    public let room: Room
 }
 
 public struct ConversationTopicDTO: Decodable, Sendable, Hashable, Identifiable {

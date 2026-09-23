@@ -201,7 +201,8 @@ sealed interface ChatThreadMode {
 
 enum class ChatMessageSide { Incoming, Outgoing }
 
-enum class ChatDeliveryState { Sending, Failed, Delivered, Read }
+/** [Refused]: the server refused the send (403); resending cannot succeed. */
+enum class ChatDeliveryState { Sending, Failed, Refused, Delivered, Read }
 
 @Immutable
 data class ChatFanEntitlement(

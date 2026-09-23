@@ -310,12 +310,19 @@ public struct GigCreator: Decodable, Sendable, Hashable {
     public let avatarUrl: String?
     public let verified: Bool?
     public let badges: [String]?
+    /// Bid rows (`GET /api/gigs/:gigId/bids`) add the bidder's track record.
+    public let averageRating: Double?
+    public let reviewCount: Int?
+    public let gigsCompleted: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, username, name, displayName, handle, badges
         case profilePictureUrl = "profile_picture_url"
         case avatarUrl
         case verified
+        case averageRating = "average_rating"
+        case reviewCount = "review_count"
+        case gigsCompleted = "gigs_completed"
     }
 
     public init(
@@ -327,7 +334,10 @@ public struct GigCreator: Decodable, Sendable, Hashable {
         profilePictureUrl: String? = nil,
         avatarUrl: String? = nil,
         verified: Bool? = nil,
-        badges: [String]? = nil
+        badges: [String]? = nil,
+        averageRating: Double? = nil,
+        reviewCount: Int? = nil,
+        gigsCompleted: Int? = nil
     ) {
         self.id = id
         self.username = username
@@ -338,6 +348,26 @@ public struct GigCreator: Decodable, Sendable, Hashable {
         self.avatarUrl = avatarUrl
         self.verified = verified
         self.badges = badges
+        self.averageRating = averageRating
+        self.reviewCount = reviewCount
+        self.gigsCompleted = gigsCompleted
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id)
+        username = try c.decodeIfPresent(String.self, forKey: .username)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
+        handle = try c.decodeIfPresent(String.self, forKey: .handle)
+        profilePictureUrl = try c.decodeIfPresent(String.self, forKey: .profilePictureUrl)
+        avatarUrl = try c.decodeIfPresent(String.self, forKey: .avatarUrl)
+        verified = try c.decodeIfPresent(Bool.self, forKey: .verified)
+        badges = try c.decodeIfPresent([String].self, forKey: .badges)
+        // The track record only labels a bid row: an odd value hides the line instead of failing the bid.
+        averageRating = try? c.decodeIfPresent(Double.self, forKey: .averageRating)
+        reviewCount = try? c.decodeIfPresent(Int.self, forKey: .reviewCount)
+        gigsCompleted = try? c.decodeIfPresent(Int.self, forKey: .gigsCompleted)
     }
 
     /// Best-effort public name across identity-serializer and legacy User shapes.
@@ -1010,6 +1040,8 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
     public let amountToPayee: Double?
     public let tipAmount: Double?
     public let refundedAmount: Double?
+    /// A poster-fault fee charged from the hold; `nil` for every other state.
+    public let gigFee: GigPaymentFeeDTO?
 
     enum CodingKeys: String, CodingKey {
         case id, currency
@@ -1023,6 +1055,7 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
         case amountToPayee = "amount_to_payee"
         case tipAmount = "tip_amount"
         case refundedAmount = "refunded_amount"
+        case gigFee = "gig_fee"
     }
 
     public init(
@@ -1040,7 +1073,8 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
         amountProcessingFee: Double? = nil,
         amountToPayee: Double? = nil,
         tipAmount: Double? = nil,
-        refundedAmount: Double? = nil
+        refundedAmount: Double? = nil,
+        gigFee: GigPaymentFeeDTO? = nil
     ) {
         self.id = id
         self.gigId = gigId
@@ -1057,6 +1091,34 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
         self.amountToPayee = amountToPayee
         self.tipAmount = tipAmount
         self.refundedAmount = refundedAmount
+        self.gigFee = gigFee
+    }
+}
+
+/// `gig_fee` on `GET /:gigId/payment`: a no-show or late-cancel fee captured
+/// from the payment hold; the rest of the hold was released.
+public struct GigPaymentFeeDTO: Decodable, Sendable, Hashable {
+    public let kind: String
+    public let feeCents: Int
+    public let releasedCents: Int
+    public let workerShareCents: Int
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case feeCents = "fee_cents", releasedCents = "released_cents", workerShareCents = "worker_share_cents"
+    }
+
+    public init(kind: String, feeCents: Int, releasedCents: Int, workerShareCents: Int) {
+        self.kind = kind
+        self.feeCents = feeCents
+        self.releasedCents = releasedCents
+        self.workerShareCents = workerShareCents
+    }
+
+    /// "No-show fee $3.13 charged · $9.37 released"
+    public var line: String {
+        let label = kind == "poster_no_show" ? "No-show fee" : "Cancellation fee"
+        return String(format: "%@ $%.2f charged · $%.2f released", label, Double(feeCents) / 100, Double(releasedCents) / 100)
     }
 }
 

@@ -100,10 +100,13 @@ public struct UserProfile: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let email: String
     public let username: String
-    public let firstName: String
+    /// Names are `null` until the claim flow collects them: the email +
+    /// password signup sends none (`backend/routes/users.js:887`), and OAuth
+    /// may omit the last name. Required `String`s failed the whole decode.
+    public let firstName: String?
     public let middleName: String?
-    public let lastName: String
-    public let name: String
+    public let lastName: String?
+    public let name: String?
     public let phoneNumber: String?
     public let dateOfBirth: String?
     public let address: String?

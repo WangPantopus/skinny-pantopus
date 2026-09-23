@@ -1,8 +1,26 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, MapPin } from 'lucide-react';
+import { Building2, Hammer, Home, Mail, Map as MapIcon, MapPin, MessageCircle, Store } from 'lucide-react';
 import type { JumpBackInItem } from './types';
+
+// The hub payload names its icons with the mobile icon keys ("hammer",
+// "chatbubbles", …). Rendering the string printed the key as text, so map
+// the keys the backend sends to icons and fall back to a pin.
+const ICONS: Record<string, ReactNode> = {
+  hammer: <Hammer className="w-5 h-5" />,
+  chatbubbles: <MessageCircle className="w-5 h-5" />,
+  mail: <Mail className="w-5 h-5" />,
+  home: <Home className="w-5 h-5" />,
+  storefront: <Store className="w-5 h-5" />,
+  map: <MapIcon className="w-5 h-5" />,
+};
+
+function iconFor(icon: JumpBackInItem['icon']): ReactNode {
+  if (typeof icon === 'string') return ICONS[icon] ?? <MapPin className="w-5 h-5" />;
+  return icon || <MapPin className="w-5 h-5" />;
+}
 
 interface JumpBackInProps {
   items: JumpBackInItem[];
@@ -31,7 +49,7 @@ export default function JumpBackIn({ items, hasBusiness }: JumpBackInProps) {
             onClick={() => router.push(item.route)}
             className="flex items-center gap-2.5 p-3 bg-app-surface border border-app-border rounded-xl text-sm text-app-text-strong font-medium hover:bg-app-hover dark:hover:bg-gray-700 hover:shadow-sm transition"
           >
-            <span className="text-lg">{item.icon || <MapPin className="w-5 h-5" />}</span>
+            <span className="text-lg">{iconFor(item.icon)}</span>
             <span className="truncate">{item.title}</span>
           </button>
         ))}

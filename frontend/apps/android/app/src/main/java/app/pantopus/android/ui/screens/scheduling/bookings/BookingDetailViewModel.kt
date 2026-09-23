@@ -44,13 +44,15 @@ class BookingDetailViewModel
         private val owner: SchedulingOwner =
             run {
                 val persisted = savedStateHandle.get<String>(OWNER_TOKEN_KEY)
+                // A notification link names its owner in the route (`ownerKind`/`ownerId`);
+                // the inbox hands it over through the relay.
+                val routeOwnerKind = savedStateHandle.get<String>(SchedulingRoutes.ARG_OWNER_KIND)
                 val resolved =
-                    if (persisted != null) {
-                        ownerFromToken(
-                            persisted,
-                        )
-                    } else {
-                        (ownerRelay.consume() ?: SchedulingOwner.Personal)
+                    when {
+                        persisted != null -> ownerFromToken(persisted)
+                        !routeOwnerKind.isNullOrBlank() ->
+                            SchedulingOwner.fromRoute(routeOwnerKind, savedStateHandle[SchedulingRoutes.ARG_OWNER_ID])
+                        else -> ownerRelay.consume() ?: SchedulingOwner.Personal
                     }
                 savedStateHandle[OWNER_TOKEN_KEY] = resolved.toToken()
                 resolved

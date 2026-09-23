@@ -52,6 +52,9 @@ object DeepLinkRouter {
     private val PLACE_DETAIL_SLUGS =
         setOf("today", "your-home", "risk", "block", "money", "civic", "identity")
 
+    /** A mail or message id in a notification link (a UUID). */
+    private val MAIL_UUID = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
     sealed interface Destination {
         data object Feed : Destination
 
@@ -222,6 +225,19 @@ object DeepLinkRouter {
         data object Earn : Destination
 
         /**
+         * `/app/mailbox/:mailId` — the letter a mail notification points at
+         * (mail_delivered / mail_claimed / mail_escrow_*), opened in the
+         * existing mail item detail.
+         */
+        data class MailItem(val mailId: String) : Destination
+
+        /** `/mailbox` — the Mail tab (the Mail Day summary notification). */
+        data object Mailbox : Destination
+
+        /** `/app/place/neighbor-message/:id` — a received neighbor message. */
+        data class NeighborMessage(val messageId: String) : Destination
+
+        /**
          * `pantopus://businesses/:id` — A10.7 Business owner view. The public
          * profile (A10.6) is the singular `pantopus://business/:username`,
          * routed to [BusinessProfile].
@@ -278,6 +294,29 @@ object DeepLinkRouter {
          */
         data object MonthlyReceipt : Destination
 
+        /**
+         * Booking notification links (`backend/services/scheduling/bookingNotifyService.js`):
+         * `/app/profile/schedule/bookings/:id` and `/app/scheduling/bookings/:id` open the
+         * existing host booking detail for the owner a Home- or Business-owned booking names
+         * with `?ot=home|business&oid=` ([ownerKind]/[ownerId]; null is personal); the
+         * endpoint's own authorization decides what a non-host sees.
+         */
+        data class BookingDetail(
+            val bookingId: String,
+            val ownerKind: String? = null,
+            val ownerId: String? = null,
+        ) : Destination
+
+        /** `/app/scheduling/my-bookings` — the existing customer My bookings list. */
+        data object MyBookings : Destination
+
+        /**
+         * Invoice notification links: `/app/invoice/:id` (`invoice_received`, `invoice_sent`)
+         * and the older `/app/invoices/:id`. They open the existing recipient invoice detail,
+         * whose endpoint only returns an invoice addressed to the signed-in user.
+         */
+        data class InvoiceDetail(val invoiceId: String) : Destination
+
         data class Unknown(val uri: String) : Destination
     }
 
@@ -329,6 +368,13 @@ object DeepLinkRouter {
             destination = resolveString(normalized),
             persistencePath = Paths.normalized(normalized),
         )
+    }
+
+    /** The task id when [path] (a notification link) opens a gig; screens that host the list push it themselves. */
+    fun gigIdForLink(path: String): String? {
+        val normalized = Paths.normalizeIncoming(path)
+        if (Paths.isOAuthCallback(normalized)) return null
+        return (resolveString(normalized) as? Destination.Gig)?.id
     }
 
     fun consume(): Destination? {
@@ -502,13 +548,37 @@ object DeepLinkRouter {
                             ?: Paths.queryParam(queryPart, "briefing_kind"),
                 )
             "profile" ->
-                // Only `?tab=receipt` is deep-linkable today (the monthly-receipt
-                // push). A bare `pantopus://profile` falls through to Unknown.
-                if (tabQuery?.lowercase() == "receipt") Destination.MonthlyReceipt else Destination.Unknown(raw)
+                // `?tab=receipt` is the monthly-receipt push; `schedule/bookings/:id` is the
+                // booking lifecycle notification link. A bare `pantopus://profile` falls
+                // through to Unknown.
+                when {
+                    tabQuery?.lowercase() == "receipt" -> Destination.MonthlyReceipt
+                    segments.drop(1).dropLast(1) == listOf("schedule", "bookings") ->
+                        HomeTaskNotificationRoute.canonicalId(segments.last())
+                            ?.let { Destination.BookingDetail(it) } ?: Destination.Unknown(raw)
+                    else -> Destination.Unknown(raw)
+                }
+            "scheduling" ->
+                // Host booking links; a Home- or Business-owned booking names its owner with
+                // `?ot=home|business&oid=<id>`.
+                when {
+                    segments.drop(1) == listOf("my-bookings") -> Destination.MyBookings
+                    segments.drop(1).dropLast(1) == listOf("bookings") ->
+                        bookingDetail(
+                            segments.last(),
+                            Paths.queryParam(queryPart, "ot"),
+                            Paths.queryParam(queryPart, "oid"),
+                        ) ?: Destination.Unknown(raw)
+                    else -> Destination.Unknown(raw)
+                }
             "connections" -> Destination.Connections
             "beacons", "beacon-updates", "beacon_updates" -> Destination.Beacons
             "discover-hub", "discover_hub", "discoverhub" -> Destination.DiscoverHub
             "wallet" -> Destination.Wallet
+            "invoice", "invoices" ->
+                HomeTaskNotificationRoute.canonicalId(segments.getOrNull(1))
+                    ?.takeIf { segments.size == 2 }
+                    ?.let { Destination.InvoiceDetail(it) } ?: Destination.Unknown(raw)
             "support-trains", "support_train" -> {
                 val id = segments.getOrNull(1)
                 when {
@@ -642,6 +712,15 @@ object DeepLinkRouter {
                 }
             }
             "place" -> {
+                // `place/neighbor-message/:id` is a received message, not a Home id.
+                if (segments.getOrNull(1) == "neighbor-message") {
+                    val messageId = segments.getOrNull(2)
+                    return if (segments.size == 3 && messageId != null && MAIL_UUID.matches(messageId)) {
+                        Destination.NeighborMessage(messageId)
+                    } else {
+                        Destination.Unknown(raw)
+                    }
+                }
                 // `pantopus://place`                      → dashboard (home resolved client-side)
                 // `pantopus://place?id=<homeId>`          → that home's dashboard
                 // `pantopus://place/<homeId>`             → same
@@ -659,9 +738,12 @@ object DeepLinkRouter {
             "mailbox" -> {
                 // `pantopus://mailbox/vacation` opens A14.8;
                 // `pantopus://mailbox/mailday` opens the A13.16 My Mail Day
-                // editor. B1.6 adds the batch-2 mailbox sub-screens. Other
-                // mailbox paths fall through to Unknown until they have routes.
-                when (segments.getOrNull(1)) {
+                // editor. B1.6 adds the batch-2 mailbox sub-screens. A bare
+                // `mailbox` opens the Mail tab and `mailbox/:mailId` (the server's
+                // mail notification link) the letter. Other mailbox paths fall
+                // through to Unknown until they have routes.
+                when (val sub = segments.getOrNull(1)) {
+                    null -> Destination.Mailbox
                     "vacation" -> Destination.VacationHold
                     "mailday" -> Destination.MailDay
                     "stamps" -> Destination.Stamps
@@ -672,7 +754,8 @@ object DeepLinkRouter {
                         val taskId = segments.getOrNull(2)
                         if (taskId.isNullOrBlank()) Destination.Unknown(raw) else Destination.MailTask(taskId)
                     }
-                    else -> Destination.Unknown(raw)
+                    else ->
+                        if (segments.size == 2 && MAIL_UUID.matches(sub)) Destination.MailItem(sub) else Destination.Unknown(raw)
                 }
             }
             "identity" ->
@@ -722,6 +805,21 @@ object DeepLinkRouter {
                 }
             else -> Destination.Unknown(raw)
         }
+    }
+
+    /**
+     * A host booking link's detail destination: no `ot` is the personal pillar;
+     * `home` / `business` need a UUID `oid`. Anything else stays unrouted.
+     */
+    private fun bookingDetail(
+        rawId: String?,
+        ownerKind: String?,
+        ownerId: String?,
+    ): Destination.BookingDetail? {
+        val bookingId = HomeTaskNotificationRoute.canonicalId(rawId) ?: return null
+        if (ownerKind == null) return Destination.BookingDetail(bookingId)
+        val owner = HomeTaskNotificationRoute.canonicalId(ownerId)?.takeIf { ownerKind == "home" || ownerKind == "business" }
+        return owner?.let { Destination.BookingDetail(bookingId, ownerKind, it) }
     }
 
     /**

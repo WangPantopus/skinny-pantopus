@@ -27,7 +27,12 @@ public struct MarketplaceTabRoot: View {
     @State private var router = DeepLinkRouter.shared
     @State private var systemSheet: SystemSheetRequest?
 
-    public init() {}
+    /// Closes the sheet this surface is presented in (Nearby's door).
+    private let onClose: (@MainActor () -> Void)?
+
+    public init(onClose: (@MainActor () -> Void)? = nil) {
+        self.onClose = onClose
+    }
 
     private var currentUserId: String {
         if case let .signedIn(user) = auth.state { return user.id }
@@ -47,12 +52,12 @@ public struct MarketplaceTabRoot: View {
                     path.append(.listingDetail(listingId: listingId))
                 },
                 onCompose: { path.append(.composeListing) },
-                onBack: nil
+                onBack: onClose
             )
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: MarketplaceRoute.self) { route in
                 destination(for: route)
-                    .toolbar(.hidden, for: .navigationBar)
+                    .modifier(OwnHeaderBar(drawsOwnHeader: !Self.usesSystemBar(route)))
             }
         }
         .onChange(of: router.pending) { _, pending in
@@ -88,6 +93,13 @@ public struct MarketplaceTabRoot: View {
         if !path.isEmpty { path.removeLast() }
     }
 
+    /// Pushed screens with no Back of their own: they keep the system bar,
+    /// which every other screen in this stack hides.
+    static func usesSystemBar(_ route: MarketplaceRoute) -> Bool {
+        if case .listingOffers = route { return true }
+        return false
+    }
+
     @ViewBuilder
     private func destination(for route: MarketplaceRoute) -> some View {
         switch route {
@@ -98,14 +110,16 @@ public struct MarketplaceTabRoot: View {
                 onMessage: { listing in
                     Task { @MainActor in
                         guard let sellerId = listing.userId else { return }
-                        let name = listing.title ?? "Seller"
+                        // The chat is with the seller; the listing is its topic.
+                        let title = listing.title ?? "Listing"
+                        let name = listing.creator?.resolvedDisplayName ?? title
                         path.append(.chatConversation(InboxConversationDestination(
                             mode: .person(otherUserId: sellerId),
                             displayName: name,
                             initials: Self.initials(from: name),
                             identityKind: nil,
-                            verified: false,
-                            initialTopic: ChatInitialTopic(topicType: "listing", topicRefId: listing.id, title: name)
+                            verified: listing.creator?.resolvedVerified ?? false,
+                            initialTopic: ChatInitialTopic(topicType: "listing", topicRefId: listing.id, title: title)
                         )))
                     }
                 },

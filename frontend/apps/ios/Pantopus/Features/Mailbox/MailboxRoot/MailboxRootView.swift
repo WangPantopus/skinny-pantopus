@@ -103,6 +103,7 @@ public struct MailboxRootView: View {
         }
         .accessibilityIdentifier("mailboxRoot")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .refreshFailureToast($viewModel.refreshFailureMessage)
         .onAppear { Analytics.track(.screenMailboxRootViewed) }
     }
 }

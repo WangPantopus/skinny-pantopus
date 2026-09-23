@@ -15,6 +15,13 @@ import {
 
 type RecipientUser = { id: string; name?: string; username?: string; city?: string | null; state?: string | null };
 
+// The Home records a sent letter could not be added to (the send's fanoutFailed).
+const FANOUT_LABELS: Record<string, string> = { bill: 'bills', document: 'documents', package: 'packages', task: 'tasks' };
+function fanoutFailureLabel(failed: unknown): string {
+  if (!Array.isArray(failed) || failed.length === 0) return '';
+  return [...new Set(failed.map((target) => FANOUT_LABELS[String(target)] || 'records'))].join(' and ');
+}
+
 function getApiErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error && err.message) return err.message;
   if (err && typeof err === 'object') {
@@ -50,6 +57,8 @@ export default function ComposeMailModal({
 }: ComposeMailModalProps) {
   const [composeMode, setComposeMode] = useState<ComposeMode>('quick');
   const [composeLoading, setComposeLoading] = useState(false);
+  // The page banner that also gets this sits behind the modal's overlay.
+  const [sendError, setSendError] = useState('');
 
   // Quick compose state
   const [quickComposeData, setQuickComposeData] = useState<QuickComposeForm>(() => ({
@@ -75,6 +84,16 @@ export default function ComposeMailModal({
   const [structuredRecipientDropdownOpen, setStructuredRecipientDropdownOpen] = useState(false);
   const [structuredRecipientActiveIndex, setStructuredRecipientActiveIndex] = useState(-1);
   const structuredRecipientContainerRef = useRef<HTMLDivElement | null>(null);
+  // Businesses this user may send as (the server's own list); "Send as" shows only when there is one.
+  const [senderBusinesses, setSenderBusinesses] = useState<api.mailbox.SenderBusiness[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.mailbox.getSenderBusinesses()
+      .then((res) => { if (!cancelled) setSenderBusinesses(res.businesses || []); })
+      .catch(() => { if (!cancelled) setSenderBusinesses([]); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Sync address inputs with home labels
   useEffect(() => {
@@ -292,15 +311,28 @@ export default function ComposeMailModal({
     e.preventDefault();
     setActionError('');
     setActionSuccess('');
+    setSendError('');
     setComposeLoading(true);
     try {
       const payload = composeMode === 'quick' ? buildQuickPayload() : buildStructuredPayload();
-      await api.mailbox.sendMail(payload);
+      const sent = await api.mailbox.sendMail(payload);
       onClose();
       onSent();
-      setActionSuccess('Mail sent successfully.');
+      const notAdded = fanoutFailureLabel((sent as { fanoutFailed?: unknown }).fanoutFailed);
+      // The server sends as a business only when the sender may; say so if the chosen one was not used.
+      const chosenBusiness = composeMode === 'structured' ? structuredComposeData.senderBusinessName.trim() : '';
+      const sentAsBusiness = (sent.mail?.senderBusinessName || '').trim();
+      const droppedBusiness = chosenBusiness && chosenBusiness.toLowerCase() !== sentAsBusiness.toLowerCase() ? chosenBusiness : '';
+      const problems = [
+        droppedBusiness && `it went out under your own name, because you can't send as ${droppedBusiness}`,
+        notAdded && `it couldn't be added to this Home's ${notAdded}`,
+      ].filter(Boolean);
+      if (problems.length > 0) setActionError(`Mail sent, but ${problems.join(', and ')}.`);
+      else setActionSuccess('Mail sent successfully.');
     } catch (err: unknown) {
-      setActionError(getApiErrorMessage(err, 'Failed to send mail.'));
+      const message = getApiErrorMessage(err, 'Failed to send mail.');
+      setSendError(message);
+      setActionError(message);
     } finally { setComposeLoading(false); }
   };
 
@@ -588,15 +620,27 @@ export default function ComposeMailModal({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input type="text" placeholder="Sender business name (optional)" value={structuredComposeData.senderBusinessName}
-                  onChange={(e) => setStructuredComposeData(prev => ({ ...prev, senderBusinessName: e.target.value }))}
-                  className={COMPOSE_FIELD_CLASS}
-                />
+                {senderBusinesses.length > 0 && (
+                  <select aria-label="Send as" value={structuredComposeData.senderBusinessName}
+                    onChange={(e) => setStructuredComposeData(prev => ({ ...prev, senderBusinessName: e.target.value }))}
+                    className={COMPOSE_SELECT_CLASS}>
+                    <option value="">Send as yourself</option>
+                    {senderBusinesses.map((business) => (
+                      <option key={business.id} value={business.name}>Send as {business.name}</option>
+                    ))}
+                  </select>
+                )}
                 <input type="text" placeholder="Sender address (optional)" value={structuredComposeData.senderAddress}
                   onChange={(e) => setStructuredComposeData(prev => ({ ...prev, senderAddress: e.target.value }))}
                   className={COMPOSE_FIELD_CLASS}
                 />
               </div>
+            </div>
+          )}
+
+          {sendError && (
+            <div role="alert" className="mt-3 text-sm px-3 py-2 rounded-lg border bg-red-50 text-red-700 border-red-200">
+              {sendError}
             </div>
           )}
 

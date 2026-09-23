@@ -10,12 +10,7 @@ import {
   useLinkMailToAsset,
   useDrawerItems,
 } from '@/lib/mailbox-queries';
-import { GigCreationModal } from '@/components/mailbox';
-
-// ── Stub: home context ───────────────────────────────────────
-function useHomeProfile() {
-  return { homeId: 'home_1', address: 'Camas, WA' };
-}
+import { useHomeAccess } from '@/hooks/useHomeAccess';
 
 // ── Category icons ───────────────────────────────────────────
 const categoryIcons: Record<string, string> = {
@@ -95,6 +90,12 @@ function LinkMailDrawer({
           />
         </div>
 
+        {linkMail.isError && (
+          <p role="alert" className="px-4 py-2 text-xs text-red-600 border-b border-app-border-subtle">
+            {linkMail.error?.message || "Couldn't link this mail. Try again."}
+          </p>
+        )}
+
         {/* Results */}
         <div className="flex-1 overflow-y-auto">
           {filteredItems.length === 0 ? (
@@ -131,21 +132,23 @@ export default function AssetDetailPage() {
   const params = useParams<{ asset_id?: string | string[] }>();
   const rawAssetId = params?.asset_id;
   const assetId = Array.isArray(rawAssetId) ? rawAssetId[0] || '' : rawAssetId || '';
-  const home = useHomeProfile();
   const router = useRouter();
   const { data: fullDetail, isLoading } = useAssetFullDetail(assetId);
   const addPhoto = useAddAssetPhoto();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showLinkDrawer, setShowLinkDrawer] = useState(false);
-  const [showGigModal, setShowGigModal] = useState(false);
 
   const asset = fullDetail?.asset;
   const linkedMail = fullDetail?.mail || [];
   const linkedGigs = fullDetail?.gigs || [];
   const photos = fullDetail?.photos || [];
+  // Photos are stored privately; adding one needs assets.manage on the record's Home.
+  const { access: homeAccess } = useHomeAccess(asset?.home_id);
+  const canAddPhoto = !!homeAccess?.permissions?.includes('assets.manage');
 
   const handlePhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     addPhoto.mutate({ assetId, file });
   }, [assetId, addPhoto]);
@@ -222,31 +225,48 @@ export default function AssetDetailPage() {
 
         {/* ── Action buttons ─────────────────────────────────── */}
         <div className="flex items-center gap-2 mb-6">
+          {canAddPhoto && (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={addPhoto.isPending}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-app-text-secondary dark:text-app-text-muted border border-app-border rounded-lg hover:bg-app-hover dark:hover:bg-gray-800 transition-colors"
+            >
+              <span>📷</span>
+              {addPhoto.isPending ? 'Uploading...' : 'Add photo'}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={addPhoto.isPending}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-app-text-secondary dark:text-app-text-muted border border-app-border rounded-lg hover:bg-app-hover dark:hover:bg-gray-800 transition-colors"
-          >
-            <span>📷</span>
-            {addPhoto.isPending ? 'Uploading...' : 'Add photo'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowGigModal(true)}
+            onClick={() => {
+              // The real task form, prefilled; the modal here only pretended to post.
+              const details = [asset.manufacturer, asset.model_number].filter(Boolean).join(' ');
+              const prefill = {
+                title: `Help with ${asset.name}`,
+                description: `Help needed with ${asset.name} (${asset.category}${details ? `, ${details}` : ''}).`,
+              };
+              router.push(`/app/gigs/new?prefill=${encodeURIComponent(JSON.stringify(prefill))}`);
+            }}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-app-text-secondary dark:text-app-text-muted border border-app-border rounded-lg hover:bg-app-hover dark:hover:bg-gray-800 transition-colors"
           >
             <span>🤝</span>
             Post Gig
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handlePhotoUpload}
-            className="hidden"
-          />
+          {canAddPhoto && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              onChange={handlePhotoUpload}
+              className="hidden"
+            />
+          )}
         </div>
+        {addPhoto.isError && (
+          <p role="alert" className="-mt-4 mb-6 text-xs text-red-600">
+            {addPhoto.error?.message || "Couldn't add this photo. Try again."}
+          </p>
+        )}
 
         {/* ── Photos gallery ─────────────────────────────────── */}
         {photos.length > 0 && (
@@ -428,22 +448,6 @@ export default function AssetDetailPage() {
         <LinkMailDrawer
           assetId={assetId}
           onClose={() => setShowLinkDrawer(false)}
-        />
-      )}
-
-      {/* ── Gig Creation Modal ───────────────────────────────── */}
-      {showGigModal && (
-        <GigCreationModal
-          source="post_delivery"
-          packageTitle={asset.name}
-          packageDescription={`${asset.category} — ${asset.manufacturer || ''} ${asset.model_number || ''}`.trim()}
-          homeAddress={home.address}
-          onGigCreated={() => setShowGigModal(false)}
-          onClose={() => setShowGigModal(false)}
-          createGig={async () => {
-            // In production this would call the actual gig API
-            return { gigId: `gig_${Date.now()}` };
-          }}
         />
       )}
     </div>

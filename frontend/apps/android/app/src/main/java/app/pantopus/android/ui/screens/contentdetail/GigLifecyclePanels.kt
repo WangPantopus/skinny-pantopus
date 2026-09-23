@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -93,8 +95,12 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     val changeOrderActionInFlight by viewModel.changeOrderActionInFlight.collectAsStateWithLifecycle()
     val fulfillment by viewModel.fulfillment.collectAsStateWithLifecycle()
     val fulfillmentActionInFlight by viewModel.fulfillmentActionInFlight.collectAsStateWithLifecycle()
+    val confirmingCompletion by viewModel.confirmingCompletion.collectAsStateWithLifecycle()
 
     var counterTarget by remember { mutableStateOf<GigBidDto?>(null) }
+
+    /** Set while the owner is asked to check before confirming completion (and releasing a held payment). */
+    var completionPrompt by remember { mutableStateOf<CompletionConfirmation?>(null) }
     var rejectTarget by remember { mutableStateOf<GigBidDto?>(null) }
 
     /** Bid whose pending counter-offer the poster is about to withdraw. */
@@ -118,6 +124,42 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
             onReject = { rejectTarget = it },
             onWithdrawCounter = { withdrawCounterTarget = it },
             rankings = offerRankings,
+        )
+    }
+
+    completionPrompt?.let { prompt ->
+        val paid = prompt.amountCents != null
+        AlertDialog(
+            onDismissRequest = { completionPrompt = null },
+            title = {
+                Text(
+                    prompt.amountCents?.let { "Release ${formatCents(it)} to ${prompt.workerName}?" }
+                        ?: "Confirm ${prompt.workerName} finished?",
+                )
+            },
+            text = {
+                Text(
+                    if (paid) {
+                        "This confirms the task is done and charges the payment you authorized."
+                    } else {
+                        "This marks the task complete."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        completionPrompt = null
+                        viewModel.confirmCompletion()
+                    },
+                    modifier = Modifier.testTag("gigDetail.confirmCompletionConfirm"),
+                ) {
+                    Text(if (paid) "Release payment" else "Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { completionPrompt = null }) { Text("Not yet") }
+            },
         )
     }
 
@@ -181,7 +223,8 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
             onWorkerAck = { viewModel.workerAck() },
             onRunningLate = { runningLateSheetVisible = true },
             onStartTask = { viewModel.startTask() },
-            onConfirmCompletion = { viewModel.confirmCompletion() },
+            onConfirmCompletion = { completionPrompt = viewModel.completionConfirmation() },
+            confirmingCompletion = confirmingCompletion,
             onReportNoShow = { noShowSheetVisible = true },
             onCantMakeIt = { viewModel.openTaskStop("worker_release") },
             canRemindWorker = viewModel.canRemindWorker(),
@@ -195,6 +238,7 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
         GigChangeOrdersCard(
             orders = changeOrders,
             viewerUserId = viewModel.viewerUserId(),
+            priceChangeUnavailableReason = viewModel.priceChangeUnavailableReason(),
             actionInFlightOrderId = changeOrderActionInFlight,
             onPropose = { proposeChangeSheetVisible = true },
             onApprove = { viewModel.approveChangeOrder(it.id) },
@@ -220,48 +264,70 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
 
     GigReviewSection(
         state = reviewState,
-        onSubmit = { rating, comment -> viewModel.submitGigReview(rating, comment) },
+        onSubmit = { rating, comment, onFailure -> viewModel.submitGigReview(rating, comment, onFailure) },
     )
 
     if (runningLateSheetVisible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val submit = remember { SheetSubmit() }
         ModalBottomSheet(onDismissRequest = { runningLateSheetVisible = false }, sheetState = sheetState) {
             GigRunningLateSheetContent(
                 onSubmit = { etaMinutes, note ->
-                    viewModel.workerRunningLate(etaMinutes, note) { ok ->
-                        if (ok) runningLateSheetVisible = false
+                    if (submit.begin()) {
+                        viewModel.workerRunningLate(etaMinutes, note, onFailure = submit::fail) { ok ->
+                            submit.end()
+                            if (ok) runningLateSheetVisible = false
+                        }
                     }
                 },
                 onCancel = { runningLateSheetVisible = false },
+                errorText = submit.error,
             )
         }
     }
 
     if (proposeChangeSheetVisible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val submit = remember { SheetSubmit() }
         ModalBottomSheet(onDismissRequest = { proposeChangeSheetVisible = false }, sheetState = sheetState) {
             GigProposeChangeSheetContent(
                 onSubmit = { type, description, amountChange, timeChangeMinutes ->
-                    viewModel.proposeChangeOrder(type, description, amountChange, timeChangeMinutes) { ok ->
-                        if (ok) proposeChangeSheetVisible = false
+                    if (submit.begin()) {
+                        viewModel.proposeChangeOrder(
+                            type,
+                            description,
+                            amountChange,
+                            timeChangeMinutes,
+                            onFailure = submit::fail,
+                        ) { ok ->
+                            submit.end()
+                            if (ok) proposeChangeSheetVisible = false
+                        }
                     }
                 },
                 onCancel = { proposeChangeSheetVisible = false },
+                errorText = submit.error,
+                priceChangeUnavailableReason = viewModel.priceChangeUnavailableReason(),
             )
         }
     }
 
     counterTarget?.let { target ->
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val submit = remember(target.id) { SheetSubmit() }
         ModalBottomSheet(onDismissRequest = { counterTarget = null }, sheetState = sheetState) {
             GigCounterSheetContent(
                 bid = target,
                 onSubmit = { amount, message ->
-                    viewModel.counterBidAsOwner(target.id, amount, message) { ok ->
-                        if (ok) counterTarget = null
+                    if (submit.begin()) {
+                        viewModel.counterBidAsOwner(target.id, amount, message, onFailure = submit::fail) { ok ->
+                            submit.end()
+                            if (ok) counterTarget = null
+                        }
                     }
                 },
                 onCancel = { counterTarget = null },
+                errorText = submit.error,
             )
         }
     }
@@ -282,14 +348,19 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
 
     if (noShowSheetVisible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val submit = remember { SheetSubmit() }
         ModalBottomSheet(onDismissRequest = { noShowSheetVisible = false }, sheetState = sheetState) {
             GigNoShowSheetContent(
                 onSubmit = { description ->
-                    viewModel.reportNoShow(description) { ok ->
-                        if (ok) noShowSheetVisible = false
+                    if (submit.begin()) {
+                        viewModel.reportNoShow(description, onFailure = submit::fail) { ok ->
+                            submit.end()
+                            if (ok) noShowSheetVisible = false
+                        }
                     }
                 },
                 onCancel = { noShowSheetVisible = false },
+                errorText = submit.error,
             )
         }
     }
@@ -354,6 +425,23 @@ private fun GigOwnerBidsPanel(
 }
 
 @Composable
+private fun BestMatchPill(bidId: String?) {
+    Text(
+        text = "BEST MATCH",
+        fontSize = 9.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 0.5.sp,
+        color = PantopusColors.primary700,
+        modifier =
+            Modifier
+                .clip(CircleShape)
+                .background(PantopusColors.primary50)
+                .padding(horizontal = Spacing.s2, vertical = 2.dp)
+                .testTag("gigDetail.bid_$bidId.bestMatch"),
+    )
+}
+
+@Composable
 private fun GigOwnerBidRow(
     bid: GigBidDto,
     busy: Boolean,
@@ -368,6 +456,8 @@ private fun GigOwnerBidRow(
     val rejected = bid.status?.lowercase() in listOf("rejected", "declined", "withdrawn")
     val countered = bid.hasPendingCounter
     val amount = bid.bidAmount ?: bid.amount ?: 0.0
+    // With large text the pill moves under the name instead of squeezing it.
+    val largeText = LocalDensity.current.fontScale >= LARGE_TEXT_SCALE
     Column(
         modifier =
             Modifier
@@ -399,6 +489,7 @@ private fun GigOwnerBidRow(
                         )
                     }
                 }
+                if (largeText && ranking?.isRecommended == true) BestMatchPill(bid.id)
                 relativeAgeLabel(bid.createdAt)?.let { age ->
                     Text(text = age, fontSize = 11.sp, color = PantopusColors.appTextMuted)
                 }
@@ -413,21 +504,7 @@ private fun GigOwnerBidRow(
                     )
                 }
             }
-            if (ranking?.isRecommended == true) {
-                Text(
-                    text = "BEST MATCH",
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp,
-                    color = PantopusColors.primary700,
-                    modifier =
-                        Modifier
-                            .clip(CircleShape)
-                            .background(PantopusColors.primary50)
-                            .padding(horizontal = Spacing.s2, vertical = 2.dp)
-                            .testTag("gigDetail.bid_${bid.id}.bestMatch"),
-                )
-            }
+            if (!largeText && ranking?.isRecommended == true) BestMatchPill(bid.id)
             Text(
                 text = formatBidAmount(amount),
                 fontSize = 16.sp,
@@ -593,6 +670,7 @@ fun GigCounterSheetContent(
     bid: GigBidDto,
     onSubmit: (amount: Double, message: String?) -> Unit,
     onCancel: () -> Unit,
+    errorText: String? = null,
 ) {
     var amountText by remember { mutableStateOf("") }
     var messageText by remember { mutableStateOf("") }
@@ -611,14 +689,14 @@ fun GigCounterSheetContent(
                 text = "Send a counter-offer",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = PantopusColors.appText,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text =
                     "Their bid is ${formatBidAmount(bid.bidAmount ?: bid.amount ?: 0.0)}. " +
                         "Propose your price — they can accept or decline.",
                 fontSize = 13.sp,
-                color = PantopusColors.appTextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Row(
@@ -682,6 +760,7 @@ fun GigCounterSheetContent(
                 },
             )
         }
+        SheetInlineError(errorText, testTag = "gigDetail.counterSheet.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(
                 label = "Cancel",
@@ -714,12 +793,12 @@ private fun GigRejectConfirmContent(
             text = "Reject this bid?",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = "$name will be notified that their bid wasn't selected. This can't be undone.",
             fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(label = "Keep bid", modifier = Modifier.weight(1f), onClick = onCancel)
@@ -743,6 +822,8 @@ private fun GigActiveTaskPanel(
     onConfirmCompletion: () -> Unit,
     onReportNoShow: () -> Unit,
     onCantMakeIt: () -> Unit,
+    /** Owner's confirm-completion request is running; the button shows it. */
+    confirmingCompletion: Boolean = false,
     /** Poster-only "Remind worker" nudge — assigned, pre-start. */
     canRemindWorker: Boolean = false,
     /** `"Sent · retry in 12m"` while the server's cooldown stands. */
@@ -847,9 +928,10 @@ private fun GigActiveTaskPanel(
             }
             if (panel.showConfirmCompletion) {
                 ActivePanelButton(
-                    label = "Confirm completion",
+                    label = if (confirmingCompletion) "Confirming…" else "Confirm completion",
                     icon = PantopusIcon.CheckCheck,
                     prominent = true,
+                    enabled = !confirmingCompletion,
                     modifier = Modifier.testTag("gigDetail.confirmCompletion"),
                     onClick = onConfirmCompletion,
                 )
@@ -885,8 +967,15 @@ private fun GigActiveTaskPanel(
 
 private val PHASE_LABELS = listOf("Assigned", "In progress", "Marked done", "Confirmed")
 
+/** At this text scale and above, labels no longer fit a quarter of the row. */
+private const val LARGE_TEXT_SCALE = 1.3f
+
 @Composable
 private fun GigPhaseStrip(activeIndex: Int) {
+    if (LocalDensity.current.fontScale >= LARGE_TEXT_SCALE) {
+        GigPhaseList(activeIndex)
+        return
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -938,6 +1027,41 @@ private fun GigPhaseStrip(activeIndex: Int) {
     }
 }
 
+/** Large-text form of [GigPhaseStrip]: one phase per line, so labels never break mid-word. */
+@Composable
+private fun GigPhaseList(activeIndex: Int) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        PHASE_LABELS.forEachIndexed { index, label ->
+            val reached = index <= activeIndex
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(22.dp)
+                            .clip(CircleShape)
+                            .background(if (reached) PantopusColors.primary600 else PantopusColors.appSurfaceSunken),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (reached) {
+                        PantopusIconImage(
+                            icon = PantopusIcon.Check,
+                            contentDescription = null,
+                            size = 12.dp,
+                            tint = PantopusColors.appTextInverse,
+                        )
+                    }
+                }
+                Text(
+                    text = label,
+                    fontSize = 10.sp,
+                    fontWeight = if (index == activeIndex) FontWeight.Bold else FontWeight.Medium,
+                    color = if (reached) PantopusColors.appText else PantopusColors.appTextMuted,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun ActivePanelButton(
     label: String,
@@ -978,6 +1102,7 @@ private fun ActivePanelButton(
 private fun GigNoShowSheetContent(
     onSubmit: (String?) -> Unit,
     onCancel: () -> Unit,
+    errorText: String? = null,
 ) {
     var description by remember { mutableStateOf("") }
     Column(
@@ -992,14 +1117,14 @@ private fun GigNoShowSheetContent(
             text = "Report a no-show",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text =
                 "This cancels the task and files an incident against the " +
                     "other party. Only report after the agreed start time has passed.",
             fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Box(
             modifier =
@@ -1030,6 +1155,7 @@ private fun GigNoShowSheetContent(
                 },
             )
         }
+        SheetInlineError(errorText, testTag = "gigDetail.noShowSheet.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(label = "Back", modifier = Modifier.weight(1f), onClick = onCancel)
             SheetDestructiveButton(
@@ -1050,6 +1176,7 @@ private val LATE_ETA_CHOICES_MINUTES = listOf(10, 20, 30, 45, 60)
 fun GigRunningLateSheetContent(
     onSubmit: (etaMinutes: Int?, note: String?) -> Unit,
     onCancel: () -> Unit,
+    errorText: String? = null,
 ) {
     var selectedEta by remember { mutableStateOf<Int?>(null) }
     var note by remember { mutableStateOf("") }
@@ -1065,12 +1192,12 @@ fun GigRunningLateSheetContent(
             text = "Running late?",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = "Let the owner know roughly how long you'll be.",
             fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             LATE_ETA_CHOICES_MINUTES.forEach { minutes ->
@@ -1124,6 +1251,7 @@ fun GigRunningLateSheetContent(
                 },
             )
         }
+        SheetInlineError(errorText, testTag = "gigDetail.runningLateSheet.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(label = "Back", modifier = Modifier.weight(1f), onClick = onCancel)
             SheetPrimaryButton(
@@ -1142,6 +1270,7 @@ fun GigRunningLateSheetContent(
 private fun GigChangeOrdersCard(
     orders: List<GigChangeOrderDto>,
     viewerUserId: String?,
+    priceChangeUnavailableReason: String?,
     actionInFlightOrderId: String?,
     onPropose: () -> Unit,
     onApprove: (GigChangeOrderDto) -> Unit,
@@ -1166,6 +1295,8 @@ private fun GigChangeOrdersCard(
             GigChangeOrderRow(
                 order = order,
                 viewerIsRequester = viewerUserId != null && viewerUserId == order.requestedBy,
+                // A pending price order can't be approved now; say why instead of offering Approve.
+                approveUnavailableReason = priceChangeUnavailableReason.takeIf { (order.amountChange ?: 0.0) != 0.0 },
                 busy = actionInFlightOrderId != null,
                 onApprove = { onApprove(order) },
                 onReject = { onReject(order) },
@@ -1186,6 +1317,7 @@ private fun GigChangeOrdersCard(
 private fun GigChangeOrderRow(
     order: GigChangeOrderDto,
     viewerIsRequester: Boolean,
+    approveUnavailableReason: String?,
     busy: Boolean,
     onApprove: () -> Unit,
     onReject: () -> Unit,
@@ -1239,14 +1371,24 @@ private fun GigChangeOrderRow(
                     )
                 }
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    BidActionButton(
-                        label = "Approve",
-                        prominent = true,
-                        enabled = !busy,
-                        modifier = Modifier.weight(1f).testTag("gigDetail.change_${order.id}.approve"),
-                        onClick = onApprove,
+                approveUnavailableReason?.let { reason ->
+                    Text(
+                        text = reason,
+                        fontSize = 13.sp,
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.testTag("gigDetail.change_${order.id}.approveUnavailable"),
                     )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    if (approveUnavailableReason == null) {
+                        BidActionButton(
+                            label = "Approve",
+                            prominent = true,
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f).testTag("gigDetail.change_${order.id}.approve"),
+                            onClick = onApprove,
+                        )
+                    }
                     BidActionButton(
                         label = "Reject",
                         prominent = false,
@@ -1293,12 +1435,19 @@ private fun changeAmountLabel(order: GigChangeOrderDto): String? {
     return null
 }
 
-/** Propose-a-change sheet → `POST /change-orders`. */
+/**
+ * Propose-a-change sheet → `POST /change-orders`. When the server refuses price changes on this task,
+ * [priceChangeUnavailableReason] says why: the sheet leaves out the two price types and the amount
+ * field and shows that sentence in their place.
+ */
 @Composable
 fun GigProposeChangeSheetContent(
     onSubmit: (GigChangeOrderType, String, Double?, Int?) -> Unit,
     onCancel: () -> Unit,
+    errorText: String? = null,
+    priceChangeUnavailableReason: String? = null,
 ) {
+    val priceChangesAvailable = priceChangeUnavailableReason == null
     var selectedType by remember { mutableStateOf<GigChangeOrderType?>(null) }
     var description by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
@@ -1318,15 +1467,23 @@ fun GigProposeChangeSheetContent(
             text = "Propose a change",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = "The other party has to approve before it takes effect.",
             fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            GigChangeOrderType.entries.forEach { type ->
+            if (priceChangeUnavailableReason != null) {
+                Text(
+                    text = priceChangeUnavailableReason,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("gigDetail.changesSheet.priceUnavailable"),
+                )
+            }
+            GigChangeOrderType.entries.filter { priceChangesAvailable || it !in PRICE_CHANGE_TYPES }.forEach { type ->
                 ReasonRadioRow(
                     label = type.label,
                     selected = selectedType == type,
@@ -1365,33 +1522,35 @@ fun GigProposeChangeSheetContent(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            Row(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(Radii.md))
-                        .background(PantopusColors.appSurfaceSunken)
-                        .padding(horizontal = Spacing.s3),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-            ) {
-                Text(text = "±$", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextSecondary)
-                BasicTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    textStyle = PantopusTextStyle.body.copy(color = PantopusColors.appText, fontWeight = FontWeight.SemiBold),
-                    cursorBrush = SolidColor(PantopusColors.primary600),
-                    modifier = Modifier.weight(1f).testTag("gigDetail.changesSheet.amount"),
-                    decorationBox = { inner ->
-                        if (amountText.isEmpty()) {
-                            Text(text = "0.00", style = PantopusTextStyle.body, color = PantopusColors.appTextMuted)
-                        }
-                        inner()
-                    },
-                )
+            if (priceChangesAvailable) {
+                Row(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(Radii.md))
+                            .background(PantopusColors.appSurfaceSunken)
+                            .padding(horizontal = Spacing.s3),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+                ) {
+                    Text(text = "±$", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextSecondary)
+                    BasicTextField(
+                        value = amountText,
+                        onValueChange = { amountText = it },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        textStyle = PantopusTextStyle.body.copy(color = PantopusColors.appText, fontWeight = FontWeight.SemiBold),
+                        cursorBrush = SolidColor(PantopusColors.primary600),
+                        modifier = Modifier.weight(1f).testTag("gigDetail.changesSheet.amount"),
+                        decorationBox = { inner ->
+                            if (amountText.isEmpty()) {
+                                Text(text = "0.00", style = PantopusTextStyle.body, color = PantopusColors.appTextMuted)
+                            }
+                            inner()
+                        },
+                    )
+                }
             }
             Row(
                 modifier =
@@ -1422,6 +1581,7 @@ fun GigProposeChangeSheetContent(
                 Text(text = "min", fontSize = 13.sp, color = PantopusColors.appTextSecondary)
             }
         }
+        SheetInlineError(errorText, testTag = "gigDetail.changesSheet.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(label = "Cancel", modifier = Modifier.weight(1f), onClick = onCancel)
             SheetPrimaryButton(
@@ -1433,7 +1593,7 @@ fun GigProposeChangeSheetContent(
                     onSubmit(
                         type,
                         description.trim(),
-                        normalizedAmountChange(type, amount),
+                        if (priceChangesAvailable) normalizedAmountChange(type, amount) else null,
                         minutes,
                     )
                 },
@@ -1441,6 +1601,8 @@ fun GigProposeChangeSheetContent(
         }
     }
 }
+
+private val PRICE_CHANGE_TYPES = setOf(GigChangeOrderType.PriceIncrease, GigChangeOrderType.PriceDecrease)
 
 /** Price-increase amounts go up, price-decrease amounts go down. */
 private fun normalizedAmountChange(
@@ -1491,16 +1653,29 @@ private fun GigPaymentCard(payment: GigPaymentResponse) {
                     .padding(Spacing.s3),
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
-            PaymentLine(label = "Platform fee (included)", amount = formatCents(row.amountPlatformFee ?: 0))
+            val gigFee = row.gigFee
+            // A fee charge replaces the full-task platform fee and total.
+            if (gigFee == null) {
+                PaymentLine(label = "Platform fee (included)", amount = formatCents(row.amountPlatformFee ?: 0))
+            }
             if ((row.tipAmount ?: 0) > 0) {
                 PaymentLine(label = "Tip", amount = formatCents(row.tipAmount ?: 0))
             }
-            PaymentLine(
-                label = app.pantopus.android.ui.screens.gigs.refunds.gigPaymentAmountLabel(row),
-                amount = formatCents(row.amountTotal ?: 0),
-                emphasized = true,
-                modifier = Modifier.testTag("gigDetail.payment.total"),
-            )
+            if (gigFee != null) {
+                PaymentLine(
+                    label = app.pantopus.android.ui.screens.gigs.refunds.gigPaymentFeeLine(gigFee),
+                    amount = "",
+                    emphasized = true,
+                    modifier = Modifier.testTag("gigDetail.payment.fee"),
+                )
+            } else {
+                PaymentLine(
+                    label = app.pantopus.android.ui.screens.gigs.refunds.gigPaymentAmountLabel(row),
+                    amount = formatCents(row.amountTotal ?: 0),
+                    emphasized = true,
+                    modifier = Modifier.testTag("gigDetail.payment.total"),
+                )
+            }
         }
     }
 }
@@ -1569,7 +1744,7 @@ private fun formatCents(cents: Int): String = String.format(Locale.US, "$%.2f", 
 @Composable
 private fun GigReviewSection(
     state: GigReviewState,
-    onSubmit: suspend (rating: Int, comment: String?) -> Boolean,
+    onSubmit: suspend (rating: Int, comment: String?, onFailure: (String) -> Unit) -> Boolean,
 ) {
     if (state is GigReviewState.Hidden) return
     var sheetVisible by remember { mutableStateOf(false) }
@@ -1644,16 +1819,19 @@ private fun GigReviewSection(
 
     if (sheetVisible && state is GigReviewState.Available) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val submit = remember { SheetSubmit() }
         ModalBottomSheet(onDismissRequest = { sheetVisible = false }, sheetState = sheetState) {
             GigReviewSheetContent(
                 initialRating = presetRating,
                 revieweeName = state.revieweeName,
                 onSubmit = { rating, comment ->
-                    val ok = onSubmit(rating, comment)
+                    submit.error = null
+                    val ok = onSubmit(rating, comment, submit::fail)
                     if (ok) sheetVisible = false
                     ok
                 },
                 onCancel = { sheetVisible = false },
+                errorText = submit.error,
             )
         }
     }
@@ -1666,6 +1844,7 @@ private fun GigReviewSheetContent(
     revieweeName: String?,
     onSubmit: suspend (rating: Int, comment: String?) -> Boolean,
     onCancel: () -> Unit,
+    errorText: String? = null,
 ) {
     val scope = rememberCoroutineScope()
     var rating by remember { mutableStateOf(initialRating) }
@@ -1683,7 +1862,7 @@ private fun GigReviewSheetContent(
             text = if (revieweeName.isNullOrEmpty()) "Leave a review" else "Review $revieweeName",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             for (value in 1..5) {
@@ -1734,6 +1913,7 @@ private fun GigReviewSheetContent(
                 },
             )
         }
+        SheetInlineError(errorText, testTag = "gigDetail.review.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(label = "Not now", modifier = Modifier.weight(1f), onClick = onCancel)
             SheetPrimaryButton(
@@ -1763,6 +1943,7 @@ private fun GigReviewSheetContent(
 fun GigReportSheetContent(
     onSubmit: (GigReportReason, String?) -> Unit,
     onCancel: () -> Unit,
+    errorText: String? = null,
 ) {
     var selected by remember { mutableStateOf<GigReportReason?>(null) }
     var details by remember { mutableStateOf("") }
@@ -1778,7 +1959,7 @@ fun GigReportSheetContent(
             text = "Report this task",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             GigReportReason.entries.forEach { reason ->
@@ -1819,6 +2000,7 @@ fun GigReportSheetContent(
                 },
             )
         }
+        SheetInlineError(errorText, testTag = "gigDetail.reportSheet.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(label = "Cancel", modifier = Modifier.weight(1f), onClick = onCancel)
             SheetDestructiveButton(
@@ -1955,6 +2137,7 @@ fun GigRescheduleSheetContent(
     initialStart: LocalDateTime?,
     onConfirm: (LocalDateTime, String?) -> Unit,
     onCancel: () -> Unit,
+    errorText: String? = null,
 ) {
     var pickedStart by remember { mutableStateOf<LocalDateTime?>(null) }
     var note by remember { mutableStateOf("") }
@@ -1971,12 +2154,12 @@ fun GigRescheduleSheetContent(
             text = "Reschedule this task",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = "Pick a new start time — your helper will be notified.",
             fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(
             modifier =
@@ -2040,6 +2223,7 @@ fun GigRescheduleSheetContent(
                 },
             )
         }
+        SheetInlineError(errorText, testTag = "gigDetail.rescheduleSheet.error")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(
                 label = "Back",
@@ -2070,6 +2254,48 @@ private val RescheduleStartFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a", Locale.US)
 
 // MARK: - Shared bits
+
+/**
+ * One open sheet's submit. A tap while the request is in flight is ignored
+ * (the button keeps its look), and the last failure stays on the sheet —
+ * the screen toast is drawn beneath the sheet's window, so it is not enough.
+ */
+internal class SheetSubmit {
+    var inFlight by mutableStateOf(false)
+        private set
+    var error by mutableStateOf<String?>(null)
+
+    fun begin(): Boolean {
+        if (inFlight) return false
+        inFlight = true
+        error = null
+        return true
+    }
+
+    fun end() {
+        inFlight = false
+    }
+
+    fun fail(message: String) {
+        error = message
+    }
+}
+
+/** A failed sheet action's message, in the Edit bid sheet's inline-error treatment. */
+@Composable
+internal fun SheetInlineError(
+    text: String?,
+    testTag: String,
+) {
+    if (!text.isNullOrEmpty()) {
+        Text(
+            text = text,
+            style = PantopusTextStyle.small,
+            color = PantopusColors.error,
+            modifier = Modifier.testTag(testTag),
+        )
+    }
+}
 
 @Composable
 private fun ReasonRadioRow(
@@ -2181,7 +2407,7 @@ private fun SheetGhostButton(
             text = label,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }

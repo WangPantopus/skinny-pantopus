@@ -28,6 +28,15 @@ object GigStopPresentation {
                 when (progress.financialStatus) {
                     "refunded" -> "$task The refund is confirmed; your bank may take additional time to show it."
                     "released" -> "$task The payment hold release is confirmed."
+                    "fee_charged" -> {
+                        val fee = progress.receipt?.feeCents
+                        val released = progress.receipt?.releasedCents
+                        if (fee != null && released != null) {
+                            "$task Cancellation fee ${money(fee)} charged · ${money(released)} released."
+                        } else {
+                            task
+                        }
+                    }
                     else -> task
                 }
             }

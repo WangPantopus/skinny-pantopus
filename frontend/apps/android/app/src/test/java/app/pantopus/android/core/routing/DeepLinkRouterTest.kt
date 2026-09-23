@@ -485,8 +485,9 @@ class DeepLinkRouterTest {
     }
 
     @Test
-    fun mailbox_without_vacation_falls_back() {
-        assertTrue(DeepLinkRouter.resolveString("pantopus://mailbox") is DeepLinkRouter.Destination.Unknown)
+    fun mailbox_root_opens_the_mail_tab() {
+        // `/mailbox` is the Mail Day summary notification's link: the Mail tab.
+        assertEquals(DeepLinkRouter.Destination.Mailbox, DeepLinkRouter.resolveString("pantopus://mailbox"))
     }
 
     // MARK: - T6.1c P5 — Auth deep links
@@ -667,8 +668,8 @@ class DeepLinkRouterTest {
     }
 
     @Test
-    fun mailbox_without_subroute_falls_back() {
-        assertTrue(DeepLinkRouter.resolveString("pantopus://mailbox") is DeepLinkRouter.Destination.Unknown)
+    fun mailbox_without_subroute_opens_the_mail_tab() {
+        assertEquals(DeepLinkRouter.Destination.Mailbox, DeepLinkRouter.resolveString("https://pantopus.app/mailbox"))
     }
 
     // MARK: - Verify-landlord routes (P2.1 / A12.5–A12.7)

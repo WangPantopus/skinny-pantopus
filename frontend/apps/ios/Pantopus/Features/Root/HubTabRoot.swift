@@ -144,6 +144,9 @@ public enum HubRoute: Hashable {
     /// "My Businesses" row (previously fell back to the NotYetAvailable
     /// placeholder).
     case myBusinesses
+    /// The viewer's own listings (Active / Sold / Drafts). Reached from the
+    /// Hub nav-drawer's "My Listings" row.
+    case myListings
     case pulsePost(postId: String)
     /// Bills list for a home (T5.2.2 / P13).
     case homeBills(homeId: String)
@@ -231,7 +234,7 @@ public enum HubRoute: Hashable {
     /// `jumpToStep == .price`).
     case editListing(listingId: String, jumpToStep: ListingComposeStep?)
     /// Invoice detail (T2.6 TransactionalDetailShell · invoice variant).
-    /// Reached from wallet / payments surfaces when those land.
+    /// Reached from invoice notification links (`DeepLinkRouter.invoiceDetail`).
     case invoiceDetail(invoiceId: String)
     /// Bell icon target. Replaced by the real notifications screen in T4.1.
     case notifications
@@ -324,6 +327,10 @@ public enum HubRoute: Hashable {
     /// preview's "Manage privacy" link when it lands in the Hub stack
     /// (via the `pantopus://identity/preview` deep link).
     case privacySettings
+    /// Privacy → "Download your data": the existing Data export screen.
+    case dataExport
+    /// Privacy → "What we collect": a Legal document (the privacy policy).
+    case legalContent(LegalDocument)
     /// Edit profile form — pushed by Settings → "Edit profile". P1.4.
     case editProfile
     /// Mailbox search target (P4.2). Client-side filter over the user's
@@ -633,6 +640,7 @@ public struct HubTabRoot: View {
             stackRoot
                 .navigationDestination(for: HubRoute.self) { route in
                     destination(for: route) { path.append($0) }
+                        .modifier(OwnHeaderBar(drawsOwnHeader: Self.drawsOwnHeader(route)))
                 }
             #if DEBUG
                 .sheet(item: $debugSheet) { route in
@@ -720,6 +728,49 @@ public struct HubTabRoot: View {
         )
     }
 
+    /// Pushed screens that draw their own header (a Back or Close of their
+    /// own). The stack's system bar is hidden on them so each shows exactly
+    /// one Back. Every other route keeps the system bar, which is its only
+    /// Back (lists, `.homeDashboard`, placeholders).
+    static func drawsOwnHeader(_ route: HubRoute) -> Bool {
+        switch route {
+        case .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
+             .documentDetail, .packageDetail, .homePhotos, .trustedNeighbors, .propertyDetails,
+             .helpCenter, .publicProfile, .homeSettings, .homeSecurity, .homeOwnershipSecurity,
+             .homeNotifications, .privacySettings, .menu, .paymentsSettings, .mailItemDetail,
+             .gigDetail, .listingDetail, .invoiceDetail, .businessProfile, .businessProfilePage,
+             .editBusinessPage, .pulseFeed, .gigsFeed, .marketplace, .beaconInsights,
+             .supportTrainDetail, .manageTrain, .discoverHub, .chatConversation, .todayDetail,
+             .explore, .ceremonialMailOpen, .mailboxMap, .vacationHold, .wallet,
+             .walletActivityList, .stamps, .mailTask, .mailTaskList, .mailTranslation,
+             .packageGig, .earn, .businessOwner, .viewAs, .cancelClaim, .propertyCorrection,
+             .quickPostGig, .editGig, .transferOwnership, .mailRoutingQueue, .mailDay:
+            true
+        // Forms and wizards with their own Close.
+        case .logMaintenance, .editMaintenance, .startPoll, .editAccessCode, .addCalendarEvent,
+             .addEmergencyInfo, .uploadDocument, .addHouseholdTask, .editPersona,
+             .composeBroadcast, .composePost, .editPost, .editSignup, .addGuest, .addBill,
+             .claimOwnership, .verifyResidency, .verifyLandlord, .createBusiness, .composeGig,
+             .composeListing, .editListing, .startSupportTrain, .ceremonialMail:
+            true
+        case let .scheduling(route):
+            schedulingDrawsOwnHeader(route)
+        default:
+            false
+        }
+    }
+
+    /// Scheduling screens that draw their own Back or Close.
+    static func schedulingDrawsOwnHeader(_ route: SchedulingRoute) -> Bool {
+        switch route {
+        case .homeEventDetail, .homeEventEditor, .bookingLimits, .blockOffTime, .resourceEditor,
+             .scheduleVisit, .messagePreview:
+            true
+        default:
+            false
+        }
+    }
+
     /// The view rooting this instance's NavigationStack, by mode.
     @ViewBuilder
     private var stackRoot: some View {
@@ -778,7 +829,7 @@ public struct HubTabRoot: View {
         case .search: return .universalSearch
         case .discoverNeighbors: return .discoverHub
         case .myBeacon: return .myBeacon
-        case .myListings: return .marketplace
+        case .myListings: return .myListings
         case .myPulse: return .myPosts
         case .myTasks: return .myTasks
         case .myBids: return .myBids
@@ -1025,6 +1076,30 @@ public struct HubTabRoot: View {
             path.append(.homeDashboard(homeId: homeId))
             path.append(.waitingRoom(homeId: homeId))
             _ = router.consume()
+        case .mailbox:
+            // `/mailbox` (the Mail Day summary notification) — the Mail tab's
+            // own root.
+            path.removeAll { _ in true }
+            _ = router.consume()
+        case let .mailItem(mailId):
+            // A mail notification's letter, in the item detail the mailbox
+            // list opens; pushed through the mailbox root like the other
+            // mailbox links so Back returns to the mailbox.
+            path.append(.mailboxRoot)
+            path.append(.mailItemDetail(mailId: mailId))
+            _ = router.consume()
+        case let .neighborMessage(messageId):
+            path.append(.neighborMessage(messageId: messageId))
+            _ = router.consume()
+        case let .bookingDetail(bookingId, owner):
+            path.append(.scheduling(.bookingDetail(owner: owner, bookingId: bookingId)))
+            _ = router.consume()
+        case .myBookings:
+            path.append(.scheduling(.customerMyBookings))
+            _ = router.consume()
+        case let .invoiceDetail(invoiceId):
+            path.append(.invoiceDetail(invoiceId: invoiceId))
+            _ = router.consume()
         default:
             break
         }
@@ -1039,7 +1114,7 @@ public struct HubTabRoot: View {
              .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home:
             false
         case .vacationHold, .mailDay, .stamps, .mailTask,
-             .mailTranslation, .unboxing, .packageGig, .earn:
+             .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem:
             tab == .mail
         default:
             tab == .place
@@ -1175,7 +1250,30 @@ public struct HubTabRoot: View {
         if path.hasPrefix("/gigs") {
             return .gigsFeed
         }
+        // Hub status pills: "N notifications" and "$X ready · Tap to
+        // withdraw". The wallet holds the balance and the Withdraw action.
+        if path.hasPrefix("/app/notifications") {
+            return .notifications
+        }
+        if path.hasPrefix("/app/settings/payments") || path.hasPrefix("/app/wallet") {
+            return .wallet
+        }
+        if path.hasPrefix("/app/map") {
+            return .explore
+        }
+        if let businessId = Self.businessId(inDashboardRoute: path) {
+            return .businessOwner(businessId: businessId)
+        }
         return .placeholder(label: item.title)
+    }
+
+    /// Extracts `<id>` from `/app/businesses/<id>/dashboard`.
+    private static func businessId(inDashboardRoute route: String) -> String? {
+        let prefix = "/app/businesses/"
+        guard route.hasPrefix(prefix) else { return nil }
+        let rest = route.dropFirst(prefix.count)
+        let id = rest.split { $0 == "/" || $0 == "?" }.first.map(String.init) ?? ""
+        return id.isEmpty ? nil : id
     }
 
     /// Two-letter initials derived from a display name. Falls back to
@@ -1238,6 +1336,15 @@ public struct HubTabRoot: View {
                     },
                     onRegister: { Task { @MainActor in push(.createBusiness) } },
                     onClaim: { Task { @MainActor in push(.discoverBusinesses) } }
+                )
+            )
+        case .myListings:
+            MyListingsView(
+                viewModel: MyListingsViewModel(
+                    onOpenListing: { listingId in
+                        Task { @MainActor in push(.listingDetail(listingId: listingId)) }
+                    },
+                    onCompose: { Task { @MainActor in push(.composeListing) } }
                 )
             )
         case .myClaims:
@@ -1326,6 +1433,9 @@ public struct HubTabRoot: View {
                 },
                 onSendMail: { _ in
                     Task { @MainActor in push(.ceremonialMail) }
+                },
+                onOpenOwnership: { id in
+                    Task { @MainActor in push(.homeOwnershipSecurity(homeId: id)) }
                 }
             )
         case let .homeMaintenance(homeId):
@@ -1897,7 +2007,7 @@ public struct HubTabRoot: View {
                             displayName: profile.displayName,
                             initials: Self.initials(from: profile.displayName),
                             identityKind: nil,
-                            verified: profile.verified ?? false
+                            verified: profile.hasVerifiedResidency
                         )))
                     }
                 },
@@ -1921,7 +2031,6 @@ public struct HubTabRoot: View {
                         items: ["Check out this business on Pantopus — \(InviteLinks.downloadURLString)"]
                     )
                 },
-                onOpenReport: { Task { @MainActor in push(.placeholder(label: "Report business")) } },
                 onEdit: { Task { @MainActor in push(.editBusinessPage(businessId: businessId)) } }
             )
         case let .businessProfilePage(businessId, pageSlug):
@@ -1937,7 +2046,6 @@ public struct HubTabRoot: View {
                         items: ["Check out this business on Pantopus — \(InviteLinks.downloadURLString)"]
                     )
                 },
-                onOpenReport: { Task { @MainActor in push(.placeholder(label: "Report business")) } },
                 onEdit: { Task { @MainActor in push(.editBusinessPage(businessId: businessId)) } }
             )
         case let .businessPages(businessId):
@@ -2457,14 +2565,14 @@ public struct HubTabRoot: View {
             ManageTrainView(
                 viewModel: ManageTrainViewModel(trainId: trainId),
                 onClose: { Task { @MainActor in if !path.isEmpty { path.removeLast() } } },
-                onOpenAnalytics: { id in
-                    Task { @MainActor in push(.placeholder(label: "Train analytics · \(id)")) }
+                onOpenAnalytics: { _ in
+                    Task { @MainActor in push(.placeholder(label: "Train analytics")) }
                 },
-                onEditDates: { id in
-                    Task { @MainActor in push(.placeholder(label: "Edit dates · \(id)")) }
+                onEditDates: { _ in
+                    Task { @MainActor in push(.placeholder(label: "Edit dates")) }
                 },
-                onInviteHelpers: { id in
-                    Task { @MainActor in push(.placeholder(label: "Invite helpers · \(id)")) }
+                onInviteHelpers: { _ in
+                    Task { @MainActor in push(.placeholder(label: "Invite helpers")) }
                 }
             )
         case .discoverHub:
@@ -2837,9 +2945,10 @@ public struct HubTabRoot: View {
             MailboxMapView { pop() }
         case .vacationHold:
             VacationHoldView(
-                viewModel: VacationHoldViewModel {
-                    pop()
-                }
+                // Keep the `onBack:` label: as a trailing closure it binds to
+                // the last closure (`onPickToDate`) and Back does nothing.
+                // swiftlint:disable:next trailing_closure
+                viewModel: VacationHoldViewModel(onBack: { pop() })
             )
         case let .mailDay(variant):
             MailDayView(viewModel: MailDayViewModel(variant: variant)) {
@@ -2986,7 +3095,16 @@ public struct HubTabRoot: View {
                 onEdit: { Task { @MainActor in push(.editProfile) } }
             )
         case .privacySettings:
-            PrivacyView(viewModel: PrivacySettingsViewModel()) { Task { @MainActor in pop() } }
+            PrivacyView(viewModel: PrivacySettingsViewModel { link in
+                switch link {
+                case .dataExport: push(.dataExport)
+                case .privacyPolicy: push(.legalContent(.privacy))
+                }
+            }) { Task { @MainActor in pop() } }
+        case .dataExport:
+            DataExportView { Task { @MainActor in pop() } }
+        case let .legalContent(doc):
+            LegalContentView(document: doc) { Task { @MainActor in pop() } }
         case let .waitingRoom(homeId):
             WaitingRoomView(
                 viewModel: WaitingRoomViewModel(homeId: homeId, state: .active),
@@ -3204,7 +3322,6 @@ private struct BusinessProfileDestination: View {
     let onBack: @MainActor () -> Void
     let onOpenMessages: @MainActor (InboxConversationDestination) -> Void
     let onShare: @MainActor () -> Void
-    let onOpenReport: @MainActor () -> Void
     let onEdit: @MainActor () -> Void
 
     @Environment(\.openURL) private var openURL
@@ -3216,7 +3333,6 @@ private struct BusinessProfileDestination: View {
             onBack: onBack,
             onOpenMessages: onOpenMessages,
             onShare: onShare,
-            onOpenReport: onOpenReport,
             onOpenWebsite: { url in openURL(url) },
             onEdit: onEdit
         )
@@ -3238,6 +3354,20 @@ extension HubRoute {
         switch self {
         case .addHome, .joinHome: true
         default: false
+        }
+    }
+}
+
+/// Hides the enclosing stack's system bar on a pushed screen that draws its
+/// own header, so the screen shows one Back instead of two.
+struct OwnHeaderBar: ViewModifier {
+    let drawsOwnHeader: Bool
+
+    func body(content: Content) -> some View {
+        if drawsOwnHeader {
+            content.toolbar(.hidden, for: .navigationBar)
+        } else {
+            content
         }
     }
 }

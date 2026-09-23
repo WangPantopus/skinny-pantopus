@@ -39,6 +39,8 @@ public enum YouRoute: Hashable {
     case placeholder(label: String)
     case helpCenter
     case privacySettings
+    /// Privacy → "Download your data": the existing Data export screen.
+    case dataExport
     case legal
     case legalContent(LegalDocument)
     case addHome
@@ -445,9 +447,12 @@ public struct YouTabRoot: View {
     /// True when opened from the `monthly_receipt` push — the Monthly
     /// Receipt card renders expanded (RN `/(tabs)/profile?tab=receipt`).
     private let expandMonthlyReceipt: Bool
+    /// Closes the profile cover (RootTabView presents it full screen).
+    private let onClose: (@MainActor () -> Void)?
 
-    public init(expandMonthlyReceipt: Bool = false) {
+    public init(expandMonthlyReceipt: Bool = false, onClose: (@MainActor () -> Void)? = nil) {
         self.expandMonthlyReceipt = expandMonthlyReceipt
+        self.onClose = onClose
     }
 
     public var body: some View {
@@ -456,11 +461,13 @@ public struct YouTabRoot: View {
                 expandMonthlyReceipt: expandMonthlyReceipt,
                 onAction: { tile in handleAction(tile) },
                 onSection: { row in handleSection(row) },
-                onLogOut: { showsSignOutConfirm = true }
+                onLogOut: { showsSignOutConfirm = true },
+                onClose: onClose
             )
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: YouRoute.self) { route in
                 destination(for: route)
+                    .modifier(OwnHeaderBar(drawsOwnHeader: Self.drawsOwnHeader(route)))
             }
             .confirmationDialog(
                 "Sign out of Pantopus?",
@@ -594,6 +601,39 @@ public struct YouTabRoot: View {
                     ) { debugDisambiguateFormMailId = nil }
                 }
             #endif
+        }
+    }
+
+    /// Pushed screens that draw their own header (a Back or Close of their
+    /// own). The stack's system bar is hidden on them so each shows exactly
+    /// one Back. Every other route keeps the system bar, which is its only
+    /// Back (lists, `.homeDashboard`, placeholders).
+    static func drawsOwnHeader(_ route: YouRoute) -> Bool {
+        switch route {
+        case .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
+             .documentDetail, .packageDetail, .helpCenter, .publicProfile, .pulsePost,
+             .legalContent, .privacySettings, .legal, .settings, .paymentsSettings,
+             .mailItemDetail, .gigDetail, .listingDetail, .businessProfile, .editBusinessPage,
+             .gigsFeed, .marketplace, .audienceProfile, .supportTrainDetail, .manageTrain,
+             .chatConversation, .explore, .ceremonialMailOpen, .mailboxMap, .vacationHold,
+             .stamps, .mailTask, .mailTaskList, .mailTranslation, .packageGig, .earn,
+             .businessOwner, .viewAs, .membershipDetail, .identityCenter,
+             .creatorAudienceMembers, .broadcastDetail, .creatorInbox,
+             .creatorInboxConversation, .fanInbox, .cancelClaim, .editGig,
+             .transferOwnership, .mailRoutingQueue, .mailDay:
+            true
+        // Forms and wizards with their own Close.
+        case .logMaintenance, .editMaintenance, .startPoll, .editAccessCode, .addCalendarEvent,
+             .addEmergencyInfo, .uploadDocument, .addHouseholdTask, .editPersona,
+             .composeBroadcast, .composePost, .editPost, .editSignup, .addBill,
+             .claimOwnership, .verifyResidency, .verifyLandlord, .businessWaitlist,
+             .createBusiness, .composeTask, .composeListing, .editListing,
+             .startSupportTrain, .ceremonialMail, .privacyHandshake:
+            true
+        case let .scheduling(route):
+            HubTabRoot.schedulingDrawsOwnHeader(route)
+        default:
+            false
         }
     }
 
@@ -865,8 +905,27 @@ public struct YouTabRoot: View {
             break
         }
         #endif
+        // A Home row with no shared Home behind it (none yet, or still in
+        // verification) opens My homes: Add a home, Find and the
+        // verification steps live there. The Business identity is always
+        // unbound here; My businesses manages, creates and claims them.
+        if Self.homeScopedRouteKeys.contains(row.routeKey) {
+            path.append(.myHomes)
+            return
+        }
+        if row.routeKey.hasPrefix("me.business.") {
+            path.append(.myBusinesses)
+            return
+        }
         path.append(.placeholder(label: row.label))
     }
+
+    /// Home identity rows that need a bound Home id.
+    private static let homeScopedRouteKeys: Set<String> = [
+        "me.members", "me.owners", "me.access", "me.bills", "me.maintenance",
+        "me.tasks", "me.packages", "me.emergency", "me.docs", "me.polls",
+        "me.home.scheduling"
+    ]
 
     private func popAfterListingUpdate(_: String) {
         Task { @MainActor in
@@ -1035,9 +1094,10 @@ public struct YouTabRoot: View {
             )
         case .vacationHold:
             VacationHoldView(
-                viewModel: VacationHoldViewModel {
-                    Task { @MainActor in pop() }
-                }
+                // Keep the `onBack:` label: as a trailing closure it binds to
+                // the last closure (`onPickToDate`) and Back does nothing.
+                // swiftlint:disable:next trailing_closure
+                viewModel: VacationHoldViewModel(onBack: { Task { @MainActor in pop() } })
             )
         case let .mailItemDetail(mailId):
             // T6.5b (P20) — Generic A17.1 mail detail. P21–P23 will
@@ -1102,7 +1162,14 @@ public struct YouTabRoot: View {
         case .privacySettings:
             // `PrivacyView` (not a bare `GroupedListView`) — it hosts the
             // account-delete confirm sheet the destructive row opens.
-            PrivacyView(viewModel: PrivacySettingsViewModel()) { Task { @MainActor in pop() } }
+            PrivacyView(viewModel: PrivacySettingsViewModel { link in
+                switch link {
+                case .dataExport: path.append(.dataExport)
+                case .privacyPolicy: path.append(.legalContent(.privacy))
+                }
+            }) { Task { @MainActor in pop() } }
+        case .dataExport:
+            DataExportView { Task { @MainActor in pop() } }
         case .legal:
             LegalIndexView(
                 onBack: { Task { @MainActor in pop() } },
@@ -1552,8 +1619,12 @@ public struct YouTabRoot: View {
             )
         case let .supportTrainDetail(supportTrainId):
             SupportTrainDetailView(
-                viewModel: SupportTrainDetailViewModel(trainId: supportTrainId)
-            ) { Task { @MainActor in pop() } }
+                viewModel: SupportTrainDetailViewModel(trainId: supportTrainId),
+                // Keep the `onBack:` label: as a trailing closure it binds to
+                // the last closure (`onMessageHost`) and Back does nothing.
+                // swiftlint:disable:next trailing_closure
+                onBack: { Task { @MainActor in pop() } }
+            )
         case .searchSupportTrains:
             SupportTrainsSearchView(
                 viewModel: SupportTrainsSearchViewModel(
@@ -1619,14 +1690,14 @@ public struct YouTabRoot: View {
             ManageTrainView(
                 viewModel: ManageTrainViewModel(trainId: trainId),
                 onClose: { Task { @MainActor in pop() } },
-                onOpenAnalytics: { id in
-                    Task { @MainActor in path.append(.placeholder(label: "Train analytics · \(id)")) }
+                onOpenAnalytics: { _ in
+                    Task { @MainActor in path.append(.placeholder(label: "Train analytics")) }
                 },
-                onEditDates: { id in
-                    Task { @MainActor in path.append(.placeholder(label: "Edit dates · \(id)")) }
+                onEditDates: { _ in
+                    Task { @MainActor in path.append(.placeholder(label: "Edit dates")) }
                 },
-                onInviteHelpers: { id in
-                    Task { @MainActor in path.append(.placeholder(label: "Invite helpers · \(id)")) }
+                onInviteHelpers: { _ in
+                    Task { @MainActor in path.append(.placeholder(label: "Invite helpers")) }
                 }
             )
         case .identityCenter:
@@ -2268,7 +2339,8 @@ public struct YouTabRoot: View {
                 },
                 onSendMail: { _ in
                     Task { @MainActor in path.append(.ceremonialMail) }
-                }
+                },
+                onOpenOwnership: { id in path.append(.homeOwners(homeId: id)) }
             )
         case let .homeTasks(homeId):
             HouseholdTasksListView(
@@ -2396,7 +2468,7 @@ public struct YouTabRoot: View {
                             displayName: profile.displayName,
                             initials: Self.initials(from: profile.displayName),
                             identityKind: nil,
-                            verified: profile.verified ?? false
+                            verified: profile.hasVerifiedResidency
                         )))
                     }
                 },
@@ -2419,13 +2491,7 @@ public struct YouTabRoot: View {
                         items: ["Check out this business on Pantopus — \(InviteLinks.downloadURLString)"]
                     )
                 },
-                onOpenReport: {
-                    Task { @MainActor in path.append(.placeholder(label: "Report business")) }
-                },
                 onOpenWebsite: { url in openURL(url) },
-                onBook: {
-                    Task { @MainActor in path.append(.placeholder(label: "Book")) }
-                },
                 onEdit: {
                     Task { @MainActor in path.append(.editBusinessPage(businessId: businessId)) }
                 }

@@ -44,7 +44,7 @@ final class HubViewModelTests: XCTestCase {
           "availability":{"hasHome":\(homeCount > 0),"hasBusiness":false,"hasPayoutMethod":false},
           "homes":[\(homeCount > 0 ? home : "")],
           "businesses":[],
-          "setup":{"steps":[{"key":"verify_home","done":\(allDone)}],"allDone":\(allDone),
+          "setup":{"steps":[{"key":"verify","done":\(allDone)}],"allDone":\(allDone),
                    "profileCompleteness":{"score":\(score),
                                           "checks":{"firstName":true,"lastName":true,"photo":true,"bio":true,"skills":true},
                                           "missingFields":[]}},

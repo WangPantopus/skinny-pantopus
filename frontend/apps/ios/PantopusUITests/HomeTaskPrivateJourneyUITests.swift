@@ -75,7 +75,7 @@ final class HomeTaskPrivateJourneyUITests: XCTestCase {
         try tapButton("Choose attachment")
         try chooseDownloadedFixture()
         try tapButton("Save or retry this attachment")
-        try require(app.staticTexts["Server error 503. Please try again."].firstMatch.waitForExistence(timeout: 20))
+        try require(app.staticTexts["Something went wrong on our side. Please try again."].firstMatch.waitForExistence(timeout: 20))
         XCTAssertFalse(element("homeTaskMedia.notice").exists)
         try tapButton("Save or retry this attachment")
         try require(app.staticTexts["Private attachment saved."].firstMatch.waitForExistence(timeout: 30))

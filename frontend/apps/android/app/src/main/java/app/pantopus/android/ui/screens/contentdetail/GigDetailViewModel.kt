@@ -13,6 +13,7 @@ import app.pantopus.android.data.api.models.gigs.GigBidDto
 import app.pantopus.android.data.api.models.gigs.GigChangeOrderDto
 import app.pantopus.android.data.api.models.gigs.GigChangeOrderMutationResponse
 import app.pantopus.android.data.api.models.gigs.GigChangeOrderType
+import app.pantopus.android.data.api.models.gigs.GigCreator
 import app.pantopus.android.data.api.models.gigs.GigDto
 import app.pantopus.android.data.api.models.gigs.GigFulfillmentStatus
 import app.pantopus.android.data.api.models.gigs.GigPaymentResponse
@@ -26,6 +27,7 @@ import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.data.api.models.offers.UpdateBidBody
 import app.pantopus.android.data.api.models.payments.TipValidation
 import app.pantopus.android.data.api.models.reviews.CreateReviewBody
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
@@ -38,10 +40,12 @@ import app.pantopus.android.data.payments.PaymentsRepository
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.reviews.ReviewsRepository
 import app.pantopus.android.ui.screens.gigs.GigsCategory
+import app.pantopus.android.ui.screens.gigs.OPEN_TO_OFFERS_LABEL
 import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationCoordinator
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
 import app.pantopus.android.ui.screens.gigs.checkout.GigCheckoutIdentity
 import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
+import app.pantopus.android.ui.screens.gigs.isOpenToOffers
 import app.pantopus.android.ui.screens.gigs.refunds.GigRefundCoordinator
 import app.pantopus.android.ui.screens.gigs.refunds.GigRefundFactory
 import app.pantopus.android.ui.screens.marketplace.ListingGradient
@@ -61,6 +65,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -95,6 +100,12 @@ data class GigActiveTaskUi(
      * (`POST /worker-release`, `backend/routes/gigs.js:5954`).
      */
     val showCantMakeIt: Boolean = false,
+)
+
+/** What the owner confirms: the worker's name and, on a paid task, the held amount confirming releases. */
+data class CompletionConfirmation(
+    val workerName: String,
+    val amountCents: Int?,
 )
 
 @HiltViewModel
@@ -461,7 +472,10 @@ class GigDetailViewModel
 
         fun canOpenRefunds(): Boolean =
             viewerIsOwner &&
-                _payment.value?.payment?.let { GigRefundCoordinator.validTarget(gigId, it, currentUserId()) } == true
+                // A charged cancellation or no-show fee is not self-refundable in the app.
+                _payment.value?.payment?.let {
+                    it.gigFee == null && GigRefundCoordinator.validTarget(gigId, it, currentUserId())
+                } == true
 
         fun openRefunds() {
             if (!canOpenRefunds()) return
@@ -1046,6 +1060,7 @@ class GigDetailViewModel
             amount: Double,
             message: String?,
             proposedTime: String? = null,
+            onFailure: (NetworkError) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             val bidId = _viewerBid.value?.id
@@ -1069,6 +1084,7 @@ class GigDetailViewModel
                     }
                     is NetworkResult.Failure -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error)
                         onResult(false)
                     }
                 }
@@ -1290,7 +1306,9 @@ class GigDetailViewModel
             val revision = ++paymentGeneration
             val mayReadPayerSummary = uid != null && uid != gig.acceptedBy
             val assignedPlus = gig.status?.lowercase() in listOf("assigned", "in_progress", "completed")
-            if (!mayReadPayerSummary || !assignedPlus) {
+            // A cancelled task shows its card only for a charged no-show or cancellation fee.
+            val cancelledWithPayment = gig.status?.lowercase() == "cancelled" && gig.paymentId != null
+            if (!mayReadPayerSummary || !(assignedPlus || cancelledWithPayment)) {
                 _payment.value = null
                 return
             }
@@ -1305,16 +1323,22 @@ class GigDetailViewModel
                     return@launch
                 }
                 when (result) {
-                    is NetworkResult.Success ->
-                        _payment.value =
-                            result.data.takeIf {
-                                val receipt = it.payment
-                                receipt != null && receipt.id == gig.paymentId && receipt.gigId == gig.id &&
-                                    receipt.payerId == gig.userId && receipt.payeeId == gig.acceptedBy
-                            }
+                    is NetworkResult.Success -> _payment.value = result.data.takeIf { paymentCardMatches(it, gig, assignedPlus) }
                     is NetworkResult.Failure -> _payment.value = null
                 }
             }
+        }
+
+        /** The gig's own payer receipt; a cancelled task keeps it only for a charged fee. */
+        private fun paymentCardMatches(
+            response: GigPaymentResponse,
+            gig: GigDto,
+            assignedPlus: Boolean,
+        ): Boolean {
+            val receipt = response.payment ?: return false
+            return receipt.id == gig.paymentId && receipt.gigId == gig.id &&
+                receipt.payerId == gig.userId && receipt.payeeId == gig.acceptedBy &&
+                (assignedPlus || receipt.gigFee != null)
         }
 
         // MARK: - Phase 5b · change orders (work item 2)
@@ -1430,6 +1454,21 @@ class GigDetailViewModel
             return gig.status?.lowercase() in listOf("assigned", "in_progress")
         }
 
+        /**
+         * Why a price change can't be proposed or approved on this task, or null when it can. The server refuses
+         * every price change for now (`PAID_PRICE_CHANGE_UNAVAILABLE`); the sentence says whether the task has a
+         * live payment hold (a payment that isn't canceled or fully refunded).
+         */
+        fun priceChangeUnavailableReason(): String {
+            val gig = rawGig
+            val held = gig?.paymentId != null && gig.paymentStatus?.lowercase() !in setOf("canceled", "refunded_full")
+            return if (held) {
+                "Price changes aren't available once a task has a payment hold."
+            } else {
+                "Price changes aren't available for this task."
+            }
+        }
+
         /** Signed-in viewer id — the Changes card gates per-row actions on it. */
         fun viewerUserId(): String? = currentUserId()
 
@@ -1439,6 +1478,7 @@ class GigDetailViewModel
             description: String,
             amountChange: Double?,
             timeChangeMinutes: Int?,
+            onFailure: (String) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             viewModelScope.launch {
@@ -1458,6 +1498,7 @@ class GigDetailViewModel
                     }
                     is NetworkResult.Failure -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error.message)
                         onResult(false)
                     }
                 }
@@ -1498,6 +1539,7 @@ class GigDetailViewModel
             amount: Double,
             message: String?,
             proposedTime: String? = null,
+            onFailure: (NetworkError) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             if (rawGig?.status?.lowercase() != "open" || viewerIsOwner || viewerHasActiveBid()) {
@@ -1515,11 +1557,15 @@ class GigDetailViewModel
                                 proposedTime = proposedTime,
                             ),
                     )
-                if (result is NetworkResult.Success) {
-                    load()
-                    onResult(true)
-                } else {
-                    onResult(false)
+                when (result) {
+                    is NetworkResult.Success -> {
+                        load()
+                        onResult(true)
+                    }
+                    is NetworkResult.Failure -> {
+                        onFailure(result.error)
+                        onResult(false)
+                    }
                 }
             }
         }
@@ -1718,6 +1764,7 @@ class GigDetailViewModel
             bidId: String,
             amount: Double,
             message: String?,
+            onFailure: (String) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             if (_bidActionInFlight.value != null || bidCheckout.state.value.blocksNewBidActions) {
@@ -1736,6 +1783,7 @@ class GigDetailViewModel
                     is NetworkResult.Failure -> {
                         _bidActionInFlight.value = null
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error.message)
                         onResult(false)
                     }
                 }
@@ -1870,6 +1918,7 @@ class GigDetailViewModel
         fun workerRunningLate(
             etaMinutes: Int?,
             note: String?,
+            onFailure: (String) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             viewModelScope.launch {
@@ -1888,6 +1937,7 @@ class GigDetailViewModel
                     }
                     is NetworkResult.Failure -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error.message)
                         onResult(false)
                     }
                 }
@@ -1962,6 +2012,25 @@ class GigDetailViewModel
         }
 
         /** Confirm the loaded work only within the original account and screen. */
+        private val _confirmingCompletion = MutableStateFlow(false)
+
+        /** True while the owner's confirm-completion request runs. */
+        val confirmingCompletion: StateFlow<Boolean> = _confirmingCompletion.asStateFlow()
+
+        /**
+         * The check shown before [confirmCompletion]: the worker's name and, while the task's payment is still an
+         * authorization hold, the amount that confirming charges.
+         */
+        fun completionConfirmation(): CompletionConfirmation? {
+            val gig = rawGig ?: return null
+            val payment = _payment.value?.payment
+            val held = payment?.takeIf { gig.paymentId != null && it.paymentStatus == "authorized" }?.amountTotal
+            return CompletionConfirmation(
+                workerName = Projection.awardWinnerName(gig, _bids.value) ?: "the worker",
+                amountCents = held,
+            )
+        }
+
         fun confirmCompletion() {
             val gig = rawGig ?: return
             val actor = currentUserId() ?: return
@@ -1970,6 +2039,7 @@ class GigDetailViewModel
             val generation = completionGeneration
             val marker = checkoutIdentities.scopeMarker()
             completionInFlight = true
+            _confirmingCompletion.value = true
             completionJob =
                 viewModelScope.launch {
                     try {
@@ -2001,6 +2071,7 @@ class GigDetailViewModel
                                 _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
                         }
                     } finally {
+                        _confirmingCompletion.value = false
                         finishCompletionAttempt(false, actor, marker, generation)
                     }
                 }
@@ -2009,6 +2080,7 @@ class GigDetailViewModel
         /** Either party `POST /report-no-show` — cancels the task with an incident. */
         fun reportNoShow(
             description: String?,
+            onFailure: (String) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             viewModelScope.launch {
@@ -2020,6 +2092,7 @@ class GigDetailViewModel
                     }
                     is NetworkResult.Failure -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error.message)
                         onResult(false)
                     }
                 }
@@ -2032,6 +2105,7 @@ class GigDetailViewModel
         suspend fun submitGigReview(
             rating: Int,
             comment: String?,
+            onFailure: (String) -> Unit = {},
         ): Boolean {
             val target = _reviewState.value as? GigReviewState.Available ?: return false
             val body =
@@ -2049,6 +2123,7 @@ class GigDetailViewModel
                 }
                 is NetworkResult.Failure -> {
                     _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                    onFailure(result.error.message)
                     false
                 }
             }
@@ -2060,6 +2135,7 @@ class GigDetailViewModel
         fun submitReport(
             reason: GigReportReason,
             details: String?,
+            onFailure: (String) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             viewModelScope.launch {
@@ -2070,6 +2146,7 @@ class GigDetailViewModel
                     }
                     is NetworkResult.Failure -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error.message)
                         onResult(false)
                     }
                 }
@@ -2136,6 +2213,7 @@ class GigDetailViewModel
         fun rescheduleTask(
             scheduledStartIso: String,
             note: String?,
+            onFailure: (String) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             viewModelScope.launch {
@@ -2147,6 +2225,7 @@ class GigDetailViewModel
                     }
                     is NetworkResult.Failure -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error.message)
                         onResult(false)
                     }
                 }
@@ -2357,7 +2436,8 @@ class GigDetailViewModel
                         distanceLabel(gig.distanceMiles),
                         relativeAge(gig.createdAt)?.let { if (it == "now") "Just posted" else "posted $it ago" },
                     )
-                val priceLine = gig.price?.let { priceLabel(it, gig.payType) }
+                val openToOffers = isOpenToOffers(gig.payType, gig.acceptedBy)
+                val priceLine = if (openToOffers) OPEN_TO_OFFERS_LABEL else gig.price?.let { priceLabel(it, gig.payType) }
                 val hero =
                     ContentDetailHero(
                         title = gig.title,
@@ -2368,7 +2448,7 @@ class GigDetailViewModel
                             ),
                         meta = metaPieces.takeIf { it.isNotEmpty() }?.joinToString(" · "),
                         priceLine = priceLine,
-                        priceCaption = if (priceLine != null) "budget" else null,
+                        priceCaption = if (priceLine != null && !openToOffers) "budget" else null,
                     )
                 val statStrip = statRows(gig)
                 val modules =
@@ -2412,7 +2492,7 @@ class GigDetailViewModel
                             add(
                                 ContentDetailModule.Bids(
                                     id = "bids",
-                                    title = "$bidCount bids",
+                                    title = "$bidCount ${if (bidCount == 1) "bid" else "bids"}",
                                     sub = bidRangeSub(bids),
                                     bids = bids.map { projectBid(it) },
                                 ),
@@ -2600,14 +2680,15 @@ class GigDetailViewModel
                         distanceLabel(gig.distanceMiles),
                         gig.scheduledStart?.takeIf { it.isNotEmpty() }?.let { formatScheduledStart(it) },
                     )
-                val priceLine = gig.price?.let { priceLabel(it, gig.payType) }
+                val openToOffers = isOpenToOffers(gig.payType, gig.acceptedBy)
+                val priceLine = if (openToOffers) OPEN_TO_OFFERS_LABEL else gig.price?.let { priceLabel(it, gig.payType) }
                 val hero =
                     ContentDetailHero(
                         title = gig.title,
                         categoryChip = null,
                         meta = metaPieces.takeIf { it.isNotEmpty() }?.joinToString(" · "),
                         priceLine = priceLine,
-                        priceCaption = gigV1PriceCaption(priceLine, awarded),
+                        priceCaption = if (openToOffers) null else gigV1PriceCaption(priceLine, awarded),
                     )
                 val modules =
                     buildList {
@@ -2634,7 +2715,7 @@ class GigDetailViewModel
                             add(
                                 ContentDetailModule.Bids(
                                     id = "bids",
-                                    title = "$bidCount bids",
+                                    title = "$bidCount ${if (bidCount == 1) "bid" else "bids"}",
                                     sub = if (awarded) "closed" else null,
                                     bids = bids.map { projectBid(it, if (awarded) gig.acceptedBy else null) },
                                 ),
@@ -2695,7 +2776,7 @@ class GigDetailViewModel
                 return gig.status in listOf("accepted", "awarded", "completed", "in_progress")
             }
 
-            private fun awardWinnerName(
+            internal fun awardWinnerName(
                 gig: GigDto,
                 bids: List<GigBidDto>,
             ): String? {
@@ -2718,12 +2799,25 @@ class GigDetailViewModel
                     id = bid.id,
                     initials = initials.ifEmpty { "?" },
                     displayName = name,
-                    ratingLine = "verified neighbor",
+                    ratingLine = bidderTrustLine(bid.bidderIdentity()),
                     amount = amountLabel,
                     verified = bid.bidderIdentity()?.resolvedVerified() == true,
                     won = won,
                     dimmed = dimmed,
                 )
+            }
+
+            /**
+             * A bid row's trust line, from the bid payload only: "Verified neighbor" when the bidder is
+             * verified, else their rating ("4.8 · 12 jobs"), else no line.
+             */
+            internal fun bidderTrustLine(bidder: GigCreator?): String? {
+                if (bidder == null) return null
+                if (bidder.resolvedVerified()) return "Verified neighbor"
+                val rating = bidder.averageRating?.takeIf { it > 0 } ?: return null
+                val base = String.format(Locale.US, "%.1f", rating)
+                val jobs = bidder.gigsCompleted?.takeIf { it > 0 } ?: return base
+                return "$base · $jobs ${if (jobs == 1) "job" else "jobs"}"
             }
 
             private fun priceLabel(

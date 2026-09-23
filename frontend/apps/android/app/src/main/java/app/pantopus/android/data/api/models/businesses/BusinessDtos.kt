@@ -172,6 +172,9 @@ data class BusinessProfileDetailDto(
     @Json(name = "is_published") val isPublished: Boolean? = null,
     @Json(name = "published_at") val publishedAt: String? = null,
     @Json(name = "verification_status") val verificationStatus: String? = null,
+    // bi0_unverified … bi4_authority: the verified mark and claims follow this,
+    // as on My businesses and the owner header.
+    @Json(name = "identity_verification_tier") val identityVerificationTier: String? = null,
     @Json(name = "primary_location") val primaryLocation: BusinessLocationDto? = null,
     /**
      * Social / booking links keyed by network name. Untyped for the same
@@ -297,6 +300,8 @@ data class BusinessOnboardingDto(
 data class BusinessDashboardProfileDto(
     @Json(name = "is_published") val isPublished: Boolean? = null,
     @Json(name = "updated_at") val updatedAt: String? = null,
+    /** Same field the My businesses card reads for its verified mark. */
+    @Json(name = "identity_verification_tier") val identityVerificationTier: String? = null,
 )
 
 /**

@@ -13,6 +13,7 @@ const emailService = require('../emailService');
 const { buildIcs } = require('./icsService');
 const { isEmailSuppressed } = require('./schedulingShared');
 const notifyPrefs = require('./schedulingNotifyPrefs');
+const { getBusinessMemberIdsByRole } = require('../../utils/businessPermissions');
 
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
@@ -37,6 +38,26 @@ async function getUserContact(userId) {
   if (!userId) return null;
   const { data } = await supabaseAdmin.from('User').select('id, email, name').eq('id', userId).maybeSingle();
   return data || null;
+}
+
+/**
+ * The people who read a booking notification addressed to `userId`. A
+ * business account has no sign-in, so a booking hosted or owned by the
+ * business itself goes to its owners; an assigned host is already a person.
+ */
+async function appRecipients(userId) {
+  if (!userId) return [];
+  try {
+    const { data: user, error } = await supabaseAdmin
+      .from('User').select('account_type').eq('id', userId).maybeSingle();
+    if (error) throw error;
+    if (user?.account_type !== 'business') return [String(userId)];
+    return await getBusinessMemberIdsByRole(userId, ['owner']);
+  } catch (err) {
+    // Keep the old addressee rather than drop the rest of the fan-out.
+    logger.warn('[bookingNotifyService] recipient lookup failed', { userId, error: err.message });
+    return [String(userId)];
+  }
 }
 
 function notifyAppUser(userId, { type, title, body, link, metadata }) {
@@ -103,6 +124,16 @@ async function buildBookingIcs({ booking, eventType, method, organizer }) {
     content: ics,
     contentType: `text/calendar; method=${method}; charset=utf-8`,
   };
+}
+
+/**
+ * The host/owner booking detail link. Home- and business-owned bookings carry
+ * their owner scope so the detail is read under that owner.
+ */
+function hostBookingLink(booking) {
+  const ownerQuery = ['home', 'business'].includes(booking.owner_type)
+    ? `?ot=${booking.owner_type}&oid=${encodeURIComponent(booking.owner_id)}` : '';
+  return `/app/scheduling/bookings/${booking.id}${ownerQuery}`;
 }
 
 /**
@@ -185,21 +216,15 @@ async function notifyBookingEvent({ booking, eventType, page, kind, manageToken 
 
     if (!copy) return;
 
-    const link = `/app/profile/schedule/bookings/${booking.id}`;
+    const link = hostBookingLink(booking);
 
-    // --- Host (always an app user, when assigned) — respect the host's notification prefs ---
-    if (booking.host_user_id && (await notifyPrefs.hostWants(booking.host_user_id, kind))) {
-      await notifyAppUser(booking.host_user_id, {
-        type: copy.invType === 'booking_request' ? 'booking_request' : copy.invType,
-        title: copy.hostTitle,
-        body: copy.hostBody,
-        link,
-        metadata: { booking_id: booking.id, event_type_id: booking.event_type_id, kind },
-      });
-    }
-    // Owner (personal pages where owner != host) — notify if distinct, respecting their prefs.
-    if (booking.owner_user_id && booking.owner_user_id !== booking.host_user_id && (await notifyPrefs.hostWants(booking.owner_user_id, kind))) {
-      await notifyAppUser(booking.owner_user_id, {
+    // --- Host, then owner when distinct — respect each person's notification prefs.
+    // A business host or owner resolves to the business's owners (appRecipients).
+    const hostIds = await appRecipients(booking.host_user_id);
+    const ownerIds = (await appRecipients(booking.owner_user_id)).filter((id) => !hostIds.includes(id));
+    for (const userId of [...hostIds, ...ownerIds]) {
+      if (!(await notifyPrefs.hostWants(userId, kind))) continue;
+      await notifyAppUser(userId, {
         type: copy.invType === 'booking_request' ? 'booking_request' : copy.invType,
         title: copy.hostTitle,
         body: copy.hostBody,
@@ -214,7 +239,9 @@ async function notifyBookingEvent({ booking, eventType, page, kind, manageToken 
         type: copy.invType,
         title: copy.invSubject,
         body: whenInvitee,
-        link,
+        // The host detail is owner-only; an invitee's own bookings live in
+        // My bookings (same rule as the reminder below).
+        link: booking.invitee_user_id === booking.host_user_id ? link : '/app/scheduling/my-bookings',
         metadata: { booking_id: booking.id, kind },
       });
     } else if (booking.invitee_email) {
@@ -241,7 +268,7 @@ async function notifyBookingEvent({ booking, eventType, page, kind, manageToken 
     }
 
     // --- Required attendees (collective/group members) — notify those not already notified ---
-    const alreadyNotified = new Set([booking.host_user_id, booking.owner_user_id, booking.invitee_user_id].filter(Boolean));
+    const alreadyNotified = new Set([...hostIds, ...ownerIds, booking.host_user_id, booking.owner_user_id, booking.invitee_user_id].filter(Boolean).map(String));
     const { data: attendees } = await supabaseAdmin
       .from('BookingAttendee')
       .select('user_id')
@@ -306,27 +333,28 @@ async function sendBookingReminder({ booking, eventType, page, kind, offsetMinut
   const inviteeTz = booking.invitee_timezone || (page && page.timezone) || 'UTC';
   const whenInvitee = formatWhen(booking.start_at, booking.end_at, inviteeTz);
   const label = Number.isFinite(offsetMinutes) ? formatLead(offsetMinutes) : (kind === 'reminder_1h' ? 'in about an hour' : 'tomorrow');
-  const ownerQuery = ['home', 'business'].includes(booking.owner_type)
-    ? `?ot=${booking.owner_type}&oid=${encodeURIComponent(booking.owner_id)}` : '';
-  const link = `/app/scheduling/bookings/${booking.id}${ownerQuery}`;
+  const link = hostBookingLink(booking);
 
-  let hostEmail = null;
-  if (booking.host_user_id) {
-    const prefs = await notifyPrefs.getPrefs(booking.host_user_id);
+  // A business host resolves to the business's owners (appRecipients).
+  const hostIds = await appRecipients(booking.host_user_id);
+  const hostEmails = [];
+  for (const hostId of hostIds) {
+    const prefs = await notifyPrefs.getPrefs(hostId);
     if (prefs.scheduling?.paused !== true
       && prefs.scheduling?.host?.reminder_sent?.email === true) {
       const { data: host, error } = await supabaseAdmin.from('User')
-        .select('id,email,name').eq('id', booking.host_user_id).maybeSingle();
+        .select('id,email,name').eq('id', hostId).maybeSingle();
       if (error || !host || typeof host.email !== 'string' || !host.email.trim()) {
         throw new Error('BOOKING_REMINDER_HOST_CONTACT_UNAVAILABLE');
       }
-      hostEmail = host.email.trim();
+      hostEmails.push(host.email.trim());
     }
   }
 
   // Host reminder respects the host's 'reminder' notify-me toggle.
-  if (booking.host_user_id && (await notifyPrefs.hostWantsKey(booking.host_user_id, 'reminder'))) {
-    await notifyReminderUser(booking.host_user_id, booking, kind, {
+  for (const hostId of hostIds) {
+    if (!(await notifyPrefs.hostWantsKey(hostId, 'reminder'))) continue;
+    await notifyReminderUser(hostId, booking, kind, {
       type: 'booking_reminder',
       title: `Reminder: ${eventName} ${label}`,
       body: whenInvitee,
@@ -335,7 +363,7 @@ async function sendBookingReminder({ booking, eventType, page, kind, offsetMinut
     });
   }
 
-  if (hostEmail) {
+  for (const hostEmail of hostEmails) {
     const html = bookingEmailHtml({
       heading: `Reminder: ${eventName}`,
       intro: `You are hosting <strong>${escapeHtml(eventName)}</strong>, ${label}.`,
@@ -377,4 +405,4 @@ async function sendBookingReminder({ booking, eventType, page, kind, offsetMinut
   }
 }
 
-module.exports = { notifyBookingEvent, sendBookingReminder, formatWhen, _internal: { bookingEmailHtml, buildBookingIcs } };
+module.exports = { notifyBookingEvent, sendBookingReminder, formatWhen, hostBookingLink, _internal: { bookingEmailHtml, buildBookingIcs } };

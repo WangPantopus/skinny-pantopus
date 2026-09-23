@@ -61,6 +61,7 @@ const optionalAuth = require('../middleware/optionalAuth');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
+const { escapeIlike } = require('../utils/escapeIlike');
 const { geocodeAddress } = require('../utils/geocoding');
 const { validateBusinessAddress } = require('../services/businessAddressService');
 const { computeAddressHash } = require('../utils/normalizeAddress');
@@ -528,7 +529,7 @@ const createBusinessFullSchema = Joi.object({
   username: Joi.string().min(3).max(40).regex(/^[a-z0-9_]+$/).required(),
   name: Joi.string().min(1).max(100).required(),
   email: Joi.string().email().required(),
-  business_type: Joi.string().valid(...Object.keys(ENTITY_TYPES)).optional(),
+  business_type: Joi.string().valid(...Array.from(ENTITY_TYPES)).optional(),
   categories: Joi.array().items(Joi.string().max(50)).max(10).optional(),
   description: Joi.string().max(2000).allow('', null).optional(),
   public_phone: Joi.string().max(30).allow('', null).optional(),
@@ -844,8 +845,8 @@ router.get('/discover', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Query must be at least 2 characters' });
     }
 
-    const fullSearchTerm = `%${queryText}%`;
-    const broadSearchTerm = `%${primaryToken}%`;
+    const fullSearchTerm = `%${escapeIlike(queryText)}%`;
+    const broadSearchTerm = `%${escapeIlike(primaryToken)}%`;
     const candidateLimit = Math.min(Math.max((safeOffset + safeLimit) * 8, 80), 400);
 
     // 1) Candidate business users
@@ -3978,6 +3979,11 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { subject } = req.body;
 
+    // Same gates as POST /api/chat/direct, which this route parallels.
+    if (req.user.accountType === 'curator') {
+      return res.status(403).json({ error: 'This account cannot send messages' });
+    }
+
     // Verify business exists
     const { data: biz } = await supabaseAdmin
       .from('User')
@@ -3986,6 +3992,11 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
       .eq('account_type', 'business')
       .single();
     if (!biz) return res.status(404).json({ error: 'Business not found' });
+
+    const { isBlocked } = require('../services/blockService');
+    if (await isBlocked(userId, businessId)) {
+      return res.status(403).json({ error: 'Unable to message this user' });
+    }
 
     // Check if there's already a direct chat between this user and business
     const { data: existingRooms } = await supabaseAdmin
@@ -4023,7 +4034,6 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
       .insert({
         type: 'direct',
         name: subject || `Inquiry to ${biz.name}`,
-        created_by: userId,
       })
       .select('id')
       .single();
@@ -4039,6 +4049,7 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
 
     res.json({ roomId: room.id, existing: false });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Business inbox start error', { error: err.message });
     res.status(500).json({ error: 'Failed to start conversation' });
   }
@@ -4821,6 +4832,14 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
       return res.status(404).json({ error: 'Recipient not found', code: 'RECIPIENT_NOT_FOUND' });
     }
 
+    // A business can't invoice someone who has blocked it (or whom it has
+    // blocked). 422 (not 403) so clients show this message, which doesn't
+    // reveal the block; a failed block check refuses too.
+    const { isBlocked } = require('../services/blockService');
+    if (await isBlocked(recipient_user_id, businessId)) {
+      return res.status(422).json({ error: 'Unable to send an invoice to this person.' });
+    }
+
     // Calculate totals — fee is deducted from business payout, not added to customer total
     const subtotal_cents = line_items.reduce(
       (sum, item) => sum + item.amount_cents * (item.quantity || 1), 0
@@ -4861,17 +4880,29 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
       .eq('id', businessId)
       .maybeSingle();
 
-    // Send notification to recipient (non-blocking)
-    supabaseAdmin.from('Notification').insert({
-      user_id: recipient_user_id,
-      type: 'invoice_received',
-      title: 'Invoice Received',
-      body: `${bizUser?.name || bizUser?.username || 'A business'} sent you an invoice for $${(total_cents / 100).toFixed(2)}`,
-      data: { invoice_id: invoice.id, business_id: businessId, amount_cents: total_cents },
-    }).then(() => {}).catch(() => {});
+    // Notify the recipient (non-blocking) through the shared notification
+    // service, which stores the payload in `metadata`. Nothing is sent when
+    // either the recipient or the business has blocked the other, or when the
+    // block check itself fails.
+    isBlocked(recipient_user_id, businessId)
+      .then((blocked) => (blocked ? null : require('../services/notificationService').createNotification({
+        userId: recipient_user_id,
+        type: 'invoice_received',
+        title: 'Invoice Received',
+        body: `${bizUser?.name || bizUser?.username || 'A business'} sent you an invoice for $${(total_cents / 100).toFixed(2)}`,
+        link: `/app/invoice/${invoice.id}`,
+        metadata: { invoice_id: invoice.id, business_id: businessId, amount_cents: total_cents },
+        context: 'personal',
+      })))
+      .catch((err) => {
+        logger.warn('Invoice notification skipped', { invoiceId: invoice.id, error: err.message });
+      });
 
     res.status(201).json({ invoice });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') {
+      return res.status(503).json({ error: "Couldn't send the invoice right now. Please try again.", code: err.code });
+    }
     logger.error('Create invoice error', { error: err.message });
     res.status(500).json({ error: 'Failed to create invoice', code: 'INTERNAL_ERROR' });
   }

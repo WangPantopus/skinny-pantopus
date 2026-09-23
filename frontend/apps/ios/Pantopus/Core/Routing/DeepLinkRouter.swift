@@ -137,6 +137,15 @@ final class DeepLinkRouter {
         case packageGig(mailId: String, isPreDelivery: Bool)
         /// `pantopus://mailbox/earn` — A10.11 Earn dashboard (Wallet sibling).
         case earn
+        /// `/app/mailbox/:mailId` — the letter a mail notification points at
+        /// (mail_delivered / mail_claimed / mail_escrow_*), opened in the
+        /// existing mail item detail.
+        case mailItem(mailId: String)
+        /// `/mailbox` — the Mail tab (the Mail Day summary notification).
+        case mailbox
+        /// `/app/place/neighbor-message/:id` — a received neighbor message, in
+        /// the existing Place message screen.
+        case neighborMessage(messageId: String)
         /// `pantopus://businesses/:id` — A10.7 Business owner view. The public
         /// profile (A10.6) lives at the singular `pantopus://business/:username`.
         case businessOwner(businessId: String)
@@ -158,6 +167,20 @@ final class DeepLinkRouter {
         /// `monthly_receipt` notification
         /// (`pantopus/frontend/apps/mobile/src/utils/notificationRouting.ts:29`).
         case monthlyReceipt
+        /// Booking notification links (`backend/services/scheduling/
+        /// bookingNotifyService.js`): `/app/profile/schedule/bookings/:id`
+        /// and `/app/scheduling/bookings/:id` open the existing host booking
+        /// detail for `owner` (`?ot=home|business&oid=` on a Home- or
+        /// Business-owned booking, else personal); the endpoint's own
+        /// authorization decides what a non-host sees.
+        case bookingDetail(bookingId: String, owner: SchedulingOwner)
+        /// `/app/scheduling/my-bookings` — the existing customer My bookings list.
+        case myBookings
+        /// Invoice notification links: `/app/invoice/:id` (`invoice_received`,
+        /// `invoice_sent`) and the older `/app/invoices/:id`. They open the
+        /// existing recipient invoice detail, whose endpoint only returns an
+        /// invoice addressed to the signed-in user.
+        case invoiceDetail(invoiceId: String)
         case unknown(URL)
     }
 
@@ -299,7 +322,12 @@ final class DeepLinkRouter {
                 pending = destination
             } else {
                 activeContentArrival = nil
-                PendingDeepLinkStore.stash(persistencePath)
+                // A cold-start link can arrive while the stored session is
+                // still hydrating. Bind it to that stored account so a
+                // server-ended session keeps it for the same account's
+                // re-sign-in; a different account or an explicit sign-out
+                // still clears it (`PendingDeepLinkStore`).
+                PendingDeepLinkStore.stash(persistencePath, expectedUserID: Self.hydratingUserIDProvider())
                 pending = nil
                 prefersLoginPresentation = true
             }
@@ -314,9 +342,20 @@ final class DeepLinkRouter {
 
     private static var signedInUserIDProvider: @MainActor () -> String? = defaultSignedInUserIDProvider
 
+    /// The stored account while the session is still hydrating (`.unknown`,
+    /// cold start); `nil` once the auth state is known.
+    private static let defaultHydratingUserIDProvider: @MainActor () -> String? = {
+        guard case .unknown = AuthManager.shared.state else { return nil }
+        return AuthManager.shared.store.get(SecureStoreKey.userId)
+    }
+
+    private static var hydratingUserIDProvider: @MainActor () -> String? = defaultHydratingUserIDProvider
+
     /// Override the session check. Pass `nil` to restore the `AuthManager` read.
+    /// A bound check models a known auth state, so it has no hydrating account.
     static func bindSignedInUserIDProvider(_ provider: (@MainActor () -> String?)?) {
         signedInUserIDProvider = provider ?? defaultSignedInUserIDProvider
+        hydratingUserIDProvider = provider == nil ? defaultHydratingUserIDProvider : { nil }
     }
 
     private static func routingKind(of destination: Destination) -> RoutingKind {
@@ -499,9 +538,23 @@ final class DeepLinkRouter {
                     ?? queryValue("briefing_kind", in: comps)
             )
         case "profile":
-            // Only `?tab=receipt` is deep-linkable today (the monthly-receipt
-            // push). A bare `pantopus://profile` falls through to `.unknown`.
+            // `?tab=receipt` is the monthly-receipt push; `schedule/bookings/:id`
+            // is the booking lifecycle notification link. A bare
+            // `pantopus://profile` falls through to `.unknown`.
             if tabQuery?.lowercased() == "receipt" { return .monthlyReceipt }
+            if segments.count == 4, segments[1] == "schedule", segments[2] == "bookings",
+               UUID(uuidString: segments[3]) != nil {
+                return .bookingDetail(bookingId: segments[3].lowercased(), owner: .personal)
+            }
+            return .unknown(url)
+        case "scheduling":
+            // Host booking links; a Home- or Business-owned booking names its
+            // owner with `?ot=home|business&oid=<id>`.
+            if segments.count == 2, segments[1] == "my-bookings" { return .myBookings }
+            if segments.count == 3, segments[1] == "bookings", UUID(uuidString: segments[2]) != nil,
+               let owner = bookingOwner(type: queryValue("ot", in: comps), id: queryValue("oid", in: comps)) {
+                return .bookingDetail(bookingId: segments[2].lowercased(), owner: owner)
+            }
             return .unknown(url)
         case "connections":
             return .connections
@@ -515,6 +568,11 @@ final class DeepLinkRouter {
             return mailboxDestination(url: url, segments: segments, idQuery: idQuery)
         case "wallet":
             return .wallet
+        case "invoice", "invoices":
+            if segments.count == 2, UUID(uuidString: segments[1]) != nil {
+                return .invoiceDetail(invoiceId: segments[1].lowercased())
+            }
+            return .unknown(url)
         case "invite":
             if segments.dropFirst().first == "lease" {
                 guard segments.count == 3, let token = segments.last,
@@ -585,6 +643,18 @@ final class DeepLinkRouter {
         components?.queryItems?.first { $0.name == name }?.value
     }
 
+    /// The owner a host booking link names: no `ot` is the personal pillar;
+    /// `home` / `business` need a UUID `oid`. Anything else stays unrouted.
+    private func bookingOwner(type: String?, id: String?) -> SchedulingOwner? {
+        guard let type else { return .personal }
+        guard let id, UUID(uuidString: id) != nil else { return nil }
+        switch type {
+        case "home": return .home(homeId: id.lowercased())
+        case "business": return .business(id: id.lowercased())
+        default: return nil
+        }
+    }
+
     private func homeDestination(url: URL, segments: [String], tabQuery: String?) -> Destination {
         guard let id = segments.dropFirst().first else { return .unknown(url) }
         let trailing = Array(segments.dropFirst(2))
@@ -648,11 +718,16 @@ final class DeepLinkRouter {
     /// `pantopus://place/<homeId>/<slug>`       → a group-detail page
     /// `pantopus://place?id=<homeId>&section=<slug>`
     private func placeDestination(
-        url _: URL,
+        url: URL,
         segments: [String],
         idQuery: String?,
         comps: URLComponents?
     ) -> Destination {
+        // `place/neighbor-message/:id` is a received message, not a Home id.
+        if segments.dropFirst().first == "neighbor-message" {
+            guard segments.count == 3, let id = segments.last, UUID(uuidString: id) != nil else { return .unknown(url) }
+            return .neighborMessage(messageId: id)
+        }
         let pathHomeId = segments.dropFirst().first.flatMap { $0.isEmpty ? nil : $0 }
         let homeId = pathHomeId ?? idQuery.flatMap { $0.isEmpty ? nil : $0 }
 
@@ -666,18 +741,23 @@ final class DeepLinkRouter {
     private func mailboxDestination(url: URL, segments: [String], idQuery: String?) -> Destination {
         // `pantopus://mailbox/vacation` opens A14.8; `pantopus://mailbox/mailday`
         // opens the A13.16 My Mail Day editor. B1.6 adds the batch-2 mailbox
-        // sub-screens (stamps / tasks / translation / unboxing / earn). Other
-        // mailbox paths fall through to `.unknown` until they have routes.
-        switch segments.dropFirst().first {
-        case "vacation": .vacationHold
-        case "mailday": .mailDay
-        case "stamps": .stamps
-        case "earn": .earn
-        case "unboxing": .unboxing(mailId: idQuery)
-        case "gig": packageGigDestination(url: url, idQuery: idQuery)
-        case "translation": .mailTranslation(mailId: idQuery ?? "")
-        case "tasks": mailTaskDestination(url: url, segments: segments)
-        default: .unknown(url)
+        // sub-screens (stamps / tasks / translation / unboxing / earn). A bare
+        // `mailbox` opens the Mail tab and `mailbox/:mailId` (the server's mail
+        // notification link) the letter. Other mailbox paths fall through to
+        // `.unknown` until they have routes.
+        guard let sub = segments.dropFirst().first else { return .mailbox }
+        switch sub {
+        case "vacation": return .vacationHold
+        case "mailday": return .mailDay
+        case "stamps": return .stamps
+        case "earn": return .earn
+        case "unboxing": return .unboxing(mailId: idQuery)
+        case "gig": return packageGigDestination(url: url, idQuery: idQuery)
+        case "translation": return .mailTranslation(mailId: idQuery ?? "")
+        case "tasks": return mailTaskDestination(url: url, segments: segments)
+        default:
+            guard segments.count == 2, UUID(uuidString: sub) != nil else { return .unknown(url) }
+            return .mailItem(mailId: sub)
         }
     }
 

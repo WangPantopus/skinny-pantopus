@@ -48,7 +48,16 @@ data class ChatOtherIdentity(
     @Json(name = "avatarUrl") val avatarUrl: String? = null,
     @Json(name = "identity_kind") val identityKind: String? = null,
     val verified: Boolean? = null,
-)
+    val badges: List<String>? = null,
+) {
+    /**
+     * The serializer reports verification as a `verified_resident` badge
+     * (hidden when the person turns the badge off); an explicit `verified`
+     * flag wins when present.
+     */
+    val isVerified: Boolean
+        get() = verified ?: (badges?.contains("verified_resident") == true)
+}
 
 /**
  * One row in the unified-conversations response. Hetero by `_type`:
@@ -248,4 +257,31 @@ data class CreateDirectChatBody(
 @JsonClass(generateAdapter = true)
 data class CreateDirectChatResponse(
     val roomId: String,
+)
+
+/**
+ * `GET /api/chat/rooms/:roomId` — only what a chat link needs to find a
+ * direct room's other participant.
+ */
+@JsonClass(generateAdapter = true)
+data class ChatRoomDetailResponse(
+    val room: ChatRoomDetail,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatRoomDetail(
+    val type: String? = null,
+    val participants: List<ChatRoomParticipant>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatRoomParticipant(
+    @Json(name = "user_id") val userId: String? = null,
+    /** The local-identity projection (`serializeUserAsLocalIdentity`). */
+    val user: ChatRoomParticipantIdentity? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatRoomParticipantIdentity(
+    val displayName: String? = null,
 )

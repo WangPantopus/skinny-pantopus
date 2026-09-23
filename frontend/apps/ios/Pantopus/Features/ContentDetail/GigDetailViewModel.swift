@@ -127,7 +127,8 @@ public final class GigDetailViewModel {
     }
 
     var canOpenRefunds: Bool {
-        guard viewerIsOwner, bidAcceptance.isCurrentAccount, let payment,
+        // A charged cancellation or no-show fee is not self-refundable in the app.
+        guard viewerIsOwner, bidAcceptance.isCurrentAccount, let payment, payment.gigFee == nil,
               payment.gigId == gigId, payment.payerId == currentUserId,
               payment.currency?.lowercased() == "usd", let id = payment.id, UUID(uuidString: id) != nil,
               let amount = payment.amountTotal, let cents = Int(exactly: amount), cents >= 50 else { return false }
@@ -148,6 +149,13 @@ public final class GigDetailViewModel {
 
     func refreshAfterRefund() async {
         guard bidAcceptance.isCurrentAccount else { return }
+        await refreshSilently()
+    }
+
+    /// A confirmed or canceled tip changes the payment card's Tip line, so
+    /// refetch once it is terminal, as Android does on its tip receipt.
+    private func refreshAfterTerminalTip() async {
+        guard tipIsCurrent, tipProgress?.terminal == true, bidAcceptance.isCurrentAccount else { return }
         await refreshSilently()
     }
 
@@ -229,6 +237,27 @@ public final class GigDetailViewModel {
         if tipConflict != nil { return "View pending tip" }
         if tipMayResume || tipProgress?.checkout != nil { return "Continue original tip" }
         return "Check tip status"
+    }
+
+    /// The state the shell renders. While a tip original is kept and not settled, the tip dock
+    /// reads "Check tip status", as on Android and web; everything else is `state` unchanged.
+    public var displayState: ContentDetailState {
+        guard hasTipOriginal, case let .loaded(content) = state,
+              content.dock.primary == Self.tipDock.primary else { return state }
+        return .loaded(ContentDetailContent(
+            kind: content.kind,
+            cover: content.cover,
+            statusPill: content.statusPill,
+            hero: content.hero,
+            statStrip: content.statStrip,
+            counterparty: content.counterparty,
+            modules: content.modules,
+            trustCapsules: content.trustCapsules,
+            dock: ContentDetailDock(
+                secondary: content.dock.secondary,
+                primary: ContentDetailDockButton(label: "Check tip status", icon: .handCoins)
+            )
+        ))
     }
 
     private var tipScope: String {
@@ -922,6 +951,17 @@ public final class GigDetailViewModel {
         return ["assigned", "in_progress"].contains((gig.status ?? "").lowercased())
     }
 
+    /// Why a price change can't be proposed or approved on this task. The server refuses every price
+    /// change for now (`PAID_PRICE_CHANGE_UNAVAILABLE`); the sentence says whether the task has a live
+    /// payment hold (a payment that isn't canceled or fully refunded).
+    public var priceChangeUnavailableReason: String {
+        let held = rawGig.map { gig in
+            gig.paymentId != nil && !["canceled", "refunded_full"].contains((gig.paymentStatus ?? "").lowercased())
+        } ?? false
+        return held ? "Price changes aren't available once a task has a payment hold."
+            : "Price changes aren't available for this task."
+    }
+
     /// True when the signed-in viewer proposed this change order —
     /// drives Withdraw (proposer) vs Approve / Reject (counterparty).
     public func isOwnChangeOrder(_ order: GigChangeOrderDTO) -> Bool {
@@ -942,6 +982,20 @@ public final class GigDetailViewModel {
         guard viewerIsOwner, let gig = rawGig else { return false }
         return (gig.status ?? "").lowercased() == "completed"
             && (gig.ownerConfirmedAt ?? "").isEmpty
+    }
+
+    /// True while the owner's confirm-completion request runs; the panel button shows it.
+    public var confirmingCompletion: Bool {
+        viewerIsOwner && completionAttempt != nil
+    }
+
+    /// The check shown before `confirmCompletion()`: the worker's name and, while the task's
+    /// payment is still an authorization hold, the amount that confirming charges.
+    public func completionConfirmation() -> GigCompletionConfirmation? {
+        guard let gig = rawGig else { return nil }
+        let worker = ownerBids.first { $0.userId == gig.acceptedBy }?.bidder?.resolvedDisplayName
+        let held = gig.paymentId != nil && payment?.paymentStatus == "authorized" ? payment?.amountTotal : nil
+        return GigCompletionConfirmation(workerName: worker ?? "the worker", amountCents: held)
     }
 
     /// "Cancel task" overflow gate — the poster on a live gig.
@@ -1094,15 +1148,25 @@ public final class GigDetailViewModel {
                 tipOriginal = result.request
                 try acceptTip(result, original: result.request)
             } else if !next.eligible {
-                tipMessage = "This task is not currently available for a tip. Reopen its details before continuing."
+                tipMessage = next.unavailableReason == "TIP_LIMIT"
+                    ? "You've reached the 3-tip limit for this task."
+                    : "This task is not currently available for a tip. Reopen its details before continuing."
             }
         } catch { failTip("Tip details could not be verified. Reopen the original before continuing.") }
+    }
+
+    /// On open, reads back a retained tip original (Android does the same) so the dock can say
+    /// "Check tip status" before the tip sheet opens. Nothing is read when no original is kept.
+    func prepareRetainedTip() async {
+        guard canTip, tipIsCurrent, (try? readStoredTip()) != nil else { return }
+        await prepareTip()
     }
 
     public func sendTip(amountCents: Int) async {
         if tipServerSession == nil { await prepareTip() }
         guard tipIsCurrent, !tipBusy else { return }
         if tipConflict != nil { await adoptOtherTip()
+            await refreshAfterTerminalTip()
             return
         }
         guard tipProgress?.terminal != true else { return }
@@ -1112,11 +1176,13 @@ public final class GigDetailViewModel {
         }
         guard tipOriginal != nil || mayChooseTip, (50...99_999_999).contains(amountCents) else { return }
         await performTip(mode: tipOriginal != nil && !tipMayResume ? "check" : "resume", amount: amountCents)
+        await refreshAfterTerminalTip()
     }
 
     func cancelOriginalTip() async {
         guard mayCancelTip, let original = tipOriginal else { return }
         await performTip(mode: "cancel", amount: original.amountCents)
+        await refreshAfterTerminalTip()
     }
 
     private func performTip(mode: String, amount: Int) async {
@@ -1307,6 +1373,7 @@ public final class GigDetailViewModel {
     /// confirmation; refreshes the task (status → completed) on success.
     @discardableResult
     public func submitDeliveryProof(photos: [DeliveryProofPhoto], note: String?) async -> Bool {
+        deliveryProofFailureMessage = nil
         guard writeIdentityIsCurrent, api.apiBaseURL == uploader.apiBaseURL else {
             retireDeliveryProof()
             return false
@@ -1367,9 +1434,13 @@ public final class GigDetailViewModel {
             await load()
             return current()
         } catch {
+            deliveryProofFailureMessage = (error as? LocalizedError)?.errorDescription
             return false
         }
     }
+
+    /// Why the last delivery proof send failed, when the server or network said; the sheet shows it.
+    public private(set) var deliveryProofFailureMessage: String?
 
     /// Retire this sheet's callbacks and transient uploaded references on departure.
     public func retireDeliveryProof() {
@@ -1381,7 +1452,12 @@ public final class GigDetailViewModel {
     /// time. Returns `true` on success so the host can dismiss its
     /// bid-entry sheet.
     @discardableResult
-    public func placeBid(amount: Double, message: String?, proposedTime: String? = nil) async -> Bool {
+    public func placeBid(
+        amount: Double,
+        message: String?,
+        proposedTime: String? = nil,
+        failure: EditBidFailure? = nil
+    ) async -> Bool {
         guard rawGig?.status?.lowercased() == "open", !viewerIsOwner, !viewerHasActiveBid else { return false }
         do {
             let _: PlaceBidResponse = try await api.request(
@@ -1397,6 +1473,7 @@ public final class GigDetailViewModel {
             await load()
             return true
         } catch {
+            failure?.record(error)
             return false
         }
     }
@@ -1406,7 +1483,12 @@ public final class GigDetailViewModel {
     /// Update the viewer's existing bid — `PUT /api/gigs/:gigId/bids/:bidId`
     /// (gigs.js:4143). Returns `true` so the bid sheet can dismiss.
     @discardableResult
-    public func updateViewerBid(amount: Double, message: String?, proposedTime: String? = nil) async -> Bool {
+    public func updateViewerBid(
+        amount: Double,
+        message: String?,
+        proposedTime: String? = nil,
+        failure: EditBidFailure? = nil
+    ) async -> Bool {
         guard viewerCanEditBid, let bidId = viewerBid?.id, !viewerBidActionInFlight else { return false }
         viewerBidActionInFlight = true
         defer { viewerBidActionInFlight = false }
@@ -1421,6 +1503,7 @@ public final class GigDetailViewModel {
             await load()
             return true
         } catch {
+            failure?.record(error)
             return false
         }
     }
@@ -2382,7 +2465,8 @@ extension GigDetailViewModel {
             distanceLabel(gig.distanceMiles),
             relativeAge(gig.createdAt).map { $0 == "now" ? "Just posted" : "posted \($0) ago" }
         ].compactMap { $0 }
-        let priceLine = gig.price.map { gigPriceLabel($0, payType: gig.payType) }
+        let openToOffers = GigOffers.isOpen(payType: gig.payType, acceptedBy: gig.acceptedBy)
+        let priceLine = openToOffers ? GigOffers.label : gig.price.map { gigPriceLabel($0, payType: gig.payType) }
         let hero = ContentDetailHero(
             title: gig.title,
             categoryChip: ContentDetailCategoryChip(
@@ -2391,7 +2475,7 @@ extension GigDetailViewModel {
             ),
             meta: metaPieces.isEmpty ? nil : metaPieces.joined(separator: " · "),
             priceLine: priceLine,
-            priceCaption: gig.price != nil ? "budget" : nil
+            priceCaption: gig.price != nil && !openToOffers ? "budget" : nil
         )
         var modules: [ContentDetailModule] = []
         if let body = gig.description, !body.isEmpty {
@@ -2419,7 +2503,7 @@ extension GigDetailViewModel {
             // no-op — `gigDetail.bids` renders below the modules.
         } else if bidCount > 0, !bids.isEmpty {
             modules.append(.bids(ContentDetailBidsModule(
-                title: "\(bidCount) bids",
+                title: "\(bidCount) \(bidCount == 1 ? "bid" : "bids")",
                 sub: bidRangeSub(bids),
                 bids: bids.map { projectBid($0) }
             )))
@@ -2560,13 +2644,14 @@ extension GigDetailViewModel {
             distanceLabel(gig.distanceMiles),
             gig.scheduledStart.flatMap { $0.isEmpty ? nil : formatScheduledStart($0) }
         ].compactMap { $0 }
-        let priceLine = gig.price.map { gigPriceLabel($0, payType: gig.payType) }
+        let openToOffers = GigOffers.isOpen(payType: gig.payType, acceptedBy: gig.acceptedBy)
+        let priceLine = openToOffers ? GigOffers.label : gig.price.map { gigPriceLabel($0, payType: gig.payType) }
         let hero = ContentDetailHero(
             title: gig.title,
             categoryChip: nil,
             meta: metaPieces.isEmpty ? nil : metaPieces.joined(separator: " · "),
             priceLine: priceLine,
-            priceCaption: gig.price == nil ? nil : (awarded ? "winning bid" : "budget")
+            priceCaption: gig.price == nil || openToOffers ? nil : (awarded ? "winning bid" : "budget")
         )
         var modules: [ContentDetailModule] = []
         if awarded {
@@ -2592,7 +2677,7 @@ extension GigDetailViewModel {
         }
         if !bids.isEmpty, !suppressBidsModule {
             modules.append(.bids(ContentDetailBidsModule(
-                title: "\(bidCount) bids",
+                title: "\(bidCount) \(bidCount == 1 ? "bid" : "bids")",
                 sub: awarded ? "closed" : nil,
                 bids: bids.map { projectBid($0, acceptedBy: awarded ? gig.acceptedBy : nil) }
             )))
@@ -2673,12 +2758,23 @@ extension GigDetailViewModel {
             initials: initials.isEmpty ? "?" : initials,
             displayName: name,
             avatarColor: "primary",
-            ratingLine: "verified neighbor",
+            ratingLine: bidderTrustLine(bid.bidder),
             amount: amountLabel,
             verified: bid.bidder?.resolvedVerified ?? false,
             won: won,
             dimmed: dimmed
         )
+    }
+
+    /// A bid row's trust line, from the bid payload only: "Verified neighbor" when the bidder is
+    /// verified, else their rating ("4.8 · 12 jobs"), else no line.
+    static func bidderTrustLine(_ bidder: GigCreator?) -> String? {
+        guard let bidder else { return nil }
+        if bidder.resolvedVerified { return "Verified neighbor" }
+        guard let rating = bidder.averageRating, rating > 0 else { return nil }
+        let base = String(format: "%.1f", rating)
+        guard let jobs = bidder.gigsCompleted, jobs > 0 else { return base }
+        return "\(base) · \(jobs) \(jobs == 1 ? "job" : "jobs")"
     }
 
     private static func gigPriceLabel(_ price: Double, payType: String?) -> String {
