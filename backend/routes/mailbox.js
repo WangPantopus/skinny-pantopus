@@ -833,8 +833,16 @@ const insertMailWithCompatibility = async (mailData) => {
     return primaryInsert;
   }
 
-  const message = primaryInsert.error.message || '';
-  const missingObjectColumns =
+  // Retry without the newer columns only when the database lacks one of them:
+  // PostgREST PGRST204 ("Could not find the 'x' column of 'Mail' in the schema
+  // cache") or Postgres 42703 (undefined_column). A NOT NULL, CHECK or foreign-key
+  // violation that merely names one of these columns (Mail_attn_user_id_fk for
+  // an attention user whose account is gone) must fail the send; the retry would
+  // store the letter without its attention and visibility fields, so a letter
+  // for one person became readable by the whole household.
+  const { code = '', message = '' } = primaryInsert.error;
+  const columnMissing = code === 'PGRST204' || code === '42703';
+  const missingObjectColumns = columnMissing && (
     message.includes('sender_display') ||
     message.includes('sender_trust') ||
     message.includes('object_id') ||
@@ -863,7 +871,7 @@ const insertMailWithCompatibility = async (mailData) => {
     message.includes('escrow_recipient_contact') ||
     message.includes('escrow_status') ||
     message.includes('escrow_expires_at') ||
-    message.includes('escrow_claim_token');
+    message.includes('escrow_claim_token'));
 
   if (!missingObjectColumns) {
     return primaryInsert;
@@ -1218,6 +1226,13 @@ const autoFanoutMailTargets = async ({
 
   // Determine which fan-out targets to create based on type AND outcomes
   const targets = [];
+
+  // A letter meant for one person (attn_only) creates no household record: a
+  // HomeBill, HomeDocument, HomePackage or HomeTask is read by the household,
+  // so the attention person keeps the letter in their mailbox instead.
+  if (String(mail.delivery_visibility || '') === 'attn_only') {
+    return [];
+  }
 
   // Type-based fan-out
   if (rawType === 'bill' || rawType === 'statement' || mailType === 'bill' || oc.includes('pay_now')) {
