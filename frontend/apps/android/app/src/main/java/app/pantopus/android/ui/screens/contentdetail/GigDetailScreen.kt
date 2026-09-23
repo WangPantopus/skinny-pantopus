@@ -340,17 +340,22 @@ fun GigDetailScreen(
     }
 
     if (showReportSheet) {
+        val submit = remember { SheetSubmit() }
         ModalBottomSheet(
             onDismissRequest = { showReportSheet = false },
             sheetState = reportSheetState,
         ) {
             GigReportSheetContent(
                 onSubmit = { reason, details ->
-                    viewModel.submitReport(reason, details) { ok ->
-                        if (ok) showReportSheet = false
+                    if (submit.begin()) {
+                        viewModel.submitReport(reason, details, onFailure = submit::fail) { ok ->
+                            submit.end()
+                            if (ok) showReportSheet = false
+                        }
                     }
                 },
                 onCancel = { showReportSheet = false },
+                errorText = submit.error,
             )
         }
     }
@@ -358,6 +363,7 @@ fun GigDetailScreen(
     // P6b — "Reschedule instead": FutureDateTimePicker + optional note →
     // `POST /reschedule`. The VM toasts "Task rescheduled" + refetches.
     if (showRescheduleSheet) {
+        val submit = remember { SheetSubmit() }
         ModalBottomSheet(
             onDismissRequest = { showRescheduleSheet = false },
             sheetState = rescheduleSheetState,
@@ -373,18 +379,23 @@ fun GigDetailScreen(
                         }.getOrNull()
                     },
                 onConfirm = { start, note ->
-                    viewModel.rescheduleTask(
-                        scheduledStartIso =
-                            start
-                                .atZone(java.time.ZoneId.systemDefault())
-                                .toInstant()
-                                .toString(),
-                        note = note,
-                    ) { ok ->
-                        if (ok) showRescheduleSheet = false
+                    if (submit.begin()) {
+                        viewModel.rescheduleTask(
+                            scheduledStartIso =
+                                start
+                                    .atZone(java.time.ZoneId.systemDefault())
+                                    .toInstant()
+                                    .toString(),
+                            note = note,
+                            onFailure = submit::fail,
+                        ) { ok ->
+                            submit.end()
+                            if (ok) showRescheduleSheet = false
+                        }
                     }
                 },
                 onCancel = { showRescheduleSheet = false },
+                errorText = submit.error,
             )
         }
     }
