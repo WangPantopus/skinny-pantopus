@@ -816,7 +816,10 @@ router.post('/party/join', validate(joinPartySchema), async (req, res, next) => 
       .in('status', ['pending', 'active'])
       .single();
 
-    if (!session) return res.status(404).json({ error: 'Session not found or expired' });
+    // Only the session's household may join (the rule GET /party/active lists by).
+    if (!session || !(await getAccessibleHomeIds(req.user.id)).includes(session.home_id)) {
+      return res.status(404).json({ error: 'Session not found or expired' });
+    }
 
     // Check 90-second expiry
     const elapsed = Date.now() - new Date(session.created_at).getTime();
