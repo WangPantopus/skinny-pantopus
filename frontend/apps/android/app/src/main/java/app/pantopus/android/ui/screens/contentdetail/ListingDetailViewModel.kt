@@ -102,6 +102,8 @@ class ListingDetailViewModel
             ): ContentDetailContent {
                 val isFree = listing.isFree ?: false
                 val sold = isSold(listing)
+                // An accepted offer or trade holds the listing for that buyer until the handoff.
+                val onHold = !sold && listing.status == "pending_pickup"
                 val priceLine = listingPriceLine(listing, isFree)
                 val imageUrl = listing.firstImage ?: listing.mediaUrls?.firstOrNull()
                 val cover =
@@ -172,6 +174,12 @@ class ListingDetailViewModel
                             secondary = ContentDetailDockButton(label = "Seller", icon = PantopusIcon.ShoppingBag),
                             primary = ContentDetailDockButton(label = "Find similar", icon = PantopusIcon.Search),
                         )
+                    } else if (onHold && !isViewerOwner) {
+                        // A held listing takes no new offers (the server refuses them); its seller still reaches the offers.
+                        ContentDetailDock(
+                            secondary = ContentDetailDockButton(label = "Message", icon = PantopusIcon.Send),
+                            primary = ContentDetailDockButton(label = "Pickup pending", icon = PantopusIcon.Clock, enabled = false),
+                        )
                     } else {
                         ContentDetailDock(
                             secondary = ContentDetailDockButton(label = "Message", icon = PantopusIcon.Send),
@@ -181,17 +189,7 @@ class ListingDetailViewModel
                 return ContentDetailContent(
                     kind = ContentDetailKind.Listing,
                     cover = cover,
-                    statusPill =
-                        if (sold) {
-                            ContentDetailPill(
-                                id = "status",
-                                label = "Sold",
-                                icon = PantopusIcon.AlertCircle,
-                                tone = ContentDetailPill.Tone.Error,
-                            )
-                        } else {
-                            null
-                        },
+                    statusPill = statusPill(sold = sold, onHold = onHold),
                     hero =
                         ContentDetailHero(
                             title = listing.title ?: "Listing",
@@ -208,6 +206,29 @@ class ListingDetailViewModel
             }
 
             private fun isSold(listing: ListingDto): Boolean = listing.soldAt != null || listing.status == "sold"
+
+            // "Pickup pending" is the My Listings vocabulary for a listing held for a buyer.
+            private fun statusPill(
+                sold: Boolean,
+                onHold: Boolean,
+            ): ContentDetailPill? =
+                if (sold) {
+                    ContentDetailPill(
+                        id = "status",
+                        label = "Sold",
+                        icon = PantopusIcon.AlertCircle,
+                        tone = ContentDetailPill.Tone.Error,
+                    )
+                } else if (onHold) {
+                    ContentDetailPill(
+                        id = "status",
+                        label = "Pickup pending",
+                        icon = PantopusIcon.Clock,
+                        tone = ContentDetailPill.Tone.Warning,
+                    )
+                } else {
+                    null
+                }
 
             private fun listingPriceLine(
                 listing: ListingDto,
