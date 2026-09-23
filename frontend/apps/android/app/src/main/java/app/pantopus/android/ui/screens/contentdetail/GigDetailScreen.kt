@@ -45,6 +45,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutHost
+import app.pantopus.android.ui.screens.my_bids.EditBidFailure
 import app.pantopus.android.ui.screens.my_bids.EditBidSheetContent
 import app.pantopus.android.ui.screens.my_bids.EditBidSheetTarget
 import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
@@ -63,6 +64,7 @@ import kotlin.coroutines.resume
 fun GigDetailScreen(
     onBack: () -> Unit = {},
     onOpenChat: (roomId: String, displayName: String, initials: String, verified: Boolean) -> Unit = { _, _, _, _ -> },
+    onOpenPayouts: () -> Unit = {},
     viewModel: GigDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -391,6 +393,7 @@ fun GigDetailScreen(
 
     val target = sheetTarget
     if (target != null) {
+        val bidFailure = remember(target.id) { EditBidFailure() }
         ModalBottomSheet(
             onDismissRequest = { sheetTarget = null },
             sheetState = sheetState,
@@ -407,12 +410,14 @@ fun GigDetailScreen(
                                     amount = draft.amount,
                                     message = draft.message,
                                     proposedTime = draft.proposedTime,
+                                    onFailure = bidFailure::record,
                                 ) { result -> cont.resume(result) }
                             } else {
                                 viewModel.placeBid(
                                     amount = draft.amount,
                                     message = draft.message,
                                     proposedTime = draft.proposedTime,
+                                    onFailure = bidFailure::record,
                                 ) { result -> cont.resume(result) }
                             }
                         }
@@ -423,6 +428,11 @@ fun GigDetailScreen(
                     ok
                 },
                 onCancel = { sheetTarget = null },
+                failure = bidFailure,
+                onSetUpPayouts = {
+                    sheetTarget = null
+                    onOpenPayouts()
+                },
             )
         }
     }
