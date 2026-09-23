@@ -372,6 +372,7 @@ struct FeedLocationSwitcherSheet: View {
                     Icon(.check, size: 16, color: Theme.Color.success)
                 }
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("pulseLocationOption_\(option.id)")
