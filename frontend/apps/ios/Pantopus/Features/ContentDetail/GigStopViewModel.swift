@@ -107,6 +107,7 @@ final class GigStopViewModel: Identifiable {
         switch preview?.financialAction {
         case .release: return "This action releases the payment hold before updating the task."
         case .refund: return "This action refunds the remaining captured amount before updating the task."
+        case .fee: return "This action charges the cancellation fee from the payment hold and releases the rest before updating the task."
         case .some(.none): return "Review the current task details before continuing."
         default: return "Check the current task and payment details before continuing."
         }
