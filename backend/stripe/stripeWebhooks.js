@@ -1045,6 +1045,19 @@ async function handleDisputeCreated(dispute) {
     return;
   }
 
+  // A provider-captured gig payment can still await its local capture record.
+  // Record it first (that path applies the hold), since a stored dispute
+  // blocks the record and would leave the charge uncaptured locally.
+  if (payment.payment_type === 'gig_payment' && payment.payment_status === PAYMENT_STATES.CAPTURE_PENDING
+    && payment.gig_completion_original?.state === 'pending') {
+    try {
+      await stripeService.capturePayment(payment.id);
+    } catch (captureErr) {
+      logger.error('Dispute: pending capture could not be recorded', { paymentId: payment.id, error: captureErr.message });
+    }
+    payment = (await findPaymentByField('id', payment.id)) || payment;
+  }
+
   // Store dispute info
   const disputeUpdates = {
     dispute_id: dispute.id,
