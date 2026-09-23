@@ -1,6 +1,7 @@
 package app.pantopus.android.data.chats
 
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
+import app.pantopus.android.data.api.models.chats.ChatRoomDetailResponse
 import app.pantopus.android.data.api.models.chats.ChatStatsResponse
 import app.pantopus.android.data.api.models.chats.ConversationTopicsResponse
 import app.pantopus.android.data.api.models.chats.CreateDirectChatBody
@@ -30,6 +31,8 @@ class ChatRepository
             safeApiCall { api.unifiedConversations(limit) }
 
         suspend fun stats(): NetworkResult<ChatStatsResponse> = safeApiCall { api.stats() }
+
+        suspend fun room(roomId: String): NetworkResult<ChatRoomDetailResponse> = safeApiCall { api.room(roomId) }
 
         suspend fun roomMessages(
             roomId: String,

@@ -159,7 +159,7 @@ class MyBidsViewModelTest {
             // `NetworkError.Server.message` ignores the server-supplied
             // `body` and renders a user-friendly fallback. We just need
             // the VM to surface a non-empty error string here.
-            assertTrue(state.message.contains("Server"))
+            assertTrue(state.message.contains("Something went wrong"))
         }
 
     // MARK: - Tab assignment

@@ -137,6 +137,32 @@ public struct UnifiedConversation: Decodable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// `GET /api/chat/rooms/:roomId` — only what a chat link needs to find a
+/// direct room's other participant.
+public struct ChatRoomDetailResponse: Decodable, Sendable {
+    public struct Room: Decodable, Sendable {
+        public let type: String?
+        public let participants: [Participant]?
+    }
+
+    public struct Participant: Decodable, Sendable {
+        public let userId: String?
+        /// The local-identity projection (`serializeUserAsLocalIdentity`).
+        public let user: Identity?
+
+        private enum CodingKeys: String, CodingKey {
+            case userId = "user_id"
+            case user
+        }
+    }
+
+    public struct Identity: Decodable, Sendable {
+        public let displayName: String?
+    }
+
+    public let room: Room
+}
+
 public struct ConversationTopicDTO: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let topicType: String

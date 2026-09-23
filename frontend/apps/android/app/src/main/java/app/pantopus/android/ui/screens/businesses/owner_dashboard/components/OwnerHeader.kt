@@ -173,6 +173,7 @@ fun OwnerHeaderBanner(
     logoIcon: PantopusIcon?,
     status: BizStatusBadge?,
     onEdit: () -> Unit,
+    isVerified: Boolean = true,
 ) {
     Column(
         modifier =
@@ -247,13 +248,23 @@ fun OwnerHeaderBanner(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OwnerChip(
-                    icon = PantopusIcon.ShieldCheck,
-                    dot = null,
-                    text = "Business · Verified",
-                    background = PantopusColors.businessBg,
-                    foreground = PantopusColors.businessDark,
-                )
+                if (isVerified) {
+                    OwnerChip(
+                        icon = PantopusIcon.ShieldCheck,
+                        dot = null,
+                        text = "Business · Verified",
+                        background = PantopusColors.businessBg,
+                        foreground = PantopusColors.businessDark,
+                    )
+                } else {
+                    OwnerChip(
+                        icon = PantopusIcon.Hourglass,
+                        dot = null,
+                        text = "Verification pending",
+                        background = PantopusColors.warningBg,
+                        foreground = PantopusColors.warning,
+                    )
+                }
                 status?.let {
                     OwnerChip(
                         icon = null,

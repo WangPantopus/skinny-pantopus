@@ -45,6 +45,8 @@ data class FirstRunContent(
     val steps: List<SetupStep>,
     val pillars: List<PillarTile>,
     val discovery: List<DiscoveryCardContent>,
+    /** Unread personal notifications — drives the bell's dot. */
+    val unreadCount: Int = 0,
 )
 
 /** Assembled hub bundle. */

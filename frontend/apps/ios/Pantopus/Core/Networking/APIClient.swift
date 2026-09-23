@@ -306,10 +306,10 @@ final class APIClient: @unchecked Sendable {
                     request, endpoint: endpoint, includingForbidden: includingForbidden, includingNotFound: includingNotFound
                 )
             } catch let signal as StepUpRequiredSignal {
-                guard endpoint.authenticated, !didAttemptStepUp else { throw APIError.forbidden }
+                guard endpoint.authenticated, !didAttemptStepUp else { throw APIError.forbidden() }
                 didAttemptStepUp = true
                 guard let token = await auth.obtainStepUpToken(purpose: signal.purpose, methods: signal.methods) else {
-                    throw APIError.forbidden
+                    throw APIError.forbidden()
                 }
                 stepUpToken = token
                 continue
@@ -410,7 +410,7 @@ final class APIClient: @unchecked Sendable {
             // (e.g. pending residency). Authentication/step-up still run above;
             // callers must inspect the status before interpreting any payload.
             if includingForbidden { return DataResponse(data: data, response: http) }
-            throw APIError.forbidden
+            throw APIError.forbidden(message: APIError.readableForbiddenMessage(data))
         case 404:
             // Atomic command recovery may carry a bound rejected receipt on
             // 404. Opt-in callers must validate its actor, Home and original

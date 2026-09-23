@@ -10,6 +10,7 @@ import { toast } from '@/components/ui/toast-store';
 import type { User, UserProfile, Listing, GigListItem } from '@pantopus/types';
 import { buildUserProfilePath } from '@pantopus/utils';
 import ResidencyHomeBlock from '@/components/profile/public/ResidencyHomeBlock';
+import ErrorState from '@/components/ui/ErrorState';
 
 export default function MyProfilePage() {
   const router = useRouter();
@@ -19,8 +20,12 @@ export default function MyProfilePage() {
   const [activities, setActivities] = useState<{ id?: string; icon?: string; text?: string; time_ago?: string }[]>([]);
   const [myListings, setMyListings] = useState<Listing[]>([]);
   const [, setListingsCount] = useState(0);
+  /** Why the profile could not load (null when it did, or while loading). */
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadUserData = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const token = getAuthToken();
       if (!token) {
@@ -121,7 +126,13 @@ export default function MyProfilePage() {
       }
     } catch (err) {
       console.error('Failed to load user:', err);
-      router.push('/login');
+      // Only an expired session belongs on /login (which sends signed-in users
+      // back to Place); a network or server failure gets a retry here.
+      if ((err as { statusCode?: number } | null)?.statusCode === 401) {
+        router.push('/login');
+      } else {
+        setLoadError(err instanceof Error && err.message ? err.message : "We couldn't load your profile.");
+      }
     } finally {
       setLoading(false);
     }
@@ -138,6 +149,16 @@ export default function MyProfilePage() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
           <p className="mt-4 text-app-muted">Loading your profile...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="bg-app text-app">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <ErrorState message={loadError} onRetry={loadUserData} />
+        </main>
       </div>
     );
   }

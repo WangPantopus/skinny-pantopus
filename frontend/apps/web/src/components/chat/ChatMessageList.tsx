@@ -23,6 +23,8 @@ interface ChatMessageListProps {
   onImageClick?: (url: string, title?: string) => void;
   /** Called when a user reacts to a message */
   onReact?: (messageId: string, emoji: string) => void;
+  /** Called when the user retries a failed (not refused) send */
+  onRetry?: (messageId: string) => void;
 }
 
 export default function ChatMessageList({
@@ -37,6 +39,7 @@ export default function ChatMessageList({
   renderTopicDivider,
   onImageClick,
   onReact,
+  onRetry,
 }: ChatMessageListProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -113,7 +116,7 @@ export default function ChatMessageList({
                 lastSenderId = senderId || null;
 
                 nodes.push(
-                  <ChatMessageBubble key={msg.id} msg={msg} isMine={isMine} showSender={showSender} onImageClick={onImageClick} onReact={onReact} />
+                  <ChatMessageBubble key={msg.id} msg={msg} isMine={isMine} showSender={showSender} onImageClick={onImageClick} onReact={onReact} onRetry={onRetry} />
                 );
 
                 return nodes;

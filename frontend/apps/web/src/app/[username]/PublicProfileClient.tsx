@@ -102,6 +102,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const [reportTarget, setReportTarget] = useState<{ id: string; current: () => boolean } | null>(null);
   const actionGeneration = useRef(0);
   const pendingBlock = useRef(false);
+  const pendingMessage = useRef(false);
   const target = useRef(profileIdentifier);
   target.current = profileIdentifier;
   const captureAction = useCallback(() => {
@@ -339,16 +340,25 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   const handleMessage = async () => {
     if (!currentUser) { router.push('/login'); return; }
     const recipientId = profile?.id;
-    if (!recipientId) return;
+    if (!recipientId || pendingMessage.current) return;
+    pendingMessage.current = true;
     try {
       const res = await api.chat.createDirectChat(recipientId) as Record<string, unknown>;
       const resRoom = res.room as Record<string, unknown> | undefined;
       const roomId = (res.roomId as string) || (resRoom?.id as string);
       if (roomId) {
         router.push(`/app/chat/conversation/${recipientId}`);
+      } else {
+        toast.error('Couldn\'t start a conversation. Try again.');
       }
     } catch (err: unknown) {
       console.error('Failed to create chat:', err);
+      // The server's reason (e.g. "Unable to message this user", rate limits)
+      // instead of a button that silently does nothing.
+      const reason = err instanceof Error ? err.message.trim() : '';
+      toast.error(reason || 'Couldn\'t start a conversation. Try again.');
+    } finally {
+      pendingMessage.current = false;
     }
   };
 

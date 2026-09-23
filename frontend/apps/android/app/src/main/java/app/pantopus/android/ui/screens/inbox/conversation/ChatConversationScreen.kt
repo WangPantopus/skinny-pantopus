@@ -4254,6 +4254,7 @@ private fun StampRow(
             ChatDeliveryState.Delivered -> stamp
             ChatDeliveryState.Sending -> "Sending..."
             ChatDeliveryState.Failed -> "Failed to send"
+            ChatDeliveryState.Refused -> "Not sent"
             null -> stamp
         }
     Row(
@@ -4313,6 +4314,14 @@ private fun StampRow(
                             color = PantopusColors.error,
                         )
                     }
+                ChatDeliveryState.Refused ->
+                    PantopusIconImage(
+                        icon = PantopusIcon.AlertCircle,
+                        contentDescription = null,
+                        size = 11.dp,
+                        tint = PantopusColors.error,
+                        modifier = Modifier.padding(start = 6.dp).testTag("chatNotSent_${content.id}"),
+                    )
                 null -> Unit
             }
         }

@@ -249,3 +249,30 @@ data class CreateDirectChatBody(
 data class CreateDirectChatResponse(
     val roomId: String,
 )
+
+/**
+ * `GET /api/chat/rooms/:roomId` — only what a chat link needs to find a
+ * direct room's other participant.
+ */
+@JsonClass(generateAdapter = true)
+data class ChatRoomDetailResponse(
+    val room: ChatRoomDetail,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatRoomDetail(
+    val type: String? = null,
+    val participants: List<ChatRoomParticipant>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatRoomParticipant(
+    @Json(name = "user_id") val userId: String? = null,
+    /** The local-identity projection (`serializeUserAsLocalIdentity`). */
+    val user: ChatRoomParticipantIdentity? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class ChatRoomParticipantIdentity(
+    val displayName: String? = null,
+)

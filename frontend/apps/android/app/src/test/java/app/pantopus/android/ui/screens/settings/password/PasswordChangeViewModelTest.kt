@@ -7,6 +7,7 @@ import app.pantopus.android.data.api.models.settings.AuthMethodsResponse
 import app.pantopus.android.data.api.models.settings.PasswordUpdateBody
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthRepository
 import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.slot
@@ -28,6 +29,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class PasswordChangeViewModelTest {
     private val account: AccountRepository = mockk()
+    private val auth: AuthRepository = mockk(relaxed = true)
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -37,7 +39,7 @@ class PasswordChangeViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(): PasswordChangeViewModel = PasswordChangeViewModel(account)
+    private fun viewModel(): PasswordChangeViewModel = PasswordChangeViewModel(account, auth)
 
     @Test fun loadDiscoversHasPasswordFromAuthMethods() =
         runTest {

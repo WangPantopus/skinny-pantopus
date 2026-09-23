@@ -45,6 +45,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutHost
+import app.pantopus.android.ui.screens.my_bids.EditBidFailure
 import app.pantopus.android.ui.screens.my_bids.EditBidSheetContent
 import app.pantopus.android.ui.screens.my_bids.EditBidSheetTarget
 import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
@@ -63,6 +64,7 @@ import kotlin.coroutines.resume
 fun GigDetailScreen(
     onBack: () -> Unit = {},
     onOpenChat: (roomId: String, displayName: String, initials: String, verified: Boolean) -> Unit = { _, _, _, _ -> },
+    onOpenPayouts: () -> Unit = {},
     viewModel: GigDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -82,6 +84,12 @@ fun GigDetailScreen(
     var showReportSheet by remember { mutableStateOf(false) }
     var showRescheduleSheet by remember { mutableStateOf(false) }
     var toastText by remember { mutableStateOf<String?>(null) }
+    // Failures use the error colour; everything else keeps the success pill.
+    var toastIsError by remember { mutableStateOf(false) }
+    val showToast: (String, Boolean) -> Unit = { text, isError ->
+        toastText = text
+        toastIsError = isError
+    }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val deliverySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val tipSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -139,7 +147,7 @@ fun GigDetailScreen(
     LaunchedEffect(Unit) {
         viewModel.lifecycleEvents.collect { event ->
             when (event) {
-                is GigLifecycleEvent.Toast -> toastText = event.text
+                is GigLifecycleEvent.Toast -> showToast(event.text, event.isError)
                 is GigLifecycleEvent.PresentPaymentSheet ->
                     lifecyclePaymentSheet.presentWithPaymentIntent(
                         paymentIntentClientSecret = event.params.clientSecret.orEmpty(),
@@ -167,15 +175,15 @@ fun GigDetailScreen(
             val clipboard =
                 context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
             clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Live status link", event.url))
-            toastText = "Live status link copied — it expires in 24 hours."
+            showToast("Live status link copied — it expires in 24 hours.", false)
         }
     }
     // Tip success → toast (PaymentSheet itself surfaces decline / SCA errors).
     LaunchedEffect(tipStatus) {
         when (val status = tipStatus) {
-            TipStatus.Succeeded -> toastText = "Tip sent — thank you!"
-            TipStatus.Canceled -> toastText = "The original tip is canceled with no charge."
-            is TipStatus.Failed -> toastText = status.message
+            TipStatus.Succeeded -> showToast("Tip sent — thank you!", false)
+            TipStatus.Canceled -> showToast("The original tip is canceled with no charge.", false)
+            is TipStatus.Failed -> showToast(status.message, true)
             else -> Unit
         }
     }
@@ -265,7 +273,7 @@ fun GigDetailScreen(
             }
         }
 
-    LaunchedEffect(stopState.recoveryError) { stopState.recoveryError?.let { toastText = it } }
+    LaunchedEffect(stopState.recoveryError) { stopState.recoveryError?.let { showToast(it, true) } }
 
     // Retained originals keep the existing tip action reachable even if task terms changed.
     val detailState = tipRecoveryDetailState(state, tipState)
@@ -314,7 +322,7 @@ fun GigDetailScreen(
         topBarAccessory = {
             GigSaveToggle(
                 saved = saved,
-                onToggle = { viewModel.toggleSave { message -> toastText = message } },
+                onToggle = { viewModel.toggleSave { message -> showToast(message, true) } },
             )
         },
         scrollFooter = {
@@ -329,7 +337,7 @@ fun GigDetailScreen(
                         onEditBid = { sheetTarget = editBidTarget(viewModel, viewerBid, heroTitle) },
                     )
                 }
-                GigQuestionsSection(viewModel) { message -> toastText = message }
+                GigQuestionsSection(viewModel) { message -> showToast(message, true) }
             }
         },
     )
@@ -340,17 +348,22 @@ fun GigDetailScreen(
     }
 
     if (showReportSheet) {
+        val submit = remember { SheetSubmit() }
         ModalBottomSheet(
             onDismissRequest = { showReportSheet = false },
             sheetState = reportSheetState,
         ) {
             GigReportSheetContent(
                 onSubmit = { reason, details ->
-                    viewModel.submitReport(reason, details) { ok ->
-                        if (ok) showReportSheet = false
+                    if (submit.begin()) {
+                        viewModel.submitReport(reason, details, onFailure = submit::fail) { ok ->
+                            submit.end()
+                            if (ok) showReportSheet = false
+                        }
                     }
                 },
                 onCancel = { showReportSheet = false },
+                errorText = submit.error,
             )
         }
     }
@@ -358,6 +371,7 @@ fun GigDetailScreen(
     // P6b — "Reschedule instead": FutureDateTimePicker + optional note →
     // `POST /reschedule`. The VM toasts "Task rescheduled" + refetches.
     if (showRescheduleSheet) {
+        val submit = remember { SheetSubmit() }
         ModalBottomSheet(
             onDismissRequest = { showRescheduleSheet = false },
             sheetState = rescheduleSheetState,
@@ -373,24 +387,30 @@ fun GigDetailScreen(
                         }.getOrNull()
                     },
                 onConfirm = { start, note ->
-                    viewModel.rescheduleTask(
-                        scheduledStartIso =
-                            start
-                                .atZone(java.time.ZoneId.systemDefault())
-                                .toInstant()
-                                .toString(),
-                        note = note,
-                    ) { ok ->
-                        if (ok) showRescheduleSheet = false
+                    if (submit.begin()) {
+                        viewModel.rescheduleTask(
+                            scheduledStartIso =
+                                start
+                                    .atZone(java.time.ZoneId.systemDefault())
+                                    .toInstant()
+                                    .toString(),
+                            note = note,
+                            onFailure = submit::fail,
+                        ) { ok ->
+                            submit.end()
+                            if (ok) showRescheduleSheet = false
+                        }
                     }
                 },
                 onCancel = { showRescheduleSheet = false },
+                errorText = submit.error,
             )
         }
     }
 
     val target = sheetTarget
     if (target != null) {
+        val bidFailure = remember(target.id) { EditBidFailure() }
         ModalBottomSheet(
             onDismissRequest = { sheetTarget = null },
             sheetState = sheetState,
@@ -407,22 +427,29 @@ fun GigDetailScreen(
                                     amount = draft.amount,
                                     message = draft.message,
                                     proposedTime = draft.proposedTime,
+                                    onFailure = bidFailure::record,
                                 ) { result -> cont.resume(result) }
                             } else {
                                 viewModel.placeBid(
                                     amount = draft.amount,
                                     message = draft.message,
                                     proposedTime = draft.proposedTime,
+                                    onFailure = bidFailure::record,
                                 ) { result -> cont.resume(result) }
                             }
                         }
                     if (ok) {
                         sheetTarget = null
-                        toastText = if (target.isEditing) "Bid updated." else "Bid submitted."
+                        showToast(if (target.isEditing) "Bid updated." else "Bid submitted.", false)
                     }
                     ok
                 },
                 onCancel = { sheetTarget = null },
+                failure = bidFailure,
+                onSetUpPayouts = {
+                    sheetTarget = null
+                    onOpenPayouts()
+                },
             )
         }
     }
@@ -483,7 +510,7 @@ fun GigDetailScreen(
                     Modifier
                         .padding(Spacing.s4)
                         .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.success)
+                        .background(if (toastIsError) PantopusColors.error else PantopusColors.success)
                         .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                         .testTag("gig-detail-toast"),
             ) {

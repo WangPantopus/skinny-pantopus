@@ -1,22 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
-import type { MailAction, CertifiedMail, VaultFolder, BookletItem, AuditEvent, MailItemV2, PartyParticipant } from '@/types/mailbox';
+import type { MailAction, CertifiedMail, VaultFolder, BookletItem, AuditEvent, PartyParticipant } from '@/types/mailbox';
 import * as api from '@pantopus/api';
 import {
   useItemDetail,
   useMarkItemOpened,
   useFileItemToVault,
   useAcknowledgeCertifiedMail,
-  useDetectLanguage,
-  useTranslateItem,
   useVaultFolders,
 } from '@/lib/mailbox-queries';
-import {
-  MailItemDetail,
-  TranslationBanner,
-} from '@/components/mailbox';
+import { MailItemDetail } from '@/components/mailbox';
+import { toast } from '@/components/ui/toast-store';
 import BookletViewer from '@/components/mailbox/BookletViewer';
 import PackageUnboxing from '@/components/mailbox/PackageUnboxing';
 import GigCreationModal from '@/components/mailbox/GigCreationModal';
@@ -28,8 +25,9 @@ import CertifiedMailDetail from '@/components/mailbox/CertifiedMailDetail';
  *
  * Fetches the full MailItemDetailResponse on mount, marks it opened
  * if unread, and renders blocks, actions, certified banner,
- * translation banner, file-to-vault, package unboxing, family mail party,
- * and certified mail audit trail.
+ * file-to-vault, package unboxing, family mail party,
+ * and certified mail audit trail. Mail translation isn't offered: the
+ * backend has no translation provider yet.
  */
 export default function ItemDetailPage() {
   const router = useRouter();
@@ -84,48 +82,13 @@ export default function ItemDetailPage() {
 
   const auditTrail: AuditEvent[] = acknowledge.data?.audit_trail ?? certifiedItem?.audit_trail ?? [];
 
-  // ── Translation ───────────────────────────────────────────
-  const { data: langDetect } = useDetectLanguage(itemId);
-  const translate = useTranslateItem();
-  const [showTranslation, setShowTranslation] = useState(false);
-  // Cache translated content in local state so toggling never re-fetches
-  const [cachedTranslation, setCachedTranslation] = useState<{
-    content: string;
-    fromLanguage: string;
-  } | null>(null);
-
-  const handleTranslate = useCallback(() => {
-    // If we already have a cached translation, just toggle display
-    if (cachedTranslation) {
-      setShowTranslation(true);
-      return;
-    }
-    translate.mutate({ itemId }, {
-      onSuccess: (data) => {
-        setCachedTranslation({
-          content: data.translated_content,
-          fromLanguage: data.from_language,
-        });
-        setShowTranslation(true);
-      },
-    });
-  }, [translate, itemId, cachedTranslation]);
-
-  const handleShowOriginal = useCallback(() => {
-    setShowTranslation(false);
-  }, []);
-
-  const isNonEnglish =
-    langDetect?.detected_language &&
-    langDetect.confidence !== undefined &&
-    langDetect.confidence > 0.85 &&
-    langDetect.detected_language.toLowerCase() !== 'english' &&
-    langDetect.detected_language.toLowerCase() !== 'en';
-
-  const isPostcard = detail?.wrapper.mail_object_type === 'postcard';
-
   // ── File to Vault ─────────────────────────────────────────
-  const { data: vaultFolders } = useVaultFolders();
+  const {
+    data: vaultFolders,
+    isLoading: vaultFoldersLoading,
+    isError: vaultFoldersFailed,
+    refetch: refetchVaultFolders,
+  } = useVaultFolders();
   const fileToVault = useFileItemToVault();
   const [vaultOpen, setVaultOpen] = useState(false);
   const vaultRef = useRef<HTMLDivElement>(null);
@@ -145,6 +108,7 @@ export default function ItemDetailPage() {
   const handleFileToVault = useCallback((folderId: string) => {
     fileToVault.mutate({ itemId, folderId }, {
       onSuccess: () => setVaultOpen(false),
+      onError: (err) => toast.error(`Couldn't file this mail. ${err.message || 'Please try again.'}`),
     });
   }, [fileToVault, itemId]);
 
@@ -219,9 +183,6 @@ export default function ItemDetailPage() {
       case 'acknowledge':
         handleAcknowledge();
         break;
-      case 'translate':
-        handleTranslate();
-        break;
       case 'create_gig':
         setGigSource('post_delivery');
         setShowGigModal(true);
@@ -242,7 +203,7 @@ export default function ItemDetailPage() {
       default:
         break;
     }
-  }, [handleAcknowledge, handleTranslate]);
+  }, [handleAcknowledge]);
 
   // ── Loading state ─────────────────────────────────────────
   if (isLoading) {
@@ -355,8 +316,29 @@ export default function ItemDetailPage() {
 
           {vaultOpen && (
             <div className="absolute right-0 top-full mt-1 w-56 bg-app-surface border border-app-border rounded-lg shadow-lg z-20 py-1 max-h-64 overflow-y-auto">
-              {!vaultFolders || vaultFolders.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-app-text-muted">No vault folders yet</p>
+              {vaultFoldersLoading ? (
+                <p className="px-3 py-2 text-xs text-app-text-muted">Loading folders...</p>
+              ) : vaultFoldersFailed ? (
+                <div className="px-3 py-2">
+                  <p className="text-xs text-app-text-muted">Couldn&apos;t load your vault folders.</p>
+                  <button
+                    type="button"
+                    onClick={() => refetchVaultFolders()}
+                    className="mt-1 text-xs font-medium text-primary-600 hover:text-primary-700"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : !vaultFolders || vaultFolders.length === 0 ? (
+                <div className="px-3 py-2">
+                  <p className="text-xs text-app-text-muted">No vault folders yet</p>
+                  <Link
+                    href="/app/mailbox/vault"
+                    className="mt-1 inline-block text-xs font-medium text-primary-600 hover:text-primary-700"
+                  >
+                    Create one in Vault
+                  </Link>
+                </div>
               ) : (
                 vaultFolders.map((folder: VaultFolder) => (
                   <button
@@ -376,17 +358,6 @@ export default function ItemDetailPage() {
             </div>
           )}
         </div>
-
-        {/* More actions */}
-        <button
-          type="button"
-          className="p-1.5 text-app-text-secondary hover:text-app-text-strong dark:hover:text-gray-300 hover:bg-app-hover dark:hover:bg-gray-800 rounded transition-colors"
-          title="More actions"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01" />
-          </svg>
-        </button>
       </div>
 
       {/* ── Scrollable content ────────────────────────────── */}
@@ -420,38 +391,6 @@ export default function ItemDetailPage() {
           />
         )}
 
-        {/* Translation Banner — shown for non-English items (confidence > 0.85) */}
-        {isNonEnglish && (
-          <div className="px-6 py-3 border-b border-app-border-subtle flex-shrink-0">
-            <TranslationBanner
-              item={detail.wrapper as unknown as MailItemV2}
-              detectedLanguage={langDetect?.detected_language}
-              confidence={langDetect?.confidence}
-              translatedContent={cachedTranslation?.content}
-              onTranslate={handleTranslate}
-              onShowOriginal={handleShowOriginal}
-              loading={translate.isPending}
-              showingTranslation={showTranslation}
-            />
-          </div>
-        )}
-
-        {/* "Translated from [Language]" indicator when showing translation */}
-        {showTranslation && cachedTranslation && (
-          <div className="px-6 py-2 bg-indigo-50 dark:bg-indigo-950/20 border-b border-indigo-100 dark:border-indigo-900 flex items-center justify-between flex-shrink-0">
-            <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
-              Translated from {cachedTranslation.fromLanguage}
-            </p>
-            <button
-              type="button"
-              onClick={handleShowOriginal}
-              className="text-xs text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium"
-            >
-              Show original
-            </button>
-          </div>
-        )}
-
         {/* Booklet viewer replaces standard detail for booklet items */}
         {isBooklet && bookletData ? (
           <div className="flex-1 min-h-0">
@@ -461,85 +400,47 @@ export default function ItemDetailPage() {
               sender={detail.wrapper.sender_display}
               onSaveToVault={() => setVaultOpen(true)}
               onDownload={() => {}}
-              onShare={() => {}}
             />
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto">
-            {/* Translated content inline — replaces standard detail when active */}
-            {showTranslation && cachedTranslation ? (
-              <div className="px-6 py-4">
-                <p className="text-sm text-app-text-strong whitespace-pre-wrap leading-relaxed">
-                  {cachedTranslation.content}
-                </p>
+            {/* Main detail component (original content) */}
+            <MailItemDetail
+              detail={detail}
+              onAction={handleAction}
+            />
 
-                {/* Postcard: show original as collapsible */}
-                {isPostcard && (
-                  <details className="mt-4">
-                    <summary className="text-xs text-indigo-500 cursor-pointer hover:text-indigo-700 dark:hover:text-indigo-300 font-medium">
-                      Original {cachedTranslation.fromLanguage}
-                    </summary>
-                    <div className="mt-2 p-3 bg-app-surface-raised rounded-lg">
-                      <MailItemDetail
-                        detail={detail}
-                        onAction={handleAction}
-                      />
-                    </div>
-                  </details>
-                )}
-
-                {/* Non-postcard: show original toggle at bottom */}
-                {!isPostcard && (
-                  <button
-                    type="button"
-                    onClick={handleShowOriginal}
-                    className="mt-4 text-xs text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium"
-                  >
-                    Show original {cachedTranslation.fromLanguage}
-                  </button>
-                )}
-              </div>
-            ) : (
-              <>
-                {/* Main detail component (original content) */}
-                <MailItemDetail
-                  detail={detail}
-                  onAction={handleAction}
-                />
-
-                {/* Package Unboxing — shown when package is delivered */}
-                {isDelivered && (
-                  <PackageUnboxing
-                    itemId={itemId}
-                    deliveryPhoto={wrapperAny?.delivery_photo_url}
-                    deliveryNote={wrapperAny?.delivery_location_note}
-                    deliveredAt={wrapperAny?.delivered_at}
-                    documentIds={
-                      detail.inside.attachments
-                        ?.filter((a) => a.mime_type?.includes('pdf') || a.filename?.match(/warranty|manual/i))
-                        .map((a) => ({
-                          type: a.filename?.match(/warranty/i) ? 'warranty' : 'manual',
-                          fileId: a.id,
-                          label: a.filename?.match(/warranty/i) ? 'Warranty' : 'Manual',
-                        })) ?? []
-                    }
-                    vaultFolders={vaultFolders}
-                    onUploadConditionPhoto={handleConditionPhotoUpload}
-                    onSaveToVault={(fileId, folderId) => {
-                      fileToVault.mutate({ itemId: fileId, folderId });
-                    }}
-                    onCreateGig={() => {
-                      setGigSource('post_delivery');
-                      setShowGigModal(true);
-                    }}
-                    onSkipUnboxing={async () => {
-                      try {
-                        await api.mailboxV2P2.recordUnboxing(itemId, { skip: true });
-                      } catch {}
-                    }}
-                  />
-                )}
-              </>
+            {/* Package Unboxing — shown when package is delivered */}
+            {isDelivered && (
+              <PackageUnboxing
+                itemId={itemId}
+                deliveryPhoto={wrapperAny?.delivery_photo_url}
+                deliveryNote={wrapperAny?.delivery_location_note}
+                deliveredAt={wrapperAny?.delivered_at}
+                documentIds={
+                  detail.inside.attachments
+                    ?.filter((a) => a.mime_type?.includes('pdf') || a.filename?.match(/warranty|manual/i))
+                    .map((a) => ({
+                      type: a.filename?.match(/warranty/i) ? 'warranty' : 'manual',
+                      fileId: a.id,
+                      label: a.filename?.match(/warranty/i) ? 'Warranty' : 'Manual',
+                    })) ?? []
+                }
+                vaultFolders={vaultFolders}
+                onUploadConditionPhoto={handleConditionPhotoUpload}
+                onSaveToVault={(fileId, folderId) => {
+                  fileToVault.mutate({ itemId: fileId, folderId });
+                }}
+                onCreateGig={() => {
+                  setGigSource('post_delivery');
+                  setShowGigModal(true);
+                }}
+                onSkipUnboxing={async () => {
+                  try {
+                    await api.mailboxV2P2.recordUnboxing(itemId, { skip: true });
+                  } catch {}
+                }}
+              />
             )}
           </div>
         )}

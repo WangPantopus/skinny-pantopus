@@ -27,7 +27,12 @@ public struct MarketplaceTabRoot: View {
     @State private var router = DeepLinkRouter.shared
     @State private var systemSheet: SystemSheetRequest?
 
-    public init() {}
+    /// Closes the sheet this surface is presented in (Nearby's door).
+    private let onClose: (@MainActor () -> Void)?
+
+    public init(onClose: (@MainActor () -> Void)? = nil) {
+        self.onClose = onClose
+    }
 
     private var currentUserId: String {
         if case let .signedIn(user) = auth.state { return user.id }
@@ -47,12 +52,12 @@ public struct MarketplaceTabRoot: View {
                     path.append(.listingDetail(listingId: listingId))
                 },
                 onCompose: { path.append(.composeListing) },
-                onBack: nil
+                onBack: onClose
             )
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: MarketplaceRoute.self) { route in
                 destination(for: route)
-                    .toolbar(.hidden, for: .navigationBar)
+                    .modifier(OwnHeaderBar(drawsOwnHeader: !Self.usesSystemBar(route)))
             }
         }
         .onChange(of: router.pending) { _, pending in
@@ -86,6 +91,13 @@ public struct MarketplaceTabRoot: View {
     @MainActor
     private func pop() {
         if !path.isEmpty { path.removeLast() }
+    }
+
+    /// Pushed screens with no Back of their own: they keep the system bar,
+    /// which every other screen in this stack hides.
+    static func usesSystemBar(_ route: MarketplaceRoute) -> Bool {
+        if case .listingOffers = route { return true }
+        return false
     }
 
     @ViewBuilder

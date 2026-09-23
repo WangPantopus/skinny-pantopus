@@ -1,6 +1,7 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
+import app.pantopus.android.data.api.models.chats.ChatRoomDetailResponse
 import app.pantopus.android.data.api.models.chats.ChatStatsResponse
 import app.pantopus.android.data.api.models.chats.ConversationTopicsResponse
 import app.pantopus.android.data.api.models.chats.CreateDirectChatBody
@@ -36,6 +37,16 @@ interface ChatApi {
     /** `GET /api/chat/stats`. */
     @GET("api/chat/stats")
     suspend fun stats(): ChatStatsResponse
+
+    /**
+     * `GET /api/chat/rooms/:roomId` — the room's type and participants, for
+     * participants only. A chat link names only the room; this tells a
+     * direct room's other person apart.
+     */
+    @GET("api/chat/rooms/{roomId}")
+    suspend fun room(
+        @Path("roomId") roomId: String,
+    ): ChatRoomDetailResponse
 
     /** `GET /api/chat/rooms/:roomId/messages` — route `chats.js:1340`. */
     @GET("api/chat/rooms/{roomId}/messages")

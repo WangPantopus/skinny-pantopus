@@ -18,6 +18,10 @@ final class HubViewModel {
     /// Current state observed by `HubView`.
     private(set) var state: HubState = .skeleton
 
+    /// Set when a refresh fails while the hub is on screen: the content stays
+    /// and this shows as a toast. The view clears it after display.
+    var refreshFailureMessage: String?
+
     /// `private(set)` confines the setter to this file, so extensions in
     /// sibling files (`HubViewModel+StatusStrip.swift`) mutate state through
     /// here rather than by widening the property's access level.
@@ -46,6 +50,8 @@ final class HubViewModel {
     var densityHomeId: String?
     var densityCount = 0
     private let bannerDismissedKey = "hub.setupBanner.dismissed"
+    /// Setup steps the "Verify your address" banner stands for (the claim and verify steps).
+    private static let addressSetupSteps: Set<String> = ["home", "verify"]
     private var bannerDismissed: Bool {
         get { UserDefaults.standard.bool(forKey: bannerDismissedKey) }
         set { UserDefaults.standard.set(newValue, forKey: bannerDismissedKey) }
@@ -55,9 +61,13 @@ final class HubViewModel {
         self.api = api
     }
 
-    /// Initial load — no-op when we already have populated content.
+    /// Initial load — no-op when the hub (populated or first-run) is
+    /// already on screen, so returning to it doesn't flash a skeleton.
     func load() async {
-        if case .populated = state { return }
+        switch state {
+        case .populated, .firstRun: return
+        case .skeleton, .error: break
+        }
         state = .skeleton
         await fetch()
     }
@@ -65,6 +75,17 @@ final class HubViewModel {
     /// Pull-to-refresh / retry.
     func refresh() async {
         await fetch()
+    }
+
+    /// Re-read only the unread counts when the hub reappears (for example
+    /// after the user read their notifications), so the bell's dot and the
+    /// megaphone don't go stale. A failed read leaves them as they are.
+    func refreshUnread() async {
+        let unread: NotificationUnreadCountResponse? = await optional {
+            try await self.api.request(NotificationsEndpoints.unreadCount)
+        }
+        guard let unread else { return }
+        state = state.withUnread(personal: unread.personalBellCount, audience: unread.byContext?.audience ?? 0)
     }
 
     /// Dismiss the amber setup banner; persists across launches.
@@ -153,7 +174,14 @@ final class HubViewModel {
         do {
             hub = try await api.request(HubEndpoints.overview())
         } catch {
-            state = .error(message: (error as? APIError)?.errorDescription ?? "Couldn't load your hub.")
+            let message = (error as? APIError)?.errorDescription ?? "Couldn't load your hub."
+            switch state {
+            case .populated, .firstRun:
+                // Keep what's on screen; a failed refresh only toasts.
+                refreshFailureMessage = message
+            case .skeleton, .error:
+                state = .error(message: message)
+            }
             return
         }
         async let todayTask: HubTodayResponse? = optional {
@@ -182,6 +210,7 @@ final class HubViewModel {
             hub: hub,
             today: today,
             discovery: discovery,
+            personalUnread: unread?.personalBellCount ?? 0,
             audienceUnread: unread?.byContext?.audience ?? 0,
             rebookable: rebookable?.rebookable ?? []
         )
@@ -197,6 +226,7 @@ final class HubViewModel {
         hub: HubResponse,
         today: HubTodayResponse?,
         discovery: HubDiscoveryResponse?,
+        personalUnread: Int = 0,
         audienceUnread: Int = 0,
         rebookable: [RebookableGigDTO] = []
     ) {
@@ -223,14 +253,21 @@ final class HubViewModel {
                     // Setup-mode pillars + discovery rail, per the design's
                     // first-run frame.
                     pillars: Self.pillars(from: hub, setupMode: true),
-                    discovery: discoveryCards
+                    discovery: discoveryCards,
+                    unreadCount: personalUnread
                 )
             )
             return
         }
 
+        // The banner asks the user to verify their address, so only an
+        // unfinished claim/verify step shows it. Profile steps alone must not
+        // tell an already-verified resident to verify.
+        let addressStepPending = hub.setup.steps.contains { step in
+            Self.addressSetupSteps.contains(step.key) && !step.done
+        }
         let banner: SetupBannerContent? =
-            (!hub.setup.allDone && !bannerDismissed)
+            (addressStepPending && !bannerDismissed)
                 ? SetupBannerContent()
                 : nil
 
@@ -258,7 +295,7 @@ final class HubViewModel {
                     avatarInitials: Self.initials(from: hub.user.name),
                     identity: identity,
                     ringProgress: hub.setup.profileCompleteness.score,
-                    unreadCount: hub.statusItems.count,
+                    unreadCount: personalUnread,
                     audienceUnreadCount: audienceUnread
                 ),
                 actionChips: Self.defaultActionChips(),
@@ -448,36 +485,6 @@ final class HubViewModel {
         case "business": .business
         default: .personal
         }
-    }
-
-    static func icon(from raw: String) -> PantopusIcon {
-        PantopusIcon.allCases.first { $0.rawValue == raw } ?? .arrowLeft
-    }
-
-    private static func initials(from name: String) -> String {
-        let parts = name.split(separator: " ").prefix(2)
-        return parts.compactMap { $0.first.map(String.init) }.joined().uppercased()
-    }
-
-    private static func setupTitle(_ key: String) -> String {
-        key.replacingOccurrences(of: "_", with: " ").capitalized
-    }
-
-    private static func greeting() -> String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        switch hour {
-        case 5..<12: return "Good morning"
-        case 12..<17: return "Good afternoon"
-        case 17..<22: return "Good evening"
-        default: return "Hello"
-        }
-    }
-
-    private static func relative(timestamp: String) -> String {
-        guard let date = ISO8601DateFormatter().date(from: timestamp) else { return timestamp }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 

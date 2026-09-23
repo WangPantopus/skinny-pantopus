@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.shared.wizard
 
+import android.os.Looper
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,11 +25,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -75,6 +78,9 @@ private const val DISABLED_CTA_ALPHA = 0.5f
  * a non-default pillar ([WizardIdentity.Home], [WizardIdentity.Business],
  * [WizardIdentity.Warm]). Default is [WizardIdentity.Personal] so legacy
  * call sites render identically.
+ *
+ * Without an explicit [chrome], the shell follows [WizardModel.chrome] as
+ * the model's state changes (see [rememberLiveChrome]).
  */
 @Composable
 fun WizardShell(
@@ -82,10 +88,12 @@ fun WizardShell(
     modifier: Modifier = Modifier,
     identity: WizardIdentity = WizardIdentity.Personal,
     handleSystemBack: Boolean = false,
-    chrome: WizardChrome = model.chrome,
+    chrome: WizardChrome? = null,
     scrollResetKey: Any? = null,
     content: @Composable () -> Unit,
 ) {
+    val liveChrome = rememberLiveChrome(model)
+    val shown = chrome ?: liveChrome
     var showDiscard by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val scrollState = rememberScrollState()
@@ -93,7 +101,7 @@ fun WizardShell(
 
     BackHandler(enabled = handleSystemBack && !showDiscard) {
         focusManager.clearFocus()
-        if (chrome.leading == WizardLeadingControl.Close && chrome.dirty) {
+        if (shown.leading == WizardLeadingControl.Close && shown.dirty) {
             showDiscard = true
         } else {
             model.onLeading()
@@ -106,26 +114,26 @@ fun WizardShell(
         topBar = {
             Column(modifier = Modifier.fillMaxWidth().background(PantopusColors.appSurface)) {
                 WizardTopBar(
-                    title = chrome.title,
-                    leading = chrome.leading,
-                    progressLabel = chrome.progressLabel,
+                    title = shown.title,
+                    leading = shown.leading,
+                    progressLabel = shown.progressLabel,
                     onLeading = {
                         focusManager.clearFocus()
-                        if (chrome.leading == WizardLeadingControl.Close && chrome.dirty) {
+                        if (shown.leading == WizardLeadingControl.Close && shown.dirty) {
                             showDiscard = true
                         } else {
                             model.onLeading()
                         }
                     },
                 )
-                if (chrome.showsProgressBar) {
+                if (shown.showsProgressBar) {
                     val total =
-                        when (val label = chrome.progressLabel) {
+                        when (val label = shown.progressLabel) {
                             is WizardProgressLabel.StepOf -> label.total
                             WizardProgressLabel.Hidden -> 1
                         }
                     val filled =
-                        chrome.progressFraction
+                        shown.progressFraction
                             ?.coerceIn(0f, 1f)
                             ?.let { (it * total).toInt() }
                             ?: 0
@@ -142,7 +150,7 @@ fun WizardShell(
         },
         bottomBar = {
             WizardStickyCta(
-                chrome = chrome,
+                chrome = shown,
                 tint = identity.accent,
                 shadow = identity.ctaShadow,
                 onPrimary = {
@@ -189,12 +197,40 @@ fun WizardShell(
         },
         onKeepGoing = { showDiscard = false },
         // P6c — wizards with a draft store offer "Save draft" too.
-        saveDraftLabel = chrome.saveDraftLabel,
+        saveDraftLabel = shown.saveDraftLabel,
         onSaveDraft = {
             showDiscard = false
             model.onSaveDraft()
         },
     )
+}
+
+/**
+ * [WizardModel.chrome] is a plain getter over the model's own state, so
+ * reading it doesn't subscribe composition, and with strong skipping the
+ * shell is skipped while only the wizard's content recomposes. The footer,
+ * step readout and close confirmation then kept the first frame's chrome.
+ * Mirror the getter into snapshot state instead: re-read it after each
+ * applied snapshot change on the main thread (collected view-model state
+ * reaches the content that way) and keep it only when it changed.
+ */
+@Composable
+private fun rememberLiveChrome(model: WizardModel): WizardChrome {
+    val live = remember(model) { mutableStateOf(model.chrome) }
+    DisposableEffect(model) {
+        val refresh = {
+            val next = model.chrome
+            if (next != live.value) live.value = next
+        }
+        refresh()
+        val observer =
+            Snapshot.registerApplyObserver { changed, _ ->
+                // Our own write below lands here too; skip it so a refresh never feeds itself.
+                if (Looper.myLooper() == Looper.getMainLooper() && changed.any { it !== live }) refresh()
+            }
+        onDispose { observer.dispose() }
+    }
+    return live.value
 }
 
 @Composable

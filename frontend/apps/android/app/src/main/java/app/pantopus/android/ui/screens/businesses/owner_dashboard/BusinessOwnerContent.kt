@@ -89,6 +89,11 @@ data class BusinessOwnerContent(
     val canPostAsBusiness: Boolean = false,
     /** Founding-business offer banner; `null` renders nothing. */
     val foundingOffer: OwnerFoundingOffer? = null,
+    /**
+     * Drives the header chip: "Business · Verified" only when verified,
+     * otherwise the "Verification pending" state the My businesses card shows.
+     */
+    val isVerified: Boolean = false,
 ) {
     /** Returns a copy with [reply] set on the review matching [reviewId]. */
     fun applyingReply(

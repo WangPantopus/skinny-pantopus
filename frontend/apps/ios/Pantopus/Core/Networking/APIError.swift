@@ -20,7 +20,10 @@ public enum APIError: Error, LocalizedError, Sendable {
     /// redirect to sign-in.
     case unauthorized
     /// 403 Forbidden — authenticated but not allowed to access this resource.
-    case forbidden
+    /// `message` is the server's own sentence for the refusal when the body
+    /// carried one a person can read (`readableForbiddenMessage`); a
+    /// `.forbidden` pattern still matches every 403.
+    case forbidden(message: String? = nil)
     /// 404 Not Found.
     case notFound
     /// 4xx with server-supplied message. `status` is the exact code.
@@ -40,11 +43,11 @@ public enum APIError: Error, LocalizedError, Sendable {
         case .invalidURL: "Could not build request URL."
         case .invalidResponse: "Invalid response from server."
         case .unauthorized: "Your session has expired. Please sign in again."
-        case .forbidden: "You don't have permission to do that."
+        case let .forbidden(message): message ?? "You don't have permission to do that."
         case .notFound: "We couldn't find what you were looking for."
         case let .clientError(_, message):
             Self.friendlyClientMessage(message) ?? "Request failed."
-        case let .server(status, _): "Server error \(status). Please try again."
+        case .server: "Something went wrong on our side. Please try again."
         case .transport: "Can't reach Pantopus. Check your connection."
         case .decoding: "Received an unexpected response."
         case .retriesExhausted: "The server is having trouble. Please try again."
@@ -68,13 +71,31 @@ public enum APIError: Error, LocalizedError, Sendable {
     /// The backend's machine `code` from an error body, when one survives.
     ///
     /// Only `clientError` / `server` carry a body — `unauthorized`,
-    /// `forbidden` and `notFound` are mapped by status alone and drop it,
-    /// so a caller that needs to tell `VERIFICATION_REQUIRED` from a plain
-    /// 403 must match the CASE as well as this code.
+    /// `forbidden` and `notFound` are mapped by status alone (a 403 keeps
+    /// at most its readable sentence), so a caller that needs to tell
+    /// `VERIFICATION_REQUIRED` from a plain 403 must match the CASE as well
+    /// as this code.
     static func code(in body: String?) -> String? {
         guard let body, let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         return json["code"] as? String
+    }
+
+    /// The sentence a 403 body gives for the refusal, when it can be shown
+    /// as-is: the JSON `message` or `error`, four or more words and at most
+    /// 200 characters, with no machine vocabulary (`STEP_UP_REQUIRED`,
+    /// `vendors.manage`). Codes and fragments ("blocked", "Access denied",
+    /// "Not a participant") and non-JSON bodies keep the generic copy.
+    static func readableForbiddenMessage(_ data: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        for key in ["message", "error"] {
+            guard let text = (json[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) else { continue }
+            let words = text.split { $0.isWhitespace }
+            guard words.count >= 4, text.count <= 200, !text.contains("_"),
+                  text.range(of: "[A-Za-z][.][A-Za-z]", options: .regularExpression) == nil else { continue }
+            return text
+        }
+        return nil
     }
 
     /// Turn a raw 4xx JSON body into a short user-facing string.

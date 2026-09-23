@@ -216,11 +216,12 @@ function DividerPreview() {
 }
 
 function StatsPreview({ data }: { data: Record<string, any> }) {
-  const stats = (data.stats as Record<string, any>[]) || [
-    { label: 'Customers', value: '1,000+' },
-    { label: 'Years', value: '5+' },
-    { label: 'Rating', value: '4.9' },
-  ];
+  // No sample numbers: the owner adds their own, and the public page hides
+  // an empty stats block.
+  const stats = (data.stats as Record<string, any>[]) || [];
+  if (stats.length === 0) {
+    return <p className="p-4 text-center text-xs text-app-text-muted">No stats yet</p>;
+  }
   return (
     <div className="p-4 grid grid-cols-3 gap-4 text-center">
       {stats.map((s: Record<string, any>, i: number) => (
@@ -370,7 +371,9 @@ export const BLOCK_TYPE_REGISTRY: {
     label: 'Stats',
     icon: <BarChart3 className="w-4 h-4" />,
     description: 'Key numbers/metrics showcase',
-    defaultData: { stats: [{ label: 'Customers', value: '1,000+' }, { label: 'Years', value: '5+' }, { label: 'Rating', value: '4.9' }] },
+    // Starts empty: sample numbers here were saved into new blocks and shown
+    // on the public page as the business's own.
+    defaultData: { stats: [] },
   },
   {
     type: 'team',

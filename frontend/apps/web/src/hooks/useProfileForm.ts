@@ -74,6 +74,8 @@ export interface UseProfileFormReturn {
   isDirty: boolean;
   reset: (data?: Partial<ProfileFormData>) => void;
   loading: boolean;
+  /** Why the profile could not load; null when it loaded (or is loading). */
+  loadError: string | null;
   saving: boolean;
   user: User | null;
   skills: string[];
@@ -95,6 +97,7 @@ export function useProfileForm(): UseProfileFormReturn {
   const [form, dispatch] = useReducer(formReducer, INITIAL_FORM);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Non-form-field state that still lives here
@@ -122,6 +125,8 @@ export function useProfileForm(): UseProfileFormReturn {
   }, []);
 
   const loadProfile = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const token = getAuthToken();
       if (!token) {
@@ -160,7 +165,13 @@ export function useProfileForm(): UseProfileFormReturn {
       setProfilePictureUrl(userData.profilePicture || userData.profile_picture_url || null);
     } catch (err) {
       console.error('Failed to load profile:', err);
-      router.push('/login');
+      // Only an expired session belongs on /login (which sends signed-in users
+      // back to Place); a network or server failure gets a retry here.
+      if ((err as { statusCode?: number } | null)?.statusCode === 401) {
+        router.push('/login');
+      } else {
+        setLoadError(err instanceof Error && err.message ? err.message : "We couldn't load your profile.");
+      }
     } finally {
       setLoading(false);
     }
@@ -246,6 +257,7 @@ export function useProfileForm(): UseProfileFormReturn {
     isDirty,
     reset,
     loading,
+    loadError,
     saving,
     user,
     skills,

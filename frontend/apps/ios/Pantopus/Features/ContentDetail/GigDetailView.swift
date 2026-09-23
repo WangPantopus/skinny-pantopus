@@ -19,6 +19,7 @@ import UIKit
 public struct GigDetailView: View {
     @State private var viewModel: GigDetailViewModel
     @State private var bidSheetTarget: EditBidSheetTarget?
+    @State private var bidFailure = EditBidFailure()
     @State private var deliveryTarget: DeliveryProofTarget?
     @State private var showTipSheet = false
     @State private var refundTarget: GigRefundViewModel?
@@ -31,6 +32,8 @@ public struct GigDetailView: View {
     // Phase 5 — lifecycle sheets
     @State private var counterTarget: GigCounterSheetTarget?
     @State private var rejectCandidate: GigBidDTO?
+    /// Set while the owner is asked to check before confirming completion.
+    @State private var completionPrompt: GigCompletionConfirmation?
     /// Bid whose pending counter-offer the poster is about to withdraw.
     @State private var withdrawCounterCandidate: GigBidDTO?
     @State private var showReportSheet = false
@@ -61,7 +64,7 @@ public struct GigDetailView: View {
 
     public var body: some View {
         TransactionalDetailShell(
-            state: viewModel.state,
+            state: viewModel.displayState,
             overflowItems: overflowItems,
             topBarAccessory: topBarAccessories,
             onBack: onBack,
@@ -85,6 +88,7 @@ public struct GigDetailView: View {
         .task {
             await viewModel.load()
             viewModel.startRealtime()
+            await viewModel.prepareRetainedTip()
         }
         .onDisappear { viewModel.stopRealtime()
             viewModel.retireDeliveryProof()
@@ -101,12 +105,14 @@ public struct GigDetailView: View {
                         ? await viewModel.updateViewerBid(
                             amount: draft.amount,
                             message: draft.message,
-                            proposedTime: draft.proposedTime
+                            proposedTime: draft.proposedTime,
+                            failure: bidFailure
                         )
                         : await viewModel.placeBid(
                             amount: draft.amount,
                             message: draft.message,
-                            proposedTime: draft.proposedTime
+                            proposedTime: draft.proposedTime,
+                            failure: bidFailure
                         )
                     if ok {
                         bidSheetTarget = nil
@@ -117,7 +123,13 @@ public struct GigDetailView: View {
                     }
                     return ok
                 },
-                onCancel: { bidSheetTarget = nil }
+                onCancel: { bidSheetTarget = nil },
+                onSetUpPayouts: {
+                    // "Go to Wallet" after a `payout_onboarding_required` refusal.
+                    bidSheetTarget = nil
+                    DeepLinkRouter.shared.handle(path: "/settings/payments")
+                },
+                failure: bidFailure
             )
             .presentationDetents([.large])
         }
@@ -129,7 +141,8 @@ public struct GigDetailView: View {
                 },
                 onDismiss: { viewModel.retireDeliveryProof()
                     deliveryTarget = nil
-                }
+                },
+                failureMessage: { viewModel.deliveryProofFailureMessage }
             )
         })
         .sheet(isPresented: $showTipSheet) { tipSheet }
@@ -168,6 +181,20 @@ public struct GigDetailView: View {
             showRescheduleSheet: $showRescheduleSheet,
             toast: $toast
         ))
+        .confirmationDialog(
+            completionPrompt?.title ?? "",
+            isPresented: Binding(
+                get: { completionPrompt != nil },
+                set: { if !$0 { completionPrompt = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: completionPrompt
+        ) { prompt in
+            Button(prompt.confirmLabel) { confirmCompletion() }
+            Button("Not yet", role: .cancel) { completionPrompt = nil }
+        } message: { prompt in
+            Text(prompt.message)
+        }
         .confirmationDialog(
             "Reject this bid?",
             isPresented: Binding(
@@ -298,6 +325,7 @@ public struct GigDetailView: View {
                     showWorkerAck: viewModel.showWorkerAck,
                     canStartTask: viewModel.canStartTask,
                     canConfirmCompletion: viewModel.canConfirmCompletion,
+                    confirmingCompletion: viewModel.confirmingCompletion,
                     noShowEligible: viewModel.noShowEligible,
                     runningLateLabel: viewModel.runningLateLabel,
                     canReportRunningLate: viewModel.canReportRunningLate,
@@ -316,15 +344,7 @@ public struct GigDetailView: View {
                             }
                         }
                     },
-                    onConfirmCompletion: {
-                        Task {
-                            switch await viewModel.confirmCompletion() {
-                            case .confirmed: toast = ToastMessage(text: "Completion confirmed.", kind: .success)
-                            case let .failed(message): toast = ToastMessage(text: message, kind: .error)
-                            case .ignored: break
-                            }
-                        }
-                    },
+                    onConfirmCompletion: { completionPrompt = viewModel.completionConfirmation() },
                     onReportNoShow: { showNoShowSheet = true },
                     onRunningLate: { showRunningLateSheet = true },
                     onCantMakeIt: { presentStop(.workerRelease) },
@@ -423,6 +443,17 @@ public struct GigDetailView: View {
             toast = ToastMessage(text: message, kind: .success)
         case let .failure(message):
             toast = ToastMessage(text: message, kind: .error)
+        }
+    }
+
+    private func confirmCompletion() {
+        completionPrompt = nil
+        Task {
+            switch await viewModel.confirmCompletion() {
+            case .confirmed: toast = ToastMessage(text: "Completion confirmed.", kind: .success)
+            case let .failed(message): toast = ToastMessage(text: message, kind: .error)
+            case .ignored: break
+            }
         }
     }
 
@@ -883,6 +914,7 @@ private struct GigLifecycleSheets: ViewModifier {
             }
             .sheet(isPresented: $showChangeOrderSheet) {
                 GigChangeOrderSheet(
+                    priceChangesAvailable: viewModel.priceChangesAvailable,
                     onSubmit: { type, description, amountChange, timeChangeMinutes in
                         let error = await viewModel.proposeChangeOrder(
                             type: type,
