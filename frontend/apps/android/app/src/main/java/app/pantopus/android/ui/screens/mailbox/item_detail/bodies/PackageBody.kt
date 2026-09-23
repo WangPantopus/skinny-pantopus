@@ -76,10 +76,11 @@ fun PackageBody(
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         PackageStatusCard(content)
-        content.deliveryPhoto?.let { PackageDeliveryPhotoCard(it) }
-        PackageInsightCard(content.status)
+        // The photo DTO has no image URL or verification evidence. Keep the
+        // sample illustration out of live package details.
+
         PackageTimelineCard(content)
-        PackageHandoffCard(content.handoffSteps)
+        if (content.handoffSteps.isNotEmpty()) PackageHandoffCard(content.handoffSteps)
         content.contents?.let { PackageContentsCard(it) }
         if (showsActions) {
             PackageSplitDock(
@@ -237,73 +238,6 @@ private fun EtaProgressBar() {
 }
 
 @Composable
-private fun PackageInsightCard(status: PackageDeliveryStatus) {
-    val delivered = status == PackageDeliveryStatus.Delivered
-    PackageCard(
-        modifier =
-            Modifier
-                .background(PantopusColors.primary50)
-                .border(1.dp, PantopusColors.primary200, RoundedCornerShape(Radii.xl))
-                .testTag("packageBody.insight"),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), verticalAlignment = Alignment.Top) {
-            Box(
-                modifier = Modifier.size(26.dp).clip(RoundedCornerShape(Radii.md)).background(PantopusColors.primary600),
-                contentAlignment = Alignment.Center,
-            ) {
-                PantopusIconImage(
-                    PantopusIcon.Sparkles,
-                    contentDescription = null,
-                    size = 14.dp,
-                    tint = PantopusColors.appTextInverse,
-                )
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                Text(
-                    if (delivered) "On your porch, photo looks right" else "Pantopus is watching this for you",
-                    style = PantopusTextStyle.body,
-                    color = PantopusColors.primary800,
-                )
-                Text(
-                    if (delivered) {
-                        "The carrier scan and proof photo match your verified address and normal drop spot."
-                    } else {
-                        "Carrier handoff is active. Pantopus will keep the delivery window and scan trail together."
-                    },
-                    style = PantopusTextStyle.small,
-                    color = PantopusColors.primary900,
-                )
-                InsightBullet(
-                    PantopusIcon.Camera,
-                    if (delivered) "Photo matches your porch" else "Carrier route is moving toward your block",
-                )
-                InsightBullet(
-                    PantopusIcon.MapPin,
-                    if (delivered) "Delivered to 1428 Elm St" else "ETA window stays visible here",
-                )
-                InsightBullet(PantopusIcon.ShieldCheck, "No signature required")
-            }
-        }
-    }
-}
-
-@Composable
-private fun InsightBullet(
-    icon: PantopusIcon,
-    text: String,
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), verticalAlignment = Alignment.Top) {
-        Box(
-            modifier = Modifier.size(18.dp).clip(RoundedCornerShape(Radii.xs)).background(PantopusColors.appSurface),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(icon, contentDescription = null, size = Radii.lg, tint = PantopusColors.primary700)
-        }
-        Text(text, style = PantopusTextStyle.caption, color = PantopusColors.appTextStrong)
-    }
-}
-
-@Composable
 private fun PackageTimelineCard(content: PackageBodyContent) {
     val context = LocalContext.current
     val openCarrier: (() -> Unit)? =
@@ -356,7 +290,8 @@ private fun PackageHandoffCard(steps: List<PackageHandoffStep>) {
 }
 
 @Composable
-private fun PackageDeliveryPhotoCard(photo: PackageDeliveryPhoto) {
+// Sample-only drawing, intentionally not called by the live PackageBody.
+internal fun PackageDeliveryPhotoCard(photo: PackageDeliveryPhoto) {
     PackageCard(noPadding = true, modifier = Modifier.testTag("packageBody.deliveryPhoto")) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s3, vertical = Spacing.s2),

@@ -59,7 +59,7 @@ private fun defaultStatusTitle(status: PackageDeliveryStatus): String =
         PackageDeliveryStatus.Shipped -> "Shipped"
         PackageDeliveryStatus.InTransit -> "In transit"
         PackageDeliveryStatus.OutForDelivery -> "Out for delivery"
-        PackageDeliveryStatus.Delivered -> "Delivered to your porch"
+        PackageDeliveryStatus.Delivered -> "Delivered"
     }
 
 private fun defaultStatusDetail(status: PackageDeliveryStatus): String =
@@ -67,7 +67,7 @@ private fun defaultStatusDetail(status: PackageDeliveryStatus): String =
         PackageDeliveryStatus.Shipped -> "Label created by the sender."
         PackageDeliveryStatus.InTransit -> "Moving through the carrier network."
         PackageDeliveryStatus.OutForDelivery -> "Expected today by 3 PM."
-        PackageDeliveryStatus.Delivered -> "Front porch - left in shade."
+        PackageDeliveryStatus.Delivered -> "Package status: delivered."
     }
 
 private fun decodeTimeline(

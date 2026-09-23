@@ -219,7 +219,7 @@ public struct PackageBodyContent: Sendable {
         case .shipped: "Shipped"
         case .inTransit: "In transit"
         case .outForDelivery: "Out for delivery"
-        case .delivered: "Delivered to your porch"
+        case .delivered: "Delivered"
         }
     }
 
@@ -228,7 +228,7 @@ public struct PackageBodyContent: Sendable {
         case .shipped: "Label created by the sender."
         case .inTransit: "Moving through the carrier network."
         case .outForDelivery: "Expected today by 3 PM."
-        case .delivered: "Front porch - left in shade."
+        case .delivered: "Package status: delivered."
         }
     }
 

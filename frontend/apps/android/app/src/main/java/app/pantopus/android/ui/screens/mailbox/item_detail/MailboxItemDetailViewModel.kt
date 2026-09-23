@@ -90,7 +90,7 @@ private fun packageDefaultStatusTitle(status: PackageDeliveryStatus): String =
         PackageDeliveryStatus.Shipped -> "Shipped"
         PackageDeliveryStatus.InTransit -> "In transit"
         PackageDeliveryStatus.OutForDelivery -> "Out for delivery"
-        PackageDeliveryStatus.Delivered -> "Delivered to your porch"
+        PackageDeliveryStatus.Delivered -> "Delivered"
     }
 
 private fun packageDefaultStatusDetail(status: PackageDeliveryStatus): String =
@@ -98,7 +98,7 @@ private fun packageDefaultStatusDetail(status: PackageDeliveryStatus): String =
         PackageDeliveryStatus.Shipped -> "Label created by the sender."
         PackageDeliveryStatus.InTransit -> "Moving through the carrier network."
         PackageDeliveryStatus.OutForDelivery -> "Expected today by 3 PM."
-        PackageDeliveryStatus.Delivered -> "Front porch - left in shade."
+        PackageDeliveryStatus.Delivered -> "Package status: delivered."
     }
 
 /** Data projected onto the Package body slot. */
