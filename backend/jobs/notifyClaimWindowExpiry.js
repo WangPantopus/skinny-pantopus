@@ -69,7 +69,7 @@ async function notifyClaimWindowExpiry() {
             type: 'claim_window_expiring',
             title: 'Ownership claim window closing soon',
             body: `The claim window for ${home.name || home.address || 'your home'} closes in ~48 hours. Submit any ownership claims before it closes.`,
-            link: `/homes/${home.id}/ownership`,
+            link: `/homes/${home.id}/owners`,
             metadata: { home_id: home.id, claim_window_ends_at: home.claim_window_ends_at },
           });
           notified++;

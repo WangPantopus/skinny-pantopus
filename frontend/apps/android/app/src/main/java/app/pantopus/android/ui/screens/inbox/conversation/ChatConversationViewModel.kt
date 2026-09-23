@@ -1062,9 +1062,13 @@ class ChatConversationViewModel
          * Block the person counterparty via `POST /api/users/:userId/block`
          * (route `backend/routes/blocks.js:13`). Person threads only — on
          * success the caller dismisses the details sheet and leaves the
-         * thread via [onBlocked].
+         * thread via [onBlocked]; on failure [onFailed] lets it say so,
+         * because the details sheet covers the screen's snackbar.
          */
-        fun blockUser(onBlocked: () -> Unit = {}) {
+        fun blockUser(
+            onFailed: () -> Unit = {},
+            onBlocked: () -> Unit = {},
+        ) {
             val target = mode as? ChatThreadMode.Person ?: return
             if (_isBlocking.value) return
             viewModelScope.launch {
@@ -1072,7 +1076,10 @@ class ChatConversationViewModel
                 try {
                     when (val result = blocksRepo.block(target.otherUserId)) {
                         is NetworkResult.Success -> onBlocked()
-                        is NetworkResult.Failure -> Timber.w("block user failed: ${result.error.message}")
+                        is NetworkResult.Failure -> {
+                            Timber.w("block user failed: ${result.error.message}")
+                            onFailed()
+                        }
                     }
                 } finally {
                     _isBlocking.value = false
@@ -1087,12 +1094,14 @@ class ChatConversationViewModel
          * misinformation · safety · other`, `details` optional, max 1000).
          * Person threads only, mirroring [blockUser]. On success the
          * caller dismisses the report sheet via [onReported] and the
-         * success toast is published through [reportNotice]; failures
-         * publish a friendly message there instead.
+         * success toast is published through [reportNotice]. Failures go
+         * to [onFailed] instead: the report sheet stays open over the
+         * snackbar, so the caller shows its own alert.
          */
         fun reportUser(
             reason: String,
             details: String?,
+            onFailed: () -> Unit = {},
             onReported: () -> Unit = {},
         ) {
             val target = mode as? ChatThreadMode.Person ?: return
@@ -1112,7 +1121,7 @@ class ChatConversationViewModel
                         }
                         is NetworkResult.Failure -> {
                             Timber.w("report user failed: ${result.error.message}")
-                            _reportNotice.value = "Couldn't submit the report. Please try again."
+                            onFailed()
                         }
                     }
                 } finally {

@@ -185,9 +185,12 @@ export default function MemberDetail({
     setSaving(true);
     setError('');
     try {
+      // A role change never carries access dates: the server refuses any
+      // role request whose end_at differs from the stored schedule
+      // (ACCESS_WINDOW_CHANGE_FORBIDDEN), so a date typed in the expiry
+      // field below must not block the role change.
       await api.homeIam.updateMemberRole(homeId, member.user_id, {
         role_base: newRole,
-        end_at: expiryDate || undefined,
       });
       if (revision !== generation.current) return;
       await loadPermissions(revision);

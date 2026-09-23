@@ -820,19 +820,6 @@ export function useUpdateMailDaySettings(
   });
 }
 
-export function useDismissMailDaySummary(
-  options?: UseMutationOptions<void, MailboxApiError, void>,
-) {
-  const qc = useQueryClient();
-  return useMutation<void, MailboxApiError, void>({
-    mutationFn: api.dismissMailDaySummary,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: mailboxKeys.mailDaySummary() });
-    },
-    ...options,
-  });
-}
-
 // ============================================================
 // STAMPS & THEMES HOOKS (Phase 3)
 // ============================================================
