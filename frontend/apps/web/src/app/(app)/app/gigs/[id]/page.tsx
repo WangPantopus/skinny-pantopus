@@ -774,7 +774,6 @@ export default function GigDetailsPage() {
                       textClassName="font-semibold text-app-text hover:underline"
                     />
                   )}
-                  <p className="text-sm text-app-text-secondary">Member since 2026</p>
                 </div>
               </div>
               <button
