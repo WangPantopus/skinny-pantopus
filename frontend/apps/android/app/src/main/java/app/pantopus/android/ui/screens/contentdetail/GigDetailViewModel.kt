@@ -26,6 +26,7 @@ import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.data.api.models.offers.UpdateBidBody
 import app.pantopus.android.data.api.models.payments.TipValidation
 import app.pantopus.android.data.api.models.reviews.CreateReviewBody
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
@@ -1046,6 +1047,7 @@ class GigDetailViewModel
             amount: Double,
             message: String?,
             proposedTime: String? = null,
+            onFailure: (NetworkError) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             val bidId = _viewerBid.value?.id
@@ -1069,6 +1071,7 @@ class GigDetailViewModel
                     }
                     is NetworkResult.Failure -> {
                         _lifecycleEvents.emit(GigLifecycleEvent.Toast(result.error.message, isError = true))
+                        onFailure(result.error)
                         onResult(false)
                     }
                 }
@@ -1510,6 +1513,7 @@ class GigDetailViewModel
             amount: Double,
             message: String?,
             proposedTime: String? = null,
+            onFailure: (NetworkError) -> Unit = {},
             onResult: (Boolean) -> Unit = {},
         ) {
             if (rawGig?.status?.lowercase() != "open" || viewerIsOwner || viewerHasActiveBid()) {
@@ -1527,11 +1531,15 @@ class GigDetailViewModel
                                 proposedTime = proposedTime,
                             ),
                     )
-                if (result is NetworkResult.Success) {
-                    load()
-                    onResult(true)
-                } else {
-                    onResult(false)
+                when (result) {
+                    is NetworkResult.Success -> {
+                        load()
+                        onResult(true)
+                    }
+                    is NetworkResult.Failure -> {
+                        onFailure(result.error)
+                        onResult(false)
+                    }
                 }
             }
         }

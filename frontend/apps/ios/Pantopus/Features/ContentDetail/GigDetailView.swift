@@ -19,6 +19,7 @@ import UIKit
 public struct GigDetailView: View {
     @State private var viewModel: GigDetailViewModel
     @State private var bidSheetTarget: EditBidSheetTarget?
+    @State private var bidFailure = EditBidFailure()
     @State private var deliveryTarget: DeliveryProofTarget?
     @State private var showTipSheet = false
     @State private var refundTarget: GigRefundViewModel?
@@ -102,12 +103,14 @@ public struct GigDetailView: View {
                         ? await viewModel.updateViewerBid(
                             amount: draft.amount,
                             message: draft.message,
-                            proposedTime: draft.proposedTime
+                            proposedTime: draft.proposedTime,
+                            failure: bidFailure
                         )
                         : await viewModel.placeBid(
                             amount: draft.amount,
                             message: draft.message,
-                            proposedTime: draft.proposedTime
+                            proposedTime: draft.proposedTime,
+                            failure: bidFailure
                         )
                     if ok {
                         bidSheetTarget = nil
@@ -118,7 +121,13 @@ public struct GigDetailView: View {
                     }
                     return ok
                 },
-                onCancel: { bidSheetTarget = nil }
+                onCancel: { bidSheetTarget = nil },
+                onSetUpPayouts: {
+                    // "Go to Wallet" after a `payout_onboarding_required` refusal.
+                    bidSheetTarget = nil
+                    DeepLinkRouter.shared.handle(path: "/settings/payments")
+                },
+                failure: bidFailure
             )
             .presentationDetents([.large])
         }
@@ -130,7 +139,8 @@ public struct GigDetailView: View {
                 },
                 onDismiss: { viewModel.retireDeliveryProof()
                     deliveryTarget = nil
-                }
+                },
+                failureMessage: { viewModel.deliveryProofFailureMessage }
             )
         })
         .sheet(isPresented: $showTipSheet) { tipSheet }

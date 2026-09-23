@@ -1354,6 +1354,7 @@ public final class GigDetailViewModel {
     /// confirmation; refreshes the task (status → completed) on success.
     @discardableResult
     public func submitDeliveryProof(photos: [DeliveryProofPhoto], note: String?) async -> Bool {
+        deliveryProofFailureMessage = nil
         guard writeIdentityIsCurrent, api.apiBaseURL == uploader.apiBaseURL else {
             retireDeliveryProof()
             return false
@@ -1414,9 +1415,13 @@ public final class GigDetailViewModel {
             await load()
             return current()
         } catch {
+            deliveryProofFailureMessage = (error as? LocalizedError)?.errorDescription
             return false
         }
     }
+
+    /// Why the last delivery proof send failed, when the server or network said; the sheet shows it.
+    public private(set) var deliveryProofFailureMessage: String?
 
     /// Retire this sheet's callbacks and transient uploaded references on departure.
     public func retireDeliveryProof() {
@@ -1428,7 +1433,12 @@ public final class GigDetailViewModel {
     /// time. Returns `true` on success so the host can dismiss its
     /// bid-entry sheet.
     @discardableResult
-    public func placeBid(amount: Double, message: String?, proposedTime: String? = nil) async -> Bool {
+    public func placeBid(
+        amount: Double,
+        message: String?,
+        proposedTime: String? = nil,
+        failure: EditBidFailure? = nil
+    ) async -> Bool {
         guard rawGig?.status?.lowercased() == "open", !viewerIsOwner, !viewerHasActiveBid else { return false }
         do {
             let _: PlaceBidResponse = try await api.request(
@@ -1444,6 +1454,7 @@ public final class GigDetailViewModel {
             await load()
             return true
         } catch {
+            failure?.record(error)
             return false
         }
     }
@@ -1453,7 +1464,12 @@ public final class GigDetailViewModel {
     /// Update the viewer's existing bid — `PUT /api/gigs/:gigId/bids/:bidId`
     /// (gigs.js:4143). Returns `true` so the bid sheet can dismiss.
     @discardableResult
-    public func updateViewerBid(amount: Double, message: String?, proposedTime: String? = nil) async -> Bool {
+    public func updateViewerBid(
+        amount: Double,
+        message: String?,
+        proposedTime: String? = nil,
+        failure: EditBidFailure? = nil
+    ) async -> Bool {
         guard viewerCanEditBid, let bidId = viewerBid?.id, !viewerBidActionInFlight else { return false }
         viewerBidActionInFlight = true
         defer { viewerBidActionInFlight = false }
@@ -1468,6 +1484,7 @@ public final class GigDetailViewModel {
             await load()
             return true
         } catch {
+            failure?.record(error)
             return false
         }
     }
