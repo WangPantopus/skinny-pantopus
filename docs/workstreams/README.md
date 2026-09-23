@@ -7,7 +7,15 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — 2026-09-23T21:50:42Z (handoff published; native gates running)
+## CURRENT RESUME POINT — 2026-09-23T21:55:48Z (four streams resumed, staged worker rotation)
+
+- **Worker rotation:** `/root/shared_ux` now owns the five unpublished native C-item groups. Stream1 returned at a clean checkpoint to make a slot: no queued build, driver or booted device; API18132 remains available. Its new source/runtime/commands are prepended to the existing [Stream1 checkpoint](coordinator-state-2026-09-23/checkpoints/stream1-2026-09-23.md). Resume the same `/root/stream1` after geo publication; preserve its pushed `9304317518a48d70a6ff8b0c4c89e7bbbd89c2ed` repair and `1e6c2c402c2507f769bc69fcc41e0385a320ffd4` native integration.
+- **Actual build order:** Stream2 is actively compiling #325 iOS. Stream3's Android build/lint passed, but its brief install queued after a broad byte scan mistook a compiler line-map `:8000` for a URL. Generated API/socket config and URL-aware dex scan show only owned18130 and no8000 network URL. Stream3 shut down its idle emulator and will install/capture after Stream2 releases heavy. Do not interrupt the active compiler.
+- **Shared UX:** source completion/runtime setup can proceed now; native heavy work waits behind Stream3 install and Stream1. Uses fresh Stream1 DB64561/64562, separate synthetic fixture prefix and owned API18138; old fixture cleanup is not claimed. Stream2 then Stream1 then Shared UX own the iOS automation windows in order.
+- **Watcher portability:** `ci-watch2.sh` now discovers both `claude/*` saved branches and new `codex/*` branches. Current monitor keeps running; the next re-arm loads the updated script. Founder branches remain unqueued.
+- **Limits:** geo Android feature capture and #325 iOS journey are still pending; no native after or new application PR has completed yet. Master remains docs391 `61c64f9c1778b9b11fda12dd0cfa4762fff3bef0`; batch4 application publication awaits the gates. Count13 closed/67 partial and founder queue unchanged.
+
+## Resume point history — 2026-09-23T21:50:42Z (handoff published; native gates running)
 
 - **Master:** `61c64f9c1778b9b11fda12dd0cfa4762fff3bef0` after documentation PR #391 merged at GitHub-reported `2026-09-23T21:47:44Z`, exact head `74f0d8194cbd91c34024945c29f300446abb7c91` with green CI OK. This publishes the seven-file handoff plus takeover/recovery notes. No application code changed in #391; #389 remains already merged and excluded from batch 4.
 - **Geo P0:** Android cold assemble completed; final lint/install/captures run at `2e7ad13f1edad86a82f1bc336b4ff32a57e7ca29`. Detekt ReturnCount was repaired by combining the nullable-coordinate guard. The existing Android constructor fixture had already been updated on the paused branch; coordinator checked it and made no duplicate change. Prior iOS DTO and evidence remain unchanged and reusable.

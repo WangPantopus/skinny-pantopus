@@ -9,8 +9,8 @@ REPO=WangPantopus/skinny-pantopus
 touch "$W" "$SEEN"
 while true; do
   open=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --jq '.[] | "\(.number) \(.head.sha) \(.head.ref)"' 2>/dev/null) || { sleep 120; continue; }
-  # Watch every open claude/* PR automatically, plus anything listed in $W.
-  for n in $(echo "$open" | awk '$3 ~ /^claude\//{print $1}'); do grep -qx "$n" "$W" || echo "$n" >> "$W"; done
+  # Watch every open claude/* or codex/* PR automatically, plus anything listed in $W.
+  for n in $(echo "$open" | awk '$3 ~ /^(claude|codex)\//{print $1}'); do grep -qx "$n" "$W" || echo "$n" >> "$W"; done
   for n in $(grep -E '^[0-9]+$' "$W" | sort -u); do
     grep -qE "^$n [^ ]+ (MERGED|CLOSED)$" "$SEEN" && continue
     sha=$(echo "$open" | awk -v n="$n" '$1==n{print $2}')
