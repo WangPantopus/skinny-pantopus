@@ -2419,13 +2419,7 @@ public struct YouTabRoot: View {
                         items: ["Check out this business on Pantopus — \(InviteLinks.downloadURLString)"]
                     )
                 },
-                onOpenReport: {
-                    Task { @MainActor in path.append(.placeholder(label: "Report business")) }
-                },
                 onOpenWebsite: { url in openURL(url) },
-                onBook: {
-                    Task { @MainActor in path.append(.placeholder(label: "Book")) }
-                },
                 onEdit: {
                     Task { @MainActor in path.append(.editBusinessPage(businessId: businessId)) }
                 }

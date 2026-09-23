@@ -304,7 +304,7 @@ final class BusinessProfileViewModelTests: XCTestCase {
 
     // MARK: - Newly claimed
 
-    func testNewlyClaimedProjectsNewStatAndCallDock() async {
+    func testNewlyClaimedProjectsNewStatAndContactOnlyDock() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.detailNewJSON),
             .status(200, body: Self.publicEmptyJSON),
@@ -322,7 +322,8 @@ final class BusinessProfileViewModelTests: XCTestCase {
         XCTAssertEqual(content.stats[2].value, "New")
         XCTAssertEqual(content.stats[2].tint, .business)
         XCTAssertNil(content.reviewSummary)
-        XCTAssertEqual(content.dock.secondary, .call)
+        // No public phone and no booking page: Contact stands alone.
+        XCTAssertNil(content.dock.secondary)
     }
 
     // MARK: - Not found

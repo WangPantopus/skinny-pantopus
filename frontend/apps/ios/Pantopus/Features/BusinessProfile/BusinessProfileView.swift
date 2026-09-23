@@ -23,11 +23,11 @@ import SwiftUI
 public struct BusinessProfileView: View {
     @State private var viewModel: BusinessProfileViewModel
     @State private var savedStore = SavedPlacesStore()
+    @State private var showsReportSheet = false
     private let onBack: @MainActor () -> Void
     /// Host pushes the chat conversation after Contact resolves a room.
     private let onOpenMessages: @MainActor (InboxConversationDestination) -> Void
     private let onShare: @MainActor () -> Void
-    private let onOpenReport: @MainActor () -> Void
     private let onOpenWebsite: @MainActor (URL) -> Void
     /// "Book" dock action — stubbed by the host (real booking ships later).
     private let onBook: @MainActor () -> Void
@@ -40,7 +40,6 @@ public struct BusinessProfileView: View {
         onBack: @escaping @MainActor () -> Void,
         onOpenMessages: @escaping @MainActor (InboxConversationDestination) -> Void = { _ in },
         onShare: @escaping @MainActor () -> Void = {},
-        onOpenReport: @escaping @MainActor () -> Void = {},
         onOpenWebsite: @escaping @MainActor (URL) -> Void = { _ in },
         onBook: @escaping @MainActor () -> Void = {},
         onEdit: @escaping @MainActor () -> Void = {}
@@ -51,7 +50,6 @@ public struct BusinessProfileView: View {
         self.onBack = onBack
         self.onOpenMessages = onOpenMessages
         self.onShare = onShare
-        self.onOpenReport = onOpenReport
         self.onOpenWebsite = onOpenWebsite
         self.onBook = onBook
         self.onEdit = onEdit
@@ -90,12 +88,15 @@ public struct BusinessProfileView: View {
                 }
             }
             Button("Share business") { onShare() }
-            Button("Report", role: .destructive) { onOpenReport() }
+            Button("Report", role: .destructive) { showsReportSheet = true }
             Button("Cancel", role: .cancel) {}
         }
         .accessibilityIdentifier("businessProfile")
         .task { await viewModel.load() }
         .task { await savedStore.loadIfNeeded() }
+        // Businesses are User rows, so the existing report sheet and
+        // POST /api/users/:id/report cover them.
+        .sheet(isPresented: $showsReportSheet) { reportSheet }
         .sheet(item: $savedBindable.pendingSave) { pending in
             SavePlaceSheet(
                 pending: pending,
@@ -103,6 +104,21 @@ public struct BusinessProfileView: View {
                     Task { await savedStore.commitSave(label: label, choice: choice) }
                 },
                 onClose: { savedStore.pendingSave = nil }
+            )
+        }
+    }
+
+    @ViewBuilder private var reportSheet: some View {
+        if case let .loaded(payload) = viewModel.state {
+            ReportUserSheet(
+                userId: payload.businessId,
+                handle: payload.header.handle,
+                displayName: payload.header.displayName,
+                onClose: { showsReportSheet = false },
+                onSubmitted: {
+                    showsReportSheet = false
+                    viewModel.toastMessage = "Report received"
+                }
             )
         }
     }

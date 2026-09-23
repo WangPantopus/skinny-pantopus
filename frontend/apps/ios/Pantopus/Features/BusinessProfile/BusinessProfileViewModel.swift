@@ -337,7 +337,7 @@ extension BusinessProfileViewModel {
             gallery: [],
             reviewSummary: buildReviewSummary(business: business, reviewsResponse: reviewsResponse),
             reviews: (reviewsResponse?.reviews ?? []).map(buildReview),
-            dock: buildDock(status: status, isNewlyClaimed: isNewlyClaimed),
+            dock: buildDock(status: status, phoneNumber: profile?.publicPhone ?? primaryLocation?.phone),
             savedPlace: pendingSavePlace,
             isNewlyClaimed: isNewlyClaimed,
             phoneNumber: profile?.publicPhone ?? primaryLocation?.phone,
@@ -692,9 +692,11 @@ extension BusinessProfileViewModel {
 
     // MARK: Dock
 
-    private func buildDock(status: BusinessOpenState?, isNewlyClaimed: Bool) -> BusinessActionDock {
+    private func buildDock(status: BusinessOpenState?, phoneNumber: String?) -> BusinessActionDock {
         let isClosed = status?.isOpen == false
-        let secondary: BusinessActionDock.Secondary = (isNewlyClaimed || isClosed) ? .call : .book
+        // "Book" needs the business's booking page, which the payload doesn't
+        // carry yet, so it isn't offered. "Call" only when there is a number.
+        let secondary: BusinessActionDock.Secondary? = (phoneNumber?.isEmpty ?? true) ? nil : .call
         let note = isClosed ? "Closed now — messages answered when they reopen" : nil
         return BusinessActionDock(secondary: secondary, note: note)
     }

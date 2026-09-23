@@ -77,6 +77,7 @@ object BusinessProfileMapper {
                 ?: business.tagline?.takeIf { it.isNotEmpty() }
 
         val serviceArea = buildServiceArea(primaryLocation, profile)
+        val phoneNumber = profile?.publicPhone ?: primaryLocation?.phone
 
         return BusinessProfileContent(
             businessId = business.id,
@@ -92,10 +93,10 @@ object BusinessProfileMapper {
             gallery = emptyList(),
             reviewSummary = buildReviewSummary(business, reviewsResponse),
             reviews = (reviewsResponse?.reviews ?: emptyList()).map { buildReview(it) },
-            dock = buildDock(status, isNewlyClaimed),
+            dock = buildDock(status, phoneNumber),
             savedPlace = savedPlace(business, header.displayName, primaryLocation, serviceArea, detail.access?.isOwner == true),
             isNewlyClaimed = isNewlyClaimed,
-            phoneNumber = profile?.publicPhone ?: primaryLocation?.phone,
+            phoneNumber = phoneNumber,
             websiteUrl = normalizedWebsite(profile?.website),
             viewerIsOwner = detail.access?.isOwner == true,
         )
@@ -478,11 +479,12 @@ object BusinessProfileMapper {
 
     private fun buildDock(
         status: BusinessOpenState?,
-        isNewlyClaimed: Boolean,
+        phoneNumber: String?,
     ): BusinessActionDock {
         val isClosed = status?.isOpen == false
-        val secondary =
-            if (isNewlyClaimed || isClosed) BusinessActionDock.Secondary.Call else BusinessActionDock.Secondary.Book
+        // "Book" needs the business's booking page, which the payload doesn't
+        // carry yet, so it isn't offered. "Call" only when there is a number.
+        val secondary = if (phoneNumber.isNullOrBlank()) null else BusinessActionDock.Secondary.Call
         val note = if (isClosed) "Closed now — messages answered when they reopen" else null
         return BusinessActionDock(secondary = secondary, note = note)
     }

@@ -36,6 +36,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +71,7 @@ import app.pantopus.android.ui.screens.business_profile.components.EmptyBlock
 import app.pantopus.android.ui.screens.business_profile.components.HoursTable
 import app.pantopus.android.ui.screens.business_profile.components.ServicesList
 import app.pantopus.android.ui.screens.business_profile.components.StatStrip
+import app.pantopus.android.ui.screens.profile.ReportUserSheet
 import app.pantopus.android.ui.screens.saved_places.PendingSavePlace
 import app.pantopus.android.ui.screens.saved_places.SaveBookmarkButton
 import app.pantopus.android.ui.screens.saved_places.SavePlaceSheet
@@ -98,7 +102,6 @@ fun BusinessProfileScreen(
     onOpenMessages: (roomId: String, displayName: String, initials: String, verified: Boolean) -> Unit =
         { _, _, _, _ -> },
     onShare: () -> Unit = {},
-    onOpenReport: () -> Unit = {},
     onOpenWebsite: (String) -> Unit = {},
     onBook: () -> Unit = {},
     onEdit: () -> Unit = {},
@@ -114,6 +117,8 @@ fun BusinessProfileScreen(
     val undo by savedPlacesStore.undo.collectAsStateWithLifecycle()
     val savedPlacesToast by savedPlacesStore.toast.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState()
+    val reportSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showReportSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.load()
@@ -209,6 +214,24 @@ fun BusinessProfileScreen(
             )
         }
 
+        // Businesses are User rows, so the existing report sheet and
+        // POST /api/users/:id/report cover them.
+        if (showReportSheet) {
+            (state as? BusinessProfileUiState.Loaded)?.content?.let { loaded ->
+                ReportUserSheet(
+                    userId = loaded.businessId,
+                    handle = loaded.header.handle,
+                    displayName = loaded.header.displayName,
+                    sheetState = reportSheetState,
+                    onDismiss = { showReportSheet = false },
+                    onSubmitted = {
+                        showReportSheet = false
+                        viewModel.showToast("Report received")
+                    },
+                )
+            }
+        }
+
         if (showOverflow) {
             val content = (state as? BusinessProfileUiState.Loaded)?.content
             val viewerIsOwner = content?.viewerIsOwner == true
@@ -233,7 +256,7 @@ fun BusinessProfileScreen(
                     },
                     onReport = {
                         viewModel.setShowOverflow(false)
-                        onOpenReport()
+                        showReportSheet = true
                     },
                     onCancel = { viewModel.setShowOverflow(false) },
                 )

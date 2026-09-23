@@ -4126,9 +4126,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 "Share business",
                             )
                         },
-                        onOpenReport = { navController.navigate(ChildRoutes.placeholder("Report business")) },
                         onOpenWebsite = { uri -> runCatching { uriHandler.openUri(uri) } },
-                        onBook = { navController.navigate(ChildRoutes.placeholder("Book")) },
                         onEdit = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
                     )
                 }
@@ -4171,9 +4169,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 "Share business",
                             )
                         },
-                        onOpenReport = { navController.navigate(ChildRoutes.placeholder("Report business")) },
                         onOpenWebsite = { uri -> runCatching { uriHandler.openUri(uri) } },
-                        onBook = { navController.navigate(ChildRoutes.placeholder("Book")) },
                         onEdit = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
                     )
                 }
