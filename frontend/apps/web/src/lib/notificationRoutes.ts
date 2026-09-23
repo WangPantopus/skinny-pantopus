@@ -17,6 +17,18 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
 
   const path = extractPath(trimmed);
   if (!path || !safeInternalPath(path)) return null;
+
+  // Stored rows keep links to pages that live elsewhere on web: the host
+  // booking detail is under /app/scheduling, a received invoice at /app/invoice.
+  const bookingMatch = path.match(/^\/app\/profile\/schedule\/bookings\/([^/?#]+)/i);
+  if (bookingMatch && uuid.test(bookingMatch[1])) {
+    return `/app/scheduling/bookings/${bookingMatch[1]}${path.slice(bookingMatch[0].length)}`;
+  }
+  const invoiceMatch = path.match(/^\/app\/invoices\/([^/?#]+)/i);
+  if (invoiceMatch && uuid.test(invoiceMatch[1])) {
+    return `/app/invoice/${invoiceMatch[1]}${path.slice(invoiceMatch[0].length)}`;
+  }
+
   if (path.startsWith('/app/')) return path;
 
   const postMatch = path.match(/^\/posts?\/([^/?#]+)/i);
@@ -31,6 +43,13 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
     return `/app/marketplace/${listingMatch[1]}${suffix}`;
   }
 
+  // Older Home notices linked to pages the web never had: /homes/:id/ownership
+  // (the Owners page) and /homes/:id/occupants (the Members page).
+  const legacyHome = path.match(/^\/homes\/([^/?#]+)\/(ownership|occupants)(?=$|[?#])/i);
+  if (legacyHome) {
+    const page = legacyHome[2].toLowerCase() === 'ownership' ? 'owners' : 'members';
+    return `/app/homes/${legacyHome[1]}/${page}${path.slice(legacyHome[0].length)}`;
+  }
   if (path.startsWith('/homes/')) return `/app${path}`;
 
   // Job links use the mobile deep-link vocabulary — bare hosts with no

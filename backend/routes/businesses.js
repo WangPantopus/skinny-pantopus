@@ -4832,6 +4832,14 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
       return res.status(404).json({ error: 'Recipient not found', code: 'RECIPIENT_NOT_FOUND' });
     }
 
+    // A business can't invoice someone who has blocked it (or whom it has
+    // blocked). 422 (not 403) so clients show this message, which doesn't
+    // reveal the block; a failed block check refuses too.
+    const { isBlocked } = require('../services/blockService');
+    if (await isBlocked(recipient_user_id, businessId)) {
+      return res.status(422).json({ error: 'Unable to send an invoice to this person.' });
+    }
+
     // Calculate totals — fee is deducted from business payout, not added to customer total
     const subtotal_cents = line_items.reduce(
       (sum, item) => sum + item.amount_cents * (item.quantity || 1), 0
@@ -4872,17 +4880,29 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
       .eq('id', businessId)
       .maybeSingle();
 
-    // Send notification to recipient (non-blocking)
-    supabaseAdmin.from('Notification').insert({
-      user_id: recipient_user_id,
-      type: 'invoice_received',
-      title: 'Invoice Received',
-      body: `${bizUser?.name || bizUser?.username || 'A business'} sent you an invoice for $${(total_cents / 100).toFixed(2)}`,
-      data: { invoice_id: invoice.id, business_id: businessId, amount_cents: total_cents },
-    }).then(() => {}).catch(() => {});
+    // Notify the recipient (non-blocking) through the shared notification
+    // service, which stores the payload in `metadata`. Nothing is sent when
+    // either the recipient or the business has blocked the other, or when the
+    // block check itself fails.
+    isBlocked(recipient_user_id, businessId)
+      .then((blocked) => (blocked ? null : require('../services/notificationService').createNotification({
+        userId: recipient_user_id,
+        type: 'invoice_received',
+        title: 'Invoice Received',
+        body: `${bizUser?.name || bizUser?.username || 'A business'} sent you an invoice for $${(total_cents / 100).toFixed(2)}`,
+        link: `/app/invoice/${invoice.id}`,
+        metadata: { invoice_id: invoice.id, business_id: businessId, amount_cents: total_cents },
+        context: 'personal',
+      })))
+      .catch((err) => {
+        logger.warn('Invoice notification skipped', { invoiceId: invoice.id, error: err.message });
+      });
 
     res.status(201).json({ invoice });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') {
+      return res.status(503).json({ error: "Couldn't send the invoice right now. Please try again.", code: err.code });
+    }
     logger.error('Create invoice error', { error: err.message });
     res.status(500).json({ error: 'Failed to create invoice', code: 'INTERNAL_ERROR' });
   }

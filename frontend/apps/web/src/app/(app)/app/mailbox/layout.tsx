@@ -10,9 +10,21 @@ import { MailboxProvider } from '@/contexts/MailboxContext';
 import {
   useDrawerMeta,
   useMailDaySummary,
-  useDismissMailDaySummary,
   useVacationHold,
 } from '@/lib/mailbox-queries';
+
+// The server keeps no dismissal for the Mail Day summary, so this browser
+// remembers the day it was dismissed; the banner returns the next day.
+const MAIL_DAY_DISMISSED_KEY = 'pantopus_mailday_summary_dismissed';
+
+function localDay(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function readMailDayDismissed(): boolean {
+  try { return window.localStorage.getItem(MAIL_DAY_DISMISSED_KEY) === localDay(); } catch { return false; }
+}
 
 /**
  * Route-level layout for all /mailbox/* pages.
@@ -22,7 +34,7 @@ import {
  * - MailboxContext + MailboxToastProvider
  * - Loading skeleton while DrawerMeta loads
  * - Error state with retry
- * - Mail Day summary banner (dismissible, API-backed)
+ * - Mail Day summary banner (dismissible for the rest of the day in this browser)
  * - Travel mode banner in left nav
  * - MailboxNav in the left column
  * - Error boundaries around each major section
@@ -73,8 +85,7 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
 
   // ── Mail Day summary banner ────────────────────────────
   const { data: mailDay } = useMailDaySummary();
-  const dismissMailDay = useDismissMailDaySummary();
-  const [mailDayDismissed, setMailDayDismissed] = useState(false);
+  const [mailDayDismissed, setMailDayDismissed] = useState(readMailDayDismissed);
 
   const showMailDayBanner =
     !mailDayDismissed &&
@@ -83,8 +94,8 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
 
   const handleDismissMailDay = useCallback(() => {
     setMailDayDismissed(true);
-    dismissMailDay.mutate();
-  }, [dismissMailDay]);
+    try { window.localStorage.setItem(MAIL_DAY_DISMISSED_KEY, localDay()); } catch { /* ignore */ }
+  }, []);
 
   // Navigate to the drawer with the most urgent item
   const handleOpenMailDay = useCallback(() => {

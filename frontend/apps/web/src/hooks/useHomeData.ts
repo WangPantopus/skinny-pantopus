@@ -133,6 +133,14 @@ function reducer(state: State, action: Action): State {
   }
 }
 
+// A section error names the section in words the page already uses (the
+// "Home help" card, "access information"), never an internal key such as homeGigs.
+const ENTITY_ERROR_LABELS: Partial<Record<keyof HomeDataEntities, string>> = {
+  secrets: 'access information',
+  homeGigs: 'home help',
+  nearbyGigs: 'home help',
+};
+
 // ── Entity fetch map ──
 
 const ENTITY_FETCHERS: Record<
@@ -300,7 +308,7 @@ export function useHomeData(homeId: string): UseHomeDataReturn {
           if (!Array.isArray(response.data)) throw new Error('Invalid collection');
           Object.assign(result, { [entity]: response.data });
         } catch {
-          result.entityErrors![entity] = `Current ${entity === 'secrets' ? 'access information' : entity} could not be loaded. Retry to check current information.`;
+          result.entityErrors![entity] = `Current ${ENTITY_ERROR_LABELS[entity] ?? entity} could not be loaded. Retry to check current information.`;
         }
       }));
       if (!current()) return;
