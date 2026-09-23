@@ -177,8 +177,9 @@ router.get('/records/assets', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const homeId = req.query.homeId;
-    const homeIds =
-      homeId && isUuid(homeId) ? [homeId] : await getAccessibleHomeIds(userId);
+    // A requested Home narrows the caller's accessible Homes; it never widens them.
+    const accessible = await getAccessibleHomeIds(userId);
+    const homeIds = homeId && isUuid(homeId) ? accessible.filter((id) => id === homeId) : accessible;
     if (!homeIds.length) return res.json({ assets: [], rooms: [] });
 
     const { data: assets, error } = await supabaseAdmin
@@ -460,8 +461,9 @@ router.get('/map/pins', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const homeId = req.query.homeId;
     const pinType = req.query.type;
-    const homeIds =
-      homeId && isUuid(homeId) ? [homeId] : await getAccessibleHomeIds(userId);
+    // A requested Home narrows the caller's accessible Homes; it never widens them.
+    const accessible = await getAccessibleHomeIds(userId);
+    const homeIds = homeId && isUuid(homeId) ? accessible.filter((id) => id === homeId) : accessible;
     if (!homeIds.length) return res.json({ pins: [] });
 
     let query = supabaseAdmin
@@ -544,6 +546,9 @@ router.get('/map/pin/:id', verifyToken, async (req, res) => {
       .single();
 
     if (error || !pin) return res.status(404).json({ error: 'Pin not found' });
+    // Same gate as creating a pin: only the pin's own household may read it.
+    const accessible = await getAccessibleHomeIds(req.user.id);
+    if (!accessible.includes(pin.home_id)) return res.status(404).json({ error: 'Pin not found' });
 
     // If linked to mail, fetch it
     let linked_mail = null;
