@@ -2,9 +2,72 @@
 
 > **▶ START HERE:** [`HANDOFF-2026-09-23.md`](HANDOFF-2026-09-23.md) — full end-of-session handoff (all three
 > streams, the pushed-but-no-PR P04/P05 fee work, the queue, and the search-filter security area the next agent
-> must NOT resume). The blocks below are the running history it summarizes.
+> must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
+> records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 05:07 UTC
+## CURRENT RESUME POINT — September 23, 2026, 06:52 UTC (coordinator session `92cc4526`)
+
+The count is still **9 closed / 71 partial**. P03 is ready to close now that #241 merged; the backlog row update
+waits for the docs pass.
+
+### Merged since the handoff (serial queue, exact-head CI)
+- #241 → `fa647f69a`
+- #248 → `c6f7db9c0`
+- #247 → `019fb0b03`
+- #249 → `c4a538e2a`
+- #250 → `35391f59e`
+
+The runner (pid 6029) is alive. #251 and #252 were appended at 06:35 UTC. Queue at 06:52: 218 231 221 236 219 213
+214 215 224 199 208 251 252.
+
+### New PRs (not queued until CI OK)
+- **#253 — P04/P05 fee, backend and migration** (`claude/stream1-poster-fault-fee` @ `be92a0f71`).
+- **#254 — fee line on web, iOS and Android** (`…-clients` @ `b0a5f9e70`), stacked on #253. Merge #253 first.
+- **Fee bundle.** The coordinator sealed it from the fee agent's evidence:
+  - 160 files, MANIFEST `18db9ac4ba6a71ff7fe95be3fce323bfffa2a4f12882f5dc8df01fca9113d024`;
+  - journeys J1–J8 plus settlement, on real Stripe TEST.
+- **Android pixel identity is complete.** The tall captures of the card and the stop sheet differ only in the
+  status-bar clock (re-compared at 06:38 UTC). The handoff's "Android pair in progress" item is closed.
+- **Migration policy re-checked.** `20260923000100` sorts after master's newest `20260922023100`, and no queued PR
+  adds a migration.
+- **#255 — search terms escaped before ILIKE filters** (`claude/search-terms-escape-ilike` @ `45f114cdf`).
+  - This is the plain defensive edit from HANDOFF §0: `escapeIlike()` is lifted to `backend/utils/escapeIlike.js`
+    and applied at the eight listed call sites.
+  - Backend Jest: 341 suites pass. Privacy gates pass.
+  - **No probing and no write-up.** The search-filter audit stays closed.
+
+### Evidence location changed (this session only)
+- This coordinator runs in an isolated worktree. A hook blocks writes into the founder's main checkout, and the
+  legacy store `skinny-pantopus/.pantopus-recovery/audits/` lives there.
+- **New and resealed bundles go in the worktree store** (gitignored by its own `.gitignore`):
+  `/Users/yingpengwang/estimate-rescue/skinny-pantopus/pantopus-stream-2-home-3ef380/.pantopus-recovery/audits/`.
+- **Copy them into the legacy store before this worktree is removed.** The legacy store stays read-only for this
+  session's agents.
+
+### Stream agents respawned (06:50 UTC)
+- Stream 1 (gigs & payments), Stream 2 (Home) and Stream 3 (accounts & social) are running as background agents
+  of session `92cc4526`. Their shared rules are in `/private/tmp/pantopus-tools/AGENT-RULES-2026-09-23.md`.
+- **New shared limiter:** `/private/tmp/pantopus-tools/device-slot.sh`.
+  - At most 3 booted test devices at a time. The founder's simulator EB5AD759 is excluded and never touched.
+  - No slot is handed out below 20% free memory.
+  - This sits alongside the existing heavy build slot.
+- **Stream 2 incident (05:57–05:59 UTC, previous session).**
+  - What happened: an Android APK built without `PANTOPUS_API_BASE_URL`/`PANTOPUS_SOCKET_URL` fell back to
+    `http://10.0.2.2:8000`. It sent two requests to the founder's `:8000` backend: a refresh (401 TOKEN_REUSE) and a
+    login for a synthetic account (401).
+  - Likely effect: log lines and limiter counts only. The founder's stack was not queried.
+  - The rules now require explicit URLs and a dex check (the APK must contain its own port and no `:8000`) before
+    any install.
+- **Load shed.** The coordinator shut down its idle simulators (F4DBD47E, C2BCF36A and Stream 3's 0AE16FA0; the
+  apps stay installed) and `docker stop`ped the finished fee project `pantopus-stream1-fee-r1` (volumes kept).
+
+### New Stream 1 observation (being verified by the Stream 1 agent)
+- **Where:** Android gig detail draws its lifecycle toast in the screen content, under any open `ModalBottomSheet`.
+- **Colour:** always `success`, even for `isError` toasts.
+- **Evidence:** in the fee J3 run, "Report no-show" returned 503, the sheet stayed open, and no message was visible.
+- **Next:** device check first. Any colour change is presentation and goes to the founder.
+
+## Resume point history — September 23, 2026, 05:07 UTC
 
 This updates the 04:40 block below; read both. The count is still **9 closed / 71 partial**.
 
