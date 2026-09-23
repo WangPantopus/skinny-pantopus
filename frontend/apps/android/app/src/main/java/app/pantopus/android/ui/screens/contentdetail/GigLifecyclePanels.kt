@@ -238,6 +238,7 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
         GigChangeOrdersCard(
             orders = changeOrders,
             viewerUserId = viewModel.viewerUserId(),
+            priceChangeUnavailableReason = viewModel.priceChangeUnavailableReason(),
             actionInFlightOrderId = changeOrderActionInFlight,
             onPropose = { proposeChangeSheetVisible = true },
             onApprove = { viewModel.approveChangeOrder(it.id) },
@@ -306,7 +307,7 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
                 },
                 onCancel = { proposeChangeSheetVisible = false },
                 errorText = submit.error,
-                priceChangesAvailable = viewModel.priceChangesAvailable(),
+                priceChangeUnavailableReason = viewModel.priceChangeUnavailableReason(),
             )
         }
     }
@@ -1269,6 +1270,7 @@ fun GigRunningLateSheetContent(
 private fun GigChangeOrdersCard(
     orders: List<GigChangeOrderDto>,
     viewerUserId: String?,
+    priceChangeUnavailableReason: String?,
     actionInFlightOrderId: String?,
     onPropose: () -> Unit,
     onApprove: (GigChangeOrderDto) -> Unit,
@@ -1293,6 +1295,8 @@ private fun GigChangeOrdersCard(
             GigChangeOrderRow(
                 order = order,
                 viewerIsRequester = viewerUserId != null && viewerUserId == order.requestedBy,
+                // A pending price order can't be approved now; say why instead of offering Approve.
+                approveUnavailableReason = priceChangeUnavailableReason.takeIf { (order.amountChange ?: 0.0) != 0.0 },
                 busy = actionInFlightOrderId != null,
                 onApprove = { onApprove(order) },
                 onReject = { onReject(order) },
@@ -1313,6 +1317,7 @@ private fun GigChangeOrdersCard(
 private fun GigChangeOrderRow(
     order: GigChangeOrderDto,
     viewerIsRequester: Boolean,
+    approveUnavailableReason: String?,
     busy: Boolean,
     onApprove: () -> Unit,
     onReject: () -> Unit,
@@ -1366,14 +1371,24 @@ private fun GigChangeOrderRow(
                     )
                 }
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    BidActionButton(
-                        label = "Approve",
-                        prominent = true,
-                        enabled = !busy,
-                        modifier = Modifier.weight(1f).testTag("gigDetail.change_${order.id}.approve"),
-                        onClick = onApprove,
+                approveUnavailableReason?.let { reason ->
+                    Text(
+                        text = reason,
+                        fontSize = 13.sp,
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.testTag("gigDetail.change_${order.id}.approveUnavailable"),
                     )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    if (approveUnavailableReason == null) {
+                        BidActionButton(
+                            label = "Approve",
+                            prominent = true,
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f).testTag("gigDetail.change_${order.id}.approve"),
+                            onClick = onApprove,
+                        )
+                    }
                     BidActionButton(
                         label = "Reject",
                         prominent = false,
@@ -1421,17 +1436,18 @@ private fun changeAmountLabel(order: GigChangeOrderDto): String? {
 }
 
 /**
- * Propose-a-change sheet → `POST /change-orders`. While the task's payment hold is live the
- * server refuses price changes, so [priceChangesAvailable] false leaves out the two price types
- * and the amount field and says why in their place.
+ * Propose-a-change sheet → `POST /change-orders`. When the server refuses price changes on this task,
+ * [priceChangeUnavailableReason] says why: the sheet leaves out the two price types and the amount
+ * field and shows that sentence in their place.
  */
 @Composable
 fun GigProposeChangeSheetContent(
     onSubmit: (GigChangeOrderType, String, Double?, Int?) -> Unit,
     onCancel: () -> Unit,
     errorText: String? = null,
-    priceChangesAvailable: Boolean = true,
+    priceChangeUnavailableReason: String? = null,
 ) {
+    val priceChangesAvailable = priceChangeUnavailableReason == null
     var selectedType by remember { mutableStateOf<GigChangeOrderType?>(null) }
     var description by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
@@ -1459,9 +1475,9 @@ fun GigProposeChangeSheetContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            if (!priceChangesAvailable) {
+            if (priceChangeUnavailableReason != null) {
                 Text(
-                    text = "Price changes aren't available once a task has a payment hold.",
+                    text = priceChangeUnavailableReason,
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.testTag("gigDetail.changesSheet.priceUnavailable"),
