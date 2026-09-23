@@ -1228,6 +1228,17 @@ public struct HubTabRoot: View {
         return .placeholder(label: item.title)
     }
 
+    /// A one-to-one chat with a support train's organizer.
+    static func chatRoute(toHost host: HostedByFooter) -> HubRoute {
+        .chatConversation(InboxConversationDestination(
+            mode: .person(otherUserId: host.organizerUserId ?? ""),
+            displayName: host.organizerDisplayName,
+            initials: host.organizerInitials,
+            identityKind: nil,
+            verified: false
+        ))
+    }
+
     /// Two-letter initials derived from a display name. Falls back to
     /// `··` when the input has no alphanumeric content so the chat header's
     /// avatar still renders.
@@ -2445,25 +2456,11 @@ public struct HubTabRoot: View {
                     // screen itself (`ReserveSlotSheet`), which posts
                     // `POST …/slots/:slotId/reserve`. Nothing to push.
                 },
-                onEditSlot: { _ in
-                    Task { @MainActor in
-                        push(.placeholder(label: "Edit your slot"))
-                    }
-                },
-                onSendCard: {
-                    Task { @MainActor in
-                        push(.placeholder(label: "Send a card"))
-                    }
-                },
-                onJoinAsBackup: {
-                    Task { @MainActor in
-                        push(.placeholder(label: "Join as backup"))
-                    }
-                },
-                onMessageHost: {
-                    Task { @MainActor in
-                        push(.placeholder(label: "Message host"))
-                    }
+                // Edit slot, Send a card and Join as backup have no backend
+                // route yet, so they aren't wired and the screen hides them
+                // (Leave / Mark delivered cover a helper's own slot).
+                onMessageHost: { host in
+                    Task { @MainActor in push(Self.chatRoute(toHost: host)) }
                 }
             )
         case let .reviewSignups(supportTrainId):
