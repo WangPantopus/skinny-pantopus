@@ -1,6 +1,16 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — September 23, 2026, 06:58 UTC
+## CURRENT RESUME POINT — September 23, 2026, 20:50 UTC (work PAUSED)
+
+Read [the final handoff](workstreams/HANDOFF-2026-09-23-FINAL.md) first. It's the complete record of coordinator session `92cc4526`.
+- **Master:** `1a15514cc`. 187 PRs merged on 2026-09-23, including combined batches #353, #374 and #387.
+- **Open:** PRs #325, #356, #388 and #389 (batch 4). 25 pushed branches have no PR yet.
+- **Agents:** all four paused with checkpoints in `workstreams/coordinator-state-2026-09-23/checkpoints/`.
+- **P0:** Stream 3's native business-profile location decode fix. Business profiles with a location fail on iOS and Android.
+- **Count:** 13 closed / 67 partial.
+- **Evidence:** new bundles are in the coordinator worktree store. Copy them into `skinny-pantopus/.pantopus-recovery/audits/` before that worktree is removed.
+
+## Resume point history — September 23, 2026, 06:58 UTC
 
 The live state is the top block of the [coordination summary](workstreams/README.md) (06:52 UTC) and the
 [end-of-session handoff](workstreams/HANDOFF-2026-09-23.md) it builds on.
