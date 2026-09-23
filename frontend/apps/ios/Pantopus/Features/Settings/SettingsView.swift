@@ -42,6 +42,8 @@ public enum SettingsStackRoute: Hashable {
 }
 
 public struct SettingsView: View {
+    @Environment(AuthManager.self) private var auth
+    @State private var showsSignOutConfirm = false
     @State private var path: [SettingsStackRoute] = []
     /// Set when a caller opens Settings straight on a sub-screen (e.g.
     /// Payments). Its Back then returns to that caller, not to the index.
@@ -75,6 +77,21 @@ public struct SettingsView: View {
             .background(Theme.Color.appBg)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("settings")
+            .confirmationDialog(
+                "Sign out of Pantopus?",
+                isPresented: $showsSignOutConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Sign out", role: .destructive) {
+                    Task {
+                        await auth.signOut()
+                        onSignedOut()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("You'll need to sign in again to access your hub.")
+            }
     }
 
     @ViewBuilder private var currentView: some View {
@@ -186,6 +203,7 @@ public struct SettingsView: View {
         switch route {
         case .editProfile: onEditProfile()
         case .reviewClaims: onOpenReviewClaims()
+        case .confirmSignOut: showsSignOutConfirm = true
         case .didSignOut: onSignedOut()
         default: break
         }
@@ -216,4 +234,5 @@ public struct SettingsView: View {
 
 #Preview {
     SettingsView()
+        .environment(AuthManager.previewSignedIn)
 }
