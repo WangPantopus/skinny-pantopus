@@ -270,9 +270,11 @@ export default function TravelModePage() {
   const [autoGig, setAutoGig] = useState(true);
 
   // ── Validation ────────────────────────────────────────
+  // The user's own calendar day. toISOString() is the UTC day, which is a day off in the evening (Americas)
+  // or the morning (Asia/Pacific) and let a past departure through or blocked today's.
   const today = useMemo(() => {
     const d = new Date();
-    return d.toISOString().split('T')[0];
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }, []);
 
   const dateError = useMemo(() => {
