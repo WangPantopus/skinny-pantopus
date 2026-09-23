@@ -38,7 +38,7 @@ const {
 const placeIntelligenceRoutes = require('../routes/placeIntelligence');
 
 const USER = 'sys-user-1';
-const HOME_ID = 'home-sys-1';
+const HOME_ID = '7d0b1c2e-5a4f-4c3b-9e21-0f6a8b9c1d02'; // a Home id is a UUID; the route 400s anything else
 const NOW = new Date('2026-08-19T00:00:00.000Z');
 
 function buildApp() {
