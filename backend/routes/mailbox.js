@@ -685,18 +685,17 @@ const getHomeForRouting = async (homeId) => {
   return home || null;
 };
 
+// Who may send a letter to a Home: anyone who can open the Home's mail (the
+// Home mail rule), and its owners, the same test as isUserLinkedToHome. It used
+// finance.view, which only owners hold, so a resident could not write to their
+// own Home.
 const hasHomeAccess = async (homeId, userId) => {
   const home = await getHomeForRouting(homeId);
   if (!home) {
     return { allowed: false, home: null };
   }
 
-  const mailAccess = await checkHomePermission(homeId, userId, 'finance.view');
-  if (mailAccess.hasAccess) {
-    return { allowed: true, home };
-  }
-
-  return { allowed: false, home };
+  return { allowed: await isUserLinkedToHome(home, userId), home };
 };
 
 // "Lives at this home" for a letter addressed to a person at a Home: they can
