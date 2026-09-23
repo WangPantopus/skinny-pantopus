@@ -10,11 +10,14 @@ import { getAuthToken, clearAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import AccountDeleteModal from '@/components/profile/AccountDeleteModal';
 import StepUpPasswordModal from '@/components/settings/StepUpPasswordModal';
+import ErrorState from '@/components/ui/ErrorState';
 import type { User } from '@pantopus/types';
 
 export default function SettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
   // Settings state
@@ -33,6 +36,8 @@ export default function SettingsPage() {
   useEffect(() => () => { deleteOperation.current = null; }, []);
 
   const loadSettings = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const token = getAuthToken();
       if (!token) {
@@ -51,7 +56,10 @@ export default function SettingsPage() {
       setShowPhone(userData.show_phone ?? false);
 
     } catch (err) {
+      // Never show the form on defaults: saving it would overwrite the real
+      // settings (a private profile would turn public).
       console.error('Failed to load settings:', err);
+      setLoadError("We couldn't load your settings. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -62,6 +70,8 @@ export default function SettingsPage() {
   }, [loadSettings]);
 
   const handleSaveSettings = async () => {
+    if (saving || !user) return;
+    setSaving(true);
     try {
       const settings = {
         email_notifications: emailNotifications,
@@ -75,6 +85,8 @@ export default function SettingsPage() {
       toast.success('Settings saved successfully');
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to save settings');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -144,6 +156,17 @@ export default function SettingsPage() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
           <p className="mt-4 text-app-secondary">Loading settings...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="bg-app">
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <h1 className="text-xl font-semibold text-app mb-6">Settings</h1>
+          <ErrorState message={loadError} onRetry={loadSettings} />
+        </main>
       </div>
     );
   }
@@ -360,9 +383,10 @@ export default function SettingsPage() {
           {/* Save Button */}
           <button
             onClick={handleSaveSettings}
-            className="w-full bg-primary-600 text-white py-3 rounded-lg hover:bg-primary-700 font-semibold"
+            disabled={saving}
+            className="w-full bg-primary-600 text-white py-3 rounded-lg hover:bg-primary-700 font-semibold disabled:opacity-50 transition"
           >
-            Save Settings
+            {saving ? 'Saving…' : 'Save Settings'}
           </button>
 
           {/* Danger Zone */}
