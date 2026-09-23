@@ -93,7 +93,7 @@ fun AboutScreen(onBack: () -> Unit = {}) {
                     heading = "Built by",
                     body =
                         "A small team of people who wanted somewhere better to ask their block for a ladder. " +
-                            "Reach us at support@pantopus.app.",
+                            "Reach us at support@pantopus.com.",
                 )
                 Column(
                     modifier =

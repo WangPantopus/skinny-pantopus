@@ -199,9 +199,8 @@ function resolveSenderTrust(mail) {
     return trust;
   }
 
-  const senderBusiness = typeof mail?.sender_business_name === 'string' ? mail.sender_business_name.trim() : '';
-  if (senderBusiness) return 'verified_business';
-
+  // A business name alone is not verification: senders could type any name. Only a stored sender_trust says
+  // 'verified_business' (POST /api/mailbox/send sets it for a verified business the sender may send for).
   if (mail?.sender_user_id || mail?.sender?.name || mail?.sender?.username) return 'pantopus_user';
   return 'unknown';
 }

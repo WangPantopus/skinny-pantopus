@@ -99,7 +99,7 @@ final class PersonaDmThreadViewModelTests: XCTestCase {
     /// not "request failed".
     func testBlockedSendGetsItsOwnCopy() {
         XCTAssertEqual(
-            PersonaDmThreadViewModel.sendErrorMessage(APIError.forbidden),
+            PersonaDmThreadViewModel.sendErrorMessage(APIError.forbidden()),
             "This profile can't accept new messages from your account."
         )
     }
@@ -133,7 +133,7 @@ final class PersonaDmThreadViewModelTests: XCTestCase {
             FanInboxViewModel.gate(for: APIError.clientError(status: 402, message: #"{"error":"quota_exhausted"}"#)),
             .quotaExhausted
         )
-        XCTAssertEqual(FanInboxViewModel.gate(for: APIError.forbidden), .blocked)
+        XCTAssertEqual(FanInboxViewModel.gate(for: APIError.forbidden()), .blocked)
         XCTAssertEqual(FanInboxViewModel.gate(for: APIError.notFound), .noMembership)
     }
 

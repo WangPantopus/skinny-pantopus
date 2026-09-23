@@ -39,7 +39,12 @@ public struct TasksTabRoot: View {
     @State private var router = DeepLinkRouter.shared
     @State private var systemSheet: SystemSheetRequest?
 
-    public init() {}
+    /// Closes the sheet this surface is presented in (Nearby's door).
+    private let onClose: (@MainActor () -> Void)?
+
+    public init(onClose: (@MainActor () -> Void)? = nil) {
+        self.onClose = onClose
+    }
 
     private var currentUserId: String {
         if case let .signedIn(user) = auth.state { return user.id }
@@ -65,7 +70,7 @@ public struct TasksTabRoot: View {
                     path.append(.tasksMap(categoryKey: category.rawValue))
                 },
                 onOpenSearch: { path.append(.gigSearch) },
-                onBack: nil,
+                onBack: onClose,
                 onOpenSupportTrain: { trainId in
                     path.append(.supportTrainDetail(supportTrainId: trainId))
                 },
@@ -75,7 +80,7 @@ public struct TasksTabRoot: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: TasksRoute.self) { route in
                 destination(for: route)
-                    .toolbar(.hidden, for: .navigationBar)
+                    .modifier(OwnHeaderBar(drawsOwnHeader: !Self.usesSystemBar(route)))
             }
         }
         .onChange(of: router.pending) { _, pending in
@@ -85,6 +90,15 @@ public struct TasksTabRoot: View {
             consumeDeepLinkIfNeeded(pending: router.pending)
         }
         .sheet(item: $systemSheet) { request in request.makeView() }
+    }
+
+    /// Pushed screens with no Back of their own: they keep the system bar,
+    /// which every other screen in this stack hides.
+    static func usesSystemBar(_ route: TasksRoute) -> Bool {
+        switch route {
+        case .myTasks, .supportTrains, .listingOffers, .placeholder: true
+        default: false
+        }
     }
 
     private var navigationPathBinding: Binding<NavigationPath> {
@@ -99,7 +113,12 @@ public struct TasksTabRoot: View {
         switch pending {
         case let .gig(id):
             path.replaceNavigationPath(NavigationPath())
-            path.append(.gigDetail(gigId: id))
+            // `/gigs/new` is the web composer's path: open the native composer.
+            if id == "new" {
+                path.append(.composeGig(category: GigsCategory.all.rawValue))
+            } else {
+                path.append(.gigDetail(gigId: id))
+            }
             _ = router.consume()
         default:
             break
@@ -189,12 +208,16 @@ public struct TasksTabRoot: View {
     private func supportTrainDetailDestination(supportTrainId: String) -> some View {
         SupportTrainDetailView(
             viewModel: SupportTrainDetailViewModel(trainId: supportTrainId),
-            onBack: pop
-        ) {
-            systemSheet = .share(
-                items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
-            )
-        }
+            onBack: pop,
+            // Keep the `onShare:` label: as a trailing closure it binds to the
+            // last closure (`onMessageHost`), so Share did nothing.
+            // swiftlint:disable:next trailing_closure
+            onShare: {
+                systemSheet = .share(
+                    items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
+                )
+            }
+        )
     }
 
     private func composeGigDestination(category: String) -> some View {

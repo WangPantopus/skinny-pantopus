@@ -6,6 +6,7 @@ import * as api from '@pantopus/api';
 import { US_STATES } from '@pantopus/utils';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
 import { useProfileForm } from '@/hooks/useProfileForm';
+import ErrorState from '@/components/ui/ErrorState';
 
 type GeoSuggestion = api.geo.GeoSuggestion;
 type NormalizedAddress = api.geo.NormalizedAddress;
@@ -125,11 +126,11 @@ export default function EditProfilePage() {
 
   const {
     form, setField, setFields,
-    loading, saving, user,
+    loading, loadError, saving, user,
     skills, newSkill, setNewSkill, addSkill, removeSkill,
     addressVerified, setAddressVerified,
     profilePictureUrl, setProfilePictureUrl,
-    saveProfile,
+    loadProfile, saveProfile,
   } = useProfileForm();
 
   const stateName = useMemo(() => {
@@ -145,6 +146,17 @@ export default function EditProfilePage() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
           <p className="mt-4 text-app-secondary">Loading profile...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="bg-app">
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <h1 className="text-xl font-semibold text-app mb-6">Edit Profile</h1>
+          <ErrorState message={loadError} onRetry={loadProfile} />
+        </main>
       </div>
     );
   }

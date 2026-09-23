@@ -351,10 +351,15 @@ public struct MailDetailView: View {
             onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
             onTranslate: onTranslate,
             onCreateTask: onCreateTask,
-            categoryActions: viewModel.categoryActions,
+            categoryActions: viewModel.categoryActions.filter { $0 != .createTask || onCreateTask != nil },
             categoryActionInFlight: viewModel.categoryActionInFlight,
             onCategoryAction: { action in
-                Task { await viewModel.tapCategoryAction(action) }
+                // Create Task runs the real create-task flow; the rest post the item action.
+                if action == .createTask {
+                    onCreateTask?()
+                } else {
+                    Task { await viewModel.tapCategoryAction(action) }
+                }
             }
         )
     }

@@ -59,6 +59,31 @@ public struct SystemShareSheet: UIViewControllerRepresentable {
     public func updateUIViewController(_: UIActivityViewController, context _: Context) {}
 }
 
+// MARK: - Email fallback
+
+/// Shown when a `mailto:` link can't open because no mail app is set up:
+/// the address with a Copy action, so "Email us" never ends in silence.
+public struct EmailFallbackAlert: ViewModifier {
+    let address: String
+    @Binding var isPresented: Bool
+
+    public func body(content: Content) -> some View {
+        content.alert("No email app found", isPresented: $isPresented) {
+            Button("Copy address") { UIPasteboard.general.string = address }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Write to us at \(address).")
+        }
+    }
+}
+
+public extension View {
+    /// Pair with `UIApplication.open(mailtoURL)` returning `false`.
+    func emailFallbackAlert(address: String, isPresented: Binding<Bool>) -> some View {
+        modifier(EmailFallbackAlert(address: address, isPresented: isPresented))
+    }
+}
+
 // MARK: - Mail compose
 
 /// Draft payload for the system mail composer. Carries a `mailtoURL`
