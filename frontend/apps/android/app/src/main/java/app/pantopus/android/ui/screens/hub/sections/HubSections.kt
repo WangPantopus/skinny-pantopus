@@ -732,9 +732,8 @@ private fun DiscoveryHeaderLink(
 }
 
 /**
- * Tasks / People / Businesses / Posts — RN
- * `src/components/hub/HubDiscovery.tsx:9-14`. Selecting a tab re-requests
- * `GET /api/hub/discovery?filter=…`.
+ * Tasks / Businesses / Posts ([HubDiscoveryFilter.visibleTabs]). Selecting a
+ * tab re-requests `GET /api/hub/discovery?filter=…`.
  */
 @Composable
 private fun DiscoveryFilterTabs(
@@ -750,7 +749,7 @@ private fun DiscoveryFilterTabs(
                 .testTag("hubDiscoveryFilters"),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        HubDiscoveryFilter.entries.forEach { tab ->
+        HubDiscoveryFilter.visibleTabs.forEach { tab ->
             val selected = tab == active
             Box(
                 modifier =
