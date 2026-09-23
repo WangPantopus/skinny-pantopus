@@ -21,6 +21,8 @@ export function useListingDetail() {
   const [listing, setListing] = useState<ListingDetail | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // A listing load that failed for any reason but "not found": the page can't say the listing is gone.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Message modal
   const [showMessageModal, setShowMessageModal] = useState(false);
@@ -60,10 +62,22 @@ export function useListingDetail() {
     try {
       const result = await api.listings.getListing(listingId);
       setListing(((result as Record<string, any>)?.listing ?? result) as ListingDetail);
-    } catch {
+      setLoadError(null);
+    } catch (err) {
       setListing(null);
+      setLoadError(
+        (err as { statusCode?: number })?.statusCode === 404
+          ? null
+          : "Couldn't load this listing. Check your connection and try again."
+      );
     }
   }, [listingId]);
+
+  const retryLoad = useCallback(async () => {
+    setLoading(true);
+    await fetchListing();
+    setLoading(false);
+  }, [fetchListing]);
 
   const fetchQuestions = useCallback(async () => {
     if (!listingId) return;
@@ -307,6 +321,8 @@ export function useListingDetail() {
     listing,
     user,
     loading,
+    loadError,
+    retryLoad,
     listingId,
     isOwner,
     questions,

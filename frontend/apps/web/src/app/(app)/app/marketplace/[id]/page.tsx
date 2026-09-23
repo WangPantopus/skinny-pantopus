@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { Frown } from 'lucide-react';
 import ReportModal from '@/components/ui/ReportModal';
+import ErrorState from '@/components/ui/ErrorState';
 import { useListingDetail } from './_components/useListingDetail';
 import ListingGallery from './_components/ListingGallery';
 import ListingInfo from './_components/ListingInfo';
@@ -23,6 +24,8 @@ export default function ListingDetailPage() {
     listing,
     user,
     loading,
+    loadError,
+    retryLoad,
     listingId,
     isOwner,
     questions,
@@ -76,6 +79,10 @@ export default function ListingDetailPage() {
         </div>
       </div>
     );
+  }
+
+  if (!listing && loadError) {
+    return <ErrorState message={loadError} onRetry={() => void retryLoad()} />;
   }
 
   // ── Not found state ────────────────────────────────────────
