@@ -529,7 +529,7 @@ const createBusinessFullSchema = Joi.object({
   username: Joi.string().min(3).max(40).regex(/^[a-z0-9_]+$/).required(),
   name: Joi.string().min(1).max(100).required(),
   email: Joi.string().email().required(),
-  business_type: Joi.string().valid(...Object.keys(ENTITY_TYPES)).optional(),
+  business_type: Joi.string().valid(...Array.from(ENTITY_TYPES)).optional(),
   categories: Joi.array().items(Joi.string().max(50)).max(10).optional(),
   description: Joi.string().max(2000).allow('', null).optional(),
   public_phone: Joi.string().max(30).allow('', null).optional(),
