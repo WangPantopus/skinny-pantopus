@@ -1036,7 +1036,8 @@ public struct HubTabRoot: View {
     static func ownsDeepLink(_ destination: DeepLinkRouter.Destination, tab: RootTab) -> Bool {
         switch destination {
         case .feed, .post, .gig, .listing, .hubToday, .conversation,
-             .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home:
+             .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home,
+             .creatorInbox, .fanInbox, .creatorAudienceMembers:
             false
         case .vacationHold, .mailDay, .stamps, .mailTask,
              .mailTranslation, .unboxing, .packageGig, .earn:

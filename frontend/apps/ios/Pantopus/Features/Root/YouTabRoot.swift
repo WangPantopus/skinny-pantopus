@@ -445,9 +445,13 @@ public struct YouTabRoot: View {
     /// True when opened from the `monthly_receipt` push — the Monthly
     /// Receipt card renders expanded (RN `/(tabs)/profile?tab=receipt`).
     private let expandMonthlyReceipt: Bool
+    /// Pushed once when a notification opens the cover on a screen inside it.
+    private let initialRoute: YouRoute?
+    @State private var didOpenInitialRoute = false
 
-    public init(expandMonthlyReceipt: Bool = false) {
+    public init(expandMonthlyReceipt: Bool = false, initialRoute: YouRoute? = nil) {
         self.expandMonthlyReceipt = expandMonthlyReceipt
+        self.initialRoute = initialRoute
     }
 
     public var body: some View {
@@ -459,6 +463,11 @@ public struct YouTabRoot: View {
                 onLogOut: { showsSignOutConfirm = true }
             )
             .toolbar(.hidden, for: .navigationBar)
+            .task {
+                guard !didOpenInitialRoute, let initialRoute else { return }
+                didOpenInitialRoute = true
+                path.append(initialRoute)
+            }
             .navigationDestination(for: YouRoute.self) { route in
                 destination(for: route)
             }
