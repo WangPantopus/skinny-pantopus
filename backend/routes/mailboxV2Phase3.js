@@ -10,7 +10,7 @@ const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
-const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+const { getAccessibleHomeIds, readableMail } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -515,6 +515,8 @@ router.post('/map/pin', verifyToken, validate(createPinSchema), async (req, res)
     if (!homeIds.includes(homeId)) {
       return res.status(403).json({ error: 'Not a member of this home' });
     }
+    // A pin may only link mail the caller may read (the mailbox per-item rule).
+    if (mailId && !(await readableMail(mailId, userId))) return res.status(404).json({ error: 'Mail not found' });
 
     const { data: pin, error } = await supabaseAdmin
       .from('HomeMapPin')
