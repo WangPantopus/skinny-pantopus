@@ -23,15 +23,21 @@ public final class ListingDetailViewModel {
     private let listingId: String
     private let api: APIClient
     private let currentUserId: @MainActor () -> String?
+    private let checkout: CheckoutCoordinator
+    private var acceptedOffer: ListingOfferDTO?
+    private var checkoutReadFailed = false
+    private var isCheckingOut = false
 
     init(
         listingId: String,
         api: APIClient = .shared,
-        currentUserId: @escaping @MainActor () -> String? = ListingDetailViewModel.currentSignedInUserId
+        currentUserId: @escaping @MainActor () -> String? = ListingDetailViewModel.currentSignedInUserId,
+        checkout: CheckoutCoordinator = CheckoutCoordinator()
     ) {
         self.listingId = listingId
         self.api = api
         self.currentUserId = currentUserId
+        self.checkout = checkout
     }
 
     /// True when the loaded listing is owned by the currently signed-in
@@ -58,8 +64,19 @@ public final class ListingDetailViewModel {
             let detail: ListingDetailResponse = try await api.request(ListingsEndpoints.detail(id: listingId))
             rawListing = detail.listing
             isSaved = detail.listing.userHasSaved ?? false
-            let viewerId = currentUserId()
-            state = .loaded(Self.project(detail.listing, viewerUserId: viewerId))
+            acceptedOffer = nil
+            checkoutReadFailed = false
+            if !isOwnedByMe, !isSold, let viewerId = currentUserId() {
+                do {
+                    let response: ListingOffersResponse = try await api.request(ListingOffersEndpoints.list(listingId: listingId))
+                    acceptedOffer = response.offers.first {
+                        $0.status == "accepted" && ($0.buyerId ?? $0.buyer?.id) == viewerId
+                    }
+                } catch {
+                    checkoutReadFailed = true
+                }
+            }
+            rebuild()
         } catch {
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load listing."
             state = .error(message: message)
@@ -129,7 +146,11 @@ public final class ListingDetailViewModel {
 
     // MARK: - Projection
 
-    static func project(_ listing: ListingDTO, viewerUserId: String? = nil) -> ContentDetailContent {
+    static func project(
+        _ listing: ListingDTO,
+        viewerUserId: String? = nil,
+        checkoutButton: ContentDetailDockButton? = nil
+    ) -> ContentDetailContent {
         let isViewerOwner: Bool = {
             guard let owner = listing.userId, !owner.isEmpty,
                   let viewer = viewerUserId, !viewer.isEmpty
@@ -158,7 +179,7 @@ public final class ListingDetailViewModel {
             counterparty: counterparty(for: listing),
             modules: modules(for: listing),
             trustCapsules: [],
-            dock: dock(isViewerOwner: isViewerOwner, sold: sold, onHold: onHold)
+            dock: dock(isViewerOwner: isViewerOwner, sold: sold, onHold: onHold, checkoutButton: checkoutButton)
         )
     }
 
@@ -244,11 +265,17 @@ public final class ListingDetailViewModel {
         return modules
     }
 
-    private static func dock(isViewerOwner: Bool, sold: Bool, onHold: Bool) -> ContentDetailDock {
+    private static func dock(isViewerOwner: Bool, sold: Bool, onHold: Bool, checkoutButton: ContentDetailDockButton?) -> ContentDetailDock {
         if sold {
             return ContentDetailDock(
                 secondary: ContentDetailDockButton(label: "Seller", icon: .shoppingBag),
                 primary: ContentDetailDockButton(label: "Find similar", icon: .search)
+            )
+        }
+        if !isViewerOwner, let checkoutButton {
+            return ContentDetailDock(
+                secondary: ContentDetailDockButton(label: "Message", icon: .send),
+                primary: checkoutButton
             )
         }
         // A held listing takes no new offers (the server refuses them); its seller still reaches the offers.
@@ -296,5 +323,66 @@ public final class ListingDetailViewModel {
         if miles < 0.1 { return "< 0.1 mi" }
         if miles < 10 { return String(format: "%.1f mi", miles) }
         return "\(Int(miles)) mi"
+    }
+}
+
+extension ListingDetailViewModel {
+    public var hasCheckoutAction: Bool {
+        acceptedOffer != nil || checkoutReadFailed
+    }
+
+    private var checkoutButton: ContentDetailDockButton? {
+        if isCheckingOut { return .init(label: "Checking payment…", icon: .clock, enabled: false) }
+        if checkoutReadFailed { return .init(label: "Check payment", icon: .clock) }
+        guard let offer = acceptedOffer else { return nil }
+        guard let summary = offer.checkout else { return .init(label: "Check payment", icon: .clock) }
+        if summary.canContinue, ["ready", "retry", "pending"].contains(summary.state) {
+            return .init(label: summary.state == "retry" ? "Retry checkout" : "Continue checkout", icon: nil)
+        }
+        let label: String
+        switch summary.state {
+        case "authorized": label = "Payment authorized"
+        case "processing": label = "Payment processing"
+        case "paid": label = "Payment received"
+        case "refund_pending": label = "Refund processing"
+        case "partially_refunded": label = "Partially refunded"
+        case "refunded": label = "Payment refunded"
+        case "disputed": label = "Payment disputed"
+        case "not_payable": label = "Pickup pending"
+        default: return .init(label: "Check payment", icon: .clock)
+        }
+        return .init(label: label, icon: .clock, enabled: false)
+    }
+
+    private func rebuild() {
+        guard let listing = rawListing else { return }
+        state = .loaded(Self.project(listing, viewerUserId: currentUserId(), checkoutButton: checkoutButton))
+    }
+
+    public func continueCheckout() async -> String? {
+        guard !isCheckingOut else { return nil }
+        guard let offer = acceptedOffer, let summary = offer.checkout,
+              summary.canContinue, ["ready", "retry", "pending"].contains(summary.state), !checkoutReadFailed else {
+            await load()
+            if checkoutReadFailed || acceptedOffer?.checkout == nil || acceptedOffer?.checkout?.state == "unavailable" {
+                return "Payment status is unavailable. Please try again."
+            }
+            return nil
+        }
+        isCheckingOut = true
+        rebuild()
+        defer {
+            isCheckingOut = false
+            if case .error = state {} else { rebuild() }
+        }
+        let outcome = await checkout.pay(CheckoutRequest(listingId: listingId, offerId: offer.id))
+        switch outcome {
+        case .paid:
+            // The sheet result is not durable payment proof. Re-read server state.
+            await load()
+            return nil
+        case .canceled: return nil
+        case let .declined(message), let .failed(message): return message
+        }
     }
 }
