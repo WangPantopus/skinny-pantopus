@@ -477,7 +477,9 @@ router.post('/magic-post', verifyToken, validate(magicPostSchema), async (req, r
       is_urgent: draft.is_urgent || false,
       tags: draft.tags || [],
       attachments: draft.attachments || [],
-      items: draft.items ? JSON.stringify(draft.items) : '[]',
+      // `items` is jsonb: pass the array itself. A JSON string here is stored as a jsonb string, which clients
+      // reading `gig.items` as an array can't decode.
+      items: Array.isArray(draft.items) ? draft.items : [],
       // Location
       origin_mode: normalizedLocation
         ? (normalizedLocation.mode === 'custom' ? 'address' : normalizedLocation.mode) || 'address'
