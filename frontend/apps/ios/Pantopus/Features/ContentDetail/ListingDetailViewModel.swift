@@ -99,10 +99,14 @@ public final class ListingDetailViewModel {
             return owner == viewer
         }()
         let sold = isSold(listing)
+        // An accepted offer or trade holds the listing for that buyer until the handoff.
+        let onHold = !sold && listing.status == "pending_pickup"
         return ContentDetailContent(
             kind: .listing,
             cover: cover(for: listing, sold: sold),
-            statusPill: sold ? ContentDetailPill(label: "Sold", icon: .alertCircle, tone: .error) : nil,
+            statusPill: sold
+                ? ContentDetailPill(label: "Sold", icon: .alertCircle, tone: .error)
+                : onHold ? ContentDetailPill(label: "Pickup pending", icon: .clock, tone: .warning) : nil,
             hero: ContentDetailHero(
                 title: listing.title ?? "Listing",
                 categoryChip: nil,
@@ -116,7 +120,7 @@ public final class ListingDetailViewModel {
             counterparty: counterparty(for: listing),
             modules: modules(for: listing, sold: sold),
             trustCapsules: [],
-            dock: dock(isViewerOwner: isViewerOwner, sold: sold)
+            dock: dock(isViewerOwner: isViewerOwner, sold: sold, onHold: onHold)
         )
     }
 
@@ -214,11 +218,18 @@ public final class ListingDetailViewModel {
         return modules
     }
 
-    private static func dock(isViewerOwner: Bool, sold: Bool) -> ContentDetailDock {
+    private static func dock(isViewerOwner: Bool, sold: Bool, onHold: Bool) -> ContentDetailDock {
         if sold {
             return ContentDetailDock(
                 secondary: ContentDetailDockButton(label: "Seller", icon: .shoppingBag),
                 primary: ContentDetailDockButton(label: "Find similar", icon: .search)
+            )
+        }
+        // A held listing takes no new offers (the server refuses them); its seller still reaches the offers.
+        if onHold, !isViewerOwner {
+            return ContentDetailDock(
+                secondary: ContentDetailDockButton(label: "Message", icon: .send),
+                primary: ContentDetailDockButton(label: "Pickup pending", icon: .clock, enabled: false)
             )
         }
         return ContentDetailDock(
