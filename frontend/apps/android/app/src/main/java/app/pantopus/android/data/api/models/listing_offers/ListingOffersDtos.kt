@@ -59,6 +59,13 @@ data class ListingOfferUserDto(
     @Json(name = "profile_picture_url") val profilePictureUrl: String? = null,
 )
 
+/** Body for `POST /api/listings/:listingId/offers` (`createOfferSchema`: amount ≥ 0 or null, message ≤ 500). */
+@JsonClass(generateAdapter = true)
+data class CreateListingOfferBody(
+    val amount: Double? = null,
+    val message: String? = null,
+)
+
 /** Body for `POST /api/listings/:listingId/offers/:offerId/counter`. */
 @JsonClass(generateAdapter = true)
 data class CounterListingOfferBody(
