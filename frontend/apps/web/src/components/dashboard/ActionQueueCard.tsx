@@ -7,6 +7,14 @@ import type { User, GigListItem } from '@pantopus/types';
 
 type Priority = 'high' | 'medium' | 'low';
 
+/** Which inputs couldn't be read; their items are skipped rather than guessed. */
+type Failed = { profile?: boolean; gigs?: boolean; bids?: boolean; stripe?: boolean };
+
+function statusOf(err: unknown): number | undefined {
+  const e = err as { statusCode?: number; status?: number } | null;
+  return e?.statusCode ?? e?.status;
+}
+
 function ActionQueueItem({
   icon,
   title,
@@ -59,15 +67,23 @@ export default function ActionQueueCard() {
   const [myBidsByGigId, setMyBidsByGigId] = useState<Record<string, Record<string, any>>>({});
   const [loadingStripeStatus, setLoadingStripeStatus] = useState(true);
   const [stripeReady, setStripeReady] = useState(false);
+  const [failed, setFailed] = useState<Failed>({});
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     // Middleware handles auth — no client-side token check needed.
+    const failures: Failed = {};
+    setLoadingStripeStatus(true);
     Promise.all([
       api.users.getMyProfile().then(setUser).catch((err) => {
         console.warn('[ActionQueueCard] Failed to load profile:', err?.message);
+        failures.profile = true;
       }),
-      api.gigs.getGigs({ limit: 100, status: ['open'] }).then((r: Record<string, any>) => setGigs((r?.gigs || r?.data || []) as GigListItem[])).catch((err) => {
+      // The viewer's own open tasks. The public list (`getGigs`) leaves the
+      // viewer's tasks out, so deadline / no-offer items could never appear.
+      api.gigs.getMyGigs({ limit: 100, status: ['open'] }).then((r) => setGigs((r?.gigs || []) as GigListItem[])).catch((err) => {
         console.warn('[ActionQueueCard] Failed to load gigs:', err?.message);
+        failures.gigs = true;
         setGigs([]);
       }),
       api.gigs.getMyBids({ limit: 200, status: ['pending', 'accepted', 'rejected'] }).then((r: Record<string, any>) => {
@@ -79,6 +95,7 @@ export default function ActionQueueCard() {
         setMyBidsByGigId(map);
       }).catch((err) => {
         console.warn('[ActionQueueCard] Failed to load bids:', err?.message);
+        failures.bids = true;
         setMyBidsByGigId({});
       }),
       api.payments.getStripeAccount().then((result: Record<string, any>) => {
@@ -86,20 +103,23 @@ export default function ActionQueueCard() {
         setStripeReady(Boolean(account?.payouts_enabled && account?.charges_enabled));
       }).catch((err) => {
         console.warn('[ActionQueueCard] Failed to load Stripe status:', err?.message);
+        // 404: no payout account yet — that is the to-do. Anything else is unknown.
+        if (statusOf(err) !== 404) failures.stripe = true;
         setStripeReady(false);
       }),
-    ]).finally(() => setLoadingStripeStatus(false));
-  }, []);
+    ]).finally(() => {
+      setFailed(failures);
+      setLoadingStripeStatus(false);
+    });
+  }, [reloadKey]);
 
   const myPendingOffers = useMemo(() => {
     return Object.values(myBidsByGigId).filter((b: Record<string, any>) => String(b?.status || '').toLowerCase() === 'pending').length;
   }, [myBidsByGigId]);
 
   const actionQueue = useMemo(() => {
-    const myId = String(user?.id || '');
-    const gigsEnriched = gigs.map((g) => ({ ...g, myBid: myBidsByGigId[String(g.id)] || null }));
-    const mine = gigsEnriched.filter((g) => String((g as Record<string, any>).user_id ?? (g as Record<string, any>).User ?? '') === myId);
-    const openMine = mine.filter((g) => String(g.status || 'open') === 'open');
+    // `gigs` holds only the viewer's own tasks (my-gigs).
+    const openMine = gigs.filter((g) => String(g.status || 'open') === 'open');
     const openMineNoOffers = openMine.filter((g) => Number((g as Record<string, any>).bidsCount || 0) === 0).length;
     const now = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
@@ -109,7 +129,7 @@ export default function ActionQueueCard() {
       return Number.isFinite(t) && t >= now && (t - now) <= dayMs;
     }).length;
 
-    const missingPhoto = !(
+    const missingPhoto = !failed.profile && !(
       user?.profile_picture_url ||
       user?.profilePicture ||
       user?.profile_picture ||
@@ -129,7 +149,7 @@ export default function ActionQueueCard() {
         onClick: () => router.push('/app/profile/edit'),
       });
     }
-    if (!loadingStripeStatus && !stripeReady) {
+    if (!loadingStripeStatus && !failed.stripe && !stripeReady) {
       items.push({
         id: 'payout',
         icon: '💳',
@@ -173,7 +193,19 @@ export default function ActionQueueCard() {
         onClick: () => router.push('/app/my-gigs'),
       });
     }
-    if (items.length === 0) {
+    const anyFailed = Boolean(failed.profile || failed.gigs || failed.bids || failed.stripe);
+    if (items.length === 0 && anyFailed) {
+      // Don't claim "caught up" when part of the queue couldn't be checked.
+      items.push({
+        id: 'unchecked',
+        icon: '⚠️',
+        title: "Couldn't check everything",
+        subtitle: 'Some of your updates didn\'t load.',
+        cta: 'Retry',
+        priority: 'low',
+        onClick: () => setReloadKey((k) => k + 1),
+      });
+    } else if (items.length === 0) {
       items.push({
         id: 'caught-up',
         icon: '✅',
@@ -187,7 +219,7 @@ export default function ActionQueueCard() {
 
     const priorityRank: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
     return items.sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority]).slice(0, 4);
-  }, [user, gigs, myBidsByGigId, loadingStripeStatus, stripeReady, myPendingOffers, router]);
+  }, [user, gigs, loadingStripeStatus, stripeReady, failed, myPendingOffers, router]);
 
   return (
     <div className="bg-app-surface rounded-xl p-4 border border-app-border shadow-sm">
