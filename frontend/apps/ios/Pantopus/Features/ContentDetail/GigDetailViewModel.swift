@@ -951,11 +951,15 @@ public final class GigDetailViewModel {
         return ["assigned", "in_progress"].contains((gig.status ?? "").lowercased())
     }
 
-    /// The server refuses a price change while the task's payment hold is live
-    /// (`PAID_PRICE_CHANGE_UNAVAILABLE`): a payment exists and it isn't canceled or fully refunded.
-    public var priceChangesAvailable: Bool {
-        guard let gig = rawGig, gig.paymentId != nil else { return true }
-        return ["canceled", "refunded_full"].contains((gig.paymentStatus ?? "").lowercased())
+    /// Why a price change can't be proposed or approved on this task. The server refuses every price
+    /// change for now (`PAID_PRICE_CHANGE_UNAVAILABLE`); the sentence says whether the task has a live
+    /// payment hold (a payment that isn't canceled or fully refunded).
+    public var priceChangeUnavailableReason: String {
+        let held = rawGig.map { gig in
+            gig.paymentId != nil && !["canceled", "refunded_full"].contains((gig.paymentStatus ?? "").lowercased())
+        } ?? false
+        return held ? "Price changes aren't available once a task has a payment hold."
+            : "Price changes aren't available for this task."
     }
 
     /// True when the signed-in viewer proposed this change order —
