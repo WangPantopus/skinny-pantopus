@@ -167,6 +167,14 @@ final class DeepLinkRouter {
         /// `monthly_receipt` notification
         /// (`pantopus/frontend/apps/mobile/src/utils/notificationRouting.ts:29`).
         case monthlyReceipt
+        /// Booking notification links (`backend/services/scheduling/
+        /// bookingNotifyService.js`): `/app/profile/schedule/bookings/:id`
+        /// (lifecycle) and `/app/scheduling/bookings/:id` (personal host
+        /// reminder) open the existing host booking detail; the endpoint's
+        /// own authorization decides what a non-host sees.
+        case bookingDetail(bookingId: String)
+        /// `/app/scheduling/my-bookings` — the existing customer My bookings list.
+        case myBookings
         case unknown(URL)
     }
 
@@ -508,9 +516,23 @@ final class DeepLinkRouter {
                     ?? queryValue("briefing_kind", in: comps)
             )
         case "profile":
-            // Only `?tab=receipt` is deep-linkable today (the monthly-receipt
-            // push). A bare `pantopus://profile` falls through to `.unknown`.
+            // `?tab=receipt` is the monthly-receipt push; `schedule/bookings/:id`
+            // is the booking lifecycle notification link. A bare
+            // `pantopus://profile` falls through to `.unknown`.
             if tabQuery?.lowercased() == "receipt" { return .monthlyReceipt }
+            if segments.count == 4, segments[1] == "schedule", segments[2] == "bookings",
+               UUID(uuidString: segments[3]) != nil {
+                return .bookingDetail(bookingId: segments[3].lowercased())
+            }
+            return .unknown(url)
+        case "scheduling":
+            // Booking reminder links. Owner-scoped (`?ot=home|business&oid=`)
+            // host links stay unrouted: the destination carries no owner.
+            if segments.count == 2, segments[1] == "my-bookings" { return .myBookings }
+            if segments.count == 3, segments[1] == "bookings", UUID(uuidString: segments[2]) != nil,
+               queryValue("ot", in: comps) == nil {
+                return .bookingDetail(bookingId: segments[2].lowercased())
+            }
             return .unknown(url)
         case "connections":
             return .connections

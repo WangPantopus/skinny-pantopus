@@ -2252,6 +2252,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.profile(tab = "receipt"))
                 DeepLinkRouter.consume()
             }
+            is DeepLinkRouter.Destination.BookingDetail -> {
+                navController.navigate(SchedulingRoutes.bookingDetail(pending.bookingId))
+                DeepLinkRouter.consume()
+            }
+            DeepLinkRouter.Destination.MyBookings -> {
+                navController.navigate(SchedulingRoutes.MY_BOOKINGS)
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.ResetPassword,
             is DeepLinkRouter.Destination.VerifyEmail,
             is DeepLinkRouter.Destination.Unknown,

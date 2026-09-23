@@ -17,6 +17,8 @@ const DRAWER_LABELS: Record<string, string> = {
   earn: 'Earn',
 };
 
+const MAIL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const FILTER_OPTIONS = [
   { value: '', label: 'All' },
   { value: 'unread', label: 'Unread' },
@@ -70,6 +72,15 @@ export default function DrawerLayout({
 
   // Detect if we're on an item detail sub-route
   const isItemView = pathname.split('/').filter(Boolean).length > 3;
+
+  // Older links open a letter as /app/mailbox/:mailId (mail notifications and
+  // the Home bill, package and document links), which lands here with the
+  // letter's id as the drawer. Open the letter's existing detail page instead.
+  useEffect(() => {
+    if (drawerParam in DRAWER_LABELS || !MAIL_ID.test(drawerParam)) return;
+    const scope = new URLSearchParams(window.location.search).get('scope');
+    router.replace(`/app/mailbox/${scope === 'home' ? 'home' : 'personal'}/${drawerParam.toLowerCase()}`);
+  }, [drawerParam, router]);
 
   // ── State ───────────────────────────────────────────────
   const [filter, setFilter] = useState('');

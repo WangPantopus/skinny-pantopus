@@ -190,7 +190,8 @@ public struct RootTabView: View {
              .notifications, .createBusiness, .businessProfile, .businessPage,
              .editBusinessPage,
              .wallet, .paymentsSettings,
-             .businessOwner, .viewAs, .waitingRoom, .neighborMessage:
+             .businessOwner, .viewAs, .waitingRoom, .neighborMessage,
+             .bookingDetail, .myBookings:
             model.selected = .place
         // Morning/Evening Briefing push — the Today tab consumes it.
         case .hubToday:

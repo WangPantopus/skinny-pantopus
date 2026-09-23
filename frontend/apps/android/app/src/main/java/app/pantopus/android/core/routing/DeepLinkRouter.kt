@@ -294,6 +294,17 @@ object DeepLinkRouter {
          */
         data object MonthlyReceipt : Destination
 
+        /**
+         * Booking notification links (`backend/services/scheduling/bookingNotifyService.js`):
+         * `/app/profile/schedule/bookings/:id` (lifecycle) and `/app/scheduling/bookings/:id`
+         * (personal host reminder) open the existing host booking detail; the endpoint's own
+         * authorization decides what a non-host sees.
+         */
+        data class BookingDetail(val bookingId: String) : Destination
+
+        /** `/app/scheduling/my-bookings` — the existing customer My bookings list. */
+        data object MyBookings : Destination
+
         data class Unknown(val uri: String) : Destination
     }
 
@@ -518,9 +529,26 @@ object DeepLinkRouter {
                             ?: Paths.queryParam(queryPart, "briefing_kind"),
                 )
             "profile" ->
-                // Only `?tab=receipt` is deep-linkable today (the monthly-receipt
-                // push). A bare `pantopus://profile` falls through to Unknown.
-                if (tabQuery?.lowercase() == "receipt") Destination.MonthlyReceipt else Destination.Unknown(raw)
+                // `?tab=receipt` is the monthly-receipt push; `schedule/bookings/:id` is the
+                // booking lifecycle notification link. A bare `pantopus://profile` falls
+                // through to Unknown.
+                when {
+                    tabQuery?.lowercase() == "receipt" -> Destination.MonthlyReceipt
+                    segments.drop(1).dropLast(1) == listOf("schedule", "bookings") ->
+                        HomeTaskNotificationRoute.canonicalId(segments.last())
+                            ?.let { Destination.BookingDetail(it) } ?: Destination.Unknown(raw)
+                    else -> Destination.Unknown(raw)
+                }
+            "scheduling" ->
+                // Booking reminder links. Owner-scoped (`?ot=home|business&oid=`) host links
+                // stay unrouted: the destination carries no owner.
+                when {
+                    segments.drop(1) == listOf("my-bookings") -> Destination.MyBookings
+                    segments.drop(1).dropLast(1) == listOf("bookings") && Paths.queryParam(queryPart, "ot") == null ->
+                        HomeTaskNotificationRoute.canonicalId(segments.last())
+                            ?.let { Destination.BookingDetail(it) } ?: Destination.Unknown(raw)
+                    else -> Destination.Unknown(raw)
+                }
             "connections" -> Destination.Connections
             "beacons", "beacon-updates", "beacon_updates" -> Destination.Beacons
             "discover-hub", "discover_hub", "discoverhub" -> Destination.DiscoverHub

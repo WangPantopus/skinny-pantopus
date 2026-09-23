@@ -2020,7 +2020,7 @@ router.post('/:id/move-out', verifyToken, async (req, res) => {
         const userName = user?.name || user?.first_name || user?.username || 'A member';
         await require('../services/notificationService').createBulkNotifications(result.notify_user_ids.map(userId => ({
           userId, type: 'member_moved_out', title: 'Member moved out', body: `${userName} has moved out.`,
-          link: `/homes/${req.params.id}/occupants`, metadata: { home_id: req.params.id, moved_out_user_id: req.user.id },
+          link: `/homes/${req.params.id}/members`, metadata: { home_id: req.params.id, moved_out_user_id: req.user.id },
         })));
       } catch (error) {
         logger.warn('Failed to send move-out notifications (non-fatal)', { error: error.message });

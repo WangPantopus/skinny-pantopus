@@ -72,7 +72,7 @@ async function challenge({ homeId, actorId, occupancyId }) {
           type: userId === r.target_id ? 'access_challenged' : 'member_challenged', title: 'Residency review changed',
           body: userId === r.target_id ? 'Your residency was challenged. Check your Home status for the next step.'
             : 'A residency review was challenged. Open household reviews for details.',
-          link: `/homes/${r.home_id}/${userId === r.target_id ? 'residency' : 'occupants'}`, metadata: { home_id: r.home_id },
+          link: `/homes/${r.home_id}/${userId === r.target_id ? 'residency' : 'members?tab=requests'}`, metadata: { home_id: r.home_id },
         });
       } catch (_) { /* A failed notification cannot undo the recorded challenge. */ }
     }

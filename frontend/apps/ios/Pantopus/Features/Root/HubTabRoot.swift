@@ -1040,6 +1040,12 @@ public struct HubTabRoot: View {
         case let .neighborMessage(messageId):
             path.append(.neighborMessage(messageId: messageId))
             _ = router.consume()
+        case let .bookingDetail(bookingId):
+            path.append(.scheduling(.bookingDetail(owner: .personal, bookingId: bookingId)))
+            _ = router.consume()
+        case .myBookings:
+            path.append(.scheduling(.customerMyBookings))
+            _ = router.consume()
         default:
             break
         }
