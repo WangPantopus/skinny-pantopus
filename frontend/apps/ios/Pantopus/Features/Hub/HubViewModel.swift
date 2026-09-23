@@ -69,6 +69,17 @@ final class HubViewModel {
         await fetch()
     }
 
+    /// Re-read only the unread counts when the hub reappears (for example
+    /// after the user read their notifications), so the bell's dot and the
+    /// megaphone don't go stale. A failed read leaves them as they are.
+    func refreshUnread() async {
+        let unread: NotificationUnreadCountResponse? = await optional {
+            try await self.api.request(NotificationsEndpoints.unreadCount)
+        }
+        guard let unread else { return }
+        state = state.withUnread(personal: unread.personalBellCount, audience: unread.byContext?.audience ?? 0)
+    }
+
     /// Dismiss the amber setup banner; persists across launches.
     func dismissSetupBanner() {
         bannerDismissed = true
@@ -184,6 +195,7 @@ final class HubViewModel {
             hub: hub,
             today: today,
             discovery: discovery,
+            personalUnread: unread?.personalBellCount ?? 0,
             audienceUnread: unread?.byContext?.audience ?? 0,
             rebookable: rebookable?.rebookable ?? []
         )
@@ -199,6 +211,7 @@ final class HubViewModel {
         hub: HubResponse,
         today: HubTodayResponse?,
         discovery: HubDiscoveryResponse?,
+        personalUnread: Int = 0,
         audienceUnread: Int = 0,
         rebookable: [RebookableGigDTO] = []
     ) {
@@ -225,7 +238,8 @@ final class HubViewModel {
                     // Setup-mode pillars + discovery rail, per the design's
                     // first-run frame.
                     pillars: Self.pillars(from: hub, setupMode: true),
-                    discovery: discoveryCards
+                    discovery: discoveryCards,
+                    unreadCount: personalUnread
                 )
             )
             return
@@ -266,7 +280,7 @@ final class HubViewModel {
                     avatarInitials: Self.initials(from: hub.user.name),
                     identity: identity,
                     ringProgress: hub.setup.profileCompleteness.score,
-                    unreadCount: hub.statusItems.count,
+                    unreadCount: personalUnread,
                     audienceUnreadCount: audienceUnread
                 ),
                 actionChips: Self.defaultActionChips(),

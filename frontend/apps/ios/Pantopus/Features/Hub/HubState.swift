@@ -29,11 +29,13 @@ public enum HubState: Sendable {
         public let steps: [SetupStep]
         public let pillars: [PillarTile]
         public let discovery: [DiscoveryCardContent]
+        /// Unread personal notifications — drives the bell's dot.
+        public var unreadCount: Int = 0
     }
 
     /// The fully-assembled hub bundle.
     public struct PopulatedContent: Sendable {
-        public let topBar: TopBarContent
+        public var topBar: TopBarContent
         public let actionChips: [ActionChipContent]
         /// Server-driven "Needs attention" strip — `GET /api/hub`'s
         /// `statusItems[]` (`backend/routes/hub.js:24`). Mirrors RN
@@ -71,6 +73,24 @@ public enum HubState: Sendable {
             self.discovery = discovery
             self.jumpBackIn = jumpBackIn
             self.activity = activity
+        }
+    }
+}
+
+extension HubState {
+    /// The same hub with fresh unread counts: the bell's dot (personal) and
+    /// the Beacon megaphone (audience). Other states are left as they are.
+    func withUnread(personal: Int, audience: Int) -> HubState {
+        switch self {
+        case var .populated(content):
+            content.topBar.unreadCount = personal
+            content.topBar.audienceUnreadCount = audience
+            return .populated(content)
+        case var .firstRun(content):
+            content.unreadCount = personal
+            return .firstRun(content)
+        default:
+            return self
         }
     }
 }
@@ -169,13 +189,13 @@ public struct TopBarContent: Sendable {
     /// user's primary identity scope (personal / home / business).
     public let identity: IdentityPillar
     public let ringProgress: Double
-    public let unreadCount: Int
+    public var unreadCount: Int
     /// S5 — unread count in the Beacon (audience) firewall zone, read
     /// from `GET /api/notifications/unread-count`'s `byContext.audience`
     /// (`backend/routes/notifications.js:187-193`). Drives the megaphone
     /// shortcut next to the bell, mirroring RN's
     /// `hub-bell-audience` button. `0` hides the shortcut.
-    public let audienceUnreadCount: Int
+    public var audienceUnreadCount: Int
 
     public init(
         greeting: String,

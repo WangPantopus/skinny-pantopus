@@ -41,7 +41,10 @@ struct HubView: View {
         .accessibilityIdentifier("hubScreen")
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
-        .onAppear { Analytics.track(.screenHubViewed) }
+        .onAppear {
+            Analytics.track(.screenHubViewed)
+            Task { await viewModel.refreshUnread() }
+        }
     }
 
     private func populatedLayout(_ content: HubState.PopulatedContent) -> some View {
@@ -119,7 +122,7 @@ struct HubView: View {
                             avatarInitials: content.avatarInitials,
                             identity: content.identity,
                             ringProgress: content.ringProgress,
-                            unreadCount: 0
+                            unreadCount: content.unreadCount
                         ),
                         onAvatarTap: { onNavigate(.openProfile) },
                         onBellTap: { onNavigate(.openNotifications) },
