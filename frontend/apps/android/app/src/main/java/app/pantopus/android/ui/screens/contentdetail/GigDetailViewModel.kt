@@ -13,6 +13,7 @@ import app.pantopus.android.data.api.models.gigs.GigBidDto
 import app.pantopus.android.data.api.models.gigs.GigChangeOrderDto
 import app.pantopus.android.data.api.models.gigs.GigChangeOrderMutationResponse
 import app.pantopus.android.data.api.models.gigs.GigChangeOrderType
+import app.pantopus.android.data.api.models.gigs.GigCreator
 import app.pantopus.android.data.api.models.gigs.GigDto
 import app.pantopus.android.data.api.models.gigs.GigFulfillmentStatus
 import app.pantopus.android.data.api.models.gigs.GigPaymentResponse
@@ -39,10 +40,12 @@ import app.pantopus.android.data.payments.PaymentsRepository
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.reviews.ReviewsRepository
 import app.pantopus.android.ui.screens.gigs.GigsCategory
+import app.pantopus.android.ui.screens.gigs.OPEN_TO_OFFERS_LABEL
 import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationCoordinator
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
 import app.pantopus.android.ui.screens.gigs.checkout.GigCheckoutIdentity
 import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
+import app.pantopus.android.ui.screens.gigs.isOpenToOffers
 import app.pantopus.android.ui.screens.gigs.refunds.GigRefundCoordinator
 import app.pantopus.android.ui.screens.gigs.refunds.GigRefundFactory
 import app.pantopus.android.ui.screens.marketplace.ListingGradient
@@ -62,6 +65,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -2427,7 +2431,8 @@ class GigDetailViewModel
                         distanceLabel(gig.distanceMiles),
                         relativeAge(gig.createdAt)?.let { if (it == "now") "Just posted" else "posted $it ago" },
                     )
-                val priceLine = gig.price?.let { priceLabel(it, gig.payType) }
+                val openToOffers = isOpenToOffers(gig.payType, gig.acceptedBy)
+                val priceLine = if (openToOffers) OPEN_TO_OFFERS_LABEL else gig.price?.let { priceLabel(it, gig.payType) }
                 val hero =
                     ContentDetailHero(
                         title = gig.title,
@@ -2438,7 +2443,7 @@ class GigDetailViewModel
                             ),
                         meta = metaPieces.takeIf { it.isNotEmpty() }?.joinToString(" · "),
                         priceLine = priceLine,
-                        priceCaption = if (priceLine != null) "budget" else null,
+                        priceCaption = if (priceLine != null && !openToOffers) "budget" else null,
                     )
                 val statStrip = statRows(gig)
                 val modules =
@@ -2482,7 +2487,7 @@ class GigDetailViewModel
                             add(
                                 ContentDetailModule.Bids(
                                     id = "bids",
-                                    title = "$bidCount bids",
+                                    title = "$bidCount ${if (bidCount == 1) "bid" else "bids"}",
                                     sub = bidRangeSub(bids),
                                     bids = bids.map { projectBid(it) },
                                 ),
@@ -2670,14 +2675,15 @@ class GigDetailViewModel
                         distanceLabel(gig.distanceMiles),
                         gig.scheduledStart?.takeIf { it.isNotEmpty() }?.let { formatScheduledStart(it) },
                     )
-                val priceLine = gig.price?.let { priceLabel(it, gig.payType) }
+                val openToOffers = isOpenToOffers(gig.payType, gig.acceptedBy)
+                val priceLine = if (openToOffers) OPEN_TO_OFFERS_LABEL else gig.price?.let { priceLabel(it, gig.payType) }
                 val hero =
                     ContentDetailHero(
                         title = gig.title,
                         categoryChip = null,
                         meta = metaPieces.takeIf { it.isNotEmpty() }?.joinToString(" · "),
                         priceLine = priceLine,
-                        priceCaption = gigV1PriceCaption(priceLine, awarded),
+                        priceCaption = if (openToOffers) null else gigV1PriceCaption(priceLine, awarded),
                     )
                 val modules =
                     buildList {
@@ -2704,7 +2710,7 @@ class GigDetailViewModel
                             add(
                                 ContentDetailModule.Bids(
                                     id = "bids",
-                                    title = "$bidCount bids",
+                                    title = "$bidCount ${if (bidCount == 1) "bid" else "bids"}",
                                     sub = if (awarded) "closed" else null,
                                     bids = bids.map { projectBid(it, if (awarded) gig.acceptedBy else null) },
                                 ),
@@ -2788,12 +2794,25 @@ class GigDetailViewModel
                     id = bid.id,
                     initials = initials.ifEmpty { "?" },
                     displayName = name,
-                    ratingLine = "verified neighbor",
+                    ratingLine = bidderTrustLine(bid.bidderIdentity()),
                     amount = amountLabel,
                     verified = bid.bidderIdentity()?.resolvedVerified() == true,
                     won = won,
                     dimmed = dimmed,
                 )
+            }
+
+            /**
+             * A bid row's trust line, from the bid payload only: "Verified neighbor" when the bidder is
+             * verified, else their rating ("4.8 · 12 jobs"), else no line.
+             */
+            internal fun bidderTrustLine(bidder: GigCreator?): String? {
+                if (bidder == null) return null
+                if (bidder.resolvedVerified()) return "Verified neighbor"
+                val rating = bidder.averageRating?.takeIf { it > 0 } ?: return null
+                val base = String.format(Locale.US, "%.1f", rating)
+                val jobs = bidder.gigsCompleted?.takeIf { it > 0 } ?: return base
+                return "$base · $jobs ${if (jobs == 1) "job" else "jobs"}"
             }
 
             private fun priceLabel(

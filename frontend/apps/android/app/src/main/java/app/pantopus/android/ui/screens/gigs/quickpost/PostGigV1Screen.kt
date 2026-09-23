@@ -879,7 +879,7 @@ private fun PriceField(
                         .semantics {
                             contentDescription =
                                 when {
-                                    !enabled -> "Price, free gig"
+                                    !enabled -> "Price, helpers suggest a price"
                                     error == null -> "Price"
                                     else -> "Price, error: $error"
                                 }
@@ -887,7 +887,7 @@ private fun PriceField(
                 decorationBox = { inner ->
                     if (value.isEmpty()) {
                         Text(
-                            text = if (enabled) "0" else "Free",
+                            text = if (enabled) "0" else "Helpers suggest a price",
                             style = PantopusTextStyle.body,
                             color = PantopusColors.appTextMuted,
                         )
