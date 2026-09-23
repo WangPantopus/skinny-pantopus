@@ -120,6 +120,15 @@ export function resolveMessageType(msg: ChatMessageLike): string {
   return rawType;
 }
 
+/** Shown when a conversation has no room yet, so a share or send has nowhere to go. */
+export const CONVERSATION_NOT_READY = "This conversation isn't ready yet. Try again in a moment.";
+
+/** Why sharing a task or listing card failed: the server's reason when it sent one. */
+export function shareFailureMessage(err: unknown): string {
+  const message = err instanceof Error ? err.message.trim() : '';
+  return message || "Couldn't share that. Try again.";
+}
+
 // ── Types ───────────────────────────────────────────────────
 
 export interface UseChatMessagesOptions {

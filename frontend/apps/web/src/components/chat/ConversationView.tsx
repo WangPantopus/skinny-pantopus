@@ -8,7 +8,7 @@ import { useMutation } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getInitials } from '@pantopus/ui-utils';
 import type { ConversationTopic } from '@pantopus/types';
-import { useChatMessages } from '../../hooks/useChatMessages';
+import { useChatMessages, shareFailureMessage, CONVERSATION_NOT_READY } from '../../hooks/useChatMessages';
 import ChatMessageList from './ChatMessageList';
 import ChatInput from './ChatInput';
 import GigPickerModal from './GigPickerModal';
@@ -226,14 +226,19 @@ export default function ConversationView({
       if (!chat.connected) await chat.refresh();
       fetchTopics();
     },
-    onError: () => {},
+    // Say why instead of closing the picker with nothing sent.
+    onError: (err: unknown) => chat.setError(shareFailureMessage(err)),
   });
 
   const handleGigSelected = useCallback((gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
     setShowGigPicker(false);
-    if (!chat.resolvedRoomId) return;
+    if (!chat.resolvedRoomId) {
+      // Keep a reason already on screen (why the conversation couldn't start).
+      chat.setError(chat.error || CONVERSATION_NOT_READY);
+      return;
+    }
     gigSendMutation.mutate(gig);
-  }, [chat.resolvedRoomId, gigSendMutation]);
+  }, [chat, gigSendMutation]);
 
   const listingSendMutation = useMutation({
     mutationFn: async (listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {
@@ -257,14 +262,19 @@ export default function ConversationView({
       if (!chat.connected) await chat.refresh();
       fetchTopics();
     },
-    onError: () => {},
+    // Say why instead of closing the picker with nothing sent.
+    onError: (err: unknown) => chat.setError(shareFailureMessage(err)),
   });
 
   const handleListingSelected = useCallback((listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {
     setShowListingPicker(false);
-    if (!chat.resolvedRoomId) return;
+    if (!chat.resolvedRoomId) {
+      // Keep a reason already on screen (why the conversation couldn't start).
+      chat.setError(chat.error || CONVERSATION_NOT_READY);
+      return;
+    }
     listingSendMutation.mutate(listing);
-  }, [chat.resolvedRoomId, listingSendMutation]);
+  }, [chat, listingSendMutation]);
 
   const handleImageClick = useCallback((url: string, title?: string) => {
     setLightboxImage({ url, title });
