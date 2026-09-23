@@ -5956,6 +5956,22 @@ router.get('/:gigId/change-orders', verifyToken, async (req, res) => {
   }
 });
 
+// A paid task's price is bound to its payment hold: Start Work, capture, stop
+// and every settlement compare them, so a price change strands the hold.
+// Until a price change can move the hold, refuse one while it is live.
+const PAID_PRICE_CHANGE_UNAVAILABLE =
+  "Price changes aren't available once a task has a payment hold. The task keeps its agreed price.";
+async function hasLivePaymentHold(gig) {
+  if (!gig.payment_id) return false;
+  const { data: payment, error } = await supabaseAdmin
+    .from('Payment')
+    .select('payment_status')
+    .eq('id', gig.payment_id)
+    .maybeSingle();
+  if (error) throw error;
+  return !['canceled', 'refunded_full'].includes(payment?.payment_status);
+}
+
 /**
  * POST /api/gigs/:gigId/change-orders
  * Request a change order (worker or poster, gig must be assigned or in_progress).
@@ -5988,7 +6004,7 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
 
     const { data: gig, error: gigFetchErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, accepted_by, status, title, price')
+      .select('id, user_id, accepted_by, status, title, price, payment_id')
       .eq('id', gigId)
       .single();
 
@@ -6009,6 +6025,9 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
       return res
         .status(403)
         .json({ error: 'Only the poster or assigned worker can request changes' });
+    }
+    if (Number(amount_change) && (await hasLivePaymentHold(gig))) {
+      return res.status(409).json({ error: PAID_PRICE_CHANGE_UNAVAILABLE, code: 'PAID_PRICE_CHANGE_UNAVAILABLE' });
     }
 
     const safeAmountChange = amount_change ? parseFloat(amount_change) : 0;
@@ -6165,7 +6184,7 @@ router.post('/:gigId/change-orders/:orderId/approve', verifyToken, async (req, r
 
     const { data: gig, error: gigFetchErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, accepted_by, title, price')
+      .select('id, user_id, accepted_by, title, price, payment_id')
       .eq('id', gigId)
       .single();
 
@@ -6195,6 +6214,9 @@ router.post('/:gigId/change-orders/:orderId/approve', verifyToken, async (req, r
     const isWorker = gig.accepted_by && String(gig.accepted_by) === String(userId);
     if (!isPoster && !isWorker) {
       return res.status(403).json({ error: 'Only the poster or worker can approve' });
+    }
+    if (Number(order.amount_change) && (await hasLivePaymentHold(gig))) {
+      return res.status(409).json({ error: PAID_PRICE_CHANGE_UNAVAILABLE, code: 'PAID_PRICE_CHANGE_UNAVAILABLE' });
     }
 
     const nowIso = new Date().toISOString();
