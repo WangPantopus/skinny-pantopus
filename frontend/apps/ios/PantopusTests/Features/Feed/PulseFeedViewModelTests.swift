@@ -33,7 +33,7 @@ final class PulseFeedViewModelTests: XCTestCase {
     )
 
     private func makeVM() -> PulseFeedViewModel {
-        PulseFeedViewModel(api: makeAPI(), locationProvider: Self.fixedLocation)
+        PulseFeedViewModel(api: makeAPI(), locationProvider: Self.fixedLocation, chosenArea: { nil })
     }
 
     private static let askPostJSON = """
