@@ -85,6 +85,9 @@ fun YouScreen(
     onOpenMailbox: () -> Unit = {},
     onOpenEditProfile: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onOpenHelp: () -> Unit = {},
+    onOpenLegal: () -> Unit = {},
+    onOpenPrivacySettings: () -> Unit = {},
     onOpenOffers: () -> Unit = {},
     onOpenMyBids: () -> Unit = {},
     onOpenMyTasks: () -> Unit = {},
@@ -235,6 +238,9 @@ fun YouScreen(
                 }
                 "me.editProfile" -> onOpenEditProfile()
                 "me.settings" -> onOpenSettings()
+                "me.help" -> onOpenHelp()
+                "me.legal" -> onOpenLegal()
+                "me.privacy", "me.home.privacy" -> onOpenPrivacySettings()
                 "me.scheduling.hub", "me.business.scheduling", "me.home.scheduling" -> onOpenScheduling()
                 "me.debug.openProfile" -> if (BuildConfig.DEBUG) debugProfileDialog = true
                 "me.debug.openPost" -> if (BuildConfig.DEBUG) debugPostDialog = true

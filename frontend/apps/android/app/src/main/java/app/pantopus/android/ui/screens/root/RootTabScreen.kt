@@ -2531,6 +2531,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.placeholder(label))
                         },
                         onOpenSettings = { navController.navigate(ChildRoutes.MENU) },
+                        onOpenHelp = { navController.navigate(ChildRoutes.SETTINGS_HELP) },
+                        onOpenLegal = { navController.navigate(ChildRoutes.SETTINGS_LEGAL) },
+                        onOpenPrivacySettings = { navController.navigate(ChildRoutes.SETTINGS_PRIVACY) },
                         onOpenOffers = { navController.navigate(ChildRoutes.OFFERS) },
                         onOpenMyBids = { navController.navigate(ChildRoutes.MY_BIDS) },
                         onOpenMyTasks = { navController.navigate(ChildRoutes.MY_TASKS) },
