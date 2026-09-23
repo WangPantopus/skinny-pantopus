@@ -178,6 +178,8 @@ public final class PulseFeedViewModel {
     private let chosenArea: @MainActor () async -> ViewingLocationDTO?
     /// The area the last first-page fetch used; later pages reuse it.
     private var lastArea: FeedArea?
+    /// Identity of the query that produced the visible rows and cursor.
+    private var lastQuery: FeedQuery?
     private var loadedItems: [FeedPostDTO] = []
     private var isLoading = false
     /// Bumped per fetch; only the latest fetch's response is applied, so a
@@ -568,22 +570,40 @@ public final class PulseFeedViewModel {
         do {
             let area = await resolvedArea()
             guard generation == fetchGeneration else { return }
+            let query = FeedQuery(
+                surface: surface.backendSurface,
+                area: area,
+                postType: isInSportsLane ? nil : activeIntent.postType,
+                topic: topicQueryValue,
+                sportsMode: isInSportsLane ? sportsMode.rawValue : nil,
+                eventKey: isInSportsLane ? resolvedEventKey : nil
+            )
+            if query != lastQuery {
+                // A changed filter or area cannot retain the old query's
+                // rows or cursor if its first page fails.
+                loadedItems = []
+                applyPagination(nil)
+                lastArea = nil
+                lastQuery = nil
+                state = .loading
+            }
             let response: FeedResponse = try await api.request(
                 PostsEndpoints.feed(
-                    surface: surface.backendSurface,
-                    latitude: area.latitude,
-                    longitude: area.longitude,
-                    radiusMiles: area.radiusMiles,
-                    postType: isInSportsLane ? nil : activeIntent.postType,
+                    surface: query.surface,
+                    latitude: query.area.latitude,
+                    longitude: query.area.longitude,
+                    radiusMiles: query.area.radiusMiles,
+                    postType: query.postType,
                     limit: 20,
-                    topic: topicQueryValue,
-                    sportsMode: isInSportsLane ? sportsMode.rawValue : nil,
-                    eventKey: isInSportsLane ? resolvedEventKey : nil
+                    topic: query.topic,
+                    sportsMode: query.sportsMode,
+                    eventKey: query.eventKey
                 )
             )
             // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
             guard generation == fetchGeneration else { return }
             lastArea = area
+            lastQuery = query
             loadedItems = response.posts
             applyPagination(response.pagination)
             scopeLabel = response.posts.first?.locationName ?? scopeLabel
@@ -842,8 +862,18 @@ public final class PulseFeedViewModel {
 }
 
 /// Where a feed request looks: coordinates plus the viewing radius, when known.
-private struct FeedArea {
+private struct FeedArea: Equatable {
     let latitude: Double?
     let longitude: Double?
     var radiusMiles: Double?
+}
+
+/// Query fields that must match before a failed refresh may retain its rows.
+private struct FeedQuery: Equatable {
+    let surface: String
+    let area: FeedArea
+    let postType: String?
+    let topic: String?
+    let sportsMode: String?
+    let eventKey: String?
 }
