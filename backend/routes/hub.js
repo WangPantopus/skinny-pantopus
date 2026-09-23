@@ -47,7 +47,7 @@ router.get('/', verifyToken, async (req, res) => {
         ).catch(() => null),
         supabaseAdmin
           .from('HomeOccupancy')
-          .select('home_id, role, is_active, verification_status, home:home_id(id, name, address, city, state, zipcode, latitude, longitude)')
+          .select('home_id, role, is_active, verification_status, home:home_id(id, name, address, city, state, zipcode, map_center_lat, map_center_lng)')
           .eq('user_id', userId)
           .eq('is_active', true),
         // Seat-based business memberships (with fallback to BusinessTeam format)
@@ -103,6 +103,15 @@ router.get('/', verifyToken, async (req, res) => {
     // lifetime_received covers direct credits, seeder funds, etc. that aren't Payment rows.
     const totalEarnedCents = Math.max(earningsFromPayments, lifetimeReceived);
 
+    // Home has no latitude/longitude columns (its coordinates are
+    // map_center_lat/lng). A failed occupancy read must not look like "no
+    // homes": that turned every resident's hub into the unverified first-run
+    // state.
+    if (occupancyResult.error) {
+      logger.error('Hub: occupancy lookup failed', { userId, error: occupancyResult.error.message });
+      return res.status(503).json({ error: 'Could not load your homes. Please retry.' });
+    }
+
     const homes = (occupancyResult.data || [])
       .filter((o) => o.home)
       .map((o) => ({
@@ -111,8 +120,8 @@ router.get('/', verifyToken, async (req, res) => {
         addressShort: [o.home.address, o.home.city].filter(Boolean).join(', '),
         city: o.home.city || null,
         state: o.home.state || null,
-        latitude: o.home.latitude || null,
-        longitude: o.home.longitude || null,
+        latitude: o.home.map_center_lat ?? null,
+        longitude: o.home.map_center_lng ?? null,
         isPrimary: false,
         roleBase: o.role || 'member',
         verified: o.verification_status === 'verified',
@@ -132,7 +141,7 @@ router.get('/', verifyToken, async (req, res) => {
     if (ownerHomeIds.length > 0) {
       const { data: ownerHomes, error: homeErr } = await supabaseAdmin
         .from('Home')
-        .select('id, name, address, city, state, zipcode, latitude, longitude')
+        .select('id, name, address, city, state, zipcode, map_center_lat, map_center_lng')
         .in('id', ownerHomeIds);
       if (homeErr) {
         logger.warn('Hub: Home fetch for owner fallback failed', { ownerHomeIds, error: homeErr.message });
@@ -144,8 +153,8 @@ router.get('/', verifyToken, async (req, res) => {
           addressShort: [home.address, home.city].filter(Boolean).join(', '),
           city: home.city || null,
           state: home.state || null,
-          latitude: home.latitude || null,
-          longitude: home.longitude || null,
+          latitude: home.map_center_lat ?? null,
+          longitude: home.map_center_lng ?? null,
           isPrimary: false,
           roleBase: 'owner',
         });
