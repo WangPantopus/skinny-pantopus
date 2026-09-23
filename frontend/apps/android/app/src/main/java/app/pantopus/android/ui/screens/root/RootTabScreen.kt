@@ -4093,7 +4093,6 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenSenderProfile = { userId ->
                             navController.navigate(ChildRoutes.publicProfile(userId))
                         },
-                        onTranslate = { navController.navigate(ChildRoutes.translation(mailId)) },
                         onOpenExtractedTask = { sourceMailId ->
                             // A17.12 — the certified-notice "view task" affordance
                             // opens the mail-derived task keyed by its source mail.
