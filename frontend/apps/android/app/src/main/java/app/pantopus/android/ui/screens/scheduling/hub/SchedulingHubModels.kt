@@ -34,6 +34,8 @@ sealed interface SchedulingHubUiState {
         val summaryRetrying: Boolean = false,
         val agenda: List<HubAgendaSection>,
         val manageRows: List<HubManageItem>,
+        /** Initials of real roster members (home occupants / business team) for the composed note. */
+        val memberInitials: List<String> = emptyList(),
     ) : SchedulingHubUiState
 
     data class Error(

@@ -216,6 +216,7 @@ class SchedulingHubViewModel
                     summaryFailed = summaryFailed,
                     agenda = buildAgenda(upcoming, pending, typesById, zone, data.memberNames),
                     manageRows = buildManageRows(isPersonal, eventTypes, availability, calendars, pending),
+                    memberInitials = data.memberNames.values.sorted().take(2).map(::initials),
                 )
         }
 
