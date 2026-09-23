@@ -319,6 +319,7 @@ internal fun OwnerEditFrame(
                     logoIcon = profile.header.logoIcon,
                     status = bannerStatus(profile.status),
                     onEdit = onEditPage,
+                    isVerified = content.isVerified,
                 )
                 Column(
                     modifier =
