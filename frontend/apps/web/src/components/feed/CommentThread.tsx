@@ -18,6 +18,8 @@ interface CommentThreadProps {
   isPosting?: boolean;
   canCompose?: boolean;
   composeDisabledMessage?: string | null;
+  /** Shown when there are no comments; null shows nothing (e.g. the load failed). */
+  emptyText?: string | null;
 }
 
 function isImageAttachment(mimeType?: string) {
@@ -38,6 +40,7 @@ export default function CommentThread({
   isPosting,
   canCompose = true,
   composeDisabledMessage,
+  emptyText = 'No comments yet — start the conversation',
 }: CommentThreadProps) {
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
@@ -312,9 +315,11 @@ export default function CommentThread({
   return (
     <div>
       {comments.length === 0 ? (
-        <div className="text-center py-6">
-          <p className="text-xs text-app-muted">No comments yet — start the conversation</p>
-        </div>
+        emptyText ? (
+          <div className="text-center py-6">
+            <p className="text-xs text-app-muted">{emptyText}</p>
+          </div>
+        ) : null
       ) : (
         <div className="divide-y divide-app">
           {topLevel.map((c) => renderComment(c, 0))}
