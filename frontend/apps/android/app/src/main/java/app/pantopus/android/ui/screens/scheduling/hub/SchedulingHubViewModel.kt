@@ -12,8 +12,9 @@ import app.pantopus.android.data.api.models.scheduling.ConnectedCalendarDto
 import app.pantopus.android.data.api.models.scheduling.EventTypeDto
 import app.pantopus.android.data.api.models.scheduling.UpdateBookingPageRequest
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.api.models.scheduling.SlotDto
 import app.pantopus.android.data.businesses.BusinessTeamRepository
+import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.scheduling.SchedulingError
@@ -32,17 +33,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 import javax.inject.Inject
 
 /**
  * A1 Scheduling Hub. One owner-polymorphic front door: the pillar pill row
  * re-scopes the whole screen (Personal default; Home/Business resolve the
- * owner id from [HomesRepository]/[AuthRepository] since the A0 route is
+ * owner id from [HomesRepository]/[BusinessesRepository] since the A0 route is
  * arg-less), the booking-link card is the hero, a master toggle pauses new
  * bookings, and the agenda + manage rows route onward via [onNavigate].
  */
@@ -54,7 +57,7 @@ class SchedulingHubViewModel
         private val homes: HomesRepository,
         private val homeMembers: HomeMembersRepository,
         private val businessTeam: BusinessTeamRepository,
-        private val auth: AuthRepository,
+        private val businesses: BusinessesRepository,
         private val errors: SchedulingErrorDecoder,
     ) : ViewModel() {
         private val _pillar = MutableStateFlow(SchedulingPillar.Personal)
@@ -70,6 +73,14 @@ class SchedulingHubViewModel
         /** One-shot: true briefly after Copy link, drives the toast. */
         private val _copied = MutableStateFlow(false)
         val copied: StateFlow<Boolean> = _copied.asStateFlow()
+
+        /**
+         * The Business pill shows only for a user who runs a business: the first
+         * one from `GET /api/businesses/my-businesses`, the source web's hub uses.
+         */
+        private val _hasBusiness = MutableStateFlow(false)
+        val hasBusiness: StateFlow<Boolean> = _hasBusiness.asStateFlow()
+        private var businessOwnerId: String? = null
 
         private var owner: SchedulingOwner = SchedulingOwner.Personal
         private var started = false
@@ -96,7 +107,12 @@ class SchedulingHubViewModel
             fetchJob =
                 viewModelScope.launch {
                     _state.value = SchedulingHubUiState.Loading
+                    val business = async { resolveFirstBusinessId() }
                     fetch()
+                    business.await()?.let {
+                        businessOwnerId = it
+                        _hasBusiness.value = true
+                    }
                 }
         }
 
@@ -137,9 +153,16 @@ class SchedulingHubViewModel
                         is NetworkResult.Success -> r.data.sharedHomes.firstOrNull()?.id?.let { SchedulingOwner.Home(it) }
                         is NetworkResult.Failure -> null
                     }
+                // A business the user can manage, never the signed-in user's own id.
                 SchedulingPillar.Business ->
-                    (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id?.let { SchedulingOwner.Business(it) }
+                    (businessOwnerId ?: resolveFirstBusinessId())?.let {
+                        businessOwnerId = it
+                        SchedulingOwner.Business(it)
+                    }
             }
+
+        private suspend fun resolveFirstBusinessId(): String? =
+            businesses.myBusinesses().dataOrNull()?.businesses?.firstOrNull()?.businessUserId?.takeIf { it.isNotBlank() }
 
         @Suppress("LongMethod", "CyclomaticComplexMethod")
         private suspend fun fetch() {
@@ -218,6 +241,32 @@ class SchedulingHubViewModel
                     manageRows = buildManageRows(isPersonal, eventTypes, availability, calendars, pending),
                     memberInitials = data.memberNames.values.sorted().take(2).map(::initials),
                 )
+            refreshPreviewTimes(loadedPage, eventTypes, zone)
+        }
+
+        /**
+         * The link preview's chips: the first day's next open start times (up to
+         * three) of the first active event type, from the public slots read over
+         * the next 14 days in the page's zone. Empty when none; null when unread.
+         */
+        private suspend fun refreshPreviewTimes(
+            page: BookingPageDto,
+            eventTypes: List<EventTypeDto>,
+            zone: ZoneId,
+        ) {
+            val slug = page.slug?.takeIf { it.isNotBlank() }
+            val type = eventTypes.firstOrNull { it.isActive != false }
+            val times: List<String>? =
+                if (slug == null || type == null) {
+                    emptyList()
+                } else {
+                    val today = LocalDate.now(zone)
+                    repo.publicGetSlots(slug, type.slug, today.toString(), today.plusDays(14).toString(), zone.id)
+                        .dataOrNull()
+                        ?.let { previewTimesFrom(it.slots, zone) }
+                }
+            val live = _state.value as? SchedulingHubUiState.Loaded ?: return
+            _state.value = live.copy(previewTimes = times)
         }
 
         /**
@@ -642,6 +691,18 @@ private fun locationKind(mode: String?): HubBookingKind =
  * by first name only ("John", "Maria"). Mirrors iOS `SchedulingHubModel.firstName`.
  */
 private fun firstName(name: String): String = name.trim().split(" ").firstOrNull { it.isNotBlank() } ?: name
+
+/** The first day's next open start times, up to three, as short local times in [zone]. */
+private fun previewTimesFrom(
+    slots: List<SlotDto>,
+    zone: ZoneId,
+): List<String> {
+    val now = Instant.now()
+    val future = slots.mapNotNull { runCatching { Instant.parse(it.start) }.getOrNull() }.filter { it.isAfter(now) }
+    val firstDay = future.firstOrNull()?.atZone(zone)?.toLocalDate() ?: return emptyList()
+    val format = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(Locale.getDefault())
+    return future.filter { it.atZone(zone).toLocalDate() == firstDay }.take(3).map { it.atZone(zone).format(format) }
+}
 
 private fun initials(name: String): String {
     val parts = name.trim().split(" ", "@").filter { it.isNotBlank() }

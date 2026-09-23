@@ -133,6 +133,13 @@ final class SchedulingHubModel {
     private(set) var connectedCalendars: [ConnectedCalendarDTO] = []
     private(set) var canEdit = true
     private(set) var isPaused = false
+    /// The first business the user can manage (`GET /api/businesses/my-businesses`,
+    /// the source web's hub uses). The Business pill shows only when there is one.
+    private(set) var businessOwnerId: String?
+    private(set) var hasBusiness: Bool
+    /// The link card's live preview: the next open start times of the first
+    /// active event type. `[]` when there are none; nil when unread.
+    private(set) var previewTimes: [String]?
 
     private let client = SchedulingClient.shared
     private let api = APIClient.shared
@@ -144,13 +151,24 @@ final class SchedulingHubModel {
     init(owner: SchedulingOwner, push: @escaping @MainActor (SchedulingRoute) -> Void) {
         self.owner = owner
         self.push = push
+        var isBusiness = false
+        if case .business = owner { isBusiness = true }
+        hasBusiness = isBusiness
+    }
+
+    /// The identity pills: Business only when the user runs a business.
+    var pillarChoices: [SchedulingPillarChoice] {
+        hasBusiness ? SchedulingPillarChoice.allCases : [.personal, .home]
     }
 
     // MARK: Lifecycle
 
     func load() async {
         phase = .loading
+        async let business = resolveFirstBusinessId()
         await fetch()
+        businessOwnerId = await business
+        if businessOwnerId != nil { hasBusiness = true }
     }
 
     func refresh() async {
@@ -173,11 +191,13 @@ final class SchedulingHubModel {
             }
             owner = .home(homeId: homeId)
         case .business:
-            guard let userId = await resolveCurrentUserId(), !userId.isEmpty else {
+            // A business the user can manage, never the signed-in user's own id.
+            if businessOwnerId == nil { businessOwnerId = await resolveFirstBusinessId() }
+            guard let businessId = businessOwnerId, !businessId.isEmpty else {
                 phase = .error("Couldn't load your business scheduling.")
                 return
             }
-            owner = .business(id: userId)
+            owner = .business(id: businessId)
         }
         await fetch()
     }
@@ -229,6 +249,39 @@ final class SchedulingHubModel {
             phase = .error("Couldn't load your scheduling hub.")
         } else {
             phase = eventTypes.isEmpty ? .empty : .loaded
+            if !eventTypes.isEmpty { await refreshPreviewTimes() }
+        }
+    }
+
+    /// The first day's next open start times (up to three) of the first active
+    /// event type, from the public slots read over the next 14 days, in the
+    /// page's time zone.
+    private func refreshPreviewTimes() async {
+        guard let slug = page?.slug, !slug.isEmpty,
+              let type = eventTypes.first(where: { $0.isActive != false }) else {
+            previewTimes = []
+            return
+        }
+        let tz = page?.timezone.flatMap { TimeZone(identifier: $0) != nil ? $0 : nil } ?? TimeZone.current.identifier
+        let now = Date()
+        do {
+            let response: PublicSlotsResponse = try await client.request(
+                SchedulingPublicEndpoints.slots(
+                    slug: slug,
+                    eventTypeSlug: type.slug,
+                    from: SchedulingTime.isoDay(now),
+                    to: SchedulingTime.isoDay(now.addingTimeInterval(14 * 86400)),
+                    tz: tz
+                )
+            )
+            let future = response.slots.filter { (SchedulingTime.parseUTC($0.start) ?? .distantPast) > now }
+            let firstDay = future.first.flatMap { SchedulingTime.parseUTC($0.start) }.map { SchedulingTime.isoDay($0, tz: tz) }
+            previewTimes = future
+                .filter { SchedulingTime.parseUTC($0.start).map { SchedulingTime.isoDay($0, tz: tz) } == firstDay }
+                .prefix(3)
+                .compactMap { SchedulingTime.localString(utcISO: $0.start, tz: tz, dateStyle: .none, timeStyle: .short) }
+        } catch {
+            previewTimes = nil
         }
     }
 
@@ -471,9 +524,9 @@ final class SchedulingHubModel {
         return r?.homes.first?.home.id
     }
 
-    private func resolveCurrentUserId() async -> String? {
-        let r: ProfileResponse? = try? await api.request(UsersEndpoints.profile())
-        return r?.user.id
+    private func resolveFirstBusinessId() async -> String? {
+        let r: MyBusinessesResponse? = try? await api.request(BusinessesEndpoints.myBusinesses())
+        return r?.businesses.first?.businessUserId
     }
 
     // MARK: Static helpers

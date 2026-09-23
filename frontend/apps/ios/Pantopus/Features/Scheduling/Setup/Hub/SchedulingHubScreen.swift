@@ -36,7 +36,7 @@ struct SchedulingHubScreen: View {
                 trailingLabel: model.canEdit ? "Scheduling settings" : "View-only access",
                 onTrailing: model.canEdit ? { model.openSettings() } : nil
             )
-            SetupIdentityPills(active: model.owner) { choice in
+            SetupIdentityPills(active: model.owner, choices: model.pillarChoices) { choice in
                 Task { await model.selectPillar(choice) }
             }
             content
@@ -95,6 +95,7 @@ struct SchedulingHubScreen: View {
                         role: model.displayRole,
                         paused: model.isPaused,
                         readOnly: !model.canEdit,
+                        previewTimes: model.previewTimes,
                         onCopy: copyLink,
                         onShare: shareLink
                     )

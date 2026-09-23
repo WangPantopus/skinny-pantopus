@@ -60,6 +60,7 @@ fun SchedulingHubScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val copied by viewModel.copied.collectAsStateWithLifecycle()
     val shareRequest by viewModel.shareRequest.collectAsStateWithLifecycle()
+    val hasBusiness by viewModel.hasBusiness.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -94,7 +95,7 @@ fun SchedulingHubScreen(
                 canEdit = canEdit,
                 onSettings = { onNavigate(viewModel.settingsRoute()) },
             )
-            HubPillBand(pillar = pillar, onSelect = viewModel::selectPillar)
+            HubPillBand(pillar = pillar, showBusiness = hasBusiness, onSelect = viewModel::selectPillar)
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 Column(
                     modifier =
@@ -200,6 +201,7 @@ private fun HubTopBar(
 @Composable
 private fun HubPillBand(
     pillar: SchedulingPillar,
+    showBusiness: Boolean,
     onSelect: (SchedulingPillar) -> Unit,
 ) {
     Box(
@@ -211,12 +213,13 @@ private fun HubPillBand(
     ) {
         IdentitySwitcherPillRow(
             options =
-                listOf(
+                listOfNotNull(
                     IdentityOption("personal", "Personal", PantopusIcon.User, SchedulingPillar.Personal.accent),
                     IdentityOption("home", "Home", PantopusIcon.Home, SchedulingPillar.Home.accent),
                     // Hub identity pill uses the storefront glyph per scheduling-hub-frames.jsx
                     // (PILLAR.business.icon == 'store'); mirrors iOS SetupKit's hub-pill override.
-                    IdentityOption("business", "Business", PantopusIcon.Store, SchedulingPillar.Business.accent),
+                    // Only for a user who runs a business.
+                    IdentityOption("business", "Business", PantopusIcon.Store, SchedulingPillar.Business.accent).takeIf { showBusiness },
                 ),
             activeId =
                 when (pillar) {
@@ -282,6 +285,7 @@ private fun HubLoadedBody(
         handle = state.handle,
         isPaused = state.isPaused,
         readOnly = !state.canEdit,
+        previewTimes = state.previewTimes,
         onCopy = onCopy,
         onShare = onShare,
     )

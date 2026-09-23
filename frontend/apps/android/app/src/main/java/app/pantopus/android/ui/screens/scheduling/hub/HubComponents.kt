@@ -144,6 +144,7 @@ internal fun BookingLinkCard(
     readOnly: Boolean,
     onCopy: () -> Unit,
     onShare: () -> Unit,
+    previewTimes: List<String>? = null,
 ) {
     HubCard {
         Column {
@@ -159,7 +160,7 @@ internal fun BookingLinkCard(
                 )
             }
             Spacer(Modifier.height(Spacing.s3))
-            LinkPreview(pillar = pillar, displayName = displayName, displayRole = displayRole, isPaused = isPaused)
+            LinkPreview(pillar = pillar, displayName = displayName, displayRole = displayRole, isPaused = isPaused, times = previewTimes)
             Spacer(Modifier.height(Spacing.s3))
             Row(
                 modifier =
@@ -254,6 +255,7 @@ private fun LinkPreview(
     displayName: String,
     displayRole: String,
     isPaused: Boolean,
+    times: List<String>?,
 ) {
     Box(
         modifier =
@@ -323,8 +325,11 @@ private fun LinkPreview(
                 Text(displayName, color = PantopusColors.appText, fontWeight = FontWeight.Bold, fontSize = 10.sp)
                 Text(displayRole, color = PantopusColors.appTextSecondary, fontSize = 8.sp)
                 Spacer(Modifier.height(Spacing.s2))
+                if (times != null && times.isEmpty()) {
+                    Text("No open times yet", color = PantopusColors.appTextMuted, fontWeight = FontWeight.SemiBold, fontSize = 8.sp)
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                    listOf("9:00", "9:30", "10:00").forEach { chip ->
+                    times.orEmpty().forEach { chip ->
                         Box(
                             modifier =
                                 Modifier
@@ -339,6 +344,7 @@ private fun LinkPreview(
                                 color = if (isPaused) PantopusColors.appTextMuted else pillar.accent,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 8.sp,
+                                maxLines = 1,
                             )
                         }
                     }
