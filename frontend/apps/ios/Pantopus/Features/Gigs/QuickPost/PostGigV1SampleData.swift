@@ -58,7 +58,7 @@ public enum PostGigV1SampleData {
                 field: .description,
                 message: "Description must be at least \(descriptionMinLength) characters."
             ),
-            PostGigV1ValidationError(field: .price, message: "Enter a price, or pick Free."),
+            PostGigV1ValidationError(field: .price, message: "Enter a price, or pick Open to offers."),
             PostGigV1ValidationError(field: .dateTime, message: "Date is in the past. Pick a future time.")
         ]
     }

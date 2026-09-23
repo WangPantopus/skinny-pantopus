@@ -57,6 +57,8 @@ fun OnboardingHomeBusinessScreen(
     val pillar = state.pillar
 
     LaunchedEffect(finished) { if (finished) onBack() }
+    // The Members / Team step lists the real household or team.
+    LaunchedEffect(state.flow) { viewModel.loadPeople() }
     LaunchedEffect(pendingShareUrl) {
         pendingShareUrl?.let { url ->
             val send =
@@ -109,7 +111,14 @@ private fun HomeStep(
                 title = "Choose who's scheduled",
                 sub = "Pick the household members people can book. Family scheduling uses everyone's own hours — no one sets times twice.",
             )
-            OnboardingMemberList(selected = state.selectedMembers, pillar = pillar, onToggle = vm::toggleMember)
+            OnboardingMemberList(
+                people = state.people,
+                peopleState = state.peopleState,
+                selected = state.selectedMembers,
+                pillar = pillar,
+                onToggle = vm::toggleMember,
+                onRetry = vm::loadPeople,
+            )
         }
         2 -> {
             val memberCount = state.selectedMembers.size
@@ -175,7 +184,14 @@ private fun BusinessStep(
                 title = "Seat your team",
                 sub = "Seated teammates can take bookings. Front-desk roles manage the calendar without being booked.",
             )
-            OnboardingTeamList(seated = state.seatedTeam, pillar = pillar, onToggle = vm::toggleSeat)
+            OnboardingTeamList(
+                people = state.people,
+                peopleState = state.peopleState,
+                seated = state.seatedTeam,
+                pillar = pillar,
+                onToggle = vm::toggleSeat,
+                onRetry = vm::loadPeople,
+            )
             ComposedAvailabilityCard(message = composedMessage(state.flow), timezoneId = state.timezoneId, pillar = pillar)
         }
         4 -> {

@@ -39,7 +39,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -126,7 +126,8 @@ class PublicProfileViewModelTest {
             assertEquals("Alex Rivera", loaded.content.header.displayName)
             assertEquals("alex", loaded.content.header.handle)
             assertEquals("Cambridge, MA", loaded.content.header.locality)
-            assertTrue(loaded.content.header.isVerified)
+            // The account email flag no longer draws a verified check.
+            assertFalse(loaded.content.header.isVerified)
             assertEquals(listOf("Carpentry", "Spanish"), loaded.content.stats.skills)
         }
 
@@ -321,7 +322,7 @@ class PublicProfileViewModelTest {
             vm.load()
             val loaded = vm.state.value as PublicProfileUiState.Loaded
             assertEquals(PublicProfileKind.Persona, loaded.content.kind)
-            assertEquals("Persona · Verified", loaded.content.header.tierLabel)
+            assertEquals("Persona", loaded.content.header.tierLabel)
             assertFalse(loaded.content.header.isVerifiedNeighbor)
         }
 
@@ -335,7 +336,8 @@ class PublicProfileViewModelTest {
             assertEquals(PublicProfileKind.Local, loaded.content.kind)
             assertTrue(loaded.content.header.isVerifiedNeighbor)
             assertEquals(null, loaded.content.header.tierLabel)
-            assertNotNull(loaded.content.neighbor?.mutuals)
+            // No mutual-neighbor data comes from the server.
+            assertNull(loaded.content.neighbor?.mutuals)
         }
 
     /**

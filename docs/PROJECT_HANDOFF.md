@@ -1,6 +1,56 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — September 22, 2026, 23:10 UTC
+## Coordinator takeover — 2026-09-23T21:36:01Z
+
+The founder resumed all streams under Codex. Current remote master is `cef95ab67864ccca3ca243cc0d936a87d342cc8f`; #389 already merged after the paused handoff. The authoritative live [coordination resume block](workstreams/README.md) records the staged replacement agents, exact PR heads, runtime recovery discrepancy, three coordinator decisions and next batch gates. Existing real-app evidence is retained; no new journey or acceptance-row closure is claimed at this takeover. Count remains **13 closed / 67 partial**. Founder environment, marketing/data-action queue and search-audit stop remain untouched.
+
+## CURRENT RESUME POINT — September 23, 2026, 20:50 UTC (work PAUSED)
+
+Read [the final handoff](workstreams/HANDOFF-2026-09-23-FINAL.md) first. It's the complete record of coordinator session `92cc4526`.
+- **Master:** `1a15514cc`. 187 PRs merged on 2026-09-23, including combined batches #353, #374 and #387.
+- **Open:** PRs #325, #356, #388 and #389 (batch 4). 25 pushed branches have no PR yet.
+- **Agents:** all four paused with checkpoints in `workstreams/coordinator-state-2026-09-23/checkpoints/`.
+- **P0:** Stream 3's native business-profile location decode fix. Business profiles with a location fail on iOS and Android.
+- **Count:** 13 closed / 67 partial.
+- **Evidence:** new bundles are in the coordinator worktree store. Copy them into `skinny-pantopus/.pantopus-recovery/audits/` before that worktree is removed.
+
+## Resume point history — September 23, 2026, 06:58 UTC
+
+The live state is the top block of the [coordination summary](workstreams/README.md) (06:52 UTC) and the
+[end-of-session handoff](workstreams/HANDOFF-2026-09-23.md) it builds on.
+- **Operating model:**
+  - Coordinator session `92cc4526` owns reviews, the serial merge queue and this hub.
+  - Streams 1, 2 and 3 run as its background agents under `/private/tmp/pantopus-tools/AGENT-RULES-2026-09-23.md`:
+    heavy-build slot, 3-slot device limiter, founder environment untouchable.
+- **Merged since the handoff:** #241 (iOS tip refresh), #248, #247, #249, #250. The runner keeps draining
+  218 231 221 236 219 213 214 215 224 199 208 251 252.
+- **Opened this session (CI first, then queue):**
+  - #253 / #254: the P04/P05 poster-fault fee (backend + migration `20260923000100`; fee line on all three clients).
+    The bundle is sealed; Android pixel identity is complete.
+  - #255: search terms escaped with the existing `escapeIlike()`. A plain defensive edit; the search-filter audit
+    stays closed.
+- **Count:** 10 closed / 70 partial of 80. P03 closed after #241 merged.
+- **Evidence:** new bundles are in the coordinator worktree store (see the summary). Copy them into
+  `skinny-pantopus/.pantopus-recovery/audits/` before that worktree is removed.
+
+## Resume point history — September 23, 2026, 01:55 UTC (superseded)
+
+The live state is the top block of the [coordination summary](workstreams/README.md): merged PRs, the ordered open queue, evidence bundles, founder decisions and open questions.
+- **Operating model:** a Claude coordinator session runs Stream 1 and coordination. Claude background agents run Streams 2 and 3, one PR per reproduced defect. Only the coordinator reviews, merges and edits this hub.
+- **Merged since the previous point:**
+  - #200/#201/#205: R06 letters and passes.
+  - #202/#203: personal block gates connection requests and web Follow.
+  - **#204: P06 record + freeze.** Founder decision, verified on installed Android and iOS with real Stripe TEST events.
+  - Master is at `8d3ab8810`.
+- **Open queue:** 206 → 212 (**`/api/hub` read nonexistent Home columns; every resident saw "no homes"**) → 207 → 210 (Android large text/dark sheets) → 211 (worker no-show releases the poster's hold) → 209 → 199 → 208.
+- **Founder decisions 2026-09-23:**
+  - P04/P05 "poster-fault pays worker": the worker-no-show half is in PR211. The poster no-show and late-cancel fee capture is not built yet and needs a forward migration.
+  - P06 record + freeze: done.
+  - Large-text and dark-mode fixes are allowed when default light mode stays pixel-identical: Android gig detail is in PR210.
+- **Open questions** for the founder (listed in the summary): the P04 fee share, D07 "Set expiry", four R06 native/role items, tips on disputed tasks, and the viewer bid count during payment.
+- **Count unchanged:** 9 closed / 71 partial of 80.
+
+## Resume point history — September 22, 2026, 23:10 UTC (superseded)
 
 A Claude Code coordinator session ("Pantopus Stream 1 coordinator handoff") took over Stream 1 and coordination at about 21:05 UTC. The previous Codex coordinator thread (`01a0c897…`) finished at 20:35 UTC; the Stream 2/3 Codex tasks have been idle since 20:07/20:15 UTC. The [coordination summary](workstreams/README.md) records the exact heads, owners, checkouts, reservations and **the two peer assignments the founder relays**, because this coordinator cannot message Codex tasks.
 

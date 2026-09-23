@@ -137,6 +137,17 @@ public struct ListingOfferUserDTO: Decodable, Sendable, Hashable, Identifiable {
 }
 
 /// Body for `POST /api/listings/:listingId/offers/:offerId/counter`.
+/// Body for `POST /api/listings/:listingId/offers` (`createOfferSchema`: amount ≥ 0 or null, message ≤ 500).
+public struct CreateListingOfferBody: Encodable, Sendable {
+    public let amount: Double?
+    public let message: String?
+
+    public init(amount: Double?, message: String?) {
+        self.amount = amount
+        self.message = message
+    }
+}
+
 public struct CounterListingOfferBody: Encodable, Sendable {
     public let counterAmount: Double
     public let counterMessage: String?
