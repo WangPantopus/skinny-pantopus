@@ -646,8 +646,7 @@ fun HubDiscoveryRail(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
         ) {
-            SectionHeader("Discover nearby")
-            Spacer(Modifier.weight(1f))
+            SectionHeader("Discover nearby", modifier = Modifier.weight(1f))
             if (onFindBusinesses != null) {
                 DiscoveryHeaderLink(
                     label = "Find Businesses",
@@ -1046,8 +1045,7 @@ fun HubRecentActivity(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SectionHeader("Recent activity")
-            Spacer(Modifier.weight(1f))
+            SectionHeader("Recent activity", modifier = Modifier.weight(1f))
             Row(
                 modifier =
                     Modifier
