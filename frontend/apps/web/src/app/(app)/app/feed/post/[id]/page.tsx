@@ -699,7 +699,7 @@ export default function PostDetailPage() {
               {matchedBusinesses.map((biz) => (
                 <a
                   key={biz.business_user_id}
-                  href={`/app/profile/${biz.username}`}
+                  href={`/b/${biz.username}`}
                   className="flex items-center gap-3 px-5 py-3 hover-bg-app transition"
                 >
                   {biz.profile_picture_url ? (

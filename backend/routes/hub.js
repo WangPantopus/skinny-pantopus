@@ -939,7 +939,7 @@ router.get('/discovery', verifyToken, async (req, res) => {
             .eq('is_active', true),
           supabaseAdmin
             .from('BusinessProfile')
-            .select('business_user_id, category')
+            .select('business_user_id, categories')
             .eq('is_published', true),
         ]);
 
@@ -970,7 +970,8 @@ router.get('/discovery', verifyToken, async (req, res) => {
 
         items = (bizUsers || []).map((b) => {
           const profile = profileById.get(b.id);
-          const category = profile?.category || null;
+          // BusinessProfile stores a `categories` array; the rail shows the first.
+          const category = (Array.isArray(profile?.categories) && profile.categories[0]) || null;
           const ratingStr = b.average_rating ? `${b.average_rating.toFixed(1)} stars` : null;
           // Published businesses on the discover page count as
           // "verified" for the chip — the publish gate already filters
@@ -986,6 +987,8 @@ router.get('/discovery', verifyToken, async (req, res) => {
             avatarUrl: b.profile_picture_url,
             createdAt: b.created_at,
             verified: true,
+            // Web opens the public business page by handle (/b/:username).
+            username: b.username || null,
             route: `/businesses/${b.id}`,
           };
         }).filter((p) => !verifiedOnly || p.verified);
