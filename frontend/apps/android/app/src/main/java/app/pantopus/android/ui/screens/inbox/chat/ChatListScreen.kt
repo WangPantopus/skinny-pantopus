@@ -333,7 +333,7 @@ internal fun EmptyFrame(onCompose: () -> Unit) {
         )
         Spacer(modifier = Modifier.size(Spacing.s2))
         Text(
-            text = "Message someone you've verified nearby.",
+            text = "Message a neighbor to get started.",
             fontSize = 13.5.sp,
             color = PantopusColors.appTextSecondary,
         )
@@ -383,7 +383,7 @@ internal fun EmptyFrame(onCompose: () -> Unit) {
                 tint = PantopusColors.primary600,
             )
             Text(
-                text = "Only verified neighbors can DM you",
+                text = "People you block can't message you",
                 fontSize = 11.5.sp,
                 fontWeight = FontWeight.Medium,
                 color = PantopusColors.appTextSecondary,
