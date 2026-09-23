@@ -64,7 +64,7 @@ public struct GigDetailView: View {
 
     public var body: some View {
         TransactionalDetailShell(
-            state: viewModel.state,
+            state: viewModel.displayState,
             overflowItems: overflowItems,
             topBarAccessory: topBarAccessories,
             onBack: onBack,
@@ -88,6 +88,7 @@ public struct GigDetailView: View {
         .task {
             await viewModel.load()
             viewModel.startRealtime()
+            await viewModel.prepareRetainedTip()
         }
         .onDisappear { viewModel.stopRealtime()
             viewModel.retireDeliveryProof()
