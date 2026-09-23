@@ -5,7 +5,53 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 08:19 UTC (coordinator session `92cc4526`)
+## CURRENT RESUME POINT — September 23, 2026, 08:34 UTC (coordinator session `92cc4526`)
+
+This updates the 08:19 block below; read both. The count is **11 closed / 69 partial**.
+
+### Merged
+- #259 → `780f2d4fd`: a repeated change order returns the existing order.
+
+### Queue
+231 271 269 273 274 255 256 260 263 265 267 268 270 272 253 221 236 219 214 215 224 199 208 251 252 257 262 264 266.
+- Fast backend/web PRs run ahead of native ones.
+- Safety and privacy fixes are first: #271, #269, #273, #274.
+- #254 joins right after #253 when its native CI is green.
+
+### Fee (#253 ready; #254 pending native CI)
+- **Re-review items fixed in `a1e3b111e`.** The DB was rebuilt from the amended migration before re-verifying with real Stripe TEST:
+  - payer spending and "paid" now use the captured fee: 313, and 213 after a 100 refund;
+  - the single-payment read carries `gig_fee`;
+  - the replay captures only while `capture_pending`;
+  - guard reasons are specific (`STOP_ACTIVE` / `NO_SHOW_REPORT_ACTIVE`), with no stray incident;
+  - the dispute branch rethrows, so redelivery records the fee;
+  - replays park after 3 definitive failures (`REPLAY_EXHAUSTED`, one alert).
+- **Follow-up in #253's Limits:** the support "release" action.
+- **Bundle r2:** 492 files, MANIFEST `8210feb6c0ad73a3662adf078205761a87984f5fff63ef39c71a46bac20a8758`.
+- #253 CI OK; marked ready and queued.
+
+### New safety and privacy PRs
+- **#269:** interim guard. A price change on a task with a live payment hold returns 409 `PAID_PRICE_CHANGE_UNAVAILABLE`.
+  - Android: the error shows as a toast and inline in the sheet.
+  - iOS: inline, in red.
+  - The paid task still starts, completes and captures.
+  - Bundle `…-paid-price-change-guard-r1`, MANIFEST `83ad5959…`.
+- **#271:** the account-delete guard returns 409 `PAYMENT_HISTORY_RETAINED` before any destructive step.
+  - Records are byte-identical before and after, and a user with no payment records still deletes.
+  - MANIFEST `a09a5474…`.
+  - The native UI check needs a step-up, so it runs in Stream 3's setup after merge.
+- **#273 (privacy):** business_team mail keeps its attention person. The Business list uses the Home mail rule, where it used to return other members' attn_only letters with `select *`.
+- **#274:** an attn_only bill letter no longer creates a household HomeBill.
+  - **Decision:** attn_only letters skip ALL household fan-outs (the HomeDocument visible to members, HomePackage, HomeTask). This is a follow-up PR.
+- **#272:** the web Owners and Emergency pages show a load failure with Retry, not a false empty list.
+  - The same flaw on the unreachable docs/maintenance/share/access/settings pages is recorded.
+- **#264 (Stream 1):** Android sheet errors inline. **#266 (Stream 3):** iOS menu bottom inset.
+
+### Cross-cutting
+- A read-only UX inventory agent is compiling `/private/tmp/pantopus-tools/ux-inventory-2026-09-23.md`. It covers placeholder/dead-end actions and weak states on all three clients, routed by stream (backlog rows U05/U03).
+- **Watch script:** `/private/tmp/pantopus-tools/coord-watch.sh` combines merge-queue events with CI OK results for the PRs in `ci-watch.txt`.
+
+## Resume point history — September 23, 2026, 08:19 UTC (coordinator session `92cc4526`)
 
 This updates the 07:52 block below; read both. The count is **11 closed / 69 partial**; P08 closed at 07:5x.
 
