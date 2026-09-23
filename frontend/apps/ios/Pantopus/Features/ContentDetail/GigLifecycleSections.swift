@@ -341,6 +341,30 @@ private struct BidderAvatar: View {
     }
 }
 
+// MARK: - Confirm completion check
+
+/// What the owner confirms: the worker's name and, on a paid task, the held amount confirming charges.
+public struct GigCompletionConfirmation: Equatable, Sendable {
+    public let workerName: String
+    public let amountCents: Double?
+
+    var title: String {
+        if let amountCents {
+            return "Release \(GigPaymentCard.centsLabel(amountCents)) to \(workerName)?"
+        }
+        return "Confirm \(workerName) finished?"
+    }
+
+    var message: String {
+        amountCents == nil ? "This marks the task complete."
+            : "This confirms the task is done and charges the payment you authorized."
+    }
+
+    var confirmLabel: String {
+        amountCents == nil ? "Confirm" : "Release payment"
+    }
+}
+
 // MARK: - Active-task panel
 
 /// Phase strip (Assigned → In progress → Marked done → Confirmed) plus
@@ -350,6 +374,8 @@ struct GigActiveTaskPanel: View {
     let showWorkerAck: Bool
     let canStartTask: Bool
     let canConfirmCompletion: Bool
+    /// The owner's confirm-completion request is running.
+    var confirmingCompletion: Bool = false
     let noShowEligible: Bool
     /// "Running ~X min late" copy — non-nil renders the late badge for
     /// both roles (Phase 5b).
@@ -492,11 +518,12 @@ struct GigActiveTaskPanel: View {
         }
         if canConfirmCompletion {
             actionButton(
-                "Confirm completion",
+                confirmingCompletion ? "Confirming…" : "Confirm completion",
                 icon: .checkCheck,
                 identifier: "gigDetail.confirmCompletion",
                 action: onConfirmCompletion
             )
+            .disabled(confirmingCompletion)
         }
         if noShowEligible {
             Button(action: onReportNoShow) {
@@ -1085,7 +1112,8 @@ struct GigPaymentCard: View {
                 statusChip
             }
             VStack(spacing: Spacing.s2) {
-                if let fee = payment.amountPlatformFee, fee > 0 {
+                // A fee charge replaces the full-task platform fee and total.
+                if payment.gigFee == nil, let fee = payment.amountPlatformFee, fee > 0 {
                     row(label: "Platform fee (included)", cents: fee)
                 }
                 if let tip = payment.tipAmount, tip > 0 {
@@ -1094,7 +1122,11 @@ struct GigPaymentCard: View {
                 Rectangle()
                     .fill(Theme.Color.appBorder)
                     .frame(height: 1)
-                totalRow
+                if let gigFee = payment.gigFee {
+                    feeRow(gigFee)
+                } else {
+                    totalRow
+                }
             }
         }
         .padding(Spacing.s3)
@@ -1137,6 +1169,17 @@ struct GigPaymentCard: View {
                 .foregroundStyle(Theme.Color.appText)
         }
         .accessibilityIdentifier("gigDetail.payment.total")
+    }
+
+    /// The charged no-show or cancellation fee and the released rest of the hold.
+    private func feeRow(_ fee: GigPaymentFeeDTO) -> some View {
+        HStack {
+            Text(fee.line)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(Theme.Color.appText)
+            Spacer()
+        }
+        .accessibilityIdentifier("gigDetail.payment.fee")
     }
 
     private var amountLabel: String {
@@ -1396,10 +1439,13 @@ struct GigChangesCard: View {
 /// Propose-a-change sheet: type chips, description, signed dollar delta,
 /// optional extra minutes → `POST /:gigId/change-orders`.
 struct GigChangeOrderSheet: View {
+    /// False while the task's payment hold is live: the server refuses price changes, so the
+    /// sheet leaves out the two price types and the amount field and says why in their place.
+    let priceChangesAvailable: Bool
     let onSubmit: @MainActor (GigChangeOrderType, String, Double?, Int?) async -> String?
     let onDismiss: @MainActor () -> Void
 
-    @State private var type: GigChangeOrderType = .priceIncrease
+    @State private var type: GigChangeOrderType
     @State private var descriptionText = ""
     @State private var amountText = ""
     @State private var amountIsDecrease = false
@@ -1408,6 +1454,22 @@ struct GigChangeOrderSheet: View {
     @State private var errorText: String?
 
     private let typeColumns = [GridItem(.flexible()), GridItem(.flexible())]
+
+    init(
+        priceChangesAvailable: Bool = true,
+        onSubmit: @escaping @MainActor (GigChangeOrderType, String, Double?, Int?) async -> String?,
+        onDismiss: @escaping @MainActor () -> Void
+    ) {
+        self.priceChangesAvailable = priceChangesAvailable
+        self.onSubmit = onSubmit
+        self.onDismiss = onDismiss
+        _type = State(initialValue: priceChangesAvailable ? .priceIncrease : .scopeAddition)
+    }
+
+    private var offeredTypes: [GigChangeOrderType] {
+        guard !priceChangesAvailable else { return GigChangeOrderType.allCases }
+        return GigChangeOrderType.allCases.filter { $0 != .priceIncrease && $0 != .priceDecrease }
+    }
 
     var body: some View {
         ScrollView {
@@ -1420,9 +1482,17 @@ struct GigChangeOrderSheet: View {
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
+                if !priceChangesAvailable {
+                    Text("Price changes aren't available once a task has a payment hold.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .accessibilityIdentifier("gigDetail.changeSheet.priceUnavailable")
+                }
                 typePicker
                 descriptionField
-                amountField
+                if priceChangesAvailable {
+                    amountField
+                }
                 minutesField
                 if let errorText {
                     Text(errorText)
@@ -1451,7 +1521,7 @@ struct GigChangeOrderSheet: View {
 
     private var typePicker: some View {
         LazyVGrid(columns: typeColumns, spacing: Spacing.s2) {
-            ForEach(GigChangeOrderType.allCases, id: \.rawValue) { candidate in
+            ForEach(offeredTypes, id: \.rawValue) { candidate in
                 let selected = type == candidate
                 Button {
                     type = candidate
@@ -1548,6 +1618,7 @@ struct GigChangeOrderSheet: View {
 
     /// Signed dollars — the +/− toggle applies the sign.
     private var parsedAmount: Double? {
+        guard priceChangesAvailable else { return nil }
         let cleaned = amountText
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "$", with: "")

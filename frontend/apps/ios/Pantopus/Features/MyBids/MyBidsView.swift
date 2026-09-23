@@ -15,6 +15,7 @@ import SwiftUI
 
 public struct MyBidsView: View {
     @State private var viewModel: MyBidsViewModel
+    @State private var editBidFailure = EditBidFailure()
 
     public init(viewModel: MyBidsViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -42,9 +43,10 @@ public struct MyBidsView: View {
                 EditBidSheetView(
                     target: target,
                     onSubmit: { draft in
-                        await viewModel.submitEditBid(draft)
+                        await viewModel.submitEditBid(draft, failure: editBidFailure)
                     },
-                    onCancel: { viewModel.cancelEditBid() }
+                    onCancel: { viewModel.cancelEditBid() },
+                    failure: editBidFailure
                 )
                 .presentationDetents([.large])
             }

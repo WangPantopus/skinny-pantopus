@@ -61,6 +61,7 @@ const optionalAuth = require('../middleware/optionalAuth');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
+const { escapeIlike } = require('../utils/escapeIlike');
 const { geocodeAddress } = require('../utils/geocoding');
 const { validateBusinessAddress } = require('../services/businessAddressService');
 const { computeAddressHash } = require('../utils/normalizeAddress');
@@ -528,7 +529,7 @@ const createBusinessFullSchema = Joi.object({
   username: Joi.string().min(3).max(40).regex(/^[a-z0-9_]+$/).required(),
   name: Joi.string().min(1).max(100).required(),
   email: Joi.string().email().required(),
-  business_type: Joi.string().valid(...Object.keys(ENTITY_TYPES)).optional(),
+  business_type: Joi.string().valid(...Array.from(ENTITY_TYPES)).optional(),
   categories: Joi.array().items(Joi.string().max(50)).max(10).optional(),
   description: Joi.string().max(2000).allow('', null).optional(),
   public_phone: Joi.string().max(30).allow('', null).optional(),
@@ -844,8 +845,8 @@ router.get('/discover', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Query must be at least 2 characters' });
     }
 
-    const fullSearchTerm = `%${queryText}%`;
-    const broadSearchTerm = `%${primaryToken}%`;
+    const fullSearchTerm = `%${escapeIlike(queryText)}%`;
+    const broadSearchTerm = `%${escapeIlike(primaryToken)}%`;
     const candidateLimit = Math.min(Math.max((safeOffset + safeLimit) * 8, 80), 400);
 
     // 1) Candidate business users

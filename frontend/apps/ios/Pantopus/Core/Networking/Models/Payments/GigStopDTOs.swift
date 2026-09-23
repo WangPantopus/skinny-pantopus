@@ -43,13 +43,15 @@ enum GigStopReason: String, Codable, CaseIterable {
 }
 
 enum GigStopFinancialAction: String, Codable {
-    case none, release, refund, review
+    /// `fee`: the owner's late cancel charges only the policy fee from the hold.
+    case none, release, refund, review, fee
     var completedStatus: String {
         switch self {
         case .none: "none"
         case .release: "released"
         case .refund: "refunded"
         case .review: "needs_review"
+        case .fee: "fee_charged"
         }
     }
 }
@@ -137,6 +139,7 @@ struct GigStopRequest: Codable, Equatable {
             (reasonNoteHash == nil ||
                 (reason == .other && reasonNoteHash?.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil))
             && (rollbackMode == nil || (rollbackMode == "payment_setup_aborted" && action == .reopenBidding))
+            && (financialAction != .fee || (action == .cancel && terms.policyFeeCents > 0))
     }
 }
 
@@ -153,7 +156,7 @@ struct GigStopPreview: Decodable {
     func isValid(gig: String, action: GigStopAction) -> Bool {
         self.action == action && terms.isValid(gig: gig)
             && (activeRequestId == nil || UUID(uuidString: activeRequestId ?? "") != nil)
-            && (!eligible || (financialAction != .review && terms.policyFeeCents == 0))
+            && (!eligible || (financialAction != .review && (financialAction == .fee) == (terms.policyFeeCents > 0)))
     }
 }
 
@@ -168,12 +171,27 @@ struct GigStopReceipt: Decodable {
     let action: GigStopAction
     let gigStatus: String
     let financialStatus: String
+    /// Fee requests only: the charged fee and the released rest of the hold.
+    var feeStatus: String?
+    var feeCents: Int?
+    var releasedCents: Int?
 
     func matches(_ request: GigStopRequest) -> Bool {
         requestId == request.requestId && gigId == request.gigId && paymentId == request.terms.paymentId
             && ownerId == request.terms.ownerId && workerId == request.terms.workerId
             && amountCents == request.terms.amountCents && currency == "usd" && action == request.action
-            && gigStatus == request.action.resultingStatus && financialStatus == request.financialAction.completedStatus
+            && gigStatus == request.action.resultingStatus && financialStatus == Self.completedStatus(self, request)
+    }
+
+    /// A fee request completes with the charged fee, or released with nothing
+    /// charged when the hold was no longer capturable.
+    static func completedStatus(_ receipt: GigStopReceipt, _ request: GigStopRequest) -> String {
+        guard request.financialAction == .fee else { return request.financialAction.completedStatus }
+        let fee = request.terms.policyFeeCents
+        if receipt.financialStatus == "fee_charged", receipt.feeStatus == "charged", receipt.feeCents == fee,
+           receipt.releasedCents == request.terms.amountCents - fee { return "fee_charged" }
+        if receipt.financialStatus == "released", receipt.feeStatus == "not_charged", receipt.feeCents == 0 { return "released" }
+        return "needs_review"
     }
 }
 
@@ -192,10 +210,12 @@ struct GigStopProgress: Decodable {
         guard request.isValid(gig: gig), self.requestId == requestId, request.requestId == requestId,
               action == request.action, expected == nil || expected == request,
               ["pending", "needs_review", "completed"].contains(status),
-              ["none", "release_pending", "released", "refund_pending", "refunded", "needs_review"].contains(financialStatus),
+              ["none", "release_pending", "released", "refund_pending", "refunded", "fee_pending", "fee_charged", "needs_review"]
+              .contains(financialStatus),
               !canRetry || request.actorId == actor else { return false }
         if status != "completed" { return receipt == nil }
-        return !canRetry && receipt?.matches(request) == true && financialStatus == request.financialAction.completedStatus
+        guard let receipt else { return false }
+        return !canRetry && receipt.matches(request) && financialStatus == GigStopReceipt.completedStatus(receipt, request)
     }
 
     var message: String {
@@ -211,6 +231,9 @@ struct GigStopProgress: Decodable {
         switch financialStatus {
         case "released": return result + " The payment hold release is confirmed."
         case "refunded": return result + " The refund is confirmed; your bank may take additional time to show it."
+        case "fee_charged":
+            guard let fee = receipt?.feeCents, let released = receipt?.releasedCents else { return result }
+            return result + String(format: " Cancellation fee $%.2f charged · $%.2f released.", Double(fee) / 100, Double(released) / 100)
         default: return result
         }
     }

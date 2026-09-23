@@ -296,14 +296,26 @@ object DeepLinkRouter {
 
         /**
          * Booking notification links (`backend/services/scheduling/bookingNotifyService.js`):
-         * `/app/profile/schedule/bookings/:id` (lifecycle) and `/app/scheduling/bookings/:id`
-         * (personal host reminder) open the existing host booking detail; the endpoint's own
-         * authorization decides what a non-host sees.
+         * `/app/profile/schedule/bookings/:id` and `/app/scheduling/bookings/:id` open the
+         * existing host booking detail for the owner a Home- or Business-owned booking names
+         * with `?ot=home|business&oid=` ([ownerKind]/[ownerId]; null is personal); the
+         * endpoint's own authorization decides what a non-host sees.
          */
-        data class BookingDetail(val bookingId: String) : Destination
+        data class BookingDetail(
+            val bookingId: String,
+            val ownerKind: String? = null,
+            val ownerId: String? = null,
+        ) : Destination
 
         /** `/app/scheduling/my-bookings` — the existing customer My bookings list. */
         data object MyBookings : Destination
+
+        /**
+         * Invoice notification links: `/app/invoice/:id` (`invoice_received`, `invoice_sent`)
+         * and the older `/app/invoices/:id`. They open the existing recipient invoice detail,
+         * whose endpoint only returns an invoice addressed to the signed-in user.
+         */
+        data class InvoiceDetail(val invoiceId: String) : Destination
 
         data class Unknown(val uri: String) : Destination
     }
@@ -356,6 +368,13 @@ object DeepLinkRouter {
             destination = resolveString(normalized),
             persistencePath = Paths.normalized(normalized),
         )
+    }
+
+    /** The task id when [path] (a notification link) opens a gig; screens that host the list push it themselves. */
+    fun gigIdForLink(path: String): String? {
+        val normalized = Paths.normalizeIncoming(path)
+        if (Paths.isOAuthCallback(normalized)) return null
+        return (resolveString(normalized) as? Destination.Gig)?.id
     }
 
     fun consume(): Destination? {
@@ -540,19 +559,26 @@ object DeepLinkRouter {
                     else -> Destination.Unknown(raw)
                 }
             "scheduling" ->
-                // Booking reminder links. Owner-scoped (`?ot=home|business&oid=`) host links
-                // stay unrouted: the destination carries no owner.
+                // Host booking links; a Home- or Business-owned booking names its owner with
+                // `?ot=home|business&oid=<id>`.
                 when {
                     segments.drop(1) == listOf("my-bookings") -> Destination.MyBookings
-                    segments.drop(1).dropLast(1) == listOf("bookings") && Paths.queryParam(queryPart, "ot") == null ->
-                        HomeTaskNotificationRoute.canonicalId(segments.last())
-                            ?.let { Destination.BookingDetail(it) } ?: Destination.Unknown(raw)
+                    segments.drop(1).dropLast(1) == listOf("bookings") ->
+                        bookingDetail(
+                            segments.last(),
+                            Paths.queryParam(queryPart, "ot"),
+                            Paths.queryParam(queryPart, "oid"),
+                        ) ?: Destination.Unknown(raw)
                     else -> Destination.Unknown(raw)
                 }
             "connections" -> Destination.Connections
             "beacons", "beacon-updates", "beacon_updates" -> Destination.Beacons
             "discover-hub", "discover_hub", "discoverhub" -> Destination.DiscoverHub
             "wallet" -> Destination.Wallet
+            "invoice", "invoices" ->
+                HomeTaskNotificationRoute.canonicalId(segments.getOrNull(1))
+                    ?.takeIf { segments.size == 2 }
+                    ?.let { Destination.InvoiceDetail(it) } ?: Destination.Unknown(raw)
             "support-trains", "support_train" -> {
                 val id = segments.getOrNull(1)
                 when {
@@ -779,6 +805,21 @@ object DeepLinkRouter {
                 }
             else -> Destination.Unknown(raw)
         }
+    }
+
+    /**
+     * A host booking link's detail destination: no `ot` is the personal pillar;
+     * `home` / `business` need a UUID `oid`. Anything else stays unrouted.
+     */
+    private fun bookingDetail(
+        rawId: String?,
+        ownerKind: String?,
+        ownerId: String?,
+    ): Destination.BookingDetail? {
+        val bookingId = HomeTaskNotificationRoute.canonicalId(rawId) ?: return null
+        if (ownerKind == null) return Destination.BookingDetail(bookingId)
+        val owner = HomeTaskNotificationRoute.canonicalId(ownerId)?.takeIf { ownerKind == "home" || ownerKind == "business" }
+        return owner?.let { Destination.BookingDetail(bookingId, ownerKind, it) }
     }
 
     /**

@@ -200,3 +200,43 @@ test('refund POST and cold history share the same read-only held projection', as
   expect(post.payment).toEqual(history.payment);
   expect(history.payment).toMatchObject({ payee_release_status: 'held', wallet_settlement: null, refunded_amount: 300 });
 });
+describe('charged poster-fault fee refunds', () => {
+  // A fee capture takes only the fee from the authorized hold: the Charge keeps
+  // the authorized amount and the provider released the rest.
+  const feeMetadata = { gig_fee: { kind: 'poster_no_show', state: 'captured', fee_cents: 250, released_cents: 750, charge_id: 'ch_one' } };
+  beforeEach(() => {
+    getTable('Payment')[0].metadata = feeMetadata;
+    mockRetrieve.mockResolvedValue(intent({ amount_received: 250 }));
+    mockCharge.mockResolvedValue({ id: 'ch_one', payment_intent: 'pi_one', customer: 'cus_one', amount: 1000, amount_captured: 250,
+      currency: 'usd', paid: true, captured: true });
+  });
+  test('the payer still cannot refund a charged fee in the app', async () => {
+    await expect(service.create(args())).rejects.toMatchObject({ statusCode: 403, code: 'SUPPORT_REQUIRED' });
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+  test('a support refund reconciles the exact fee capture and refunds within it', async () => {
+    mockCreate.mockResolvedValue(refund({ amount: 250, metadata: { payment_id: 'pay', refund_request_id: requestId } }));
+    const result = await service.create(args({ actorId: 'admin', actorMode: 'admin', amount: 250 }));
+    expect(result).toMatchObject({ success: true, refundRequest: { amountCents: 250, status: 'succeeded' } });
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ amount: 250, payment_intent: 'pi_one' }), { idempotencyKey: `pantopus-refund:${requestId}` });
+    expect(getTable('Payment')[0].refunded_amount).toBe(250);
+  });
+  test('a dashboard refund of the fee is recorded from its webhook', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_synthetic_contract_only';
+    mockList.mockResolvedValue({ data: [refund({ id: 're_dashboard', amount: 250, metadata: {} })], has_more: false });
+    mockEvent.mockReturnValue({ id: 'evt_fee_refund', type: 'charge.refunded', data: { object: { id: 'ch_one', payment_intent: 'pi_one', amount: 1000, amount_refunded: 250 } } });
+    const a = express(); a.use('/webhook', express.raw({ type: 'application/json' }), require('../stripe/stripeWebhooks'));
+    expect((await http(a).post('/webhook').set('Content-Type', 'application/json').send('{}')).status).toBe(200);
+    expect(getTable('Payment')[0].refunded_amount).toBe(250);
+  });
+  test.each([
+    ['a capture that is not the recorded fee', () => mockRetrieve.mockResolvedValue(intent({ amount_received: 300 }))],
+    ['a Charge that captured a different amount', () => mockCharge.mockResolvedValue({ id: 'ch_one', payment_intent: 'pi_one', customer: 'cus_one',
+      amount: 1000, amount_captured: 1000, currency: 'usd', paid: true, captured: true })],
+    ['a refund larger than the captured fee', () => mockList.mockResolvedValue({ data: [refund({ id: 're_big', amount: 300, metadata: {} })], has_more: false })],
+  ])('%s is never recorded', async (_, arrange) => {
+    arrange();
+    await expect(service.reconcile('pay')).rejects.toMatchObject({ statusCode: 409 });
+    expect(getTable('Payment')[0].refunded_amount).toBe(0);
+  });
+});

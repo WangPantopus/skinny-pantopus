@@ -44,7 +44,7 @@ public enum APIError: Error, LocalizedError, Sendable {
         case .notFound: "We couldn't find what you were looking for."
         case let .clientError(_, message):
             Self.friendlyClientMessage(message) ?? "Request failed."
-        case let .server(status, _): "Server error \(status). Please try again."
+        case .server: "Something went wrong on our side. Please try again."
         case .transport: "Can't reach Pantopus. Check your connection."
         case .decoding: "Received an unexpected response."
         case .retriesExhausted: "The server is having trouble. Please try again."

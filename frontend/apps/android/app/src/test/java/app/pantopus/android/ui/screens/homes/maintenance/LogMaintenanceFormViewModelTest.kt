@@ -159,7 +159,7 @@ class LogMaintenanceFormViewModelTest {
             vm.updateTitle("Fall HVAC tune-up")
             vm.submit()
             assertNull(vm.event.value)
-            // `NetworkError.Server.message` is "Server error 500. Please try again."
+            // `NetworkError.Server.message` is "Something went wrong on our side. Please try again."
             assertNotNull(vm.form.value.submitError)
         }
 

@@ -44,11 +44,15 @@ fun ChatConversationHost(
     onUseAIDraft: (ChatAIDraftCard) -> Unit = {},
     onOpenGig: (String) -> Unit = {},
     onOpenListing: (String) -> Unit = {},
+    arrivalRoomId: String? = null,
     authViewModel: ChatConversationHostViewModel = hiltViewModel(),
 ) {
     val state by authViewModel.authState.collectAsStateWithLifecycle()
     val currentUserId = (state as? AuthRepository.State.SignedIn)?.user?.id.orEmpty()
-    val arrival = (mode as? ChatThreadMode.Room)?.let { DeepLinkRouter.Destination.Conversation(it.id) }
+    // A chat link opened as a person thread still completes for its room.
+    val arrival =
+        (mode as? ChatThreadMode.Room)?.let { DeepLinkRouter.Destination.Conversation(it.id) }
+            ?: arrivalRoomId?.let { DeepLinkRouter.Destination.Conversation(it) }
     DisposableEffect(arrival) {
         onDispose { arrival?.let(DeepLinkRouter::completeArrival) }
     }

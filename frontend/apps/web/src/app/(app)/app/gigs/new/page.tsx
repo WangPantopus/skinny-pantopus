@@ -329,6 +329,12 @@ function PostTaskPageContent() {
           }
         : undefined,
     };
+    if (!isEditMode) {
+      // A new task leaves out the optional fields left empty; an edit sends null to clear them.
+      for (const key of ['category', 'deadline', 'estimated_duration', 'beneficiary_user_id']) {
+        if (payload[key] == null) delete payload[key];
+      }
+    }
 
     setSubmitting(true);
 

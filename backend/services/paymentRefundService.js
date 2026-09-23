@@ -3,18 +3,20 @@
 const { randomUUID, createHash } = require('crypto');
 const db = require('../config/supabaseAdmin');
 const { getStripeClient } = require('../stripe/getStripeClient');
-const { providerId } = require('../stripe/gigPaymentProof');
+const { providerId, capturedFeeCents, publicGigFee } = require('../stripe/gigPaymentProof');
 const stripe = getStripeClient();
 const STATUSES = new Set(['pending', 'requires_action', 'succeeded', 'failed', 'canceled']);
 const REASONS = new Set(['duplicate', 'fraudulent', 'requested_by_customer', 'work_not_completed', 'other']);
 const fail = (message, statusCode = 409, code = 'refund_conflict') => Object.assign(new Error(message), { statusCode, code });
 const { snapshot, readProjection } = require('./walletSettlementService');
+const FEE_REFUND_MESSAGE = "Cancellation and no-show fees can't be refunded in the app. Contact support.";
 async function rpc(name, args) {
   const { data, error } = await db.rpc(name, args);
   if (error || !data) throw fail('Refund progress could not be saved. Retry the same request.', 503, 'refund_save_pending');
   if (data.error) {
     const status = data.error === 'NOT_FOUND' ? 404 : ['FORBIDDEN', 'SUPPORT_REQUIRED'].includes(data.error) ? 403 : 409;
-    const err = fail(data.error === 'SUPPORT_REQUIRED' ? 'Payment has been released to the worker. Contact support for a refund.' :
+    const err = fail(data.error === 'SUPPORT_REQUIRED' ? (data.reason === 'GIG_FEE' ? FEE_REFUND_MESSAGE
+      : 'Payment has been released to the worker. Contact support for a refund.') :
       `Refund could not continue (${data.error}).`, status, data.error);
     if (data.request) { err.refundRequest = publicRequest(data.request); err.refundRow = data.request; }
     throw err;
@@ -49,7 +51,9 @@ function publicRequest(r, actor = null) {
 }
 function publicPayment(p) {
   return { id: p.id, payment_status: p.payment_status, amount_total: p.amount_total,
-    refunded_amount: p.refunded_amount || 0, currency: p.currency, captured_at: p.captured_at || null };
+    refunded_amount: p.refunded_amount || 0, currency: p.currency, captured_at: p.captured_at || null,
+    // A charged poster-fault fee is not self-refundable; readers see it here.
+    gig_fee: publicGigFee(p) };
 }
 async function localRecords(payment) {
   const results = await Promise.all([
@@ -98,18 +102,22 @@ async function verifyProvider(payment, release = false) {
       || (intent.amount_received || 0) !== 0) throw fail('This payment can no longer be released as an authorization hold.');
     return { intent };
   }
-  if (intent.status !== 'succeeded' || intent.amount_received !== payment.amount_total
+  // A recorded poster-fault fee captured only the fee from the authorized hold.
+  const feeCents = capturedFeeCents(payment);
+  const captured = feeCents ?? payment.amount_total;
+  if (intent.status !== 'succeeded' || intent.amount_received !== captured
     || !payment.stripe_charge_id || providerId(intent.latest_charge) !== payment.stripe_charge_id) throw fail('The exact payment capture must be reconciled before refunding.');
   const charge = await stripe.charges.retrieve(payment.stripe_charge_id);
   if (!charge || charge.id !== payment.stripe_charge_id || charge.paid !== true || charge.captured !== true
     || charge.amount !== payment.amount_total || providerId(charge.payment_intent) !== intent.id
+    || (feeCents !== null && charge.amount_captured !== feeCents)
     || providerId(charge.customer) !== payment.stripe_customer_id || String(charge.currency).toLowerCase() !== 'usd') throw fail('Provider charge proof does not match.');
   return { intent, charge };
 }
 function verifiedReceipt(payment, refund, requests) {
   if (!refund?.id || providerId(refund.payment_intent) !== payment.stripe_payment_intent_id
     || providerId(refund.charge) !== payment.stripe_charge_id || !Number.isSafeInteger(refund.amount)
-    || refund.amount <= 0 || refund.amount > payment.amount_total || String(refund.currency).toLowerCase() !== 'usd'
+    || refund.amount <= 0 || refund.amount > (capturedFeeCents(payment) ?? payment.amount_total) || String(refund.currency).toLowerCase() !== 'usd'
     || !STATUSES.has(refund.status) || !Number.isSafeInteger(refund.created)) throw fail('Provider refund proof does not match.');
   const requestId = refund.metadata?.refund_request_id || null;
   if (refund.metadata?.payment_id && refund.metadata.payment_id !== payment.id) throw fail('Provider refund belongs to another payment.');
@@ -167,6 +175,9 @@ async function create({ paymentId, amount = null, reason, description = null, ac
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) throw fail('Invalid refund request ID.', 400);
     let payment = await paymentById(paymentId);
     await assertActor(payment, actorId, actorMode);
+    // A charged poster-fault fee belongs to the worker by policy; its payer
+    // cannot refund it in the app. The SQL reservation refuses it as well.
+    if (actorMode === 'payer' && capturedFeeCents(payment) !== null) throw fail(FEE_REFUND_MESSAGE, 403, 'SUPPORT_REQUIRED');
     let records = await localRecords(payment);
     request = records.requests.find(r => r.id === id);
     // Reconciliation can enroll earlier external/legacy refunds. This is a read

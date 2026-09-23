@@ -6,6 +6,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { capturedFeeCents } = require('../stripe/gigPaymentProof');
 
 const INCLUDABLE_STATUSES = [
   'captured_hold', 'transfer_scheduled', 'transfer_pending', 'transferred',
@@ -63,7 +64,12 @@ function aggregateEarningsRows(rows, startDate = null, endDate = null) {
 
     const amountToPayee = Number(row?.amount_to_payee || 0) || 0;
     const refunded = Number(row?.refunded_amount || 0) || 0;
-    const net = Math.max(0, amountToPayee - refunded);
+    // A charged poster-fault fee earns only the worker share of the fee.
+    const feeCents = capturedFeeCents(row);
+    const total = Number(row?.amount_total || 0) || 0;
+    const net = feeCents !== null && total > 0
+      ? Math.max(0, Math.floor(feeCents * amountToPayee / total) - Math.floor(refunded * amountToPayee / total))
+      : Math.max(0, amountToPayee - refunded);
     totalPayments += 1;
     totalEarned += net;
     if (PAID_STATUS_SET.has(status)) totalPaid += net;
@@ -119,7 +125,7 @@ async function getEarningsForUser(userId, startDate = null, endDate = null) {
 
   const { data: rows, error } = await supabaseAdmin
     .from('Payment')
-    .select('amount_to_payee, refunded_amount, payment_status, is_escrowed, escrow_released_at, created_at')
+    .select('amount_total, amount_to_payee, refunded_amount, payment_status, is_escrowed, escrow_released_at, created_at, metadata')
     .eq('payee_id', userId)
     .order('created_at', { ascending: false });
 

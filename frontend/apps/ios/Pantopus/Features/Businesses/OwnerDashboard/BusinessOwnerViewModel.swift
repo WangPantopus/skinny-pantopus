@@ -284,7 +284,8 @@ public final class BusinessOwnerViewModel {
             reviews: mappedReviews,
             publicProfile: publicProfile,
             canPostAsBusiness: canPost(dashboard.access?.roleBase),
-            foundingOffer: foundingOffer
+            foundingOffer: foundingOffer,
+            isVerified: BusinessCardModel.isVerified(tier: dashboard.profile?.identityVerificationTier)
         )
     }
 

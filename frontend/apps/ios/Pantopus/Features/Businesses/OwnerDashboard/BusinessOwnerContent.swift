@@ -159,6 +159,9 @@ public struct BusinessOwnerContent: Sendable, Hashable {
     public let canPostAsBusiness: Bool
     /// Founding-business offer banner; `nil` renders nothing.
     public let foundingOffer: OwnerFoundingOffer?
+    /// Drives the header chip: "Business · Verified" only when verified,
+    /// otherwise the "Verification pending" state the My businesses card shows.
+    public let isVerified: Bool
 
     public init(
         businessId: String,
@@ -170,9 +173,11 @@ public struct BusinessOwnerContent: Sendable, Hashable {
         reviews: [OwnerReviewItem],
         publicProfile: BusinessProfileContent,
         canPostAsBusiness: Bool = false,
-        foundingOffer: OwnerFoundingOffer? = nil
+        foundingOffer: OwnerFoundingOffer? = nil,
+        isVerified: Bool = false
     ) {
         self.foundingOffer = foundingOffer
+        self.isVerified = isVerified
         self.businessId = businessId
         self.isLive = isLive
         self.editedMeta = editedMeta
@@ -213,7 +218,8 @@ public struct BusinessOwnerContent: Sendable, Hashable {
             reviews: updated,
             publicProfile: publicProfile,
             canPostAsBusiness: canPostAsBusiness,
-            foundingOffer: foundingOffer
+            foundingOffer: foundingOffer,
+            isVerified: isVerified
         )
     }
 
@@ -230,7 +236,8 @@ public struct BusinessOwnerContent: Sendable, Hashable {
             reviews: reviews,
             publicProfile: publicProfile,
             canPostAsBusiness: canPostAsBusiness,
-            foundingOffer: offer
+            foundingOffer: offer,
+            isVerified: isVerified
         )
     }
 

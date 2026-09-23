@@ -345,13 +345,13 @@ final class EditProfileViewModel {
                 .flatMap(URL.init(string:))
         }
         avatarInitial = Self.initial(
-            firstName: profile.firstName,
-            name: profile.name,
+            firstName: profile.firstName ?? "",
+            name: profile.name ?? "",
             username: profile.username
         )
-        seed(.firstName, profile.firstName)
+        seed(.firstName, profile.firstName ?? "")
         seed(.middleName, profile.middleName ?? "")
-        seed(.lastName, profile.lastName)
+        seed(.lastName, profile.lastName ?? "")
         seed(.bio, profile.bio ?? "")
         seed(.tagline, profile.tagline ?? "")
         seed(.phoneNumber, profile.phoneNumber ?? "")

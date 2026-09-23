@@ -20,6 +20,7 @@ internal data class PendingContentArrival(
 )
 
 /** Device-only encrypted handoff. Legacy links migrate without extending their original lifetime. */
+@Suppress("TooManyFunctions")
 object PendingDeepLinkStore {
     private val adapter = Moshi.Builder().build().adapter(PendingContentArrival::class.java).serializeNulls()
     private val storage = PendingContentArrivalPreferences()
@@ -55,6 +56,23 @@ object PendingDeepLinkStore {
             if (!storage.clearProtected()) return@safely null
             arrival.path.takeIf { arrival.expectedUserId == null || arrival.expectedUserId == userId }
         }
+
+    /**
+     * A content link opened while a stored session was still hydrating (cold
+     * start) is stashed unbound: the router cannot know the account yet. When
+     * that hydration ends the stored session, the link belongs to that stored
+     * account, so bind it before [retainForReauthentication] — only the same
+     * account's re-sign-in can then replay it.
+     */
+    @Synchronized
+    fun adoptHydrationArrival(userId: String?) {
+        safely(Unit) {
+            val arrival = read(System.currentTimeMillis()) ?: return@safely
+            if (userId != null && arrival.expectedUserId == null) {
+                storage.write(adapter.toJson(arrival.copy(expectedUserId = userId)))
+            }
+        }
+    }
 
     @Synchronized
     fun retainForReauthentication(userId: String?) {
