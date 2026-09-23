@@ -312,7 +312,8 @@ export default function GigsBrowsePage() {
         setPage(pageNum);
       } catch (err) {
         console.warn('Failed to fetch gigs:', err);
-        if (!append) setFetchError('Failed to load tasks. Please try again.');
+        // A failed page 1 replaces the list with the error; a failed "load more" keeps the list and shows the banner.
+        setFetchError(append ? "Couldn't load more tasks." : 'Failed to load tasks. Please try again.');
       }
     },
     [filters, debouncedSearch, sortOption, userLat, userLng, radiusMiles]
@@ -763,7 +764,7 @@ export default function GigsBrowsePage() {
                           </div>
                         ))}
                       </div>
-                    ) : gigs.length === 0 ? (
+                    ) : gigs.length === 0 && !fetchError ? (
                       <div>
                         <EmptyState
                           icon={Search}
