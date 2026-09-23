@@ -39,10 +39,12 @@ import app.pantopus.android.data.payments.PaymentsRepository
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.data.reviews.ReviewsRepository
 import app.pantopus.android.ui.screens.gigs.GigsCategory
+import app.pantopus.android.ui.screens.gigs.OPEN_TO_OFFERS_LABEL
 import app.pantopus.android.ui.screens.gigs.authorization.GigAssignedAuthorizationCoordinator
 import app.pantopus.android.ui.screens.gigs.checkout.GigBidCheckoutCoordinator
 import app.pantopus.android.ui.screens.gigs.checkout.GigCheckoutIdentity
 import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
+import app.pantopus.android.ui.screens.gigs.isOpenToOffers
 import app.pantopus.android.ui.screens.gigs.refunds.GigRefundCoordinator
 import app.pantopus.android.ui.screens.gigs.refunds.GigRefundFactory
 import app.pantopus.android.ui.screens.marketplace.ListingGradient
@@ -2427,7 +2429,8 @@ class GigDetailViewModel
                         distanceLabel(gig.distanceMiles),
                         relativeAge(gig.createdAt)?.let { if (it == "now") "Just posted" else "posted $it ago" },
                     )
-                val priceLine = gig.price?.let { priceLabel(it, gig.payType) }
+                val openToOffers = isOpenToOffers(gig.payType, gig.acceptedBy)
+                val priceLine = if (openToOffers) OPEN_TO_OFFERS_LABEL else gig.price?.let { priceLabel(it, gig.payType) }
                 val hero =
                     ContentDetailHero(
                         title = gig.title,
@@ -2438,7 +2441,7 @@ class GigDetailViewModel
                             ),
                         meta = metaPieces.takeIf { it.isNotEmpty() }?.joinToString(" · "),
                         priceLine = priceLine,
-                        priceCaption = if (priceLine != null) "budget" else null,
+                        priceCaption = if (priceLine != null && !openToOffers) "budget" else null,
                     )
                 val statStrip = statRows(gig)
                 val modules =
@@ -2670,14 +2673,15 @@ class GigDetailViewModel
                         distanceLabel(gig.distanceMiles),
                         gig.scheduledStart?.takeIf { it.isNotEmpty() }?.let { formatScheduledStart(it) },
                     )
-                val priceLine = gig.price?.let { priceLabel(it, gig.payType) }
+                val openToOffers = isOpenToOffers(gig.payType, gig.acceptedBy)
+                val priceLine = if (openToOffers) OPEN_TO_OFFERS_LABEL else gig.price?.let { priceLabel(it, gig.payType) }
                 val hero =
                     ContentDetailHero(
                         title = gig.title,
                         categoryChip = null,
                         meta = metaPieces.takeIf { it.isNotEmpty() }?.joinToString(" · "),
                         priceLine = priceLine,
-                        priceCaption = gigV1PriceCaption(priceLine, awarded),
+                        priceCaption = if (openToOffers) null else gigV1PriceCaption(priceLine, awarded),
                     )
                 val modules =
                     buildList {

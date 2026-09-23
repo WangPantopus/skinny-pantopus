@@ -2431,7 +2431,8 @@ extension GigDetailViewModel {
             distanceLabel(gig.distanceMiles),
             relativeAge(gig.createdAt).map { $0 == "now" ? "Just posted" : "posted \($0) ago" }
         ].compactMap { $0 }
-        let priceLine = gig.price.map { gigPriceLabel($0, payType: gig.payType) }
+        let openToOffers = GigOffers.isOpen(payType: gig.payType, acceptedBy: gig.acceptedBy)
+        let priceLine = openToOffers ? GigOffers.label : gig.price.map { gigPriceLabel($0, payType: gig.payType) }
         let hero = ContentDetailHero(
             title: gig.title,
             categoryChip: ContentDetailCategoryChip(
@@ -2440,7 +2441,7 @@ extension GigDetailViewModel {
             ),
             meta: metaPieces.isEmpty ? nil : metaPieces.joined(separator: " · "),
             priceLine: priceLine,
-            priceCaption: gig.price != nil ? "budget" : nil
+            priceCaption: gig.price != nil && !openToOffers ? "budget" : nil
         )
         var modules: [ContentDetailModule] = []
         if let body = gig.description, !body.isEmpty {
@@ -2609,13 +2610,14 @@ extension GigDetailViewModel {
             distanceLabel(gig.distanceMiles),
             gig.scheduledStart.flatMap { $0.isEmpty ? nil : formatScheduledStart($0) }
         ].compactMap { $0 }
-        let priceLine = gig.price.map { gigPriceLabel($0, payType: gig.payType) }
+        let openToOffers = GigOffers.isOpen(payType: gig.payType, acceptedBy: gig.acceptedBy)
+        let priceLine = openToOffers ? GigOffers.label : gig.price.map { gigPriceLabel($0, payType: gig.payType) }
         let hero = ContentDetailHero(
             title: gig.title,
             categoryChip: nil,
             meta: metaPieces.isEmpty ? nil : metaPieces.joined(separator: " · "),
             priceLine: priceLine,
-            priceCaption: gig.price == nil ? nil : (awarded ? "winning bid" : "budget")
+            priceCaption: gig.price == nil || openToOffers ? nil : (awarded ? "winning bid" : "budget")
         )
         var modules: [ContentDetailModule] = []
         if awarded {
