@@ -13,6 +13,7 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { useBadges } from '@/contexts/BadgeContext';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
+import ErrorState from '@/components/ui/ErrorState';
 import { pushSignal } from '@/lib/signal-buffer';
 import PaymentStatusBadge from '@/components/payments/PaymentStatusBadge';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
@@ -151,6 +152,8 @@ export default function GigDetailsPage() {
   const [gig, setGig] = useState<GigFullRecord | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  // A load that failed for any reason but "not found": the page can't say the task is gone.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Media gallery state
   const [gigMedia, setGigMedia] = useState<GigMediaItem[]>([]);
@@ -175,6 +178,7 @@ export default function GigDetailsPage() {
       return;
     }
     setLoading(true);
+    setLoadError(null);
     try {
       await Promise.all([loadCurrentUser(), loadGigDetails(), loadGigMedia()]);
     } finally {
@@ -189,6 +193,8 @@ export default function GigDetailsPage() {
     } catch (err) {
       console.error('Failed to load user:', err);
       setUser(null);
+      // Without the viewer the page can't tell a poster from a bidder (it would offer the poster a bid form).
+      setLoadError("Couldn't load this task. Check your connection and try again.");
     }
   };
 
@@ -199,6 +205,9 @@ export default function GigDetailsPage() {
     } catch (err) {
       console.error('Failed to load gig:', err);
       setGig(null);
+      if ((err as { statusCode?: number })?.statusCode !== 404) {
+        setLoadError("Couldn't load this task. Check your connection and try again.");
+      }
     }
   };
 
@@ -416,6 +425,10 @@ export default function GigDetailsPage() {
         </div>
       </div>
     );
+  }
+
+  if (loadError) {
+    return <ErrorState message={loadError} onRetry={() => void init()} />;
   }
 
   if (!gig) {
