@@ -205,7 +205,7 @@ internal fun WhoAndWhyStep(
         ReasonPicker(selected = form.selectedReason, onSelect = onSelectReason)
 
         if (inviteCandidate != null) {
-            InvitePrivacyHint(query = form.beneficiaryQuery)
+            InvitePrivacyHint()
         } else {
             ContextNoteField(
                 note = form.reason,
@@ -405,7 +405,7 @@ private fun PrivacyToggleRow(
 }
 
 @Composable
-private fun InvitePrivacyHint(query: String) {
+private fun InvitePrivacyHint() {
     Row(
         modifier =
             Modifier
@@ -424,7 +424,8 @@ private fun InvitePrivacyHint(query: String) {
             tint = PantopusColors.appTextSecondary,
         )
         Text(
-            text = "Invite-only by default. The train stays private until $query accepts. Other neighbors won't see it on the block.",
+            // No invite goes to the recipient, so nothing is waiting on them to accept.
+            text = "Invite-only by default. Other neighbors won't see it on the block.",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextStrong,
         )
