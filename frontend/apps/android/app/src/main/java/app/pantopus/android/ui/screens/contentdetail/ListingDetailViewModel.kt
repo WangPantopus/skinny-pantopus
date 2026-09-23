@@ -5,20 +5,25 @@ package app.pantopus.android.ui.screens.contentdetail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.listing_offers.ListingOfferDto
 import app.pantopus.android.data.api.models.listings.ListingDto
+import app.pantopus.android.data.api.models.payments.CreatePaymentIntentRequest
+import app.pantopus.android.data.api.models.payments.PaymentIntentSheetParamsDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.listing_offers.ListingOffersRepository
 import app.pantopus.android.data.listings.ListingsRepository
+import app.pantopus.android.data.payments.PaymentsRepository
 import app.pantopus.android.ui.screens.marketplace.ListingGradient
+import app.pantopus.android.ui.screens.settings.payments.CheckoutOutcome
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 @HiltViewModel
 class ListingDetailViewModel
@@ -27,6 +32,7 @@ class ListingDetailViewModel
         private val repo: ListingsRepository,
         private val offersRepo: ListingOffersRepository,
         private val auth: AuthRepository,
+        private val paymentsRepo: PaymentsRepository,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         companion object {
@@ -42,6 +48,11 @@ class ListingDetailViewModel
         val state: StateFlow<ContentDetailUiState> = _state.asStateFlow()
 
         private var rawListing: ListingDto? = null
+        private var acceptedOffer: ListingOfferDto? = null
+        private var checkoutReadFailed = false
+        private var isCheckingOut = false
+        private var readInFlight = false
+
 
         private val _saved = MutableStateFlow(false)
 
@@ -87,24 +98,127 @@ class ListingDetailViewModel
         }
 
         fun load() {
+            if (readInFlight || isCheckingOut) return
+            viewModelScope.launch { refreshContent() }
+        }
+
+        private suspend fun refreshContent() {
+            readInFlight = true
             _state.value = ContentDetailUiState.Loading
-            viewModelScope.launch {
+            try {
                 when (val result = repo.detail(listingId)) {
                     is NetworkResult.Success -> {
                         rawListing = result.data.listing
                         _saved.value = result.data.listing.userHasSaved == true
-                        _state.value =
-                            ContentDetailUiState.Loaded(
-                                Projection.project(
-                                    result.data.listing,
-                                    isViewerOwner = isOwnedByMe(),
-                                ),
-                            )
+                        acceptedOffer = null
+                        checkoutReadFailed = false
+                        val viewerId = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id
+                        if (!isOwnedByMe() && !isSold() && viewerId != null) {
+                            when (val offers = offersRepo.listOffers(listingId)) {
+                                is NetworkResult.Success ->
+                                    acceptedOffer = offers.data.offers.firstOrNull {
+                                        it.status == "accepted" && (it.buyerId ?: it.buyer?.id) == viewerId
+                                    }
+                                is NetworkResult.Failure -> checkoutReadFailed = true
+                            }
+                        }
+                        rebuild()
                     }
-                    is NetworkResult.Failure -> {
+                    is NetworkResult.Failure ->
                         _state.value = ContentDetailUiState.Error(result.error.displayMessage("Couldn't load detail."))
+                }
+            } finally {
+                readInFlight = false
+            }
+        }
+
+        fun hasCheckoutAction(): Boolean = acceptedOffer != null || checkoutReadFailed
+
+        private fun checkoutButton(): ContentDetailDockButton? {
+            val summary = acceptedOffer?.checkout
+            return when {
+                isCheckingOut -> ContentDetailDockButton("Checking payment…", PantopusIcon.Clock, enabled = false)
+                checkoutReadFailed -> ContentDetailDockButton("Check payment", PantopusIcon.Clock)
+                acceptedOffer == null -> null
+                summary == null -> ContentDetailDockButton("Check payment", PantopusIcon.Clock)
+                summary.canContinue && summary.state in setOf("ready", "retry", "pending") ->
+                    ContentDetailDockButton(if (summary.state == "retry") "Retry checkout" else "Continue checkout")
+                else -> {
+                    val label =
+                        when (summary.state) {
+                            "authorized" -> "Payment authorized"
+                            "processing" -> "Payment processing"
+                            "paid" -> "Payment received"
+                            "refund_pending" -> "Refund processing"
+                            "partially_refunded" -> "Partially refunded"
+                            "refunded" -> "Payment refunded"
+                            "disputed" -> "Payment disputed"
+                            "not_payable" -> "Pickup pending"
+                            else -> null
+                        }
+                    if (label == null) {
+                        ContentDetailDockButton("Check payment", PantopusIcon.Clock)
+                    } else {
+                        ContentDetailDockButton(label, PantopusIcon.Clock, enabled = false)
                     }
                 }
+            }
+        }
+
+        private fun rebuild() {
+            val listing = rawListing ?: return
+            _state.value = ContentDetailUiState.Loaded(Projection.project(listing, isOwnedByMe(), checkoutButton()))
+        }
+
+        fun continueCheckout(
+            onReady: (PaymentIntentSheetParamsDto) -> Unit,
+            onError: (String) -> Unit,
+        ) {
+            if (isCheckingOut || readInFlight) return
+            val offer = acceptedOffer
+            val summary = offer?.checkout
+            if (offer == null || summary?.canContinue != true ||
+                summary.state !in setOf("ready", "retry", "pending") || checkoutReadFailed
+            ) {
+                viewModelScope.launch {
+                    refreshContent()
+                    if (checkoutReadFailed || acceptedOffer?.checkout == null || acceptedOffer?.checkout?.state == "unavailable") {
+                        onError("Payment status is unavailable. Please try again.")
+                    }
+                }
+                return
+            }
+            isCheckingOut = true
+            rebuild()
+            viewModelScope.launch {
+                when (val result = paymentsRepo.createPaymentIntent(CreatePaymentIntentRequest(listingId = listingId, offerId = offer.id))) {
+                    is NetworkResult.Success -> {
+                        if (result.data.clientSecret.isNullOrBlank()) {
+                            isCheckingOut = false
+                            rebuild()
+                            onError("Couldn't start checkout. Please try again.")
+                        } else {
+                            onReady(result.data)
+                        }
+                    }
+                    is NetworkResult.Failure -> {
+                        isCheckingOut = false
+                        rebuild()
+                        onError(result.error.displayMessage("Couldn't start checkout. Please try again."))
+                    }
+                }
+            }
+        }
+
+        fun onCheckoutOutcome(outcome: CheckoutOutcome, onError: (String) -> Unit) {
+            viewModelScope.launch {
+                if (outcome == CheckoutOutcome.Paid) {
+                    // The sheet result is not durable payment proof. Re-read server state.
+                    refreshContent()
+                }
+                isCheckingOut = false
+                if (_state.value !is ContentDetailUiState.Error) rebuild()
+                if (outcome is CheckoutOutcome.Declined) onError(outcome.message ?: "Payment failed. Please try again.")
             }
         }
 
@@ -133,6 +247,7 @@ class ListingDetailViewModel
             fun project(
                 listing: ListingDto,
                 isViewerOwner: Boolean = false,
+                checkoutButton: ContentDetailDockButton? = null,
             ): ContentDetailContent {
                 val isFree = listing.isFree ?: false
                 val sold = isSold(listing)
@@ -193,6 +308,11 @@ class ListingDetailViewModel
                         ContentDetailDock(
                             secondary = ContentDetailDockButton(label = "Seller", icon = PantopusIcon.ShoppingBag),
                             primary = ContentDetailDockButton(label = "Find similar", icon = PantopusIcon.Search),
+                        )
+                    } else if (!isViewerOwner && checkoutButton != null) {
+                        ContentDetailDock(
+                            secondary = ContentDetailDockButton(label = "Message", icon = PantopusIcon.Send),
+                            primary = checkoutButton,
                         )
                     } else if (onHold && !isViewerOwner) {
                         // A held listing takes no new offers (the server refuses them); its seller still reaches the offers.

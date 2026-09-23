@@ -47,6 +47,7 @@ data class ListingOfferDto(
     @Json(name = "updated_at") val updatedAt: String? = null,
     val buyer: ListingOfferUserDto? = null,
     val seller: ListingOfferUserDto? = null,
+    val checkout: ListingCheckoutSummaryDto? = null,
 )
 
 /** Inlined buyer / seller user card on each offer. */
@@ -71,4 +72,12 @@ data class CreateListingOfferBody(
 data class CounterListingOfferBody(
     @Json(name = "counterAmount") val counterAmount: Double,
     @Json(name = "counterMessage") val counterMessage: String? = null,
+)
+
+/** Buyer-only display state. The intent endpoint remains the payment authority. */
+@JsonClass(generateAdapter = true)
+data class ListingCheckoutSummaryDto(
+    val state: String = "unavailable",
+    @Json(name = "can_continue") val canContinue: Boolean = false,
+    @Json(name = "payment_status") val paymentStatus: String? = null,
 )

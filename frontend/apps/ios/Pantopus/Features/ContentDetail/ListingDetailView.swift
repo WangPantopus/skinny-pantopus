@@ -104,6 +104,14 @@ public struct ListingDetailView: View {
     /// — and the host wired an `onViewOffers` callback, we push to the
     /// seller's offers panel instead of the buyer's "Make offer" sheet.
     private func handlePrimaryAction() {
+        if viewModel.hasCheckoutAction {
+            Task {
+                if let message = await viewModel.continueCheckout() {
+                    toast = ToastMessage(text: message, kind: .error)
+                }
+            }
+            return
+        }
         // A sold listing's "Find similar" browses the marketplace; a sold listing takes no offers.
         if viewModel.isSold {
             onFindSimilar?()

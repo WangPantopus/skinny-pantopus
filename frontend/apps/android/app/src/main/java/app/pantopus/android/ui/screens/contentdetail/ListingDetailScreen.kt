@@ -36,11 +36,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import com.stripe.android.paymentsheet.rememberPaymentSheet
 
 @Composable
 fun ListingDetailScreen(
@@ -62,6 +64,30 @@ fun ListingDetailScreen(
     var offerError by remember { mutableStateOf<String?>(null) }
     var toastText by remember { mutableStateOf<String?>(null) }
     var toastIsError by remember { mutableStateOf(false) }
+
+    val showCheckoutError: (String) -> Unit = { message ->
+        toastIsError = true
+        toastText = message
+    }
+    val paymentSheet = rememberPaymentSheet { result ->
+        viewModel.onCheckoutOutcome(StripePaymentSheets.checkoutOutcome(result), showCheckoutError)
+    }
+    val continueCheckout = {
+        viewModel.continueCheckout(
+            onReady = { params ->
+                paymentSheet.presentWithPaymentIntent(
+                    paymentIntentClientSecret = params.clientSecret.orEmpty(),
+                    configuration = StripePaymentSheets.paymentConfiguration(
+                        context = context,
+                        customerId = params.customer,
+                        ephemeralKey = params.ephemeralKey,
+                        publishableKey = params.publishableKey,
+                    ),
+                )
+            },
+            onError = showCheckoutError,
+        )
+    }
 
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(toastText) {
@@ -100,7 +126,9 @@ fun ListingDetailScreen(
         onBack = onBack,
         onPrimaryAction = {
             val listing = viewModel.listingSnapshot()
-            if (viewModel.isSold()) {
+            if (viewModel.hasCheckoutAction()) {
+                continueCheckout()
+            } else if (viewModel.isSold()) {
                 // A sold listing's "Find similar" browses the marketplace; a sold listing takes no offers.
                 onFindSimilar?.invoke()
             } else if (listing != null && viewModel.isOwnedByMe() && onViewOffers != null) {
