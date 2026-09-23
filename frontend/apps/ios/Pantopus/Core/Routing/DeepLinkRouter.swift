@@ -160,10 +160,11 @@ final class DeepLinkRouter {
         case monthlyReceipt
         /// Booking notification links (`backend/services/scheduling/
         /// bookingNotifyService.js`): `/app/profile/schedule/bookings/:id`
-        /// (lifecycle) and `/app/scheduling/bookings/:id` (personal host
-        /// reminder) open the existing host booking detail; the endpoint's
-        /// own authorization decides what a non-host sees.
-        case bookingDetail(bookingId: String)
+        /// and `/app/scheduling/bookings/:id` open the existing host booking
+        /// detail for `owner` (`?ot=home|business&oid=` on a Home- or
+        /// Business-owned booking, else personal); the endpoint's own
+        /// authorization decides what a non-host sees.
+        case bookingDetail(bookingId: String, owner: SchedulingOwner)
         /// `/app/scheduling/my-bookings` — the existing customer My bookings list.
         case myBookings
         case unknown(URL)
@@ -513,16 +514,16 @@ final class DeepLinkRouter {
             if tabQuery?.lowercased() == "receipt" { return .monthlyReceipt }
             if segments.count == 4, segments[1] == "schedule", segments[2] == "bookings",
                UUID(uuidString: segments[3]) != nil {
-                return .bookingDetail(bookingId: segments[3].lowercased())
+                return .bookingDetail(bookingId: segments[3].lowercased(), owner: .personal)
             }
             return .unknown(url)
         case "scheduling":
-            // Booking reminder links. Owner-scoped (`?ot=home|business&oid=`)
-            // host links stay unrouted: the destination carries no owner.
+            // Host booking links; a Home- or Business-owned booking names its
+            // owner with `?ot=home|business&oid=<id>`.
             if segments.count == 2, segments[1] == "my-bookings" { return .myBookings }
             if segments.count == 3, segments[1] == "bookings", UUID(uuidString: segments[2]) != nil,
-               queryValue("ot", in: comps) == nil {
-                return .bookingDetail(bookingId: segments[2].lowercased())
+               let owner = bookingOwner(type: queryValue("ot", in: comps), id: queryValue("oid", in: comps)) {
+                return .bookingDetail(bookingId: segments[2].lowercased(), owner: owner)
             }
             return .unknown(url)
         case "connections":
@@ -605,6 +606,18 @@ final class DeepLinkRouter {
 
     private func queryValue(_ name: String, in components: URLComponents?) -> String? {
         components?.queryItems?.first { $0.name == name }?.value
+    }
+
+    /// The owner a host booking link names: no `ot` is the personal pillar;
+    /// `home` / `business` need a UUID `oid`. Anything else stays unrouted.
+    private func bookingOwner(type: String?, id: String?) -> SchedulingOwner? {
+        guard let type else { return .personal }
+        guard let id, UUID(uuidString: id) != nil else { return nil }
+        switch type {
+        case "home": return .home(homeId: id.lowercased())
+        case "business": return .business(id: id.lowercased())
+        default: return nil
+        }
     }
 
     private func homeDestination(url: URL, segments: [String], tabQuery: String?) -> Destination {

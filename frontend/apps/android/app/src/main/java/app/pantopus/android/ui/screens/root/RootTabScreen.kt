@@ -2237,7 +2237,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.BookingDetail -> {
-                navController.navigate(SchedulingRoutes.bookingDetail(pending.bookingId))
+                navController.navigate(SchedulingRoutes.bookingDetail(pending.bookingId, pending.ownerKind, pending.ownerId))
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.MyBookings -> {
@@ -3153,7 +3153,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 composable(
                     route = SchedulingRoutes.BOOKING_DETAIL,
-                    arguments = listOf(navArgument(SchedulingRoutes.ARG_BOOKING_ID) { type = NavType.StringType }),
+                    arguments =
+                        listOf(navArgument(SchedulingRoutes.ARG_BOOKING_ID) { type = NavType.StringType }) +
+                            schedulingOwnerNavArgs(),
                 ) { entry ->
                     BookingDetailScreen(
                         bookingId = entry.arguments?.getString(SchedulingRoutes.ARG_BOOKING_ID).orEmpty(),

@@ -174,9 +174,13 @@ object SchedulingRoutes {
 
     // ── A8 Bookings inbox & core ──────────────────────────────────────────────
     const val BOOKINGS_INBOX = "scheduling/bookings"
-    const val BOOKING_DETAIL = "scheduling/bookings/{$ARG_BOOKING_ID}"
+    const val BOOKING_DETAIL = "scheduling/bookings/{$ARG_BOOKING_ID}?$OWNER_ARGS"
 
-    fun bookingDetail(bookingId: String) = "scheduling/bookings/$bookingId"
+    fun bookingDetail(
+        bookingId: String,
+        ownerKind: String? = null,
+        ownerId: String? = null,
+    ) = "scheduling/bookings/$bookingId" + ownerQuery(ownerKind, ownerId)
 
     // ── A9 Bookings extras ────────────────────────────────────────────────────
     const val BOOKING_SEARCH = "scheduling/bookings/search"
