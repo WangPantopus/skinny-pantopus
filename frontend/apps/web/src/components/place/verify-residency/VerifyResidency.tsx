@@ -3,7 +3,8 @@
 // A landlord/school holding a letter enters (or deep-links) the printed
 // code; the page answers from GET /api/public/residency-letters/:code:
 //   * active   — genuine and currently valid (green)
-//   * revoked  — genuine but revoked by the resident (amber, NOT valid)
+//   * revoked / expired — genuine but no longer valid (amber); the server
+//     returns only { valid: false, status }, never the name or address
 //   * unknown  — no such letter (neutral)
 // Anonymous by design — no account, nothing persisted.
 // ============================================================
@@ -34,7 +35,9 @@ function fmtDate(iso?: string | null): string {
 }
 
 function ResultPanel({ result }: { result: ResidencyLetterVerification }) {
-  if (!result.valid) {
+  // A genuine letter that no longer verifies is not an unknown code.
+  const inactive = !result.valid && (result.status === 'revoked' || result.status === 'expired');
+  if (!result.valid && !inactive) {
     return (
       <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-5 flex items-start gap-3.5">
         <span className="w-11 h-11 rounded-xl bg-app-surface-sunken flex items-center justify-center shrink-0">
@@ -50,7 +53,8 @@ function ResultPanel({ result }: { result: ResidencyLetterVerification }) {
     );
   }
 
-  const revoked = result.status === 'revoked';
+  const expired = result.status === 'expired';
+  const revoked = result.status === 'revoked' || expired;
   const address = result.address;
   const cityZip = address
     ? [[address.city, address.state].filter(Boolean).join(', '), address.zipcode].filter(Boolean).join(' ')
@@ -66,38 +70,42 @@ function ResultPanel({ result }: { result: ResidencyLetterVerification }) {
         </span>
         <div>
           <div className="text-[17px] font-bold text-app-text -tracking-[0.01em]">
-            {revoked ? 'Genuine, but revoked' : 'Verified residency letter'}
+            {expired ? 'Genuine, but expired' : revoked ? 'Genuine, but revoked' : 'Verified residency letter'}
           </div>
           <div className="text-[13px] text-app-text-secondary mt-0.5">
-            {revoked
-              ? `This letter was issued by Pantopus but the resident revoked it on ${fmtDate(result.revoked_at)}. Treat it as no longer valid.`
-              : 'Issued by Pantopus and currently active.'}
+            {expired
+              ? 'This letter was issued by Pantopus but it has expired. Treat it as no longer valid.'
+              : revoked
+                ? `This letter was issued by Pantopus but it has been revoked${result.revoked_at ? ` on ${fmtDate(result.revoked_at)}` : ''}. Treat it as no longer valid.`
+                : 'Issued by Pantopus and currently active.'}
           </div>
         </div>
       </div>
-      <div className="px-5 py-4 grid gap-3">
-        <div>
-          <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-app-text-muted mb-0.5">Resident</div>
-          <div className="text-[15px] font-semibold text-app-text">{result.resident_name}</div>
-        </div>
-        <div>
-          <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-app-text-muted mb-0.5">Verified address</div>
-          <div className="text-[15px] font-semibold text-app-text leading-[21px]">{address?.line1}<br />{cityZip}</div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
+      {result.valid && (
+        <div className="px-5 py-4 grid gap-3">
           <div>
-            <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-app-text-muted mb-0.5">Issued</div>
-            <div className="text-[14px] text-app-text-strong">{fmtDate(result.issued_at)}</div>
+            <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-app-text-muted mb-0.5">Resident</div>
+            <div className="text-[15px] font-semibold text-app-text">{result.resident_name}</div>
           </div>
           <div>
-            <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-app-text-muted mb-0.5">Issued for</div>
-            <div className="text-[14px] text-app-text-strong">{result.purpose}</div>
+            <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-app-text-muted mb-0.5">Verified address</div>
+            <div className="text-[15px] font-semibold text-app-text leading-[21px]">{address?.line1}<br />{cityZip}</div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-app-text-muted mb-0.5">Issued</div>
+              <div className="text-[14px] text-app-text-strong">{fmtDate(result.issued_at)}</div>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold tracking-[0.04em] uppercase text-app-text-muted mb-0.5">Issued for</div>
+              <div className="text-[14px] text-app-text-strong">{result.purpose}</div>
+            </div>
+          </div>
+          <div className="text-[12.5px] text-app-text-muted leading-[18px] pt-2 border-t border-app-border-subtle">
+            Match these details against the letter you were handed. This check confirms the letter&apos;s code, holder, address, and current status — it is not a government record.
           </div>
         </div>
-        <div className="text-[12.5px] text-app-text-muted leading-[18px] pt-2 border-t border-app-border-subtle">
-          Match these details against the letter you were handed. This check confirms the letter&apos;s code, holder, address, and current status — it is not a government record.
-        </div>
-      </div>
+      )}
     </div>
   );
 }
