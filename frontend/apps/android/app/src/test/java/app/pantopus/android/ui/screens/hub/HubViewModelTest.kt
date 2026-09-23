@@ -93,7 +93,7 @@ class HubViewModelTest {
             businesses = emptyList(),
             setup =
                 HubSetup(
-                    steps = listOf(HubSetup.Step(key = "verify_home", done = allDone)),
+                    steps = listOf(HubSetup.Step(key = "verify", done = allDone)),
                     allDone = allDone,
                     profileCompleteness =
                         HubSetup.ProfileCompleteness(

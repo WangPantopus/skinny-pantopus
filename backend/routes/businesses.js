@@ -3978,6 +3978,11 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { subject } = req.body;
 
+    // Same gates as POST /api/chat/direct, which this route parallels.
+    if (req.user.accountType === 'curator') {
+      return res.status(403).json({ error: 'This account cannot send messages' });
+    }
+
     // Verify business exists
     const { data: biz } = await supabaseAdmin
       .from('User')
@@ -3986,6 +3991,11 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
       .eq('account_type', 'business')
       .single();
     if (!biz) return res.status(404).json({ error: 'Business not found' });
+
+    const { isBlocked } = require('../services/blockService');
+    if (await isBlocked(userId, businessId)) {
+      return res.status(403).json({ error: 'Unable to message this user' });
+    }
 
     // Check if there's already a direct chat between this user and business
     const { data: existingRooms } = await supabaseAdmin
@@ -4023,7 +4033,6 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
       .insert({
         type: 'direct',
         name: subject || `Inquiry to ${biz.name}`,
-        created_by: userId,
       })
       .select('id')
       .single();
@@ -4039,6 +4048,7 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
 
     res.json({ roomId: room.id, existing: false });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Business inbox start error', { error: err.message });
     res.status(500).json({ error: 'Failed to start conversation' });
   }
@@ -4861,14 +4871,24 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
       .eq('id', businessId)
       .maybeSingle();
 
-    // Send notification to recipient (non-blocking)
-    supabaseAdmin.from('Notification').insert({
-      user_id: recipient_user_id,
-      type: 'invoice_received',
-      title: 'Invoice Received',
-      body: `${bizUser?.name || bizUser?.username || 'A business'} sent you an invoice for $${(total_cents / 100).toFixed(2)}`,
-      data: { invoice_id: invoice.id, business_id: businessId, amount_cents: total_cents },
-    }).then(() => {}).catch(() => {});
+    // Notify the recipient (non-blocking) through the shared notification
+    // service, which stores the payload in `metadata`. Nothing is sent when
+    // either the recipient or the business has blocked the other, or when the
+    // block check itself fails.
+    const { isBlocked } = require('../services/blockService');
+    isBlocked(recipient_user_id, businessId)
+      .then((blocked) => (blocked ? null : require('../services/notificationService').createNotification({
+        userId: recipient_user_id,
+        type: 'invoice_received',
+        title: 'Invoice Received',
+        body: `${bizUser?.name || bizUser?.username || 'A business'} sent you an invoice for $${(total_cents / 100).toFixed(2)}`,
+        link: `/app/invoice/${invoice.id}`,
+        metadata: { invoice_id: invoice.id, business_id: businessId, amount_cents: total_cents },
+        context: 'personal',
+      })))
+      .catch((err) => {
+        logger.warn('Invoice notification skipped', { invoiceId: invoice.id, error: err.message });
+      });
 
     res.status(201).json({ invoice });
   } catch (err) {
