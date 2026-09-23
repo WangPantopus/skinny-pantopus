@@ -633,7 +633,7 @@ describe('Current-location selection (reverse geocode)', () => {
       .get('/api/geo/reverse?lat=47.6&lon=-122.3')
       .expect(500);
 
-    expect(res.body.error).toBe('connection timeout');
+    expect(res.body.error).toBe('Server error');
   });
 
   it('caches reverse geocode response', async () => {
@@ -819,7 +819,7 @@ describe('GeoProvider failure paths', () => {
       .get('/api/geo/autocomplete?q=portland')
       .expect(500);
 
-    expect(res.body.error).toBe('ETIMEDOUT');
+    expect(res.body.error).toBe('Server error');
   });
 
   it('autocomplete returns empty for short queries without calling provider', async () => {
@@ -851,7 +851,7 @@ describe('GeoProvider failure paths', () => {
       .send({ suggestion_id: 'address.12345' })
       .expect(500);
 
-    expect(res.body.error).toBe('Mapbox service unavailable');
+    expect(res.body.error).toBe('Server error');
   });
 });
 
