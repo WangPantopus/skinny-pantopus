@@ -23,7 +23,12 @@ public struct PulseTabRoot: View {
     @State private var navigationReady = false
     @State private var router = DeepLinkRouter.shared
 
-    public init() {}
+    /// Closes the sheet this surface is presented in (Nearby's door).
+    private let onClose: (@MainActor () -> Void)?
+
+    public init(onClose: (@MainActor () -> Void)? = nil) {
+        self.onClose = onClose
+    }
 
     private var currentUserId: String {
         if case let .signedIn(user) = auth.state { return user.id }
@@ -39,7 +44,7 @@ public struct PulseTabRoot: View {
                 onCompose: { intent in
                     path.append(.compose(intent: intent.rawValue))
                 },
-                onBack: nil
+                onBack: onClose
             )
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: PulseRoute.self) { route in
