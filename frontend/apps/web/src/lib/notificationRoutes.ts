@@ -31,6 +31,13 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
     return `/app/marketplace/${listingMatch[1]}${suffix}`;
   }
 
+  // Older Home notices linked to pages the web never had: /homes/:id/ownership
+  // (the Owners page) and /homes/:id/occupants (the Members page).
+  const legacyHome = path.match(/^\/homes\/([^/?#]+)\/(ownership|occupants)(?=$|[?#])/i);
+  if (legacyHome) {
+    const page = legacyHome[2].toLowerCase() === 'ownership' ? 'owners' : 'members';
+    return `/app/homes/${legacyHome[1]}/${page}${path.slice(legacyHome[0].length)}`;
+  }
   if (path.startsWith('/homes/')) return `/app${path}`;
 
   // Job links use the mobile deep-link vocabulary — bare hosts with no

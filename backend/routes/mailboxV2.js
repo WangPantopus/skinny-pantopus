@@ -1,7 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
-const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+// canAccessMail / readableMail: the mailbox's per-item rule (own mail, or mail
+// for a Home whose mail the caller may read). Every per-item route checks it
+// before reading or changing anything and otherwise answers its not-found.
+const {
+  getAccessibleHomeIds, canAccessMail, readableMail, homesMailFilter, visibleMailIds,
+} = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -223,7 +228,8 @@ router.get('/drawers', verifyToken, async (req, res) => {
         query = query.eq('recipient_user_id', userId);
       } else if (drawer === 'home') {
         if (homeIds.length > 0) {
-          query = query.in('recipient_home_id', homeIds);
+          // Only Home letters the Home mail rule shows this member (M01).
+          query = query.or(homesMailFilter(homeIds, userId));
         } else {
           return { unread_count: 0, urgent_count: 0, last_item_at: null };
         }
@@ -294,7 +300,8 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       query = query.eq('recipient_user_id', userId);
     } else if (drawer === 'home') {
       if (homeIds.length > 0) {
-        query = query.in('recipient_home_id', homeIds);
+        // Only Home letters the Home mail rule shows this member (M01).
+        query = query.or(homesMailFilter(homeIds, userId));
       } else {
         return res.json({ mail: [], total: 0, drawer });
       }
@@ -367,7 +374,9 @@ router.get('/item/:id', verifyToken, async (req, res) => {
       .eq('id', id)
       .single();
 
-    if (error || !mail) return res.status(404).json({ error: 'Mail not found' });
+    if (error || !mail || !(await canAccessMail(mail, userId))) {
+      return res.status(404).json({ error: 'Mail not found' });
+    }
 
     // Enrich with package data if needed
     let packageInfo = null;
@@ -459,6 +468,7 @@ router.post('/item/:id/action', verifyToken, async (req, res) => {
     if (!validActions.includes(action)) {
       return res.status(400).json({ error: 'Invalid action' });
     }
+    if (!(await readableMail(id, userId))) return res.status(404).json({ error: 'Mail not found' });
 
     // Update lifecycle based on action
     const lifecycleMap = { file: 'filed', shred: 'shredded', forward: 'forwarded' };
@@ -488,7 +498,7 @@ router.post('/route', verifyToken, async (req, res) => {
       .eq('id', mailId)
       .single();
 
-    if (!mail) return res.status(404).json({ error: 'Mail not found' });
+    if (!mail || !(await canAccessMail(mail, req.user.id))) return res.status(404).json({ error: 'Mail not found' });
 
     const result = await routeMail(
       mail.recipient_name,
@@ -556,7 +566,7 @@ router.post('/resolve', verifyToken, validate(resolveRoutingSchema), async (req,
       .eq('id', mailId)
       .single();
 
-    if (!mail) return res.status(404).json({ error: 'Mail not found' });
+    if (!mail || !(await canAccessMail(mail, userId))) return res.status(404).json({ error: 'Mail not found' });
 
     const privacyMap = { personal: 'private_to_person', home: 'shared_household', business: 'business_team' };
     await supabaseAdmin
@@ -616,7 +626,10 @@ router.get('/pending', verifyToken, async (req, res) => {
       .eq('resolved', false)
       .order('created_at', { ascending: false });
 
-    return res.json({ pending: data || [] });
+    // Each item embeds its Mail: keep only mail this member may see (their own,
+    // or Home letters the Home mail rule shows them; M01).
+    const visible = await visibleMailIds((data || []).map((row) => row.mail_id), userId, homeIds);
+    return res.json({ pending: (data || []).filter((row) => visible.has(row.mail_id)) });
   } catch (err) {
     logger.error('Pending fetch error', { error: err.message });
     return res.status(500).json({ error: 'Server error' });
@@ -627,6 +640,7 @@ router.get('/pending', verifyToken, async (req, res) => {
 router.get('/package/:mailId', verifyToken, async (req, res) => {
   try {
     const { mailId } = req.params;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Package not found' });
 
     const { data: pkg } = await supabaseAdmin
       .from('MailPackage')
@@ -664,6 +678,7 @@ router.patch('/package/:mailId/status', verifyToken, validate(updatePackageStatu
   try {
     const { mailId } = req.params;
     const { status, location, photoUrl, deliveryLocationNote } = req.body;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Package not found' });
 
     const { data: pkg } = await supabaseAdmin
       .from('MailPackage')
@@ -724,11 +739,11 @@ router.post('/package/:mailId/share-eta', verifyToken, async (req, res) => {
 
     const { data: mail } = await supabaseAdmin
       .from('Mail')
-      .select('recipient_home_id, address_home_id, sender_display')
+      .select('id, recipient_user_id, recipient_home_id, address_home_id, sender_display')
       .eq('id', mailId)
       .single();
 
-    if (!mail) return res.status(404).json({ error: 'Mail not found' });
+    if (!mail || !(await canAccessMail(mail, userId))) return res.status(404).json({ error: 'Mail not found' });
 
     const homeId = mail.recipient_home_id || mail.address_home_id;
     if (!homeId) return res.status(400).json({ error: 'No home associated' });
@@ -771,6 +786,7 @@ router.post('/package/:mailId/neighbor-gig', verifyToken, async (req, res) => {
   try {
     const { mailId } = req.params;
     const userId = req.user.id;
+    if (!(await readableMail(mailId, userId))) return res.status(404).json({ error: 'Mail not found' });
 
     // Placeholder for P2 full integration — just logs event and returns success
     await logMailEvent('package_neighbor_gig_created', mailId, userId, { gig_id: null });

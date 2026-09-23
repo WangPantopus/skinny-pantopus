@@ -10,11 +10,8 @@ import {
   useRsvpCommunityEvent,
 } from '@/lib/mailbox-queries';
 import { CommunityCard, TrustBadge } from '@/components/mailbox';
-
-// ── Stub: home context ───────────────────────────────────────
-function useHomeProfile() {
-  return { homeId: 'home_1', neighborhood: 'Camas, WA' };
-}
+// The user's Home; each page used a hard-coded 'home_1' stub.
+import useHomeProfile from '../_components/useMailboxHome';
 
 // ── Reaction config ──────────────────────────────────────────
 
