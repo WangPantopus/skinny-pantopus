@@ -121,7 +121,12 @@ public struct SettingsView: View {
         case let .legalContent(doc):
             LegalContentView(document: doc) { popLast() }
         case let .placeholder(label):
-            NotYetAvailableView(tabName: label, icon: .info)
+            // Settings renders `path.last` without a navigation bar, so the
+            // placeholder carries the Settings top bar for its way back.
+            VStack(spacing: Spacing.s0) {
+                SettingsTopBar(title: label) { popLast() }
+                NotYetAvailableView(tabName: label, icon: .info) { popLast() }
+            }
         case .blockedUsers, .password, .securityDevices, .verification, .help, .about, .payments, .dataExport:
             settingsDestination(for: route)
         }

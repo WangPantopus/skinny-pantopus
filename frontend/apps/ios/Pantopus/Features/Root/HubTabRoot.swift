@@ -2463,14 +2463,14 @@ public struct HubTabRoot: View {
             ManageTrainView(
                 viewModel: ManageTrainViewModel(trainId: trainId),
                 onClose: { Task { @MainActor in if !path.isEmpty { path.removeLast() } } },
-                onOpenAnalytics: { id in
-                    Task { @MainActor in push(.placeholder(label: "Train analytics · \(id)")) }
+                onOpenAnalytics: { _ in
+                    Task { @MainActor in push(.placeholder(label: "Train analytics")) }
                 },
-                onEditDates: { id in
-                    Task { @MainActor in push(.placeholder(label: "Edit dates · \(id)")) }
+                onEditDates: { _ in
+                    Task { @MainActor in push(.placeholder(label: "Edit dates")) }
                 },
-                onInviteHelpers: { id in
-                    Task { @MainActor in push(.placeholder(label: "Invite helpers · \(id)")) }
+                onInviteHelpers: { _ in
+                    Task { @MainActor in push(.placeholder(label: "Invite helpers")) }
                 }
             )
         case .discoverHub:
