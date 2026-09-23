@@ -1010,6 +1010,8 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
     public let amountToPayee: Double?
     public let tipAmount: Double?
     public let refundedAmount: Double?
+    /// A poster-fault fee charged from the hold; `nil` for every other state.
+    public let gigFee: GigPaymentFeeDTO?
 
     enum CodingKeys: String, CodingKey {
         case id, currency
@@ -1023,6 +1025,7 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
         case amountToPayee = "amount_to_payee"
         case tipAmount = "tip_amount"
         case refundedAmount = "refunded_amount"
+        case gigFee = "gig_fee"
     }
 
     public init(
@@ -1040,7 +1043,8 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
         amountProcessingFee: Double? = nil,
         amountToPayee: Double? = nil,
         tipAmount: Double? = nil,
-        refundedAmount: Double? = nil
+        refundedAmount: Double? = nil,
+        gigFee: GigPaymentFeeDTO? = nil
     ) {
         self.id = id
         self.gigId = gigId
@@ -1057,6 +1061,34 @@ public struct GigPaymentDTO: Decodable, Sendable, Hashable {
         self.amountToPayee = amountToPayee
         self.tipAmount = tipAmount
         self.refundedAmount = refundedAmount
+        self.gigFee = gigFee
+    }
+}
+
+/// `gig_fee` on `GET /:gigId/payment`: a no-show or late-cancel fee captured
+/// from the payment hold; the rest of the hold was released.
+public struct GigPaymentFeeDTO: Decodable, Sendable, Hashable {
+    public let kind: String
+    public let feeCents: Int
+    public let releasedCents: Int
+    public let workerShareCents: Int
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case feeCents = "fee_cents", releasedCents = "released_cents", workerShareCents = "worker_share_cents"
+    }
+
+    public init(kind: String, feeCents: Int, releasedCents: Int, workerShareCents: Int) {
+        self.kind = kind
+        self.feeCents = feeCents
+        self.releasedCents = releasedCents
+        self.workerShareCents = workerShareCents
+    }
+
+    /// "No-show fee $3.13 charged · $9.37 released"
+    public var line: String {
+        let label = kind == "poster_no_show" ? "No-show fee" : "Cancellation fee"
+        return String(format: "%@ $%.2f charged · $%.2f released", label, Double(feeCents) / 100, Double(releasedCents) / 100)
     }
 }
 
