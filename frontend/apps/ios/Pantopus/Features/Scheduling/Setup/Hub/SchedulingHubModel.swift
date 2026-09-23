@@ -131,7 +131,9 @@ final class SchedulingHubModel {
     private(set) var eventTypes: [EventTypeDTO] = []
     private(set) var availabilityRules: [AvailabilityRuleDTO] = []
     private(set) var connectedCalendars: [ConnectedCalendarDTO] = []
-    private(set) var canEdit = true
+    private(set) var canEdit = false
+    private var accessGeneration = 0
+    private(set) var accessDenied = false
     private(set) var isPaused = false
     /// The first business the user can manage (`GET /api/businesses/my-businesses`,
     /// the source web's hub uses). The Business pill shows only when there is one.
@@ -203,20 +205,40 @@ final class SchedulingHubModel {
     }
 
     private func fetch() async {
-        // Re-arm edit affordances on every fetch — a 403 from one pillar must
-        // not latch view-only mode onto the others (mirrors Android's
-        // `canEdit = true` at the top of fetch).
-        canEdit = true
+        accessGeneration += 1
+        let generation = accessGeneration
+        let fetchOwner = owner
+        canEdit = false
+        accessDenied = false
         let pageResult: BookingPageResponse
         do {
             pageResult = try await client.request(SchedulingEndpoints.getBookingPage(owner: owner))
         } catch let error as SchedulingError {
-            if case .forbidden = error { canEdit = false }
-            phase = .error(error.userMessage ?? "Couldn't load your scheduling hub.")
+            if case .forbidden = error {
+                accessDenied = true
+                canEdit = false
+                phase = .error("You don't have access to this scheduling hub. Ask an owner for access.")
+            } else {
+                phase = .error(error.userMessage ?? "Couldn't load your scheduling hub.")
+            }
             return
         } catch {
             phase = .error("Couldn't load your scheduling hub.")
             return
+        }
+
+        if case let .home(homeId) = fetchOwner {
+            do {
+                let access: HomeAccessDTO = try await api.request(HomeAdminEndpoints.myAccess(homeId: homeId))
+                guard generation == accessGeneration, owner == fetchOwner else { return }
+                canEdit = access.can("calendar.edit")
+            } catch {
+                guard generation == accessGeneration, owner == fetchOwner else { return }
+                phase = .error("Couldn't check your Home scheduling access. Try again.")
+                return
+            }
+        } else if generation == accessGeneration, owner == fetchOwner {
+            canEdit = true
         }
 
         let isPersonal = owner.isPersonal

@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.scheduling.hub
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.scheduling.AvailabilityRuleDto
@@ -10,11 +11,12 @@ import app.pantopus.android.data.api.models.scheduling.BookingPageDto
 import app.pantopus.android.data.api.models.scheduling.BookingSummaryResponse
 import app.pantopus.android.data.api.models.scheduling.ConnectedCalendarDto
 import app.pantopus.android.data.api.models.scheduling.EventTypeDto
+import app.pantopus.android.data.api.models.scheduling.SlotDto
 import app.pantopus.android.data.api.models.scheduling.UpdateBookingPageRequest
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.api.models.scheduling.SlotDto
 import app.pantopus.android.data.businesses.BusinessTeamRepository
 import app.pantopus.android.data.businesses.BusinessesRepository
+import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.scheduling.SchedulingError
@@ -59,8 +61,22 @@ class SchedulingHubViewModel
         private val businessTeam: BusinessTeamRepository,
         private val businesses: BusinessesRepository,
         private val errors: SchedulingErrorDecoder,
+        private val homeAdmin: HomeAdminRepository,
+        savedStateHandle: SavedStateHandle = SavedStateHandle(),
     ) : ViewModel() {
-        private val _pillar = MutableStateFlow(SchedulingPillar.Personal)
+        private var owner: SchedulingOwner =
+            SchedulingOwner.fromRoute(
+                savedStateHandle[SchedulingRoutes.ARG_OWNER_KIND],
+                savedStateHandle[SchedulingRoutes.ARG_OWNER_ID],
+            )
+        private val _pillar =
+            MutableStateFlow(
+                when (owner) {
+                    is SchedulingOwner.Home -> SchedulingPillar.Home
+                    is SchedulingOwner.Business -> SchedulingPillar.Business
+                    SchedulingOwner.Personal -> SchedulingPillar.Personal
+                },
+            )
         val pillar: StateFlow<SchedulingPillar> = _pillar.asStateFlow()
 
         private val _state = MutableStateFlow<SchedulingHubUiState>(SchedulingHubUiState.Loading)
@@ -82,7 +98,6 @@ class SchedulingHubViewModel
         val hasBusiness: StateFlow<Boolean> = _hasBusiness.asStateFlow()
         private var businessOwnerId: String? = null
 
-        private var owner: SchedulingOwner = SchedulingOwner.Personal
         private var started = false
         private var fetchJob: Job? = null
         private var pauseJob: Job? = null
@@ -166,18 +181,32 @@ class SchedulingHubViewModel
 
         @Suppress("LongMethod", "CyclomaticComplexMethod")
         private suspend fun fetch() {
-            canEdit = true
-            val pageResult = repo.getBookingPage(owner)
+            canEdit = false
+            val fetchOwner = owner
+            val pageResult = repo.getBookingPage(fetchOwner)
             val loadedPage =
                 when (pageResult) {
                     is NetworkResult.Success -> pageResult.data.page
                     is NetworkResult.Failure -> {
                         val decoded = errors.decode(pageResult.error)
                         canEdit = decoded !is SchedulingError.Secret
-                        _state.value = SchedulingHubUiState.Error(decoded.hubMessage())
+                        _state.value = SchedulingHubUiState.Error(decoded.hubMessage(), accessDenied = !canEdit)
                         return
                     }
                 }
+            if (owner != fetchOwner) return
+            canEdit = when (fetchOwner) {
+                is SchedulingOwner.Home -> when (val access = homeAdmin.myAccess(fetchOwner.homeId)) {
+                    is NetworkResult.Success -> access.data.can("calendar.edit")
+                    is NetworkResult.Failure -> {
+                        if (owner != fetchOwner) return
+                        _state.value = SchedulingHubUiState.Error("Couldn't check your Home scheduling access. Try again.")
+                        return
+                    }
+                }
+                else -> true
+            }
+            if (owner != fetchOwner) return
             page = loadedPage
 
             val pillar = _pillar.value
@@ -260,7 +289,7 @@ class SchedulingHubViewModel
                 if (slug == null || type == null) {
                     emptyList()
                 } else {
-                    val today = LocalDate.now(zone)
+                    val today = LocalDate.now(java.time.ZoneOffset.UTC)
                     repo.publicGetSlots(slug, type.slug, today.toString(), today.plusDays(14).toString(), zone.id)
                         .dataOrNull()
                         ?.let { previewTimesFrom(it.slots, zone) }

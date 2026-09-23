@@ -5,12 +5,14 @@ package app.pantopus.android.ui.screens.you.me
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.BuildConfig
+import app.pantopus.android.data.api.models.businesses.BusinessMembership
 import app.pantopus.android.data.api.models.homes.MyHome
 import app.pantopus.android.data.api.models.users.InviteProgressDto
 import app.pantopus.android.data.api.models.users.MonthlyReceiptDto
 import app.pantopus.android.data.api.models.users.UserProfile
 import app.pantopus.android.data.api.models.users.UserStatsDto
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.profile.ProfileInsightsRepository
 import app.pantopus.android.data.profile.ProfileRepository
@@ -32,6 +34,7 @@ sealed interface MeUiState {
         val personal: MeIdentityContent,
         val home: MeIdentityContent,
         val business: MeIdentityContent,
+        val showBusiness: Boolean = true,
     ) : MeUiState
 
     data class Error(val message: String) : MeUiState
@@ -45,6 +48,7 @@ class MeViewModel
         private val profileRepo: ProfileRepository,
         private val homesRepo: HomesRepository,
         private val insightsRepo: ProfileInsightsRepository,
+        private val businessesRepo: BusinessesRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<MeUiState>(MeUiState.Loading)
         val state: StateFlow<MeUiState> = _state.asStateFlow()
@@ -96,8 +100,13 @@ class MeViewModel
             viewModelScope.launch {
                 val profileDeferred = async { profileRepo.ownProfile() }
                 val homesDeferred = async { homesRepo.myHomes() }
+                val businessesDeferred = async { businessesRepo.myBusinesses() }
                 val profileResult = profileDeferred.await()
                 val homesResult = homesDeferred.await()
+                val businessesResult = businessesDeferred.await()
+                val businesses = (businessesResult as? NetworkResult.Success)?.data?.businesses
+                val showBusiness = businesses == null || businesses.isNotEmpty()
+                if (!showBusiness && _activeIdentity.value == MeIdentity.Business) _activeIdentity.value = MeIdentity.Personal
 
                 val profile =
                     (profileResult as? NetworkResult.Success)?.data?.user
@@ -121,7 +130,8 @@ class MeViewModel
                     MeUiState.Loaded(
                         personal = buildPersonal(profile, stats),
                         home = buildHome(homes, profileLocality = localityOf(profile), homesFailed = homesFailed),
-                        business = buildBusiness(profile),
+                        business = buildBusiness(businesses?.firstOrNull(), businesses == null),
+                        showBusiness = showBusiness,
                     )
                 fetchInsights()
             }
@@ -172,7 +182,8 @@ class MeViewModel
             val displayName = name.ifEmpty { "Pantopus user" }
             val tagline = profile.tagline?.takeIf { it.isNotEmpty() } ?: profile.bio
             val activityValue = "${stats?.totalGigsCompleted ?: profile.gigsCompleted ?: 0}"
-            val trustValue = if (profile.verified) "Verified" else "Pending"
+            val residencyVerified = profile.residency?.get("verified") == true
+            val trustValue = if (residencyVerified) "Verified" else "Pending"
             val reputationValue = ratingString(stats?.averageRating ?: profile.averageRating ?: 0.0)
             return MeIdentityContent(
                 identity = MeIdentity.Personal,
@@ -181,7 +192,7 @@ class MeViewModel
                 handle = "@${profile.username}",
                 locality = localityOf(profile),
                 tagline = tagline,
-                verified = profile.verified,
+                verified = residencyVerified,
                 stats =
                     listOf(
                         MeStat("activity", activityValue, "Activity"),
@@ -342,67 +353,60 @@ class MeViewModel
             )
         }
 
-        private fun buildBusiness(profile: UserProfile): MeIdentityContent =
-            MeIdentityContent(
+        private fun buildBusiness(
+            membership: BusinessMembership?,
+            failed: Boolean,
+        ): MeIdentityContent {
+            val business = membership?.business
+            val name = business?.name?.takeIf { it.isNotBlank() } ?: "Your Businesses"
+            val args = membership?.let { mapOf("businessId" to it.businessUserId) }.orEmpty()
+            return MeIdentityContent(
                 identity = MeIdentity.Business,
-                displayName = "Your Businesses",
-                initials = "B",
-                handle = "Business pages",
-                locality = localityOf(profile),
-                tagline = "Open My businesses to manage a business, create one, or claim a page that's already listed.",
+                displayName = name,
+                initials = initials(name),
+                handle = if (failed) "Couldn't load your businesses" else business?.username?.let { "@$it" } ?: "Business pages",
+                locality =
+                    listOfNotNull(
+                        business?.city,
+                        business?.state,
+                    ).filter { it.isNotBlank() }.joinToString(", ").takeIf { it.isNotBlank() },
+                tagline = if (failed) "Open My businesses to try again." else membership?.profile?.description,
                 verified = false,
-                stats =
-                    listOf(
-                        MeStat("orders", "—", "Orders"),
-                        MeStat("products", "—", "Products"),
-                        MeStat("rating", "—", "Rating"),
-                    ),
-                actionTiles =
-                    listOf(
-                        MeActionTile("orders", PantopusIcon.File, "Orders", routeKey = "me.business.orders"),
-                        MeActionTile("products", PantopusIcon.ShoppingBag, "Products", routeKey = "me.business.products"),
-                        MeActionTile("payouts", PantopusIcon.Shield, "Payouts", routeKey = "me.business.payouts"),
-                        MeActionTile("team", PantopusIcon.UserPlus, "Team", routeKey = "me.business.team"),
-                        MeActionTile("hours", PantopusIcon.Info, "Hours", routeKey = "me.business.hours"),
-                        MeActionTile("promo", PantopusIcon.Megaphone, "Promo", routeKey = "me.business.promo"),
-                    ),
+                stats = emptyList(),
+                actionTiles = emptyList(),
                 sections =
                     withDebug(
                         listOf(
                             MeSection(
-                                id = "business",
-                                header = "Business",
-                                rows =
-                                    listOf(
-                                        MeSectionRow(
-                                            "profile",
-                                            PantopusIcon.Edit2,
-                                            "Edit business profile",
-                                            routeKey = "me.business.editProfile",
-                                        ),
-                                        MeSectionRow("settings", PantopusIcon.Menu, "Settings", routeKey = "me.settings"),
-                                        MeSectionRow(
-                                            "scheduling",
-                                            PantopusIcon.Calendar,
-                                            "Scheduling",
-                                            routeKey = "me.business.scheduling",
-                                        ),
-                                    ),
+                                "business",
+                                "Business",
+                                listOfNotNull(
+                                    MeSectionRow("businesses", PantopusIcon.ShoppingBag, "My businesses", routeKey = "me.businesses"),
+                                    MeSectionRow(
+                                        "scheduling",
+                                        PantopusIcon.Calendar,
+                                        "Scheduling",
+                                        routeKey = "me.business.scheduling",
+                                        routeArgs = args,
+                                    )
+                                        .takeIf { membership != null },
+                                    MeSectionRow("settings", PantopusIcon.Menu, "Settings", routeKey = "me.settings"),
+                                ),
                             ),
                             MeSection(
-                                id = "help_legal",
-                                header = "Help & Legal",
-                                rows =
-                                    listOf(
-                                        MeSectionRow("help", PantopusIcon.HelpCircle, "Help", routeKey = "me.help"),
-                                        MeSectionRow("terms", PantopusIcon.File, "Terms", routeKey = "me.legal"),
-                                        MeSectionRow("privacy", PantopusIcon.Shield, "Privacy", routeKey = "me.privacy"),
-                                    ),
+                                "help_legal",
+                                "Help & Legal",
+                                listOf(
+                                    MeSectionRow("help", PantopusIcon.HelpCircle, "Help", routeKey = "me.help"),
+                                    MeSectionRow("terms", PantopusIcon.File, "Terms", routeKey = "me.legal"),
+                                    MeSectionRow("privacy", PantopusIcon.Shield, "Privacy", routeKey = "me.privacy"),
+                                ),
                             ),
                         ),
                     ),
                 isUnbound = true,
             )
+        }
 
         private fun homeActionTiles(homeId: String?): List<MeActionTile> {
             val args = if (homeId != null) mapOf("homeId" to homeId) else emptyMap()

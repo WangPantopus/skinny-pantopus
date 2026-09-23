@@ -42,6 +42,7 @@ sealed interface SchedulingHubUiState {
 
     data class Error(
         val message: String,
+        val accessDenied: Boolean = false,
     ) : SchedulingHubUiState
 }
 

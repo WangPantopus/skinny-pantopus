@@ -2666,7 +2666,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenMyHomes = { navController.navigate(ChildRoutes.MY_HOMES) },
                         onOpenMyListings = { navController.navigate(ChildRoutes.MY_LISTINGS) },
                         onOpenMyBusinesses = { navController.navigate(ChildRoutes.MY_BUSINESSES) },
-                        onOpenScheduling = { navController.navigate(SchedulingRoutes.HUB) },
+                        onOpenScheduling = { owner -> navController.navigate(SchedulingRoutes.hub(owner.routeKind, owner.ownerRouteId)) },
                     )
                 }
 
@@ -3068,7 +3068,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 // ── Calendarly scheduling (A0) — pre-stubbed routes; feature streams fill the bodies ──
-                composable(SchedulingRoutes.HUB) {
+                composable(SchedulingRoutes.HUB_WITH_OWNER, arguments = schedulingOwnerNavArgs()) {
                     SchedulingHubScreen(
                         onBack = { navController.popBackStack() },
                         onNavigate = { route -> navController.navigate(route) },

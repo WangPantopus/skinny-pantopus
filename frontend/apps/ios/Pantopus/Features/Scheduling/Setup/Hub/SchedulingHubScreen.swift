@@ -33,7 +33,7 @@ struct SchedulingHubScreen: View {
                 // right={info}, mirrored on Android) as a view-only indicator — inert,
                 // since the body already carries the view-only explainer banner.
                 trailingIcon: model.canEdit ? .moreHorizontal : .info,
-                trailingLabel: model.canEdit ? "Scheduling settings" : "View-only access",
+                trailingLabel: model.canEdit ? "Scheduling settings" : "Scheduling access",
                 onTrailing: model.canEdit ? { model.openSettings() } : nil
             )
             SetupIdentityPills(active: model.owner, choices: model.pillarChoices) { choice in
@@ -64,7 +64,15 @@ struct SchedulingHubScreen: View {
             SchedulingHubSkeleton(owner: model.owner)
         case .empty:
             ScrollView {
-                HubEmptyState(owner: model.owner) { model.startSetup() }
+                if model.canEdit {
+                    HubEmptyState(owner: model.owner) { model.startSetup() }
+                } else {
+                    viewOnlyBanner
+                    Text("No event types yet. Ask an owner to set up scheduling.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .padding(Spacing.s4)
+                }
             }
             .background(Theme.Color.appBg)
         case .loaded:
@@ -124,7 +132,8 @@ struct SchedulingHubScreen: View {
             nameFor: { model.eventTypeName(for: $0) },
             onShare: shareLink,
             onRetry: { Task { await model.retrySummary() } },
-            onInsights: { model.openInsights() }
+            onInsights: { model.openInsights() },
+            readOnly: !model.canEdit
         )
     }
 
@@ -273,7 +282,8 @@ struct SchedulingHubScreen: View {
                 Circle().fill(Theme.Color.appSurfaceSunken).frame(width: 64, height: 64)
                 Icon(.cloudOff, size: 28, strokeWidth: 1.8, color: Theme.Color.appTextSecondary)
             }
-            Text("Couldn't load scheduling").font(.system(size: 18, weight: .semibold)).foregroundStyle(Theme.Color.appText)
+            Text(model.accessDenied ? "Scheduling access needed" : "Couldn't load scheduling")
+                .font(.system(size: 18, weight: .semibold)).foregroundStyle(Theme.Color.appText)
             Text(message)
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)

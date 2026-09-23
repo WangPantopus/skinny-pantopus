@@ -23,6 +23,8 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessTeamRepository
 import app.pantopus.android.data.businesses.BusinessesRepository
+import app.pantopus.android.data.api.models.homes.HomeAccessDto
+import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.scheduling.SchedulingErrorDecoder
@@ -56,6 +58,7 @@ class SchedulingHubViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val repo: app.pantopus.android.data.scheduling.SchedulingRepository = mockk(relaxed = true)
     private val homes: HomesRepository = mockk()
+    private val homeAdmin: HomeAdminRepository = mockk()
     private val homeMembers: HomeMembersRepository = mockk()
     private val businessTeam: BusinessTeamRepository = mockk()
     private val businesses: BusinessesRepository = mockk()
@@ -64,6 +67,7 @@ class SchedulingHubViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(dispatcher)
+        coEvery { homeAdmin.myAccess(any()) } returns NetworkResult.Success(HomeAccessDto(hasAccess = true, permissions = listOf("calendar.view", "calendar.edit")))
         coEvery { businesses.myBusinesses() } returns
             NetworkResult.Success(
                 MyBusinessesResponse(
@@ -104,7 +108,7 @@ class SchedulingHubViewModelTest {
         coEvery { repo.getConnectedCalendars() } returns NetworkResult.Success(GetConnectedCalendarsResponse())
     }
 
-    private fun newVm() = SchedulingHubViewModel(repo, homes, homeMembers, businessTeam, businesses, errors)
+    private fun newVm() = SchedulingHubViewModel(repo, homes, homeMembers, businessTeam, businesses, errors, homeAdmin)
 
     private fun et(id: String) =
         EventTypeDto(id = id, name = "Intro call", slug = "intro", durations = listOf(30), defaultDuration = 30, locationMode = "video")

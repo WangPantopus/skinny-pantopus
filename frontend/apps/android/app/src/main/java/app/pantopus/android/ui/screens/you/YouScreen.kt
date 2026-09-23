@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.scheduling.SchedulingOwner
 import app.pantopus.android.ui.screens.you.me.MeView
 import app.pantopus.android.ui.theme.PantopusColors
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -113,7 +114,7 @@ fun YouScreen(
     onOpenMyHomes: () -> Unit = {},
     onOpenMyListings: () -> Unit = {},
     onOpenMyBusinesses: () -> Unit = {},
-    onOpenScheduling: () -> Unit = {},
+    onOpenScheduling: (SchedulingOwner) -> Unit = {},
 ) {
     val state by viewModel.authState.collectAsStateWithLifecycle()
     val signedIn = state as? AuthRepository.State.SignedIn
@@ -257,7 +258,9 @@ fun YouScreen(
                 "me.help" -> onOpenHelp()
                 "me.legal" -> onOpenLegal()
                 "me.privacy", "me.home.privacy" -> onOpenPrivacySettings()
-                "me.scheduling.hub", "me.business.scheduling", "me.home.scheduling" -> onOpenScheduling()
+                "me.scheduling.hub" -> onOpenScheduling(SchedulingOwner.Personal)
+                "me.business.scheduling" -> row.routeArgs["businessId"]?.let { onOpenScheduling(SchedulingOwner.Business(it)) }
+                "me.home.scheduling" -> row.routeArgs["homeId"]?.let { onOpenScheduling(SchedulingOwner.Home(it)) }
                 "me.debug.openProfile" -> if (BuildConfig.DEBUG) debugProfileDialog = true
                 "me.debug.openPost" -> if (BuildConfig.DEBUG) debugPostDialog = true
                 "me.debug.inviteOwner" -> if (BuildConfig.DEBUG) debugInviteDialog = true

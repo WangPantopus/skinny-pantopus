@@ -86,7 +86,12 @@ fun SchedulingHubScreen(
         }
     }
 
-    val canEdit = (state as? SchedulingHubUiState.Loaded)?.canEdit ?: true
+    val canEdit =
+        when (val current = state) {
+            is SchedulingHubUiState.Loaded -> current.canEdit
+            is SchedulingHubUiState.Empty -> current.canEdit
+            else -> false
+        }
     val showFooter = state is SchedulingHubUiState.Loaded && canEdit
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
@@ -109,9 +114,20 @@ fun SchedulingHubScreen(
                             Spacer(Modifier.height(Spacing.s4))
                             HubSkeleton()
                         }
-                        is SchedulingHubUiState.Error -> HubErrorState(message = s.message, onRetry = viewModel::load)
+                        is SchedulingHubUiState.Error ->
+                            HubErrorState(
+                                message = s.message,
+                                accessDenied = s.accessDenied,
+                                onRetry = viewModel::load,
+                            )
                         is SchedulingHubUiState.Empty -> {
-                            HubEmptyState(pillar = s.pillar, onSetUp = { onNavigate(viewModel.startSetupRoute()) })
+                            if (s.canEdit) {
+                                HubEmptyState(pillar = s.pillar, onSetUp = { onNavigate(viewModel.startSetupRoute()) })
+                            } else {
+                                ViewOnlyBanner()
+                                Spacer(Modifier.height(Spacing.s4))
+                                Text("No event types yet. Ask an owner to set up scheduling.", color = PantopusColors.appTextSecondary)
+                            }
                             Spacer(Modifier.height(Spacing.s8))
                         }
                         is SchedulingHubUiState.Loaded ->
@@ -188,7 +204,7 @@ private fun HubTopBar(
             ) {
                 PantopusIconImage(
                     icon = if (canEdit) PantopusIcon.MoreHorizontal else PantopusIcon.Info,
-                    contentDescription = if (canEdit) "Settings" else "View-only access",
+                    contentDescription = if (canEdit) "Settings" else "Scheduling access",
                     size = if (canEdit) 22.dp else 20.dp,
                     tint = PantopusColors.appText,
                 )
@@ -270,6 +286,7 @@ private fun HubLoadedBody(
         onShare = onShare,
         onRetry = onRetrySummary,
         onInsights = onInsights,
+        readOnly = !state.canEdit,
     )
     if (state.isComposed) {
         Spacer(Modifier.height(Spacing.s3))
