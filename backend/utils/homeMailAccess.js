@@ -108,8 +108,10 @@ async function trustedHomeIdsOrThrow(userId) {
  *     the column default privacy 'private_to_person', so privacy alone cannot
  *     decide them.
  *   - Otherwise privacy 'shared_household' means the household.
- * The owner is a member like any other here. business_team mail keeps its
- * existing rule (any member of the Home) and is not counted by the badge.
+ * The owner is a member like any other here. business_team mail (the Business
+ * drawer) is exempt only from the privacy clause: who a letter is addressed to
+ * and who it is for still apply, so an attn_only letter filed into Business
+ * stays with its attention person. The badge does not count business_team mail.
  *
  * Each clause is the body of one PostgREST or(); the clauses are ANDed.
  * homeId and userId are UUIDs from the caller's own occupancy and session.
@@ -128,8 +130,10 @@ function homeMailVisibilityClauses(homeId, userId) {
 
 /** The rule for one Home's letters, as the body of a PostgREST or(). */
 function homeMailFilter(homeId, userId) {
-  const clauses = homeMailVisibilityClauses(homeId, userId).map((clause) => `or(${clause})`);
-  return `privacy.eq.business_team,and(${clauses.join(',')})`;
+  const clauses = homeMailVisibilityClauses(homeId, userId);
+  const privacy = clauses.pop();
+  clauses.push(`privacy.eq.business_team,${privacy}`);
+  return `and(${clauses.map((clause) => `or(${clause})`).join(',')})`;
 }
 
 /** Letters on these Homes the member may see, as the body of an or(). */
