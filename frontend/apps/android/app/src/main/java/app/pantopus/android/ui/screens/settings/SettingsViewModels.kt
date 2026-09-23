@@ -737,8 +737,16 @@ class PrivacySettingsViewModel
          * Radio labels + helper copy are RN's
          * (`settings/privacy.tsx:20-33`, `:476-556`) word for word.
          */
-        private fun searchPrivacyGroup(): GroupedListGroup =
-            GroupedListGroup(
+        private fun searchPrivacyGroup(): GroupedListGroup {
+            // The card has no pull-to-refresh; after a failed load this row is the way back.
+            val retry =
+                GroupedListRow(
+                    id = ROW_SEARCH_PRIVACY_RETRY,
+                    label = "Try again",
+                    control = RowControl.Chevron,
+                    testTag = "search-privacy-retry",
+                ).takeIf { searchPrivacyLoadFailed }
+            return GroupedListGroup(
                 id = PrivacyCatalog.SEARCH_PRIVACY,
                 overline = "Find me in search",
                 helper =
@@ -748,23 +756,15 @@ class PrivacySettingsViewModel
                         PrivacyCatalog.searchVisibilityHelp[searchVisibility]
                     },
                 rows =
-                    // The card has no pull-to-refresh; this row is the way back.
-                    listOfNotNull(
-                        GroupedListRow(
-                            id = ROW_SEARCH_PRIVACY_RETRY,
-                            label = "Try again",
-                            control = RowControl.Chevron,
-                            testTag = "search-privacy-retry",
-                        ).takeIf { searchPrivacyLoadFailed },
-                    ) +
-                    PrivacyCatalog.searchVisibilityOptions.map { option ->
-                        GroupedListRow(
-                            id = "$SEARCH_VISIBILITY_PREFIX${option.key}",
-                            label = option.label,
-                            control = RowControl.Radio(option.key == searchVisibility),
-                            testTag = "search-visibility-${option.key}",
-                        )
-                    } +
+                    listOfNotNull(retry) +
+                        PrivacyCatalog.searchVisibilityOptions.map { option ->
+                            GroupedListRow(
+                                id = "$SEARCH_VISIBILITY_PREFIX${option.key}",
+                                label = option.label,
+                                control = RowControl.Radio(option.key == searchVisibility),
+                                testTag = "search-visibility-${option.key}",
+                            )
+                        } +
                         GroupedListRow(
                             id = ROW_FINDABLE_BY_NAME,
                             label = "Find me by real name",
@@ -775,6 +775,7 @@ class PrivacySettingsViewModel
                             testTag = "findable-by-name-switch",
                         ),
             )
+        }
 
         private fun biometricSecurityGroup(): GroupedListGroup {
             val label = appLock.biometricLabel.value
