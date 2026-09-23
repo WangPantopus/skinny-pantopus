@@ -1,5 +1,7 @@
 # Three-stream coordination
 
+> **▶ INTERRUPTION RESUME (Sep 23, 19:50 UTC):** [`coordinator-state-2026-09-23/COORDINATOR-RESUME.md`](coordinator-state-2026-09-23/COORDINATOR-RESUME.md) — exact merge/batch state, restart procedure, agent ids, and the per-stream checkpoint files.
+
 > **▶ START HERE:** [`HANDOFF-2026-09-23.md`](HANDOFF-2026-09-23.md) — full end-of-session handoff (all three
 > streams, the pushed-but-no-PR P04/P05 fee work, the queue, and the search-filter security area the next agent
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
