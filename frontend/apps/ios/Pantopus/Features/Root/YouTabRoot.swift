@@ -1675,8 +1675,10 @@ public struct YouTabRoot: View {
                             )
                         }
                     },
-                    onMessage: { _ in
-                        Task { @MainActor in path.append(.placeholder(label: "Message helper")) }
+                    onMessage: { reservation in
+                        Task { @MainActor in
+                            path.append(.chatConversation(HubTabRoot.chatDestination(toHelper: reservation)))
+                        }
                     },
                     onEdit: { reservation in
                         Task { @MainActor in
@@ -1693,14 +1695,13 @@ public struct YouTabRoot: View {
             ManageTrainView(
                 viewModel: ManageTrainViewModel(trainId: trainId),
                 onClose: { Task { @MainActor in pop() } },
-                onOpenAnalytics: { _ in
-                    Task { @MainActor in path.append(.placeholder(label: "Train analytics")) }
-                },
-                onEditDates: { _ in
-                    Task { @MainActor in path.append(.placeholder(label: "Edit dates")) }
-                },
+                // Invite shares the train, as the detail's Share does.
+                // Analytics and Edit dates have no backend / native editor
+                // yet, so they aren't wired and their rows are hidden.
                 onInviteHelpers: { _ in
-                    Task { @MainActor in path.append(.placeholder(label: "Invite helpers")) }
+                    systemSheet = .share(
+                        items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
+                    )
                 }
             )
         case .identityCenter:

@@ -70,12 +70,53 @@ final class StartSupportTrainWizardViewModelTests: XCTestCase {
         vm.updateBeneficiaryQuery(StartSupportTrainSampleData.inviteQuery)
         vm.selectReason(.baby)
         XCTAssertTrue(vm.isInviteRecipientBranch)
-        XCTAssertEqual(vm.chrome.primaryCTALabel, "Send invite & continue")
+        XCTAssertEqual(vm.chrome.primaryCTALabel, "Continue")
         XCTAssertEqual(vm.chrome.secondaryCTA?.label, "Search again")
         XCTAssertEqual(vm.inviteCandidate?.typedName, StartSupportTrainSampleData.inviteQuery)
         vm.secondaryTapped()
         XCTAssertEqual(vm.beneficiaryQuery, "")
         XCTAssertNil(vm.inviteCandidate)
+    }
+
+    func testChangeStartsAFreshSearchInsteadOfClaimingNoMatch() {
+        let vm = makeVM()
+        vm.selectBeneficiary(StartSupportTrainSampleData.verifiedNeighbor)
+        vm.clearBeneficiary()
+        // The chosen name no longer sits in the field with no results, which
+        // read as "No one on Pantopus by that name" for someone who is.
+        XCTAssertNil(vm.selectedBeneficiary)
+        XCTAssertEqual(vm.beneficiaryQuery, "")
+        XCTAssertFalse(vm.isInviteRecipientBranch)
+        XCTAssertNil(vm.inviteCandidate)
+    }
+
+    func testFailedSearchIsNotANoMatchAndCanBeRetried() async {
+        let vm = makeVM(routes: [
+            "/api/mailbox/compose/recipients": [
+                .status(500, body: "{\"error\":\"Failed to search\"}"),
+                .status(200, body: "{\"recipients\":[]}")
+            ]
+        ])
+        vm.updateBeneficiaryQuery("Zelda Nomatch")
+        await waitFor("the search to fail") { vm.beneficiarySearchFailed && !vm.isSearchingBeneficiary }
+        XCTAssertFalse(vm.isInviteRecipientBranch)
+        XCTAssertNil(vm.inviteCandidate)
+
+        vm.retryBeneficiarySearch()
+        XCTAssertFalse(vm.beneficiarySearchFailed)
+        await waitFor("the retried search to find no one") { vm.isInviteRecipientBranch }
+        XCTAssertEqual(vm.inviteCandidate?.typedName, "Zelda Nomatch")
+    }
+
+    func testNoMatchWaitsUntilTheNameIsTyped() {
+        let vm = makeVM()
+        vm.setEditingBeneficiaryQuery(true)
+        vm.updateBeneficiaryQuery(StartSupportTrainSampleData.inviteQuery)
+        // While the field is being edited the no-match card would replace it
+        // and swallow the rest of the name.
+        XCTAssertFalse(vm.isInviteRecipientBranch)
+        vm.setEditingBeneficiaryQuery(false)
+        XCTAssertTrue(vm.isInviteRecipientBranch)
     }
 
     func testReasonClampsAtCharLimit() {

@@ -1199,6 +1199,19 @@ public struct HubTabRoot: View {
     }
 
     /// A one-to-one chat with a support train's organizer.
+    /// Chat with a confirmed helper from Review signups.
+    static func chatDestination(toHelper reservation: SupportTrainReservationDTO) -> InboxConversationDestination {
+        let name = reservation.displayName
+        let initials = String(name.split(separator: " ").compactMap(\.first).prefix(2)).uppercased()
+        return InboxConversationDestination(
+            mode: .person(otherUserId: reservation.userId ?? reservation.helper?.id ?? ""),
+            displayName: name,
+            initials: initials,
+            identityKind: nil,
+            verified: false
+        )
+    }
+
     static func chatRoute(toHost host: HostedByFooter) -> HubRoute {
         .chatConversation(InboxConversationDestination(
             mode: .person(otherUserId: host.organizerUserId ?? ""),
@@ -2527,8 +2540,8 @@ public struct HubTabRoot: View {
                             )
                         }
                     },
-                    onMessage: { _ in
-                        Task { @MainActor in push(.placeholder(label: "Message helper")) }
+                    onMessage: { reservation in
+                        Task { @MainActor in push(.chatConversation(Self.chatDestination(toHelper: reservation))) }
                     },
                     onEdit: { reservation in
                         Task { @MainActor in
@@ -2545,14 +2558,13 @@ public struct HubTabRoot: View {
             ManageTrainView(
                 viewModel: ManageTrainViewModel(trainId: trainId),
                 onClose: { Task { @MainActor in if !path.isEmpty { path.removeLast() } } },
-                onOpenAnalytics: { _ in
-                    Task { @MainActor in push(.placeholder(label: "Train analytics")) }
-                },
-                onEditDates: { _ in
-                    Task { @MainActor in push(.placeholder(label: "Edit dates")) }
-                },
+                // Invite shares the train, as the detail's Share does.
+                // Analytics and Edit dates have no backend / native editor
+                // yet, so they aren't wired and their rows are hidden.
                 onInviteHelpers: { _ in
-                    Task { @MainActor in push(.placeholder(label: "Invite helpers")) }
+                    systemSheet = .share(
+                        items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
+                    )
                 }
             )
         case .discoverHub:

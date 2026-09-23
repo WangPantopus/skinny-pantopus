@@ -80,7 +80,7 @@ extension ManageTrainViewModel {
                 tone: .sky,
                 label: "Invite more helpers",
                 meta: nil,
-                sub: "Share a link or pick from neighbors who follow this train.",
+                sub: "Share a link with people you know.",
                 isDestructive: false
             ),
             OrganizeRowContent(

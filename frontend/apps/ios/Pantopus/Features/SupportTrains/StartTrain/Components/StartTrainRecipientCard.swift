@@ -66,13 +66,15 @@ struct StartTrainRecipientCard: View {
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(Theme.Color.appTextInverse)
                 )
-            ZStack {
-                Circle().fill(Theme.Color.successSolid)
-                Icon(.shieldCheck, size: 9, strokeWidth: 2.6, color: Theme.Color.appTextInverse)
+            if isVerified {
+                ZStack {
+                    Circle().fill(Theme.Color.successSolid)
+                    Icon(.shieldCheck, size: 9, strokeWidth: 2.6, color: Theme.Color.appTextInverse)
+                }
+                .frame(width: 18, height: 18)
+                .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
+                .offset(x: 2, y: 2)
             }
-            .frame(width: 18, height: 18)
-            .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
-            .offset(x: 2, y: 2)
         }
         .accessibilityHidden(true)
     }
@@ -83,18 +85,20 @@ struct StartTrainRecipientCard: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
                 .lineLimit(1)
-            HStack(spacing: 3) {
-                Icon(.shieldCheck, size: 9, strokeWidth: 2.6, color: Theme.Color.success)
-                Text("VERIFIED")
-                    .font(.system(size: 9, weight: .bold))
-                    .kerning(0.3)
-                    .foregroundStyle(Theme.Color.success)
+            if isVerified {
+                HStack(spacing: 3) {
+                    Icon(.shieldCheck, size: 9, strokeWidth: 2.6, color: Theme.Color.success)
+                    Text("VERIFIED")
+                        .font(.system(size: 9, weight: .bold))
+                        .kerning(0.3)
+                        .foregroundStyle(Theme.Color.success)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Theme.Color.successBg)
+                .clipShape(Capsule())
+                .accessibilityLabel("Verified neighbor")
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Theme.Color.successBg)
-            .clipShape(Capsule())
-            .accessibilityLabel("Verified neighbor")
         }
     }
 
@@ -137,11 +141,16 @@ struct StartTrainRecipientCard: View {
         recipient.name ?? recipient.username ?? "Recipient"
     }
 
+    /// Only the server's `isVerified` may back a verified claim.
+    private var isVerified: Bool {
+        recipient.isVerified == true
+    }
+
     private var metaLine: String {
         if let address = recipient.homeAddress, !address.isEmpty {
             return "Neighbor · \(address)"
         }
-        return "Verified neighbor"
+        return isVerified ? "Verified neighbor" : "Neighbor"
     }
 
     private var mutualsSummary: String {

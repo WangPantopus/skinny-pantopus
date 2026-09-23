@@ -172,7 +172,11 @@ fun SupportTrainDetailScreen(
     action.error?.let { message ->
         AlertDialog(
             onDismissRequest = { viewModel.acknowledgeError() },
-            title = { Text("Something went wrong") },
+            title = {
+                Text(
+                    if (message == SupportTrainDetailViewModel.NO_OPEN_DATES_NOTICE) "No open dates" else "Something went wrong",
+                )
+            },
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = { viewModel.acknowledgeError() }) { Text("OK") }
