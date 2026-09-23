@@ -76,6 +76,29 @@ enum class GigComposeCategory(
             if (key.isEmpty() || key == "all") return null
             return entries.firstOrNull { it.key == key }
         }
+
+        /**
+         * Maps a magic-draft `category` onto the compose enum. The backend
+         * answers with display names ("Pet Care", "Tech Support",
+         * "Gardening"…), so separators are ignored, errand buckets land on
+         * Delivery and any other bucket lands on Other. Mirrors iOS
+         * `GigComposeCategory.from(backendCategory:)`. Null for blank input.
+         */
+        fun fromBackendCategory(raw: String?): GigComposeCategory? {
+            val key =
+                raw
+                    ?.lowercase()
+                    ?.replace("_", "")
+                    ?.replace("-", "")
+                    ?.replace(" ", "")
+                    .orEmpty()
+            if (key.isBlank()) return null
+            return when (key) {
+                "errands", "grocerypickup" -> Delivery
+                "techsupport" -> Tech
+                else -> entries.firstOrNull { it.key == key } ?: Other
+            }
+        }
     }
 }
 
