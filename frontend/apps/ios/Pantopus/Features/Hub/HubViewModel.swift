@@ -18,6 +18,10 @@ final class HubViewModel {
     /// Current state observed by `HubView`.
     private(set) var state: HubState = .skeleton
 
+    /// Set when a refresh fails while the hub is on screen: the content stays
+    /// and this shows as a toast. The view clears it after display.
+    var refreshFailureMessage: String?
+
     /// `private(set)` confines the setter to this file, so extensions in
     /// sibling files (`HubViewModel+StatusStrip.swift`) mutate state through
     /// here rather than by widening the property's access level.
@@ -57,9 +61,13 @@ final class HubViewModel {
         self.api = api
     }
 
-    /// Initial load — no-op when we already have populated content.
+    /// Initial load — no-op when the hub (populated or first-run) is
+    /// already on screen, so returning to it doesn't flash a skeleton.
     func load() async {
-        if case .populated = state { return }
+        switch state {
+        case .populated, .firstRun: return
+        case .skeleton, .error: break
+        }
         state = .skeleton
         await fetch()
     }
@@ -155,7 +163,14 @@ final class HubViewModel {
         do {
             hub = try await api.request(HubEndpoints.overview())
         } catch {
-            state = .error(message: (error as? APIError)?.errorDescription ?? "Couldn't load your hub.")
+            let message = (error as? APIError)?.errorDescription ?? "Couldn't load your hub."
+            switch state {
+            case .populated, .firstRun:
+                // Keep what's on screen; a failed refresh only toasts.
+                refreshFailureMessage = message
+            case .skeleton, .error:
+                state = .error(message: message)
+            }
             return
         }
         async let todayTask: HubTodayResponse? = optional {
