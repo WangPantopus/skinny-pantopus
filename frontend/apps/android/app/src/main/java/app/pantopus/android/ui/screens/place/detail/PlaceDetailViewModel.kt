@@ -133,11 +133,22 @@ class PlaceDetailViewModel
             }
         }
 
-        fun issueLetter(purpose: String) {
+        fun issueLetter(
+            purpose: String,
+            onIssued: () -> Unit = {},
+        ) {
             if (purpose.isBlank()) return
             viewModelScope.launch {
                 _isIssuing.value = true
-                repo.issueResidencyLetter(homeId, purpose)
+                // A refused issue (403, rate limit, outage) must not look
+                // like a no-op: surface it like the claim/revoke paths and
+                // keep the typed purpose so the resident can retry.
+                when (val r = repo.issueResidencyLetter(homeId, purpose)) {
+                    is NetworkResult.Success -> onIssued()
+                    is NetworkResult.Failure ->
+                        _actionToast.value =
+                            PlaceActionToast(r.error.displayMessage("Couldn't issue the letter."), isError = true)
+                }
                 _isIssuing.value = false
                 loadLetters()
             }

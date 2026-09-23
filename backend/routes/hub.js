@@ -14,6 +14,7 @@ const router = express.Router();
 const Joi = require('joi');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
+const homeListService = require('../services/homeListService');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
@@ -161,8 +162,21 @@ router.get('/', verifyToken, async (req, res) => {
       }
     }
 
-    if (homes.length > 0) homes[0].isPrimary = true;
-    const primaryHome = homes[0] || null;
+    // Home data follows the Home list's access state (GET /api/homes/my-homes
+    // and /primary). Only a Home the caller currently shares can be primary and
+    // feed the Home card. Any other entry (a pending application, ended or
+    // fenced access) stays for the setup steps with the list's safe projection
+    // instead of the Home's name, address and location; the caller's own
+    // private setup keeps its details.
+    const homeStates = await Promise.all(homes.map((home) => homeListService.readAccessState(home.id, userId)));
+    homes.forEach((home, i) => {
+      if (['shared', 'private_setup'].includes(homeStates[i].mode)) return;
+      Object.assign(home, { name: 'Home verification', addressShort: '', city: null, state: null, latitude: null, longitude: null });
+    });
+    const primaryIndex = homeStates.findIndex((state) => state.mode === 'shared');
+    if (primaryIndex >= 0) homes[primaryIndex].isPrimary = true;
+    const primaryHome = homes[primaryIndex] || null;
+    const primaryPermissions = new Set(primaryHome ? homeStates[primaryIndex].access.permissions : []);
 
     const businesses = (bizTeamResult.data || [])
       .filter((t) => t.business)
@@ -261,14 +275,17 @@ router.get('/', verifyToken, async (req, res) => {
 
     // Home-specific queries (only if user has a home)
     if (primaryHome) {
-      batch2.homeMail = Promise.resolve(
+      // The same permission gates as the Home dashboard: bills need
+      // finance.view, mail needs mailbox.view, the roster needs members.view.
+      const homeCan = (permission) => primaryPermissions.has(permission);
+      if (homeCan('mailbox.view')) batch2.homeMail = Promise.resolve(
         supabaseAdmin
           .from('Mail')
           .select('id', { count: 'exact', head: true })
           .eq('home_id', primaryHome.id)
           .eq('status', 'pending')
       ).catch(() => ({ count: 0 }));
-      batch2.dueBills = Promise.resolve(
+      if (homeCan('finance.view')) batch2.dueBills = Promise.resolve(
         supabaseAdmin
           .from('HomeBill')
           .select('id, bill_type, provider_name, amount, due_date, status')
@@ -282,7 +299,7 @@ router.get('/', verifyToken, async (req, res) => {
         .then(tasks => ({ data: tasks.filter(t => t.due_at && Date.parse(t.due_at) <= weekFromNow.getTime()
           && !['done', 'canceled'].includes(t.status))
           .sort((a, b) => new Date(a.due_at) - new Date(b.due_at)).slice(0, 2) }));
-      batch2.memberCount = Promise.resolve(
+      if (homeCan('members.view')) batch2.memberCount = Promise.resolve(
         supabaseAdmin
           .from('HomeOccupancy')
           .select('id', { count: 'exact', head: true })
@@ -602,6 +619,9 @@ router.get('/', verifyToken, async (req, res) => {
   } catch (err) {
     logger.error('Hub endpoint error', { error: err.message, stack: err.stack });
     if (err.code === 'HOME_RECORD_UNAVAILABLE') return homeRecordService.sendError(res, err);
+    if (['HOME_ACCESS_UNAVAILABLE', 'HOME_LIST_UNAVAILABLE', 'HOME_LIST_ACCESS_CHANGED'].includes(err.code)) {
+      return homeListService.sendError(res, err);
+    }
     res.status(500).json({ error: 'Failed to load hub data' });
   }
 });
