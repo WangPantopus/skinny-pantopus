@@ -5,7 +5,39 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 12:34 UTC (coordinator session `92cc4526`)
+## CURRENT RESUME POINT — September 23, 2026, 13:34 UTC (coordinator session `92cc4526`)
+
+This updates the 12:34 block below; read both. The count is **13 closed / 67 partial**.
+
+### Merged since the last block
+- #280 (fan-out failures, migration `000300`) and #283 (no-show reasons).
+- #291: My Home coordinates.
+- #290: Change Orders banner.
+- #328: the coupon-order route is disabled.
+
+### Queue
+289 311 322 323 324 326 327 310 317 318 319 292 221 236 219 214 215 224 199 208 251 252 257 279 262 264 287 266 285 286 301 303 
+
+### Open PRs not yet queued
+- **Stream 1:** #302, #312.
+- **Stream 3:** #304–#309, #330–#332.
+- **Shared-UX:** #313–#316, #329, #333, #334.
+- **Stream 2:** #320, #321, #325.
+
+Each gets queued as its CI OK turns green.
+
+### Notes since the last block
+- Stream 2 #323 (S2-02 part A): web record page hides 'Add photo' (POST …/photos never existed; home-interior photos must stay private — part B = private-bucket write + signed URLs, approved); Link Mail Item drawer shows its error. FAKE SUCCESS found: record page 'Post Gig' uses a stub createGig and shows 'Task Posted!' without creating anything -> route to the real classic composer with prefill (approved).
+- Shared-UX #311 queued (web ApiRequestError: server reasons shown, machine codes/5xx internals -> plain copy per status, 4xx not retried, Today error state). #322 web offline status bar (C-25). C-26 (keep content on failed refresh) coded for iOS Hub/Pulse/Messages/Mailbox/Place.
+- Stream 2 #324 (stacked on #323): record 'Post Gig' -> real /app/gigs/new prefill (was a stub 'Task Posted!' with no request). #325: task-from-mail 409 shows the server reason and switches to the mail-task list (Android verified). Stub search: /app/mailbox/coupon CouponPipeline fakes an order + payout (order_<ts>, receipt_<ts>, earnPayoutReleased:true) -> coordinator decision: hide entry points + honest unavailable state unless a real route exists; web mailbox Tasks 'Post as gig' fake 'Task Posted!' -> same fix as #324.
+- CORE (Stream 1): Android magic composer can't post — (1) WizardShell reads chrome only at first composition (Kotlin 2.0.21 strong skipping) -> footer/step readout/dirty flag frozen; latent in ~12 Android wizards (CreateBusiness, InviteTeammate, CeremonialMail, PrivacyHandshake, AddBill, ClaimOwnership, AddPet, FirstRun, OnboardingHomeBusiness, StartSupportTrain, listing composer) -> shared WizardShell fix approved (Stream 1), verification matrix across wizards; (2) magic-draft decode: clarifyingQuestion arrives as an object but iOS+Android models declare String -> every low-confidence draft silently loses title/description (iOS affected too) -> tolerant decode; (3) Android category mapping; gigs/new deep link opens detail 'new' -> composer.
+- Stream 2 #326: /app/mailbox/coupon crashed on load on master (offerId passed where an offer object is expected); now honest EmptyState 'Coupon orders aren't available yet'; mock order/payout can't render. MONEY RISK found: POST /api/mailbox/v2/p2/coupon/order records a redemption with no payment/merchant step, flips the user's EarnTransaction to 'available' (payout release) and creates a receipt — no UI calls it; coordinator asked Stream 2 to verify whether a normal user can mint withdrawable earnings through it and, if so, disable it pending a real design. #327: mailbox Tasks 'Post as Gig instead' -> real composer (was fake 'Task Posted!'); existing-task path escalates twice + hangs on failure -> fix.
+- Coupon order route verified (Stream 2, MANIFEST ad259c13…): does NOT release real money today (no withdrawal/payout/wallet reads EarnTransaction; /api/wallet unchanged) but it flips pending AND flagged/under_review/rejected EarnTransactions to 'available' (overrides risk holds), no ownership/engagement/active checks, no idempotency, receipt insert always fails Mail_type_check; no UI caller. Coordinator decision: disable (410) in a small safety PR; check Earn 'Available' UI honesty. FOUNDER: Earn payouts are not wired to any cash-out path.
+- Stream 2 #328: POST /api/mailbox/v2/p2/coupon/order disabled (410 'Coupon orders aren't available yet.'), writes nothing; comment lists ownership/status/idempotency/price/receipt requirements. MANIFEST bf103042…. Flaky: postVisibilityContract 5 s timeout under load (passes alone).
+- Stream 3 round: #271 acceptance on iOS+Android (409 shown, user stays signed in, DB unchanged; clean delete 200); iOS post-delete login shows a 'Welcome back' card for the deleted account -> #236 (queued) fixes. New PRs: #304 bell = unread, #305 'N businesses', #306 real verification chip, #307 iOS pinned header, #308 native 403 server reason, #309 refused chat send (no Retry), #310 create-full business_type validation, #317 web business type select, #318 web chat room access state, #319 web chat send failures + Retry, #330 email fallback + support@pantopus.com, #331 iOS Messages list live (S3-30), #332 password screen shows own email (was 'maria@pantopus.app · Last changed 84 days ago' for everyone). S3-29 decision: hide the four fake native privacy cards (no backend) + invented 'Last updated' footer; FOUNDER: wire real fields later if wanted. Shared-UX new: #329 iOS single back, #333 keep content on refresh failure, #334 Nearby sheets Back.
+- Earn honesty (Stream 2, MANIFEST b0ca818f…): web honest; NATIVE Earnings tab showed 'Available to cash out $X' + 'Cash out $X' from unfunded mail-offer/ad payouts never credited to the wallet (/api/wallet = 0) — reproduced: any ordinary account can attach an unfunded payout ≤ $10 to an Ad letter and the recipient's app then shows 'Cash out $10.00'; 'Ways to earn' shows sample data ('28 near you · up to $140 today') and a referral reward that doesn't exist. Coordinator decision: cash-out hero reads the real wallet (/api/wallet) + honest separate label for offer/ad earnings + honest copy; hide referral. FOUNDER: unfunded ad payouts by any account; offer payouts never clear; ad payouts never credited.
+
+## Resume point history — September 23, 2026, 12:34 UTC (coordinator session `92cc4526`)
 
 This updates the 11:34 block below; read both. The count is **13 closed / 67 partial**.
 
