@@ -2655,23 +2655,23 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
       return res.json({ businesses: post.matched_businesses_cache, cached: true });
     }
 
-    // 3. Hydrate live data from BusinessProfile for matched IDs
-    const { data: profiles, error: profileErr } = await supabase
+    // 3. Hydrate live data for matched IDs: published BusinessProfile rows
+    // (keyed by business_user_id) plus the business account's public fields.
+    // Rating, review and completed-gig counts live on the User row. The
+    // service client is needed to read those User fields, as the public
+    // business page does; only published profiles are returned.
+    const { data: profiles, error: profileErr } = await supabaseAdmin
       .from('BusinessProfile')
       .select(`
-        user_id,
+        business_user_id,
         categories,
-        business_hours,
-        average_rating,
-        review_count,
-        completed_gigs,
         is_published,
-        user:user_id (
+        user:business_user_id (
           id, username, name, first_name, last_name,
-          profile_picture_url, is_banned
+          profile_picture_url, average_rating, review_count, gigs_completed
         )
       `)
-      .in('user_id', ids)
+      .in('business_user_id', ids)
       .eq('is_published', true);
 
     if (profileErr) {
@@ -2679,14 +2679,12 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch matched businesses' });
     }
 
-    // 4. Filter out banned users and unpublished profiles
-    const validProfiles = (profiles || []).filter(
-      (p) => p.user && !p.user.is_banned
-    );
+    // 4. Keep profiles whose business account still exists
+    const validProfiles = (profiles || []).filter((p) => p.user);
 
     // 5. Build response preserving ranked order from matched_business_ids
     const profileMap = {};
-    validProfiles.forEach((p) => { profileMap[p.user_id] = p; });
+    validProfiles.forEach((p) => { profileMap[p.business_user_id] = p; });
 
     const businesses = ids
       .filter((uid) => profileMap[uid])
@@ -2700,9 +2698,9 @@ router.get('/:id/matched-businesses', verifyToken, async (req, res) => {
           name: u.name || [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username,
           profile_picture_url: u.profile_picture_url || null,
           categories: p.categories || [],
-          average_rating: p.average_rating != null ? parseFloat(p.average_rating) : null,
-          review_count: parseInt(p.review_count, 10) || 0,
-          completed_gigs: parseInt(p.completed_gigs, 10) || 0,
+          average_rating: u.average_rating != null ? parseFloat(u.average_rating) : null,
+          review_count: parseInt(u.review_count, 10) || 0,
+          completed_gigs: parseInt(u.gigs_completed, 10) || 0,
           is_open_now: null, // Would require business_hours parsing; cache has this
         };
       });
