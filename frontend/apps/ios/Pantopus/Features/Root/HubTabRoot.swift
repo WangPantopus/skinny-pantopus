@@ -1072,6 +1072,21 @@ public struct HubTabRoot: View {
             path.append(.homeDashboard(homeId: homeId))
             path.append(.waitingRoom(homeId: homeId))
             _ = router.consume()
+        case .mailbox:
+            // `/mailbox` (the Mail Day summary notification) — the Mail tab's
+            // own root.
+            path.removeAll { _ in true }
+            _ = router.consume()
+        case let .mailItem(mailId):
+            // A mail notification's letter, in the item detail the mailbox
+            // list opens; pushed through the mailbox root like the other
+            // mailbox links so Back returns to the mailbox.
+            path.append(.mailboxRoot)
+            path.append(.mailItemDetail(mailId: mailId))
+            _ = router.consume()
+        case let .neighborMessage(messageId):
+            path.append(.neighborMessage(messageId: messageId))
+            _ = router.consume()
         case let .bookingDetail(bookingId, owner):
             path.append(.scheduling(.bookingDetail(owner: owner, bookingId: bookingId)))
             _ = router.consume()
@@ -1095,7 +1110,7 @@ public struct HubTabRoot: View {
              .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home:
             false
         case .vacationHold, .mailDay, .stamps, .mailTask,
-             .mailTranslation, .unboxing, .packageGig, .earn:
+             .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem:
             tab == .mail
         default:
             tab == .place
