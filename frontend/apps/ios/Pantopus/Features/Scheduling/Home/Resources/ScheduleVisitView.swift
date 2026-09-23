@@ -168,37 +168,8 @@ struct ScheduleVisitView: View {
             Text("Optional — e.g. \u{201C}Front door code 4827\u{201D}.")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
-            // Spec AccessNote secondary affordance — view-only (the access-code
-            // directory has no v1 backend), mirroring Android's `LinkAccessCodeRow`.
-            linkAccessCodeRow
         }
         .padding(.horizontal, Spacing.s4)
-    }
-
-    private var linkAccessCodeRow: some View {
-        HStack(spacing: Spacing.s2) {
-            Icon(.keyRound, size: 15, color: Theme.Color.appTextStrong)
-                .frame(width: 30, height: 30)
-                .background(Theme.Color.appSurfaceSunken)
-                .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
-            Text("Link an access code")
-                .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(Theme.Color.appText)
-            Spacer(minLength: Spacing.s2)
-            Icon(.chevronRight, size: 16, color: Theme.Color.appTextMuted)
-        }
-        .padding(.horizontal, Spacing.s3)
-        .padding(.vertical, Spacing.s2)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.Color.appSurface)
-        .overlay(
-            RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                .stroke(Theme.Color.appBorder, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-        .contentShape(Rectangle())
-        .accessibilityLabel("Link an access code")
-        .accessibilityIdentifier("scheduling.scheduleVisit.linkAccessCode")
     }
 
     private var loadingBody: some View {

@@ -289,7 +289,6 @@ private fun VisitSetupBody(
                 fontSize = 11.sp,
                 color = PantopusColors.appTextSecondary,
             )
-            LinkAccessCodeRow()
         }
     }
 
@@ -339,55 +338,6 @@ private fun Explainer() {
             fontSize = 11.5.sp,
             lineHeight = 16.sp,
             color = PantopusColors.primary800,
-        )
-    }
-}
-
-/**
- * "Link an access code" affordance (F13 AccessNote). View-only — the access-code
- * directory has no v1 backend, so this renders the designed structure.
- */
-@Composable
-private fun LinkAccessCodeRow() {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(Radii.md))
-                .background(PantopusColors.appSurface)
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.md))
-                .clickable(onClickLabel = "Link an access code") {}
-                .padding(horizontal = Spacing.s3, vertical = Spacing.s2),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(30.dp)
-                    .clip(RoundedCornerShape(Radii.sm))
-                    .background(PantopusColors.appSurfaceSunken),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.KeyRound,
-                contentDescription = null,
-                size = 15.dp,
-                tint = PantopusColors.appText,
-            )
-        }
-        Text(
-            "Link an access code",
-            fontSize = 12.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.appText,
-            modifier = Modifier.weight(1f),
-        )
-        PantopusIconImage(
-            icon = PantopusIcon.ChevronRight,
-            contentDescription = null,
-            size = 16.dp,
-            tint = PantopusColors.appTextMuted,
         )
     }
 }
