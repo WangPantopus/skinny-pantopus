@@ -22,6 +22,7 @@ const schedulingNotifyPrefs = require('../services/scheduling/schedulingNotifyPr
 const packages = require('../services/scheduling/packageService');
 const notificationService = require('../services/notificationService');
 const emailService = require('../services/emailService');
+const { isBlocked } = require('../services/blockService');
 const { resolveOwner, assertCanManageOwner, ownerColumns, normalizeEmail, generateToken } = require('../services/scheduling/schedulingShared');
 
 router.use(verifyToken);
@@ -1267,6 +1268,17 @@ router.get('/invoices/:id', withOwner('view'), asyncHandler(async (req, res) => 
 router.post('/invoices/:id/send', withOwner('edit'), asyncHandler(async (req, res) => {
   const { data: inv } = await supabaseAdmin.from('BusinessInvoice').select('*').eq('id', req.params.id).maybeSingle();
   if (!inv || inv.business_user_id !== req.scheduling.ownerId) return res.status(404).json({ error: 'NOT_FOUND' });
+  // Same rule as creating the invoice: someone who has blocked the business
+  // (or whom it has blocked) can't be sent it, and a failed check refuses.
+  if (inv.recipient_user_id) {
+    let blocked;
+    try {
+      blocked = await isBlocked(inv.recipient_user_id, inv.business_user_id);
+    } catch (err) {
+      return res.status(503).json({ error: "Couldn't send the invoice right now. Please try again.", code: err.code });
+    }
+    if (blocked) return res.status(422).json({ error: 'Unable to send an invoice to this person.' });
+  }
   // Notify the recipient in-app (no status mutation — avoid touching the gig invoice state machine).
   if (inv.recipient_user_id) {
     await notificationService.createNotification({
