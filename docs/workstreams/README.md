@@ -7,7 +7,15 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — 2026-09-23T21:45:07Z (runtime restored; trade hold repair)
+## CURRENT RESUME POINT — 2026-09-23T21:50:42Z (handoff published; native gates running)
+
+- **Master:** `61c64f9c1778b9b11fda12dd0cfa4762fff3bef0` after documentation PR #391 merged at GitHub-reported `2026-09-23T21:47:44Z`, exact head `74f0d8194cbd91c34024945c29f300446abb7c91` with green CI OK. This publishes the seven-file handoff plus takeover/recovery notes. No application code changed in #391; #389 remains already merged and excluded from batch 4.
+- **Geo P0:** Android cold assemble completed; final lint/install/captures run at `2e7ad13f1edad86a82f1bc336b4ff32a57e7ca29`. Detekt ReturnCount was repaired by combining the nullable-coordinate guard. The existing Android constructor fixture had already been updated on the paused branch; coordinator checked it and made no duplicate change. Prior iOS DTO and evidence remain unchanged and reusable.
+- **#325:** fresh API/SQL cases are ready; exact-head iOS rebuild follows the geo heavy slot. Stream2 has first iOS Maestro control window; driver setup/install also requires heavy slot. Stream1 iOS waits for explicit release. Automation-driver XCTest setup does not authorize an application unit-test run.
+- **Trade hold repair:** the affected completion regression also passed at the real API/SQL boundary: accepted A completes both its listings as sold; cancelled proposal B's offered listing stays active. Native afters still pending. Source and receipt paths remain in the prior block.
+- **Remaining:** #356/#388/#325 remote native CI is still running, with no reported failures at the last check. Application batch4 is unpublished; no feature or full-app acceptance is inferred from a build or healthy runtime. Shared UX begins at the next worker slot after geo publication. Existing 13/67 acceptance count and founder queue unchanged.
+
+## Resume point history — 2026-09-23T21:45:07Z (runtime restored; trade hold repair)
 
 - **Three isolated runtimes recovered:** Stream 1 fresh canonical replay also passed (89 through `20260923000300`), API18132 healthy. Stream 2 API18143 healthy, real GoTrue login/Home setup and household-mail creation restored; Stream 3 API18130 healthy and native sign-in succeeded. These are runtime/auth prerequisites; the pending feature journeys remain unverified until their captures complete.
 - **New coordinator review finding, reproduced:** on the unpublished pending-pickup candidate, accept trade A, then cancel still-proposed B sharing its target. Real ordinary API + SQL showed B released A's listing to active. Stream 1 removed only the proposed-cancellation release, since proposals hold no listings; no accepted-cancellation/refund policy was added. Pushed head `9304317518a48d70a6ff8b0c4c89e7bbbd89c2ed`. API/SQL after now keeps A accepted and target pending_pickup; native gate remains. Receipts: coordinator evidence store `20260923-stream1-runtime-resume-r1/evidence/trade-cancel-before.json` and `trade-cancel-after.json` (bundle still in progress).

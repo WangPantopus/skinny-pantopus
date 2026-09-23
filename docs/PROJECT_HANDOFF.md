@@ -1,10 +1,10 @@
 # Pantopus project handoff
 
-## Coordinator takeover — 2026-09-23T21:36:01Z
+## CURRENT RESUME POINT — 2026-09-23T21:36:01Z (coordinator takeover)
 
 The founder resumed all streams under Codex. Current remote master is `cef95ab67864ccca3ca243cc0d936a87d342cc8f`; #389 already merged after the paused handoff. The authoritative live [coordination resume block](workstreams/README.md) records the staged replacement agents, exact PR heads, runtime recovery discrepancy, three coordinator decisions and next batch gates. Existing real-app evidence is retained; no new journey or acceptance-row closure is claimed at this takeover. Count remains **13 closed / 67 partial**. Founder environment, marketing/data-action queue and search-audit stop remain untouched.
 
-## CURRENT RESUME POINT — September 23, 2026, 20:50 UTC (work PAUSED)
+## Resume point history — September 23, 2026, 20:50 UTC (work was paused)
 
 Read [the final handoff](workstreams/HANDOFF-2026-09-23-FINAL.md) first. It's the complete record of coordinator session `92cc4526`.
 - **Master:** `1a15514cc`. 187 PRs merged on 2026-09-23, including combined batches #353, #374 and #387.
