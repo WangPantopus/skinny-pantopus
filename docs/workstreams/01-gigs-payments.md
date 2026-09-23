@@ -1,6 +1,51 @@
 # Stream 1 — Gigs, payments and coordination
 
-## CURRENT RESUME SUMMARY — September 22, 2026
+## CURRENT STREAM 1 STATE — September 23, 2026, 02:10 UTC
+
+The live queue, merges and cross-stream decisions are in the [coordination summary](README.md). The accounting table below is still authoritative; new evidence for each row:
+
+- **P03:** installed **iOS** native tips (`20260923-stream1-p03-ios-tip-r1`, MANIFEST `8439eecbe818…`), same cases as Android. iOS shows the Tip line only after a reload.
+- **P06:** **record + freeze merged (PR204, `dd59f811b`)**; verified with real TEST events on Android (won → worker credited 1063) and iOS (webhook before record → frozen; lost → `refunded_full`).
+- **P08:** installed **iOS** checkout lifetime (`20260923-stream1-p08-ios-account-r1`, MANIFEST `dc56f5f82c6c…`).
+  - Dismissal now aborts on iOS, as on Android.
+  - Process death → Resume/Cancel.
+  - 401 sign-out.
+  - Another account sees the viewer state only.
+  - The owner's cancel voids both intents.
+- **P04:** worker no-show releases the poster's hold (**PR211**, `20260923-stream1-p04-no-show-release-r1`).
+- **U02:**
+  - Android gig-detail large text and dark sheets (**PR210**, `20260923-stream1-u02-android-sheets-a11y-r1`; default light mode pixel-identical).
+  - iOS audit (`20260923-stream1-u02-ios-a11y-r1`): dark mode legible. Proposals: the BEST MATCH pill has a contrast of about 2.9:1 in dark mode, and iOS ignores Dynamic Type (4,746 fixed-size fonts).
+
+### P04/P05 poster-fault fee execution — proposal for founder approval
+
+**Decided (2026-09-23):** "If the poster cancels late or no-shows, the worker gets the recorded % (25%) from the already-held funds and the rest is refunded. If the worker no-shows, the poster gets a full refund and the worker is not charged; only reliability is affected." The worker-no-show half is PR211.
+
+**Facts found:**
+1. A Stripe partial capture of the manual hold (`amount_to_capture`) takes the fee and releases the remainder. In the TEST probe, the charge showed `amount` 1250, `amount_captured` 313 and `amount_refunded` 0, with no refund object.
+2. The only settlement (`settle_paid_gig_wallet_income`) requires a completed, owner-confirmed gig, and refund receipts that equal `refunded_amount`. It cannot pay a cancelled gig's fee.
+3. The stop command blocks fee-bearing cancels (`FEE_POLICY_REVIEW`: standard 5% or strict 10% after the grace period) and started gigs (`STARTED_POLICY_REVIEW`). All three clients accept only stop receipts with `financialStatus` released/refunded/none.
+4. Today the payment card would show "Task charged $12.50" for any captured payment.
+
+**Proposed implementation (two PRs, one forward migration, no new tables):**
+- **A. Poster no-show (worker reports).**
+  - report-no-show partial-captures the recorded 25% with an idempotent key.
+  - A new SQL function records the fee capture on the same Payment: `captured_hold`, charge and `captured_at`, with the fee and released amounts in `metadata`.
+  - A cancelled-gig settlement function credits the worker after the normal 48h dispute window.
+  - The payment card and notices show "No-show fee $3.13 charged · $9.37 released".
+- **B. Poster late cancel.**
+  - The stop command gains a `fee` financial action (partial capture) for the after-grace policy fee.
+  - The receipt gains `financialStatus: fee_charged`.
+  - Web, iOS and Android accept it and show the fee line. The cancel preview already shows the policy fee.
+
+**Decisions needed before building:**
+1. **Worker share:**
+   - (a) the whole fee to the worker (the platform absorbs Stripe's ~30¢ + 2.9%), or
+   - (b) the normal 85% worker share of the fee (the existing proportional settlement math).
+2. **Presentation:** approve the fee line on the payment card, the stop receipt and the notices (web, iOS, Android).
+3. **Scope:** does "cancels late" also cover cancelling **after work started**? That is policy zone 2: flexible 10%, standard 25%, strict 50%. Today it is blocked as `STARTED_POLICY_REVIEW`.
+
+## Previous resume summary — September 22, 2026 (history)
 
 This is the current takeover point. It supersedes the dated checkpoints below, which are preserved as history. The founder requested consolidation of **all three streams** before more feature work. No application change, new test or accepted-journey rerun was made for this handoff. Read the [shared handoff](../PROJECT_HANDOFF.md), [coordination state](README.md), and the existing [80-row backlog](../REMAINING_WORK_2026-09-11.md); this file indexes implementation and evidence, not a second backlog.
 
