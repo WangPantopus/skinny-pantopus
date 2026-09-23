@@ -5,7 +5,51 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 11:01 UTC (coordinator session `92cc4526`)
+## CURRENT RESUME POINT — September 23, 2026, 11:34 UTC (coordinator session `92cc4526`)
+
+This updates the 11:01 block below; read both.
+
+### Count: **13 closed / 67 partial**
+P04 and P05 closed at 11:2x UTC, after the fee merged:
+- #253 → `1d791906c`;
+- #254 → `63953ccd8`;
+- bundle r2, MANIFEST `57092fbf…`.
+
+### Merged since the last block
+- #254 (fee line on the clients).
+- **#288:** magic post works again. `task_format` defaults to `in_person`, and the web composer shows a failure instead of swallowing it.
+- **#294:** the classic web post form accepts empty optional fields.
+
+### Queue
+296 297 255 278 280 283 291 290 289 221 236 219 214 215 224 199 208 251 252 257 279 262 264 287 266 285 286.
+Core-flow and security fixes go first.
+
+### New PRs
+- **#296 (Stream 2):** `GET /api/gigs/:id` resolves the viewer through `optionalAuth`.
+  - Before: web cookie sessions were anonymous there, so the owner's edit form lost the exact address and Save failed with "Please choose an exact address".
+- **#297 (Stream 2, security):** posting from a Home requires `home.view`.
+  - Before: strangers and moved-out members could tag any Home, and the task appeared on that household's list.
+- **#298 (Stream 2, privacy):** `GET /api/gigs`, `/in-bounds` and `/browse` use `optionalAuth` and now **filter blocked users' tasks in both directions**, matching on `user_id` or `created_by`.
+  - Before: blocked users' tasks were listed on every transport.
+  - A failed block read now returns 503 rather than an unfiltered list.
+  - **Recorded follow-up:** a block rule for direct-link task detail needs a participant exception (owner, assigned worker, existing bidder).
+- **#291 (Stream 2):** web "My Home" reads the Home list's coordinates. Before, every post ran a geocode and a Home PATCH.
+- **#289 (Stream 1):** the approve route claims only a still-pending order, checks the price write, and returns 409 on a repeat.
+- **#290 (Stream 1):** the web Change Orders banner is worded from the viewer's side, and one click sends one approve.
+- **#292 (Stream 3):** the native routers accept `?ot=&oid=` host booking links. This fixes the #245 regression; the device checks are pending.
+- **#286:** native 5xx copy. It was re-greened after a one-line update to a test expectation.
+
+### Agents
+- **Five running:** Streams 1, 2 and 3; the fee agent is done; the new shared-UX agent (C-items).
+- **Shared-UX progress:** it reproduced C-01, C-02, C-04, C-11 and C-22 on iOS master. Its fix branches are written, and the iOS integration build is waiting for the heavy slot.
+
+### Disk
+- Disk reached 98%, about 11 GiB free.
+- **The coordinator** deleted its own 8 GB of derived data. **Streams 2 and 3** pruned about 11 GB of their own regenerable outputs.
+- **Time Machine local snapshots** still hold the deleted blocks, and the OS purges them under pressure. Nobody touches them; the founder can thin them.
+- **Shared-UX agent:** it gets its own AVD only at 20 GiB or more free.
+
+## Resume point history — September 23, 2026, 11:01 UTC (coordinator session `92cc4526`)
 
 This updates the 10:33 block below; read both. The count is **11 closed / 69 partial**.
 
