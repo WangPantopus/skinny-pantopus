@@ -258,23 +258,14 @@ struct ComposedAvailabilityNote: View {
             }
             HStack(spacing: Spacing.s2) {
                 Icon(.globe, size: 14, color: identity.accent)
-                Text("Everyone's set to \(timezone)")
+                // The device's zone, which finish-setup gives the booking page;
+                // members' own hours keep their own zones.
+                Text("Times show in your time zone (\(timezone))")
                     .font(.system(size: 11.5, weight: .semibold))
                     .foregroundStyle(Theme.Color.appTextStrong)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Spacer(minLength: Spacing.s2)
-                HStack(spacing: Spacing.s1) {
-                    Icon(.check, size: 10, strokeWidth: 3, color: Theme.Color.appTextInverse)
-                    Text("CONFIRMED")
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(0.4)
-                        .foregroundStyle(Theme.Color.appTextInverse)
-                }
-                .padding(.horizontal, Spacing.s2)
-                .padding(.vertical, 3)
-                .background(Theme.Color.successSolid)
-                .clipShape(Capsule())
             }
             .padding(.horizontal, 10)
             .padding(.vertical, Spacing.s2)

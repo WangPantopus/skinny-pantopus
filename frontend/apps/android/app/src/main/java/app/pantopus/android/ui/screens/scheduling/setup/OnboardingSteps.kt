@@ -160,24 +160,15 @@ internal fun ComposedAvailabilityCard(
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             PantopusIconImage(icon = PantopusIcon.Globe, contentDescription = null, size = 14.dp, tint = pillar.accent)
+            // The device's zone, which finish-setup gives the booking page;
+            // members' own hours keep their own zones.
             Text(
-                "Everyone's set to $timezoneId",
+                "Times show in your time zone ($timezoneId)",
                 color = PantopusColors.appTextStrong,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 11.5.sp,
                 modifier = Modifier.weight(1f),
             )
-            Row(
-                modifier =
-                    Modifier.clip(
-                        RoundedCornerShape(Radii.pill),
-                    ).background(PantopusColors.successLight).padding(horizontal = 8.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                PantopusIconImage(icon = PantopusIcon.Check, contentDescription = null, size = 10.dp, tint = PantopusColors.success)
-                Text("CONFIRMED", color = PantopusColors.success, fontWeight = FontWeight.Bold, fontSize = 10.sp)
-            }
         }
     }
 }
