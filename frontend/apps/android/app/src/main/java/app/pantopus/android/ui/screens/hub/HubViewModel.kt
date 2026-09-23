@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.gigs.RebookableGigDto
 import app.pantopus.android.data.api.models.hub.HubResponse
 import app.pantopus.android.data.api.models.hub.HubStatusItem
 import app.pantopus.android.data.api.models.hub.HubTodayResponse
+import app.pantopus.android.data.api.models.notifications.NotificationUnreadCountResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigExtrasRepository
 import app.pantopus.android.data.hub.HubRepository
@@ -202,11 +203,8 @@ class HubViewModel
             // into the Beacon notification zone. Sequenced (not raced)
             // after the companions so a stubbed test sequence stays
             // predictable; a failure just hides the shortcut.
-            val audienceUnread =
-                (notificationsRepo.unreadCount() as? NetworkResult.Success)
-                    ?.data
-                    ?.byContext
-                    ?.audience ?: 0
+            val unread = (notificationsRepo.unreadCount() as? NetworkResult.Success)?.data
+            val audienceUnread = unread?.byContext?.audience ?: 0
 
             // Rebookable helpers feed the "Jump back in" rail. Optional —
             // an empty / failing gigs call never blanks the hub.
@@ -216,13 +214,41 @@ class HubViewModel
                     ?.rebookable
                     .orEmpty()
 
-            applyResults(hub, today, discovery?.items.orEmpty(), audienceUnread, rebookable)
+            applyResults(hub, today, discovery?.items.orEmpty(), personalUnread(unread), audienceUnread, rebookable)
+        }
+
+        /**
+         * Re-read only the unread counts when the hub reappears (for example
+         * after the user read their notifications), so the bell's dot and the
+         * megaphone don't go stale. A failed read leaves them as they are.
+         */
+        fun refreshUnread() {
+            viewModelScope.launch {
+                val unread = (notificationsRepo.unreadCount() as? NetworkResult.Success)?.data ?: return@launch
+                when (val current = _state.value) {
+                    is HubUiState.Populated ->
+                        _state.value =
+                            HubUiState.Populated(
+                                current.content.copy(
+                                    topBar =
+                                        current.content.topBar.copy(
+                                            unreadCount = personalUnread(unread),
+                                            audienceUnreadCount = unread.byContext?.audience ?: 0,
+                                        ),
+                                ),
+                            )
+                    is HubUiState.FirstRun ->
+                        _state.value = HubUiState.FirstRun(current.content.copy(unreadCount = personalUnread(unread)))
+                    else -> Unit
+                }
+            }
         }
 
         private fun applyResults(
             hub: HubResponse,
             today: HubTodayResponse?,
             discoveryItems: List<app.pantopus.android.data.api.models.hub.DiscoveryItem>,
+            personalUnread: Int = 0,
             audienceUnread: Int = 0,
             rebookable: List<RebookableGigDto> = emptyList(),
         ) {
@@ -230,7 +256,8 @@ class HubViewModel
             val identity = primaryIdentity(hub)
             val discoveryCards = projectDiscovery(discoveryItems)
             if (isFirstRun(hub)) {
-                _state.value = firstRunState(hub, identity, discoveryCards)
+                val firstRun = firstRunState(hub, identity, discoveryCards)
+                _state.value = HubUiState.FirstRun(firstRun.content.copy(unreadCount = personalUnread))
                 return
             }
 
@@ -270,7 +297,7 @@ class HubViewModel
                                 ringProgress =
                                     hub.setup.profileCompleteness.score
                                         .toFloat(),
-                                unreadCount = hub.statusItems.size,
+                                unreadCount = personalUnread,
                                 audienceUnreadCount = audienceUnread,
                             ),
                         actionChips =
@@ -509,6 +536,18 @@ class HubViewModel
                 ),
             )
         }
+
+        /**
+         * The bell's dot counts unread personal notifications (personal +
+         * platform, like the web personal-zone bell); the megaphone counts the
+         * audience zone. Older deployments only return the total.
+         */
+        private fun personalUnread(unread: NotificationUnreadCountResponse?): Int =
+            when {
+                unread == null -> 0
+                unread.byContext == null -> unread.count
+                else -> unread.byContext.personal + unread.byContext.platform
+            }
 
         /** Which identity tints the avatar ring. Defaults to home when
          *  the user has any claimed home; else personal. */

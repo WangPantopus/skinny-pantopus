@@ -67,6 +67,45 @@ final class HubViewModel {
         await fetch()
     }
 
+    /// Re-read only the unread counts when the hub reappears (for example
+    /// after the user read their notifications), so the bell's dot and the
+    /// megaphone don't go stale. A failed read leaves them as they are.
+    func refreshUnread() async {
+        let unread: NotificationUnreadCountResponse? = await optional {
+            try await self.api.request(NotificationsEndpoints.unreadCount)
+        }
+        guard let unread else { return }
+        switch state {
+        case let .populated(content):
+            let bar = content.topBar
+            state = .populated(HubState.PopulatedContent(
+                topBar: TopBarContent(
+                    greeting: bar.greeting,
+                    name: bar.name,
+                    avatarInitials: bar.avatarInitials,
+                    identity: bar.identity,
+                    ringProgress: bar.ringProgress,
+                    unreadCount: Self.personalUnread(unread),
+                    audienceUnreadCount: unread.byContext?.audience ?? 0
+                ),
+                actionChips: content.actionChips,
+                statusItems: content.statusItems,
+                neighborDensity: content.neighborDensity,
+                setupBanner: content.setupBanner,
+                today: content.today,
+                pillars: content.pillars,
+                discovery: content.discovery,
+                jumpBackIn: content.jumpBackIn,
+                activity: content.activity
+            ))
+        case var .firstRun(content):
+            content.unreadCount = Self.personalUnread(unread)
+            state = .firstRun(content)
+        default:
+            break
+        }
+    }
+
     /// Dismiss the amber setup banner; persists across launches.
     func dismissSetupBanner() {
         bannerDismissed = true
@@ -182,9 +221,19 @@ final class HubViewModel {
             hub: hub,
             today: today,
             discovery: discovery,
+            personalUnread: Self.personalUnread(unread),
             audienceUnread: unread?.byContext?.audience ?? 0,
             rebookable: rebookable?.rebookable ?? []
         )
+    }
+
+    /// The bell's dot counts unread personal notifications (personal +
+    /// platform, like the web personal-zone bell); the megaphone counts the
+    /// audience zone. Older deployments only return the total.
+    static func personalUnread(_ unread: NotificationUnreadCountResponse?) -> Int {
+        guard let unread else { return 0 }
+        guard let split = unread.byContext else { return unread.count }
+        return split.personal + split.platform
     }
 
     /// Run a throwing async request and swallow its failure, returning nil.
@@ -197,6 +246,7 @@ final class HubViewModel {
         hub: HubResponse,
         today: HubTodayResponse?,
         discovery: HubDiscoveryResponse?,
+        personalUnread: Int = 0,
         audienceUnread: Int = 0,
         rebookable: [RebookableGigDTO] = []
     ) {
@@ -223,7 +273,8 @@ final class HubViewModel {
                     // Setup-mode pillars + discovery rail, per the design's
                     // first-run frame.
                     pillars: Self.pillars(from: hub, setupMode: true),
-                    discovery: discoveryCards
+                    discovery: discoveryCards,
+                    unreadCount: personalUnread
                 )
             )
             return
@@ -258,7 +309,7 @@ final class HubViewModel {
                     avatarInitials: Self.initials(from: hub.user.name),
                     identity: identity,
                     ringProgress: hub.setup.profileCompleteness.score,
-                    unreadCount: hub.statusItems.count,
+                    unreadCount: personalUnread,
                     audienceUnreadCount: audienceUnread
                 ),
                 actionChips: Self.defaultActionChips(),

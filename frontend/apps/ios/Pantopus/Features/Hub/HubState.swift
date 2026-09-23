@@ -29,6 +29,8 @@ public enum HubState: Sendable {
         public let steps: [SetupStep]
         public let pillars: [PillarTile]
         public let discovery: [DiscoveryCardContent]
+        /// Unread personal notifications — drives the bell's dot.
+        public var unreadCount: Int = 0
     }
 
     /// The fully-assembled hub bundle.
