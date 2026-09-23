@@ -1521,7 +1521,6 @@ private object ChildRoutes {
         topicType: String? = null,
         topicRefId: String? = null,
         topicTitle: String? = null,
-        arrivalRoomId: String? = null,
     ): String {
         fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/person/${enc(userId)}?" +
@@ -1536,9 +1535,14 @@ private object ChildRoutes {
             "&$CHAT_SCROLL_TO_KEY=" +
             "&$CHAT_TOPIC_TYPE_KEY=${enc(topicType ?: "")}" +
             "&$CHAT_TOPIC_REF_ID_KEY=${enc(topicRefId ?: "")}" +
-            "&$CHAT_TOPIC_TITLE_KEY=${enc(topicTitle ?: "")}" +
-            "&$CHAT_ARRIVAL_ROOM_KEY=${enc(arrivalRoomId ?: "")}"
+            "&$CHAT_TOPIC_TITLE_KEY=${enc(topicTitle ?: "")}"
     }
+
+    /** Adds the linked room id to a person-thread route (see [CHAT_ARRIVAL_ROOM_KEY]). */
+    fun withArrivalRoom(
+        route: String,
+        roomId: String,
+    ): String = "$route&$CHAT_ARRIVAL_ROOM_KEY=${java.net.URLEncoder.encode(roomId, "UTF-8").replace("+", "%20")}"
 
     /** Build the chat-conversation path for a gig-scoped room. */
     fun chatConversationRoom(
@@ -2030,20 +2034,22 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 val person = pending.id.takeIf { it.isNotBlank() }?.let { deepLinkChatResolver.directCounterpart(it) }
                 if (person != null) {
                     navController.navigate(
-                        ChildRoutes.chatConversationFromPicker(
-                            userId = person.userId,
-                            displayName = person.displayName,
-                            initials =
-                                person.displayName
-                                    .split(" ")
-                                    .take(2)
-                                    .mapNotNull { it.firstOrNull()?.toString() }
-                                    .joinToString("")
-                                    .uppercase()
-                                    .ifEmpty { "?" },
-                            verified = false,
-                            locality = null,
-                            arrivalRoomId = pending.id,
+                        ChildRoutes.withArrivalRoom(
+                            ChildRoutes.chatConversationFromPicker(
+                                userId = person.userId,
+                                displayName = person.displayName,
+                                initials =
+                                    person.displayName
+                                        .split(" ")
+                                        .take(2)
+                                        .mapNotNull { it.firstOrNull()?.toString() }
+                                        .joinToString("")
+                                        .uppercase()
+                                        .ifEmpty { "?" },
+                                verified = false,
+                                locality = null,
+                            ),
+                            pending.id,
                         ),
                     )
                 } else if (pending.id.isNotBlank()) {
