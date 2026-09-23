@@ -6,6 +6,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
 const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, homeMailFilter, visibleMailFilter } = require('../utils/homeMailAccess');
+const { HOME_DOCUMENT_TYPES } = require('../utils/homeDocumentAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -1129,7 +1130,10 @@ const createHomeDocumentFanoutTarget = async ({
   homeId,
   senderId
 }) => {
-  const docType = pickExtractedString(mail, ['doc_type', 'docType']) || 'mail_document';
+  // HomeDocument_type_chk allows only HOME_DOCUMENT_TYPES; an unknown or missing
+  // type is 'other' (it defaulted to 'mail_document', which failed every insert).
+  const extractedDocType = pickExtractedString(mail, ['doc_type', 'docType']);
+  const docType = HOME_DOCUMENT_TYPES.includes(extractedDocType) ? extractedDocType : 'other';
   const title = mail.display_title || mail.subject || 'Mailbox document';
   const mimeType = pickExtractedString(mail, ['mime_type', 'mimeType']);
   const sizeBytes = pickExtractedNumber(mail, ['size_bytes', 'sizeBytes']);
@@ -1216,7 +1220,8 @@ const autoFanoutMailTargets = async ({
   mail,
   homeId,
   senderId,
-  outcomes: outcomesList
+  outcomes: outcomesList,
+  failed = [],
 }) => {
   if (!mail || !homeId) return [];
 
@@ -1241,7 +1246,9 @@ const autoFanoutMailTargets = async ({
   if (rawType === 'package') {
     targets.push('package');
   }
-  if (rawType === 'document' || mailType === 'packet' || oc.includes('save_to_records')) {
+  // A package letter's deliverable type is also 'packet'; its record is the
+  // HomePackage, so only document letters and "save to records" add a HomeDocument.
+  if (rawType === 'document' || (mailType === 'packet' && rawType !== 'package') || oc.includes('save_to_records')) {
     // Avoid duplicate if bill already covers document
     if (!targets.includes('document')) {
       targets.push('document');
@@ -1258,34 +1265,51 @@ const autoFanoutMailTargets = async ({
   const links = [];
 
   for (const targetType of targets) {
-    // Skip if link already exists for this target type
-    const existingLink = await getMailLinkByType(mail.id, targetType);
-    if (existingLink) {
-      links.push(existingLink);
-      continue;
+    // One failed target must not drop the others; the caller tells the sender
+    // which ones failed instead of reporting a plain success.
+    try {
+      // Skip if link already exists for this target type
+      const existingLink = await getMailLinkByType(mail.id, targetType);
+      if (existingLink) {
+        links.push(existingLink);
+        continue;
+      }
+
+      let targetId = null;
+      if (targetType === 'bill') {
+        targetId = await createHomeBillFanoutTarget({ mail, homeId, senderId });
+      } else if (targetType === 'document') {
+        targetId = await createHomeDocumentFanoutTarget({ mail, homeId, senderId });
+      } else if (targetType === 'package') {
+        targetId = await createHomePackageFanoutTarget({ mail, homeId, senderId });
+      } else if (targetType === 'task') {
+        targetId = await createHomeTaskFanoutTarget({ mail, homeId, senderId });
+      }
+
+      if (!targetId) {
+        failed.push(targetType);
+        continue;
+      }
+
+      // A HomeTask records its letter itself (source_mail_id); MailLink has no
+      // 'task' target type, so writing one failed after the task was created.
+      if (targetType === 'task') {
+        links.push({ target_type: 'task', target_id: targetId });
+        continue;
+      }
+
+      const link = await upsertMailLink({
+        mailId: mail.id,
+        targetType,
+        targetId,
+        createdBy: 'system'
+      });
+
+      if (link) links.push(link);
+    } catch (targetErr) {
+      failed.push(targetType);
+      logger.warn('Mailbox fanout target failed', { mailId: mail.id, homeId, targetType, error: targetErr.message });
     }
-
-    let targetId = null;
-    if (targetType === 'bill') {
-      targetId = await createHomeBillFanoutTarget({ mail, homeId, senderId });
-    } else if (targetType === 'document') {
-      targetId = await createHomeDocumentFanoutTarget({ mail, homeId, senderId });
-    } else if (targetType === 'package') {
-      targetId = await createHomePackageFanoutTarget({ mail, homeId, senderId });
-    } else if (targetType === 'task') {
-      targetId = await createHomeTaskFanoutTarget({ mail, homeId, senderId });
-    }
-
-    if (!targetId) continue;
-
-    const link = await upsertMailLink({
-      mailId: mail.id,
-      targetType,
-      targetId,
-      createdBy: 'system'
-    });
-
-    if (link) links.push(link);
   }
 
   return links;
@@ -2062,6 +2086,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     }
 
     let fanoutLinks = [];
+    const fanoutFailed = [];
     const fanoutHomeId = addressHomeId || recipientHomeId || null;
     // Fan out for home-targeted mail, or for user-targeted mail with outcome-based
     // fan-out triggers (save_to_records, create_task, pay_now) when a home is known
@@ -2077,9 +2102,11 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
           mail,
           homeId: fanoutHomeId,
           senderId,
-          outcomes
+          outcomes,
+          failed: fanoutFailed,
         });
       } catch (fanoutErr) {
+        fanoutFailed.push('home_records');
         logger.warn('Mailbox fanout failed', {
           mailId: mail.id,
           senderId,
@@ -2191,6 +2218,8 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     res.status(201).json({
       message: 'Mail sent successfully',
       fanoutLinks,
+      // Home records (bill, document, package, task) the letter was meant to add but could not.
+      fanoutFailed,
       mail: {
         id: mail.id,
         type: mail.type,
