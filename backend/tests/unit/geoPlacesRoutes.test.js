@@ -214,7 +214,7 @@ describe('GET /geo/places/nearby', () => {
     await nearbyHandler(mockReq({ query: { lat: '45.5219', lng: '-122.6841' } }), res);
 
     expect(res._status).toBe(500);
-    expect(res._json).toHaveProperty('error', 'Mapbox down');
+    expect(res._json).toHaveProperty('error', 'Server error');
   });
 });
 
@@ -297,6 +297,6 @@ describe('GET /geo/places/search', () => {
     await searchHandler(mockReq({ query: { q: 'blue star' } }), res);
 
     expect(res._status).toBe(500);
-    expect(res._json).toHaveProperty('error', 'search failed');
+    expect(res._json).toHaveProperty('error', 'Server error');
   });
 });
