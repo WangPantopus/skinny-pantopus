@@ -7,11 +7,14 @@
 // picker. tz defaults to the browser zone, is user-overridable, and is threaded
 // into the slot reads + the handoff. Picking a slot STOPS here and hands off to
 // W6 via the [eventType]/confirm route (carrying the chosen start/end/tz).
+// A month with no open times offers "Get notified when times open", which
+// opens the E13 waitlist sheet and joins the event type's waitlist.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import type { BookingSlot, PublicEventType } from "@pantopus/types";
+import { hasActiveSession, publicBooking, users } from "@pantopus/api";
 import { buildBookingEventPath } from "@pantopus/utils";
 import {
   SlotPicker,
@@ -19,6 +22,7 @@ import {
   pillarTokens,
   type Pillar,
 } from "@/components/scheduling";
+import WaitlistJoinSheet from "@/components/scheduling/bookings-extras/WaitlistJoinSheet";
 import { durationLabel, locationIcon } from "./discoveryUtils";
 
 interface PublicSlotPickerProps {
@@ -40,8 +44,52 @@ export default function PublicSlotPicker({
   const tk = pillarTokens(pillar);
   const [tz, setTz] = useState<string>(() => detectTimezone());
   const [picked, setPicked] = useState<string | null>(null);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [viewer, setViewer] = useState<{ email?: string; name?: string } | null>(
+    null,
+  );
   const LocationIcon = locationIcon(eventType.location_mode);
   const dur = durationLabel(eventType.default_duration);
+
+  // A signed-in visitor gets their email filled in. The join links the entry
+  // to their account when the emails match (trimmed, case-insensitive), so a
+  // promotion reaches them in the app; everyone else is emailed.
+  useEffect(() => {
+    if (!waitlistOpen || viewer || !hasActiveSession()) return;
+    let alive = true;
+    users
+      .getMyProfile()
+      .then((me) => {
+        if (!alive) return;
+        setViewer({
+          email: me.email || undefined,
+          name: me.name?.trim() || undefined,
+        });
+      })
+      .catch(() => {
+        // Signed out after all, or the profile didn't load: the visitor types
+        // their email.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [waitlistOpen, viewer]);
+
+  const joinWaitlist = async ({
+    email,
+    name,
+  }: {
+    email: string;
+    name: string;
+  }) => {
+    await publicBooking.joinWaitlistPublic(slug, eventTypeSlug, {
+      email,
+      name: name || null,
+    });
+    const same = (a: string) => a.trim().toLowerCase();
+    const linked = !!viewer?.email && same(viewer.email) === same(email);
+    return { notifyVia: linked ? ("app" as const) : ("email" as const) };
+  };
 
   const handlePick = (slot: BookingSlot) => {
     setPicked(slot.start);
@@ -89,6 +137,18 @@ export default function PublicSlotPicker({
         onTzChange={setTz}
         onPick={handlePick}
         selected={picked}
+        onNotifyMe={() => setWaitlistOpen(true)}
+      />
+
+      <WaitlistJoinSheet
+        open={waitlistOpen}
+        onClose={() => setWaitlistOpen(false)}
+        hostName={hostName}
+        eventTypeName={eventType.name}
+        pillar={pillar}
+        defaultEmail={viewer?.email}
+        defaultName={viewer?.name}
+        onJoin={joinWaitlist}
       />
     </div>
   );
