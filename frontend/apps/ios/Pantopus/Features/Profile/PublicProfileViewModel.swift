@@ -789,7 +789,9 @@ public final class PublicProfileViewModel {
             handle: profile.username.isEmpty ? nil : profile.username,
             locality: profile.locality,
             avatarURL: (profile.profilePictureURL ?? profile.avatarURL).flatMap(URL.init(string:)),
-            isVerified: profile.verified ?? false,
+            // No avatar check: `verified` is the account email flag that sign-in
+            // sets, and a check reads as identity or residency verification.
+            isVerified: false,
             identityBadges: buildBadges(profile),
             tierLabel: kind == .persona ? "Persona · Verified" : nil,
             isVerifiedNeighbor: kind == .local
@@ -900,7 +902,9 @@ public final class PublicProfileViewModel {
             name: profile.displayName,
             locality: profile.locality,
             avatarURL: (profile.profilePictureURL ?? profile.avatarURL).flatMap(URL.init(string:)),
-            isVerified: profile.verified ?? false,
+            // No avatar check: `verified` is the account email flag that sign-in
+            // sets, and a check reads as identity or residency verification.
+            isVerified: false,
             identity: isNew ? .fresh : .personal,
             kicker: neighborSince(profile.createdAt, isNew: isNew)
         )

@@ -742,7 +742,9 @@ class PublicProfileViewModel
                     handle = profile.username.takeIf { it.isNotEmpty() },
                     locality = profile.locality,
                     avatarUrl = profile.profilePictureUrl ?: profile.avatarUrl,
-                    isVerified = profile.verified == true,
+                    // No avatar check: `verified` is the account email flag that
+                    // sign-in sets, and a check reads as identity verification.
+                    isVerified = false,
                     identityBadges = buildBadges(profile),
                     tierLabel = if (kind == PublicProfileKind.Persona) "Persona · Verified" else null,
                     isVerifiedNeighbor = kind == PublicProfileKind.Local,
@@ -887,7 +889,8 @@ class PublicProfileViewModel
                         name = profile.displayName,
                         locality = profile.locality,
                         avatarUrl = profile.profilePictureUrl ?: profile.avatarUrl,
-                        isVerified = profile.verified == true,
+                        // No avatar check (see the header above).
+                        isVerified = false,
                         identity = if (isNew) NeighborIdentity.Fresh else NeighborIdentity.Personal,
                         kicker = neighborSince(profile.createdAt, isNew),
                     ),
