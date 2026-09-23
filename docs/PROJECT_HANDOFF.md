@@ -1,6 +1,23 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — September 22, 2026, 23:10 UTC
+## CURRENT RESUME POINT — September 23, 2026, 01:55 UTC
+
+The live state is the top block of the [coordination summary](workstreams/README.md): merged PRs, the ordered open queue, evidence bundles, founder decisions and open questions.
+- **Operating model:** a Claude coordinator session runs Stream 1 and coordination. Claude background agents run Streams 2 and 3, one PR per reproduced defect. Only the coordinator reviews, merges and edits this hub.
+- **Merged since the previous point:**
+  - #200/#201/#205: R06 letters and passes.
+  - #202/#203: personal block gates connection requests and web Follow.
+  - **#204: P06 record + freeze.** Founder decision, verified on installed Android and iOS with real Stripe TEST events.
+  - Master is at `8d3ab8810`.
+- **Open queue:** 206 → 212 (**`/api/hub` read nonexistent Home columns; every resident saw "no homes"**) → 207 → 210 (Android large text/dark sheets) → 211 (worker no-show releases the poster's hold) → 209 → 199 → 208.
+- **Founder decisions 2026-09-23:**
+  - P04/P05 "poster-fault pays worker": the worker-no-show half is in PR211. The poster no-show and late-cancel fee capture is not built yet and needs a forward migration.
+  - P06 record + freeze: done.
+  - Large-text and dark-mode fixes are allowed when default light mode stays pixel-identical: Android gig detail is in PR210.
+- **Open questions** for the founder (listed in the summary): the P04 fee share, D07 "Set expiry", four R06 native/role items, tips on disputed tasks, and the viewer bid count during payment.
+- **Count unchanged:** 9 closed / 71 partial of 80.
+
+## Resume point history — September 22, 2026, 23:10 UTC (superseded)
 
 A Claude Code coordinator session ("Pantopus Stream 1 coordinator handoff") took over Stream 1 and coordination at about 21:05 UTC. The previous Codex coordinator thread (`01a0c897…`) finished at 20:35 UTC; the Stream 2/3 Codex tasks have been idle since 20:07/20:15 UTC. The [coordination summary](workstreams/README.md) records the exact heads, owners, checkouts, reservations and **the two peer assignments the founder relays**, because this coordinator cannot message Codex tasks.
 

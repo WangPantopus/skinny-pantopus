@@ -1,6 +1,92 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — September 22, 2026, 23:50 UTC
+## CURRENT RESUME POINT — September 23, 2026, 01:55 UTC
+
+The operating model from 23:50 UTC (below) still holds:
+- Claude coordinator session: Stream 1 developer and coordinator.
+- Claude background agents run Streams 2 and 3.
+- Agents open one PR per reproduced defect and never merge or edit this hub.
+- The coordinator reviews every PR and merges serially at fresh exact-head CI. Branch protection is strict, so every merge sends the other PRs behind; run `gh pr update-branch`, then wait for CI again.
+
+The count is still **9 closed / 71 partial**. No merged PR closes a whole row.
+
+### Merged since 23:50 UTC (master `8d3ab8810`)
+
+| PR | Stream / row | Merge commit | Evidence (private bundle, MANIFEST sha256) |
+|---|---|---|---|
+| 200 letter verification requires current residency | 2 / R06 | `d718cc4e9` | `20260923-stream2-r06-residency-letters-r1`, `50d34d0c1318…` |
+| 201 public page shows revoked/expired letters as such | 2 / R06 | `7321e7a54` | same bundle |
+| 202 personal block refuses connection requests | 3 / N03–N04 | `896e15ba5` | `20260923-stream3-connection-request-block-gate-r1`, `3d6bf7393553…` |
+| 203 web hides Follow after a personal block | 3 / N03–N04 | `2ac88e90b` | `20260923-stream3-web-profile-block-follow-r1`, `a52fac3a451f…` |
+| 204 **P06 record + freeze** (founder decision) | 1 / P06 | `dd59f811b` | `20260923-stream1-p06-disputed-capture-freeze-r1`, `f892193038b8…` |
+| 205 only resident roles issue letters/passes | 2 / R06 | `8d3ab8810` | `20260923-stream2-r06-native-letters-passes-r1`, `abc109142f59…` |
+
+P06 detail:
+- A charge already disputed at capture is now recorded, confirmed and frozen as `disputed`, whether the capture or the dispute webhook comes first.
+- Verified on installed apps with real Stripe TEST events:
+  - Android won: settlement credited the worker 1063.
+  - iOS lost: `refunded_full` 750 with no credit.
+
+### Open queue (merge in this order)
+
+1. **206** web letter/pass errors (Stream 2)
+2. **212** `/api/hub` read nonexistent `Home.latitude/longitude`; every resident's hub showed "no homes" (2, D09/H08; evidence `20260923-stream2-hub-home-columns-r1`, MANIFEST `7e5620a41ad4…`). Highest impact.
+3. **207** Android letter errors (2)
+4. **210** Android large text + dark sheets (Stream 1, U02, founder-approved)
+5. **211** worker no-show releases the poster's hold (1, P04)
+6. **209** web role change without access dates (2, D07)
+7. **199** iOS Local profile block state (3)
+8. **208** iOS letter errors (2)
+
+Hold the next hub docs PR until this queue is empty.
+
+### Founder decisions (2026-09-23) and implementation state
+
+- **P04/P05 "poster-fault pays worker":**
+  - Worker no-show → poster refunded in full, worker not charged. **PR211** releases the hold; verified on installed Android.
+  - Poster no-show or late cancel → the worker gets the recorded % from the held funds and the rest is released. **Not built yet.**
+  - Stripe TEST probe: a partial capture (`amount_to_capture`) leaves the remainder released with `amount_refunded` 0 and no refund object. The existing settlement also requires a completed and confirmed gig.
+  - Fee execution therefore needs a forward migration: a fee-capture record plus a cancelled-gig settlement path. Late cancel also needs the stop command and all three clients (their stop-receipt fences accept only `released`/`refunded`/`none`).
+- **P06 record + freeze:** done (PR204).
+- **Large text / dark mode:** approved when default light mode stays pixel-identical. Android gig detail is done in PR210 (proof in the bundle). iOS and web are not audited yet.
+
+### Decisions still needed from the founder
+
+1. **P04 fee share.** Does the worker get the whole fee, or the fee after the normal 15% platform share (what the existing refund-proportional settlement would pay)?
+2. **D07 "Set expiry".**
+   - No endpoint can change member access dates.
+   - Options: (a) remove or disable the control (a design change), or (b) add a shorten-only access-window operation (product/security decision plus a migration).
+   - Related: lease residents are badged "MEMBER", and Change Role has no "Lease resident".
+3. **R06.**
+   - Native Identity entry: a native dashboard link to letters and passes.
+   - Native letter PDF: view or download on native.
+   - Guest copy: a verified guest still reads "Verified resident".
+   - Manager role: it may still issue letters and passes.
+4. Tips can still be sent on a task whose payment is disputed (tips are separate payments).
+5. From earlier: non-owner viewers see "No bids yet" while a bid is mid-payment.
+
+### New evidence (all cleanup verified: owned SQL rows 0, TEST objects refunded/canceled/deleted, ledgers unchanged)
+
+- Stream 1:
+  - `20260923-stream1-p03-ios-tip-r1` (MANIFEST `8439eecbe818…`): P03 **iOS** native tips.
+    - Covered: new card; dismiss → Cancel tip; 3DS success; 3DS failure → same-intent recovery; three-tip limit; reload total $30.
+    - iOS adds the Tip line only after a reload (Android updates it in place).
+  - `20260923-stream1-p06-disputed-capture-freeze-r1` (PR204).
+  - `20260923-stream1-u02-android-sheets-a11y-r1` (MANIFEST `633aee9ed00d…`, PR210).
+  - `20260923-stream1-p04-no-show-release-r1` (MANIFEST `8030c691d087…`, PR211).
+- Stream 2: `20260923-stream2-d07-member-expiry-r1` (MANIFEST `aa8764195…`, PR209). Its R06 bundles are in the table above.
+- Stream 3: the bundles in the table above.
+
+### Next actions
+
+- **Stream 1:**
+  1. Poster-fault fee capture: no-show 25% first, then the stop-command late cancel.
+  2. iOS equivalents of the P08/P09 Android journeys.
+  3. U02 audits on iOS and web.
+- **Stream 2:** D09 malformed-success readers → D02 unknown-save → D10 household delete cleanup.
+- **Stream 3:** iOS Settings "Blocked users" count (PR pending) → booking notification routing (iOS/Android) → cold-start link binding.
+
+## Resume point history — September 22, 2026, 23:50 UTC (superseded by the block above)
 
 ### Operating model from 23:50 UTC — founder direction: "resume all work, all 3 streams"
 
