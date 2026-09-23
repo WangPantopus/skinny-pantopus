@@ -295,7 +295,8 @@ public struct MailDetailView: View {
                 onOpenSenderProfile: onOpenSenderProfile,
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
                 onOpenUnboxing: onOpenUnboxing,
-                onAskNeighbor: onAskNeighbor,
+                // Offered only while posting a package task is available.
+                onAskNeighbor: PackageGigAvailability.isAvailable ? onAskNeighbor : nil,
                 onShareEta: { Task { @MainActor in await viewModel.sharePackageEta() } },
                 onReportIssue: { Task { @MainActor in await viewModel.reportPackageIssue() } }
             )

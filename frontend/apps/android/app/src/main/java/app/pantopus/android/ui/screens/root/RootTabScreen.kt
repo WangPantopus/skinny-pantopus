@@ -274,6 +274,7 @@ import app.pantopus.android.ui.screens.mailbox.mail_task.MailTaskListScreen
 import app.pantopus.android.ui.screens.mailbox.mail_task.MailTaskScreen
 import app.pantopus.android.ui.screens.mailbox.mailbox_map.MailboxMapScreen
 import app.pantopus.android.ui.screens.mailbox.mailbox_root.MailboxRootScreen
+import app.pantopus.android.ui.screens.mailbox.package_gig.PACKAGE_GIG_AVAILABLE
 import app.pantopus.android.ui.screens.mailbox.package_gig.PACKAGE_GIG_MAIL_ID_KEY
 import app.pantopus.android.ui.screens.mailbox.package_gig.PACKAGE_GIG_MAIL_ID_NONE
 import app.pantopus.android.ui.screens.mailbox.package_gig.PACKAGE_GIG_MODE_KEY
@@ -4071,12 +4072,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenUnboxing = { sourceMailId ->
                             navController.navigate(ChildRoutes.unboxing(sourceMailId))
                         },
-                        onAskNeighbor = { sourceMailId, isPreDelivery ->
-                            // A17.8 → "Ask a Neighbor" (RN `mailbox/package.tsx:204`).
-                            navController.navigate(
-                                ChildRoutes.packageGig(mailId = sourceMailId, isPreDelivery = isPreDelivery),
-                            )
-                        },
+                        onAskNeighbor =
+                            { sourceMailId: String, isPreDelivery: Boolean ->
+                                // A17.8 → "Ask a Neighbor" (RN `mailbox/package.tsx:204`).
+                                navController.navigate(
+                                    ChildRoutes.packageGig(mailId = sourceMailId, isPreDelivery = isPreDelivery),
+                                )
+                            }.takeIf { PACKAGE_GIG_AVAILABLE },
                     )
                 }
                 composable(

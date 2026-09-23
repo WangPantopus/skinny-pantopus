@@ -15,6 +15,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * Posting a task for a package isn't available yet: the package task routes answer 501 until package
+ * tasks are designed. While this is false, no screen offers the package-task flow.
+ */
+const val PACKAGE_GIG_AVAILABLE = false
+
 /** Nav-arg keys for the A17.8 package-gig route (`mailbox/gig?…`). */
 const val PACKAGE_GIG_MAIL_ID_KEY = "mailId"
 const val PACKAGE_GIG_MODE_KEY = "mode"

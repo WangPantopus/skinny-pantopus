@@ -1007,7 +1007,10 @@ public struct HubTabRoot: View {
             _ = router.consume()
         case let .packageGig(mailId, isPreDelivery):
             path.append(.mailboxRoot)
-            path.append(.packageGig(mailId: mailId, isPreDelivery: isPreDelivery))
+            // While package tasks aren't available, the link opens the package's mail instead.
+            path.append(PackageGigAvailability.isAvailable
+                ? .packageGig(mailId: mailId, isPreDelivery: isPreDelivery)
+                : .mailItemDetail(mailId: mailId))
             _ = router.consume()
         case .earn:
             path.append(.mailboxRoot)

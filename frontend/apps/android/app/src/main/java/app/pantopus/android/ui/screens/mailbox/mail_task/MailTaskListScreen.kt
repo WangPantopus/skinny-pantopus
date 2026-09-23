@@ -49,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.mailbox.package_gig.PACKAGE_GIG_AVAILABLE
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -590,31 +591,33 @@ private fun CreateFrame(
 
         // A17.8 → "Ask a Neighbor". RN's escalation out of the task pipeline
         // (`src/app/mailbox/tasks.tsx:231-240`).
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(46.dp)
-                    .clip(RoundedCornerShape(Radii.lg))
-                    .background(PantopusColors.businessBg)
-                    .clickable(onClick = onPostAsNeighborTask)
-                    .testTag("mailTaskList_postAsNeighborTask"),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.UsersRound,
-                contentDescription = null,
-                size = 15.dp,
-                tint = PantopusColors.business,
-            )
-            Spacer(Modifier.size(Spacing.s2))
-            Text(
-                text = "Post as Neighbor Task Instead",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = PantopusColors.business,
-            )
+        if (PACKAGE_GIG_AVAILABLE) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                        .clip(RoundedCornerShape(Radii.lg))
+                        .background(PantopusColors.businessBg)
+                        .clickable(onClick = onPostAsNeighborTask)
+                        .testTag("mailTaskList_postAsNeighborTask"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.UsersRound,
+                    contentDescription = null,
+                    size = 15.dp,
+                    tint = PantopusColors.business,
+                )
+                Spacer(Modifier.size(Spacing.s2))
+                Text(
+                    text = "Post as Neighbor Task Instead",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PantopusColors.business,
+                )
+            }
         }
 
         Row(
