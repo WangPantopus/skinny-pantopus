@@ -82,8 +82,13 @@ function coordsFromHome(h: Record<string, any>): { latitude: number | null; long
     return { latitude: mapLat, longitude: mapLng };
   }
 
-  // 2. GeoJSON { type:'Point', coordinates:[lng,lat] } — if Supabase serialized the PostGIS column.
+  // 1b. { latitude, longitude } — what the Home list (/api/homes/my-homes, /primary) returns.
   const loc = h?.location as Record<string, any> | undefined;
+  const locLat = toFiniteNumber(loc?.latitude);
+  const locLng = toFiniteNumber(loc?.longitude);
+  if (locLat != null && locLng != null) return { latitude: locLat, longitude: locLng };
+
+  // 2. GeoJSON { type:'Point', coordinates:[lng,lat] } — if Supabase serialized the PostGIS column.
   const coords = loc?.coordinates as number[] | undefined;
   if (coords && coords.length >= 2) {
     const lat = toFiniteNumber(coords[1]);
