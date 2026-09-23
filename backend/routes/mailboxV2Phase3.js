@@ -130,12 +130,6 @@ const cancelVacationSchema = Joi.object({
   holdId: Joi.string().uuid().required(),
 });
 
-// ── Translation ──
-const translateSchema = Joi.object({
-  mailId: Joi.string().uuid().required(),
-  targetLang: Joi.string().max(10).optional(),
-});
-
 // ============ HELPERS ============
 
 async function logMailEvent(userId, eventType, mailId, metadata = {}) {
@@ -1577,58 +1571,14 @@ router.post('/vacation/cancel', verifyToken, validate(cancelVacationSchema), asy
 //                     TRANSLATION ENDPOINTS
 // ====================================================================
 
-// POST /translate — translate a mail item
-router.post('/translate', verifyToken, validate(translateSchema), async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { mailId, targetLang } = req.body;
-    const lang = targetLang || 'en';
-
-    // Check cache
-    const { data: mail } = await supabaseAdmin
-      .from('Mail')
-      .select('id, subject, key_facts, translation_text, translation_lang, translation_cached_at')
-      .eq('id', mailId)
-      .eq('recipient_user_id', userId)
-      .single();
-
-    if (!mail) return res.status(404).json({ error: 'Mail not found' });
-
-    // If cached translation exists and target matches
-    if (mail.translation_text && mail.translation_lang === lang) {
-      return res.json({
-        translated_text: mail.translation_text,
-        from_language: 'auto',
-        to_language: lang,
-        cached: true,
-      });
-    }
-
-    // Mock translation (Phase 3 placeholder — real translation would use an API)
-    const originalText = typeof mail.key_facts === 'string' ? mail.key_facts : JSON.stringify(mail.key_facts || {});
-    const translatedText = `[Translated to ${lang}] ${mail.subject || ''}\n\n${originalText}`;
-
-    // Cache
-    await supabaseAdmin
-      .from('Mail')
-      .update({
-        translation_text: translatedText,
-        translation_lang: lang,
-        translation_cached_at: new Date().toISOString(),
-      })
-      .eq('id', mailId);
-
-    logMailEvent(userId, 'mail_translated', mailId, { targetLang: lang });
-    res.json({
-      translated_text: translatedText,
-      from_language: 'auto',
-      to_language: lang,
-      cached: false,
-    });
-  } catch (err) {
-    logger.error('[P3] POST /translate failed', { error: err.message });
-    res.status(500).json({ error: 'Translation failed' });
-  }
+// POST /translate — disabled: there is no translation provider yet, and no app should show a translation.
+// The route used to answer with a mock ("[Translated to <lang>] <subject>" followed by the letter's key facts), cache
+// it on the Mail row (translation_text, translation_lang, translation_cached_at) and serve that cache later; the apps
+// showed it as the letter's translation. It now answers 501 for every signed-in call, writes nothing and never reads
+// those cached columns. A real implementation needs a translation provider (and its cost) and the Home mail read rule
+// (utils/homeMailAccess) instead of the recipient_user_id-only lookup.
+router.post('/translate', verifyToken, (req, res) => {
+  res.status(501).json({ error: "Translation isn't available yet." });
 });
 
 // ====================================================================
