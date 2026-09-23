@@ -45,7 +45,7 @@ final class HomeSettingsViewModelTests: XCTestCase {
         // existing client-side privacy toggles.
         XCTAssertEqual(
             rowsByGroup["access"],
-            ["accessCodes", "trustedNeighbors", "privacy", "ownershipSecurity"]
+            ["accessCodes", "privacy", "ownershipSecurity"]
         )
         XCTAssertEqual(rowsByGroup["members"], ["people", "inviteLink"])
         XCTAssertEqual(rowsByGroup["notifications"], ["homeNotifications"])
@@ -95,8 +95,6 @@ final class HomeSettingsViewModelTests: XCTestCase {
         await vm.load()
         let propertyDetails = row(vm: vm, groupId: "homeIdentity", rowId: "propertyDetails")
         XCTAssertEqual(propertyDetails?.subtext, "Not set")
-        let trustedNeighbors = row(vm: vm, groupId: "access", rowId: "trustedNeighbors")
-        XCTAssertEqual(trustedNeighbors?.subtext, "Available after verification")
     }
 
     func testTapPrivacyRowRoutesToSecurity() async {

@@ -124,11 +124,15 @@ data class NeighborDensityContent(
      */
     val homeId: String?,
 ) {
-    /** "12 verified neighbors within 1 mi". */
+    /**
+     * "12 neighbors within 1 mi". The count (`count_neighbors_within`) is
+     * every active occupancy in range, verified or not, so it doesn't say
+     * "verified".
+     */
     val pillText: String
         get() {
             val noun = if (count == 1) "neighbor" else "neighbors"
-            return "$count verified $noun within ${formatRadius(radiusMiles)}"
+            return "$count $noun within ${formatRadius(radiusMiles)}"
         }
 
     private fun formatRadius(miles: Double): String =

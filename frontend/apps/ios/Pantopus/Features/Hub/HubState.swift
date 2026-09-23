@@ -153,11 +153,13 @@ public struct NeighborDensityContent: Sendable, Hashable {
         self.homeId = homeId
     }
 
-    /// Pill copy — "👥 12 verified neighbors within 1 mi" in RN; the
-    /// native pill renders the glyph separately.
+    /// Pill copy — "12 neighbors within 1 mi"; the native pill renders
+    /// the glyph separately. The count (`count_neighbors_within`) is every
+    /// active occupancy in range, verified or not, so it doesn't say
+    /// "verified".
     public var pillText: String {
         let noun = count == 1 ? "neighbor" : "neighbors"
-        return "\(count) verified \(noun) within \(Self.formatRadius(radiusMiles))"
+        return "\(count) \(noun) within \(Self.formatRadius(radiusMiles))"
     }
 
     /// `1` → "1 mi", `1.5` → "1.5 mi".

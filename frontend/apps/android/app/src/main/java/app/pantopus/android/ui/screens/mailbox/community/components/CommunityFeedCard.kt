@@ -183,7 +183,6 @@ private fun StatsRow(item: CommunityFeedItem) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Stat(icon = PantopusIcon.Eye, text = "${item.views}")
-        Stat(icon = PantopusIcon.Users, text = "${item.neighborsReceived} reached")
         if (item.rsvpCount > 0) {
             Stat(icon = PantopusIcon.CalendarCheck, text = "${item.rsvpCount} RSVP")
         }
