@@ -2031,7 +2031,6 @@ public struct HubTabRoot: View {
                         items: ["Check out this business on Pantopus — \(InviteLinks.downloadURLString)"]
                     )
                 },
-                onOpenReport: { Task { @MainActor in push(.placeholder(label: "Report business")) } },
                 onEdit: { Task { @MainActor in push(.editBusinessPage(businessId: businessId)) } }
             )
         case let .businessProfilePage(businessId, pageSlug):
@@ -2047,7 +2046,6 @@ public struct HubTabRoot: View {
                         items: ["Check out this business on Pantopus — \(InviteLinks.downloadURLString)"]
                     )
                 },
-                onOpenReport: { Task { @MainActor in push(.placeholder(label: "Report business")) } },
                 onEdit: { Task { @MainActor in push(.editBusinessPage(businessId: businessId)) } }
             )
         case let .businessPages(businessId):
@@ -3324,7 +3322,6 @@ private struct BusinessProfileDestination: View {
     let onBack: @MainActor () -> Void
     let onOpenMessages: @MainActor (InboxConversationDestination) -> Void
     let onShare: @MainActor () -> Void
-    let onOpenReport: @MainActor () -> Void
     let onEdit: @MainActor () -> Void
 
     @Environment(\.openURL) private var openURL
@@ -3336,7 +3333,6 @@ private struct BusinessProfileDestination: View {
             onBack: onBack,
             onOpenMessages: onOpenMessages,
             onShare: onShare,
-            onOpenReport: onOpenReport,
             onOpenWebsite: { url in openURL(url) },
             onEdit: onEdit
         )
