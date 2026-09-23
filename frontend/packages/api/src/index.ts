@@ -165,7 +165,7 @@ export {
   approveHouseholdAccessRequest,
   rejectHouseholdAccessRequest,
 } from './endpoints/homes';
-export { getHub, getHubToday, updateHubContext, getDiscovery, getHubPreferences, updateHubPreferences, dismissDensityMilestone } from './endpoints/hub';
+export { getHub, getHubToday, getDiscovery, getHubPreferences, updateHubPreferences, dismissDensityMilestone } from './endpoints/hub';
 export { getLocation, setLocation, resolveLocation, setPinned, setRadius } from './endpoints/location';
 export { getListings, getNearbyListings, searchListings, createListing, getListing, toggleSave as toggleListingSave, getSavedListings, getMyListings, getUserListings, getCarouselListings, refreshListing, getListingsInBounds, browseListings, discoverListings, autocompleteListings } from './endpoints/listings';
 export {
