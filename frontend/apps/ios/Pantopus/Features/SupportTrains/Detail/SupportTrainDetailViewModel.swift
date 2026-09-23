@@ -316,7 +316,7 @@ extension SupportTrainDetailViewModel {
             typeDates: typeDates,
             calendarDays: calendar(slots: slots, reservations: reservations),
             sections: sections(slots: slots, reservations: reservations),
-            hostedBy: hostedBy(primaryName: primaryName),
+            hostedBy: hostedBy(primaryName: primaryName, primaryUserId: primary?.user?.id),
             dock: isFull ? .sendCardAndBackup : .signUp(label: "Sign up for a slot"),
             celebrationBanner: isFull
                 ? SupportTrainDetailContent.CelebrationBanner(
@@ -397,12 +397,13 @@ extension SupportTrainDetailViewModel {
         )
     }
 
-    private nonisolated static func hostedBy(primaryName: String?) -> HostedByFooter {
+    private nonisolated static func hostedBy(primaryName: String?, primaryUserId: String?) -> HostedByFooter {
         let name = primaryName ?? "Organizer"
         return HostedByFooter(
             organizerInitials: initials(from: name),
             organizerDisplayName: name,
-            neighborHint: nil
+            neighborHint: nil,
+            organizerUserId: primaryUserId
         )
     }
 

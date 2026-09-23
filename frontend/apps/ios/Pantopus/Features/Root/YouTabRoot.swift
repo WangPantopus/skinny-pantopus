@@ -631,6 +631,17 @@ public struct YouTabRoot: View {
         }
     }
 
+    /// A one-to-one chat with a support train's organizer.
+    static func chatRoute(toHost host: HostedByFooter) -> YouRoute {
+        .chatConversation(InboxConversationDestination(
+            mode: .person(otherUserId: host.organizerUserId ?? ""),
+            displayName: host.organizerDisplayName,
+            initials: host.organizerInitials,
+            identityKind: nil,
+            verified: false
+        ))
+    }
+
     private var navigationPathBinding: Binding<NavigationPath> {
         Binding(
             get: { path.navigationPath },
@@ -1588,10 +1599,11 @@ public struct YouTabRoot: View {
         case let .supportTrainDetail(supportTrainId):
             SupportTrainDetailView(
                 viewModel: SupportTrainDetailViewModel(trainId: supportTrainId),
-                // Keep the `onBack:` label: as a trailing closure it binds to
-                // the last closure (`onMessageHost`) and Back does nothing.
-                // swiftlint:disable:next trailing_closure
-                onBack: { Task { @MainActor in pop() } }
+                onBack: { Task { @MainActor in pop() } },
+                onOpenManage: { Task { @MainActor in path.append(.manageTrain(trainId: supportTrainId)) } },
+                onMessageHost: { host in
+                    Task { @MainActor in path.append(Self.chatRoute(toHost: host)) }
+                }
             )
         case .searchSupportTrains:
             SupportTrainsSearchView(
