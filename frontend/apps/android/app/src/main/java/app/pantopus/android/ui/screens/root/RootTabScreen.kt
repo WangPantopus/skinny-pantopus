@@ -2192,6 +2192,22 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.EARN)
                 DeepLinkRouter.consume()
             }
+            // A mail notification's letter, in the item detail the mailbox list
+            // opens; pushed through MAILBOX_ROOT like the other mailbox links.
+            is DeepLinkRouter.Destination.MailItem -> {
+                navController.navigate(ChildRoutes.MAILBOX_ROOT)
+                navController.navigate(ChildRoutes.mailboxItemDetail(pending.mailId))
+                DeepLinkRouter.consume()
+            }
+            // `/mailbox` (the Mail Day summary notification) — the Mail tab.
+            DeepLinkRouter.Destination.Mailbox -> {
+                navController.navigateToRootTab(PantopusRoute.Mail)
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.NeighborMessage -> {
+                navController.navigate(ChildRoutes.neighborMessage(pending.messageId))
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.BusinessOwner -> {
                 navController.navigate(ChildRoutes.businessOwner(pending.businessId))
                 DeepLinkRouter.consume()

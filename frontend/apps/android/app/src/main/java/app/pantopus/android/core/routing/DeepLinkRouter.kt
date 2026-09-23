@@ -52,6 +52,9 @@ object DeepLinkRouter {
     private val PLACE_DETAIL_SLUGS =
         setOf("today", "your-home", "risk", "block", "money", "civic", "identity")
 
+    /** A mail or message id in a notification link (a UUID). */
+    private val MAIL_UUID = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
     sealed interface Destination {
         data object Feed : Destination
 
@@ -220,6 +223,19 @@ object DeepLinkRouter {
 
         /** `pantopus://mailbox/earn` — A10.11 Earn dashboard (Wallet sibling). */
         data object Earn : Destination
+
+        /**
+         * `/app/mailbox/:mailId` — the letter a mail notification points at
+         * (mail_delivered / mail_claimed / mail_escrow_*), opened in the
+         * existing mail item detail.
+         */
+        data class MailItem(val mailId: String) : Destination
+
+        /** `/mailbox` — the Mail tab (the Mail Day summary notification). */
+        data object Mailbox : Destination
+
+        /** `/app/place/neighbor-message/:id` — a received neighbor message. */
+        data class NeighborMessage(val messageId: String) : Destination
 
         /**
          * `pantopus://businesses/:id` — A10.7 Business owner view. The public
@@ -642,6 +658,15 @@ object DeepLinkRouter {
                 }
             }
             "place" -> {
+                // `place/neighbor-message/:id` is a received message, not a Home id.
+                if (segments.getOrNull(1) == "neighbor-message") {
+                    val messageId = segments.getOrNull(2)
+                    return if (segments.size == 3 && messageId != null && MAIL_UUID.matches(messageId)) {
+                        Destination.NeighborMessage(messageId)
+                    } else {
+                        Destination.Unknown(raw)
+                    }
+                }
                 // `pantopus://place`                      → dashboard (home resolved client-side)
                 // `pantopus://place?id=<homeId>`          → that home's dashboard
                 // `pantopus://place/<homeId>`             → same
@@ -659,9 +684,12 @@ object DeepLinkRouter {
             "mailbox" -> {
                 // `pantopus://mailbox/vacation` opens A14.8;
                 // `pantopus://mailbox/mailday` opens the A13.16 My Mail Day
-                // editor. B1.6 adds the batch-2 mailbox sub-screens. Other
-                // mailbox paths fall through to Unknown until they have routes.
-                when (segments.getOrNull(1)) {
+                // editor. B1.6 adds the batch-2 mailbox sub-screens. A bare
+                // `mailbox` opens the Mail tab and `mailbox/:mailId` (the server's
+                // mail notification link) the letter. Other mailbox paths fall
+                // through to Unknown until they have routes.
+                when (val sub = segments.getOrNull(1)) {
+                    null -> Destination.Mailbox
                     "vacation" -> Destination.VacationHold
                     "mailday" -> Destination.MailDay
                     "stamps" -> Destination.Stamps
@@ -672,7 +700,8 @@ object DeepLinkRouter {
                         val taskId = segments.getOrNull(2)
                         if (taskId.isNullOrBlank()) Destination.Unknown(raw) else Destination.MailTask(taskId)
                     }
-                    else -> Destination.Unknown(raw)
+                    else ->
+                        if (segments.size == 2 && MAIL_UUID.matches(sub)) Destination.MailItem(sub) else Destination.Unknown(raw)
                 }
             }
             "identity" ->
