@@ -783,20 +783,11 @@ router.post('/package/:mailId/share-eta', verifyToken, async (req, res) => {
   }
 });
 
-// POST /api/mailbox/v2/package/:mailId/neighbor-gig — Create gig for neighbor help
-router.post('/package/:mailId/neighbor-gig', verifyToken, async (req, res) => {
-  try {
-    const { mailId } = req.params;
-    const userId = req.user.id;
-    if (!(await readableMail(mailId, userId))) return res.status(404).json({ error: 'Mail not found' });
-
-    // Placeholder for P2 full integration — just logs event and returns success
-    await logMailEvent('package_neighbor_gig_created', mailId, userId, { gig_id: null });
-    return res.json({ message: 'Neighbor gig request created (placeholder)', gigId: null });
-  } catch (err) {
-    logger.error('Neighbor gig error', { error: err.message });
-    return res.status(500).json({ error: 'Server error' });
-  }
+// POST /api/mailbox/v2/package/:mailId/neighbor-gig — ask a neighbor for package help (not available yet).
+// This placeholder answered "Neighbor gig request created" with no task behind it. Until package tasks are real,
+// refuse and write nothing, as the package gig routes in mailboxV2Phase2.js do.
+router.post('/package/:mailId/neighbor-gig', verifyToken, (req, res) => {
+  res.status(501).json({ error: "Posting a task for a package isn't available yet." });
 });
 
 // ============ EARN ENDPOINTS ============
