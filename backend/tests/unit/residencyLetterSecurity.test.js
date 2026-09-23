@@ -88,6 +88,7 @@ describe('an expired letter is not valid', () => {
 describe('a live letter still verifies', () => {
   test('returns exactly what is printed on the paper', async () => {
     seedLetter();
+    seedTable('HomeOccupancy', [{ home_id: 'home-1', user_id: 'user-1', is_active: true, verification_status: 'verified' }]);
 
     const res = await service.verifyByCode(CODE);
 
