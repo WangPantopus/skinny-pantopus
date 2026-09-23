@@ -6,9 +6,10 @@ import { Hammer, User, Store, Megaphone } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { DiscoveryItem, DiscoveryFilter } from '@pantopus/api';
 
+// No "People" tab: `filter=people` never returns anyone today, so the tab
+// could only ever be empty. Whether and how to list people is a product call.
 const FILTER_TABS: { key: DiscoveryFilter; label: string }[] = [
   { key: 'gigs', label: 'Tasks' },
-  { key: 'people', label: 'People' },
   { key: 'businesses', label: 'Businesses' },
   { key: 'posts', label: 'Posts' },
 ];

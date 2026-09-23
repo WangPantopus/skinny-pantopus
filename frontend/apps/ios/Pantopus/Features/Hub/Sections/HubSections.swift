@@ -561,12 +561,11 @@ struct HubDiscoveryRail: View {
         .accessibilityIdentifier(identifier)
     }
 
-    /// Tasks / People / Businesses / Posts — RN
-    /// `src/components/hub/HubDiscovery.tsx:9-14`.
+    /// Tasks / Businesses / Posts (`HubDiscoveryFilter.visibleTabs`).
     private var filterTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(HubDiscoveryFilter.allCases) { tab in
+                ForEach(HubDiscoveryFilter.visibleTabs) { tab in
                     let active = tab == activeFilter
                     Button {
                         onFilterChange?(tab)
