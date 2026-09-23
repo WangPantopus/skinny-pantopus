@@ -5,7 +5,72 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 07:21 UTC (coordinator session `92cc4526`)
+## CURRENT RESUME POINT — September 23, 2026, 07:24 UTC (coordinator session `92cc4526`)
+
+This updates the 07:21 block below; read both. The count is **10 closed / 70 partial**.
+
+### New agent PRs (each queued only after CI OK)
+- **#257 (Stream 2): native mail/mailbox/neighbor notification links.**
+  - Android re-verified on a dex-checked APK against 18142: the mail notice opens the letter, the summary notice opens
+    the Mail tab, the neighbor notice opens the message, and a deleted target shows a clear not-found.
+  - The master baseline drops the mail and summary taps, and the neighbor tap shows "Server error 500".
+  - Bundle `20260923-stream2-native-notification-links-r1`, MANIFEST `4f7ae017…`.
+- **#258 (Stream 3): invoice_received notification.**
+  - The route now uses `createNotification`, so the payload goes to `metadata` and badge/socket/push fire.
+  - It skips the notification when blocked, and fails closed.
+  - The link is `/app/invoice/:id`.
+  - Verified through the real iOS create-invoice caller. Bundle `…-invoice-received-notification-r1`, MANIFEST
+    `ddae007a…`.
+- **#259 (Stream 1): repeated change orders.**
+  - On master, a double tap made two "+$10" orders, and approving both took the price from 0 to 10 to 20.
+  - The route now returns the existing pending order: `already_requested`, a derived id and the primary key close the
+    race.
+  - Bundle `…-change-order-repeat-r1`, MANIFEST `2f8f87d3…`.
+
+### Decisions made by the coordinator (functional; no visual change at rest)
+- **Stream 1:**
+  - Android lifecycle sheets get an inline error, reusing EditBidSheet's treatment, plus an in-flight guard. Idle
+    states must stay pixel-identical.
+- **Stream 2:**
+  - Android bottom bar: highlight the tab on child screens, and make a tap on Place work. This starts after
+    #251/#252/#257.
+  - `/api/homes/:id/intelligence` returns 400 instead of 500 for a malformed id.
+  - Route item 5: Mail Day dismiss is kept client-side as "dismissed today", and the dead POST is dropped.
+  - Route item 7: the dead hub-context calls are removed.
+  - Route item 8: the section error copy must not expose internal keys like "homeGigs".
+- **Stream 3:**
+  - The iOS half of decision 5 (chat link → person thread) gets its own PR.
+  - Hub side menu: "Help & Support" sits under the tab bar; the fix is bottom padding only.
+  - The "1 verified business" count is fixed if its logic is wrong; if only the wording is wrong, it goes to the
+    founder.
+
+### Founder decisions added (not implemented)
+- **Route item 6:** the web package unboxing panel has never rendered.
+  - (A) Map the package fields and reuse the native two-step upload. The panel would appear.
+  - (B) Leave it hidden.
+- **Route item 8:** Home dashboard gigs.
+  - (A) A small read-only `GET /api/homes/:id/gigs` from `Gig.origin_home_id`, gated on `home.view`.
+  - (B) Stop requesting it.
+- **Route item 9:** landlord Notices/Settings.
+  - (A) Hide the tabs. (B) Show an honest "not available yet". (C) Build 3 tables and routes.
+  - The agent recommends A or B.
+- **Paid gigs:** an approved price change on a PAID gig never changes the hold. Stream 1 is documenting what each
+  party sees.
+- **Presentation (from Stream 1):** red error toasts drawn above sheets, and copy for "Server error 503…" and
+  "No grounds for no-show report".
+
+### Queue (08:00 ETA for #213)
+- Order: 218 213 231 221 236 219 214 215 224 199 208 251 252 255 256.
+- #213 was moved up because Stream 3's #245 native tap check needs it.
+- Each native PR takes about 35 minutes of Android CI after its update.
+
+### Process notes
+- **iOS sign-in:** Stream 3 now signs in through a local DEBUG launch-env build, then installs the master build over
+  it. No credential is typed. The simulator pasteboard mirrors the Mac clipboard, so `simctl pbcopy` is unsafe for
+  secrets.
+- **CI watcher:** `/private/tmp/pantopus-tools/ci-watch.sh` watches the PR numbers listed in `ci-watch.txt`.
+
+## Resume point history — September 23, 2026, 07:21 UTC (coordinator session `92cc4526`)
 
 This updates the 06:52 block below; read both. The count is **10 closed / 70 partial**.
 
