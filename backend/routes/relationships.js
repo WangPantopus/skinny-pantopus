@@ -22,6 +22,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
+const blockService = require('../services/blockService');
 const { isBlocked, getRelationshipStatus } = require('../utils/visibilityPolicy');
 const { invalidateFilterCache } = require('../services/feedService');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
@@ -93,6 +94,14 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
     // Exclude curator accounts — platform-owned, not a real neighbor
     if (targetUser.account_type === 'curator') {
       return res.status(403).json({ error: 'Cannot send connection requests to this account' });
+    }
+
+    // A personal UserBlock in either direction refuses new connection
+    // requests, like follows and direct messages, before any relationship
+    // row or notification is written. Existing Relationship rows and the
+    // PersonaBlock scope are unchanged.
+    if (await blockService.isBlocked(requesterId, addressee_id)) {
+      return res.status(403).json({ error: 'Cannot send a connection request to this user' });
     }
 
     // Check for existing relationship (the unique pair index enforces one row)
@@ -206,6 +215,7 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
       relationship,
     });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Connection request error', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Failed to send connection request' });
   }
