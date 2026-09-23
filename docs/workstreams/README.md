@@ -5,7 +5,49 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 14:34 UTC (coordinator session `92cc4526`)
+## CURRENT RESUME POINT — September 23, 2026, 15:00 UTC (coordinator session `92cc4526`)
+
+This updates the 14:34 block below; read both. The count is **13 closed / 67 partial**.
+
+### Merged since the last block
+- #310, #317, #318.
+
+### Merge process change: combined batches
+- **Why.** About 30 reviewed native PRs were waiting. A native CI run takes about 35 minutes, and runners were saturated (3 running, 11 queued, some waiting since 13:29). Serial exact-head merges would have taken most of a day, and agents open PRs faster than that.
+- **How it works.**
+  - The coordinator builds one branch, `claude/coord-merge-batch-N`, from master, with `git merge-tree` in the object store (no checkout).
+  - Each reviewed PR's head commit merges unchanged, in queue order. A PR that conflicts is left out.
+  - CI runs once on the combination, and the serial queue merges the batch PR with `--match-head-commit`.
+  - GitHub then marks each included PR as merged.
+  - If an agent pushes after a batch is built, that PR stays open with only its new commits and merges later.
+- **Batch 1 = #353.** It includes 36 PRs: 319 343 345 344 347 292 337 340 341 314 221 236 219 214 215 224 199 208 251 252 279 262 264 287 266 285 286 301 303 305 306 302 313 307 335 336.
+- **Left out: #257.** It conflicts with #292 and #279 in `HubTabRoot.swift`; all three change notification routing. Stream 2 rebases it after #353 merges.
+- **Batch 2 candidates (reviewed):** #351 (web post detail errors, C-19) and #352 (web links that 404, S3-19/21/27).
+- **Queue tooling.** The serial queue order before batching is saved in `/private/tmp/pantopus-tools/merge-queue/queue.before-batch1.txt`. The builder script is in the coordinator scratchpad; it prints `OK <pr> <head> <chain commit>` per PR.
+
+### GitHub API rate limit
+- **What happened.** At about 14:55 UTC, GitHub's GraphQL budget (5,000 points an hour, shared by the coordinator and all agents) ran out.
+- **Cause.** The coordinator's CI watcher polled about 85 PRs every minute, merged ones included, with two GraphQL calls each.
+- **Fix.** It is replaced by `/private/tmp/pantopus-tools/ci-watch2.sh`, run by `coord-watch2.sh`. The new watcher is REST-only: one open-PR list per 90-second loop, and each PR head is checked only until it reports. Agents were asked not to use `gh pr checks --watch`.
+
+### Stream 2 PRs since the last block
+- **#346 (native Earn honest).** The hero now reads "Available to cash out" from `GET /api/wallet`, the same source as Payments.
+  - Cash out shows only above $0.
+  - Ad and mail-offer payouts sit in their own cell: "Mail offers $X · can't be cashed out yet".
+  - Refer is hidden.
+  - The empty states, including the Mail > Earn drawer, are honest.
+  - Before, both platforms showed "Cash out $10.00" from an unfunded ad letter.
+  - MANIFEST `4e3f529b…` (corrected from `1a940c85…`).
+- **#347 (S2-02 part B, security-sensitive; reviewed, in batch 1).** Record photos move to private storage.
+  - Route: `POST /api/mailbox/v2/p3/records/asset/:id/photos`, into the private `HOME_DOCUMENTS_BUCKET`.
+  - The bucket is refused if it is public. The server generates each key: `asset-photos/<home>/<asset>/<photo>/<sha256>`.
+  - Upload needs `assets.manage` (403). A non-member or unknown record gets 404.
+  - Permissions are checked before any bytes are parsed. Photos must be JPEG, PNG, WebP or HEIC, magic-checked, 25 MB or less.
+  - Reads get a 300-second signed URL, and only viewers with `assets.view` see photos.
+  - Web "Add photo" is back, for `assets.manage` only. No schema change. MANIFEST `71230a41…`.
+  - **Deploy note:** hosted environments need `HOME_DOCUMENTS_BUCKET` set.
+
+## Resume point history — September 23, 2026, 14:34 UTC (coordinator session `92cc4526`)
 
 This updates the 13:34 block below; read both. The count is **13 closed / 67 partial**.
 
