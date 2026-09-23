@@ -101,7 +101,6 @@ class PrivacySnapshotTest {
         GroupedListScreen(
             title = viewModel.title,
             state = viewModel.state.value,
-            footerCaption = viewModel.footerCaption,
             banner = viewModel.banner.value,
         )
     }

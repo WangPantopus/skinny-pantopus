@@ -146,7 +146,7 @@ fun NotificationSettingsScreen(
 /** Mirrors iOS `notificationSettingsToast`. */
 const val NOTIFICATION_SETTINGS_TOAST_TAG = "notificationSettingsToast"
 
-/** A14.7 Privacy preferences (RadioCards + fuzz slider + toggles + data rows). */
+/** A14.7 Privacy preferences (biometric security, search privacy, data rows, delete). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrivacySettingsScreen(
@@ -191,14 +191,12 @@ fun PrivacySettingsScreen(
         GroupedListScreen(
             title = viewModel.title,
             state = state,
-            footerCaption = viewModel.footerCaption,
             banner = banner,
             callbacks =
                 GroupedListCallbacks(
                     onBack = onBack,
                     onToggleRow = { rowId, isOn -> viewModel.onToggle(rowId, isOn, activity) },
                     onSelectRadio = viewModel::onRadio,
-                    onSetFuzz = viewModel::onSetFuzz,
                     onTapRow = { rowId ->
                         if (rowId == "appLockOpenSettings") {
                             val intent =

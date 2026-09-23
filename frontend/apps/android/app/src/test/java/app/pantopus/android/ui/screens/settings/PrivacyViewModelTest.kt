@@ -14,7 +14,6 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.privacy.PrivacyRepository
-import app.pantopus.android.ui.components.FuzzStop
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListBanner
 import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListGroup
@@ -41,10 +40,9 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * P7.6 / A14.7 — the reshaped Privacy matrix. Covers the defaults +
- * stealth frames, the RadioCard / fuzz / activity / data projection,
- * the stealth banner, optimistic radio / toggle / fuzz mutations, and
- * the helper-line parity contract (mirrored on iOS).
+ * P7.6 / A14.7 — the Privacy matrix. Covers the defaults + stealth
+ * frames, the group projection (only backend-backed cards, S3-29), the
+ * data rows and the stealth banner (mirrored on iOS).
  *
  * T1 adds the backend-backed surfaces: the search-privacy card wired to
  * `GET/PATCH /api/privacy/settings`, and the delete-account gate in front
@@ -82,49 +80,15 @@ class PrivacyViewModelTest {
             ),
     )
 
-    @Test fun populated_produces_eight_groups_in_design_order() {
+    /** Profile visibility, Address on profile, Map location fuzz and
+     *  Activity have no backend field, so they are not shown (S3-29). */
+    @Test fun populated_shows_only_backend_backed_groups() {
         val vm = privacyVm().apply { load() }
         assertEquals(
-            listOf(
-                "biometricSecurity",
-                "searchPrivacy",
-                "visibility",
-                "address",
-                "fuzz",
-                "activity",
-                "data",
-                "delete",
-            ),
+            listOf("biometricSecurity", "searchPrivacy", "data", "delete"),
             vm.groups().map { it.id },
         )
         assertNull(vm.banner.value)
-    }
-
-    @Test fun visibility_and_address_are_four_option_radio_cards() {
-        val groups = privacyVm().loadedGroups()
-        val visibility = groups.group("visibility")
-        val address = groups.group("address")
-        assertEquals(4, visibility?.rows?.size)
-        assertEquals(4, address?.rows?.size)
-        assertEquals("visibility.verified", selectedRadioId(visibility))
-        assertEquals("address.street", selectedRadioId(address))
-        visibility?.rows?.forEach { assertTrue("${it.id} radio", it.control is RowControl.Radio) }
-    }
-
-    @Test fun fuzz_group_defaults_to_half_mile() {
-        val fuzz = privacyVm().loadedGroups().group("fuzz")
-        assertEquals(FuzzStop.HalfMile, fuzz?.fuzz?.stop)
-        assertEquals("How exact your task and listing pins appear on the map.", fuzz?.fuzz?.leadIn)
-        assertTrue(fuzz?.rows?.isEmpty() ?: false)
-    }
-
-    @Test fun activity_has_four_toggles_all_on() {
-        val activity = privacyVm().loadedGroups().group("activity")
-        assertEquals(listOf("online", "recent", "nearby", "ratings"), activity?.rows?.map { it.id })
-        activity?.rows?.forEach {
-            val control = it.control
-            assertTrue("${it.id} toggle", control is RowControl.Toggle && control.isOn)
-        }
     }
 
     @Test fun data_rows_carry_leading_icons_and_delete_is_destructive() {
@@ -135,28 +99,6 @@ class PrivacyViewModelTest {
         val delete = groups.group("delete")?.rows?.first()
         assertEquals("deleteAccount", delete?.id)
         assertTrue(delete?.destructive ?: false)
-    }
-
-    @Test fun select_radio_updates_selection() {
-        val vm = privacyVm()
-        vm.load()
-        vm.onRadio("visibility.connections")
-        assertEquals("visibility.connections", selectedRadioId(vm.groups().group("visibility")))
-    }
-
-    @Test fun toggle_activity_flips_local_state() {
-        val vm = privacyVm()
-        vm.load()
-        vm.onToggle("online", isOn = false)
-        val control = vm.groups().group("activity")?.rows?.first { it.id == "online" }?.control
-        assertTrue(control is RowControl.Toggle && !control.isOn)
-    }
-
-    @Test fun set_fuzz_updates_stop() {
-        val vm = privacyVm()
-        vm.load()
-        vm.onSetFuzz(PrivacyCatalog.FUZZ, FuzzStop.Exact)
-        assertEquals(FuzzStop.Exact, vm.groups().group("fuzz")?.fuzz?.stop)
     }
 
     // ---- Search privacy (GET / PATCH /api/privacy/settings) ----
@@ -223,7 +165,7 @@ class PrivacyViewModelTest {
     @Test fun search_privacy_load_failure_keeps_screen_and_swaps_helper() {
         coEvery { privacy.settings() } returns NetworkResult.Failure(NetworkError.Server(500, null))
         val groups = privacyVm().loadedGroups()
-        assertEquals("a failed settings fetch must not blank the screen", 8, groups.size)
+        assertEquals("a failed settings fetch must not blank the screen", 4, groups.size)
         assertEquals(
             "Search privacy could not load. Pull to refresh before changing this setting.",
             groups.group("searchPrivacy")?.helper,
@@ -331,60 +273,15 @@ class PrivacyViewModelTest {
         assertFalse(vm.accountDeleted.value)
     }
 
-    @Test fun stealth_shows_banner_and_strictest_controls() {
+    @Test fun stealth_shows_banner() {
         val vm = privacyVm()
         vm.setVariant(PrivacySettingsViewModel.Variant.Stealth)
-        val groups = vm.groups()
         val banner = vm.banner.value
         assertNotNull(banner)
         assertEquals("Stealth mode is on", banner?.title)
         assertEquals("Your profile is hidden from search. Existing connections still see you.", banner?.subtitle)
         assertEquals(PantopusIcon.EyeOff, banner?.icon)
         assertEquals(GroupedListBanner.Style.Stealth, banner?.style)
-        assertEquals("visibility.hidden", selectedRadioId(groups.group("visibility")))
-        assertEquals("address.hidden", selectedRadioId(groups.group("address")))
-        assertEquals(FuzzStop.Neighborhood, groups.group("fuzz")?.fuzz?.stop)
-        groups.group("activity")?.rows?.forEach {
-            val control = it.control
-            if (control is RowControl.Toggle) assertFalse("${it.id} off", control.isOn)
-        }
-        assertEquals("Stealth · auto-applied May 26, 2026", vm.footerCaption)
-    }
-
-    @Test fun footer_default() {
-        assertEquals("Last updated · Mar 12, 2024", privacyVm().footerCaption)
-    }
-
-    @Test fun helper_copy_matches_design() {
-        val populated = privacyVm().loadedGroups()
-        assertEquals(
-            "Verified neighbors can find you and start a conversation.",
-            populated.group("visibility")?.helper,
-        )
-        assertEquals(
-            "Street name shows on your profile; full address only to people you hire or sell to.",
-            populated.group("address")?.helper,
-        )
-        assertEquals(
-            "Pins drop within a block of you. Exact address only shared after a task is accepted.",
-            populated.group("fuzz")?.helper,
-        )
-        assertNull("Activity card has no helper", populated.group("activity")?.helper)
-
-        val stealthVm = privacyVm().apply { setVariant(PrivacySettingsViewModel.Variant.Stealth) }
-        val stealth = stealthVm.groups()
-        assertEquals(
-            "Hidden — your profile won't show in search or recommendations.",
-            stealth.group("visibility")?.helper,
-        )
-        assertEquals(
-            "Address hidden everywhere. Deliveries still route correctly.",
-            stealth.group("address")?.helper,
-        )
-        assertEquals(
-            "Pins fuzz to your neighborhood — buyers see only \"Park Slope\", never your block.",
-            stealth.group("fuzz")?.helper,
-        )
     }
 
     // MARK: - Helpers
