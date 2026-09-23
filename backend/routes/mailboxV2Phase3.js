@@ -200,7 +200,7 @@ const PHOTO_URL_TTL_SECONDS = 300;
 const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
 const photoMultipart = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: taskMediaStorage.MAX_BYTES, files: 1, fields: 0, parts: 1 },
+  limits: { fileSize: taskMediaStorage.MAX_BYTES, files: 1, fields: 1, fieldSize: 100, parts: 3 },
 }).single('file');
 
 async function photoBucket() {
@@ -403,12 +403,14 @@ router.post('/records/asset/:id/photos', verifyToken, async (req, res, next) => 
   }
 }, (req, res, next) => photoMultipart(req, res, (err) => {
   if (!err) return next();
+  logger.warn('[P3] record photo upload rejected', { code: err.code, message: err.message });
   return err.code === 'LIMIT_FILE_SIZE'
     ? photoError(res, 413, 'Choose a photo of 25 MB or less.')
     : photoError(res, 400, 'Choose one photo to upload.');
 }), async (req, res) => {
   const asset = req.photoAsset;
   try {
+    if (!req.file) return photoError(res, 400, 'Choose one photo to upload.');
     let meta;
     try {
       meta = taskMediaStorage.inspect(req.file);
