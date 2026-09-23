@@ -69,20 +69,22 @@ fun ListingDetailScreen(
         toastIsError = true
         toastText = message
     }
-    val paymentSheet = rememberPaymentSheet { result ->
-        viewModel.onCheckoutOutcome(StripePaymentSheets.checkoutOutcome(result), showCheckoutError)
-    }
+    val paymentSheet =
+        rememberPaymentSheet { result ->
+            viewModel.onCheckoutOutcome(StripePaymentSheets.checkoutOutcome(result), showCheckoutError)
+        }
     val continueCheckout = {
         viewModel.continueCheckout(
             onReady = { params ->
                 paymentSheet.presentWithPaymentIntent(
                     paymentIntentClientSecret = params.clientSecret.orEmpty(),
-                    configuration = StripePaymentSheets.paymentConfiguration(
-                        context = context,
-                        customerId = params.customer,
-                        ephemeralKey = params.ephemeralKey,
-                        publishableKey = params.publishableKey,
-                    ),
+                    configuration =
+                        StripePaymentSheets.paymentConfiguration(
+                            context = context,
+                            customerId = params.customer,
+                            ephemeralKey = params.ephemeralKey,
+                            publishableKey = params.publishableKey,
+                        ),
                 )
             },
             onError = showCheckoutError,
