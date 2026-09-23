@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import * as api from '@pantopus/api';
+import { toast } from '@/components/ui/toast-store';
 import type {
   MagicDraftResponse,
   MagicPostResponse,
@@ -139,14 +140,17 @@ export default function MagicTaskComposerV2({ isOpen, onClose }: MagicTaskCompos
         text: text.trim(),
         draft: finalDraft,
         location,
+        // A Remote task has no place; say so, as the iOS and Android composers do.
+        ...(selectedLocation.mode === 'remote' ? { task_format: 'remote' as const } : {}),
         source_flow: 'magic',
         ai_confidence: draft.confidence,
         ai_draft_json: draft.draft as unknown as Record<string, any>,
       });
       setPostResult(result);
       setPhase('posted');
-    } catch {
-      // If post fails, keep compose phase so user can retry
+    } catch (err: unknown) {
+      // Keep the compose phase so the user can retry, and say why the post failed.
+      toast.error((err as { message?: string } | null)?.message || 'Failed to post task. Please try again.');
       setIsPosting(false);
     }
   }, [draft, text, isPosting, scheduleType, selectedLocation, priceOption, customPrice, scheduledDate]);
