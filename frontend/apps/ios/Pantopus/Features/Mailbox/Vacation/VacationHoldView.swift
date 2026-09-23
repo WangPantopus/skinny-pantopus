@@ -738,7 +738,8 @@ private struct VacationDatePickerSheet: View {
             Spacer(minLength: 0)
         }
         .background(Theme.Color.appBg)
-        .presentationDetents([.medium, .large])
+        // The graphical calendar, title and Done don't fit the medium detent.
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }
 }
