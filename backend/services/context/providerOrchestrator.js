@@ -186,10 +186,10 @@ function clearHubTodayCache(userId) {
  */
 // The address calendar for the location's home (Wedge Phase 2, D6) — null
 // when there is no home or the lookup fails; never throws.
-async function fetchAddressCalendar(homeId) {
+async function fetchAddressCalendar(homeId, userId) {
   if (!homeId) return null;
   try {
-    return await addressCalendarService.composeForHomeId(homeId);
+    return await addressCalendarService.composeForHomeId(homeId, { userId });
   } catch (err) {
     logger.warn('orchestrator: address calendar unavailable', { homeId, error: err.message });
     return null;
@@ -237,7 +237,7 @@ async function getHubToday(userId, options = {}) {
     fetchAQI(latitude, longitude),
     fetchAlerts(latitude, longitude),
     collectInternalContext(userId, location.homeId),
-    fetchAddressCalendar(location.homeId),
+    fetchAddressCalendar(location.homeId, userId),
   ]);
   const fetchMs = Date.now() - fetchStartMs;
 
@@ -466,7 +466,7 @@ async function composeMorningBriefing(userId, location) {
     fetchAQI(latitude, longitude),
     fetchAlerts(latitude, longitude),
     collectInternalContext(userId, location.homeId),
-    fetchAddressCalendar(location.homeId),
+    fetchAddressCalendar(location.homeId, userId),
     getRecentBriefings(userId),
   ]);
 
@@ -577,7 +577,7 @@ async function composeEveningBriefing(userId, location) {
     fetchWeather(latitude, longitude),
     fetchAlerts(latitude, longitude),
     collectInternalContext(userId, location.homeId),
-    fetchAddressCalendar(location.homeId),
+    fetchAddressCalendar(location.homeId, userId),
     getRecentBriefings(userId),
   ]);
 
