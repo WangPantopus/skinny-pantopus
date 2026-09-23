@@ -115,7 +115,6 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         api: APIClient = .shared,
         onOpen: @escaping @MainActor (Link) -> Void = { _ in }
     ) {
-        self.onOpen = onOpen
         let stealth = (variant == .stealth)
         isStealth = stealth
         visibility = stealth ? "hidden" : "verified"
@@ -125,6 +124,7 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
         self.appLock = appLock
         self.auth = auth
         self.api = api
+        self.onOpen = onOpen
         sensitiveActionGate = { reason in
             await appLock.verifySensitiveAction(reason: reason)
         }
