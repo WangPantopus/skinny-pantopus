@@ -1,6 +1,86 @@
 # Three-stream coordination
 
-## CURRENT RESUME POINT — September 23, 2026, 05:00 UTC
+## CURRENT RESUME POINT — September 23, 2026, 04:40 UTC
+
+This updates the 04:17 block below; read both. The count is still **9 closed / 71 partial**. P03 closure is proposed once #241 is verified on a simulator (below).
+
+### Timestamp correction (coordinator)
+- Four earlier block labels were ahead of their actual commit times. They are now labelled with the real UTC commit time, and each keeps its first label.
+- Three Stream 1 bundle headers stated windows later than their runs. They are corrected from the harness request logs and resealed, with a `## Correction` note in each RESULT.md:
+  - `retire-gig-status-route-r1`: 04:15–04:17, MANIFEST `bbabd6aabf152dd5229c59794a5ccfc0d8cf21e1b9834a43f48b903829e548b4`;
+  - `schema-drift-reads-r1`: 04:09–04:13, MANIFEST `63d582a83e83a78db95fda2f4a74c285829eac3559820c73dfa4fa2d4809849f`;
+  - `account-delete-money-guard-r1`: 03:58–04:02, MANIFEST `6e12133bcbcec40f21641c03eadf66caccdc6caf58bf5c9efd55e243cf386ac6`.
+- Eight other Stream 1 manifests had `updatedAt` rounded 2–11 minutes past their real seal. Each is set to its actual write time with a `corrections` entry; file hashes are unchanged. The hub citations now carry the new MANIFEST hashes.
+- Commit times and harness request logs are authoritative.
+
+### Merged since 04:17 UTC
+- #230: Hub mail counts (Stream 2).
+- #237 (Stream 1): schema-drift reads.
+- #238 (Stream 1): retires `PATCH /api/gigs/:id/status`.
+- #216: booking invitee notification link (Stream 3).
+- **#239: M01 privacy fix, merged `7855e7c7d`.**
+  - Members see only the Home letters the Home rule allows. The rule is one definition in `utils/homeMailAccess`, shared by the v1/v2 lists, the per-item gate, drawers, pending, Mail Day and the badge.
+  - The v1 delivery notice now reaches only members who may open the letter.
+  - Bundle `20260923-stream2-m01-home-mail-visibility-r1`: 57 files, MANIFEST `739617a1e8752fd3ecf07c6db86a40994f28c97d23533eec0141257cccf46e61`, verified by the coordinator.
+
+### Client-route drift scan (coordinator, new tool)
+`/private/tmp/pantopus-coord-schema/routes-scan.cjs` builds Express 5's route table in registration order. It covers `app.js` mounts, routers, nested and helper-registered routes, and loop-generated paths: 1,229 routes. It matches all 2,734 client calls against it (web 1,060, iOS 794, Android 880).
+- **Result:** 2,696 calls resolve. Triage is in `/private/tmp/pantopus-coord-schema/route-findings-2026-09-23.md`.
+- **Stream 2, dispatched:** nine live **web** screens call backend routes that never existed; `git log -S` finds none ever. Each item is reproduce-first; repairs go through an existing route where the semantics match, otherwise a build-vs-hide proposal for the founder:
+  - Mailbox Counter page and nav badge;
+  - Records create asset and add photo;
+  - map pin "add to calendar";
+  - Mail Day summary dismiss;
+  - package condition photo;
+  - Hub context sync;
+  - Home dashboard gigs;
+  - landlord property **Notices** and **Settings** tabs (no tables exist).
+- **Recorded, no UI caller:**
+  - web chat room leave/search/mute/pin/archive;
+  - files metadata, get and portfolio reorder;
+  - `PUT /users/location`;
+  - native listing `DELETE …/save` (the backend POST toggles);
+  - web ad-campaign functions (`GET /api/mailbox/campaigns` is also shadowed by `/:id`);
+  - `updateMagicSettings` sends PUT where the backend has PATCH.
+- **Informational:** 147 calls reach only routes behind `IDENTITY_FIREWALL_ENABLED`, `PERSONA_ENABLED` or `PERSONA_BROADCAST_ENABLED`, which is deployment configuration.
+- **Stripped-body scan** (`body-scan.cjs`): `validate()` uses `stripUnknown`. Across 274 validated routes, 175 read the body, and only one reads an undeclared field: listing `source_type`/`source_id`, which no client sends. Of the web literal bodies, 79 were checked against their Joi schemas: no enum mismatch, and 4 stripped keys that no handler needs. No repair.
+
+### Stream 1
+- **#241, awaiting simulator verification:**
+  - Fix: iOS gig detail refetches after a terminal tip. The P03 iOS bundle recorded a stale payment card until reopen; Android refetches on its receipt.
+  - Verification plan: its own simulator, derived data and port 18152, on the heavy slot after the fee agent's iOS pair and Stream 3's chat-link builds.
+  - With it, every item in P03's recorded "Remaining" list is covered:
+    - iOS create/cancel/3DS: `20260923-stream1-p03-ios-tip-r1`;
+    - storage loss on both platforms: `20260923-stream1-p03-storage-loss-r1`.
+- **Fee agent (P04/P05):**
+  - Backend and all three clients are implemented locally.
+  - Checks pass:
+    - CI schema replay reproduced with CLI 2.116.0 (2.98.2 segfaults on unchanged contracts);
+    - 67/67 pgTAP;
+    - migration `20260923000100_gig_fee_capture.sql` sorts after master's newest;
+    - backend Jest 238 suites.
+  - The Stripe TEST hold-unavailable no-show converges.
+  - Native pixel-identity pairs and the payer journeys are next. It holds C2BCF36A, `/private/tmp/pantopus-stream1-ios-dd`, port 18132 and emulator-5558.
+
+### Disk
+The data volume hit ENOSPC twice around 04:25 UTC. Each stream deleted only its own regenerable build output:
+- Stream 1: the 3DS-run derived data and packages, plus an old worktree's Android build;
+- Stream 2: about 19 GiB of stale iOS derived data;
+- Stream 3: about 3 GiB.
+
+About 32 GiB was free afterwards. Shared caches (`~/Library/Developer/Xcode/DerivedData`) were not touched.
+
+### Founder questions added (not implemented)
+- **Mailbox:**
+  - who sees `business_team` mail;
+  - whether admins see `attn_plus_admins` letters;
+  - whether a v1 bill send on an `attn_only` letter should still fan out a HomeBill (provider and amount) to finance viewers.
+- **Route drift:** build-vs-hide decisions for the Stream 2 items without a backend, once Stream 2 posts its proposals. The landlord Notices/Settings tabs have no tables at all.
+
+### Queue
+226 227 209 211 210 218 231 221 236 219 213 214 215 224 199 208. #240 (Stream 3 business inbox) is queued after review of its bundle, and #241 after simulator verification.
+
+## Resume point history — September 23, 2026, 04:17 UTC (first labelled 05:00)
 
 This updates the 03:45 block below; read both. The count is still **9 closed / 71 partial**.
 
@@ -46,7 +126,7 @@ Stream 1 results:
 - **Urgent-task fan-out:** build `find_homes_nearby` and start neighbor pushes?
 - **Mailbox:** should admins see `attn_plus_admins` letters? `/party/assign` assignee membership.
 
-## Resume point history — September 23, 2026, 03:45 UTC
+## Resume point history — September 23, 2026, 03:34 UTC (first labelled 03:45)
 
 This updates the 01:55 block below; read both. The count is still **9 closed / 71 partial**.
 
@@ -116,7 +196,7 @@ This updates the 01:55 block below; read both. The count is still **9 closed / 7
 - `20260923-stream1-p03-storage-loss-r1`: native tip recovery after local-storage loss. Android pays and iOS cancels, both on the same intent.
 - `20260923-stream1-bid-block-gate-r1`: PR229.
 
-## Resume point history — September 23, 2026, 01:55 UTC
+## Resume point history — September 23, 2026, 01:44 UTC (first labelled 01:55)
 
 The operating model from 23:50 UTC (below) still holds:
 - Claude coordinator session: Stream 1 developer and coordinator.
@@ -134,7 +214,7 @@ The count is still **9 closed / 71 partial**. No merged PR closes a whole row.
 | 201 public page shows revoked/expired letters as such | 2 / R06 | `7321e7a54` | same bundle |
 | 202 personal block refuses connection requests | 3 / N03–N04 | `896e15ba5` | `20260923-stream3-connection-request-block-gate-r1`, `3d6bf7393553…` |
 | 203 web hides Follow after a personal block | 3 / N03–N04 | `2ac88e90b` | `20260923-stream3-web-profile-block-follow-r1`, `a52fac3a451f…` |
-| 204 **P06 record + freeze** (founder decision) | 1 / P06 | `dd59f811b` | `20260923-stream1-p06-disputed-capture-freeze-r1`, `f892193038b8…` |
+| 204 **P06 record + freeze** (founder decision) | 1 / P06 | `dd59f811b` | `20260923-stream1-p06-disputed-capture-freeze-r1`, `e83baeae267b…` |
 | 205 only resident roles issue letters/passes | 2 / R06 | `8d3ab8810` | `20260923-stream2-r06-native-letters-passes-r1`, `abc109142f59…` |
 
 P06 detail:
@@ -184,12 +264,12 @@ Hold the next hub docs PR until this queue is empty.
 ### New evidence (all cleanup verified: owned SQL rows 0, TEST objects refunded/canceled/deleted, ledgers unchanged)
 
 - Stream 1:
-  - `20260923-stream1-p03-ios-tip-r1` (MANIFEST `8439eecbe818…`): P03 **iOS** native tips.
+  - `20260923-stream1-p03-ios-tip-r1` (MANIFEST `df1187bf0648…`): P03 **iOS** native tips.
     - Covered: new card; dismiss → Cancel tip; 3DS success; 3DS failure → same-intent recovery; three-tip limit; reload total $30.
     - iOS adds the Tip line only after a reload (Android updates it in place).
   - `20260923-stream1-p06-disputed-capture-freeze-r1` (PR204).
-  - `20260923-stream1-u02-android-sheets-a11y-r1` (MANIFEST `633aee9ed00d…`, PR210).
-  - `20260923-stream1-p04-no-show-release-r1` (MANIFEST `8030c691d087…`, PR211).
+  - `20260923-stream1-u02-android-sheets-a11y-r1` (MANIFEST `b6c055ad4483…`, PR210).
+  - `20260923-stream1-p04-no-show-release-r1` (MANIFEST `a4182bfcacaa…`, PR211).
 - Stream 2: `20260923-stream2-d07-member-expiry-r1` (MANIFEST `aa8764195…`, PR209). Its R06 bundles are in the table above.
 - Stream 3: the bundles in the table above.
 
@@ -202,7 +282,7 @@ Hold the next hub docs PR until this queue is empty.
 - **Stream 2:** D09 malformed-success readers → D02 unknown-save → D10 household delete cleanup.
 - **Stream 3:** iOS Settings "Blocked users" count (PR pending) → booking notification routing (iOS/Android) → cold-start link binding.
 
-## Resume point history — September 22, 2026, 23:50 UTC (superseded by the block above)
+## Resume point history — September 22, 2026, 23:44 UTC (first labelled 23:50; superseded by the block above)
 
 ### Operating model from 23:50 UTC — founder direction: "resume all work, all 3 streams"
 

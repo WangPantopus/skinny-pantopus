@@ -4,9 +4,9 @@
 
 The live queue, merges and cross-stream decisions are in the [coordination summary](README.md). The accounting table below is still authoritative; new evidence for each row:
 
-- **P03:** installed **iOS** native tips (`20260923-stream1-p03-ios-tip-r1`, MANIFEST `8439eecbe818…`), same cases as Android. iOS shows the Tip line only after a reload.
+- **P03:** installed **iOS** native tips (`20260923-stream1-p03-ios-tip-r1`, MANIFEST `df1187bf0648…`), same cases as Android. iOS shows the Tip line only after a reload.
 - **P06:** **record + freeze merged (PR204, `dd59f811b`)**; verified with real TEST events on Android (won → worker credited 1063) and iOS (webhook before record → frozen; lost → `refunded_full`).
-- **P08:** installed **iOS** checkout lifetime (`20260923-stream1-p08-ios-account-r1`, MANIFEST `dc56f5f82c6c…`).
+- **P08:** installed **iOS** checkout lifetime (`20260923-stream1-p08-ios-account-r1`, MANIFEST `8df47db4c573…`).
   - Dismissal now aborts on iOS, as on Android.
   - Process death → Resume/Cancel.
   - 401 sign-out.
