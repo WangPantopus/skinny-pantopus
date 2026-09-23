@@ -106,7 +106,7 @@ async function resolve({actorId,requestId,intent,cancel=false}) {
         if (!await getActiveOccupancy(result.home_id,userId)) continue;
         await require('./notificationService').createBulkNotifications([{
           userId,type:'member_moved_out',title:'Household member left',body:'A household member left.',
-          link:`/homes/${result.home_id}/occupants`,metadata:{home_id:result.home_id,moved_out_user_id:args.p_actor_id},
+          link:`/homes/${result.home_id}/members`,metadata:{home_id:result.home_id,moved_out_user_id:args.p_actor_id},
         }]);
       } catch { /* Retain committed proof; no outbox or delivery guarantee. */ }
     }
