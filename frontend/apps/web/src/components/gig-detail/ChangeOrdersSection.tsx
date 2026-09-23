@@ -15,6 +15,7 @@ import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { formatTimeAgo as timeAgo, CHANGE_ORDER_STATUS_STYLES, statusClasses } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { getErrorMessage } from '@pantopus/utils';
 
 // ─── Types ───
 
@@ -80,7 +81,7 @@ export default function ChangeOrdersSection({
       setFormTime('');
       await loadOrders();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to submit change request');
+      toast.error(getErrorMessage(err, 'Failed to submit change request'));
     } finally {
       setSubmitting(false);
     }
@@ -91,7 +92,7 @@ export default function ChangeOrdersSection({
       await api.gigs.approveChangeOrder(gigId, orderId);
       await loadOrders();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to approve');
+      toast.error(getErrorMessage(err, 'Failed to approve'));
     }
   };
 
@@ -101,7 +102,7 @@ export default function ChangeOrdersSection({
       await api.gigs.rejectChangeOrder(gigId, orderId, reason || undefined);
       await loadOrders();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to decline');
+      toast.error(getErrorMessage(err, 'Failed to decline'));
     }
   };
 
@@ -112,7 +113,7 @@ export default function ChangeOrdersSection({
       await api.gigs.withdrawChangeOrder(gigId, orderId);
       await loadOrders();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to withdraw');
+      toast.error(getErrorMessage(err, 'Failed to withdraw'));
     }
   };
 

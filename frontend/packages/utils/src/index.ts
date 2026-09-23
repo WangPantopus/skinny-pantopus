@@ -489,13 +489,18 @@ export function removeFromStorage(key: string): void {
 
 // ============ ERROR HANDLING ============
 
-export function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
+/**
+ * The user-facing message of a thrown value. The shared API client rejects
+ * with a plain `{ message, ... }` object rather than an `Error`, so read
+ * `.message` from either; `fallback` covers values that carry no message.
+ */
+export function getErrorMessage(error: unknown, fallback = 'An unknown error occurred'): string {
+  if (error instanceof Error) return error.message || fallback;
+  if (typeof error === 'string') return error || fallback;
   if (error && typeof error === 'object' && 'message' in error) {
-    return String(error.message);
+    return String(error.message) || fallback;
   }
-  return 'An unknown error occurred';
+  return fallback;
 }
 
 // ============ RATING UTILITIES ============
