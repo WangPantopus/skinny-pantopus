@@ -535,11 +535,13 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
         let user = rel.otherUser
         let displayName = Self.displayName(for: user) ?? "Member"
         let initials = Self.initials(for: user, displayName: displayName)
+        // The relationship payload carries no verification, so the chat
+        // this opens doesn't claim "Verified neighbor".
         let target = ConnectionsChatTarget(
             userId: user?.id ?? rel.id,
             displayName: displayName,
             initials: initials,
-            verified: true
+            verified: false
         )
         let acceptedAtRaw = rel.acceptedAt ?? rel.createdAt
         let body = "Connected " + (

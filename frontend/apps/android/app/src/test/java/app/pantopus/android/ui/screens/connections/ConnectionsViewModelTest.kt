@@ -389,7 +389,8 @@ class ConnectionsViewModelTest {
             assertNotNull(captured)
             assertEquals("u_a", captured?.userId)
             assertEquals("Maria Kovacs", captured?.displayName)
-            assertTrue(captured?.verified == true)
+            // The relationship payload carries no verification.
+            assertEquals(false, captured?.verified)
         }
 
     // MARK: - Pure helpers

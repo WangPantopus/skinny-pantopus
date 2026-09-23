@@ -460,7 +460,8 @@ final class ConnectionsViewModelTests: XCTestCase {
         handler()
         XCTAssertEqual(captured.target?.userId, "u_a")
         XCTAssertEqual(captured.target?.displayName, "Maria Kovacs")
-        XCTAssertTrue(captured.target?.verified ?? false)
+        // The relationship payload carries no verification.
+        XCTAssertFalse(captured.target?.verified ?? true)
     }
 
     // MARK: - Pure helpers

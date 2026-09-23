@@ -1903,7 +1903,7 @@ public struct HubTabRoot: View {
                             displayName: profile.displayName,
                             initials: Self.initials(from: profile.displayName),
                             identityKind: nil,
-                            verified: profile.verified ?? false
+                            verified: profile.hasVerifiedResidency
                         )))
                     }
                 },

@@ -531,12 +531,14 @@ class ConnectionsViewModel
             val user = rel.otherUser
             val displayName = displayNameFor(user) ?: "Member"
             val initials = initialsFor(user, displayName)
+            // The relationship payload carries no verification, so the chat
+            // this opens doesn't claim "Verified neighbor".
             val target =
                 ConnectionsChatTarget(
                     userId = user?.id ?: rel.id,
                     displayName = displayName,
                     initials = initials,
-                    verified = true,
+                    verified = false,
                 )
             val acceptedRaw = rel.acceptedAt ?: rel.createdAt
             val timeFragment = formatRelativeTime(acceptedRaw, now, zone) ?: "recently"
