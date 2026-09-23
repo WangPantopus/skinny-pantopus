@@ -122,14 +122,20 @@ data class BusinessUserDetailDto(
 )
 
 /**
- * Geo point projection. The backend's `parsePostGISPoint` normalises
- * PostGIS data into `{ lat, lng }`.
+ * Geo point projection. The backend's `parsePostGISPoint`
+ * (`backend/routes/businesses.js`) sends `{ longitude, latitude }`; the older
+ * `{ lat, lng }` shape is still accepted. Read [lat] / [lng].
  */
 @JsonClass(generateAdapter = true)
 data class BusinessGeoPoint(
-    val lat: Double,
-    val lng: Double,
-)
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    @Json(name = "lat") val legacyLat: Double? = null,
+    @Json(name = "lng") val legacyLng: Double? = null,
+) {
+    val lat: Double? get() = latitude ?: legacyLat
+    val lng: Double? get() = longitude ?: legacyLng
+}
 
 /** A single `BusinessLocation` row. */
 @JsonClass(generateAdapter = true)

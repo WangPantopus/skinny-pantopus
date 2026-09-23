@@ -115,9 +115,12 @@ public struct MailTaskListAlert: Identifiable, Sendable, Hashable {
     public let id = UUID()
     public let title: String
     public let message: String
+    /// When set, the alert's button is "Open task" and opens this task.
+    public let openTaskId: String?
 
-    public init(title: String, message: String) {
+    public init(title: String, message: String, openTaskId: String? = nil) {
         self.title = title
         self.message = message
+        self.openTaskId = openTaskId
     }
 }

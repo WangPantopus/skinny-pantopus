@@ -48,6 +48,7 @@ import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.components.DateSpan
 import app.pantopus.android.ui.components.DateSpanTone
+import app.pantopus.android.ui.components.FutureDatePickerDialog
 import app.pantopus.android.ui.screens.mailbox.vacation.components.HeldList
 import app.pantopus.android.ui.screens.mailbox.vacation.components.HoldStatusHero
 import app.pantopus.android.ui.theme.PantopusColors
@@ -97,6 +98,9 @@ fun VacationHoldScreen(
      */
     var showEndHoldConfirm by remember { mutableStateOf(false) }
 
+    /** The From / To row whose date picker is open. */
+    var pickingDate by remember { mutableStateOf<VacationDateField?>(null) }
+
     LaunchedEffect(toast) {
         if (toast != null) {
             kotlinx.coroutines.delay(TOAST_MILLIS)
@@ -134,7 +138,8 @@ fun VacationHoldScreen(
                         .padding(bottom = Spacing.s6),
             ) {
                 when (val m = mode) {
-                    is VacationHoldMode.Scheduling -> SchedulingBody(viewModel = viewModel, draft = m.draft)
+                    is VacationHoldMode.Scheduling ->
+                        SchedulingBody(viewModel = viewModel, draft = m.draft, onPickDate = { pickingDate = it })
                     is VacationHoldMode.Active ->
                         ActiveBody(
                             viewModel = viewModel,
@@ -143,6 +148,23 @@ fun VacationHoldScreen(
                         )
                 }
             }
+        }
+
+        val picking = pickingDate
+        val scheduling = mode as? VacationHoldMode.Scheduling
+        if (picking != null && scheduling != null) {
+            val draft = scheduling.draft
+            val isFrom = picking == VacationDateField.From
+            FutureDatePickerDialog(
+                initial = if (isFrom) draft.fromDate else draft.toDate,
+                earliest = if (isFrom) null else draft.fromDate,
+                confirmLabel = "Done",
+                onSelect = { date ->
+                    if (isFrom) viewModel.setFromDate(date) else viewModel.setToDate(date)
+                    pickingDate = null
+                },
+                onDismiss = { pickingDate = null },
+            )
         }
 
         if (showEndHoldConfirm) {
@@ -286,10 +308,14 @@ private fun TopBar(
 
 // MARK: - Scheduling body
 
+/** The date row a picker is open for. */
+private enum class VacationDateField { From, To }
+
 @Composable
 private fun SchedulingBody(
     viewModel: VacationHoldViewModel,
     draft: VacationScheduleDraft,
+    onPickDate: (VacationDateField) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         VacationOverline("When")
@@ -298,7 +324,10 @@ private fun SchedulingBody(
                 label = "From",
                 sub = "9:00 AM pickup",
                 value = formatWeekdayShort(draft.fromDate),
-                onTap = { viewModel.tapFromDate() },
+                onTap = {
+                    viewModel.tapFromDate()
+                    onPickDate(VacationDateField.From)
+                },
                 tag = "vacationHoldFromDate",
             )
             VacationHairline()
@@ -306,7 +335,10 @@ private fun SchedulingBody(
                 label = "To",
                 sub = "Resume delivery",
                 value = formatWeekdayShort(draft.toDate),
-                onTap = { viewModel.tapToDate() },
+                onTap = {
+                    viewModel.tapToDate()
+                    onPickDate(VacationDateField.To)
+                },
                 tag = "vacationHoldToDate",
             )
             VacationHairline()

@@ -1109,9 +1109,6 @@ public struct YouTabRoot: View {
                 onOpenSenderProfile: { userId in
                     Task { @MainActor in path.append(.publicProfile(userId: userId)) }
                 },
-                onTranslate: {
-                    Task { @MainActor in path.append(.mailTranslation(mailId: mailId)) }
-                },
                 onOpenExtractedTask: { sourceMailId in
                     // A17.12 — the certified-notice "view task" affordance
                     // opens the mail-derived task keyed by its source mail.
