@@ -364,9 +364,8 @@ function CommunityDetailPanel({
           )}
         </div>
 
-        {/* Reach count */}
+        {/* Published details. No reach count: the stored neighbors_received isn't a real count of households. */}
         <div className="flex items-center gap-4 mb-4 text-xs text-app-text-secondary">
-          <span>{item.neighbors_received} households received this</span>
           <span>Published to {item.published_to}</span>
           <span>{new Date(item.created_at).toLocaleDateString()}</span>
         </div>
