@@ -31,6 +31,7 @@ const {
 } = require('../utils/moduleSchemas');
 const stripeService = require('../stripe/stripeService');
 const blockService = require('../services/blockService');
+const { escapeIlike } = require('../utils/escapeIlike');
 const { publicPayment, publicGigFee } = require('../stripe/gigPaymentProof');
 const paidGigAcceptance = require('../services/gigPaymentAcceptance');
 const gigStop = require('../services/gigStopService');
@@ -43,6 +44,7 @@ const homeTaskGigService = require('../services/homeTaskGigService');
 const gigPricingService = require('../services/gig/gigPricingService');
 const { alertMatchingSavedSearches } = require('../services/savedSearchAlertService');
 const { haversineMiles } = require('../utils/geo');
+const { checkHomePermission } = require('../utils/homePermissions');
 const {
   serializeGigAuthorForViewer,
   serializeUserAsLocalIdentity,
@@ -240,6 +242,29 @@ function applyUserExclusions(gigs, exclusions) {
 function excludeUserOwnedGigs(gigs, userId) {
   if (!userId) return gigs;
   return gigs.filter((gig) => String(gig?.user_id || '') !== String(userId));
+}
+
+/**
+ * Leave out tasks from anyone the viewer blocked or who blocked the viewer (UserBlock,
+ * both directions), matching the poster (user_id) and whoever created the task
+ * (created_by). Anonymous viewers are unaffected. A failed block read throws
+ * (blockService's unavailable contract), so a caller never lists unfiltered tasks.
+ */
+async function excludeBlockedPosters(gigs, viewerId) {
+  if (!viewerId || !Array.isArray(gigs) || gigs.length === 0) return gigs;
+  const blocked = await blockService.blockedUserIds(viewerId);
+  if (blocked.size === 0) return gigs;
+  const isBlocked = (id) => id != null && blocked.has(String(id));
+  let kept = gigs.filter((gig) => !isBlocked(gig?.user_id) && !isBlocked(gig?.created_by));
+  // List RPCs return user_id only; read created_by for the rest.
+  const unread = kept.filter((gig) => gig && gig.created_by === undefined && gig.id).map((gig) => gig.id);
+  if (unread.length > 0) {
+    const { data, error } = await supabaseAdmin.from('Gig').select('id').in('id', unread).in('created_by', [...blocked]);
+    if (error) throw blockService.blockCheckUnavailable();
+    const drop = new Set((data || []).map((row) => String(row.id)));
+    if (drop.size > 0) kept = kept.filter((gig) => !drop.has(String(gig.id)));
+  }
+  return kept;
 }
 
 function summarizeGigBids(bids) {
@@ -565,9 +590,10 @@ const createGigSchema = Joi.object({
   title: Joi.string().min(5).max(255).required(),
   description: Joi.string().min(10).required(),
   price: Joi.number().min(0).when('home_task_source', { is: Joi.exist(), then: Joi.number().precision(2).max(99999999.99).strict() }).required(),
-  category: Joi.string().max(100).optional(),
-  deadline: Joi.date().iso().when('home_task_source', { is: Joi.exist(), then: Joi.optional(), otherwise: Joi.date().min('now').optional() }),
-  estimated_duration: Joi.number().positive().optional(), // hours
+  // Clients send an optional field they left empty as null; treat it as not provided.
+  category: Joi.string().max(100).allow(null).optional(),
+  deadline: Joi.date().iso().allow(null).when('home_task_source', { is: Joi.exist(), then: Joi.optional(), otherwise: Joi.date().min('now').allow(null).optional() }),
+  estimated_duration: Joi.number().positive().allow(null).optional(), // hours
   attachments: Joi.array().items(Joi.string().uri()).max(10).optional(),
 
   // Proxy posting: post a gig on behalf of a business account
@@ -580,7 +606,7 @@ const createGigSchema = Joi.object({
     .optional(),
 
   // Scheduled start time (used for grace window calculations)
-  scheduled_start: Joi.date().iso().optional(),
+  scheduled_start: Joi.date().iso().allow(null).optional(),
 
   // Tasks surface: new fields
   location_precision: Joi.string()
@@ -781,9 +807,10 @@ const updateGigSchema = Joi.object({
   title: Joi.string().min(5).max(255),
   description: Joi.string().min(10),
   price: Joi.number().min(0),
-  category: Joi.string().max(100),
-  deadline: Joi.date().iso().min('now'),
-  estimated_duration: Joi.number().positive(),
+  // null clears an optional field the editor emptied.
+  category: Joi.string().max(100).allow(null),
+  deadline: Joi.date().iso().min('now').allow(null),
+  estimated_duration: Joi.number().positive().allow(null),
   attachments: Joi.array().items(Joi.string().uri()).max(10),
   cancellation_policy: Joi.string().valid('flexible', 'standard', 'strict'),
   is_urgent: Joi.boolean(),
@@ -1060,6 +1087,11 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
   logger.info('Creating gig', { userId, beneficiary_user_id });
 
   try {
+    // Posting from a Home needs home.view there: its members see these tasks on the Home help card.
+    if (location.homeId && !(await checkHomePermission(location.homeId, userId, 'home.view')).hasAccess) {
+      return res.status(403).json({ error: "You can't post from that Home." });
+    }
+
     // ─── Proxy posting (post as business) ───
     let effectiveUserId = userId; // who the gig belongs to
     let createdBy = userId; // who actually created it
@@ -2108,8 +2140,8 @@ router.get('/search', verifyToken, async (req, res) => {
     const tokens = normalizedQuery.split(/\s+/).filter(Boolean).slice(0, 6);
     const primaryToken = tokens[0] || normalizedQuery;
 
-    const fullSearchTerm = `%${queryText}%`;
-    const broadSearchTerm = `%${primaryToken}%`;
+    const fullSearchTerm = `%${escapeIlike(queryText)}%`;
+    const broadSearchTerm = `%${escapeIlike(primaryToken)}%`;
     const candidateLimit = Math.min(Math.max((safeOffset + safeLimit) * 8, 80), 400);
 
     // Build base query
@@ -2269,7 +2301,7 @@ router.get('/search', verifyToken, async (req, res) => {
  * This endpoint is intentionally public (no verifyToken) because it powers the main browsing feed.
  * We enrich each gig with bidsCount (number of bids/offers).
  */
-router.get('/', async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   try {
     const {
@@ -2305,7 +2337,7 @@ router.get('/', async (req, res) => {
     }
 
     const requestedUserId = userId || user_id;
-    const currentUserId = req.user?.id || (await extractOptionalUserId(req));
+    const currentUserId = req.user?.id || null; // optionalAuth: Bearer (native) or session cookie (web)
     const shouldExcludeOwnGigs = Boolean(currentUserId && !requestedUserId);
 
     // Resolve pagination: support both page (1-based) and offset
@@ -2380,6 +2412,13 @@ router.get('/', async (req, res) => {
       }
 
       let rows = data || [];
+
+      try {
+        rows = await excludeBlockedPosters(rows, currentUserId);
+      } catch (blockErr) {
+        logger.warn('Gig list block check unavailable', { error: blockErr.message });
+        return res.status(503).json({ error: 'Failed to fetch gigs' });
+      }
 
       if (shouldExcludeOwnGigs) {
         rows = excludeUserOwnedGigs(rows, currentUserId);
@@ -2670,7 +2709,8 @@ router.get('/', async (req, res) => {
     // Search filter (non-spatial path)
     const searchTerm = (search || '').trim();
     if (searchTerm) {
-      query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+      const escapedSearch = escapeIlike(searchTerm);
+      query = query.or(`title.ilike.%${escapedSearch}%,description.ilike.%${escapedSearch}%`);
     }
 
     // Deadline filter (non-spatial path)
@@ -2723,11 +2763,19 @@ router.get('/', async (req, res) => {
 
     query = query.range(parsedOffset, parsedOffset + parsedLimit - 1);
 
-    const { data: gigs, error, count } = await query;
+    const { data: fetchedGigs, error, count } = await query;
 
     if (error) {
       logger.error('Error fetching gigs', { error: error.message });
       return res.status(500).json({ error: 'Failed to fetch gigs' });
+    }
+
+    let gigs;
+    try {
+      gigs = await excludeBlockedPosters(fetchedGigs || [], currentUserId);
+    } catch (blockErr) {
+      logger.warn('Gig list block check unavailable', { error: blockErr.message });
+      return res.status(503).json({ error: 'Failed to fetch gigs' });
     }
 
     const gigIdsFromGigs = (gigs || []).map((g) => g.id).filter(Boolean);
@@ -2790,7 +2838,7 @@ router.get('/', async (req, res) => {
  *  - min_lat, min_lon, max_lat, max_lon (required)
  *  - status (optional, default 'open')
  */
-router.get('/in-bounds', async (req, res) => {
+router.get('/in-bounds', optionalAuth, async (req, res) => {
   const startTime = process.hrtime.bigint();
   try {
     const min_lat = parseFloat(req.query.min_lat);
@@ -2804,7 +2852,7 @@ router.get('/in-bounds', async (req, res) => {
     }
     const includeRemote = parseBooleanQuery(req.query.includeRemote, true);
     const category = req.query.category || null;
-    const currentUserId = req.user?.id || (await extractOptionalUserId(req));
+    const currentUserId = req.user?.id || null; // optionalAuth: Bearer (native) or session cookie (web)
 
     if (![min_lat, min_lon, max_lat, max_lon].every(Number.isFinite)) {
       return res
@@ -2836,7 +2884,13 @@ router.get('/in-bounds', async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch gigs in bounds' });
     }
 
-    const rows = data || [];
+    let rows;
+    try {
+      rows = await excludeBlockedPosters(data || [], currentUserId);
+    } catch (blockErr) {
+      logger.warn('Gig map block check unavailable', { error: blockErr.message });
+      return res.status(503).json({ error: 'Failed to fetch gigs in bounds' });
+    }
     const savedGigIds = await getViewerSavedGigIds(
       currentUserId,
       rows.map((gig) => gig.id).filter(Boolean)
@@ -3378,7 +3432,7 @@ const { getGigClusters } = require('../services/gig/clusterService');
  * Returns pre-sectioned data for the task browse feed.
  * Query params: lat, lng (required), radius (optional, meters, default 100mi)
  */
-router.get('/browse', async (req, res) => {
+router.get('/browse', optionalAuth, async (req, res) => {
   const startTime = Date.now();
   try {
     const lat = parseFloat(req.query.lat);
@@ -3400,7 +3454,7 @@ router.get('/browse', async (req, res) => {
       MAX_BROWSE_RADIUS_METERS
     );
     const taskArchetype = req.query.task_archetype || null;
-    const userId = await extractOptionalUserId(req);
+    const userId = req.user?.id || null; // optionalAuth: Bearer (native) or session cookie (web)
 
     // ── Cache check ──
     if (!userId) {
@@ -3434,7 +3488,14 @@ router.get('/browse', async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch gigs' });
     }
 
-    const visibleGigs = excludeUserOwnedGigs(allGigs || [], userId);
+    let unblockedGigs;
+    try {
+      unblockedGigs = await excludeBlockedPosters(allGigs || [], userId);
+    } catch (blockErr) {
+      logger.warn('Browse block check unavailable', { error: blockErr.message });
+      return res.status(503).json({ error: 'Failed to fetch gigs' });
+    }
+    const visibleGigs = excludeUserOwnedGigs(unblockedGigs, userId);
 
     // ── Fetch user context (optional, non-blocking) ──
     let userAffinities = [];
@@ -3705,13 +3766,14 @@ router.delete('/hidden-categories/:category', verifyToken, async (req, res) => {
 
 /**
  * GET /api/gigs/:id
- * Get a single gig by ID
+ * Get a single gig by ID. optionalAuth resolves the viewer from a Bearer token (native) or the web
+ * session cookie; a revoked session reads as anonymous, as on the app's other soft-auth reads.
  */
-router.get('/:id', async (req, res) => {
+router.get('/:id', optionalAuth, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   try {
     const { id } = req.params;
-    const currentUserId = req.user?.id || (await extractOptionalUserId(req));
+    const currentUserId = req.user?.id || null;
 
     // Public reads should not depend on RLS (server does not forward user JWT to Supabase).
     // Use the service role client for consistent behavior.
@@ -3815,6 +3877,9 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
       const { latitude, longitude, mode, address, city, state, zip, homeId, place_id,
         geocode_provider, geocode_accuracy, geocode_place_id } =
         updateData.location;
+      if (homeId && !(await checkHomePermission(homeId, userId, 'home.view')).hasAccess) {
+        return res.status(403).json({ error: "You can't post from that Home." });
+      }
       const approx = calculateApproxLocation(latitude, longitude);
 
       updateData.exact_location = formatLocationForDB(latitude, longitude);
