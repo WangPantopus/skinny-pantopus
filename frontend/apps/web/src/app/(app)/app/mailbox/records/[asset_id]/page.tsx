@@ -1,18 +1,14 @@
 'use client';
 
 /* eslint-disable @next/next/no-img-element */
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import type { MailItemV2 } from '@/types/mailbox';
 import {
   useAssetFullDetail,
-  useAddAssetPhoto,
   useLinkMailToAsset,
   useDrawerItems,
 } from '@/lib/mailbox-queries';
-import { GigCreationModal } from '@/components/mailbox';
-// The user's Home; each page used a hard-coded 'home_1' stub.
-import useHomeProfile from '../../_components/useMailboxHome';
 
 // ── Category icons ───────────────────────────────────────────
 const categoryIcons: Record<string, string> = {
@@ -92,6 +88,12 @@ function LinkMailDrawer({
           />
         </div>
 
+        {linkMail.isError && (
+          <p role="alert" className="px-4 py-2 text-xs text-red-600 border-b border-app-border-subtle">
+            {linkMail.error?.message || "Couldn't link this mail. Try again."}
+          </p>
+        )}
+
         {/* Results */}
         <div className="flex-1 overflow-y-auto">
           {filteredItems.length === 0 ? (
@@ -128,24 +130,14 @@ export default function AssetDetailPage() {
   const params = useParams<{ asset_id?: string | string[] }>();
   const rawAssetId = params?.asset_id;
   const assetId = Array.isArray(rawAssetId) ? rawAssetId[0] || '' : rawAssetId || '';
-  const home = useHomeProfile();
   const router = useRouter();
   const { data: fullDetail, isLoading } = useAssetFullDetail(assetId);
-  const addPhoto = useAddAssetPhoto();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showLinkDrawer, setShowLinkDrawer] = useState(false);
-  const [showGigModal, setShowGigModal] = useState(false);
 
   const asset = fullDetail?.asset;
   const linkedMail = fullDetail?.mail || [];
   const linkedGigs = fullDetail?.gigs || [];
   const photos = fullDetail?.photos || [];
-
-  const handlePhotoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    addPhoto.mutate({ assetId, file });
-  }, [assetId, addPhoto]);
 
   const wStatus = asset ? warrantyColors[asset.warranty_status] || warrantyColors.none : warrantyColors.none;
   const iconPath = asset ? categoryIcons[asset.category] || categoryIcons.other : categoryIcons.other;
@@ -218,31 +210,24 @@ export default function AssetDetailPage() {
         </div>
 
         {/* ── Action buttons ─────────────────────────────────── */}
+        {/* "Add photo" returns once record photos can be stored privately; its route never existed. */}
         <div className="flex items-center gap-2 mb-6">
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={addPhoto.isPending}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-app-text-secondary dark:text-app-text-muted border border-app-border rounded-lg hover:bg-app-hover dark:hover:bg-gray-800 transition-colors"
-          >
-            <span>📷</span>
-            {addPhoto.isPending ? 'Uploading...' : 'Add photo'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowGigModal(true)}
+            onClick={() => {
+              // The real task form, prefilled; the modal here only pretended to post.
+              const details = [asset.manufacturer, asset.model_number].filter(Boolean).join(' ');
+              const prefill = {
+                title: `Help with ${asset.name}`,
+                description: `Help needed with ${asset.name} (${asset.category}${details ? `, ${details}` : ''}).`,
+              };
+              router.push(`/app/gigs/new?prefill=${encodeURIComponent(JSON.stringify(prefill))}`);
+            }}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-app-text-secondary dark:text-app-text-muted border border-app-border rounded-lg hover:bg-app-hover dark:hover:bg-gray-800 transition-colors"
           >
             <span>🤝</span>
             Post Gig
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handlePhotoUpload}
-            className="hidden"
-          />
         </div>
 
         {/* ── Photos gallery ─────────────────────────────────── */}
@@ -425,22 +410,6 @@ export default function AssetDetailPage() {
         <LinkMailDrawer
           assetId={assetId}
           onClose={() => setShowLinkDrawer(false)}
-        />
-      )}
-
-      {/* ── Gig Creation Modal ───────────────────────────────── */}
-      {showGigModal && (
-        <GigCreationModal
-          source="post_delivery"
-          packageTitle={asset.name}
-          packageDescription={`${asset.category} — ${asset.manufacturer || ''} ${asset.model_number || ''}`.trim()}
-          homeAddress={home.address}
-          onGigCreated={() => setShowGigModal(false)}
-          onClose={() => setShowGigModal(false)}
-          createGig={async () => {
-            // In production this would call the actual gig API
-            return { gigId: `gig_${Date.now()}` };
-          }}
         />
       )}
     </div>

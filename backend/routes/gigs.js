@@ -6285,25 +6285,43 @@ router.post('/:gigId/change-orders/:orderId/approve', verifyToken, async (req, r
     }
 
     const nowIso = new Date().toISOString();
+    // Claim the still-pending order, so a repeated approve can't apply its price twice.
     const { data: updated, error: updateErr } = await supabaseAdmin
       .from('GigChangeOrder')
       .update({ status: 'approved', reviewed_by: userId, reviewed_at: nowIso, updated_at: nowIso })
       .eq('id', orderId)
+      .eq('status', 'pending')
       .select()
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       return res.status(500).json({ error: 'Failed to approve change order' });
     }
+    if (!updated) {
+      return res.status(409).json({ error: 'This change request was already answered.' });
+    }
 
-    // Apply price change to gig if applicable
+    // Apply price change to gig if applicable. If the price can't be saved, the
+    // order goes back to pending and nobody is told it was approved.
     if (order.amount_change && order.amount_change !== 0) {
       const currentPrice = parseFloat(gig.price) || 0;
       const newPrice = Math.max(0, currentPrice + parseFloat(order.amount_change));
-      await supabaseAdmin
+      const { error: priceErr } = await supabaseAdmin
         .from('Gig')
         .update({ price: newPrice, updated_at: nowIso })
         .eq('id', gigId);
+      if (priceErr) {
+        logger.error('Approve change order: price update failed', { gigId, orderId, error: priceErr.message });
+        const { error: revertErr } = await supabaseAdmin
+          .from('GigChangeOrder')
+          .update({ status: 'pending', reviewed_by: null, reviewed_at: null, updated_at: new Date().toISOString() })
+          .eq('id', orderId)
+          .eq('status', 'approved');
+        if (revertErr) {
+          logger.error('Approve change order: could not return the order to pending', { gigId, orderId, error: revertErr.message });
+        }
+        return res.status(500).json({ error: 'Failed to approve change order' });
+      }
     }
 
     // Notify the requester
@@ -6964,8 +6982,18 @@ function noShowEligibility(gig, userId, now = Date.now()) {
     return { can_report: false, reason: `Status is ${gig.status}` };
   }
 
-  if (!gig.user_id || !gig.accepted_by || String(gig.user_id) === String(gig.accepted_by) || gig.started_at) {
-    return { can_report: false, reason: 'No grounds for no-show report' };
+  // A refused report is shown to the person who tried it, so each reason says
+  // plainly why a no-show can't be reported yet.
+  if (gig.started_at) {
+    return {
+      can_report: false,
+      reason: isPoster
+        ? "The worker has already started, so this can't be reported as a no-show."
+        : "You've already started this task, so it can't be reported as a no-show.",
+    };
+  }
+  if (!gig.user_id || !gig.accepted_by || String(gig.user_id) === String(gig.accepted_by)) {
+    return { can_report: false, reason: "This task can't be reported as a no-show." };
   }
 
   // Check if enough time has passed to suspect a no-show
@@ -6993,7 +7021,7 @@ function noShowEligibility(gig, userId, now = Date.now()) {
       reason:
         now > canReportAfter
           ? 'Worker has not started after expected time'
-          : 'Too early to report',
+          : 'You can report a no-show 30 minutes after the agreed start time.',
     };
   }
 
@@ -7002,12 +7030,12 @@ function noShowEligibility(gig, userId, now = Date.now()) {
   // scheduled task also needs its agreed start plus the same buffer to pass.
   if (isWorker && gig.status === 'assigned') {
     const acceptedAt = gig.accepted_at ? new Date(gig.accepted_at).getTime() : now;
-    if (!Number.isFinite(acceptedAt)) return { can_report: false, reason: 'No valid acceptance time' };
+    if (!Number.isFinite(acceptedAt)) return { can_report: false, reason: "This task can't be reported as a no-show." };
     const hoursOverdue = (now - acceptedAt) / (60 * 60 * 1000);
     let scheduledStart = null;
     if (gig.scheduled_start) {
       scheduledStart = new Date(gig.scheduled_start).getTime();
-      if (!Number.isFinite(scheduledStart)) return { can_report: false, reason: 'No valid scheduled start' };
+      if (!Number.isFinite(scheduledStart)) return { can_report: false, reason: "This task can't be reported as a no-show." };
     }
     const canReportAfter = scheduledStart === null ? null : scheduledStart + NO_SHOW_BUFFER_MS;
     const canReport = hoursOverdue > 24 && (canReportAfter === null || now > canReportAfter);
@@ -7018,11 +7046,16 @@ function noShowEligibility(gig, userId, now = Date.now()) {
         expected_start: new Date(scheduledStart).toISOString(),
         can_report_after: new Date(canReportAfter).toISOString(),
       }),
-      reason: canReport ? 'Poster unresponsive for 24+ hours' : 'Too early to report',
+      // Too early: name the rule that is still waiting (the later of the two).
+      reason: canReport
+        ? 'Poster unresponsive for 24+ hours'
+        : canReportAfter !== null && canReportAfter >= acceptedAt + 24 * 60 * 60 * 1000
+          ? 'You can report the poster as a no-show 30 minutes after the agreed start time.'
+          : 'You can report the poster as a no-show 24 hours after the task was assigned to you.',
     };
   }
 
-  return { can_report: false, reason: 'No grounds for no-show report' };
+  return { can_report: false, reason: "This task can't be reported as a no-show right now." };
 }
 
 // A no-show cancel refused by a database guard that holds the task for another
@@ -7082,9 +7115,11 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
 
     // Must be in assigned or in_progress state
     if (!resumingPosterNoShow && !['assigned', 'in_progress'].includes(gig.status)) {
+      const state = { open: 'still open', completed: 'already completed', cancelled: 'already cancelled' }[gig.status]
+        || 'no longer active';
       return res
         .status(400)
-        .json({ error: `Cannot report no-show for a gig in "${gig.status}" status` });
+        .json({ error: `This task is ${state}, so it can't be reported as a no-show.` });
     }
 
     const eligibility = resumingPosterNoShow ? { can_report: true } : noShowEligibility(gig, userId);
