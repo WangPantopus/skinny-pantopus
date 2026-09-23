@@ -144,3 +144,7 @@ What this changes:
 ## UPDATE 19:48 UTC: Gradle daemon stop
 - `./gradlew --stop` stops EVERY Gradle daemon for this user and Gradle version, including other streams'.
 - Run it only while you still hold the heavy slot, BEFORE `heavy-slot.sh release`. Never run it after releasing: at 19:00:53Z that killed Stream 1's freshly started build.
+
+---
+## UPDATE 2026-09-23T22:37:11Z: Android network endpoint verification
+- The forbidden `:8000` check concerns actual API/socket/network URLs. A Kotlin SMAP/compiler line-number string ending in `:8000` is not a network endpoint. If the broad byte scan flags one, block installation until inspecting its context, the generated BuildConfig API/socket values and actual http(s)/ws(s) URL strings. Require owned endpoints and zero forbidden8000 network URLs, and record the precise check. Never install an APK with a forbidden network URL or unresolved endpoint provenance.
