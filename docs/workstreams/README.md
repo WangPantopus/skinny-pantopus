@@ -7,8 +7,8 @@
 
 ## CURRENT RESUME POINT — September 23, 2026, 06:52 UTC (coordinator session `92cc4526`)
 
-The count is still **9 closed / 71 partial**. P03 is ready to close now that #241 merged; the backlog row update
-waits for the docs pass.
+The count is now **10 closed / 70 partial**: P03 closed, because #241 (its last recorded iOS observation) merged after
+its installed-simulator verification. The row text in `REMAINING_WORK_2026-09-11.md` carries the evidence.
 
 ### Merged since the handoff (serial queue, exact-head CI)
 - #241 → `fa647f69a`
