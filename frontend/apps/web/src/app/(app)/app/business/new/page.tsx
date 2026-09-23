@@ -75,16 +75,22 @@ export default function BusinessOnboardingPage() {
     setSaving(true);
     setError('');
     try {
+      // The type chips describe what the business does, not its legal entity:
+      // `business_type` only accepts entity types (for_profit, nonprofit_501c3,
+      // …), so every chip used to fail with a 400. Leave the entity to the
+      // server default (for_profit) and keep the chip as the first category.
+      const typedCategories = categories
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       const result = await api.businesses.createBusiness({
         name: name.trim(),
         username: username.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''),
         email: email.trim(),
-        business_type: businessType,
         description: description.trim() || undefined,
-        categories: categories
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
+        categories: businessType === 'other' || typedCategories.includes(businessType)
+          ? typedCategories
+          : [businessType, ...typedCategories],
         public_phone: phone.trim() || undefined,
         website: website.trim() || undefined,
       });

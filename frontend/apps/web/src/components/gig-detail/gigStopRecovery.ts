@@ -36,7 +36,9 @@ export function validStopRequest(value: unknown, gigId: string): value is GigSto
     && (value.reason === null || reasons.includes(value.reason as string))
     && (value.reasonNoteHash == null || (value.reason === 'other' && fingerprint(value.reasonNoteHash)))
     && (value.rollbackMode === null || (value.rollbackMode === 'payment_setup_aborted' && value.action === 'reopen_bidding'))
-    && ['none', 'release', 'refund'].includes(value.financialAction as string);
+    && ['none', 'release', 'refund', 'fee'].includes(value.financialAction as string)
+    // Only an owner cancel with a policy fee charges it from the hold.
+    && (value.financialAction !== 'fee' || (value.action === 'cancel' && value.terms.policyFeeCents > 0));
 }
 
 export function sameStopRequest(a: GigStopRequest, b: GigStopRequest): boolean {
@@ -59,8 +61,9 @@ export function verifyStopPreview(value: GigStopPreview, gigId: string, actorId:
   if (!value || !validStopTerms(value.terms, gigId) || value.action !== action
     || typeof value.eligible !== 'boolean' || !optionalId(value.activeRequestId)
     || !(value.unavailableReason === null || typeof value.unavailableReason === 'string')
-    || !['none', 'release', 'refund', 'review'].includes(value.financialAction)
-    || (value.eligible && (value.financialAction === 'review' || value.terms.policyFeeCents !== 0))) {
+    || !['none', 'release', 'refund', 'review', 'fee'].includes(value.financialAction)
+    || (value.eligible && (value.financialAction === 'review'
+      || (value.financialAction === 'fee') !== (value.terms.policyFeeCents > 0)))) {
     throw new Error('Task action details could not be verified. Check again before continuing.');
   }
   verifyStopScope(value.actorId, value.sessionScope, actorId, scope);
@@ -73,7 +76,8 @@ export function verifyStopProgress(value: GigStopProgress, gigId: string, actorI
     || value.request.requestId !== requestId || value.action !== value.request.action
     || (expected && !sameStopRequest(value.request, expected))
     || !['pending', 'needs_review', 'completed'].includes(value.status)
-    || !['none', 'release_pending', 'released', 'refund_pending', 'refunded', 'needs_review'].includes(value.financialStatus)
+    || !['none', 'release_pending', 'released', 'refund_pending', 'refunded', 'fee_pending', 'fee_charged',
+      'needs_review'].includes(value.financialStatus)
     || typeof value.canRetry !== 'boolean' || (value.canRetry && value.request.actorId !== actorId)) {
     throw new Error('The task action is not confirmed. Check its status to recover the original request.');
   }
@@ -84,13 +88,21 @@ export function verifyStopProgress(value: GigStopProgress, gigId: string, actorI
   }
   const request = value.request;
   const receipt = value.receipt;
-  const financial = { none: 'none', release: 'released', refund: 'refunded' }[request.financialAction];
+  // A fee request completes with the charged fee, or released with nothing
+  // charged when the hold was no longer capturable.
+  const financial = request.financialAction === 'fee'
+    ? receipt && ((receipt.financialStatus === 'fee_charged' && receipt.feeStatus === 'charged'
+      && receipt.feeCents === request.terms.policyFeeCents
+      && receipt.releasedCents === request.terms.amountCents - request.terms.policyFeeCents)
+      || (receipt.financialStatus === 'released' && receipt.feeStatus === 'not_charged' && receipt.feeCents === 0))
+      ? receipt.financialStatus : null
+    : { none: 'none', release: 'released', refund: 'refunded' }[request.financialAction];
   const status = ['reopen_bidding', 'worker_release'].includes(request.action) ? 'open' : 'cancelled';
   if (!receipt || value.canRetry || receipt.requestId !== requestId || receipt.gigId !== gigId
     || receipt.action !== request.action || receipt.paymentId !== request.terms.paymentId
     || receipt.ownerId !== request.terms.ownerId || receipt.workerId !== request.terms.workerId
     || receipt.amountCents !== request.terms.amountCents || receipt.currency !== 'usd'
-    || receipt.gigStatus !== status || receipt.financialStatus !== financial || value.financialStatus !== financial) {
+    || receipt.gigStatus !== status || !financial || receipt.financialStatus !== financial || value.financialStatus !== financial) {
     throw new Error('Completion is not confirmed. Check the original task action before continuing.');
   }
   return value;
@@ -188,6 +200,10 @@ export function stopProgressMessage(progress: GigStopProgress): string {
       ? 'The payment hold release is pending. The task action is not complete yet.'
       : 'The task action is pending. Check its status before continuing.';
   const outcome = progress.receipt?.gigStatus === 'open' ? 'The task is open for bidding.' : 'The task is cancelled.';
+  const receipt = progress.receipt;
   return progress.financialStatus === 'refunded' ? `${outcome} The refund is confirmed; your bank may take additional time to show it.`
-    : progress.financialStatus === 'released' ? `${outcome} The payment hold release is confirmed.` : outcome;
+    : progress.financialStatus === 'released' ? `${outcome} The payment hold release is confirmed.`
+      : progress.financialStatus === 'fee_charged' && receipt?.feeCents !== undefined && receipt.releasedCents !== undefined
+        ? `${outcome} Cancellation fee $${(receipt.feeCents / 100).toFixed(2)} charged · $${(receipt.releasedCents / 100).toFixed(2)} released.`
+        : outcome;
 }

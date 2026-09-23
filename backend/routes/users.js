@@ -4242,7 +4242,7 @@ router.get('/:id/relationship', verifyToken, async (req, res) => {
 
     const visibility = require('../utils/visibilityPolicy');
     const [relationshipStatus, followingThem, theyFollowMe] = await Promise.all([
-      visibility.getRelationshipStatus(viewerId, targetId),
+      visibility.getRelationshipStatus(viewerId, targetId, { forViewer: true }),
       isUserFollowing(viewerId, targetId),
       isUserFollowing(targetId, viewerId),
     ]);
