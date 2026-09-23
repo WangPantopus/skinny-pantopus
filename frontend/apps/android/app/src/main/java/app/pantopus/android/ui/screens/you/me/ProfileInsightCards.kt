@@ -338,7 +338,8 @@ private fun DetailSection(
 @Composable
 fun InviteProgressCard(
     progress: InviteProgressDto,
-    onShare: () -> Unit = {},
+    // Null hides "Invite a neighbor" (no invite code to share yet).
+    onShare: (() -> Unit)? = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -410,31 +411,33 @@ fun InviteProgressCard(
                 )
             }
         }
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(Radii.md))
-                    .background(PantopusColors.primary600)
-                    .clickable(onClick = onShare)
-                    .padding(vertical = Spacing.s3)
-                    .testTag("inviteProgress.share"),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Send,
-                contentDescription = null,
-                size = 16.dp,
-                tint = PantopusColors.appTextInverse,
-            )
-            Spacer(Modifier.width(Spacing.s2))
-            Text(
-                text = "Invite a neighbor",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = PantopusColors.appTextInverse,
-            )
+        if (onShare != null) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(Radii.md))
+                        .background(PantopusColors.primary600)
+                        .clickable(onClick = onShare)
+                        .padding(vertical = Spacing.s3)
+                        .testTag("inviteProgress.share"),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.Send,
+                    contentDescription = null,
+                    size = 16.dp,
+                    tint = PantopusColors.appTextInverse,
+                )
+                Spacer(Modifier.width(Spacing.s2))
+                Text(
+                    text = "Invite a neighbor",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PantopusColors.appTextInverse,
+                )
+            }
         }
     }
 }
