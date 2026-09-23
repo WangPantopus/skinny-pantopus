@@ -138,6 +138,10 @@ public enum YouRoute: Hashable {
     /// T6.3f / P14 — Home dashboard for a specific home, reached from
     /// the My homes row tap inside the You stack.
     case homeDashboard(homeId: String)
+    /// Property details from the Home dashboard's "Property details" row
+    /// (the Hub stack's `.propertyDetails`), and its correction form.
+    case propertyDetails(homeId: String)
+    case propertyCorrection(homeId: String)
     /// T3.2 — Identity Center. The "me.identityCenter" Personal section row pushes here.
     case identityCenter
     /// T3.3 — Audience profile. The "me.audience" Personal section row pushes here.
@@ -618,7 +622,7 @@ public struct YouTabRoot: View {
              .businessOwner, .viewAs, .membershipDetail, .identityCenter,
              .creatorAudienceMembers, .broadcastDetail, .creatorInbox,
              .creatorInboxConversation, .fanInbox, .cancelClaim, .editGig,
-             .transferOwnership, .mailRoutingQueue, .mailDay:
+             .transferOwnership, .mailRoutingQueue, .mailDay, .propertyDetails, .propertyCorrection:
             true
         // Forms and wizards with their own Close.
         case .logMaintenance, .editMaintenance, .startPoll, .editAccessCode, .addCalendarEvent,
@@ -1944,6 +1948,16 @@ public struct YouTabRoot: View {
                     if !path.isEmpty { path.removeLast() }
                 }
             )
+        case let .propertyDetails(homeId):
+            PropertyDetailsView(
+                homeId: homeId,
+                onBack: { Task { @MainActor in pop() } },
+                onRequestCorrection: {
+                    Task { @MainActor in path.append(.propertyCorrection(homeId: homeId)) }
+                }
+            )
+        case let .propertyCorrection(homeId):
+            PropertyCorrectionView(homeId: homeId) { pop() }
         case let .homePets(homeId):
             PetsListView(homeId: homeId)
         case let .homeCalendar(homeId):
@@ -2312,6 +2326,9 @@ public struct YouTabRoot: View {
                 },
                 onOpenMembers: { membersHomeId in
                     Task { @MainActor in path.append(.homeMembers(homeId: membersHomeId)) }
+                },
+                onOpenPropertyDetails: { detailsHomeId in
+                    Task { @MainActor in path.append(.propertyDetails(homeId: detailsHomeId)) }
                 },
                 onHireHelp: { _ in
                     // H1 — "Hire" on a seasonal-checklist item opens the
