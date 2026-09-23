@@ -7,7 +7,31 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 19:30 UTC (coordinator session `92cc4526`)
+## CURRENT RESUME POINT — 2026-09-23T21:39:56Z (isolated runtime recovery)
+
+- **Verified recovery boundary:** both local Docker contexts resolve to the same empty engine; old stream ports had no listeners. The coordinator approved fresh canonical replay and synthetic fixtures only, on the existing stream ports. No database archive restore, founder data repair, existing ledger rewrite or application schema change is authorized.
+- **Stream 3:** fresh owned API64531/SQL64532 replay succeeded, 89 canonical migrations through `20260923000300`, source `cef95ab67864ccca3ca243cc0d936a87d342cc8f`. Geo Android build and fresh fixture setup continue. Retain the accepted iOS evidence.
+- **Stream 2:** fresh `pantopus-stream2-native-resume-r2` on API64553/SQL64554 replay succeeded with the same canonical 89-entry schema. #325 checkout is pinned at `7034669ae72fdd19acfa5ad738d700625bb4bd1c`; simulator build and fresh auth/fixture recovery continue. The prior API health was 503; a listener alone is not acceptance.
+- **Stream 1:** released to replay its prepared synthetic `pantopus-stream1-resume-20260923` on API64561/SQL64562; Shares this with Shared UX later. Stream1 fixtures use `f9230b01`, Shared UX must use its distinct prefix. No data is recovered merely by recreating a schema.
+- **Batch preflight:** #356/#388 merge cleanly together at unchanged heads; no files overlap between them. Coordinator read current diffs and verified all 37/34 evidence-manifest files respectively. Current-head CI still running; #325 iOS and geo Android remain real-app gates. No batch PR published yet.
+- **Tool adaptations:** merge runner now uses the coordination checkout instead of the forbidden founder checkout. Batch-builder new commits no longer falsely attribute Codex-generated merge messages to Claude. Durable scripts updated here; prior authorship/history retained.
+- **Limits/next:** no fresh real-app pass yet. Complete pending journeys and green exact-head batch4 before progressing through unpublished groups. Founder queue unchanged. Agent identities, three coordinator decisions and hard limits are in the preceding takeover block. Keep evidence store/worktree intact.
+
+## Resume point history — 2026-09-23T21:36:01Z (Codex coordinator takeover)
+
+The founder resumed the paused effort. Read the final handoff below for preserved evidence and remaining scope; this block corrects its Git/runtime snapshot. Acceptance remains **13 closed / 67 partial**. No fresh app journey is claimed yet.
+
+- **Live Git:** master `cef95ab67864ccca3ca243cc0d936a87d342cc8f`; #389 was already merged at the GitHub-reported `2026-09-23T21:09:55Z`, so it is excluded from batch 4. Open application PRs are #325 (`7034669ae72fdd19acfa5ad738d700625bb4bd1c`), #356 (`f9ebef95f842d30bcc09861e01ee253a3c5ae1ba`), #388 (`f98c86e2cc546e7e23bc9be7e05c526f16bcb043`). Their stable repair patch IDs match their handoff-reviewed versions exactly; only master merges changed their heads. Current-head CI is pending. Docs #391 and founder #46 are also open; #46 remains untouched.
+- **Recovery:** every §5.2 stream/WIP branch exists on origin. The hub fast-forwarded to its existing remote history. Most application worktrees have been removed since the pause; helpers and evidence remain. The coordinator worktree's intentional `.claude/launch.json` edit is preserved. No founder checkout mutation.
+- **Machine:** uptime 2 days 23:45, load 4.20/5.14/10.32, kernel pressure 1, free space 150 GiB at the `date -u` preflight. Auto-maintenance stays paused; no gc/maintenance/repack authorized.
+- **Watcher:** existing `coord-watch2.sh` started as a supervised, 30-minute process (Codex exec session 98353; watcher PID 85063), because this environment has no Claude Monitor tool. REST-only; re-arm on expiry. Merge runner stays off until a reviewed batch exists.
+- **Agent order:** prior Claude agent IDs are not callable in this Codex team. Replacement Stream 3 (`/root/stream3`) started first: geo Android completion then scheduling/You. Stream 2 (`/root/stream2`) next: #325 exact-current-head iOS re-check, then Home/Place. Stream 1 (`/root/stream1`) follows: native afters then one web session. Shared UX is next when a background slot is available (three worker slots plus coordinator here). Only one heavy build; at most one device per stream. No standalone unit-test campaign or new tests.
+- **Runtime discrepancy under investigation:** Stream 3 sees no containers/volumes in the current desktop-linux Docker context, despite surviving helper files and Stream 2 listeners. Check all relevant local contexts read-only before rebuilding or declaring retained data absent. Never change the founder runtime or migrate an existing stream ledger.
+- **Coordinator decisions:** (1) hide unboxing and ceremonial-letter Share alongside the other dead controls; (2) landlord tenant-request notifications open the authorized Home using its existing route; (3) do not apply `wip/stream3/accounts-social-publicshare-nostore`: its `publicShare.ts` is already byte-identical to master (Git blob `9c0603ed2ed4a387bc41dad7aea31f8865d478a6`, history `cf34d604d8` / `f941c3bb40`), and its remaining tsconfig change is a local build artifact. Preserve the backup ref.
+- **Next:** complete the two real-app gates, recheck CI, build batch 4 from #356/#388/#325 and geo when ready, review each new PR and merge only a green exact head. Then unpublished groups, remaining existing inventory and a fresh full-app iOS/Android/web pass. No whole-app cleanliness claim.
+- **Standing limits:** founder environment and main checkout untouched; search-filter audit closed; Stripe TEST only; secrets stay private; no bare stash; all §7 founder decisions/data repairs/marketing remain with the founder. Keep the coordinator worktree; copy its audit store to the founder audit location before any future removal, per the explicit handoff requirement.
+
+## Resume point history — September 23, 2026, 19:30 UTC (coordinator session `92cc4526`)
 
 This updates the 17:00 block below; read both. The count is **13 closed / 67 partial**.
 
