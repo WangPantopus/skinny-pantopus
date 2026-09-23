@@ -284,7 +284,8 @@ data class ContentDetailBidRow(
     val id: String,
     val initials: String,
     val displayName: String,
-    val ratingLine: String,
+    /** Trust line under the name ("4.8 · 12 jobs"); null shows none. */
+    val ratingLine: String?,
     val amount: String,
     val verified: Boolean,
     /** Optional tag pill ("fastest reply" / "has van"). */

@@ -189,8 +189,8 @@ struct EarnOffersTab: View {
     private var disclaimer: some View {
         Text(
             """
-            Businesses pay to reach you. You get paid to engage.
-            Earnings reflect after a short verification window.
+            Businesses pay to reach you.
+            Offer earnings can't be cashed out yet.
             """
         )
         .font(.system(size: 10.5))

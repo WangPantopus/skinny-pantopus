@@ -175,7 +175,9 @@ router.get('/recipients', verifyToken, async (req, res) => {
       const [householdRes, homeRes] = await Promise.all([
         supabaseAdmin
           .from('HomeOccupancy')
-          .select('user_id, role, User!inner(id, name, username, verified, profile_picture_url)')
+          // Name the user_id FK: HomeOccupancy also references User through
+          // added_by_user_id, and an unqualified embed fails as ambiguous.
+          .select('user_id, role, User!HomeOccupancy_user_id_fkey!inner(id, name, username, verified, profile_picture_url)')
           .eq('home_id', homeId)
           .eq('is_active', true),
         supabaseAdmin
@@ -394,10 +396,11 @@ router.get('/home-context/:homeId', verifyToken, async (req, res) => {
       });
     }
 
-    // Get active occupants with user details
+    // Get active occupants with user details. The embed names the user_id FK
+    // (HomeOccupancy also references User through added_by_user_id).
     const { data: occupants } = await supabaseAdmin
       .from('HomeOccupancy')
-      .select('user_id, role, User!inner(id, name, username)')
+      .select('user_id, role, User!HomeOccupancy_user_id_fkey!inner(id, name, username)')
       .eq('home_id', homeId)
       .eq('is_active', true);
 

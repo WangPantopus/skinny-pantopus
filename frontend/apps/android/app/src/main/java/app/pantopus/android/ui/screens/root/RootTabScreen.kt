@@ -2269,6 +2269,22 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.EARN)
                 DeepLinkRouter.consume()
             }
+            // A mail notification's letter, in the item detail the mailbox list
+            // opens; pushed through MAILBOX_ROOT like the other mailbox links.
+            is DeepLinkRouter.Destination.MailItem -> {
+                navController.navigate(ChildRoutes.MAILBOX_ROOT)
+                navController.navigate(ChildRoutes.mailboxItemDetail(pending.mailId))
+                DeepLinkRouter.consume()
+            }
+            // `/mailbox` (the Mail Day summary notification) — the Mail tab.
+            DeepLinkRouter.Destination.Mailbox -> {
+                navController.navigateToRootTab(PantopusRoute.Mail)
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.NeighborMessage -> {
+                navController.navigate(ChildRoutes.neighborMessage(pending.messageId))
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.BusinessOwner -> {
                 navController.navigate(ChildRoutes.businessOwner(pending.businessId))
                 DeepLinkRouter.consume()
@@ -4177,12 +4193,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.privacyHandshake(handle, tierRank))
                         },
                         onOpenMessages = { profile ->
+                            // Verified residency is the fact behind "Verified neighbor";
+                            // `profile.verified` is the account flag sign-in sets.
                             navController.navigate(
                                 ChildRoutes.chatConversationFromPicker(
                                     userId = profile.id,
                                     displayName = profile.displayName,
                                     initials = initialsFromName(profile.displayName),
-                                    verified = profile.verified == true,
+                                    verified = profile.residency?.get("verified") == true,
                                     locality = profile.locality,
                                 ),
                             )
@@ -4219,9 +4237,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 "Share business",
                             )
                         },
-                        onOpenReport = { navController.navigate(ChildRoutes.placeholder("Report business")) },
                         onOpenWebsite = { uri -> runCatching { uriHandler.openUri(uri) } },
-                        onBook = { navController.navigate(ChildRoutes.placeholder("Book")) },
                         onEdit = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
                     )
                 }
@@ -4264,9 +4280,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 "Share business",
                             )
                         },
-                        onOpenReport = { navController.navigate(ChildRoutes.placeholder("Report business")) },
                         onOpenWebsite = { uri -> runCatching { uriHandler.openUri(uri) } },
-                        onBook = { navController.navigate(ChildRoutes.placeholder("Book")) },
                         onEdit = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
                     )
                 }
@@ -4599,17 +4613,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onBack = { navController.popBackStack() },
                         onOpenMessages = { listing ->
                             listing.userId?.let { sellerId ->
-                                val name = listing.title ?: "Seller"
+                                // The chat is with the seller; the listing is its topic.
+                                val title = listing.title ?: "Listing"
+                                val name = listing.creator?.resolvedDisplayName() ?: title
                                 navController.navigate(
                                     ChildRoutes.chatConversationFromPicker(
                                         userId = sellerId,
                                         displayName = name,
                                         initials = initialsFromName(name),
-                                        verified = false,
+                                        verified = listing.creator?.resolvedVerified() == true,
                                         locality = listing.locationName,
                                         topicType = "listing",
                                         topicRefId = listing.id,
-                                        topicTitle = name,
+                                        topicTitle = title,
                                     ),
                                 )
                             }
@@ -5075,7 +5091,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     NotificationSettingsScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.SETTINGS_PRIVACY) {
-                    PrivacySettingsScreen(onBack = { navController.popBackStack() })
+                    PrivacySettingsScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenDataExport = { navController.navigate(ChildRoutes.SETTINGS_DATA_EXPORT) },
+                        onOpenPrivacyPolicy = {
+                            navController.navigate(ChildRoutes.settingsLegalContent(LegalDocument.Privacy.rowId))
+                        },
+                    )
                 }
                 composable(ChildRoutes.SETTINGS_BLOCKED_USERS) {
                     BlockedUsersScreen(onBack = { navController.popBackStack() })
@@ -6318,7 +6340,8 @@ private fun routeForDrawer(
         NavigationDrawerDestination.MyBusinesses -> ChildRoutes.MY_BUSINESSES
         NavigationDrawerDestination.Connections -> ChildRoutes.CONNECTIONS
         NavigationDrawerDestination.Mailbox -> ChildRoutes.MAILBOX_ROOT
-        NavigationDrawerDestination.ProfileAndPrivacy -> ChildRoutes.IDENTITY_CENTER
+        // Privacy holds Delete account; iOS opens the same screen from this row.
+        NavigationDrawerDestination.ProfileAndPrivacy -> ChildRoutes.SETTINGS_PRIVACY
         NavigationDrawerDestination.BeaconUpdates -> ChildRoutes.BEACONS_FEED
         NavigationDrawerDestination.Search -> ChildRoutes.UNIVERSAL_SEARCH
         NavigationDrawerDestination.DiscoverNeighbors -> ChildRoutes.DISCOVER_HUB
