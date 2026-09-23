@@ -58,23 +58,42 @@ sealed class NetworkError(
     class ClientError(
         code: Int,
         val body: String?,
-    ) : NetworkError(code, friendlyClientMessage(body) ?: body ?: "Request failed ($code).") {
+    ) : NetworkError(code, friendlyClientMessage(body) ?: plainClientMessage(code)) {
         companion object {
+            /**
+             * A short user-facing string from a 4xx body, or null when it holds
+             * nothing a person should read (raw JSON, HTML, machine codes).
+             */
             fun friendlyClientMessage(body: String?): String? {
                 if (body.isNullOrBlank()) return null
-                return runCatching {
-                    val json = org.json.JSONObject(body)
-                    val details = json.optJSONArray("details")
-                    if (details != null) {
-                        for (index in 0 until details.length()) {
-                            val message = details.optJSONObject(index)?.optString("message").orEmpty()
-                            if (message.isNotBlank()) return message
-                        }
+                val json =
+                    runCatching { org.json.JSONObject(body) }.getOrNull()
+                        // A short plain-text body ("Too many requests, please try
+                        // again later.") reads fine; an HTML page or a dump does not.
+                        ?: return body.trim().takeIf { it.length <= MAX_PLAIN_BODY && !it.startsWith("<") }
+                val details = json.optJSONArray("details")
+                if (details != null) {
+                    for (index in 0 until details.length()) {
+                        val message = details.optJSONObject(index)?.optString("message").orEmpty()
+                        if (message.isNotBlank()) return message
                     }
-                    json.optString("message").takeIf { it.isNotBlank() }
-                        ?: json.optString("error").takeIf { it.isNotBlank() }
-                }.getOrNull() ?: body
+                }
+                return json.optString("message").takeIf { it.isNotBlank() }
+                    ?: json.optString("error").takeIf { it.isNotBlank() && !isMachineCode(it) }
             }
+
+            /** `NOT_FOUND`, `SLOT_FULL`: a code for the app, not copy for people. */
+            fun isMachineCode(value: String): Boolean = Regex("^[A-Z][A-Z0-9_]*$").matches(value)
+
+            /** Plain copy for a 4xx whose body carries no readable message. */
+            fun plainClientMessage(code: Int): String =
+                when (code) {
+                    413 -> "That file is too large."
+                    429 -> "Too many attempts. Please wait a moment and try again."
+                    else -> "Something went wrong. Please try again."
+                }
+
+            private const val MAX_PLAIN_BODY = 160
         }
     }
 
@@ -92,7 +111,7 @@ sealed class NetworkError(
     /** Response decoded into an unexpected shape. */
     class Decoding(
         cause: Throwable,
-    ) : NetworkError(null, "Received an unexpected response.", cause)
+    ) : NetworkError(null, "Something went wrong loading this. Please try again.", cause)
 
     /** Retry loop exhausted without a 2xx. */
     data object RetriesExhausted :
