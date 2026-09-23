@@ -833,12 +833,6 @@ const reportGigSchema = Joi.object({
   details: Joi.string().max(1000).optional(),
 });
 
-const updateStatusSchema = Joi.object({
-  status: Joi.string()
-    .valid('open', 'assigned', 'in_progress', 'completed', 'cancelled')
-    .required(),
-});
-
 // ============ HELPER FUNCTIONS ============
 
 /**
@@ -3868,60 +3862,23 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
 });
 
 /**
- * PATCH /api/gigs/:id/status
- * Update gig status
+ * PATCH /api/gigs/:id/status — retired.
+ * A direct status write bypassed Start Work, completion confirmation, payment
+ * capture and hold release. Task state changes go through their own commands
+ * (start, mark-completed, confirm-completion and the stop/cancel command). No
+ * client calls this route, and its old ownership read named columns that do not
+ * exist, so it always answered 404; correcting that read would have reopened
+ * the bypass.
  */
-router.patch('/:id/status', verifyToken, validate(updateStatusSchema), async (req, res) => {
+router.patch('/:id/status', verifyToken, (req, res) => {
   // Availability changes must retain their stop receipt and financial outcome.
-  // Other existing lifecycle routes keep their own authorization contracts.
-  if (['open', 'cancelled'].includes(req.body.status)) {
+  if (['open', 'cancelled'].includes(req.body?.status)) {
     return res.status(409).json({ code: 'STOP_TERMS_REQUIRED', error: 'Refresh the stop preview and submit a stop request to close or reopen this task.' });
   }
-  try {
-    const { id } = req.params;
-    const userId = req.user.id;
-    const { status } = req.body;
-
-    logger.info('Updating gig status', { gigId: id, userId, status });
-
-    // Verify ownership
-    const { data: existingGig, error: fetchError } = await supabase
-      .from('Gig')
-      .select('user_id, status, approx_latitude, approx_longitude')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !existingGig) {
-      return res.status(404).json({ error: 'Gig not found' });
-    }
-
-    const ownerAccess = await getGigOwnerAccess(existingGig.user_id, userId, 'gigs.manage');
-    if (!ownerAccess.allowed) {
-      return res.status(403).json({ error: 'You can only update your own gigs' });
-    }
-
-    const { data: updatedGig, error } = await supabase
-      .from('Gig')
-      .update({ status })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      logger.error('Error updating gig status', { error: error.message, gigId: id });
-      return res.status(500).json({ error: 'Failed to update gig status' });
-    }
-
-    // Invalidate browse cache near this gig
-    if (existingGig.approx_latitude != null && existingGig.approx_longitude != null) {
-      browseCache.invalidateNear(existingGig.approx_latitude, existingGig.approx_longitude);
-    }
-
-    res.json({ gig: updatedGig });
-  } catch (err) {
-    logger.error('Gig status update error', { error: err.message, gigId: req.params.id });
-    res.status(500).json({ error: 'Failed to update gig status' });
-  }
+  return res.status(410).json({
+    error: 'Task status changes use the task actions (Start work, Mark done, Confirm completion, Cancel).',
+    code: 'GIG_STATUS_ROUTE_RETIRED',
+  });
 });
 
 /**
