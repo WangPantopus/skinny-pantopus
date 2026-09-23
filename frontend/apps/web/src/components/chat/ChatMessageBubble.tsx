@@ -43,6 +43,7 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
   const msgType = resolveMessageType(msg);
   const isOptimistic = msg._optimistic;
   const isFailed = msg._failed;
+  const isRefused = msg._refused;
 
   const isEdited = msg.edited || msg.is_edited;
   const replyMeta = msg.reply_to_id ? (metadata as Record<string, any>)?.replyContext : null;
@@ -241,7 +242,9 @@ function ChatMessageBubble({ msg, isMine, showSender = false, onImageClick, onRe
           )}
         </div>
         <div className={`text-[10px] text-app-muted mt-0.5 ${isMine ? 'text-right mr-1' : 'ml-1'}`}>
-          {isFailed ? (
+          {isFailed && isRefused ? (
+            <span className="text-red-500">Not sent</span>
+          ) : isFailed ? (
             <span className="text-red-500">
               Failed to send{' '}
               {onRetry && (
@@ -267,6 +270,7 @@ export default React.memo(ChatMessageBubble, (prev, next) => {
     && prev.msg.is_edited === next.msg.is_edited
     && prev.msg._optimistic === next.msg._optimistic
     && prev.msg._failed === next.msg._failed
+    && prev.msg._refused === next.msg._refused
     && prev.isMine === next.isMine
     && prev.showSender === next.showSender
     && prev.msg.reactions === next.msg.reactions

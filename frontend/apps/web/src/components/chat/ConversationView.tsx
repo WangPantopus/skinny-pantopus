@@ -406,6 +406,7 @@ export default function ConversationView({
           renderTopicDivider={renderTopicDivider}
           onImageClick={handleImageClick}
           onReact={handleReact}
+          onRetry={chat.retryMessage}
         />
       </div>
 
@@ -427,7 +428,8 @@ export default function ConversationView({
       <ChatInput
         onSend={handleSend}
         sending={chat.sending}
-        placeholder="Message"
+        disabled={!!chat.directChatError}
+        placeholder={chat.directChatError ? "You can't send messages in this conversation." : 'Message'}
         onAttachAction={handleAttachAction}
       />
 
