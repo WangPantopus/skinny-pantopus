@@ -6334,7 +6334,8 @@ private fun routeForDrawer(
         NavigationDrawerDestination.MyBusinesses -> ChildRoutes.MY_BUSINESSES
         NavigationDrawerDestination.Connections -> ChildRoutes.CONNECTIONS
         NavigationDrawerDestination.Mailbox -> ChildRoutes.MAILBOX_ROOT
-        NavigationDrawerDestination.ProfileAndPrivacy -> ChildRoutes.IDENTITY_CENTER
+        // Privacy holds Delete account; iOS opens the same screen from this row.
+        NavigationDrawerDestination.ProfileAndPrivacy -> ChildRoutes.SETTINGS_PRIVACY
         NavigationDrawerDestination.BeaconUpdates -> ChildRoutes.BEACONS_FEED
         NavigationDrawerDestination.Search -> ChildRoutes.UNIVERSAL_SEARCH
         NavigationDrawerDestination.DiscoverNeighbors -> ChildRoutes.DISCOVER_HUB

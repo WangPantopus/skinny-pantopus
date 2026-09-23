@@ -177,10 +177,11 @@ private val Sections =
                     Item(
                         question = "How do I delete my account?",
                         answer =
-                            "Go to Settings → Privacy → Delete account. " +
+                            "Open the menu, tap Profile & Privacy, then Delete account at the bottom. " +
                                 "You'll confirm in the app and verify your identity, then your account and its " +
                                 "data are removed. Finish or cancel any gigs in progress and resolve pending " +
-                                "payments first — those block deletion.",
+                                "payments first — those block deletion. If your account has payment history, " +
+                                "contact support to close it.",
                     ),
                 ),
         ),
