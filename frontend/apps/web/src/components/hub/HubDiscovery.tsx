@@ -58,7 +58,8 @@ export default function HubDiscovery({ lat, lng }: HubDiscoveryProps) {
   };
 
   const handleItemPress = (item: DiscoveryItem) => {
-    if (item.route) router.push(item.route);
+    const path = webPathForDiscovery(item);
+    if (path) router.push(path);
   };
 
   return (
@@ -133,4 +134,28 @@ export default function HubDiscovery({ lat, lng }: HubDiscoveryProps) {
       </div>
     </div>
   );
+}
+
+/**
+ * Discovery items carry the native route vocabulary (`/user/:id`,
+ * `/businesses/:id`, `/gigs/:id`, `/posts/:id`). Web has no such pages, so map
+ * each kind to the in-app page that shows it.
+ */
+function webPathForDiscovery(item: DiscoveryItem): string | null {
+  const route = item.route || '';
+  const match = route.match(/^\/(user|businesses|gigs|posts|listings)\/([^/?#]+)/);
+  if (!match) return route.startsWith('/app/') ? route : null;
+  const [, kind, id] = match;
+  switch (kind) {
+    case 'user':
+      return `/${id}`; // the public profile page accepts an account id
+    case 'businesses':
+      return item.username ? `/b/${item.username}` : null;
+    case 'gigs':
+      return `/app/gigs/${id}`;
+    case 'posts':
+      return `/app/feed/post/${id}`;
+    default:
+      return `/app/marketplace/${id}`;
+  }
 }
