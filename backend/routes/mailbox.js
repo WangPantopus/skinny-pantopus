@@ -5,7 +5,7 @@ const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
 // canAccessMail: the per-item rule, shared with the v2 mailbox routes.
-const { getAccessibleHomeIds, canAccessMail, homeMailFilter, visibleMailFilter } = require('../utils/homeMailAccess');
+const { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, homeMailFilter, visibleMailFilter } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -699,11 +699,15 @@ const hasHomeAccess = async (homeId, userId) => {
   return { allowed: false, home };
 };
 
+// "Lives at this home" for a letter addressed to a person at a Home: they can
+// open this Home's mail under the Home mail rule (utils/homeMailAccess), or
+// they own it. It used finance.view, which only owners hold, so a letter to any
+// other resident was refused.
 const isUserLinkedToHome = async (home, userId) => {
   if (!home || !userId) return false;
-
-  const mailAccess = await checkHomePermission(home.id, userId, 'finance.view');
-  return mailAccess.hasAccess;
+  if ((await trustedHomeIdsOrThrow(userId)).includes(home.id)) return true;
+  const access = await checkHomePermission(home.id, userId);
+  return access.hasAccess === true && access.isOwner === true;
 };
 
 const hasVerifiedSenderHome = async (userId) => {
@@ -1964,6 +1968,18 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     if (deliveryTargetType === 'user' && addressHomeId && recipientUserId) {
       const linkedToHome = await isUserLinkedToHome(addressHome, recipientUserId);
       if (!linkedToHome) {
+        return res.status(400).json({
+          error: 'That person doesn\u2019t live at the selected home address.'
+        });
+      }
+    }
+
+    // A Home letter's attention person must be able to open this Home's mail
+    // (the Home mail rule). Otherwise an attn_only letter was stored for nobody,
+    // or failed the attention foreign key when the person's account was gone.
+    if (deliveryTargetType === 'home' && attnUserId) {
+      const attnHomeIds = await trustedHomeIdsOrThrow(attnUserId);
+      if (!addressHome || !attnHomeIds.includes(addressHome.id)) {
         return res.status(400).json({
           error: 'That person doesn\u2019t live at the selected home address.'
         });
