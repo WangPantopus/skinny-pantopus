@@ -5,7 +5,46 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 10:33 UTC (coordinator session `92cc4526`)
+## CURRENT RESUME POINT — September 23, 2026, 11:01 UTC (coordinator session `92cc4526`)
+
+This updates the 10:33 block below; read both. The count is **11 closed / 69 partial**.
+
+### Merged
+- #282 (business-account notifications go to owners/admins).
+- **#253, the P04/P05 poster-fault fee backend,** merged 10:38 → `1d791906c`.
+
+### Queue
+254 (clients) 288 (magic post) 255 278 280 283 221 236 219 214 215 224 199 208 251 252 257 279 262 264 287 266 285.
+- The coordinator merged master into #255 (import conflict with #253) and ran the full backend suite: 341 suites pass.
+- #280 and #283 were rebased, and #257 was rebased and now runs before #279.
+
+### UX inventory (U05/U03), done
+- **File:** `/private/tmp/pantopus-tools/ux-inventory-2026-09-23.md`. A code read on `4f2983c5d`.
+- **Totals:** 155 items: 48 dead ends, 60 misleading, 37 weak, 10 cosmetic.
+- **By stream:** Stream 1: 25, Stream 2: 24, Stream 3: 69, shared: 37.
+- **Top items:**
+  - iOS profile cover with no way back (C-01);
+  - native bid errors hide "set up payouts first" (S1-06);
+  - native "Make offer" creates an inquiry the seller never sees (S1-01);
+  - web business creation always fails (S3-01);
+  - native mail buttons claim "Payment started" when nothing happened (S2-07);
+  - native privacy controls don't save (S3-29);
+  - web Settings: a failed load, then Save, can make a private profile public (S3-28);
+  - **a #245 regression:** Home- and Business-owned booking notifications open nothing on native (S3-02, being fixed first);
+  - every native listing shows a verified "Seller" (S1-07);
+  - Hub pills and You → Home rows open placeholders (C-02, C-04);
+  - native Home dashboard tabs never show content (S2-09);
+  - iOS Messages stops updating (S3-30);
+  - one-tap payment release with no confirm (S1-19).
+- **Dispatch:** each stream got its section in impact order.
+- **New shared-UX agent** for the 37 shared items: navigation shells, Hub/You/Settings, shared error components, feed, support trains. It uses API 18138 / Next 18139 and its own fixtures on 64561/64562.
+- **Device slots raised to 4.** The memory gate stays at 20% free.
+
+### Privacy fixes approved (Stream 3)
+- The relationships list omits blocked rows the caller didn't create, and unblock returns a uniform 404 to anyone but the blocker.
+- The neighbor reply copy stays true for the blocker and is neutral for the blocked party.
+
+## Resume point history — September 23, 2026, 10:33 UTC (coordinator session `92cc4526`)
 
 This updates the 08:34 block below; read both. The count is **11 closed / 69 partial**.
 
