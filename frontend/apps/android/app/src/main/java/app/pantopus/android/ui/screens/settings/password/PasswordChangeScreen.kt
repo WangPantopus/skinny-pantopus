@@ -141,8 +141,8 @@ fun PasswordChangeScreen(
 }
 
 internal data class PasswordChangeLoadedState(
-    val email: String,
-    val lastChanged: String,
+    val email: String?,
+    val lastChanged: String?,
     val requiresCurrent: Boolean,
     val fields: Map<FieldKey, FormFieldState>,
     val strength: PasswordStrength,
