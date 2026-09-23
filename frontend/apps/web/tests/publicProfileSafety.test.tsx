@@ -7,7 +7,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 
 jest.mock('@pantopus/api', () => ({
   getAuthToken: jest.fn(() => 'session-a'), onTokenChange: jest.fn(() => jest.fn()), AUTH_SESSION_CHANGE_KEY: 'auth-change',
-  blocks: { blockUser: jest.fn() },
+  blocks: { blockUser: jest.fn(), getBlockedUsers: jest.fn() },
   users: { getProfileByUsername: jest.fn(), getMyProfile: jest.fn(), getRelationshipStatus: jest.fn(), reportUser: jest.fn() },
   gigs: { getGigs: jest.fn() }, posts: { getUserPosts: jest.fn() },
   reviews: { getUserReviews: jest.fn(), getPendingReviews: jest.fn() },
@@ -26,6 +26,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   (api.users.getMyProfile as jest.Mock).mockResolvedValue({ id: 'viewer', username: 'viewer' });
   (api.users.getRelationshipStatus as jest.Mock).mockResolvedValue({ following: false, relationship: 'none' });
+  (api.blocks.getBlockedUsers as jest.Mock).mockResolvedValue({ blocked: [] });
   (api.gigs.getGigs as jest.Mock).mockResolvedValue({ gigs: [{ id: 'gig' }] });
   (api.posts.getUserPosts as jest.Mock).mockResolvedValue({ posts: [{ id: 'post' }] });
   (api.reviews.getUserReviews as jest.Mock).mockResolvedValue({ reviews: [] });

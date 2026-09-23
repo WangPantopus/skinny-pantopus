@@ -94,6 +94,9 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   // Relationship state
   const [followState, setFollowState] = useState(false);
   const [connectionState, setConnectionState] = useState<RelationshipState>('none');
+  // True when the viewer's personal block list could not be read: Follow
+  // fails closed rather than offering an affordance the server may refuse.
+  const [followUnavailable, setFollowUnavailable] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   const [reportTarget, setReportTarget] = useState<{ id: string; current: () => boolean } | null>(null);
@@ -134,6 +137,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     setCurrentUser(null);
     setConnectionState('none');
     setFollowState(false);
+    setFollowUnavailable(false);
     const invalidate = () => { actionGeneration.current++; };
     const retire = () => {
       invalidate(); pendingBlock.current = false;
@@ -188,6 +192,24 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
   const loadRelationshipStatus = useCallback(async () => {
     if (!profile?.id) return;
+    // N04 — personal UserBlock rows are separate from the Relationship graph
+    // (GET /:id/relationship reports only the latter). Read the viewer's own
+    // block list first, like the native clients, so a fresh profile load
+    // never offers Follow for someone this account blocked; a failed read
+    // fails closed.
+    try {
+      const { blocked } = await api.blocks.getBlockedUsers();
+      if ((blocked || []).some((entry) => entry.user_id === profile.id)) {
+        setConnectionState('blocked');
+        setFollowState(false);
+        return;
+      }
+    } catch (err) {
+      console.error('Failed to load blocked users:', err);
+      setFollowUnavailable(true);
+      toast.error('Couldn\'t verify block status. Actions are unavailable.');
+      return;
+    }
     try {
       const status = await api.users.getRelationshipStatus(profile.id);
       setFollowState(status.following);
@@ -305,6 +327,10 @@ export default function PublicProfileClient({ username, initialProfile }: Public
       loadUserPosts();
     } catch (err: unknown) {
       console.error('Follow error:', err);
+      const status = (err as { statusCode?: number } | null)?.statusCode;
+      toast.error(status === 403
+        ? 'You can\'t follow this profile.'
+        : (followState ? 'Couldn\'t unfollow.' : 'Couldn\'t follow.'));
     } finally {
       setActionLoading(false);
     }
@@ -549,6 +575,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         reliabilityLabel={reliabilityLabel}
         reliabilityScore={reliabilityScore}
         followState={followState}
+        canFollow={connectionState !== 'blocked' && !followUnavailable}
         actionLoading={actionLoading}
         shareCopied={shareCopied}
         onFollow={handleFollow}

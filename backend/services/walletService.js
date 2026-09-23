@@ -179,7 +179,9 @@ class WalletService {
       });
 
       try {
-        await supabaseAdmin.rpc('wallet_credit', {
+        // supabase-js reports a failed RPC in `error` rather than throwing; only a
+        // recorded credit may mark the debit reversed.
+        const { error: reversalError } = await supabaseAdmin.rpc('wallet_credit', {
           p_user_id: userId,
           p_amount: amount,
           p_type: 'withdrawal_reversal',
@@ -187,6 +189,7 @@ class WalletService {
           p_idempotency_key: `${idempotencyKey}:reversal`,
           p_metadata: { original_tx_id: tx.id, error: stripeErr.message },
         });
+        if (reversalError) throw new Error(reversalError.message);
 
         // Mark original tx as reversed
         const { error: reverseUpdateErr } = await supabaseAdmin
