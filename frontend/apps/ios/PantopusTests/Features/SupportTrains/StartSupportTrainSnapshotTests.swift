@@ -51,7 +51,7 @@ final class StartSupportTrainSnapshotTests: XCTestCase {
         vm.selectReason(.baby)
 
         assertRenders(StartSupportTrainWizardView(viewModel: vm))
-        XCTAssertEqual(vm.chrome.primaryCTALabel, "Send invite & continue")
+        XCTAssertEqual(vm.chrome.primaryCTALabel, "Continue")
         XCTAssertEqual(vm.chrome.secondaryCTA?.label, "Search again")
         // Invite branch surfaces a candidate built from the typed query.
         XCTAssertEqual(vm.inviteCandidate?.typedName, StartSupportTrainSampleData.inviteQuery)

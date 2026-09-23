@@ -92,7 +92,7 @@ class StartSupportTrainViewModelTest {
             vm.updateBeneficiaryQuery(StartSupportTrainSampleData.INVITE_QUERY)
             vm.selectReason(StartSupportTrainReason.Baby)
             assertTrue(vm.isInviteRecipientBranch())
-            assertEquals("Send invite & continue", vm.chrome.primaryCtaLabel)
+            assertEquals("Continue", vm.chrome.primaryCtaLabel)
             assertEquals("Search again", vm.chrome.secondaryCta?.label)
             assertEquals(StartSupportTrainSampleData.INVITE_QUERY, vm.inviteCandidate()?.typedName)
             vm.onSecondary()

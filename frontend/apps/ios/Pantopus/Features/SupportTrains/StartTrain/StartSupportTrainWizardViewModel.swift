@@ -103,11 +103,8 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
     public var inviteCandidate: StartSupportTrainInviteCandidate? {
         guard isInviteRecipientBranch else { return nil }
         let typed = beneficiaryQuery.trimmingCharacters(in: .whitespaces)
-        return StartSupportTrainInviteCandidate(
-            typedName: typed,
-            phone: StartSupportTrainSampleData.inviteCandidate.phone,
-            email: StartSupportTrainSampleData.inviteCandidate.email
-        )
+        // No contact handles: sample ones must never reach the live card.
+        return StartSupportTrainInviteCandidate(typedName: typed, phone: "", email: "")
     }
 
     // MARK: - Step 1 actions
@@ -312,7 +309,8 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
 
     private var primaryCTALabel: String {
         switch step {
-        case .whoAndWhy: isInviteRecipientBranch ? "Send invite & continue" : "Continue"
+        // No invite is sent from the wizard, so the CTA doesn't promise one.
+        case .whoAndWhy: "Continue"
         case .whatAndWhen: "Continue"
         case .reviewAndLaunch: "Launch train"
         case .success: "Open train"
