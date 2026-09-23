@@ -16,6 +16,7 @@ import app.pantopus.android.data.feed.FeedActionsRepository
 import app.pantopus.android.data.feed.FeedModerationStore
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
+import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.sports.SportsRepository
@@ -55,6 +56,10 @@ class PulseFeedViewModelTest {
             override suspend fun requestCurrent(timeoutMillis: Long): UserCoordinate? = null
         }
     private val postsRefresh = PulsePostsRefreshNotifier()
+
+    // No area chosen: the feed falls back to the device location (none here).
+    private val viewingLocation: ViewingLocationRepository =
+        mockk { coEvery { current() } returns NetworkResult.Failure(NetworkError.NotFound) }
 
     // Sports lane — only queried once the Sports topic is selected.
     private val sportsRepo: SportsRepository =
@@ -167,6 +172,7 @@ class PulseFeedViewModelTest {
             postsRefresh,
             sportsRepo,
             FeedModerationStore(),
+            viewingLocation,
         )
 
     @Test fun beacon_badges_require_a_verified_public_credential() =

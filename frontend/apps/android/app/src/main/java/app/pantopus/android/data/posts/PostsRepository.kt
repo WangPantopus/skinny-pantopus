@@ -46,12 +46,14 @@ class PostsRepository
             topic: String? = null,
             sportsMode: String? = null,
             eventKey: String? = null,
+            radiusMiles: Double? = null,
         ): NetworkResult<FeedResponse> =
             safeApiCall {
                 api.feed(
                     surface = surface,
                     latitude = latitude,
                     longitude = longitude,
+                    radiusMiles = radiusMiles,
                     postType = postType,
                     limit = limit,
                     cursorCreatedAt = cursorCreatedAt,
