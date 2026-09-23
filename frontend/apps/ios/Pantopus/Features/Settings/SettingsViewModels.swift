@@ -68,9 +68,13 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
             footer = "\(user.email) · ID \(String(user.id.prefix(8)))"
             isAdmin = user.isAdmin
         }
-        // Block count (best-effort).
-        if let blocks: PrivacyBlocksResponse = try? await api.request(PrivacyEndpoints.blocks) {
-            blockCount = blocks.blocks.count
+        // Block count (best-effort) — both lists the Blocked users screen
+        // shows: Identity Firewall profile blocks and personal blocks
+        // (`GET /api/users/blocked`).
+        let profileBlocks: PrivacyBlocksResponse? = try? await api.request(PrivacyEndpoints.blocks)
+        let personalBlocks = try? await api.request(BlocksEndpoints.blocked, as: UserBlocksResponse.self)
+        if profileBlocks != nil || personalBlocks != nil {
+            blockCount = (profileBlocks?.blocks.count ?? 0) + (personalBlocks?.blocked.count ?? 0)
         }
         // Real verification state — `GET /api/users/profile` → `user.verified`
         // (`backend/routes/users.js:1962`). Same field the Verification
