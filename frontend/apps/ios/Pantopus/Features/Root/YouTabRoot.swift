@@ -2268,7 +2268,8 @@ public struct YouTabRoot: View {
                 },
                 onSendMail: { _ in
                     Task { @MainActor in path.append(.ceremonialMail) }
-                }
+                },
+                onOpenOwnership: { id in path.append(.homeOwners(homeId: id)) }
             )
         case let .homeTasks(homeId):
             HouseholdTasksListView(
