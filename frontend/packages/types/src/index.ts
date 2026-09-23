@@ -1028,6 +1028,8 @@ export interface ChatMessage {
   reactions?: ReactionSummary[];
   _optimistic?: boolean;
   _failed?: boolean;
+  /** The server refused this send (403): resending cannot succeed, so no Retry. */
+  _refused?: boolean;
   _clientMessageId?: string;
 }
 

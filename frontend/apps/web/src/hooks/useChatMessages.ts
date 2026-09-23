@@ -156,11 +156,24 @@ export interface UseChatMessagesReturn {
   resolvedRoomId: string | null;
   /** Populated in person-based mode after createDirectChat resolves (header / avatar). */
   directChatPeer: User | null;
+  /** Person-based mode: why the conversation could not be started (null when it was). */
+  directChatError: string | null;
   sendMessage: (text: string, files?: File[]) => Promise<void>;
   retryMessage: (messageId: string) => Promise<void>;
   loadOlder: () => Promise<void>;
   refresh: () => Promise<void>;
   reactToMessage: (messageId: string, emoji: string) => Promise<void>;
+}
+
+/** A send refused by the server (403): resending cannot succeed. */
+function isRefusal(err: unknown): boolean {
+  return (err as { statusCode?: number } | null)?.statusCode === 403;
+}
+
+/** The server's own sentence for a failed send, when the client carried one. */
+function sendFailureReason(err: unknown): string | null {
+  const message = (err as { message?: unknown } | null)?.message;
+  return typeof message === 'string' && message.trim() ? message.trim() : null;
 }
 
 // ── Hook ────────────────────────────────────────────────────
@@ -179,6 +192,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [resolvedRoomId, setResolvedRoomId] = useState<string | null>(roomId || null);
   const [directChatPeer, setDirectChatPeer] = useState<User | null>(null);
+  const [directChatError, setDirectChatError] = useState<string | null>(null);
   const [conversationRoomIds, setConversationRoomIds] = useState<string[]>([]);
   const nextCursorRef = useRef<string | null>(null);
 
@@ -309,6 +323,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       return;
     }
     setDirectChatPeer(null);
+    setDirectChatError(null);
     let cancelled = false;
     (async () => {
       try {
@@ -316,8 +331,15 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         const rid = result?.roomId;
         if (!cancelled && rid) setResolvedRoomId(String(rid));
         if (!cancelled && result?.otherUser) setDirectChatPeer(result.otherUser as User);
-      } catch {
-        if (!cancelled) setDirectChatPeer(null);
+      } catch (err) {
+        if (!cancelled) {
+          setDirectChatPeer(null);
+          // Say why, instead of letting a typed message vanish on Send (e.g. 403
+          // "Unable to message this user" when the other person blocked you).
+          const reason = sendFailureReason(err) || "We couldn't start this conversation. Try again later.";
+          setDirectChatError(reason);
+          setError(reason);
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -595,6 +617,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     },
     onSuccess: async (sendResult, vars) => {
       const { clientMessageId } = vars;
+      setError(null);
       const deliveredMessage = sendResult?.message as ChatMessage | undefined;
       if (deliveredMessage?.id) {
         setMessages((prev) => {
@@ -609,11 +632,13 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         await refresh();
       }
     },
-    onError: (_err, vars) => {
-      // Mark optimistic message as failed instead of removing it
+    onError: (err, vars) => {
+      // Mark optimistic message as failed instead of removing it. A 403 is a
+      // refusal (blocked, not a participant): no Retry, and show the reason.
       const { clientMessageId } = vars;
+      const refused = isRefusal(err);
       setMessages(prev => prev.map(m =>
-        m.id === clientMessageId ? { ...m, _failed: true, _optimistic: false } : m
+        m.id === clientMessageId ? { ...m, _failed: true, _refused: refused, _optimistic: false } : m
       ));
     },
     onSettled: () => {
@@ -625,20 +650,22 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     const trimmed = text.trim();
     const hasFiles = (files?.length || 0) > 0;
     const targetRoomId = isRoomMode ? roomId : resolvedRoomId;
-    if ((!trimmed && !hasFiles) || sending || !targetRoomId) return;
+    if ((!trimmed && !hasFiles) || sending) return;
+    // Throwing keeps the draft in the composer, which restores it with the reason.
+    if (!targetRoomId) throw new Error(directChatError || "This conversation isn't ready yet. Try again in a moment.");
 
     // Generate a client-side message ID for idempotent sends and optimistic rendering
     const clientMessageId = crypto.randomUUID();
 
     // mutateAsync preserves the throw-on-error contract for callers
     await sendMessageMutation.mutateAsync({ text, files, targetRoomId, clientMessageId });
-  }, [isRoomMode, roomId, resolvedRoomId, sending, sendMessageMutation]);
+  }, [isRoomMode, roomId, resolvedRoomId, sending, sendMessageMutation, directChatError]);
 
   // ── Retry failed message ────────────────────────────
 
   const retryMessage = useCallback(async (messageId: string) => {
     const failedMsg = messagesRef.current.find(m => m.id === messageId && (m as Record<string, any>)._failed);
-    if (!failedMsg) return;
+    if (!failedMsg || (failedMsg as Record<string, any>)._refused) return;
 
     const targetRoomId = isRoomMode ? roomId : resolvedRoomId;
     if (!targetRoomId) return;
@@ -660,6 +687,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
         clientMessageId,
       });
 
+      setError(null);
       const delivered = sendResult?.message as ChatMessage | undefined;
       if (delivered?.id) {
         setMessages(prev => {
@@ -670,10 +698,12 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
       } else {
         await refresh();
       }
-    } catch {
+    } catch (err) {
+      const refused = isRefusal(err);
       setMessages(prev => prev.map(m =>
-        m.id === messageId ? { ...m, _failed: true, _optimistic: false } : m
+        m.id === messageId ? { ...m, _failed: true, _refused: refused, _optimistic: false } : m
       ));
+      if (refused) setError(sendFailureReason(err) || "You can't send messages in this conversation.");
     }
   }, [isRoomMode, roomId, resolvedRoomId, asBusinessUserId, refresh]);
 
@@ -733,6 +763,7 @@ export function useChatMessages(opts: UseChatMessagesOptions): UseChatMessagesRe
     loadingOlder,
     resolvedRoomId,
     directChatPeer,
+    directChatError,
     sendMessage,
     retryMessage,
     loadOlder,

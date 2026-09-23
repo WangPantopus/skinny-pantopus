@@ -415,6 +415,7 @@ export default function ChatRoomView({
           headerContent={historicalHeader}
           onImageClick={handleImageClick}
           onReact={handleReact}
+          onRetry={chat.retryMessage}
         />
       </div>
 
