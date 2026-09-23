@@ -133,18 +133,23 @@ public enum MailCategoryAction: String, Sendable, Hashable, Identifiable, CaseIt
 }
 
 public enum MailCategoryActions {
-    /// `CATEGORY_ACTIONS` — ported verbatim from
-    /// `src/components/mailbox/constants.ts:25-33`. Keyed on the backend's
-    /// free-text `Mail.category` column (`bill` / `legal` / `notice` /
-    /// `receipt` / `community` / `promo` / `other`), *not* on `mail_type`.
+    /// RN's `CATEGORY_ACTIONS` (`src/components/mailbox/constants.ts:25-33`),
+    /// keyed on the backend's free-text `Mail.category` column (`bill` /
+    /// `legal` / `notice` / `receipt` / `community` / `promo` / `other`), *not*
+    /// on `mail_type`. Only tiles that do what they say are offered: Pay,
+    /// Sign, Remind, Forward, Dispute, Share with Household and Acknowledge
+    /// only logged a click (`POST /item/:id/action`) while toasting a success,
+    /// so they stay out until they have real flows (a letter that asks for an
+    /// acknowledgement already shows the detail's own Acknowledge button).
+    /// Create Task runs the detail's create-task flow (`MailDetailView`).
     public static let byCategory: [String: [MailCategoryAction]] = [
-        "bill": [.pay, .remind, .file, .forward, .dispute],
-        "legal": [.fileNow, .forward, .remind],
-        "notice": [.acknowledge, .shareWithHousehold, .createTask, .file],
-        "receipt": [.file, .forward],
-        "community": [.acknowledge, .shareWithHousehold, .file],
+        "bill": [.file],
+        "legal": [.fileNow],
+        "notice": [.createTask, .file],
+        "receipt": [.file],
+        "community": [.file],
         "promo": [.saveOffer, .dismiss],
-        "other": [.file, .forward]
+        "other": [.file]
     ]
 
     /// Fallback set for an unmapped / missing category — RN's
