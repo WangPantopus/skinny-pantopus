@@ -30,6 +30,7 @@ import { useRadiusSuggestion } from '@/hooks/useRadiusSuggestion';
 import { CATEGORIES, type MarketplaceTab, type FilterPillKey } from './constants';
 import { CategoryIcon } from './iconMap';
 import EmptyState from '@/components/ui/EmptyState';
+import ErrorState from '@/components/ui/ErrorState';
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton';
 
 const MarketplaceMap = dynamic(() => import('./MarketplaceMap'), { ssr: false });
@@ -778,6 +779,17 @@ export default function MarketplacePage() {
               onSave={handleSave}
               nearestActivityCenter={nearestActivityCenter}
             />
+            {browseQuery.isError && browseListings.length === 0 && (
+              <div
+                role="alert"
+                className="absolute top-14 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-2 bg-app-surface rounded-full shadow-md border border-app-border text-sm text-app-text-strong"
+              >
+                Couldn&apos;t load listings.
+                <button type="button" onClick={() => void browseQuery.refetch()} className="font-semibold text-primary-600 hover:underline">
+                  Try again
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -889,7 +901,10 @@ export default function MarketplacePage() {
         )}
 
         {/* ── Discovery Mode: curated sections ──────────────── */}
-        {isDiscovery && (
+        {isDiscovery && discoverQuery.isError && !discoverData && (
+          <ErrorState message="Couldn't load the marketplace." onRetry={() => void discoverQuery.refetch()} />
+        )}
+        {isDiscovery && !(discoverQuery.isError && !discoverData) && (
           <MarketplaceDiscoveryFeed
             data={discoverData}
             loading={loading}
@@ -912,6 +927,8 @@ export default function MarketplacePage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 <LoadingSkeleton variant="listing-card" count={8} />
               </div>
+            ) : browseQuery.isError && gridListings.length === 0 ? (
+              <ErrorState message="Couldn't load listings." onRetry={() => void browseQuery.refetch()} />
             ) : gridListings.length === 0 ? (
               <EmptyState
                 icon={Store}
