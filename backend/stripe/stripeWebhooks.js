@@ -616,6 +616,23 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
     // ─── Manual capture PI: this means capture() was called ───
     // The capturePayment() in stripeService already transitions to captured_hold,
     // but this webhook serves as a safety net / confirmation.
+    if (payment.payment_type === 'gig_payment' && Number.isSafeInteger(paymentIntent.amount_received)
+      && paymentIntent.amount_received < payment.amount_total) {
+      // A partial capture is a poster-fault fee. Its own command records the
+      // exact fee from fresh provider proof; a full-capture transition or a
+      // "payment captured" notice would be false. Recover only a reserved
+      // no-show fee here; a stop request's fee is finished by its reconciler.
+      try {
+        const gigStop = require('../services/gigStopService');
+        if (!(await gigStop.reconcileNoShowFee(payment.id))) await gigStop.reconcileFeeStop(payment.id);
+      } catch (feeErr) {
+        // An unavailable database or provider read is retried by the provider's
+        // redelivery; a definitive review outcome is logged, not retried forever.
+        if (!feeErr.statusCode || feeErr.statusCode >= 500) throw feeErr;
+        logger.warn('PI succeeded: partial gig capture awaits its fee command', { paymentId: payment.id, error: feeErr.message });
+      }
+      return;
+    }
     if (payment.payment_status === PAYMENT_STATES.AUTHORIZED) {
       // capturePayment hasn't run its transition yet — do it here
       const COOLING_OFF_MS = 48 * 60 * 60 * 1000;
@@ -792,6 +809,20 @@ async function handlePaymentIntentCanceled(paymentIntent, req) {
   const payment = await findPaymentByPI(paymentIntent.id);
   if (!payment) return;
   if (await reconcileLegacyAuthorization(payment, req)) return;
+
+  // A reserved poster no-show fee whose hold was canceled (expired or released)
+  // records that nothing was charged and finishes the report. A transient error
+  // is retried by the provider's redelivery. After a definitive review outcome the
+  // payment still becomes canceled below, and the same record accepts that later.
+  if (payment.payment_type === 'gig_payment' && payment.metadata?.gig_fee?.kind === 'poster_no_show'
+    && payment.metadata.gig_fee.state === 'pending') {
+    try {
+      if (await require('../services/gigStopService').reconcileNoShowFee(payment.id)) return;
+    } catch (feeErr) {
+      if (!feeErr.statusCode || feeErr.statusCode >= 500) throw feeErr;
+      logger.warn('PI canceled: reserved no-show fee needs review', { paymentId: payment.id, error: feeErr.message });
+    }
+  }
 
   // If still in a pre-canceled state, transition cleanly
   if (payment.payment_status !== PAYMENT_STATES.CANCELED) {
@@ -1054,6 +1085,20 @@ async function handleDisputeCreated(dispute) {
       await stripeService.capturePayment(payment.id);
     } catch (captureErr) {
       logger.error('Dispute: pending capture could not be recorded', { paymentId: payment.id, error: captureErr.message });
+    }
+    payment = (await findPaymentByField('id', payment.id)) || payment;
+  } else if (payment.payment_type === 'gig_payment' && ((payment.payment_status === PAYMENT_STATES.CAPTURE_PENDING
+    && payment.metadata?.gig_fee?.state === 'pending') || payment.payment_status === PAYMENT_STATES.AUTHORIZED)) {
+    // The same order for a poster-fault fee captured from the hold: record its
+    // exact capture as captured_hold, which the freeze below marks disputed.
+    try {
+      const gigStop = require('../services/gigStopService');
+      if (!(await gigStop.reconcileNoShowFee(payment.id))) await gigStop.reconcileFeeStop(payment.id);
+    } catch (feeErr) {
+      // A transient failure is retried by the provider's redelivery before the
+      // dispute is stored; a definitive review outcome is logged and stored below.
+      if (!feeErr.statusCode || feeErr.statusCode >= 500) throw feeErr;
+      logger.error('Dispute: pending fee capture could not be recorded', { paymentId: payment.id, error: feeErr.message });
     }
     payment = (await findPaymentByField('id', payment.id)) || payment;
   }

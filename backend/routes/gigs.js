@@ -31,7 +31,8 @@ const {
 } = require('../utils/moduleSchemas');
 const stripeService = require('../stripe/stripeService');
 const blockService = require('../services/blockService');
-const { publicPayment } = require('../stripe/gigPaymentProof');
+const { escapeIlike } = require('../utils/escapeIlike');
+const { publicPayment, publicGigFee } = require('../stripe/gigPaymentProof');
 const paidGigAcceptance = require('../services/gigPaymentAcceptance');
 const gigStop = require('../services/gigStopService');
 const { PAYMENT_STATES, getPaymentStateInfo } = require('../stripe/paymentStateMachine');
@@ -43,6 +44,7 @@ const homeTaskGigService = require('../services/homeTaskGigService');
 const gigPricingService = require('../services/gig/gigPricingService');
 const { alertMatchingSavedSearches } = require('../services/savedSearchAlertService');
 const { haversineMiles } = require('../utils/geo');
+const { checkHomePermission } = require('../utils/homePermissions');
 const {
   serializeGigAuthorForViewer,
   serializeUserAsLocalIdentity,
@@ -240,6 +242,29 @@ function applyUserExclusions(gigs, exclusions) {
 function excludeUserOwnedGigs(gigs, userId) {
   if (!userId) return gigs;
   return gigs.filter((gig) => String(gig?.user_id || '') !== String(userId));
+}
+
+/**
+ * Leave out tasks from anyone the viewer blocked or who blocked the viewer (UserBlock,
+ * both directions), matching the poster (user_id) and whoever created the task
+ * (created_by). Anonymous viewers are unaffected. A failed block read throws
+ * (blockService's unavailable contract), so a caller never lists unfiltered tasks.
+ */
+async function excludeBlockedPosters(gigs, viewerId) {
+  if (!viewerId || !Array.isArray(gigs) || gigs.length === 0) return gigs;
+  const blocked = await blockService.blockedUserIds(viewerId);
+  if (blocked.size === 0) return gigs;
+  const isBlocked = (id) => id != null && blocked.has(String(id));
+  let kept = gigs.filter((gig) => !isBlocked(gig?.user_id) && !isBlocked(gig?.created_by));
+  // List RPCs return user_id only; read created_by for the rest.
+  const unread = kept.filter((gig) => gig && gig.created_by === undefined && gig.id).map((gig) => gig.id);
+  if (unread.length > 0) {
+    const { data, error } = await supabaseAdmin.from('Gig').select('id').in('id', unread).in('created_by', [...blocked]);
+    if (error) throw blockService.blockCheckUnavailable();
+    const drop = new Set((data || []).map((row) => String(row.id)));
+    if (drop.size > 0) kept = kept.filter((gig) => !drop.has(String(gig.id)));
+  }
+  return kept;
 }
 
 function summarizeGigBids(bids) {
@@ -565,9 +590,10 @@ const createGigSchema = Joi.object({
   title: Joi.string().min(5).max(255).required(),
   description: Joi.string().min(10).required(),
   price: Joi.number().min(0).when('home_task_source', { is: Joi.exist(), then: Joi.number().precision(2).max(99999999.99).strict() }).required(),
-  category: Joi.string().max(100).optional(),
-  deadline: Joi.date().iso().when('home_task_source', { is: Joi.exist(), then: Joi.optional(), otherwise: Joi.date().min('now').optional() }),
-  estimated_duration: Joi.number().positive().optional(), // hours
+  // Clients send an optional field they left empty as null; treat it as not provided.
+  category: Joi.string().max(100).allow(null).optional(),
+  deadline: Joi.date().iso().allow(null).when('home_task_source', { is: Joi.exist(), then: Joi.optional(), otherwise: Joi.date().min('now').allow(null).optional() }),
+  estimated_duration: Joi.number().positive().allow(null).optional(), // hours
   attachments: Joi.array().items(Joi.string().uri()).max(10).optional(),
 
   // Proxy posting: post a gig on behalf of a business account
@@ -580,7 +606,7 @@ const createGigSchema = Joi.object({
     .optional(),
 
   // Scheduled start time (used for grace window calculations)
-  scheduled_start: Joi.date().iso().optional(),
+  scheduled_start: Joi.date().iso().allow(null).optional(),
 
   // Tasks surface: new fields
   location_precision: Joi.string()
@@ -781,9 +807,10 @@ const updateGigSchema = Joi.object({
   title: Joi.string().min(5).max(255),
   description: Joi.string().min(10),
   price: Joi.number().min(0),
-  category: Joi.string().max(100),
-  deadline: Joi.date().iso().min('now'),
-  estimated_duration: Joi.number().positive(),
+  // null clears an optional field the editor emptied.
+  category: Joi.string().max(100).allow(null),
+  deadline: Joi.date().iso().min('now').allow(null),
+  estimated_duration: Joi.number().positive().allow(null),
   attachments: Joi.array().items(Joi.string().uri()).max(10),
   cancellation_policy: Joi.string().valid('flexible', 'standard', 'strict'),
   is_urgent: Joi.boolean(),
@@ -1060,6 +1087,11 @@ router.post('/', verifyToken, validate(createGigSchema), async (req, res) => {
   logger.info('Creating gig', { userId, beneficiary_user_id });
 
   try {
+    // Posting from a Home needs home.view there: its members see these tasks on the Home help card.
+    if (location.homeId && !(await checkHomePermission(location.homeId, userId, 'home.view')).hasAccess) {
+      return res.status(403).json({ error: "You can't post from that Home." });
+    }
+
     // ─── Proxy posting (post as business) ───
     let effectiveUserId = userId; // who the gig belongs to
     let createdBy = userId; // who actually created it
@@ -2108,8 +2140,8 @@ router.get('/search', verifyToken, async (req, res) => {
     const tokens = normalizedQuery.split(/\s+/).filter(Boolean).slice(0, 6);
     const primaryToken = tokens[0] || normalizedQuery;
 
-    const fullSearchTerm = `%${queryText}%`;
-    const broadSearchTerm = `%${primaryToken}%`;
+    const fullSearchTerm = `%${escapeIlike(queryText)}%`;
+    const broadSearchTerm = `%${escapeIlike(primaryToken)}%`;
     const candidateLimit = Math.min(Math.max((safeOffset + safeLimit) * 8, 80), 400);
 
     // Build base query
@@ -2269,7 +2301,7 @@ router.get('/search', verifyToken, async (req, res) => {
  * This endpoint is intentionally public (no verifyToken) because it powers the main browsing feed.
  * We enrich each gig with bidsCount (number of bids/offers).
  */
-router.get('/', async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   try {
     const {
@@ -2305,7 +2337,7 @@ router.get('/', async (req, res) => {
     }
 
     const requestedUserId = userId || user_id;
-    const currentUserId = req.user?.id || (await extractOptionalUserId(req));
+    const currentUserId = req.user?.id || null; // optionalAuth: Bearer (native) or session cookie (web)
     const shouldExcludeOwnGigs = Boolean(currentUserId && !requestedUserId);
 
     // Resolve pagination: support both page (1-based) and offset
@@ -2380,6 +2412,13 @@ router.get('/', async (req, res) => {
       }
 
       let rows = data || [];
+
+      try {
+        rows = await excludeBlockedPosters(rows, currentUserId);
+      } catch (blockErr) {
+        logger.warn('Gig list block check unavailable', { error: blockErr.message });
+        return res.status(503).json({ error: 'Failed to fetch gigs' });
+      }
 
       if (shouldExcludeOwnGigs) {
         rows = excludeUserOwnedGigs(rows, currentUserId);
@@ -2670,7 +2709,8 @@ router.get('/', async (req, res) => {
     // Search filter (non-spatial path)
     const searchTerm = (search || '').trim();
     if (searchTerm) {
-      query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+      const escapedSearch = escapeIlike(searchTerm);
+      query = query.or(`title.ilike.%${escapedSearch}%,description.ilike.%${escapedSearch}%`);
     }
 
     // Deadline filter (non-spatial path)
@@ -2723,11 +2763,19 @@ router.get('/', async (req, res) => {
 
     query = query.range(parsedOffset, parsedOffset + parsedLimit - 1);
 
-    const { data: gigs, error, count } = await query;
+    const { data: fetchedGigs, error, count } = await query;
 
     if (error) {
       logger.error('Error fetching gigs', { error: error.message });
       return res.status(500).json({ error: 'Failed to fetch gigs' });
+    }
+
+    let gigs;
+    try {
+      gigs = await excludeBlockedPosters(fetchedGigs || [], currentUserId);
+    } catch (blockErr) {
+      logger.warn('Gig list block check unavailable', { error: blockErr.message });
+      return res.status(503).json({ error: 'Failed to fetch gigs' });
     }
 
     const gigIdsFromGigs = (gigs || []).map((g) => g.id).filter(Boolean);
@@ -2790,7 +2838,7 @@ router.get('/', async (req, res) => {
  *  - min_lat, min_lon, max_lat, max_lon (required)
  *  - status (optional, default 'open')
  */
-router.get('/in-bounds', async (req, res) => {
+router.get('/in-bounds', optionalAuth, async (req, res) => {
   const startTime = process.hrtime.bigint();
   try {
     const min_lat = parseFloat(req.query.min_lat);
@@ -2804,7 +2852,7 @@ router.get('/in-bounds', async (req, res) => {
     }
     const includeRemote = parseBooleanQuery(req.query.includeRemote, true);
     const category = req.query.category || null;
-    const currentUserId = req.user?.id || (await extractOptionalUserId(req));
+    const currentUserId = req.user?.id || null; // optionalAuth: Bearer (native) or session cookie (web)
 
     if (![min_lat, min_lon, max_lat, max_lon].every(Number.isFinite)) {
       return res
@@ -2836,7 +2884,13 @@ router.get('/in-bounds', async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch gigs in bounds' });
     }
 
-    const rows = data || [];
+    let rows;
+    try {
+      rows = await excludeBlockedPosters(data || [], currentUserId);
+    } catch (blockErr) {
+      logger.warn('Gig map block check unavailable', { error: blockErr.message });
+      return res.status(503).json({ error: 'Failed to fetch gigs in bounds' });
+    }
     const savedGigIds = await getViewerSavedGigIds(
       currentUserId,
       rows.map((gig) => gig.id).filter(Boolean)
@@ -3378,7 +3432,7 @@ const { getGigClusters } = require('../services/gig/clusterService');
  * Returns pre-sectioned data for the task browse feed.
  * Query params: lat, lng (required), radius (optional, meters, default 100mi)
  */
-router.get('/browse', async (req, res) => {
+router.get('/browse', optionalAuth, async (req, res) => {
   const startTime = Date.now();
   try {
     const lat = parseFloat(req.query.lat);
@@ -3400,7 +3454,7 @@ router.get('/browse', async (req, res) => {
       MAX_BROWSE_RADIUS_METERS
     );
     const taskArchetype = req.query.task_archetype || null;
-    const userId = await extractOptionalUserId(req);
+    const userId = req.user?.id || null; // optionalAuth: Bearer (native) or session cookie (web)
 
     // ── Cache check ──
     if (!userId) {
@@ -3434,7 +3488,14 @@ router.get('/browse', async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch gigs' });
     }
 
-    const visibleGigs = excludeUserOwnedGigs(allGigs || [], userId);
+    let unblockedGigs;
+    try {
+      unblockedGigs = await excludeBlockedPosters(allGigs || [], userId);
+    } catch (blockErr) {
+      logger.warn('Browse block check unavailable', { error: blockErr.message });
+      return res.status(503).json({ error: 'Failed to fetch gigs' });
+    }
+    const visibleGigs = excludeUserOwnedGigs(unblockedGigs, userId);
 
     // ── Fetch user context (optional, non-blocking) ──
     let userAffinities = [];
@@ -3705,13 +3766,14 @@ router.delete('/hidden-categories/:category', verifyToken, async (req, res) => {
 
 /**
  * GET /api/gigs/:id
- * Get a single gig by ID
+ * Get a single gig by ID. optionalAuth resolves the viewer from a Bearer token (native) or the web
+ * session cookie; a revoked session reads as anonymous, as on the app's other soft-auth reads.
  */
-router.get('/:id', async (req, res) => {
+router.get('/:id', optionalAuth, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   try {
     const { id } = req.params;
-    const currentUserId = req.user?.id || (await extractOptionalUserId(req));
+    const currentUserId = req.user?.id || null;
 
     // Public reads should not depend on RLS (server does not forward user JWT to Supabase).
     // Use the service role client for consistent behavior.
@@ -3815,6 +3877,9 @@ router.patch('/:id', verifyToken, validate(updateGigSchema), async (req, res) =>
       const { latitude, longitude, mode, address, city, state, zip, homeId, place_id,
         geocode_provider, geocode_accuracy, geocode_place_id } =
         updateData.location;
+      if (homeId && !(await checkHomePermission(homeId, userId, 'home.view')).hasAccess) {
+        return res.status(403).json({ error: "You can't post from that Home." });
+      }
       const approx = calculateApproxLocation(latitude, longitude);
 
       updateData.exact_location = formatLocationForDB(latitude, longitude);
@@ -5956,6 +6021,22 @@ router.get('/:gigId/change-orders', verifyToken, async (req, res) => {
   }
 });
 
+// A paid task's price is bound to its payment hold: Start Work, capture, stop
+// and every settlement compare them, so a price change strands the hold.
+// Until a price change can move the hold, refuse one while it is live.
+const PAID_PRICE_CHANGE_UNAVAILABLE =
+  "Price changes aren't available once a task has a payment hold. The task keeps its agreed price.";
+async function hasLivePaymentHold(gig) {
+  if (!gig.payment_id) return false;
+  const { data: payment, error } = await supabaseAdmin
+    .from('Payment')
+    .select('payment_status')
+    .eq('id', gig.payment_id)
+    .maybeSingle();
+  if (error) throw error;
+  return !['canceled', 'refunded_full'].includes(payment?.payment_status);
+}
+
 /**
  * POST /api/gigs/:gigId/change-orders
  * Request a change order (worker or poster, gig must be assigned or in_progress).
@@ -5988,7 +6069,7 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
 
     const { data: gig, error: gigFetchErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, accepted_by, status, title, price')
+      .select('id, user_id, accepted_by, status, title, price, payment_id')
       .eq('id', gigId)
       .single();
 
@@ -6009,6 +6090,9 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
       return res
         .status(403)
         .json({ error: 'Only the poster or assigned worker can request changes' });
+    }
+    if (Number(amount_change) && (await hasLivePaymentHold(gig))) {
+      return res.status(409).json({ error: PAID_PRICE_CHANGE_UNAVAILABLE, code: 'PAID_PRICE_CHANGE_UNAVAILABLE' });
     }
 
     const safeAmountChange = amount_change ? parseFloat(amount_change) : 0;
@@ -6165,7 +6249,7 @@ router.post('/:gigId/change-orders/:orderId/approve', verifyToken, async (req, r
 
     const { data: gig, error: gigFetchErr } = await supabaseAdmin
       .from('Gig')
-      .select('id, user_id, accepted_by, title, price')
+      .select('id, user_id, accepted_by, title, price, payment_id')
       .eq('id', gigId)
       .single();
 
@@ -6195,6 +6279,9 @@ router.post('/:gigId/change-orders/:orderId/approve', verifyToken, async (req, r
     const isWorker = gig.accepted_by && String(gig.accepted_by) === String(userId);
     if (!isPoster && !isWorker) {
       return res.status(403).json({ error: 'Only the poster or worker can approve' });
+    }
+    if (Number(order.amount_change) && (await hasLivePaymentHold(gig))) {
+      return res.status(409).json({ error: PAID_PRICE_CHANGE_UNAVAILABLE, code: 'PAID_PRICE_CHANGE_UNAVAILABLE' });
     }
 
     const nowIso = new Date().toISOString();
@@ -6911,19 +6998,50 @@ function noShowEligibility(gig, userId, now = Date.now()) {
   }
 
   // For worker: can report poster no-show if poster becomes unresponsive
-  // (e.g., after gig is assigned for 24+ hours with no communication)
+  // (e.g., after gig is assigned for 24+ hours with no communication). A
+  // scheduled task also needs its agreed start plus the same buffer to pass.
   if (isWorker && gig.status === 'assigned') {
     const acceptedAt = gig.accepted_at ? new Date(gig.accepted_at).getTime() : now;
     if (!Number.isFinite(acceptedAt)) return { can_report: false, reason: 'No valid acceptance time' };
     const hoursOverdue = (now - acceptedAt) / (60 * 60 * 1000);
+    let scheduledStart = null;
+    if (gig.scheduled_start) {
+      scheduledStart = new Date(gig.scheduled_start).getTime();
+      if (!Number.isFinite(scheduledStart)) return { can_report: false, reason: 'No valid scheduled start' };
+    }
+    const canReportAfter = scheduledStart === null ? null : scheduledStart + NO_SHOW_BUFFER_MS;
+    const canReport = hoursOverdue > 24 && (canReportAfter === null || now > canReportAfter);
     return {
-      can_report: hoursOverdue > 24,
+      can_report: canReport,
       hours_since_accept: Math.floor(hoursOverdue),
-      reason: hoursOverdue > 24 ? 'Poster unresponsive for 24+ hours' : 'Too early to report',
+      ...(canReportAfter === null ? {} : {
+        expected_start: new Date(scheduledStart).toISOString(),
+        can_report_after: new Date(canReportAfter).toISOString(),
+      }),
+      reason: canReport ? 'Poster unresponsive for 24+ hours' : 'Too early to report',
     };
   }
 
   return { can_report: false, reason: 'No grounds for no-show report' };
+}
+
+// A no-show cancel refused by a database guard that holds the task for another
+// in-flight operation: each guard gets its own plain reason.
+const NO_SHOW_REFUSALS = {
+  feeReserved: { code: 'NO_SHOW_REPORT_ACTIVE', error: 'A no-show report for this task is already being processed. Refresh the task to see its status.' },
+  stopActive: { code: 'STOP_ACTIVE', error: 'A cancellation for this task is already in progress. Refresh the task to see its status.' },
+  holdExpiring: { code: 'PAYMENT_HOLD_EXPIRING', error: 'This task\'s payment hold expired and is being released. Refresh the task to see its status.' },
+  completionPending: { code: 'COMPLETION_PENDING', error: 'This task\'s completion is being confirmed. Refresh the task to see its status.' },
+  changed: { code: 'NO_SHOW_NOT_ELIGIBLE', error: 'The task changed. Reopen it and check its status.' },
+};
+function noShowCancelRefusal(error) {
+  if (error?.code !== '23514') return null;
+  const message = String(error.message || '');
+  if (message.includes('reserved no-show fee')) return NO_SHOW_REFUSALS.feeReserved;
+  if (message.includes('saved stop request')) return NO_SHOW_REFUSALS.stopActive;
+  if (message.includes('Authorization expiry')) return NO_SHOW_REFUSALS.holdExpiring;
+  if (message.includes('completion')) return NO_SHOW_REFUSALS.completionPending;
+  return NO_SHOW_REFUSALS.changed;
 }
 
 /**
@@ -6957,14 +7075,19 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
         .json({ error: 'Only the poster or assigned worker can report a no-show' });
     }
 
+    // The worker's own poster no-show report that already cancelled this task
+    // converges on its recorded fee outcome; it never charges again.
+    const resumingPosterNoShow = !isPoster && gig.status === 'cancelled'
+      && gig.cancellation_reason === 'no_show_poster' && String(gig.cancelled_by) === String(userId);
+
     // Must be in assigned or in_progress state
-    if (!['assigned', 'in_progress'].includes(gig.status)) {
+    if (!resumingPosterNoShow && !['assigned', 'in_progress'].includes(gig.status)) {
       return res
         .status(400)
         .json({ error: `Cannot report no-show for a gig in "${gig.status}" status` });
     }
 
-    const eligibility = noShowEligibility(gig, userId);
+    const eligibility = resumingPosterNoShow ? { can_report: true } : noShowEligibility(gig, userId);
     if (!eligibility.can_report) {
       return res.status(409).json({ code: 'NO_SHOW_NOT_ELIGIBLE', error: eligibility.reason });
     }
@@ -6973,61 +7096,149 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
     const reportedAgainst = isPoster ? gig.accepted_by : gig.user_id;
     const nowIso = new Date().toISOString();
 
-    // 1) Create the incident record
-    const { data: incident, error: incidentErr } = await supabaseAdmin
-      .from('GigIncident')
-      .insert({
-        gig_id: gigId,
-        reported_by: userId,
-        reported_against: reportedAgainst,
-        type: incidentType,
-        description: description || null,
-        evidence_urls: evidence_urls || [],
-        status: 'open',
-      })
-      .select()
-      .single();
-
-    if (incidentErr) {
-      logger.error('Failed to create no-show incident', { error: incidentErr.message });
-      return res.status(500).json({ error: 'Failed to report no-show' });
-    }
-
-    // 2) Cancel the gig with zone 3 (no-show)
     const gigPrice = parseFloat(gig.price) || 0;
     const policyKey = gig.cancellation_policy || 'standard';
     // A worker no-show costs the worker reliability only, and the poster's
-    // hold is released in full below. A poster no-show records the 25% fee.
+    // hold is released in full below. A poster no-show charges the 25% fee
+    // from the poster's existing hold; the rest of the hold is released.
     const noShowFee = isPoster ? 0 : Math.round(gigPrice * 0.25 * 100) / 100;
+    const noShowFeeCents = Math.round(noShowFee * 100);
+    const reportActive = () => res.status(409).json(NO_SHOW_REFUSALS.feeReserved);
 
-    // Only the unstarted assignment that was checked above may be cancelled;
-    // a concurrent Start Work keeps the task and its payment hold.
-    const { data: updatedGig, error: cancelErr } = await supabaseAdmin
-      .from('Gig')
-      .update({
-        status: 'cancelled',
-        cancelled_at: nowIso,
-        cancelled_by: userId,
-        cancellation_reason: incidentType,
-        cancellation_zone: 3,
-        cancellation_fee: noShowFee,
-        updated_at: nowIso,
-      })
-      .eq('id', gigId)
-      .eq('status', gig.status)
-      .select()
-      .maybeSingle();
-
-    if (cancelErr) {
-      return res.status(500).json({ error: 'Failed to cancel gig' });
-    }
-    if (!updatedGig) {
-      return res.status(409).json({ code: 'NO_SHOW_NOT_ELIGIBLE', error: 'The task changed. Reopen it and check its status.' });
-    }
-
-    // Worker no-show: release the poster's authorization hold in full.
-    let holdRelease = 'none';
+    // The worker's report holds the task while its fee is captured; the poster's
+    // report cannot cancel it in that window (the database fence also refuses it).
     if (isPoster && gig.payment_id) {
+      const { data: heldPayment, error: heldErr } = await supabaseAdmin.from('Payment')
+        .select('payment_status, metadata').eq('id', gig.payment_id).maybeSingle();
+      if (heldErr) return res.status(503).json({ error: 'The no-show report could not be checked. Please retry.' });
+      if (heldPayment?.payment_status === 'capture_pending' || heldPayment?.metadata?.gig_fee?.state === 'pending') return reportActive();
+    }
+
+    // Poster no-show with a payment: the database admits the report, writes its
+    // incident once and reserves the fee capture before any other effect. A
+    // retry resumes the same reservation. Without a capturable hold, or with a
+    // fee below the provider's 50-cent minimum, nothing is charged.
+    let feeReservation = null;
+    if (!isPoster && !resumingPosterNoShow && gig.payment_id && noShowFeeCents > 0) {
+      try {
+        feeReservation = await gigStop.reserveNoShowFee({ gigId, actorId: userId, feeCents: noShowFeeCents,
+          description, evidenceUrls: evidence_urls });
+      } catch (reserveErr) {
+        return res.status(reserveErr.statusCode || 503).json({ code: reserveErr.code, error: reserveErr.message });
+      }
+    }
+    const feeFromHold = Boolean(feeReservation && !feeReservation.noHold && !feeReservation.belowMinimum);
+    const feeBelowMinimum = !isPoster && noShowFeeCents > 0 && noShowFeeCents < 50;
+
+    // 1) Create the incident record (the worker's report reuses its own). The
+    // poster's incident is written only after its cancel succeeds, so a refused
+    // report leaves no incident behind.
+    const insertIncident = async () => {
+      const { data: inserted, error: incidentErr } = await supabaseAdmin
+        .from('GigIncident')
+        .insert({
+          gig_id: gigId,
+          reported_by: userId,
+          reported_against: reportedAgainst,
+          type: incidentType,
+          description: description || null,
+          evidence_urls: evidence_urls || [],
+          status: 'open',
+        })
+        .select()
+        .single();
+      if (incidentErr) logger.error('Failed to create no-show incident', { error: incidentErr.message });
+      return incidentErr ? null : inserted;
+    };
+    let incident = feeReservation?.incident || null;
+    if (!incident && !isPoster) {
+      const { data: existing, error: existingErr } = await supabaseAdmin.from('GigIncident').select('*')
+        .eq('gig_id', gigId).eq('reported_by', userId).eq('type', incidentType)
+        .order('created_at', { ascending: true }).limit(1).maybeSingle();
+      if (existingErr) return res.status(503).json({ error: 'The no-show report could not be checked. Please retry.' });
+      incident = existing || await insertIncident();
+      if (!incident) return res.status(500).json({ error: 'Failed to report no-show' });
+    }
+
+    // 2) Cancel the gig with zone 3 (no-show)
+    let updatedGig = resumingPosterNoShow ? gig : null;
+    let feeCharge = null;
+    let cancelledHere = false;
+    if (!isPoster && feeFromHold) {
+      // Capture only the fee from the hold, then record it and cancel the task
+      // in one transaction. An unknown outcome keeps the same reservation.
+      let charged;
+      try {
+        charged = await gigStop.chargeNoShowFee({ payment: feeReservation.payment, actorId: userId });
+      } catch (chargeErr) {
+        return res.status(chargeErr.statusCode || 503).json({ code: chargeErr.code, error: chargeErr.message });
+      }
+      if (charged.review) {
+        // Unreachable while the database fence holds the task: the provider
+        // outcome is recorded, and support reviews the changed task.
+        return res.status(409).json({ code: 'NO_SHOW_REVIEW', feeCharge: charged.outcome,
+          error: 'The no-show fee outcome is recorded, but the task changed at the same time. Support will review it.' });
+      }
+      updatedGig = charged.gig || null;
+      feeCharge = charged.outcome;
+      if (!updatedGig) {
+        const { data: current } = await supabaseAdmin.from('Gig').select('*').eq('id', gigId).maybeSingle();
+        updatedGig = current || gig;
+      }
+    } else if (resumingPosterNoShow) {
+      if (gig.payment_id) {
+        const { data: payment, error: paymentErr } = await supabaseAdmin.from('Payment').select('*')
+          .eq('id', gig.payment_id).maybeSingle();
+        if (paymentErr) return res.status(503).json({ error: 'The no-show report could not be checked. Please retry.' });
+        feeCharge = gigStop.noShowFeeOutcome(payment)
+          || (payment && noShowFeeCents > 0
+            ? { status: 'not_charged', reason: feeBelowMinimum ? 'FEE_BELOW_MINIMUM' : 'HOLD_UNAVAILABLE', feeCents: 0 } : null);
+      }
+    } else {
+      // Only the unstarted assignment that was checked above may be cancelled;
+      // a concurrent Start Work keeps the task and its payment hold. A poster
+      // no-show without a capturable hold records no fee: nothing is charged.
+      const { data: cancelled, error: cancelErr } = await supabaseAdmin
+        .from('Gig')
+        .update({
+          status: 'cancelled',
+          cancelled_at: nowIso,
+          cancelled_by: userId,
+          cancellation_reason: incidentType,
+          cancellation_zone: 3,
+          cancellation_fee: 0,
+          updated_at: nowIso,
+        })
+        .eq('id', gigId)
+        .eq('status', gig.status)
+        .select()
+        .maybeSingle();
+
+      if (cancelErr) {
+        // A database guard holds this task for another in-flight operation.
+        const refusal = noShowCancelRefusal(cancelErr);
+        if (refusal) return res.status(409).json(refusal);
+        return res.status(500).json({ error: 'Failed to cancel gig' });
+      }
+      if (!cancelled) {
+        return res.status(409).json({ code: 'NO_SHOW_NOT_ELIGIBLE', error: 'The task changed. Reopen it and check its status.' });
+      }
+      updatedGig = cancelled;
+      cancelledHere = true;
+      if (!incident) incident = await insertIncident();
+      if (!isPoster && (feeReservation?.noHold || feeReservation?.belowMinimum)) {
+        const reason = feeReservation.belowMinimum ? 'FEE_BELOW_MINIMUM' : 'HOLD_UNAVAILABLE';
+        feeCharge = { status: 'not_charged', reason, feeCents: 0 };
+        logger.warn('Poster-fault fee not charged', { kind: 'poster_no_show', gigId, paymentId: gig.payment_id, reason });
+      }
+    }
+    const chargedFeeCents = feeCharge?.status === 'charged' ? feeCharge.feeCents : 0;
+
+    // Worker no-show, or a poster no-show whose fee is below the provider's
+    // 50-cent minimum: release the poster's authorization hold in full.
+    let holdRelease = 'none';
+    const releaseHold = isPoster || (feeCharge?.status === 'not_charged' && feeCharge.reason === 'FEE_BELOW_MINIMUM');
+    if (releaseHold && gig.payment_id) {
       try {
         await stripeService.cancelAuthorization(gig.payment_id);
         holdRelease = 'released';
@@ -7038,13 +7249,15 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
       }
     }
 
-    // 3) Update reliability metrics for the no-show party
+    // 3) Update reliability metrics for the no-show party once: only the request
+    // that cancelled the task applies it. A fee charged or recorded from the hold
+    // applies the same rule inside its recording transaction.
     // Increment no_show_count and recalculate reliability_score
-    const { data: currentUser } = await supabaseAdmin
+    const { data: currentUser } = cancelledHere ? await supabaseAdmin
       .from('User')
       .select('no_show_count, late_cancel_count, gigs_completed, reliability_score')
       .eq('id', reportedAgainst)
-      .single();
+      .single() : { data: null };
 
     if (currentUser) {
       const newNoShowCount = (currentUser.no_show_count || 0) + 1;
@@ -7065,24 +7278,29 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
         .eq('id', reportedAgainst);
     }
 
-    // 4) Notify the no-show party
-    const { data: reporter } = await supabaseAdmin
-      .from('User')
-      .select('name, username')
-      .eq('id', userId)
-      .single();
-    const reporterName = reporter?.name || reporter?.username || 'The other party';
-    const gigTitle = gig.title || 'a gig';
-
-    createNotification({
-      userId: reportedAgainst,
-      type: 'no_show_reported',
-      title: `No-show reported for "${gigTitle}"`,
-      body: `${reporterName} reported you as a no-show.${noShowFee > 0 ? ` Fee: $${noShowFee.toFixed(2)}` : ''} This affects your reliability score.`,
-      icon: '⚠️',
-      link: `/gigs/${gigId}`,
-      metadata: { gig_id: gigId, incident_id: incident?.id, fee: noShowFee },
-    });
+    // 4) Notify the no-show party. The worker's report shares one notice per
+    // task with its recovery paths, so a retry or a recorded webhook never repeats it.
+    if (isPoster) {
+      const { data: reporter } = await supabaseAdmin
+        .from('User')
+        .select('name, username')
+        .eq('id', userId)
+        .single();
+      const reporterName = reporter?.name || reporter?.username || 'The other party';
+      createNotification({
+        userId: reportedAgainst,
+        type: 'no_show_reported',
+        title: `No-show reported for "${gig.title || 'a gig'}"`,
+        body: `${reporterName} reported you as a no-show. This affects your reliability score.`,
+        icon: '⚠️',
+        link: `/gigs/${gigId}`,
+        metadata: { gig_id: gigId, incident_id: incident?.id, fee: 0 },
+      });
+    } else {
+      gigStop.notifyPosterNoShow({ gigId, posterId: reportedAgainst, workerId: userId, gigTitle: gig.title, feeCharge,
+        incidentId: incident?.id })
+        .catch(notifyErr => logger.warn('No-show notice failed', { gigId, error: notifyErr.message }));
+    }
 
     logger.info('No-show reported', {
       gigId,
@@ -7093,8 +7311,9 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
     res.json({
       incident,
       gig: updatedGig,
-      fee: noShowFee,
+      fee: chargedFeeCents / 100,
       holdRelease,
+      ...(!isPoster ? { feeCharge } : {}),
       message: 'No-show reported successfully. The gig has been cancelled.',
     });
   } catch (err) {
@@ -7642,6 +7861,8 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
         return res.status(409).json({ error: 'Payment ownership needs verification' });
       }
       Object.assign(payment, await require('../services/walletSettlementService').readProjection(payment));
+      // A charged poster-fault fee: the fee, the released rest and the worker share.
+      payment.gig_fee = publicGigFee(payment);
       payment.tip_amount = (successfulTips || []).reduce((sum, tip) => {
         const grossTip = Number(tip?.tip_amount || 0) || 0;
         const refundedTip = Number(tip?.refunded_amount || 0) || 0;
@@ -7664,6 +7885,10 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
       delete payment.stripe_setup_intent_id;
       delete payment.stripe_customer_id;
       delete payment.stripe_charge_id;
+      if (payment.metadata?.gig_fee) {
+        const { gig_fee: _feeReceipt, ...metadata } = payment.metadata;
+        payment.metadata = metadata;
+      }
     }
 
     const stateInfo = payment?.payment_status

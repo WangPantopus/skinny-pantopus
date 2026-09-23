@@ -7,6 +7,8 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { getBusinessMemberIdsByRole } = require('../utils/businessPermissions');
+const notificationService = require('../services/notificationService');
 
 async function expirePopupBusinesses() {
   const now = new Date().toISOString();
@@ -54,18 +56,24 @@ async function expirePopupBusinesses() {
 
     const businessName = bizUser?.name || 'Your pop-up';
 
-    // Create an in-app notification (insert into Notification table if it exists)
+    // In-app notification. The business account has no sign-in, so its
+    // owners and admins get it, with a link to the business dashboard.
     try {
-      await supabaseAdmin.from('Notification').insert({
-        user_id: businessId,
-        type: 'popup_expired',
-        title: 'Pop-up listing ended',
-        body: `Your pop-up listing for ${businessName} has ended. Renew to list again.`,
-        data: { business_id: businessId },
-      });
+      const recipients = await getBusinessMemberIdsByRole(businessId, ['owner', 'admin']);
+      for (const userId of recipients) {
+        await notificationService.createNotification({
+          userId,
+          type: 'popup_expired',
+          title: 'Pop-up listing ended',
+          body: `Your pop-up listing for ${businessName} has ended. Renew to list again.`,
+          link: `/app/businesses/${businessId}/dashboard`,
+          metadata: { business_id: businessId },
+          context: 'personal',
+        });
+      }
     } catch (notifErr) {
-      // Non-critical — notification table may not exist yet
-      logger.warn('expirePopupBusinesses: notification insert failed', { businessId, error: notifErr.message });
+      // Non-critical — the pop-up is already unpublished.
+      logger.warn('expirePopupBusinesses: notification failed', { businessId, error: notifErr.message });
     }
 
     logger.info('expirePopupBusinesses: unpublished expired pop-up', { businessId, name: businessName });

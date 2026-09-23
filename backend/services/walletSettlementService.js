@@ -5,6 +5,8 @@ const snapshot = p => ({ id: p.id, payer_id: p.payer_id, payee_id: p.payee_id, g
   currency: String(p.currency).toLowerCase(), intent_id: p.stripe_payment_intent_id || null,
   charge_id: p.stripe_charge_id || null, customer_id: p.stripe_customer_id || null, transfer_id: p.stripe_transfer_id || null });
 const unavailable = () => Object.assign(new Error('Wallet settlement verification is unavailable.'), { statusCode: 503 });
+// A captured poster-fault fee (metadata.gig_fee) settles only its worker share.
+const { capturedFeeCents, feeWorkerShare } = require('../stripe/gigPaymentProof');
 const publicReceipt = r => ({ id: r.id, paymentId: r.payment_id, status: r.status, amountCents: r.amount_cents,
   currency: r.currency, refundBasisCents: r.refund_basis_cents, createdAt: r.created_at });
 async function readProjection(payment) {
@@ -34,8 +36,15 @@ async function readProjection(payment) {
   }
   if (settlement) {
     const basis = settlement.refund_basis_cents;
+    // A fee settlement credits the worker share of the fee less the share of any
+    // part of the fee refunded before settlement (its refund basis).
+    const feeCents = capturedFeeCents(payment);
+    const basisShare = Number.isSafeInteger(basis) && basis >= 0
+      ? Number(BigInt(basis) * BigInt(payment.amount_to_payee) / BigInt(payment.amount_total)) : NaN;
+    const expected = feeCents !== null ? (basis <= feeCents ? feeWorkerShare(payment, feeCents) - basisShare : -1)
+      : payment.amount_to_payee - basisShare;
     if (!isDeepStrictEqual(settlement.frozen_payment, snapshot(payment)) || !Number.isSafeInteger(basis) || basis < 0 || basis > refunds
-      || settlement.amount_cents !== payment.amount_to_payee - Number(BigInt(basis) * BigInt(payment.amount_to_payee) / BigInt(payment.amount_total))
+      || settlement.amount_cents !== expected
       || settlement.currency !== 'usd' || payment.stripe_transfer_id) return unknown;
     if (settlement.status === 'no_earnings') {
       return settlement.amount_cents === 0 && credits.length === 0 && !settlement.wallet_transaction_id
@@ -57,10 +66,14 @@ async function readProjection(payment) {
   if (!payment.stripe_payment_intent_id || !payment.stripe_customer_id) return unknown;
   return { payee_release_status: 'held', wallet_settlement: null };
 }
-async function settle(payment) {
-  const { data, error } = await db.rpc('settle_paid_gig_wallet_income', { p_payment_id: payment.id, p_expected: snapshot(payment) });
+async function settleWith(rpcName, payment) {
+  const { data, error } = await db.rpc(rpcName, { p_payment_id: payment.id, p_expected: snapshot(payment) });
   if (error || !data) throw unavailable();
   if (data.error || !data.payment || !data.settlement) throw Object.assign(new Error('Wallet settlement needs verification.'), { code: data.error, statusCode: 409 });
   return data;
 }
-module.exports = { readProjection, settle, snapshot };
+const settle = payment => settleWith('settle_paid_gig_wallet_income', payment);
+// A cancelled task's poster-fault fee: the same fenced receipt and deliveries,
+// crediting only the worker share of the captured fee.
+const settleFee = payment => settleWith('settle_gig_fee_wallet_income', payment);
+module.exports = { readProjection, settle, settleFee, snapshot };

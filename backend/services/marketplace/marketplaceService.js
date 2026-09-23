@@ -13,6 +13,7 @@
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
+const { escapeIlike } = require('../../utils/escapeIlike');
 const s3 = require('../s3Service');
 const { applyLocationPrivacyBatch } = require('./locationPrivacy');
 const { LISTING_CATEGORIES } = require('../../constants/marketplace');
@@ -477,7 +478,7 @@ async function browseListings({
         .select(LISTING_BROWSE_SELECT)
         .eq('status', 'active')
         .is('archived_at', null)
-        .or(`title.ilike.%${trimmed}%,description.ilike.%${trimmed}%`);
+        .or(`title.ilike.%${escapeIlike(trimmed)}%,description.ilike.%${escapeIlike(trimmed)}%`);
 
       // Re-apply bounding box
       if (south != null) fuzzyQuery = fuzzyQuery.gte('latitude', south);
@@ -552,7 +553,7 @@ async function browseListings({
         .eq('status', 'active')
         .is('archived_at', null)
         .is('latitude', null)
-        .or(`title.ilike.%${trimmed}%,description.ilike.%${trimmed}%`);
+        .or(`title.ilike.%${escapeIlike(trimmed)}%,description.ilike.%${escapeIlike(trimmed)}%`);
 
       if (category) fuzzyRemote = fuzzyRemote.eq('category', category);
       if (listingType) fuzzyRemote = fuzzyRemote.eq('listing_type', listingType);

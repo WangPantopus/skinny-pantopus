@@ -1085,7 +1085,8 @@ struct GigPaymentCard: View {
                 statusChip
             }
             VStack(spacing: Spacing.s2) {
-                if let fee = payment.amountPlatformFee, fee > 0 {
+                // A fee charge replaces the full-task platform fee and total.
+                if payment.gigFee == nil, let fee = payment.amountPlatformFee, fee > 0 {
                     row(label: "Platform fee (included)", cents: fee)
                 }
                 if let tip = payment.tipAmount, tip > 0 {
@@ -1094,7 +1095,11 @@ struct GigPaymentCard: View {
                 Rectangle()
                     .fill(Theme.Color.appBorder)
                     .frame(height: 1)
-                totalRow
+                if let gigFee = payment.gigFee {
+                    feeRow(gigFee)
+                } else {
+                    totalRow
+                }
             }
         }
         .padding(Spacing.s3)
@@ -1137,6 +1142,17 @@ struct GigPaymentCard: View {
                 .foregroundStyle(Theme.Color.appText)
         }
         .accessibilityIdentifier("gigDetail.payment.total")
+    }
+
+    /// The charged no-show or cancellation fee and the released rest of the hold.
+    private func feeRow(_ fee: GigPaymentFeeDTO) -> some View {
+        HStack {
+            Text(fee.line)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(Theme.Color.appText)
+            Spacer()
+        }
+        .accessibilityIdentifier("gigDetail.payment.fee")
     }
 
     private var amountLabel: String {

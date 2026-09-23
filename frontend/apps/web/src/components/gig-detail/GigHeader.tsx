@@ -5,6 +5,7 @@ import { Bookmark, Tag, Flag } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import ReportModal from '@/components/ui/ReportModal';
+import { getErrorMessage } from '@pantopus/utils';
 
 type AnyObj = Record<string, any>;
 
@@ -51,7 +52,7 @@ export default function GigHeader({
       await api.gigs.reportGig(gigId, reason, details);
       toast.success('Report submitted. Thank you for keeping the community safe.');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to submit report');
+      toast.error(getErrorMessage(err, 'Failed to submit report'));
     }
   };
 

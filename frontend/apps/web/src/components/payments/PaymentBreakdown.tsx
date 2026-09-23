@@ -1,6 +1,6 @@
 'use client';
 
-import type { Payment } from '@pantopus/types';
+import type { Payment, PaymentGigFee } from '@pantopus/types';
 import { verifiedSettlement } from './payeeRelease';
 
 interface PaymentBreakdownProps {
@@ -14,6 +14,20 @@ interface PaymentBreakdownProps {
 function formatCents(cents: number | undefined | null): string {
   if (cents === undefined || cents === null) return '$0.00';
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+/** A charged poster-fault fee replaces the full-task total with one fee line. */
+function chargedGigFee(payment: Payment): PaymentGigFee | null {
+  const fee = payment.gig_fee;
+  if (!fee || !['poster_no_show', 'late_cancel'].includes(fee.kind)) return null;
+  const valid = [fee.fee_cents, fee.released_cents, fee.worker_share_cents].every(Number.isSafeInteger)
+    && fee.fee_cents > 0 && fee.fee_cents < payment.amount_total && fee.released_cents === payment.amount_total - fee.fee_cents
+    && fee.worker_share_cents >= 0 && fee.worker_share_cents <= fee.fee_cents;
+  return valid ? fee : null;
+}
+
+function feeLine(fee: PaymentGigFee): string {
+  return `${fee.kind === 'poster_no_show' ? 'No-show fee' : 'Cancellation fee'} ${formatCents(fee.fee_cents)} charged · ${formatCents(fee.released_cents)} released`;
 }
 
 function payerTotalLabel(payment: Payment): string {
@@ -42,6 +56,7 @@ export default function PaymentBreakdown({
   const tip = payment.tip_amount || 0;
   const refunded = payment.refunded_amount || 0;
   const settlement = verifiedSettlement(payment);
+  const gigFee = chargedGigFee(payment);
 
   if (compact) {
     return (
@@ -83,8 +98,8 @@ export default function PaymentBreakdown({
           <span className="text-app-text">{formatCents(subtotal)}</span>
         </div>
 
-        {/* Platform fee */}
-        {perspective === 'payer' ? (
+        {/* Platform fee (it describes a full task charge, never a fee charge) */}
+        {gigFee ? null : perspective === 'payer' ? (
           <div className="flex justify-between">
             <span className="text-app-text-secondary">Platform fee (included)</span>
             <span className="text-app-text">{formatCents(platformFee)}</span>
@@ -108,15 +123,20 @@ export default function PaymentBreakdown({
         <div className="border-t border-app-border-subtle my-1" />
 
         {/* Total or Earnings */}
-        {perspective === 'payer' ? (
+        {gigFee && (
+          <div className="flex justify-between font-semibold">
+            <span className="text-app-text">{feeLine(gigFee)}</span>
+          </div>
+        )}
+        {perspective === 'payer' ? (!gigFee && (
           <div className="flex justify-between font-semibold">
             <span className="text-app-text">{payerTotalLabel(payment)}</span>
             <span className="text-app-text">{formatCents(total)}</span>
           </div>
-        ) : (
+        )) : (
           <div className="flex justify-between font-semibold">
             <span className="text-app-text">{refunded > 0 ? 'Original expected earnings' : 'Expected earnings'}</span>
-            <span className="text-green-700">{formatCents(toPayee + tip)}</span>
+            <span className="text-green-700">{formatCents(gigFee ? gigFee.worker_share_cents : toPayee + tip)}</span>
           </div>
         )}
         {perspective === 'payee' && settlement && (
