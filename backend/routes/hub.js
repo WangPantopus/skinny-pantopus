@@ -14,6 +14,9 @@ const router = express.Router();
 const Joi = require('joi');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
+const homeListService = require('../services/homeListService');
+const { unreadMailQuery } = require('../services/homeDashboardService');
+const { staleAffectsTrust } = require('../utils/verificationAge');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
@@ -47,7 +50,7 @@ router.get('/', verifyToken, async (req, res) => {
         ).catch(() => null),
         supabaseAdmin
           .from('HomeOccupancy')
-          .select('home_id, role, is_active, verification_status, home:home_id(id, name, address, city, state, zipcode, latitude, longitude)')
+          .select('home_id, role, is_active, verification_status, home:home_id(id, name, address, city, state, zipcode, map_center_lat, map_center_lng)')
           .eq('user_id', userId)
           .eq('is_active', true),
         // Seat-based business memberships (with fallback to BusinessTeam format)
@@ -103,6 +106,15 @@ router.get('/', verifyToken, async (req, res) => {
     // lifetime_received covers direct credits, seeder funds, etc. that aren't Payment rows.
     const totalEarnedCents = Math.max(earningsFromPayments, lifetimeReceived);
 
+    // Home has no latitude/longitude columns (its coordinates are
+    // map_center_lat/lng). A failed occupancy read must not look like "no
+    // homes": that turned every resident's hub into the unverified first-run
+    // state.
+    if (occupancyResult.error) {
+      logger.error('Hub: occupancy lookup failed', { userId, error: occupancyResult.error.message });
+      return res.status(503).json({ error: 'Could not load your homes. Please retry.' });
+    }
+
     const homes = (occupancyResult.data || [])
       .filter((o) => o.home)
       .map((o) => ({
@@ -111,8 +123,8 @@ router.get('/', verifyToken, async (req, res) => {
         addressShort: [o.home.address, o.home.city].filter(Boolean).join(', '),
         city: o.home.city || null,
         state: o.home.state || null,
-        latitude: o.home.latitude || null,
-        longitude: o.home.longitude || null,
+        latitude: o.home.map_center_lat ?? null,
+        longitude: o.home.map_center_lng ?? null,
         isPrimary: false,
         roleBase: o.role || 'member',
         verified: o.verification_status === 'verified',
@@ -132,7 +144,7 @@ router.get('/', verifyToken, async (req, res) => {
     if (ownerHomeIds.length > 0) {
       const { data: ownerHomes, error: homeErr } = await supabaseAdmin
         .from('Home')
-        .select('id, name, address, city, state, zipcode, latitude, longitude')
+        .select('id, name, address, city, state, zipcode, map_center_lat, map_center_lng')
         .in('id', ownerHomeIds);
       if (homeErr) {
         logger.warn('Hub: Home fetch for owner fallback failed', { ownerHomeIds, error: homeErr.message });
@@ -144,16 +156,29 @@ router.get('/', verifyToken, async (req, res) => {
           addressShort: [home.address, home.city].filter(Boolean).join(', '),
           city: home.city || null,
           state: home.state || null,
-          latitude: home.latitude || null,
-          longitude: home.longitude || null,
+          latitude: home.map_center_lat ?? null,
+          longitude: home.map_center_lng ?? null,
           isPrimary: false,
           roleBase: 'owner',
         });
       }
     }
 
-    if (homes.length > 0) homes[0].isPrimary = true;
-    const primaryHome = homes[0] || null;
+    // Home data follows the Home list's access state (GET /api/homes/my-homes
+    // and /primary). Only a Home the caller currently shares can be primary and
+    // feed the Home card. Any other entry (a pending application, ended or
+    // fenced access) stays for the setup steps with the list's safe projection
+    // instead of the Home's name, address and location; the caller's own
+    // private setup keeps its details.
+    const homeStates = await Promise.all(homes.map((home) => homeListService.readAccessState(home.id, userId)));
+    homes.forEach((home, i) => {
+      if (['shared', 'private_setup'].includes(homeStates[i].mode)) return;
+      Object.assign(home, { name: 'Home verification', addressShort: '', city: null, state: null, latitude: null, longitude: null });
+    });
+    const primaryIndex = homeStates.findIndex((state) => state.mode === 'shared');
+    if (primaryIndex >= 0) homes[primaryIndex].isPrimary = true;
+    const primaryHome = homes[primaryIndex] || null;
+    const primaryPermissions = new Set(primaryHome ? homeStates[primaryIndex].access.permissions : []);
 
     const businesses = (bizTeamResult.data || [])
       .filter((t) => t.business)
@@ -218,12 +243,15 @@ router.get('/', verifyToken, async (req, res) => {
           .eq('user_id', userId)
           .eq('is_read', false)
       ).catch(() => ({ count: 0 })),
+      // Unread personal mail, as the mailbox counts it (Mail has no status or
+      // is_read column; those names made this read fail and show nothing).
       personalMail: Promise.resolve(
         supabaseAdmin
           .from('Mail')
-          .select('id, type, is_read')
-          .eq('recipient_id', userId)
-          .eq('status', 'pending')
+          .select('id, type')
+          .eq('recipient_user_id', userId)
+          .eq('viewed', false)
+          .eq('archived', false)
       ).catch(() => ({ data: null })),
       gigsNearby: Promise.resolve(
         supabaseAdmin
@@ -252,14 +280,19 @@ router.get('/', verifyToken, async (req, res) => {
 
     // Home-specific queries (only if user has a home)
     if (primaryHome) {
-      batch2.homeMail = Promise.resolve(
-        supabaseAdmin
-          .from('Mail')
-          .select('id', { count: 'exact', head: true })
-          .eq('home_id', primaryHome.id)
-          .eq('status', 'pending')
-      ).catch(() => ({ count: 0 }));
-      batch2.dueBills = Promise.resolve(
+      // The same permission gates as the Home dashboard: bills need
+      // finance.view, mail needs mailbox.view, the roster needs members.view.
+      const homeCan = (permission) => primaryPermissions.has(permission);
+      // Home mail uses the dashboard's unread badge and gate (mailbox.view on a
+      // current, verified occupancy), which also hides other members' private
+      // and attention-only mail. Mail has no home_id or status column.
+      const primaryOccupancy = homeStates[primaryIndex].access.occupancy;
+      if (homeCan('mailbox.view') && primaryOccupancy?.verification_status === 'verified'
+        && !staleAffectsTrust(primaryOccupancy.verified_at)) {
+        batch2.homeMail = Promise.resolve(unreadMailQuery(primaryHome.id, userId, now.toISOString()))
+          .catch(() => ({ count: 0 }));
+      }
+      if (homeCan('finance.view')) batch2.dueBills = Promise.resolve(
         supabaseAdmin
           .from('HomeBill')
           .select('id, bill_type, provider_name, amount, due_date, status')
@@ -273,7 +306,7 @@ router.get('/', verifyToken, async (req, res) => {
         .then(tasks => ({ data: tasks.filter(t => t.due_at && Date.parse(t.due_at) <= weekFromNow.getTime()
           && !['done', 'canceled'].includes(t.status))
           .sort((a, b) => new Date(a.due_at) - new Date(b.due_at)).slice(0, 2) }));
-      batch2.memberCount = Promise.resolve(
+      if (homeCan('members.view')) batch2.memberCount = Promise.resolve(
         supabaseAdmin
           .from('HomeOccupancy')
           .select('id', { count: 'exact', head: true })
@@ -398,7 +431,7 @@ router.get('/', verifyToken, async (req, res) => {
 
     // Personal inbox
     const mailItems = b2.personalMail.data || [];
-    const unreadPersonal = mailItems.filter((m) => !m.is_read).length;
+    const unreadPersonal = mailItems.length;
     const offerItems = mailItems.filter((m) => m.type === 'ad' || m.type === 'newsletter');
     if (unreadPersonal > 0) {
       statusItems.push({
@@ -440,7 +473,9 @@ router.get('/', verifyToken, async (req, res) => {
     let homeCard = null;
     if (primaryHome) {
       homeCard = {
-        newMail: statusItems.find((i) => i.type === 'mail_new')?.count || 0,
+        // The Home card counts Home mail only (the personal inbox item shares
+        // the mail_new type).
+        newMail: b2.homeMail?.count || 0,
         billsDue: dueBills
           .filter((b) => b.status !== 'paid')
           .slice(0, 2)
@@ -593,6 +628,9 @@ router.get('/', verifyToken, async (req, res) => {
   } catch (err) {
     logger.error('Hub endpoint error', { error: err.message, stack: err.stack });
     if (err.code === 'HOME_RECORD_UNAVAILABLE') return homeRecordService.sendError(res, err);
+    if (['HOME_ACCESS_UNAVAILABLE', 'HOME_LIST_UNAVAILABLE', 'HOME_LIST_ACCESS_CHANGED'].includes(err.code)) {
+      return homeListService.sendError(res, err);
+    }
     res.status(500).json({ error: 'Failed to load hub data' });
   }
 });

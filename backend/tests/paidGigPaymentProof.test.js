@@ -371,7 +371,7 @@ describe('original completion capture recovery', () => {
     expect(mockCapture).not.toHaveBeenCalled();
   });
   test.each([{ customer: 'other' }, { currency: 'eur' }, { captured: false }, { refunded: true },
-    { amount_refunded: 1 }, { disputed: true }, { payment_intent: 'other' }, { id: 'ch_other' }])(
+    { amount_refunded: 1 }, { disputed: null }, { payment_intent: 'other' }, { id: 'ch_other' }])(
     'fresh charge mismatch %j cannot confirm the original', async extra => {
       const rpc = jest.fn(); setRpcMock(rpc); mockCharge.mockResolvedValue(charge(extra));
       await expect(service.capturePayment('pay')).rejects.toMatchObject({ statusCode: 409 });
