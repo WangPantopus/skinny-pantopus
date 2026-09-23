@@ -122,18 +122,16 @@ extension HubViewModel {
                 progressFraction: nil
             )
         }
-        let serverItems = hub.jumpBackIn.enumerated().map { index, raw in
+        let serverItems = hub.jumpBackIn.map { raw in
             JumpBackItem(
                 id: raw.title,
                 title: raw.title,
                 icon: icon(from: raw.icon),
                 route: raw.route,
                 tint: tint(forRoute: raw.route),
-                // Backend doesn't carry kicker / progress for jump
-                // tiles yet — first slot reads "In progress",
-                // second reads "Draft" so the design's two-card
-                // visual lands without a backend change.
-                kicker: index == 0 ? "In progress" : "Draft",
+                // The backend carries no status for these tiles, so they
+                // get no kicker (a label by position was untrue).
+                kicker: "",
                 progressLabel: nil,
                 progressFraction: nil
             )

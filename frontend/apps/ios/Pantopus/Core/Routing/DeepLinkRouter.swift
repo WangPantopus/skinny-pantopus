@@ -231,6 +231,15 @@ final class DeepLinkRouter {
         handle(url: url)
     }
 
+    /// True when `path` resolves to a destination the app can open (not
+    /// `.unknown`). Lets list hosts route a link or fall back to their own
+    /// placeholder instead of dropping the tap.
+    func canResolve(path: String) -> Bool {
+        guard let url = URL(string: Self.normalizeIncoming(path)) else { return false }
+        if case .unknown = resolve(url: url) { return false }
+        return true
+    }
+
     func consume() -> Destination? {
         defer { pending = nil }
         return pending
