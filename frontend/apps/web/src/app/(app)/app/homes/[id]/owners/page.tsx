@@ -28,6 +28,7 @@ function OwnersContent() {
 
   const [owners, setOwners] = useState<HomeOwner[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => { if (!getAuthToken()) router.push('/login'); }, [router]);
 
@@ -35,8 +36,10 @@ function OwnersContent() {
     if (!homeId) return;
     try {
       const res = await api.homeOwnership.getHomeOwners(homeId);
+      setLoadError(null);
       setOwners(res.owners || []);
-    } catch { toast.error('Failed to load owners'); }
+    } catch {
+      setLoadError('Current owners could not be loaded. Retry to check current information.'); toast.error('Failed to load owners'); }
   }, [homeId]);
 
   useEffect(() => { setLoading(true); fetchOwners().finally(() => setLoading(false)); }, [fetchOwners]);
@@ -62,7 +65,12 @@ function OwnersContent() {
       </div>
 
       {/* Owner list */}
-      {owners.length === 0 ? (
+      {loadError ? (
+        <div className="text-center py-16">
+          <p className="text-sm text-app-text-secondary">{loadError}</p>
+          <button type="button" onClick={() => { setLoading(true); fetchOwners().finally(() => setLoading(false)); }} className="mt-3 px-4 py-2 border border-app-border rounded-lg text-sm font-medium text-app-text-strong hover:bg-app-hover transition">Retry</button>
+        </div>
+      ) : owners.length === 0 ? (
         <div className="text-center py-16">
           <Users className="w-10 h-10 mx-auto text-app-text-muted mb-3" />
           <p className="text-sm text-app-text-secondary">No owners registered</p>

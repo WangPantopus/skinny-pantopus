@@ -7,6 +7,9 @@ import type { HomeMapPin, MapPinType } from '@/types/mailbox';
 import { useMapPins, useAddPinToCalendar } from '@/lib/mailbox-queries';
 import { TrustBadge } from '@/components/mailbox';
 import { TILE_URL, TILE_ATTRIBUTION } from '@/components/map/constants';
+// The user's Home; the page used a hard-coded 'home_1' stub. A Home without a
+// stored location keeps the Camas fallback centre.
+import useHomeProfile from '../_components/useMailboxHome';
 
 // ── Leaflet must be loaded client-side only ──────────────────
 const MapContainer = dynamic(
@@ -60,17 +63,6 @@ const TRUST_MAP: Record<string, 'verified_gov' | 'verified_utility' | 'verified_
   pantopus_user: 'pantopus_user',
 };
 
-// ── Stub: home profile context (replace with real hook) ──────
-function useHomeProfile() {
-  // In production this would come from a profile context or API
-  return {
-    homeId: 'home_1',
-    lat: 45.5945,
-    lng: -122.4065,
-    address: 'Camas, WA',
-  };
-}
-
 // ── Main Page ────────────────────────────────────────────────
 
 export default function MailMapPage() {
@@ -84,7 +76,7 @@ export default function MailMapPage() {
   const calendarMutation = useAddPinToCalendar();
 
   const { data: pins, isLoading } = useMapPins(home.homeId, undefined, {
-    enabled: hasLocation,
+    enabled: hasLocation && !!home.homeId,
   });
 
   // Load leaflet on client

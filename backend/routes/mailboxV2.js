@@ -5,7 +5,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 // for a Home whose mail the caller may read). Every per-item route checks it
 // before reading or changing anything and otherwise answers its not-found.
 const {
-  getAccessibleHomeIds, canAccessMail, readableMail, homesMailFilter, visibleMailIds,
+  getAccessibleHomeIds, canAccessMail, readableMail, homesMailFilter, visibleMailFilter, visibleMailIds,
 } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -306,7 +306,9 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
         return res.json({ mail: [], total: 0, drawer });
       }
     } else if (drawer === 'business') {
-      query = query.or(`recipient_user_id.eq.${userId},recipient_home_id.in.(${homeIds.join(',')})`);
+      // The caller's own letters, or Home letters the Home mail rule shows them
+      // (M01): a letter filed into Business keeps its recipient and attention.
+      query = query.or(visibleMailFilter(userId, homeIds));
     }
 
     // Tab filter: incoming vs counter vs vault

@@ -9,6 +9,7 @@ import { removalLink } from '@/components/home/member-removals/removalModel';
 type MyHome = Awaited<ReturnType<typeof api.homes.getMyHomes>>['homes'][number];
 type Claim = Awaited<ReturnType<typeof api.homeOwnership.getMyOwnershipClaims>>['claims'][number];
 import { toast } from '@/components/ui/toast-store';
+import { failureMessage } from '@/components/home/share/shareFailure';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { validateResidencyPage, residencyRequestLabel, residencyReviewLabel } from '@/components/homes/residencyProgressModel';
 type ResidencyRequest = Awaited<ReturnType<typeof api.homes.getMyResidencyRequests>>['requests'][number];
@@ -135,7 +136,8 @@ export default function HomesPage() {
     });
     if (!yes || ready.current !== opening || !opening()) return;
     try { await api.homes.deleteHome(homeId); await load(); }
-    catch (e: unknown) { toast.error(e instanceof Error ? e.message : 'Failed'); }
+    // The API client rejects with a plain object; keep the server's reason (e.g. linked records).
+    catch (e: unknown) { toast.error(failureMessage(e, 'Failed')); }
   };
 
   const leave = (homeId: string) => {

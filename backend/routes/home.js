@@ -2020,7 +2020,7 @@ router.post('/:id/move-out', verifyToken, async (req, res) => {
         const userName = user?.name || user?.first_name || user?.username || 'A member';
         await require('../services/notificationService').createBulkNotifications(result.notify_user_ids.map(userId => ({
           userId, type: 'member_moved_out', title: 'Member moved out', body: `${userName} has moved out.`,
-          link: `/homes/${req.params.id}/occupants`, metadata: { home_id: req.params.id, moved_out_user_id: req.user.id },
+          link: `/homes/${req.params.id}/members`, metadata: { home_id: req.params.id, moved_out_user_id: req.user.id },
         })));
       } catch (error) {
         logger.warn('Failed to send move-out notifications (non-fatal)', { error: error.message });
@@ -2358,6 +2358,46 @@ router.delete('/:id/public-data/:dataId', verifyToken, async (req, res) => {
 // ============================================================================
 
 
+// ============ HOME GIGS ============
+
+/**
+ * GET /api/homes/:id/gigs
+ * Tasks the household posted from this Home (Gig.origin_home_id), newest
+ * first. Drafts stay private to their poster. The poster chooses
+ * origin_home_id, so only tasks posted by someone who can access this Home
+ * are listed.
+ */
+router.get('/:id/gigs', verifyToken, async (req, res) => {
+  if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
+  try {
+    const { id: homeId } = req.params;
+    const access = await checkHomePermission(homeId, req.user.id, 'home.view');
+    if (!access.hasAccess) return res.status(403).json({ error: 'No access to this home' });
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
+    const { data: rows, error } = await supabaseAdmin
+      .from('Gig')
+      .select('id, title, status, price, category, scheduled_start, created_at, user_id, created_by')
+      .eq('origin_home_id', homeId)
+      .neq('status', 'draft')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    const posterOf = (gig) => gig.created_by || gig.user_id;
+    const posters = [...new Set((rows || []).map(posterOf).filter(Boolean))];
+    const household = new Set();
+    await Promise.all(posters.map(async (posterId) => {
+      if ((await checkHomePermission(homeId, posterId)).hasAccess) household.add(posterId);
+    }));
+    const gigs = (rows || []).filter((gig) => household.has(posterOf(gig))).slice(0, limit)
+      .map(({ id, title, status, price, category, scheduled_start, created_at }) => (
+        { id, title, status, price, category, scheduled_start, created_at }));
+    res.json({ gigs });
+  } catch (err) {
+    logger.error('Error fetching home gigs', { error: err.message, homeId: req.params.id });
+    res.status(500).json({ error: 'Failed to fetch home tasks' });
+  }
+});
+
 // ============ HOME NEARBY GIGS ============
 
 /**
@@ -2381,9 +2421,11 @@ router.get('/:id/nearby-gigs', verifyToken, async (req, res) => {
       .eq('id', homeId)
       .single();
 
-    if (homeError || !home || !home.location) {
+    if (homeError || !home) {
       return res.status(400).json({ error: 'Home location not found' });
     }
+    // A Home without coordinates has no nearby tasks yet: an empty list, not an error.
+    if (!home.location) return res.json({ gigs: [] });
 
     // Parse geography column (GeoJSON or WKT format)
     const coords = parsePostGISPoint(home.location);
