@@ -13,7 +13,8 @@ extension MailDetailViewModel {
     ) -> MailDetailContent {
         let item = detail.item
         let category = MailItemCategory.fromRaw(item.mailType ?? item.type)
-        let trust = MailTrust.fromRaw(nil)
+        // The hero pill reads the letter's stored sender_trust, like the Mailbox list does.
+        let trust = MailTrust.fromRaw(item.senderTrust)
         let senderDisplayName = detail.sender?.name
             ?? item.senderBusinessName
             ?? item.senderAddress

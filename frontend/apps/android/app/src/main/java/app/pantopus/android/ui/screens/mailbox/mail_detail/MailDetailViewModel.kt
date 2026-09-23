@@ -839,7 +839,8 @@ class MailDetailViewModel
             @JvmStatic
             fun project(detail: MailDetail): MailDetailContent {
                 val category = MailItemCategory.fromRaw(detail.mailType ?: detail.type)
-                val trust = MailTrust.fromRaw(null)
+                // The hero pill reads the letter's stored sender_trust, like the Mailbox list does.
+                val trust = MailTrust.fromRaw(detail.senderTrust)
                 val senderDisplayName =
                     detail.sender?.name
                         ?: detail.senderBusinessName
