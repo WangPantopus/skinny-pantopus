@@ -750,9 +750,16 @@ router.post('/package/:mailId/share-eta', verifyToken, async (req, res) => {
     const homeId = mail.recipient_home_id || mail.address_home_id;
     if (!homeId) return res.status(400).json({ error: 'No home associated' });
 
-    // Get household members
-    const residents = await getHomeResidents(homeId);
-    const otherResidents = residents.filter(r => r.user_id !== userId);
+    // Household members to notify. The User embed names the user_id FK:
+    // HomeOccupancy also references User through added_by_user_id, and the
+    // unqualified embed failed as ambiguous (PGRST201), so nobody was notified.
+    const { data: residents, error: residentsError } = await supabaseAdmin
+      .from('HomeOccupancy')
+      .select('user_id, User!HomeOccupancy_user_id_fkey!inner(id)')
+      .eq('home_id', homeId)
+      .eq('is_active', true);
+    if (residentsError) throw residentsError;
+    const otherResidents = (residents || []).filter(r => r.user_id !== userId);
 
     // Create notification mail items for all household members (batch insert)
     if (otherResidents.length > 0) {
