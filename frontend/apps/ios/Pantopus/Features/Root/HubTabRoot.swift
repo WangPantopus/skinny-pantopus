@@ -651,6 +651,10 @@ public struct HubTabRoot: View {
         .onChange(of: router.pending) { _, pending in
             consumeDeepLinkIfNeeded(pending: pending)
         }
+        // In the Mail tab, the Mailbox/Messages switch hides below the root.
+        .onChange(of: path.isEmpty, initial: true) { _, atRoot in
+            if mode == .mailbox { MailTabStore.shared.mailboxAtRoot = atRoot }
+        }
         .onChange(of: rootTabs.selected) { _, _ in
             // Cross-tab dispatch may select this tab *after* the pending
             // destination landed — re-attempt once ownership arrives.
@@ -1215,6 +1219,30 @@ public struct HubTabRoot: View {
                 online: false
             )
         }
+    }
+
+    /// A one-to-one chat with a support train's organizer.
+    /// Chat with a confirmed helper from Review signups.
+    static func chatDestination(toHelper reservation: SupportTrainReservationDTO) -> InboxConversationDestination {
+        let name = reservation.displayName
+        let initials = String(name.split(separator: " ").compactMap(\.first).prefix(2)).uppercased()
+        return InboxConversationDestination(
+            mode: .person(otherUserId: reservation.userId ?? reservation.helper?.id ?? ""),
+            displayName: name,
+            initials: initials,
+            identityKind: nil,
+            verified: false
+        )
+    }
+
+    static func chatRoute(toHost host: HostedByFooter) -> HubRoute {
+        .chatConversation(InboxConversationDestination(
+            mode: .person(otherUserId: host.organizerUserId ?? ""),
+            displayName: host.organizerDisplayName,
+            initials: host.organizerInitials,
+            identityKind: nil,
+            verified: false
+        ))
     }
 
     /// Dispatch a discovery card tap to the matching detail route.
@@ -2411,6 +2439,12 @@ public struct HubTabRoot: View {
                     case let .mailItemDetail(id): push(.mailItemDetail(mailId: id))
                     case let .pulsePost(id): push(.pulsePost(postId: id))
                     case let .homeDashboard(id): push(.homeDashboard(homeId: id))
+                    case let .link(path, label):
+                        if DeepLinkRouter.shared.canResolve(path: path) {
+                            DeepLinkRouter.shared.handle(path: path)
+                        } else {
+                            push(.placeholder(label: label))
+                        }
                     case let .placeholder(label): push(.placeholder(label: label))
                     }
                 }
@@ -2503,25 +2537,11 @@ public struct HubTabRoot: View {
                     // screen itself (`ReserveSlotSheet`), which posts
                     // `POST …/slots/:slotId/reserve`. Nothing to push.
                 },
-                onEditSlot: { _ in
-                    Task { @MainActor in
-                        push(.placeholder(label: "Edit your slot"))
-                    }
-                },
-                onSendCard: {
-                    Task { @MainActor in
-                        push(.placeholder(label: "Send a card"))
-                    }
-                },
-                onJoinAsBackup: {
-                    Task { @MainActor in
-                        push(.placeholder(label: "Join as backup"))
-                    }
-                },
-                onMessageHost: {
-                    Task { @MainActor in
-                        push(.placeholder(label: "Message host"))
-                    }
+                // Edit slot, Send a card and Join as backup have no backend
+                // route yet, so they aren't wired and the screen hides them
+                // (Leave / Mark delivered cover a helper's own slot).
+                onMessageHost: { host in
+                    Task { @MainActor in push(Self.chatRoute(toHost: host)) }
                 }
             )
         case let .reviewSignups(supportTrainId):
@@ -2547,8 +2567,8 @@ public struct HubTabRoot: View {
                             )
                         }
                     },
-                    onMessage: { _ in
-                        Task { @MainActor in push(.placeholder(label: "Message helper")) }
+                    onMessage: { reservation in
+                        Task { @MainActor in push(.chatConversation(Self.chatDestination(toHelper: reservation))) }
                     },
                     onEdit: { reservation in
                         Task { @MainActor in
@@ -2565,14 +2585,13 @@ public struct HubTabRoot: View {
             ManageTrainView(
                 viewModel: ManageTrainViewModel(trainId: trainId),
                 onClose: { Task { @MainActor in if !path.isEmpty { path.removeLast() } } },
-                onOpenAnalytics: { _ in
-                    Task { @MainActor in push(.placeholder(label: "Train analytics")) }
-                },
-                onEditDates: { _ in
-                    Task { @MainActor in push(.placeholder(label: "Edit dates")) }
-                },
+                // Invite shares the train, as the detail's Share does.
+                // Analytics and Edit dates have no backend / native editor
+                // yet, so they aren't wired and their rows are hidden.
                 onInviteHelpers: { _ in
-                    Task { @MainActor in push(.placeholder(label: "Invite helpers")) }
+                    systemSheet = .share(
+                        items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
+                    )
                 }
             )
         case .discoverHub:

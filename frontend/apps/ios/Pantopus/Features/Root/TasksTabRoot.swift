@@ -209,13 +209,19 @@ public struct TasksTabRoot: View {
         SupportTrainDetailView(
             viewModel: SupportTrainDetailViewModel(trainId: supportTrainId),
             onBack: pop,
-            // Keep the `onShare:` label: as a trailing closure it binds to the
-            // last closure (`onMessageHost`), so Share did nothing.
-            // swiftlint:disable:next trailing_closure
             onShare: {
                 systemSheet = .share(
                     items: ["Join my support train on Pantopus — \(InviteLinks.downloadURLString)"]
                 )
+            },
+            onMessageHost: { host in
+                path.append(.chatConversation(InboxConversationDestination(
+                    mode: .person(otherUserId: host.organizerUserId ?? ""),
+                    displayName: host.organizerDisplayName,
+                    initials: host.organizerInitials,
+                    identityKind: nil,
+                    verified: false
+                )))
             }
         )
     }

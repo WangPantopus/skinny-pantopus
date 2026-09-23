@@ -174,8 +174,15 @@ public final class PulseFeedViewModel {
 
     private var resolvedLatitude: Double?
     private var resolvedLongitude: Double?
+    /// Reads the area chosen in the Nearby context bar (`GET /api/location`).
+    private let chosenArea: @MainActor () async -> ViewingLocationDTO?
+    /// The area the last first-page fetch used; later pages reuse it.
+    private var lastArea: FeedArea?
     private var loadedItems: [FeedPostDTO] = []
     private var isLoading = false
+    /// Bumped per fetch; only the latest fetch's response is applied, so a
+    /// filter tapped while a load is in flight still takes effect.
+    private var fetchGeneration = 0
     private var hasMore = false
     private var nextCursorCreatedAt: String?
     private var nextCursorId: String?
@@ -198,7 +205,8 @@ public final class PulseFeedViewModel {
         longitude: Double? = nil,
         viewerId: String? = nil,
         locationProvider: any LocationProviding = DeviceLocationProvider.shared,
-        moderation: FeedModerationStore = .shared
+        moderation: FeedModerationStore = .shared,
+        chosenArea: (@MainActor () async -> ViewingLocationDTO?)? = nil
     ) {
         self.api = api
         self.surface = surface
@@ -207,6 +215,10 @@ public final class PulseFeedViewModel {
         self.locationProvider = locationProvider
         explicitViewerId = viewerId
         self.moderation = moderation
+        self.chosenArea = chosenArea ?? { [api] in
+            let payload: ViewingLocationPayload? = try? await api.request(ViewingLocationEndpoints.current())
+            return payload?.viewingLocation
+        }
     }
 
     /// First-time load. Refetches when still empty so a location fix can
@@ -547,17 +559,20 @@ public final class PulseFeedViewModel {
     // MARK: - Fetch
 
     private func fetch() async {
-        if isLoading { return }
+        fetchGeneration += 1
+        let generation = fetchGeneration
         isLoading = true
-        defer { isLoading = false }
+        defer { if generation == fetchGeneration { isLoading = false } }
         if case .loaded = state {} else { state = .loading }
         do {
-            let coords = await resolvedCoordinates()
+            let area = await resolvedArea()
+            lastArea = area
             let response: FeedResponse = try await api.request(
                 PostsEndpoints.feed(
                     surface: surface.backendSurface,
-                    latitude: coords.latitude,
-                    longitude: coords.longitude,
+                    latitude: area.latitude,
+                    longitude: area.longitude,
+                    radiusMiles: area.radiusMiles,
                     postType: isInSportsLane ? nil : activeIntent.postType,
                     limit: 20,
                     topic: topicQueryValue,
@@ -565,12 +580,15 @@ public final class PulseFeedViewModel {
                     eventKey: isInSportsLane ? resolvedEventKey : nil
                 )
             )
+            // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
+            guard generation == fetchGeneration else { return }
             loadedItems = response.posts
             applyPagination(response.pagination)
             scopeLabel = response.posts.first?.locationName ?? scopeLabel
             recomputeRadiusSuggestion()
             rebuildLoadedState()
         } catch {
+            guard generation == fetchGeneration else { return }
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load posts."
             if case .loaded = state {
                 // Keep the posts on screen; a failed refresh only toasts.
@@ -587,12 +605,14 @@ public final class PulseFeedViewModel {
         isLoadingMore = true
         defer { isLoadingMore = false }
         do {
-            let coords = await resolvedCoordinates()
+            // Later pages stay in the area the first page used.
+            let area = if let lastArea { lastArea } else { await resolvedArea() }
             let response: FeedResponse = try await api.request(
                 PostsEndpoints.feed(
                     surface: surface.backendSurface,
-                    latitude: coords.latitude,
-                    longitude: coords.longitude,
+                    latitude: area.latitude,
+                    longitude: area.longitude,
+                    radiusMiles: area.radiusMiles,
                     postType: isInSportsLane ? nil : activeIntent.postType,
                     limit: 20,
                     cursorCreatedAt: cursorCreatedAt,
@@ -665,24 +685,32 @@ public final class PulseFeedViewModel {
         return true
     }
 
-    private func resolvedCoordinates() async -> (latitude: Double?, longitude: Double?) {
+    /// Where the feed looks: the host's explicit coordinates, else (Nearby)
+    /// the area chosen in the context bar, else the device location — the
+    /// order web's `useFeedData` uses. Without the chosen area, Nearby sent
+    /// no coordinates when location was off and stayed empty however many
+    /// times an area was picked.
+    private func resolvedArea() async -> FeedArea {
         if let latitude, let longitude {
-            return (latitude, longitude)
+            return FeedArea(latitude: latitude, longitude: longitude)
+        }
+        if surface == .pulse, let chosen = await chosenArea() {
+            return FeedArea(latitude: chosen.latitude, longitude: chosen.longitude, radiusMiles: chosen.radiusMiles)
         }
         if let resolvedLatitude, let resolvedLongitude {
-            return (resolvedLatitude, resolvedLongitude)
+            return FeedArea(latitude: resolvedLatitude, longitude: resolvedLongitude)
         }
         if let cached = locationProvider.cachedCoordinate() {
             resolvedLatitude = cached.latitude
             resolvedLongitude = cached.longitude
-            return (cached.latitude, cached.longitude)
+            return FeedArea(latitude: cached.latitude, longitude: cached.longitude)
         }
         if let fresh = await locationProvider.requestCurrent(timeoutSeconds: 4) {
             resolvedLatitude = fresh.latitude
             resolvedLongitude = fresh.longitude
-            return (fresh.latitude, fresh.longitude)
+            return FeedArea(latitude: fresh.latitude, longitude: fresh.longitude)
         }
-        return (nil, nil)
+        return FeedArea(latitude: nil, longitude: nil)
     }
 
     // MARK: - Optimistic accessors
@@ -733,7 +761,9 @@ public final class PulseFeedViewModel {
             authorName: post.creator?.displayName ?? "Pantopus user",
             authorInitials: initials,
             // Beacon credentials come from the public profile, never the surface.
-            authorVerified: surface == .beacons ? post.creator?.credential?.status == "verified" : isBusiness,
+            // Other surfaces carry no verification field, so no badge (being
+            // a business isn't being verified).
+            authorVerified: surface == .beacons && post.creator?.credential?.status == "verified",
             avatarTint: isBusiness ? .violet : .sky,
             meta: Self.metaString(post: post, intent: intent),
             intent: intent,
@@ -803,4 +833,11 @@ public final class PulseFeedViewModel {
         let parts = name.split(separator: " ").prefix(2)
         return parts.compactMap { $0.first.map(String.init) }.joined().uppercased()
     }
+}
+
+/// Where a feed request looks: coordinates plus the viewing radius, when known.
+private struct FeedArea {
+    let latitude: Double?
+    let longitude: Double?
+    var radiusMiles: Double?
 }

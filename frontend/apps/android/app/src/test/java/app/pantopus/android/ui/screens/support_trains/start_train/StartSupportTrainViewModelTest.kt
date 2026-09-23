@@ -92,12 +92,61 @@ class StartSupportTrainViewModelTest {
             vm.updateBeneficiaryQuery(StartSupportTrainSampleData.INVITE_QUERY)
             vm.selectReason(StartSupportTrainReason.Baby)
             assertTrue(vm.isInviteRecipientBranch())
-            assertEquals("Send invite & continue", vm.chrome.primaryCtaLabel)
+            assertEquals("Continue", vm.chrome.primaryCtaLabel)
             assertEquals("Search again", vm.chrome.secondaryCta?.label)
             assertEquals(StartSupportTrainSampleData.INVITE_QUERY, vm.inviteCandidate()?.typedName)
             vm.onSecondary()
             assertEquals("", vm.form.value.beneficiaryQuery)
             assertEquals(null, vm.inviteCandidate())
+        }
+
+    @Test fun change_starts_a_fresh_search_instead_of_claiming_no_match() =
+        runTest(dispatcher) {
+            val vm = StartSupportTrainViewModel(supportTrains, mailCompose)
+            vm.selectBeneficiary(fakeRecipient())
+            vm.clearBeneficiary()
+            // The chosen name no longer sits in the field with no results, which
+            // read as "No one on Pantopus by that name" for someone who is.
+            assertNull(vm.selectedBeneficiary.value)
+            assertEquals("", vm.form.value.beneficiaryQuery)
+            assertFalse(vm.isInviteRecipientBranch())
+            assertNull(vm.inviteCandidate())
+        }
+
+    @Test fun failed_search_is_not_a_no_match_and_can_be_retried() =
+        runTest(dispatcher) {
+            coEvery { mailCompose.recipients(any(), any()) } returnsMany
+                listOf(
+                    NetworkResult.Failure(NetworkError.Server(500, "boom")),
+                    NetworkResult.Success(MailComposeRecipientsResponse(recipients = emptyList())),
+                )
+            val vm = StartSupportTrainViewModel(supportTrains, mailCompose)
+            vm.updateBeneficiaryQuery("Zelda Nomatch")
+            advanceUntilIdle()
+            assertTrue(vm.beneficiarySearchFailed.value)
+            assertFalse(vm.isInviteRecipientBranch())
+            assertNull(vm.inviteCandidate())
+
+            vm.retryBeneficiarySearch()
+            assertFalse(vm.beneficiarySearchFailed.value)
+            advanceUntilIdle()
+            assertTrue(vm.isInviteRecipientBranch())
+            assertEquals("Zelda Nomatch", vm.inviteCandidate()?.typedName)
+        }
+
+    @Test fun no_match_waits_until_the_name_is_typed() =
+        runTest(dispatcher) {
+            coEvery { mailCompose.recipients(any(), any()) } returns
+                NetworkResult.Success(MailComposeRecipientsResponse(recipients = emptyList()))
+            val vm = StartSupportTrainViewModel(supportTrains, mailCompose)
+            vm.setEditingBeneficiaryQuery(true)
+            vm.updateBeneficiaryQuery(StartSupportTrainSampleData.INVITE_QUERY)
+            advanceUntilIdle()
+            // While the field is being edited the no-match card would replace it
+            // and swallow the rest of the name.
+            assertFalse(vm.isInviteRecipientBranch())
+            vm.setEditingBeneficiaryQuery(false)
+            assertTrue(vm.isInviteRecipientBranch())
         }
 
     @Test fun reason_clamps_at_char_limit() =

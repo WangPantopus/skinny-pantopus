@@ -39,7 +39,7 @@ final class ReviewSignupsViewModelTests: XCTestCase {
         api: APIClient? = nil,
         onShareTrain: @escaping @MainActor () -> Void = {},
         onConfirm: @escaping @MainActor (String) -> Void = { _ in },
-        onMessage: @escaping @MainActor (String) -> Void = { _ in },
+        onMessage: @escaping @MainActor (SupportTrainReservationDTO) -> Void = { _ in },
         onEdit: @escaping @MainActor (SupportTrainReservationDTO) -> Void = { _ in }
     ) -> ReviewSignupsViewModel {
         ReviewSignupsViewModel(

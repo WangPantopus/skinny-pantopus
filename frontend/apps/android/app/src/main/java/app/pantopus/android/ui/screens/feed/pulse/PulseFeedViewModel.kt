@@ -20,6 +20,7 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.feed.FeedActionsRepository
 import app.pantopus.android.data.feed.FeedModerationStore
 import app.pantopus.android.data.location.LocationProvider
+import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.sports.SportsRepository
@@ -38,6 +39,13 @@ import java.time.Instant
 import javax.inject.Inject
 
 /** Render state for the Pulse feed screen. */
+/** Where a feed request looks: coordinates plus the viewing radius, when known. */
+private data class FeedArea(
+    val latitude: Double?,
+    val longitude: Double?,
+    val radiusMiles: Double? = null,
+)
+
 sealed interface PulseFeedUiState {
     data object Loading : PulseFeedUiState
 
@@ -84,6 +92,8 @@ class PulseFeedViewModel
          * RN's `PantopusProvider` (`mutedEntities` + `hiddenPostIds`).
          */
         private val moderation: FeedModerationStore,
+        /** `GET /api/location` — the area chosen in the Nearby context bar. */
+        private val viewingLocation: ViewingLocationRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<PulseFeedUiState>(PulseFeedUiState.Loading)
         val state: StateFlow<PulseFeedUiState> = _state.asStateFlow()
@@ -223,7 +233,16 @@ class PulseFeedViewModel
         private var longitude: Double? = null
         private var resolvedLatitude: Double? = null
         private var resolvedLongitude: Double? = null
+
+        /** The area the last first-page fetch used; later pages reuse it. */
+        private var lastArea: FeedArea? = null
         private var loading = false
+
+        /**
+         * Bumped per fetch; only the latest fetch's response is applied, so a
+         * filter tapped while a load is in flight still takes effect.
+         */
+        private var fetchGeneration = 0
 
         /** All pages loaded so far — search filters project from this. */
         private var loadedPosts: List<FeedPost> = emptyList()
@@ -713,19 +732,21 @@ class PulseFeedViewModel
             _isLoadingMore.value = true
             viewModelScope.launch {
                 try {
-                    val (lat, lng) = resolvedCoordinates()
+                    // Later pages stay in the area the first page used.
+                    val area = lastArea ?: resolvedArea()
                     when (
                         val result =
                             repo.feed(
                                 surface = _surface.value.backendSurface,
-                                latitude = lat,
-                                longitude = lng,
+                                latitude = area.latitude,
+                                longitude = area.longitude,
                                 postType = if (isInSportsLane) null else _activeIntent.value.postType,
                                 cursorCreatedAt = cursorCreatedAt,
                                 cursorId = cursorId,
                                 topic = topicQueryValue(),
                                 sportsMode = if (isInSportsLane) _sportsMode.value.key else null,
                                 eventKey = if (isInSportsLane) resolvedEventKey() else null,
+                                radiusMiles = area.radiusMiles,
                             )
                     ) {
                         is NetworkResult.Success -> {
@@ -784,7 +805,7 @@ class PulseFeedViewModel
         }
 
         private fun fetch(isRefresh: Boolean = false) {
-            if (loading) return
+            val generation = ++fetchGeneration
             loading = true
             if (isRefresh) _isRefreshing.value = true
             if (_state.value !is PulseFeedUiState.Loaded) {
@@ -792,19 +813,22 @@ class PulseFeedViewModel
             }
             viewModelScope.launch {
                 try {
-                    val (lat, lng) = resolvedCoordinates()
-                    when (
-                        val result =
-                            repo.feed(
-                                surface = _surface.value.backendSurface,
-                                latitude = lat,
-                                longitude = lng,
-                                postType = if (isInSportsLane) null else _activeIntent.value.postType,
-                                topic = topicQueryValue(),
-                                sportsMode = if (isInSportsLane) _sportsMode.value.key else null,
-                                eventKey = if (isInSportsLane) resolvedEventKey() else null,
-                            )
-                    ) {
+                    val area = resolvedArea()
+                    lastArea = area
+                    val result =
+                        repo.feed(
+                            surface = _surface.value.backendSurface,
+                            latitude = area.latitude,
+                            longitude = area.longitude,
+                            postType = if (isInSportsLane) null else _activeIntent.value.postType,
+                            topic = topicQueryValue(),
+                            sportsMode = if (isInSportsLane) _sportsMode.value.key else null,
+                            eventKey = if (isInSportsLane) resolvedEventKey() else null,
+                            radiusMiles = area.radiusMiles,
+                        )
+                    // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
+                    if (generation != fetchGeneration) return@launch
+                    when (result) {
                         is NetworkResult.Success -> {
                             val response = result.data
                             scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
@@ -829,17 +853,33 @@ class PulseFeedViewModel
                         }
                     }
                 } finally {
-                    loading = false
-                    _isRefreshing.value = false
+                    if (generation == fetchGeneration) {
+                        loading = false
+                        _isRefreshing.value = false
+                    }
                 }
             }
         }
 
-        private suspend fun resolvedCoordinates(): Pair<Double?, Double?> =
-            explicitCoordinates()
-                ?: storedCoordinates()
-                ?: awaitFreshCoordinates()
-                ?: (null to null)
+        /**
+         * Where the feed looks: the host's explicit coordinates, else (Nearby)
+         * the area chosen in the context bar, else the device location — the
+         * order web's `useFeedData` uses. Without the chosen area, Nearby sent
+         * no coordinates when location was off and stayed empty however many
+         * times an area was picked.
+         */
+        private suspend fun resolvedArea(): FeedArea =
+            explicitCoordinates()?.let { (lat, lng) -> FeedArea(lat, lng) }
+                ?: viewingArea()
+                ?: (storedCoordinates() ?: awaitFreshCoordinates())?.let { (lat, lng) -> FeedArea(lat, lng) }
+                ?: FeedArea(null, null)
+
+        /** The viewing location from `GET /api/location`, for the Nearby surface. */
+        private suspend fun viewingArea(): FeedArea? {
+            if (_surface.value != FeedSurface.Pulse) return null
+            val chosen = (viewingLocation.current() as? NetworkResult.Success)?.data?.viewingLocation ?: return null
+            return FeedArea(chosen.latitude, chosen.longitude, chosen.radiusMiles)
+        }
 
         private fun explicitCoordinates(): Pair<Double, Double>? {
             val lat = latitude ?: return null
@@ -899,7 +939,9 @@ class PulseFeedViewModel
                 authorName = authorName,
                 authorInitials = initials(authorName),
                 // Beacon credentials come from the public profile, never the surface.
-                authorVerified = if (surfaceValue == FeedSurface.Beacons) post.creator?.credential?.status == "verified" else isBusiness,
+                // Other surfaces carry no verification field, so no badge (being
+                // a business isn't being verified).
+                authorVerified = surfaceValue == FeedSurface.Beacons && post.creator?.credential?.status == "verified",
                 avatarTint = if (isBusiness) FeedAvatarTint.Violet else FeedAvatarTint.Sky,
                 meta = metaString(post),
                 intent = intent,

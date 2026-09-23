@@ -471,6 +471,10 @@ struct HubDiscoveryRail: View {
     var onFilterChange: ((HubDiscoveryFilter) -> Void)?
     /// True while the filter refetch is in flight.
     var isLoading = false
+    /// True when the last request failed; the rail offers Try again.
+    var loadFailed = false
+    /// Re-request the active filter after a failure.
+    var onRetry: (() -> Void)?
     /// Optional `See all` action — pushes to the typed Discover hub
     /// screen (T5.4.1).
     var onSeeAll: (() -> Void)?
@@ -487,6 +491,8 @@ struct HubDiscoveryRail: View {
             }
             if isLoading {
                 skeletonRail
+            } else if loadFailed {
+                failedRow
             } else if items.isEmpty {
                 emptyRow
             } else {
@@ -561,12 +567,11 @@ struct HubDiscoveryRail: View {
         .accessibilityIdentifier(identifier)
     }
 
-    /// Tasks / People / Businesses / Posts — RN
-    /// `src/components/hub/HubDiscovery.tsx:9-14`.
+    /// Tasks / Businesses / Posts (`HubDiscoveryFilter.visibleTabs`).
     private var filterTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(HubDiscoveryFilter.allCases) { tab in
+                ForEach(HubDiscoveryFilter.visibleTabs) { tab in
                     let active = tab == activeFilter
                     Button {
                         onFilterChange?(tab)
@@ -630,6 +635,31 @@ struct HubDiscoveryRail: View {
         }
         .accessibilityIdentifier("hubDiscoverySkeleton")
         .accessibilityLabel("Loading nearby discovery")
+    }
+
+    private var failedRow: some View {
+        VStack(spacing: Spacing.s2) {
+            Text("Couldn't load this right now.")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            if let onRetry {
+                Button("Try again", action: onRetry)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.Color.primary600)
+                    .accessibilityIdentifier("hubDiscoveryRetry")
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Spacing.s6)
+        .background(Theme.Color.appSurface)
+        .overlay(
+            RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                .stroke(Theme.Color.appBorder, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+        .padding(.horizontal, Spacing.s4)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("hubDiscoveryFailed")
     }
 
     private var emptyRow: some View {
@@ -729,7 +759,7 @@ struct HubJumpBackIn: View {
                         JumpBackCard(item: item)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(item.kicker), \(item.title)")
+                    .accessibilityLabel(item.kicker.isEmpty ? item.title : "\(item.kicker), \(item.title)")
                 }
             }
             .padding(.horizontal, Spacing.s4)
@@ -750,10 +780,12 @@ private struct JumpBackCard: View {
             .frame(width: 34, height: 34)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.kicker.uppercased())
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(0.5)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
+                if !item.kicker.isEmpty {
+                    Text(item.kicker.uppercased())
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(0.5)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
                 Text(item.title)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)
