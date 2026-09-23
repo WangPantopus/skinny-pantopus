@@ -869,8 +869,27 @@ public struct YouTabRoot: View {
             break
         }
         #endif
+        // A Home row with no shared Home behind it (none yet, or still in
+        // verification) opens My homes: Add a home, Find and the
+        // verification steps live there. The Business identity is always
+        // unbound here; My businesses manages, creates and claims them.
+        if Self.homeScopedRouteKeys.contains(row.routeKey) {
+            path.append(.myHomes)
+            return
+        }
+        if row.routeKey.hasPrefix("me.business.") {
+            path.append(.myBusinesses)
+            return
+        }
         path.append(.placeholder(label: row.label))
     }
+
+    /// Home identity rows that need a bound Home id.
+    private static let homeScopedRouteKeys: Set<String> = [
+        "me.members", "me.owners", "me.access", "me.bills", "me.maintenance",
+        "me.tasks", "me.packages", "me.emergency", "me.docs", "me.polls",
+        "me.home.scheduling"
+    ]
 
     private func popAfterListingUpdate(_: String) {
         Task { @MainActor in
