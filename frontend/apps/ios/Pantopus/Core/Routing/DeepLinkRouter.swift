@@ -299,7 +299,12 @@ final class DeepLinkRouter {
                 pending = destination
             } else {
                 activeContentArrival = nil
-                PendingDeepLinkStore.stash(persistencePath)
+                // A cold-start link can arrive while the stored session is
+                // still hydrating. Bind it to that stored account so a
+                // server-ended session keeps it for the same account's
+                // re-sign-in; a different account or an explicit sign-out
+                // still clears it (`PendingDeepLinkStore`).
+                PendingDeepLinkStore.stash(persistencePath, expectedUserID: Self.hydratingUserIDProvider())
                 pending = nil
                 prefersLoginPresentation = true
             }
@@ -314,9 +319,20 @@ final class DeepLinkRouter {
 
     private static var signedInUserIDProvider: @MainActor () -> String? = defaultSignedInUserIDProvider
 
+    /// The stored account while the session is still hydrating (`.unknown`,
+    /// cold start); `nil` once the auth state is known.
+    private static let defaultHydratingUserIDProvider: @MainActor () -> String? = {
+        guard case .unknown = AuthManager.shared.state else { return nil }
+        return AuthManager.shared.store.get(SecureStoreKey.userId)
+    }
+
+    private static var hydratingUserIDProvider: @MainActor () -> String? = defaultHydratingUserIDProvider
+
     /// Override the session check. Pass `nil` to restore the `AuthManager` read.
+    /// A bound check models a known auth state, so it has no hydrating account.
     static func bindSignedInUserIDProvider(_ provider: (@MainActor () -> String?)?) {
         signedInUserIDProvider = provider ?? defaultSignedInUserIDProvider
+        hydratingUserIDProvider = provider == nil ? defaultHydratingUserIDProvider : { nil }
     }
 
     private static func routingKind(of destination: Destination) -> RoutingKind {
