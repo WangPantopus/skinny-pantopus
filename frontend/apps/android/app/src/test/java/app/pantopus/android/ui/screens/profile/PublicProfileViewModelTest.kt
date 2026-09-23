@@ -126,7 +126,8 @@ class PublicProfileViewModelTest {
             assertEquals("Alex Rivera", loaded.content.header.displayName)
             assertEquals("alex", loaded.content.header.handle)
             assertEquals("Cambridge, MA", loaded.content.header.locality)
-            assertTrue(loaded.content.header.isVerified)
+            // The account email flag no longer draws a verified check.
+            assertFalse(loaded.content.header.isVerified)
             assertEquals(listOf("Carpentry", "Spanish"), loaded.content.stats.skills)
         }
 
