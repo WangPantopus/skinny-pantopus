@@ -19,6 +19,7 @@ import app.pantopus.android.data.api.models.offers.BidGigDto
 import app.pantopus.android.data.api.models.offers.UpdateBidBody
 import app.pantopus.android.data.api.models.offers.WithdrawBidReason
 import app.pantopus.android.data.api.models.reviews.CreateReviewBody
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.gigs.GigsRepository
@@ -530,7 +531,10 @@ class MyBidsViewModel
          * mutate the cached bid so the row reflects the new amount without
          * a full refetch.
          */
-        suspend fun submitEditBid(draft: EditBidDraft): Boolean {
+        suspend fun submitEditBid(
+            draft: EditBidDraft,
+            onFailure: (NetworkError) -> Unit = {},
+        ): Boolean {
             val target = _editBidTarget.value ?: return false
             val bidId = target.bidId ?: return false
             val body =
@@ -559,6 +563,7 @@ class MyBidsViewModel
                             text = result.error.message.ifEmpty { "Couldn't update bid." },
                             isError = true,
                         )
+                    onFailure(result.error)
                     false
                 }
             }

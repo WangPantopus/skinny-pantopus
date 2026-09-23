@@ -122,7 +122,7 @@ fun MyBidsScreen(
     EditBidSheet(
         target = editBidTarget,
         onCancel = { viewModel.cancelEditBid() },
-        onSubmit = { draft -> viewModel.submitEditBid(draft) },
+        onSubmit = { draft, failure -> viewModel.submitEditBid(draft, onFailure = failure::record) },
     )
 
     LeaveReviewSheet(
@@ -194,19 +194,21 @@ private fun WithdrawBidSheet(
 private fun EditBidSheet(
     target: EditBidSheetTarget?,
     onCancel: () -> Unit,
-    onSubmit: suspend (EditBidDraft) -> Boolean,
+    onSubmit: suspend (EditBidDraft, EditBidFailure) -> Boolean,
 ) {
     if (target == null) return
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val failure = remember(target.id) { EditBidFailure() }
     ModalBottomSheet(
         onDismissRequest = onCancel,
         sheetState = sheetState,
     ) {
         EditBidSheetContent(
             target = target,
-            onSubmit = onSubmit,
+            onSubmit = { draft -> onSubmit(draft, failure) },
             onCancel = onCancel,
+            failure = failure,
         )
     }
 }
