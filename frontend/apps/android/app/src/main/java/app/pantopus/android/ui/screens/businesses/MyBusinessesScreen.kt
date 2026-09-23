@@ -172,7 +172,7 @@ private fun BusinessesIntroCard(count: Int) {
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = if (count == 1) "1 verified business" else "$count verified businesses",
+                text = if (count == 1) "1 business" else "$count businesses",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,

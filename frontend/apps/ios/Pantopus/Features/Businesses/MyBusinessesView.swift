@@ -94,7 +94,7 @@ private struct BusinessesIntroCard: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                Text(count == 1 ? "1 verified business" : "\(count) verified businesses")
+                Text(count == 1 ? "1 business" : "\(count) businesses")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
                 Text("Tap any business to manage its inbox, gigs, and reviews")
