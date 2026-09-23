@@ -29,7 +29,7 @@ public struct HelpCenterView: View {
         )
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("helpCenter")
-        .emailFallbackAlert(address: "support@pantopus.app", isPresented: $showsEmailFallback)
+        .emailFallbackAlert(address: "support@pantopus.com", isPresented: $showsEmailFallback)
     }
 
     private var headerView: some View {
@@ -83,7 +83,7 @@ public struct HelpCenterView: View {
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             PrimaryButton(title: "Email support") {
-                if let url = URL(string: "mailto:support@pantopus.app?subject=Help") {
+                if let url = URL(string: "mailto:support@pantopus.com?subject=Help") {
                     await openURL(url)
                 }
             }

@@ -5037,11 +5037,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     HelpCenterScreen(
                         onBack = { navController.popBackStack() },
                         onEmailSupport = {
-                            showsEmailFallback = !context.openMailto("mailto:support@pantopus.app?subject=Help")
+                            showsEmailFallback = !context.openMailto("mailto:support@pantopus.com?subject=Help")
                         },
                     )
                     if (showsEmailFallback) {
-                        EmailFallbackDialog("support@pantopus.app") { showsEmailFallback = false }
+                        EmailFallbackDialog("support@pantopus.com") { showsEmailFallback = false }
                     }
                 }
                 composable(ChildRoutes.SETTINGS_LEGAL) {
