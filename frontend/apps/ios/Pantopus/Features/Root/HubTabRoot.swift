@@ -1370,6 +1370,9 @@ public struct HubTabRoot: View {
                 },
                 onSendMail: { _ in
                     Task { @MainActor in push(.ceremonialMail) }
+                },
+                onOpenOwnership: { id in
+                    Task { @MainActor in push(.homeOwnershipSecurity(homeId: id)) }
                 }
             )
         case let .homeMaintenance(homeId):

@@ -108,6 +108,8 @@ fun HomeDashboardScreen(
     /** FAB → "Send Mail" — opens the mail composer
      *  (RN `homes/[id]/index.tsx:160`). */
     onSendMail: ((String) -> Unit)? = null,
+    /** The "Ownership" tab — the home's ownership screen. */
+    onOpenOwnership: ((String) -> Unit)? = null,
     viewModel: HomeDashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -210,6 +212,22 @@ fun HomeDashboardScreen(
             }
             else -> openPlaceholder(actionId)
         }
+    }
+
+    // A section tab opens that section's screen, and the strip stays on
+    // Overview. Without a wired screen it keeps the old in-place tab.
+    fun openTab(tabId: String) {
+        val homeId = viewModel.currentHomeId()
+        val open: ((String) -> Unit)? =
+            when (tabId) {
+                "tasks" -> onOpenTasks
+                "bills" -> onOpenBills
+                "packages" -> onOpenPackages
+                "members" -> onOpenMembers
+                "ownership" -> onOpenOwnership
+                else -> null
+            }
+        if (open != null && homeId != null) open(homeId) else viewModel.selectTab(tabId)
     }
 
     fun handleQuickAction(actionId: String) {
@@ -336,7 +354,7 @@ fun HomeDashboardScreen(
                     intelligence = intelligenceStack,
                     brandNew = null,
                     selectedTab = selectedTab,
-                    onSelectTab = viewModel::selectTab,
+                    onSelectTab = ::openTab,
                     onBack = onBack,
                     onQuickAction = ::handleQuickAction,
                     onFabAction = ::handleFab,
@@ -360,7 +378,7 @@ fun HomeDashboardScreen(
                     content = current.brandNew.content,
                     brandNew = current.brandNew,
                     selectedTab = selectedTab,
-                    onSelectTab = viewModel::selectTab,
+                    onSelectTab = ::openTab,
                     onBack = onBack,
                     onQuickAction = ::handleQuickAction,
                     onFabAction = ::handleFab,
@@ -385,7 +403,7 @@ fun HomeDashboardScreen(
                     intelligence = intelligenceStack,
                     brandNew = null,
                     selectedTab = selectedTab,
-                    onSelectTab = viewModel::selectTab,
+                    onSelectTab = ::openTab,
                     onBack = onBack,
                     onQuickAction = ::handleQuickAction,
                     onFabAction = ::handleFab,
