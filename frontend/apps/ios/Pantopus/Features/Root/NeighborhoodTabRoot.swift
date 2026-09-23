@@ -75,11 +75,11 @@ public struct NeighborhoodTabRoot: View {
     private func surfaceRoot(_ surface: NeighborhoodDoorStore.Surface) -> some View {
         switch surface {
         case .pulse:
-            PulseTabRoot()
+            PulseTabRoot { presentedSurface = nil }
         case .tasks:
-            TasksTabRoot()
+            TasksTabRoot { presentedSurface = nil }
         case .marketplace:
-            MarketplaceTabRoot()
+            MarketplaceTabRoot { presentedSurface = nil }
         }
     }
 }

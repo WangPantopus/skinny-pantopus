@@ -39,7 +39,12 @@ public struct TasksTabRoot: View {
     @State private var router = DeepLinkRouter.shared
     @State private var systemSheet: SystemSheetRequest?
 
-    public init() {}
+    /// Closes the sheet this surface is presented in (Nearby's door).
+    private let onClose: (@MainActor () -> Void)?
+
+    public init(onClose: (@MainActor () -> Void)? = nil) {
+        self.onClose = onClose
+    }
 
     private var currentUserId: String {
         if case let .signedIn(user) = auth.state { return user.id }
@@ -65,7 +70,7 @@ public struct TasksTabRoot: View {
                     path.append(.tasksMap(categoryKey: category.rawValue))
                 },
                 onOpenSearch: { path.append(.gigSearch) },
-                onBack: nil,
+                onBack: onClose,
                 onOpenSupportTrain: { trainId in
                     path.append(.supportTrainDetail(supportTrainId: trainId))
                 },
