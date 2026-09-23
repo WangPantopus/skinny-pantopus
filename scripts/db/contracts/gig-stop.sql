@@ -201,6 +201,88 @@ DO $$ DECLARE d jsonb; terms jsonb; explanation text:='other: Private scheduling
  d:=public.finish_gig_stop(pg_temp.stop_id(811),pg_temp.stop_id(1));
  IF d->'request'->>'reason' IS DISTINCT FROM explanation THEN RAISE EXCEPTION 'Completed replay lost original explanation'; END IF;
 END $$;
+DO $$ DECLARE d jsonb; pay public."Payment"; capture jsonb; release jsonb; incident jsonb; strikes integer; BEGIN
+ -- P04/P05 poster no-show fee: scheduled-start admission, one incident, the task
+ -- fence, hold-canceled recovery, captured-fee refunds and settlement, and fees
+ -- below the provider's 50-cent capture minimum.
+ INSERT INTO public."Gig"(id,user_id,created_by,title,description,price,status,accepted_by,accepted_at,cancellation_policy,scheduled_start) VALUES
+  (pg_temp.stop_id(112),pg_temp.stop_id(1),pg_temp.stop_id(1),'Fee contract','Synthetic',10,'assigned',pg_temp.stop_id(2),now()-interval '25 hours','standard',now()+interval '1 hour'),
+  (pg_temp.stop_id(113),pg_temp.stop_id(1),pg_temp.stop_id(1),'Fee contract','Synthetic',10,'assigned',pg_temp.stop_id(2),now()-interval '25 hours','standard',NULL),
+  (pg_temp.stop_id(114),pg_temp.stop_id(1),pg_temp.stop_id(1),'Fee contract','Synthetic',4,'assigned',pg_temp.stop_id(2),now()-interval '1 hour','strict',NULL),
+  (pg_temp.stop_id(115),pg_temp.stop_id(1),pg_temp.stop_id(1),'Fee contract','Synthetic',1.5,'assigned',pg_temp.stop_id(2),now()-interval '25 hours','standard',NULL);
+ INSERT INTO public."GigBid"(id,gig_id,user_id,bid_amount,status) VALUES(pg_temp.stop_id(612),pg_temp.stop_id(112),pg_temp.stop_id(2),10,'accepted'),
+  (pg_temp.stop_id(613),pg_temp.stop_id(113),pg_temp.stop_id(2),10,'accepted'),(pg_temp.stop_id(614),pg_temp.stop_id(114),pg_temp.stop_id(2),4,'accepted'),
+  (pg_temp.stop_id(615),pg_temp.stop_id(115),pg_temp.stop_id(2),1.5,'accepted');
+ INSERT INTO public."Payment"(id,gig_id,payer_id,payee_id,amount_total,amount_subtotal,amount_platform_fee,amount_to_payee,stripe_customer_id,stripe_payment_intent_id,payment_status) VALUES
+  (pg_temp.stop_id(312),pg_temp.stop_id(112),pg_temp.stop_id(1),pg_temp.stop_id(2),1000,1000,150,850,'cus_stop','pi_stop12','authorized'),
+  (pg_temp.stop_id(313),pg_temp.stop_id(113),pg_temp.stop_id(1),pg_temp.stop_id(2),1000,1000,150,850,'cus_stop','pi_stop13','authorized'),
+  (pg_temp.stop_id(314),pg_temp.stop_id(114),pg_temp.stop_id(1),pg_temp.stop_id(2),400,400,60,340,'cus_stop','pi_stop14','authorized'),
+  (pg_temp.stop_id(315),pg_temp.stop_id(115),pg_temp.stop_id(1),pg_temp.stop_id(2),150,150,22,128,'cus_stop','pi_stop15','authorized');
+ UPDATE public."Gig" g SET payment_id=p.id,payment_status='authorized' FROM public."Payment" p WHERE p.gig_id=g.id AND g.id IN (pg_temp.stop_id(112),pg_temp.stop_id(113),pg_temp.stop_id(114),pg_temp.stop_id(115));
+ -- A scheduled task admits the worker's report only after its start plus the poster's 30-minute buffer.
+ IF public.prepare_gig_fee_capture(pg_temp.stop_id(112),pg_temp.stop_id(2),250,'Synthetic report')->>'error' IS DISTINCT FROM 'NOT_ELIGIBLE' THEN RAISE EXCEPTION 'No-show fee admitted before the scheduled start'; END IF;
+ UPDATE public."Gig" SET scheduled_start=now()-interval '29 minutes' WHERE id=pg_temp.stop_id(112);
+ IF public.prepare_gig_fee_capture(pg_temp.stop_id(112),pg_temp.stop_id(2),250)->>'error' IS DISTINCT FROM 'NOT_ELIGIBLE' THEN RAISE EXCEPTION 'No-show fee admitted inside the start buffer'; END IF;
+ IF EXISTS(SELECT FROM public."GigIncident" WHERE gig_id=pg_temp.stop_id(112)) THEN RAISE EXCEPTION 'Refused report wrote an incident'; END IF;
+ UPDATE public."Gig" SET scheduled_start=now()-interval '31 minutes' WHERE id=pg_temp.stop_id(112);
+ d:=public.prepare_gig_fee_capture(pg_temp.stop_id(112),pg_temp.stop_id(2),250,'Synthetic report');
+ IF d ? 'error' OR d->'payment'->>'payment_status'<>'capture_pending' OR d->'payment'->'metadata'->'gig_fee'->>'state'<>'pending' THEN RAISE EXCEPTION 'Reservation failed %',d; END IF;
+ incident:=d->'incident';
+ d:=public.prepare_gig_fee_capture(pg_temp.stop_id(112),pg_temp.stop_id(2),250,'Synthetic retry');
+ IF d->>'reused'<>'true' OR d->'incident'->>'id' IS DISTINCT FROM incident->>'id' OR incident->>'id' IS NULL
+  OR (SELECT count(*) FROM public."GigIncident" WHERE gig_id=pg_temp.stop_id(112))<>1 THEN RAISE EXCEPTION 'Retried report duplicated its incident %',d; END IF;
+ -- The reservation holds the task: no other report, Start Work or removal until its outcome is recorded.
+ BEGIN UPDATE public."Gig" SET status='cancelled',cancellation_reason='no_show_worker' WHERE id=pg_temp.stop_id(112); RAISE EXCEPTION 'Poster report cancelled a reserved task'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE public."Gig" SET status='in_progress',started_at=now() WHERE id=pg_temp.stop_id(112); RAISE EXCEPTION 'Work started on a reserved task'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN DELETE FROM public."Gig" WHERE id=pg_temp.stop_id(112); RAISE EXCEPTION 'Reserved task deleted'; EXCEPTION WHEN check_violation THEN NULL; END;
+ -- The hold-canceled webhook marked the payment canceled first; the same record still finishes the report once.
+ UPDATE public."Payment" SET payment_status='canceled',updated_at=now() WHERE id=pg_temp.stop_id(312);
+ strikes:=(SELECT coalesce(no_show_count,0) FROM public."User" WHERE id=pg_temp.stop_id(1));
+ release:=pg_temp.stop_proof(12);
+ d:=public.record_gig_fee_capture(pg_temp.stop_id(312),pg_temp.stop_id(2),release);
+ IF d ? 'error' OR d->'gig'->>'status'<>'cancelled' OR d->'gig'->>'cancellation_reason'<>'no_show_poster' OR d->'payment'->>'payment_status'<>'canceled'
+  OR d->'payment'->'metadata'->'gig_fee'->>'state'<>'not_charged' OR (d->'gig'->>'cancellation_fee')::numeric<>0 THEN RAISE EXCEPTION 'Canceled hold did not finish the report %',d; END IF;
+ IF public.record_gig_fee_capture(pg_temp.stop_id(312),pg_temp.stop_id(2),release)->>'reused'<>'true'
+  OR (SELECT no_show_count FROM public."User" WHERE id=pg_temp.stop_id(1))<>strikes+1 THEN RAISE EXCEPTION 'Recorded report was repeated'; END IF;
+ -- A captured fee is refunded and settled by the captured fee, never by the authorized amount.
+ d:=public.prepare_gig_fee_capture(pg_temp.stop_id(113),pg_temp.stop_id(2),250);
+ capture:=pg_temp.stop_proof(13)||jsonb_build_object('status','succeeded','amount_received',250,'amount_capturable',0,'charge_amount',1000,
+  'amount_captured',250,'charge_captured',true,'charge_refunded',false,'charge_amount_refunded',0,'charge_disputed',false);
+ d:=public.record_gig_fee_capture(pg_temp.stop_id(313),pg_temp.stop_id(2),capture);
+ IF d ? 'error' OR d->'payment'->>'payment_status'<>'captured_hold' OR (d->'gig'->>'cancellation_fee')::numeric<>2.5 THEN RAISE EXCEPTION 'Fee capture not recorded %',d; END IF;
+ SELECT * INTO pay FROM public."Payment" WHERE id=pg_temp.stop_id(313);
+ IF public.payment_captured_amount(pay)<>250 THEN RAISE EXCEPTION 'Captured fee amount unknown'; END IF;
+ IF public.reserve_payment_refund(pay.id,pg_temp.stop_id(896)::text,pg_temp.stop_id(1),'payer',NULL,'requested_by_customer',NULL,public.refund_payment_snapshot(pay),'refund')->>'error'
+  IS DISTINCT FROM 'SUPPORT_REQUIRED' THEN RAISE EXCEPTION 'Payer refunded a charged fee'; END IF;
+ UPDATE public."User" SET role='admin' WHERE id=pg_temp.stop_id(3);
+ IF public.reserve_payment_refund(pay.id,pg_temp.stop_id(895)::text,pg_temp.stop_id(3),'admin',260,'requested_by_customer',NULL,public.refund_payment_snapshot(pay),'refund')->>'error'
+  IS DISTINCT FROM 'AMOUNT_EXCEEDED' THEN RAISE EXCEPTION 'Refund exceeded the captured fee'; END IF;
+ d:=public.reserve_payment_refund(pay.id,pg_temp.stop_id(897)::text,pg_temp.stop_id(3),'admin',NULL,'requested_by_customer',NULL,public.refund_payment_snapshot(pay),'refund');
+ IF d ? 'error' OR (d->'request'->>'amount_cents')::integer<>250 THEN RAISE EXCEPTION 'Fee refund not bounded by the captured fee %',d; END IF;
+ SELECT * INTO pay FROM public."Payment" WHERE id=pg_temp.stop_id(313);
+ d:=public.record_payment_refund_receipts(pay.id,public.refund_payment_snapshot(pay),jsonb_build_array(jsonb_build_object(
+  'id','re_fee13','intentId','pi_stop13','chargeId','ch_stop13','amountCents',250,'currency','usd','status','succeeded','requestId',pg_temp.stop_id(897),'createdAt',now())));
+ IF d->'payment'->>'payment_status'<>'refunded_full' OR (d->'payment'->>'refunded_amount')::integer<>250 THEN RAISE EXCEPTION 'Full fee refund not recorded as full %',d; END IF;
+ UPDATE public."Payment" SET cooling_off_ends_at=now()-interval '1 minute' WHERE id=pg_temp.stop_id(313);
+ SELECT * INTO pay FROM public."Payment" WHERE id=pg_temp.stop_id(313);
+ d:=public.settle_gig_fee_wallet_income(pay.id,public.refund_payment_snapshot(pay));
+ IF d ? 'error' OR d->'settlement'->>'status'<>'no_earnings' OR d->'payment'->>'payment_status'<>'refunded_full'
+  OR EXISTS(SELECT FROM public."WalletTransaction" WHERE payment_id=pay.id) THEN RAISE EXCEPTION 'Refunded fee still paid the worker %',d; END IF;
+ -- A policy fee below 50 cents is not charged: the owner's late cancel is a plain release and says why.
+ d:=public.read_gig_stop_preview(pg_temp.stop_id(114),pg_temp.stop_id(1),'cancel');
+ IF d->>'eligible'<>'true' OR d->>'financialAction'<>'release' OR (d->'terms'->>'policyFeeCents')::integer<>0
+  OR d->>'feeStatus'<>'not_charged' OR d->>'feeReason'<>'FEE_BELOW_MINIMUM' THEN RAISE EXCEPTION 'Sub-minimum fee charged or unexplained %',d; END IF;
+ IF public.read_gig_stop_preview(pg_temp.stop_id(114),pg_temp.stop_id(2),'cancel')->>'unavailableReason' IS DISTINCT FROM 'FEE_POLICY_REVIEW' THEN RAISE EXCEPTION 'Worker cancel left review'; END IF;
+ d:=public.begin_gig_stop(pg_temp.stop_id(114),pg_temp.stop_id(1),repeat('a',64),pg_temp.stop_id(814),'cancel',d->'terms');
+ IF d ? 'error' OR d->'request'->>'financial_action'<>'release' OR public.check_gig_stop_current(pg_temp.stop_id(814),pg_temp.stop_id(1)) ? 'error' THEN RAISE EXCEPTION 'Waived fee cancel not reserved as a release %',d; END IF;
+ d:=public.finish_gig_stop(pg_temp.stop_id(814),pg_temp.stop_id(1),pg_temp.stop_proof(14)||'{"amount":400}');
+ IF d->'request'->'receipt'->>'financialStatus'<>'released' OR (SELECT cancellation_fee FROM public."Gig" WHERE id=pg_temp.stop_id(114))<>0
+  THEN RAISE EXCEPTION 'Waived fee cancel not released %',d; END IF;
+ -- A worker's no-show report with a fee below 50 cents is admitted once, without any reservation.
+ d:=public.prepare_gig_fee_capture(pg_temp.stop_id(115),pg_temp.stop_id(2),38,'Synthetic report');
+ IF d->>'error' IS DISTINCT FROM 'FEE_BELOW_MINIMUM' OR d->'incident'->>'id' IS NULL
+  OR (SELECT metadata ? 'gig_fee' OR payment_status<>'authorized' FROM public."Payment" WHERE id=pg_temp.stop_id(315)) THEN RAISE EXCEPTION 'Sub-minimum no-show fee reserved %',d; END IF;
+END $$;
 SET LOCAL ROLE authenticated;
 DO $$ BEGIN
  BEGIN PERFORM public.begin_gig_stop(NULL,NULL,repeat('a',64),NULL,'close','{}'); RAISE EXCEPTION 'Client could reserve task stop'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;

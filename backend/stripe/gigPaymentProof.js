@@ -67,5 +67,12 @@ function publicGigFee(p) {
   if (!['poster_no_show', 'late_cancel'].includes(fee.kind) || fee.released_cents !== p.amount_total - feeCents) return null;
   return { kind: fee.kind, fee_cents: feeCents, released_cents: fee.released_cents, worker_share_cents: feeWorkerShare(p, feeCents) };
 }
+// The amounts a payment history row shows: a charged poster-fault fee moved only
+// the fee (payer) and later its worker share (payee), never the authorized amount.
+function paymentRowAmounts(p) {
+  const fee = publicGigFee(p);
+  if (fee) return { payerCents: fee.fee_cents, payeeCents: fee.worker_share_cents };
+  return { payerCents: Number(p?.amount_total || 0) || 0, payeeCents: Number(p?.amount_to_payee ?? p?.amount_total ?? 0) || 0 };
+}
 module.exports = { publicPayment, conflict, providerId, assertPaymentTerms, assertIntentBinding, assertAuthorizedIntent, assertCapturedIntent,
-  capturedFeeCents, feeWorkerShare, publicGigFee };
+  capturedFeeCents, feeWorkerShare, publicGigFee, paymentRowAmounts };

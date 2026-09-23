@@ -1,4 +1,4 @@
-const mockStripe = { paymentIntents: { retrieve: jest.fn(), cancel: jest.fn() }, charges: { retrieve: jest.fn() } };
+const mockStripe = { paymentIntents: { retrieve: jest.fn(), cancel: jest.fn(), capture: jest.fn() }, charges: { retrieve: jest.fn() } };
 jest.mock('../stripe/getStripeClient', () => ({ getStripeClient: () => mockStripe }));
 jest.mock('../services/paymentRefundService', () => ({ create: jest.fn(), reconcile: jest.fn() }));
 const db = require('./__mocks__/supabaseAdmin');
@@ -184,5 +184,67 @@ describe('durable stop notice relay', () => {
     delivery(); notifications.deliverStoredGigNotification.mockResolvedValue({ acceptedCount: 1, unresolvedCount: 0 });
     expect(await stop.deliverPending()).toEqual({ delivered: 1 });
     expect(notifications.deliverStoredGigNotification).toHaveBeenCalledWith({ id: 'original-notice', type: 'gig_cancelled' });
+  });
+});
+describe('reserved poster no-show fee recovery', () => {
+  const reserved = extra => ({ ...payment, payment_type: 'gig_payment', amount_to_payee: 850, payment_status: 'capture_pending',
+    capture_attempts: 1, metadata: { gig_fee: { kind: 'poster_no_show', state: 'pending', fee_cents: 250, released_cents: 750,
+      actor_id: 'worker', request_id: 'reservation' } }, ...extra });
+  let recorded;
+  beforeEach(() => {
+    db.seedTable('User', [{ id: 'worker', name: 'Synthetic worker' }]);
+    recorded = null;
+    handler = async (name, args) => {
+      if (name === 'record_gig_fee_capture') {
+        recorded = args;
+        const charged = args.p_proof.status === 'succeeded';
+        return { data: { reused: false, gig: { id: 'gig', user_id: 'payer', title: 'Synthetic task', status: 'cancelled' },
+          payment: { ...reserved(), payment_status: charged ? 'captured_hold' : 'canceled',
+            metadata: { gig_fee: charged ? { kind: 'poster_no_show', state: 'captured', fee_cents: 250, released_cents: 750 }
+              : { kind: 'poster_no_show', state: 'not_charged', reason: 'HOLD_UNAVAILABLE', fee_cents: 0 } } } } };
+      }
+      if (name === 'prepare_gig_fee_capture') return { data: { error: 'FEE_BELOW_MINIMUM', incident: { id: 'incident' } } };
+      throw new Error(`Unexpected ${name}`);
+    };
+  });
+  test('a hold canceled after the webhook marked the payment canceled records not charged and notifies the poster once', async () => {
+    db.seedTable('Payment', [reserved({ payment_status: 'canceled' })]);
+    intent.status = 'canceled'; intent.amount_capturable = 0;
+    const result = await stop.reconcileNoShowFee('payment');
+    expect(result.outcome).toEqual({ status: 'not_charged', reason: 'HOLD_UNAVAILABLE', feeCents: 0 });
+    expect(recorded).toEqual(expect.objectContaining({ p_payment_id: 'payment', p_actor_id: 'worker',
+      p_proof: expect.objectContaining({ status: 'canceled', amount_received: 0, amount_captured: 0 }) }));
+    expect(mockStripe.paymentIntents.capture).not.toHaveBeenCalled();
+    expect(notifications.createNotification).toHaveBeenCalledTimes(1);
+    expect(notifications.createNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: 'payer', type: 'no_show_reported',
+      idempotencyKey: 'gig-no-show:gig:payer', body: 'Synthetic worker reported you as a no-show. This affects your reliability score.' }));
+  });
+  test('a webhook never captures a live reserved hold; the scheduled replay completes the same capture once', async () => {
+    db.seedTable('Payment', [reserved()]);
+    expect(await stop.reconcileNoShowFee('payment')).toBeNull();
+    expect(mockStripe.paymentIntents.capture).not.toHaveBeenCalled(); expect(recorded).toBeNull();
+    mockStripe.paymentIntents.capture.mockImplementation(async () => {
+      Object.assign(intent, { status: 'succeeded', amount_received: 250, amount_capturable: 0 });
+      Object.assign(charge, { captured: true, amount_captured: 250, disputed: false });
+      return structuredClone(intent);
+    });
+    const result = await stop.reconcileNoShowFee('payment', { replay: true });
+    expect(mockStripe.paymentIntents.capture).toHaveBeenCalledTimes(1);
+    expect(mockStripe.paymentIntents.capture).toHaveBeenCalledWith('pi_stop', { amount_to_capture: 250 }, { idempotencyKey: 'gig-fee:payment:pi_stop' });
+    expect(recorded.p_proof).toEqual(expect.objectContaining({ status: 'succeeded', amount_received: 250, amount_captured: 250, charge_amount: 1000 }));
+    expect(result.outcome).toEqual({ status: 'charged', feeCents: 250, releasedCents: 750 });
+    expect(notifications.createNotification).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: 'gig-no-show:gig:payer',
+      body: 'Synthetic worker reported you as a no-show. No-show fee $2.50 charged · $7.50 released. This affects your reliability score.' }));
+  });
+  test.each([['captured_hold'], ['refunded_full']])('a recorded or unrelated %s payment is not recovered again', async status => {
+    db.seedTable('Payment', [reserved({ payment_status: status })]);
+    expect(await stop.reconcileNoShowFee('payment', { replay: true })).toBeNull();
+    expect(mockStripe.paymentIntents.retrieve).not.toHaveBeenCalled(); expect(recorded).toBeNull();
+  });
+  test('a fee below the provider minimum is admitted without a reservation and keeps its single incident', async () => {
+    expect(await stop.reserveNoShowFee({ gigId: 'gig', actorId: 'worker', feeCents: 38, description: 'Synthetic', evidenceUrls: ['a', 7] }))
+      .toEqual({ belowMinimum: true, incident: { id: 'incident' } });
+    expect(rpc).toHaveBeenCalledWith('prepare_gig_fee_capture', { p_gig_id: 'gig', p_actor_id: 'worker', p_fee_cents: 38,
+      p_description: 'Synthetic', p_evidence_urls: ['a'] });
   });
 });

@@ -8,7 +8,7 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const stripeService = require('../stripe/stripeService');
-const { publicPayment } = require('../stripe/gigPaymentProof');
+const { publicPayment, paymentRowAmounts } = require('../stripe/gigPaymentProof');
 const verifyToken = require('../middleware/verifyToken');
 const { requireAdmin } = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -703,8 +703,7 @@ router.get('/', verifyToken, paymentHistoryReadLimiter, async (req, res) => {
     
     const enrichedPayments = (payments || []).map((payment) => {
       const isSender = String(payment?.payer_id || '') === String(userId);
-      const payerAmount = Number(payment?.amount_total || 0) || 0;
-      const payeeAmount = Number(payment?.amount_to_payee ?? payment?.amount_total ?? 0) || 0;
+      const { payerCents: payerAmount, payeeCents: payeeAmount } = paymentRowAmounts(payment);
       return {
         ...publicPayment(payment),
         amount_cents: isSender ? payerAmount : payeeAmount,
@@ -764,6 +763,7 @@ router.get('/history', verifyToken, paymentHistoryReadLimiter, async (req, res) 
           payment_status,
           payment_type,
           description,
+          metadata,
           created_at,
           updated_at,
           gig:gig_id(id, title, category),
@@ -809,10 +809,11 @@ router.get('/history', verifyToken, paymentHistoryReadLimiter, async (req, res) 
 
     const paymentRows = (paymentsRes.data || []).map((payment) => {
       const isSender = String(payment?.payer_id || '') === String(userId);
-      const payerAmount = Number(payment?.amount_total || 0) || 0;
-      const payeeAmount = Number(payment?.amount_to_payee ?? payment?.amount_total ?? 0) || 0;
+      const { payerCents: payerAmount, payeeCents: payeeAmount } = paymentRowAmounts(payment);
+      // metadata is read only to recognize a charged fee; this stream never returned it.
+      const { metadata: _metadata, ...visible } = publicPayment(payment);
       return {
-        ...publicPayment(payment),
+        ...visible,
         id: payment.id,
         entry_type: 'payment',
         amount_cents: isSender ? payerAmount : payeeAmount,

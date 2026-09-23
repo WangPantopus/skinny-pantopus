@@ -7,6 +7,9 @@
 -- existing Payment row (metadata.gig_fee) and the existing stop request/receipt.
 -- The stop command gains the 'fee' financial action. Worker-initiated actions stay
 -- fee-free. Provider calls remain in the service; SQL records exact provider proof.
+-- A fee below the provider's 50-cent capture minimum is not charged. A reserved
+-- no-show fee holds the task until its provider outcome is recorded. Refunds and
+-- settlement of a charged fee use the captured fee, not the authorized amount.
 -- Applied functions are extended by CREATE OR REPLACE with their signatures and
 -- privileges unchanged; no applied migration or historical row is rewritten.
 -- Deploy this migration before the matching backend and clients.
@@ -33,12 +36,13 @@ LANGUAGE sql IMMUTABLE SET search_path=public,pg_temp AS $$
 $$;
 
 -- One Payment write for both fee kinds. Callers hold the Gig then Payment locks
--- and have already verified the proof; only definer functions may call it.
+-- and have already verified the proof; only definer functions may call it. A
+-- dispute stored before the capture was recorded keeps the payment frozen.
 CREATE FUNCTION public.record_gig_fee_payment(p_payment_id uuid,p_kind text,p_fee integer,p_request_id uuid,p_proof jsonb)
 RETURNS public."Payment" LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
 DECLARE p public."Payment";
 BEGIN
- UPDATE public."Payment" SET payment_status='captured_hold',stripe_charge_id=p_proof->>'charge_id',
+ UPDATE public."Payment" SET payment_status=CASE WHEN dispute_id IS NOT NULL THEN 'disputed' ELSE 'captured_hold' END,stripe_charge_id=p_proof->>'charge_id',
   captured_at=coalesce(captured_at,clock_timestamp()),cooling_off_ends_at=coalesce(cooling_off_ends_at,clock_timestamp()+interval '48 hours'),
   payment_succeeded_at=coalesce(payment_succeeded_at,clock_timestamp()),
   metadata=coalesce(metadata,'{}'::jsonb)||jsonb_build_object('gig_fee',coalesce(metadata->'gig_fee','{}'::jsonb)||jsonb_build_object(
@@ -50,26 +54,34 @@ BEGIN
 END $$;
 
 -- Poster no-show, step 1: reserve the capture before the provider call. The
--- capture_pending state keeps a hold release, a stop request, Start Work and the
--- full-capture webhook path away while the provider outcome is unknown.
-CREATE FUNCTION public.prepare_gig_fee_capture(p_gig_id uuid,p_actor_id uuid,p_fee_cents integer) RETURNS jsonb
+-- capture_pending state and guard_gig_fee_gig keep a hold release, a stop request,
+-- Start Work, the poster's own report and the full-capture webhook path away while
+-- the provider outcome is unknown. The worker may report only 24 hours after
+-- acceptance and, for a scheduled task, after the agreed start plus the same
+-- 30-minute buffer the poster's report uses. The report's incident is written here,
+-- under the task lock, exactly once for the reservation and its retries.
+CREATE FUNCTION public.prepare_gig_fee_capture(p_gig_id uuid,p_actor_id uuid,p_fee_cents integer,
+ p_description text DEFAULT NULL,p_evidence_urls text[] DEFAULT '{}') RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
-DECLARE g public."Gig"; p public."Payment"; fee jsonb;
+DECLARE g public."Gig"; p public."Payment"; fee jsonb; incident public."GigIncident"; outcome text;
 BEGIN
  SELECT * INTO g FROM public."Gig" WHERE id=p_gig_id FOR UPDATE;
  IF NOT FOUND THEN RETURN jsonb_build_object('error','NOT_FOUND'); END IF;
  IF p_actor_id IS NULL OR g.accepted_by IS DISTINCT FROM p_actor_id THEN RETURN jsonb_build_object('error','FORBIDDEN'); END IF;
  SELECT * INTO p FROM public."Payment" WHERE id=g.payment_id FOR UPDATE;
  IF NOT FOUND THEN RETURN jsonb_build_object('error','PAYMENT_REVIEW'); END IF;
+ SELECT * INTO incident FROM public."GigIncident" WHERE gig_id=g.id AND reported_by=p_actor_id AND type='no_show_poster'
+  ORDER BY created_at,id LIMIT 1;
  fee:=p.metadata->'gig_fee';
  IF fee IS NOT NULL THEN
   -- A retried report resumes only its own reservation or recorded outcome.
   IF fee->>'kind' IS DISTINCT FROM 'poster_no_show' OR fee->>'actor_id' IS DISTINCT FROM p_actor_id::text
    OR fee->>'fee_cents' IS DISTINCT FROM p_fee_cents::text THEN RETURN jsonb_build_object('error','FEE_CHANGED'); END IF;
-  RETURN jsonb_build_object('payment',to_jsonb(p),'gig',to_jsonb(g),'reused',true);
+  RETURN jsonb_build_object('payment',to_jsonb(p),'gig',to_jsonb(g),'incident',to_jsonb(incident),'reused',true);
  END IF;
  IF g.status IS DISTINCT FROM 'assigned' OR g.started_at IS NOT NULL OR g.worker_completed_at IS NOT NULL
-  OR g.owner_confirmed_at IS NOT NULL OR g.accepted_at IS NULL OR g.accepted_at>clock_timestamp()-interval '24 hours' THEN
+  OR g.owner_confirmed_at IS NOT NULL OR g.accepted_at IS NULL OR g.accepted_at>clock_timestamp()-interval '24 hours'
+  OR (g.scheduled_start IS NOT NULL AND g.scheduled_start>=clock_timestamp()-interval '30 minutes') THEN
   RETURN jsonb_build_object('error','NOT_ELIGIBLE'); END IF;
  IF EXISTS(SELECT FROM public."GigStopRequest" WHERE gig_id=g.id AND state<>'completed') THEN RETURN jsonb_build_object('error','STOP_ACTIVE'); END IF;
  -- No capturable hold (never authorized, or already released/expired): the
@@ -78,8 +90,8 @@ BEGIN
   AND p.gig_id IS NOT DISTINCT FROM g.id AND p.payer_id IS NOT DISTINCT FROM g.user_id AND p.payee_id IS NOT DISTINCT FROM g.accepted_by
   AND p.captured_at IS NULL AND coalesce(p.capture_attempts,0)=0 AND coalesce(p.refunded_amount,0)=0 AND p.dispute_id IS NULL
   AND NOT EXISTS(SELECT FROM public."PaymentRefundRequest" WHERE payment_id=p.id AND status IN ('pending','requires_action')) THEN
-  RETURN jsonb_build_object('error','NO_HOLD'); END IF;
- IF p.gig_id IS DISTINCT FROM g.id OR p.payer_id IS DISTINCT FROM g.user_id OR p.payee_id IS DISTINCT FROM g.accepted_by
+  outcome:='NO_HOLD';
+ ELSIF p.gig_id IS DISTINCT FROM g.id OR p.payer_id IS DISTINCT FROM g.user_id OR p.payee_id IS DISTINCT FROM g.accepted_by
   OR p.payment_type IS DISTINCT FROM 'gig_payment' OR lower(p.currency) IS DISTINCT FROM 'usd'
   OR p.amount_total IS DISTINCT FROM round(g.price*100)::bigint OR p.amount_total<50
   OR p.payment_status IS DISTINCT FROM 'authorized' OR p.stripe_payment_intent_id IS NULL OR p.stripe_customer_id IS NULL
@@ -90,23 +102,35 @@ BEGIN
   OR EXISTS(SELECT FROM public."PaymentRefundReceipt" WHERE payment_id=p.id AND status IN ('pending','requires_action'))
   OR EXISTS(SELECT FROM public."GigAuthorizationExpiry" WHERE payment_id=p.id AND kind='cancel' AND state='pending')
   OR EXISTS(SELECT FROM public."GigLegacyAuthorization" WHERE payment_id=p.id AND NOT superseded AND (lease_until>clock_timestamp() OR cancel_requested)) THEN
-  RETURN jsonb_build_object('error','PAYMENT_REVIEW'); END IF;
+  RETURN jsonb_build_object('error','PAYMENT_REVIEW');
  -- The route computes the existing noShowFee (25%, rounded to cents); it can
  -- differ from exact integer math only by float rounding at a half cent.
- IF p_fee_cents IS NULL OR p_fee_cents<=0 OR p_fee_cents>=p.amount_total OR abs(p_fee_cents::bigint*4-p.amount_total)>4 THEN
-  RETURN jsonb_build_object('error','INVALID_FEE'); END IF;
+ ELSIF p_fee_cents IS NULL OR p_fee_cents<=0 OR p_fee_cents>=p.amount_total OR abs(p_fee_cents::bigint*4-p.amount_total)>4 THEN
+  RETURN jsonb_build_object('error','INVALID_FEE');
+ -- The provider refuses a capture below 50 cents: nothing is charged and the
+ -- service releases the live hold in full.
+ ELSIF p_fee_cents<50 THEN outcome:='FEE_BELOW_MINIMUM';
+ END IF;
+ IF incident.id IS NULL THEN
+  INSERT INTO public."GigIncident"(gig_id,reported_by,reported_against,type,description,evidence_urls,status)
+  VALUES(g.id,p_actor_id,g.user_id,'no_show_poster',nullif(p_description,''),coalesce(p_evidence_urls,'{}'),'open') RETURNING * INTO incident;
+ END IF;
+ IF outcome IS NOT NULL THEN RETURN jsonb_build_object('error',outcome,'incident',to_jsonb(incident)); END IF;
  UPDATE public."Payment" SET payment_status='capture_pending',capture_attempts=coalesce(capture_attempts,0)+1,
   metadata=coalesce(metadata,'{}'::jsonb)||jsonb_build_object('gig_fee',jsonb_build_object('version',1,'kind','poster_no_show',
    'state','pending','fee_cents',p_fee_cents,'released_cents',p.amount_total-p_fee_cents,'actor_id',p_actor_id,
    'request_id',gen_random_uuid(),'requested_at',clock_timestamp())),updated_at=clock_timestamp()
  WHERE id=p.id RETURNING * INTO p;
  UPDATE public."Gig" SET payment_status=p.payment_status,updated_at=clock_timestamp() WHERE id=g.id RETURNING * INTO g;
- RETURN jsonb_build_object('payment',to_jsonb(p),'gig',to_jsonb(g),'reused',false);
+ RETURN jsonb_build_object('payment',to_jsonb(p),'gig',to_jsonb(g),'incident',to_jsonb(incident),'reused',false);
 END $$;
 
 -- Poster no-show, step 2: record the exact provider outcome and cancel the task
 -- in one transaction. A replay returns the recorded outcome and never re-records.
--- A canceled (expired or released) hold is recorded as not charged.
+-- A canceled (expired or released) hold is recorded as not charged, also after the
+-- hold-canceled webhook already marked the payment canceled. A valid provider
+-- outcome is always recorded on the payment; a task that changed anyway (which
+-- guard_gig_fee_gig prevents) is never cancelled from it and is left for review.
 CREATE FUNCTION public.record_gig_fee_capture(p_payment_id uuid,p_actor_id uuid,p_proof jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
 DECLARE target_gig uuid; g public."Gig"; p public."Payment"; fee jsonb; fee_cents integer; charged boolean;
@@ -121,13 +145,12 @@ BEGIN
   OR g.payment_id IS DISTINCT FROM p.id OR g.accepted_by IS DISTINCT FROM p.payee_id OR g.user_id IS DISTINCT FROM p.payer_id THEN
   RETURN jsonb_build_object('error','PAYMENT_CHANGED'); END IF;
  IF fee->>'state' IN ('captured','not_charged') THEN
-  RETURN jsonb_build_object('payment',to_jsonb(p),'gig',to_jsonb(g),'reused',true); END IF;
+  RETURN jsonb_build_object('payment',to_jsonb(p),'gig',to_jsonb(g),'reused',true,'review',fee->'review'); END IF;
  fee_cents:=(fee->>'fee_cents')::integer;
- IF fee->>'state' IS DISTINCT FROM 'pending' OR p.payment_status IS DISTINCT FROM 'capture_pending'
-  OR g.status IS DISTINCT FROM 'assigned' OR g.started_at IS NOT NULL OR g.worker_completed_at IS NOT NULL OR g.owner_confirmed_at IS NOT NULL
-  OR p.dispute_id IS NOT NULL OR coalesce(p.refunded_amount,0)<>0 THEN RETURN jsonb_build_object('error','PAYMENT_CHANGED'); END IF;
- IF public.gig_fee_capture_proof(p,fee_cents,p_proof) THEN charged:=true;
- ELSIF public.gig_stop_release_proof(p,p_proof) THEN charged:=false;
+ IF fee->>'state' IS DISTINCT FROM 'pending' OR p.captured_at IS NOT NULL OR coalesce(p.refunded_amount,0)<>0 THEN
+  RETURN jsonb_build_object('error','PAYMENT_CHANGED'); END IF;
+ IF p.payment_status IN ('capture_pending','disputed') AND public.gig_fee_capture_proof(p,fee_cents,p_proof) THEN charged:=true;
+ ELSIF p.payment_status IN ('capture_pending','canceled') AND p.dispute_id IS NULL AND public.gig_stop_release_proof(p,p_proof) THEN charged:=false;
  ELSE RETURN jsonb_build_object('error','INVALID_PROOF'); END IF;
  IF charged THEN
   p:=public.record_gig_fee_payment(p.id,'poster_no_show',fee_cents,(fee->>'request_id')::uuid,p_proof);
@@ -136,9 +159,17 @@ BEGIN
    'state','not_charged','reason','HOLD_UNAVAILABLE','fee_cents',0,'released_cents',amount_total,'recorded_at',clock_timestamp())),
    updated_at=clock_timestamp() WHERE id=p.id RETURNING * INTO p;
  END IF;
+ IF g.status IS DISTINCT FROM 'assigned' OR g.started_at IS NOT NULL OR g.worker_completed_at IS NOT NULL OR g.owner_confirmed_at IS NOT NULL THEN
+  UPDATE public."Payment" SET metadata=jsonb_set(metadata,'{gig_fee,review}','"TASK_CHANGED"'::jsonb),updated_at=clock_timestamp()
+  WHERE id=p.id RETURNING * INTO p;
+  UPDATE public."Gig" SET payment_status=p.payment_status,updated_at=clock_timestamp() WHERE id=g.id RETURNING * INTO g;
+  RETURN jsonb_build_object('payment',to_jsonb(p),'gig',to_jsonb(g),'reused',false,'review','TASK_CHANGED');
+ END IF;
+ PERFORM set_config('app.gig_fee_receipt','on',true);
  UPDATE public."Gig" SET status='cancelled',cancelled_at=clock_timestamp(),cancelled_by=p_actor_id,cancellation_reason='no_show_poster',
   cancellation_zone=3,cancellation_fee=CASE WHEN charged THEN fee_cents/100.0 ELSE 0 END,payment_status=p.payment_status,
   updated_at=clock_timestamp() WHERE id=g.id RETURNING * INTO g;
+ PERFORM set_config('app.gig_fee_receipt','off',true);
  -- The report route's existing reliability rule, applied once with the transition
  -- so a lost reply or a retry can neither skip nor repeat it.
  UPDATE public."User" SET no_show_count=coalesce(no_show_count,0)+1,
@@ -147,11 +178,31 @@ BEGIN
  RETURN jsonb_build_object('payment',to_jsonb(p),'gig',to_jsonb(g),'reused',false);
 END $$;
 
+-- A reserved poster no-show fee holds its task until record_gig_fee_capture (the
+-- only writer that sets app.gig_fee_receipt) records the provider outcome: no
+-- other report, Start Work, stop, assignment or payment change may commit between
+-- the reservation and that record. Gig then Payment, as every other guard.
+CREATE FUNCTION public.guard_gig_fee_gig() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
+BEGIN
+ IF OLD.payment_id IS NOT NULL AND current_setting('app.gig_fee_receipt',true) IS DISTINCT FROM 'on'
+  AND (TG_OP='DELETE' OR ROW(NEW.user_id,NEW.accepted_by,NEW.price,NEW.payment_id,NEW.status,NEW.started_at,NEW.accepted_at,NEW.worker_completed_at,NEW.owner_confirmed_at)
+   IS DISTINCT FROM ROW(OLD.user_id,OLD.accepted_by,OLD.price,OLD.payment_id,OLD.status,OLD.started_at,OLD.accepted_at,OLD.worker_completed_at,OLD.owner_confirmed_at)) THEN
+  PERFORM 1 FROM public."Payment" WHERE id=OLD.payment_id FOR SHARE;
+  IF EXISTS(SELECT FROM public."Payment" WHERE id=OLD.payment_id AND metadata->'gig_fee'->>'state'='pending') THEN
+   RAISE EXCEPTION 'The reserved no-show fee must be recorded first' USING ERRCODE='23514'; END IF;
+ END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF; RETURN NEW;
+END $$;
+CREATE TRIGGER guard_gig_fee_gig BEFORE UPDATE OR DELETE ON public."Gig" FOR EACH ROW EXECUTE FUNCTION public.guard_gig_fee_gig();
+
 -- Owner cancel after the grace period, before Start Work, on a live authorized
 -- hold: the policy fee is charged from that hold. Worker cancels stay in review.
+-- The provider refuses captures below 50 cents, so a smaller policy fee on the
+-- owner's cancel is not charged: that cancel is fee-free (a plain release) and
+-- the preview says why. A worker cancel keeps the policy amount and its review.
 CREATE OR REPLACE FUNCTION public.read_gig_stop_preview(p_gig_id uuid,p_actor_id uuid,p_action text) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
-DECLARE g public."Gig"; p public."Payment"; t jsonb; reason text; financial text:='none'; active uuid;
+DECLARE g public."Gig"; p public."Payment"; t jsonb; reason text; financial text:='none'; active uuid; waived text;
 BEGIN
  SELECT * INTO g FROM public."Gig" WHERE id=p_gig_id FOR UPDATE;
  IF NOT FOUND THEN RETURN jsonb_build_object('error','NOT_FOUND'); END IF;
@@ -159,6 +210,10 @@ BEGIN
  SELECT * INTO p FROM public."Payment" WHERE id=g.payment_id FOR UPDATE;
  PERFORM 1 FROM public."GigBid" WHERE gig_id=g.id AND status='accepted' ORDER BY id FOR UPDATE;
  t:=public.gig_stop_terms(g,p_action);
+ IF p_action='cancel' AND (t->>'policyFeeCents')::integer BETWEEN 1 AND 49
+  AND coalesce(public.gig_stop_owner_allowed(g.user_id,p_actor_id),false) THEN
+  t:=jsonb_set(t,'{policyFeeCents}','0'::jsonb); waived:='FEE_BELOW_MINIMUM';
+ END IF;
  SELECT id INTO active FROM public."GigStopRequest" WHERE gig_id=g.id AND state<>'completed';
  IF active IS NOT NULL THEN reason:='STOP_ACTIVE';
  ELSIF g.started_at IS NOT NULL OR g.status NOT IN ('open','assigned') OR g.worker_completed_at IS NOT NULL OR g.owner_confirmed_at IS NOT NULL THEN reason:='STARTED_POLICY_REVIEW';
@@ -196,7 +251,8 @@ BEGIN
   END IF;
  END IF;
  RETURN jsonb_build_object('gig',to_jsonb(g),'payment',CASE WHEN p.id IS NULL THEN NULL ELSE to_jsonb(p) END,
- 'terms',t,'eligible',reason IS NULL,'unavailableReason',reason,'financialAction',financial,'activeRequestId',active);
+ 'terms',t,'eligible',reason IS NULL,'unavailableReason',reason,'financialAction',financial,'activeRequestId',active)
+  ||CASE WHEN waived IS NULL OR reason IS NOT NULL THEN '{}'::jsonb ELSE jsonb_build_object('feeStatus','not_charged','feeReason',waived) END;
 END $$;
 
 -- A fee request's provider evidence is either the exact fee capture or, when
@@ -343,14 +399,165 @@ BEGIN
  RETURN public.reserve_payment_refund_before_stop_fence(p_payment_id,p_request_key,p_actor_id,p_actor_mode,p_amount,p_reason,p_description,p_expected,p_operation);
 END $$;
 
+-- A charged fee captured only part of its hold. Refunds and their accounting are
+-- bounded by that captured fee, and a refund of the whole fee is a full refund, so
+-- a support refund, a dashboard refund and its webhook can be recorded exactly.
+CREATE FUNCTION public.payment_captured_amount(p public."Payment") RETURNS bigint
+LANGUAGE sql IMMUTABLE SET search_path=public,pg_temp AS $$
+ SELECT CASE WHEN p.metadata->'gig_fee'->>'state'='captured' AND jsonb_typeof(p.metadata->'gig_fee'->'fee_cents')='number'
+  THEN (p.metadata->'gig_fee'->>'fee_cents')::bigint ELSE p.amount_total END
+$$;
+CREATE OR REPLACE FUNCTION public.reserve_payment_refund_before_stop_fence(p_payment_id uuid,p_request_key text,p_actor_id uuid,p_actor_mode text,
+ p_amount integer,p_reason text,p_description text,p_expected jsonb,p_operation text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE p public."Payment"; r public."PaymentRefundRequest"; active public."PaymentRefundRequest";
+ remaining integer; credited boolean; captured bigint;
+BEGIN
+ SELECT * INTO p FROM public."Payment" WHERE id=p_payment_id FOR UPDATE;
+ IF NOT FOUND THEN RETURN jsonb_build_object('error','NOT_FOUND'); END IF;
+ PERFORM 1 FROM public."User" WHERE id=p_actor_id FOR SHARE;
+ IF NOT coalesce(public.refund_actor_allowed(p.payer_id,p_actor_id,p_actor_mode),false) THEN
+  RETURN jsonb_build_object('error','FORBIDDEN'); END IF;
+ SELECT * INTO r FROM public."PaymentRefundRequest" WHERE request_key=p_request_key FOR UPDATE;
+ IF FOUND THEN
+  IF r.payment_id<>p.id OR r.actor_id IS DISTINCT FROM p_actor_id OR r.actor_mode<>p_actor_mode
+   OR r.requested_amount IS DISTINCT FROM p_amount OR r.reason<>p_reason
+   OR r.description IS DISTINCT FROM p_description THEN RETURN jsonb_build_object('error','REQUEST_CONFLICT'); END IF;
+  RETURN jsonb_build_object('request',to_jsonb(r),'payment',to_jsonb(p),'reused',true);
+ END IF;
+ IF public.refund_payment_snapshot(p) IS DISTINCT FROM p_expected THEN RETURN jsonb_build_object('error','PAYMENT_CHANGED'); END IF;
+ IF p_request_key IS NULL OR length(p_request_key)>200 OR length(p_request_key)<1
+  OR p_reason NOT IN ('duplicate','fraudulent','requested_by_customer','work_not_completed','other')
+  OR lower(p.currency)<>'usd' OR p.amount_total<50 OR p_amount<=0
+  OR p.amount_to_payee<0 OR p.amount_to_payee>p.amount_total
+  OR coalesce(p.refunded_amount,0)<0 OR coalesce(p.refunded_amount,0)>p.amount_total THEN
+  RETURN jsonb_build_object('error','INVALID_TERMS'); END IF;
+ SELECT * INTO active FROM public."PaymentRefundRequest" WHERE payment_id=p.id AND status IN ('pending','requires_action') FOR UPDATE;
+ IF FOUND THEN RETURN jsonb_build_object('error','REFUND_ACTIVE','request',to_jsonb(active)); END IF;
+ IF EXISTS(SELECT FROM public."PaymentRefundReceipt" WHERE payment_id=p.id AND status IN ('pending','requires_action')) THEN
+  RETURN jsonb_build_object('error','PROVIDER_REFUND_PENDING'); END IF;
+ IF p.dispute_id IS NOT NULL OR p.payment_status='disputed' THEN RETURN jsonb_build_object('error','DISPUTED'); END IF;
+ SELECT EXISTS(SELECT FROM public."WalletTransaction" WHERE payment_id=p.id AND type IN ('gig_income','tip_income')) INTO credited;
+ IF p_actor_mode='payer' AND (credited OR p.stripe_transfer_id IS NOT NULL OR p.payment_status IN ('transfer_pending','transferred')) THEN
+  RETURN jsonb_build_object('error','SUPPORT_REQUIRED'); END IF;
+ IF p_operation='release' THEN
+  IF p.payment_status NOT IN ('authorized','authorize_pending') OR coalesce(p.capture_attempts,0)>0 THEN
+   RETURN jsonb_build_object('error','CAPTURE_IN_PROGRESS'); END IF;
+  remaining:=p.amount_total;
+ ELSIF p_operation='refund' THEN
+  IF p.payment_status NOT IN ('captured_hold','transfer_scheduled','refunded_partial','transferred','transfer_pending') THEN
+   RETURN jsonb_build_object('error','PAYMENT_STATE'); END IF;
+  IF p.payment_status='transfer_pending' AND p.stripe_transfer_id IS NULL AND NOT credited THEN
+   RETURN jsonb_build_object('error','TRANSFER_UNKNOWN'); END IF;
+  captured:=public.payment_captured_amount(p);
+  remaining:=captured-coalesce(p.refunded_amount,0);
+  IF p_amount IS NOT NULL THEN remaining:=p_amount; END IF;
+  IF remaining<=0 OR remaining>captured-coalesce(p.refunded_amount,0) THEN RETURN jsonb_build_object('error','AMOUNT_EXCEEDED'); END IF;
+ ELSE RETURN jsonb_build_object('error','INVALID_OPERATION'); END IF;
+ INSERT INTO public."PaymentRefundRequest"(id,request_key,payment_id,actor_id,actor_mode,requested_amount,amount_cents,
+  currency,reason,description,operation,frozen_payment,previous_status,reversal_status)
+ VALUES(p_request_key::uuid,p_request_key,p.id,p_actor_id,p_actor_mode,p_amount,remaining,'usd',p_reason,p_description,p_operation,
+  p_expected,p.payment_status,CASE WHEN credited OR p.stripe_transfer_id IS NOT NULL THEN 'pending' ELSE 'not_required' END)
+ RETURNING * INTO r;
+ UPDATE public."Payment" SET payment_status='refund_pending',refund_reason=p_reason,updated_at=clock_timestamp() WHERE id=p.id RETURNING * INTO p;
+ UPDATE public."Gig" SET payment_status=p.payment_status,updated_at=clock_timestamp() WHERE id=p.gig_id AND payment_id=p.id;
+ RETURN jsonb_build_object('request',to_jsonb(r),'payment',to_jsonb(p),'reused',false);
+END $$;
+CREATE OR REPLACE FUNCTION public.record_payment_refund_receipts_before_stop_fence(p_payment_id uuid,p_expected jsonb,p_receipts jsonb)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE p public."Payment"; item jsonb; old_receipt public."PaymentRefundReceipt"; r public."PaymentRefundRequest";
+ old_refund public."Refund"; request_id uuid; total_success bigint; total_pending bigint; next_status text; restore_status text; captured bigint;
+BEGIN
+ SELECT * INTO p FROM public."Payment" WHERE id=p_payment_id FOR UPDATE;
+ IF NOT FOUND THEN RETURN jsonb_build_object('error','NOT_FOUND'); END IF;
+ IF public.refund_payment_snapshot(p) IS DISTINCT FROM p_expected THEN RETURN jsonb_build_object('error','PAYMENT_CHANGED'); END IF;
+ IF jsonb_typeof(p_receipts)<>'array' THEN RETURN jsonb_build_object('error','INVALID_PROOF'); END IF;
+ captured:=public.payment_captured_amount(p);
+ FOR item IN SELECT value FROM jsonb_array_elements(p_receipts) LOOP
+  IF item->>'id' IS NULL OR item->>'intentId' IS DISTINCT FROM p.stripe_payment_intent_id
+   OR item->>'chargeId' IS DISTINCT FROM p.stripe_charge_id OR lower(item->>'currency') IS DISTINCT FROM lower(p.currency)
+   OR (item->>'amountCents')::bigint<=0 OR (item->>'amountCents')::bigint>captured
+   OR item->>'status' NOT IN ('pending','requires_action','succeeded','failed','canceled') THEN
+   RAISE EXCEPTION 'Refund evidence does not match the exact payment' USING ERRCODE='40001'; END IF;
+  request_id:=nullif(item->>'requestId','')::uuid;
+  IF request_id IS NOT NULL THEN
+   SELECT * INTO r FROM public."PaymentRefundRequest" WHERE id=request_id FOR UPDATE;
+   IF NOT FOUND OR r.payment_id<>p.id OR r.amount_cents<>(item->>'amountCents')::integer OR r.operation<>'refund'
+    OR r.frozen_payment IS DISTINCT FROM public.refund_payment_snapshot(p)
+    OR (r.provider_refund_id IS NOT NULL AND r.provider_refund_id<>item->>'id') THEN
+    RAISE EXCEPTION 'Refund request evidence does not match' USING ERRCODE='40001'; END IF;
+  END IF;
+  SELECT * INTO old_receipt FROM public."PaymentRefundReceipt" WHERE provider_refund_id=item->>'id' FOR UPDATE;
+  IF FOUND THEN
+   IF old_receipt.payment_id<>p.id OR old_receipt.amount_cents<>(item->>'amountCents')::integer
+    OR old_receipt.currency<>lower(item->>'currency') OR old_receipt.intent_id<>item->>'intentId'
+    OR old_receipt.charge_id<>item->>'chargeId' OR old_receipt.request_id IS DISTINCT FROM request_id THEN
+    RAISE EXCEPTION 'Refund receipt cannot be rebound' USING ERRCODE='40001'; END IF;
+   -- A stale pending event cannot undo a final, already verified receipt.
+   IF old_receipt.status IN ('succeeded','failed','canceled') AND old_receipt.status<>item->>'status' THEN CONTINUE; END IF;
+  END IF;
+  INSERT INTO public."PaymentRefundReceipt"(provider_refund_id,payment_id,request_id,intent_id,charge_id,
+   amount_cents,currency,status,provider_created_at,verified_at)
+  VALUES(item->>'id',p.id,request_id,item->>'intentId',item->>'chargeId',(item->>'amountCents')::integer,
+   lower(item->>'currency'),item->>'status',(item->>'createdAt')::timestamptz,clock_timestamp())
+  ON CONFLICT(provider_refund_id) DO UPDATE SET status=EXCLUDED.status,verified_at=EXCLUDED.verified_at;
+  SELECT * INTO old_refund FROM public."Refund" WHERE stripe_refund_id=item->>'id' FOR UPDATE;
+  IF FOUND AND (old_refund.payment_id<>p.id OR old_refund.amount<>(item->>'amountCents')::integer
+   OR lower(old_refund.currency)<>lower(item->>'currency')) THEN
+   RAISE EXCEPTION 'Historical refund requires reconciliation' USING ERRCODE='40001'; END IF;
+  IF NOT FOUND THEN
+   INSERT INTO public."Refund"(payment_id,stripe_refund_id,amount,currency,reason,description,refund_status,initiated_by,
+    metadata,refund_succeeded_at)
+   VALUES(p.id,item->>'id',(item->>'amountCents')::integer,upper(item->>'currency'),
+    CASE WHEN request_id IS NOT NULL THEN r.reason ELSE 'other' END,
+    CASE WHEN request_id IS NOT NULL THEN r.description ELSE 'Provider-verified refund' END,item->>'status',
+    coalesce(CASE WHEN request_id IS NOT NULL THEN r.actor_id END,p.payer_id),
+    jsonb_build_object('verified_receipt',true,'refund_request_id',request_id),
+    CASE WHEN item->>'status'='succeeded' THEN clock_timestamp() END);
+  ELSE
+   UPDATE public."Refund" SET refund_status=item->>'status',
+    refund_succeeded_at=CASE WHEN item->>'status'='succeeded' THEN coalesce(refund_succeeded_at,clock_timestamp()) END
+   WHERE id=old_refund.id;
+  END IF;
+  IF request_id IS NOT NULL THEN
+   UPDATE public."PaymentRefundRequest" SET provider_refund_id=item->>'id',provider_status=item->>'status',status=item->>'status',
+    lease_token=NULL,lease_until=NULL,updated_at=clock_timestamp() WHERE id=request_id;
+  END IF;
+ END LOOP;
+ SELECT coalesce(sum(amount_cents) FILTER(WHERE status='succeeded'),0),
+  coalesce(sum(amount_cents) FILTER(WHERE status IN ('pending','requires_action')),0)
+ INTO total_success,total_pending FROM public."PaymentRefundReceipt" WHERE payment_id=p.id;
+ IF total_success>captured OR total_success+total_pending>captured OR total_success<coalesce(p.refunded_amount,0) THEN
+  RAISE EXCEPTION 'Refund accounting requires reconciliation' USING ERRCODE='40001'; END IF;
+ SELECT x.previous_status INTO restore_status FROM public."PaymentRefundRequest" x WHERE x.payment_id=p.id ORDER BY x.created_at DESC,x.id DESC LIMIT 1;
+ next_status:=p.payment_status;
+ IF p.payment_status<>'disputed' THEN
+  IF total_success=captured THEN next_status:='refunded_full';
+  ELSIF total_pending>0 OR EXISTS(SELECT FROM public."PaymentRefundRequest" WHERE payment_id=p.id AND status IN ('pending','requires_action')) THEN
+   next_status:='refund_pending';
+  ELSIF total_success>0 THEN next_status:='refunded_partial';
+  ELSIF p.payment_status='refund_pending' THEN
+   next_status:=coalesce(restore_status,CASE WHEN p.stripe_transfer_id IS NOT NULL OR EXISTS(
+    SELECT FROM public."WalletTransaction" WHERE payment_id=p.id AND type IN ('gig_income','tip_income')) THEN 'transferred' ELSE 'captured_hold' END);
+  END IF;
+ END IF;
+ UPDATE public."Payment" SET refunded_amount=total_success,payment_status=next_status,updated_at=clock_timestamp() WHERE id=p.id RETURNING * INTO p;
+ UPDATE public."Gig" SET payment_status=p.payment_status,updated_at=clock_timestamp() WHERE id=p.gig_id AND payment_id=p.id;
+ PERFORM public.settle_payment_refund_wallet(p.id);
+ RETURN jsonb_build_object('payment',to_jsonb(p));
+END $$;
+
 -- Cancelled-task fee settlement. Mirrors settle_paid_gig_wallet_income: the same
 -- Gig->Payment lock order, cooling-off, dispute (active or lost), refund and
 -- exact-capture fences, one gig_income credit per payment ('gig_income:<id>'),
 -- one PaymentWalletSettlement and the existing payout deliveries and notices.
+-- A verified refund of the fee before settlement reduces the worker share by the
+-- same split (its refund basis); a later refund is recovered from that credit by
+-- the existing settle_payment_refund_wallet.
 CREATE FUNCTION public.settle_gig_fee_wallet_income(p_payment_id uuid,p_expected jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
 DECLARE target_gig uuid; p public."Payment"; g public."Gig"; s public."PaymentWalletSettlement"; tx public."WalletTransaction";
- fee jsonb; fee_cents integer; net integer; recipient record; event_id uuid; note_id uuid;
+ fee jsonb; fee_cents integer; net integer; recipient record; event_id uuid; note_id uuid; verified_total bigint;
 BEGIN
  SELECT gig_id INTO target_gig FROM public."Payment" WHERE id=p_payment_id;
  IF NOT FOUND THEN RETURN jsonb_build_object('error','NOT_FOUND'); END IF;
@@ -380,13 +587,15 @@ BEGIN
   OR fee_cents<=0 OR fee_cents>=p.amount_total OR (fee->>'released_cents')::integer IS DISTINCT FROM p.amount_total-fee_cents
   OR fee->>'charge_id' IS DISTINCT FROM p.stripe_charge_id THEN
   RETURN jsonb_build_object('error','CAPTURE_PROOF_REQUIRED'); END IF;
- IF p.payment_status IS DISTINCT FROM 'captured_hold' OR (p.dispute_id IS NOT NULL AND p.dispute_status IS DISTINCT FROM 'won')
+ IF p.payment_status IS NULL OR p.payment_status NOT IN ('captured_hold','refunded_partial','refunded_full')
+  OR (p.dispute_id IS NOT NULL AND p.dispute_status IS DISTINCT FROM 'won')
   OR p.stripe_transfer_id IS NOT NULL THEN RETURN jsonb_build_object('error','PAYMENT_STATE'); END IF;
  IF coalesce(p.cooling_off_ends_at,p.captured_at+interval '48 hours')>clock_timestamp() THEN RETURN jsonb_build_object('error','COOLING_OFF'); END IF;
  IF EXISTS(SELECT FROM public."PaymentRefundRequest" WHERE payment_id=p.id AND status IN ('pending','requires_action'))
   OR EXISTS(SELECT FROM public."PaymentRefundReceipt" WHERE payment_id=p.id AND status IN ('pending','requires_action')) THEN
   RETURN jsonb_build_object('error','REFUND_ACTIVE'); END IF;
- IF coalesce(p.refunded_amount,0)<>0 OR EXISTS(SELECT FROM public."PaymentRefundReceipt" WHERE payment_id=p.id AND status='succeeded') THEN
+ SELECT coalesce(sum(amount_cents),0) INTO verified_total FROM public."PaymentRefundReceipt" WHERE payment_id=p.id AND status='succeeded';
+ IF verified_total IS DISTINCT FROM coalesce(p.refunded_amount,0)::bigint OR verified_total>fee_cents THEN
   RETURN jsonb_build_object('error','REFUND_PROOF_REQUIRED'); END IF;
  SELECT * INTO g FROM public."Gig" WHERE id=p.gig_id;
  IF g.id IS NULL OR g.payment_id IS DISTINCT FROM p.id OR g.user_id IS DISTINCT FROM p.payer_id OR g.accepted_by IS DISTINCT FROM p.payee_id
@@ -396,19 +605,19 @@ BEGIN
  IF p.transfer_status='wallet_credited' OR EXISTS(SELECT FROM public."WalletTransaction" WHERE payment_id=p.id
   AND type IN ('gig_income','tip_income') AND direction='credit') THEN RETURN jsonb_build_object('error','SETTLEMENT_PROOF_REQUIRED'); END IF;
  -- The worker share of a fee uses the same proportional split as a task payment.
- net:=floor(fee_cents::numeric*p.amount_to_payee/p.amount_total);
+ net:=floor(fee_cents::numeric*p.amount_to_payee/p.amount_total)-floor(verified_total::numeric*p.amount_to_payee/p.amount_total);
  IF net>0 THEN
   tx:=public.wallet_credit_before_refund_fence(p.payee_id,net,'gig_income',
    CASE WHEN fee->>'kind'='poster_no_show' THEN 'Income from no-show fee' ELSE 'Income from cancellation fee' END,
    p.id,p.gig_id,p.payer_id,NULL,('gig_income:'||p.id)::varchar,
-   jsonb_build_object('verified_wallet_settlement',true,'refund_basis_cents',0,'gig_fee_cents',fee_cents,'gig_fee_kind',fee->>'kind'));
+   jsonb_build_object('verified_wallet_settlement',true,'refund_basis_cents',verified_total,'gig_fee_cents',fee_cents,'gig_fee_kind',fee->>'kind'));
   IF tx.payment_id IS DISTINCT FROM p.id OR tx.user_id IS DISTINCT FROM p.payee_id OR tx.counterparty_id IS DISTINCT FROM p.payer_id
    OR tx.gig_id IS DISTINCT FROM p.gig_id OR tx.amount IS DISTINCT FROM net OR tx.direction<>'credit' OR tx.type<>'gig_income'
    OR NOT EXISTS(SELECT FROM public."Wallet" WHERE id=tx.wallet_id AND user_id=p.payee_id AND lower(currency)='usd') THEN
    RAISE EXCEPTION 'Wallet settlement receipt mismatch' USING ERRCODE='40001'; END IF;
  END IF;
  INSERT INTO public."PaymentWalletSettlement"(payment_id,wallet_transaction_id,frozen_payment,amount_cents,refund_basis_cents,currency,status)
- VALUES(p.id,tx.id,public.refund_payment_snapshot(p),net,0,'usd',CASE WHEN net>0 THEN 'credited' ELSE 'no_earnings' END) RETURNING * INTO s;
+ VALUES(p.id,tx.id,public.refund_payment_snapshot(p),net,verified_total,'usd',CASE WHEN net>0 THEN 'credited' ELSE 'no_earnings' END) RETURNING * INTO s;
  IF net>0 THEN
   FOR recipient IN SELECT p.payee_id AS user_id,'payout_sent'::text AS kind
     UNION ALL SELECT p.payer_id,'payment_completed' LOOP
@@ -428,17 +637,72 @@ BEGIN
    UPDATE public."PaymentWalletDelivery" SET notification_id=note_id WHERE id=event_id;
   END LOOP;
  END IF;
- UPDATE public."Payment" SET payment_status='transferred',transfer_status=CASE WHEN net>0 THEN 'wallet_credited' ELSE transfer_status END,
+ -- Refund status and worker settlement are distinct, as for a task payment.
+ UPDATE public."Payment" SET payment_status=CASE WHEN verified_total>0 THEN payment_status ELSE 'transferred' END,
+  transfer_status=CASE WHEN net>0 THEN 'wallet_credited' ELSE transfer_status END,
   transfer_completed_at=coalesce(transfer_completed_at,clock_timestamp()),updated_at=clock_timestamp()
  WHERE id=p.id RETURNING * INTO p;
  UPDATE public."Gig" SET payment_status=p.payment_status,updated_at=clock_timestamp() WHERE id=p.gig_id AND payment_id=p.id;
  RETURN jsonb_build_object('payment',to_jsonb(p),'settlement',to_jsonb(s),'reused',false);
 END $$;
 
+-- Earnings count a charged fee's worker share (less the share of any refund of
+-- it), never the authorized task amount the fee was captured from. Signature,
+-- invoker rights and grants are unchanged.
+CREATE OR REPLACE FUNCTION public.get_user_earnings(p_user_id uuid, p_start_date timestamp with time zone DEFAULT NULL::timestamp with time zone, p_end_date timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+DECLARE
+  v_result jsonb;
+BEGIN
+  WITH scoped AS (
+    SELECT
+      payment_status,
+      GREATEST(0, CASE WHEN metadata->'gig_fee'->>'state'='captured' AND jsonb_typeof(metadata->'gig_fee'->'fee_cents')='number' AND amount_total>0
+        THEN (floor((metadata->'gig_fee'->>'fee_cents')::numeric*COALESCE(amount_to_payee, 0)/amount_total)
+          -floor(COALESCE(refunded_amount, 0)::numeric*COALESCE(amount_to_payee, 0)/amount_total))::bigint
+        ELSE COALESCE(amount_to_payee, 0) - COALESCE(refunded_amount, 0) END) AS net_amount,
+      COALESCE(is_escrowed, FALSE) AS is_escrowed,
+      escrow_released_at
+    FROM "Payment"
+    WHERE payee_id = p_user_id
+      AND (p_start_date IS NULL OR created_at >= p_start_date)
+      AND (p_end_date IS NULL OR created_at <= p_end_date)
+      AND payment_status IN (
+        'captured_hold', 'transfer_scheduled', 'transfer_pending', 'transferred',
+        'refund_pending', 'refunded_partial', 'refunded_full', 'disputed',
+        'succeeded', 'processing'
+      )
+  ),
+  earnings AS (
+    SELECT
+      COUNT(*) AS total_payments,
+      COALESCE(SUM(net_amount), 0) AS total_earned,
+      COALESCE(SUM(CASE WHEN payment_status IN ('transferred', 'succeeded') THEN net_amount ELSE 0 END), 0) AS total_paid,
+      COALESCE(SUM(CASE WHEN is_escrowed = TRUE AND escrow_released_at IS NULL THEN net_amount ELSE 0 END), 0) AS total_escrowed,
+      COALESCE(SUM(CASE WHEN ((is_escrowed = FALSE) OR escrow_released_at IS NOT NULL OR payment_status IN ('transferred', 'succeeded')) THEN net_amount ELSE 0 END), 0) AS total_available
+    FROM scoped
+  )
+  SELECT jsonb_build_object(
+    'totalPayments', total_payments,
+    'totalEarned', total_earned,
+    'totalPaid', total_paid,
+    'totalEscrowed', total_escrowed,
+    'totalAvailable', total_available,
+    'currency', 'USD'
+  ) INTO v_result
+  FROM earnings;
+
+  RETURN v_result;
+END;
+$$;
+
 DO $$ DECLARE f record; BEGIN
  FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'
  AND p.proname IN ('gig_fee_capture_proof','prepare_gig_fee_capture','record_gig_fee_capture','settle_gig_fee_wallet_income',
-  'read_gig_stop_preview','record_gig_stop_evidence','materialize_gig_stop_notices','finish_gig_stop','reserve_payment_refund') LOOP
+  'read_gig_stop_preview','record_gig_stop_evidence','materialize_gig_stop_notices','finish_gig_stop','reserve_payment_refund',
+  'guard_gig_fee_gig','payment_captured_amount','reserve_payment_refund_before_stop_fence','record_payment_refund_receipts_before_stop_fence') LOOP
   EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,anon,authenticated',f.signature);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role',f.signature);
  END LOOP;

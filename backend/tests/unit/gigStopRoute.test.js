@@ -1,4 +1,5 @@
-jest.mock('../../services/gigStopService', () => ({ preview: jest.fn(), readRequest: jest.fn(), execute: jest.fn() }));
+jest.mock('../../services/gigStopService', () => ({ preview: jest.fn(), readRequest: jest.fn(), execute: jest.fn(),
+  notifyPosterNoShow: jest.fn(() => Promise.resolve(null)) }));
 jest.mock('../__mocks__/verifyToken', () => {
   const verify = (req, res, next) => { req.user = { id: req.headers['x-test-user-id'] }; req.session = { id: req.headers['x-test-session'] || 'session' }; next(); };
   verify.requireAdmin = (req, res, next) => next(); return verify;
@@ -106,6 +107,10 @@ describe('no-show report admission matches the existing timing preview', () => {
     ['no assigned worker', payer, { accepted_by: null, scheduled_start: new Date(now - 60 * 60_000).toISOString() }],
     ['same person on both sides', payer, { accepted_by: payer, scheduled_start: new Date(now - 60 * 60_000).toISOString() }],
     ['recorded start with stale assigned status', payer, { started_at: new Date(now - 60_000).toISOString(), scheduled_start: new Date(now - 60 * 60_000).toISOString() }],
+    // A poster no-show also needs the agreed start plus the poster report's 30-minute buffer to pass.
+    ['worker beyond 24 hours before the scheduled start', worker, { accepted_at: new Date(now - 24 * 60 * 60_000 - 1).toISOString() }],
+    ['worker beyond 24 hours exactly at the start buffer', worker, { accepted_at: new Date(now - 24 * 60 * 60_000 - 1).toISOString(), scheduled_start: new Date(now - 30 * 60_000).toISOString() }],
+    ['worker beyond 24 hours with an invalid scheduled start', worker, { accepted_at: new Date(now - 24 * 60 * 60_000 - 1).toISOString(), scheduled_start: 'invalid' }],
   ])('%s cannot bypass the read-only eligibility check', async (_, actor, changes) => {
     seedTable('Gig', [{ ...base, ...changes }]);
     const preview = await request(app).get(`/gigs/${gig}/no-show-check`).set('x-test-user-id', actor);
@@ -119,7 +124,8 @@ describe('no-show report admission matches the existing timing preview', () => {
   test.each([
     ['poster beyond the scheduled buffer', payer, { scheduled_start: new Date(now - 30 * 60_000 - 1).toISOString() }],
     ['poster beyond the unscheduled acceptance buffer', payer, { scheduled_start: null, accepted_at: new Date(now - 150 * 60_000 - 1).toISOString() }],
-    ['worker beyond 24 hours', worker, { accepted_at: new Date(now - 24 * 60 * 60_000 - 1).toISOString() }],
+    ['worker beyond 24 hours and the scheduled start buffer', worker, { accepted_at: new Date(now - 24 * 60 * 60_000 - 1).toISOString(), scheduled_start: new Date(now - 30 * 60_000 - 1).toISOString() }],
+    ['worker beyond 24 hours without a scheduled start', worker, { accepted_at: new Date(now - 24 * 60 * 60_000 - 1).toISOString(), scheduled_start: null }],
   ])('%s retains the existing eligible path', async (_, actor, changes) => {
     seedTable('Gig', [{ ...base, ...changes }]);
     const preview = await request(app).get(`/gigs/${gig}/no-show-check`).set('x-test-user-id', actor);
@@ -129,6 +135,43 @@ describe('no-show report admission matches the existing timing preview', () => {
     expect(getTable('GigIncident')).toHaveLength(1);
     expect(getTable('GigIncident')[0]).toMatchObject({ gig_id: gig, reported_by: actor, reported_against: actor === payer ? worker : payer });
     expect(getTable('Gig')[0].status).toBe('cancelled');
+  });
+
+  test('the poster cannot cancel a task while the worker no-show fee is being captured', async () => {
+    seedTable('Gig', [{ ...base, payment_id: 'fee-payment', scheduled_start: new Date(now - 60 * 60_000).toISOString() }]);
+    seedTable('Payment', [{ id: 'fee-payment', gig_id: gig, payment_status: 'capture_pending',
+      metadata: { gig_fee: { kind: 'poster_no_show', state: 'pending' } } }]);
+    const result = await request(app).post(`/gigs/${gig}/report-no-show`).set('x-test-user-id', payer).send({});
+    expect(result.status).toBe(409); expect(result.body.code).toBe('NO_SHOW_REPORT_ACTIVE');
+    expect(getTable('GigIncident')).toHaveLength(0); expect(getTable('Gig')[0].status).toBe('assigned');
+  });
+
+  test('a retry after a failed cancellation applies the reliability rule exactly once', async () => {
+    const supabaseAdmin = require('../__mocks__/supabaseAdmin');
+    seedTable('Gig', [{ ...base, accepted_at: new Date(now - 24 * 60 * 60_000 - 1).toISOString(), scheduled_start: null }]);
+    seedTable('User', [{ id: payer, no_show_count: 0, late_cancel_count: 0, reliability_score: 100 }, { id: worker, name: 'Synthetic worker' }]);
+    const realFrom = supabaseAdmin.from; let failNextCancel = true;
+    const spy = jest.spyOn(supabaseAdmin, 'from').mockImplementation(table => {
+      const builder = realFrom(table);
+      if (table === 'Gig' && failNextCancel) {
+        builder.update = () => {
+          failNextCancel = false;
+          const lost = { eq: () => lost, select: () => lost, maybeSingle: () => lost,
+            then: (resolve, reject) => Promise.resolve({ data: null, error: { code: '08006', message: 'Synthetic lost connection' } }).then(resolve, reject) };
+          return lost;
+        };
+      }
+      return builder;
+    });
+    try {
+      const first = await request(app).post(`/gigs/${gig}/report-no-show`).set('x-test-user-id', worker).send({ description: 'Synthetic report' });
+      expect(first.status).toBe(500); expect(getTable('GigIncident')).toHaveLength(1);
+      expect(getTable('Gig')[0].status).toBe('assigned');
+      const retry = await request(app).post(`/gigs/${gig}/report-no-show`).set('x-test-user-id', worker).send({ description: 'Synthetic report' });
+      expect(retry.status).toBe(200); expect(getTable('Gig')[0].status).toBe('cancelled');
+      expect(getTable('GigIncident')).toHaveLength(1);
+      expect(getTable('User').find(u => u.id === payer)).toMatchObject({ no_show_count: 1, reliability_score: 85 });
+    } finally { spy.mockRestore(); }
   });
 
   test('an unrelated actor stays outside the reporting boundary', async () => {

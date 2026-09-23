@@ -36,9 +36,13 @@ async function readProjection(payment) {
   }
   if (settlement) {
     const basis = settlement.refund_basis_cents;
+    // A fee settlement credits the worker share of the fee less the share of any
+    // part of the fee refunded before settlement (its refund basis).
     const feeCents = capturedFeeCents(payment);
-    const expected = feeCents !== null ? (basis === 0 ? feeWorkerShare(payment, feeCents) : -1)
-      : payment.amount_to_payee - Number(BigInt(basis) * BigInt(payment.amount_to_payee) / BigInt(payment.amount_total));
+    const basisShare = Number.isSafeInteger(basis) && basis >= 0
+      ? Number(BigInt(basis) * BigInt(payment.amount_to_payee) / BigInt(payment.amount_total)) : NaN;
+    const expected = feeCents !== null ? (basis <= feeCents ? feeWorkerShare(payment, feeCents) - basisShare : -1)
+      : payment.amount_to_payee - basisShare;
     if (!isDeepStrictEqual(settlement.frozen_payment, snapshot(payment)) || !Number.isSafeInteger(basis) || basis < 0 || basis > refunds
       || settlement.amount_cents !== expected
       || settlement.currency !== 'usd' || payment.stripe_transfer_id) return unknown;
