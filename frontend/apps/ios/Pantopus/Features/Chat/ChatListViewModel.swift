@@ -74,9 +74,17 @@ public final class ChatListViewModel {
 
     // MARK: - Public API
 
-    /// First-time load — no-op when we already have content.
+    /// First load, and every return to the list. `teardown()` cancels the
+    /// live subscriptions whenever the list is covered (opening a
+    /// conversation pushes over it), so a return re-subscribes and merges
+    /// in what changed meanwhile: the conversation just read, and messages
+    /// that arrived while it was open.
     public func load() async {
-        if case .loaded = state { return }
+        if case .loaded = state {
+            subscribeToSockets()
+            await fetch()
+            return
+        }
         await fetch()
         subscribeToSockets()
     }
