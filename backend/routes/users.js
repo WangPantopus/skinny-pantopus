@@ -4744,6 +4744,18 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       });
     }
 
+    // Settled payment history cannot be removed yet: every gig payment is still
+    // referenced by its task and settlement records, so the deletes below fail
+    // part-way, after erasing refunds, the wallet ledger and payouts and after
+    // signing the user out everywhere. Refuse before anything changes.
+    if ((userPaymentStates || []).length > 0) {
+      return res.status(409).json({
+        error: "Your account has payment history, so it can't be deleted in the app yet. Contact support to close it.",
+        code: 'PAYMENT_HISTORY_RETAINED',
+        paymentCount: userPaymentStates.length,
+      });
+    }
+
     // LIF-02: block deletion while this user is the owner of a home that other
     // people still live in. Home.owner_id now SET NULLs rather than cascading
     // (migration 188), so the home itself survives — but a household left with

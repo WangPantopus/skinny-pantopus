@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import * as api from '@pantopus/api';
 import type { Persona, HubHome, HubBusiness } from './types';
 
 const ACTIVE_HOME_KEY = 'pantopus_active_home_id';
@@ -35,8 +34,9 @@ function persistPersona(p: Persona) {
 }
 
 /**
- * Manages active home / persona state with localStorage persistence
- * and server sync via hub context API.
+ * Manages active home / persona state with localStorage persistence.
+ * The server derives its context from the primary home and stores no choice,
+ * so a switch is kept in this browser only.
  * Call `init()` once with server-provided data to reconcile stored vs server state.
  */
 export function useHubContext() {
@@ -77,16 +77,12 @@ export function useHubContext() {
     setActiveHomeId(homeId);
     persistHomeId(homeId);
     setHomePickerOpen(false);
-    // Sync to server (fire-and-forget)
-    api.hub.updateHubContext({ activeHomeId: homeId }).catch(() => {});
   }, []);
 
   const switchPersona = useCallback((p: Persona) => {
     setActivePersona(p);
     persistPersona(p);
     setPersonaPickerOpen(false);
-    // Sync to server (fire-and-forget)
-    api.hub.updateHubContext({ activePersona: p }).catch(() => {});
   }, []);
 
   return {

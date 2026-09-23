@@ -29,7 +29,7 @@ const placeIntelligenceRoutes = require('../routes/placeIntelligence');
 
 const USER = 'place-user-1';
 const OTHER = 'place-user-2';
-const HOME_ID = 'home-place-1';
+const HOME_ID = '7d0b1c2e-5a4f-4c3b-9e21-0f6a8b9c1d01'; // a Home id is a UUID; the route 400s anything else
 const LAT = 45.51;
 const LNG = -122.65;
 const GEOHASH = encodeGeohash(LAT, LNG, 6);
