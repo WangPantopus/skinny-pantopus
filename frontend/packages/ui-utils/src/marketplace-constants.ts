@@ -67,7 +67,6 @@ export const FILTER_PILLS = [
   { key: 'free', label: 'Free' },
   { key: 'wanted', label: 'Wanted' },
   { key: 'nearby', label: '< 1 mi' },
-  { key: 'trusted', label: 'Verified' },
   { key: 'new_today', label: 'New Today' },
   { key: 'remote', label: 'Remote' },
   { key: 'price_0_25', label: 'Under $25' },

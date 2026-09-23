@@ -1228,6 +1228,9 @@ struct GigPaymentCard: View {
 struct GigChangesCard: View {
     let orders: [GigChangeOrderDTO]
     let inFlightOrderId: String?
+    /// Set when price changes can't be approved on this task: a pending price order shows this
+    /// sentence instead of Approve (Reject stays).
+    var priceChangeUnavailableReason: String?
     /// `true` when the signed-in viewer proposed the order (→ Withdraw);
     /// otherwise the viewer is the counterparty (→ Approve / Reject).
     let isOwnOrder: @MainActor (GigChangeOrderDTO) -> Bool
@@ -1246,7 +1249,7 @@ struct GigChangesCard: View {
                 Spacer()
             }
             if orders.isEmpty {
-                Text("No changes proposed yet. Need a different price or more time? Propose it here.")
+                Text("No changes proposed yet. Need more time or a change in scope? Propose it here.")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.Color.appTextSecondary)
             } else {
@@ -1306,6 +1309,21 @@ struct GigChangesCard: View {
     }
 
     private func pendingActions(_ order: GigChangeOrderDTO, inFlight: Bool) -> some View {
+        let approveUnavailableReason = (order.amountChange ?? 0) != 0 ? priceChangeUnavailableReason : nil
+        return VStack(alignment: .leading, spacing: Spacing.s2) {
+            if !isOwnOrder(order), let approveUnavailableReason {
+                Text(approveUnavailableReason)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .accessibilityIdentifier("gigDetail.change_\(order.id).approveUnavailable")
+            }
+            pendingButtons(order, approveUnavailable: approveUnavailableReason != nil)
+        }
+        .disabled(inFlight)
+        .opacity(inFlight ? 0.6 : 1)
+    }
+
+    private func pendingButtons(_ order: GigChangeOrderDTO, approveUnavailable: Bool) -> some View {
         HStack(spacing: Spacing.s2) {
             if isOwnOrder(order) {
                 rowButton(
@@ -1315,12 +1333,14 @@ struct GigChangesCard: View {
                     identifier: "gigDetail.change_\(order.id).withdraw"
                 ) { onWithdraw(order) }
             } else {
-                rowButton(
-                    "Approve",
-                    icon: .check,
-                    style: .primary,
-                    identifier: "gigDetail.change_\(order.id).approve"
-                ) { onApprove(order) }
+                if !approveUnavailable {
+                    rowButton(
+                        "Approve",
+                        icon: .check,
+                        style: .primary,
+                        identifier: "gigDetail.change_\(order.id).approve"
+                    ) { onApprove(order) }
+                }
                 rowButton(
                     "Reject",
                     icon: .x,
@@ -1329,8 +1349,6 @@ struct GigChangesCard: View {
                 ) { onReject(order) }
             }
         }
-        .disabled(inFlight)
-        .opacity(inFlight ? 0.6 : 1)
     }
 
     private var proposeButton: some View {
@@ -1439,11 +1457,15 @@ struct GigChangesCard: View {
 /// Propose-a-change sheet: type chips, description, signed dollar delta,
 /// optional extra minutes → `POST /:gigId/change-orders`.
 struct GigChangeOrderSheet: View {
-    /// False while the task's payment hold is live: the server refuses price changes, so the
-    /// sheet leaves out the two price types and the amount field and says why in their place.
-    let priceChangesAvailable: Bool
+    /// Set when the server refuses price changes on this task: the sheet leaves out the two price
+    /// types and the amount field and shows this sentence in their place.
+    let priceChangeUnavailableReason: String?
     let onSubmit: @MainActor (GigChangeOrderType, String, Double?, Int?) async -> String?
     let onDismiss: @MainActor () -> Void
+
+    private var priceChangesAvailable: Bool {
+        priceChangeUnavailableReason == nil
+    }
 
     @State private var type: GigChangeOrderType
     @State private var descriptionText = ""
@@ -1456,14 +1478,14 @@ struct GigChangeOrderSheet: View {
     private let typeColumns = [GridItem(.flexible()), GridItem(.flexible())]
 
     init(
-        priceChangesAvailable: Bool = true,
+        priceChangeUnavailableReason: String? = nil,
         onSubmit: @escaping @MainActor (GigChangeOrderType, String, Double?, Int?) async -> String?,
         onDismiss: @escaping @MainActor () -> Void
     ) {
-        self.priceChangesAvailable = priceChangesAvailable
+        self.priceChangeUnavailableReason = priceChangeUnavailableReason
         self.onSubmit = onSubmit
         self.onDismiss = onDismiss
-        _type = State(initialValue: priceChangesAvailable ? .priceIncrease : .scopeAddition)
+        _type = State(initialValue: priceChangeUnavailableReason == nil ? .priceIncrease : .scopeAddition)
     }
 
     private var offeredTypes: [GigChangeOrderType] {
@@ -1482,8 +1504,8 @@ struct GigChangeOrderSheet: View {
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
-                if !priceChangesAvailable {
-                    Text("Price changes aren't available once a task has a payment hold.")
+                if let priceChangeUnavailableReason {
+                    Text(priceChangeUnavailableReason)
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .accessibilityIdentifier("gigDetail.changeSheet.priceUnavailable")
