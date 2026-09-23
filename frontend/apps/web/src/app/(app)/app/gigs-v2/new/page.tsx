@@ -323,6 +323,7 @@ function QuickComposerContent() {
           homeId: selectedLocation.homeId,
           place_id: selectedLocation.place_id,
         } : undefined,
+        ...(showRemote ? { task_format: 'remote' as const } : {}),
         source_flow: 'magic',
         engagement_mode: finalEngagement as any,
         ai_confidence: draftResponse.confidence,
