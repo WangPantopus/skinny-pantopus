@@ -30,6 +30,9 @@ import javax.inject.Inject
 /** Key used to persist the dismissal flag for the amber setup banner. */
 private const val BANNER_DISMISSED_KEY = "hub.setupBanner.dismissed"
 
+/** Setup steps the "Verify your address" banner stands for (the claim and verify steps). */
+private val ADDRESS_SETUP_STEPS = setOf("home", "verify")
+
 /** ViewModel backing the hub screen. */
 @HiltViewModel
 class HubViewModel
@@ -232,7 +235,11 @@ class HubViewModel
             }
 
             val bannerDismissed = prefs.getBoolean(BANNER_DISMISSED_KEY, false)
-            val setupBanner = if (!hub.setup.allDone && !bannerDismissed) SetupBannerContent() else null
+            // The banner asks the user to verify their address, so only an
+            // unfinished claim/verify step shows it. Profile steps alone must not
+            // tell an already-verified resident to verify.
+            val addressStepPending = hub.setup.steps.any { it.key in ADDRESS_SETUP_STEPS && !it.done }
+            val setupBanner = if (addressStepPending && !bannerDismissed) SetupBannerContent() else null
 
             val primaryHome = hub.homes.firstOrNull { it.isPrimary } ?: hub.homes.firstOrNull()
             densityHomeId = primaryHome?.id
