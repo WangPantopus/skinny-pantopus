@@ -1679,7 +1679,9 @@ async function executeOwnershipTransfer(homeId, meta, actorUserId) {
         type: 'ownership_transfer_received',
         title: 'Ownership transfer initiated',
         body: 'You have been designated as the new owner. Please verify ownership to complete the transfer.',
-        link: `/homes/${homeId}/ownership`,
+        // The buyer verifies ownership on the claim's evidence page (the web has
+        // no /ownership page).
+        link: claimId ? `/homes/${homeId}/claim-owner/evidence?claimId=${claimId}` : `/homes/${homeId}/owners`,
         metadata: { home_id: homeId, claim_id: claimId },
       });
     } catch (notifErr) {

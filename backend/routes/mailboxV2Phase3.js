@@ -169,6 +169,20 @@ function warrantyStatus(expiresAt) {
   return 'active';
 }
 
+// HomeAsset stores brand, model, purchase_date and warranty_expires_at. The
+// records responses have always named them manufacturer, model_number,
+// purchased_at and warranty_expires; those keys read columns that don't exist,
+// so they were always empty and the warranty always "none".
+function assetRecordFields(asset) {
+  return {
+    manufacturer: asset.brand,
+    model_number: asset.model,
+    purchased_at: asset.purchase_date,
+    warranty_expires: asset.warranty_expires_at,
+    warranty_status: warrantyStatus(asset.warranty_expires_at),
+  };
+}
+
 // ====================================================================
 //                      RECORDS ENDPOINTS
 // ====================================================================
@@ -205,6 +219,21 @@ router.get('/records/assets', verifyToken, async (req, res) => {
       });
     }
 
+    // The assets' photos (AssetPhoto), newest first; cards show the first.
+    const photosByAsset = {};
+    if (assetIds.length) {
+      const { data: photos, error: photoError } = await supabaseAdmin
+        .from('AssetPhoto')
+        .select('id, asset_id, url, caption, taken_at')
+        .in('asset_id', assetIds)
+        .order('taken_at', { ascending: false });
+      if (photoError) throw photoError;
+      (photos || []).forEach((p) => {
+        (photosByAsset[p.asset_id] = photosByAsset[p.asset_id] || [])
+          .push({ id: p.id, url: p.url, caption: p.caption, taken_at: p.taken_at });
+      });
+    }
+
     const rooms = [...new Set((assets || []).map(a => a.room).filter(Boolean))];
 
     const enriched = (assets || []).map(a => ({
@@ -212,14 +241,11 @@ router.get('/records/assets', verifyToken, async (req, res) => {
       name: a.name,
       category: a.category || 'other',
       room: a.room,
-      manufacturer: a.manufacturer,
-      model_number: a.model_number,
-      purchased_at: a.purchased_at,
-      warranty_expires: a.warranty_expires,
-      warranty_status: warrantyStatus(a.warranty_expires),
+      ...assetRecordFields(a),
       linked_mail_count: linkCounts[a.id] || 0,
       linked_gig_count: gigCounts[a.id] || 0,
-      photo_url: a.photo_url,
+      photo_url: photosByAsset[a.id]?.[0]?.url || null,
+      photos: photosByAsset[a.id] || [],
     }));
 
     logMailEvent(userId, 'records_viewed', null, { homeIds });
@@ -280,7 +306,7 @@ router.get('/records/asset/:id/mail', verifyToken, async (req, res) => {
 
     const enrichedAsset = {
       ...asset,
-      warranty_status: warrantyStatus(asset.warranty_expires),
+      ...assetRecordFields(asset),
       linked_mail_count: mail.length,
       linked_gig_count: 0,
     };
