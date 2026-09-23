@@ -5354,14 +5354,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     ManageTrainScreen(
                         onBack = { navController.popBackStack() },
-                        onOpenAnalytics = { id ->
-                            navController.navigate(ChildRoutes.placeholder("Train analytics · $id"))
-                        },
-                        onEditDates = { id ->
-                            navController.navigate(ChildRoutes.placeholder("Edit dates · $id"))
-                        },
-                        onInviteHelpers = { id ->
-                            navController.navigate(ChildRoutes.placeholder("Invite helpers · $id"))
+                        // Invite shares the train, as the detail's Share does.
+                        // Analytics and Edit dates have no backend / native
+                        // editor yet, so they aren't wired and their rows are
+                        // hidden.
+                        onInviteHelpers = {
+                            appContext.shareText(
+                                "Join my support train on Pantopus — ${InviteLinks.DOWNLOAD_URL}",
+                                "Share train",
+                            )
                         },
                     )
                 }

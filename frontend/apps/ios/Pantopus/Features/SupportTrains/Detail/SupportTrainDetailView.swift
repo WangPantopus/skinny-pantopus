@@ -87,7 +87,7 @@ public struct SupportTrainDetailView: View {
             Text("Leave \(row.title) on \(row.dayLabel) \(row.dateLabel)? This reopens the date for someone else.")
         }
         .alert(
-            "Something went wrong",
+            viewModel.actionErrorTitle,
             isPresented: Binding(
                 get: { viewModel.actionError != nil },
                 set: { if !$0 { viewModel.acknowledgeActionError() } }
