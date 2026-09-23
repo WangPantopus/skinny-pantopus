@@ -5,7 +5,49 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 06:52 UTC (coordinator session `92cc4526`)
+## CURRENT RESUME POINT — September 23, 2026, 07:21 UTC (coordinator session `92cc4526`)
+
+This updates the 06:52 block below; read both. The count is **10 closed / 70 partial**.
+
+### Fee PRs #253/#254 are back in DRAFT; they are not safe to merge
+A read-only coordinator review of #253 found must-fix defects. The full list is in
+`/private/tmp/pantopus-tools/fee-review-253-2026-09-23.md`.
+1. A worker-no-show report or Start Work that runs during the fee capture leaves a captured fee unrecorded, with the
+   payment stuck in `capture_pending`.
+2. Fee refunds can't be reconciled, and the worker share still settles after a refund.
+3. A worker could charge the no-show fee before the scheduled start, although the existing UI copy says "only after
+   the agreed start time".
+4. A stalled reservation has no recovery path.
+5. History and pending earnings show the full task amount.
+6. Sub-50¢ partial captures are unverified.
+7. Settlement routes on the mere presence of `metadata.gig_fee`.
+8. Several low items.
+
+Both PRs were taken off the queue and marked draft. A dedicated fee-repair agent owns them now: disposable project
+64571/64572, ports 18134/18135, iOS sim C2BCF36A. It reproduces each finding, repairs it, re-verifies with Stripe
+TEST, and writes bundle `…-poster-fault-fee-r2`.
+
+### Other changes since 06:52
+- **#256 (new): web transport errors show plain copy.**
+  - Reproduced on `/login`: "Request failed with status code 500" when the API was down, and "Network error: cannot
+    reach API at /api/users/login" when offline.
+  - Both now show the app's existing plain copy.
+  - Bundle `20260923-coord-web-transport-error-copy-r1`, MANIFEST `d16e9c0f…`.
+  - CI OK. Queued before the fee PRs were pulled.
+- **Queue:** 218 231 221 236 219 213 214 215 224 199 208 251 252 255 256. #218's Android CI is running.
+- **Stream 1: Android gig-detail sheet failures are invisible.** The toast is drawn under the sheet's scrim, in the
+  success colour, for 2.5 s. Seven lifecycle sheets are affected; confirmed on emulator-5558 in bundle
+  `20260923-stream1-sheet-error-feedback-r1`.
+  - **Approved functional repair:** an inline error that reuses EditBidSheet's treatment, plus an in-flight guard. The
+    idle state must stay pixel-identical.
+  - **New defect:** a double tap on "Send request" created two identical pending change orders. It is being
+    reproduced end to end (approve both, check the price delta); a server guard comes first.
+- **Founder question (presentation):**
+  - Colour `isError` toasts red and draw them above sheets (iOS and web already do both).
+  - Copy: "Server error 503. Please try again." → "Something went wrong on our side. Please try again."
+  - Copy: "No grounds for no-show report" → "The worker has already started, so this can't be reported as a no-show."
+
+## Resume point history — September 23, 2026, 06:52 UTC (coordinator session `92cc4526`)
 
 The count is now **10 closed / 70 partial**: P03 closed, because #241 (its last recorded iOS observation) merged after
 its installed-simulator verification. The row text in `REMAINING_WORK_2026-09-11.md` carries the evidence.
