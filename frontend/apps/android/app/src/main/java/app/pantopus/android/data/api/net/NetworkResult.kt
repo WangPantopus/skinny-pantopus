@@ -38,6 +38,9 @@ sealed class NetworkError(
     open class Forbidden(
         val body: String? = null,
     ) : NetworkError(403, readableForbiddenMessage(body) ?: FORBIDDEN_FALLBACK) {
+        /** The server's readable sentence for the refusal, or null when the body had none. */
+        val reason: String? get() = readableForbiddenMessage(body)
+
         override fun equals(other: Any?): Boolean = other is Forbidden
 
         override fun hashCode(): Int = 403

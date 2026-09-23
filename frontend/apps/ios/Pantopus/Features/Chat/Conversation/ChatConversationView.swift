@@ -3024,6 +3024,9 @@ private struct ChatBubbleRow: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("chatRetry_\(content.id)")
+                    case .refused:
+                        Icon(.alertCircle, size: 11, color: Theme.Color.error)
+                            .accessibilityIdentifier("chatNotSent_\(content.id)")
                     case .none:
                         EmptyView()
                     }
@@ -3041,6 +3044,7 @@ private struct ChatBubbleRow: View {
         case .delivered: raw
         case .sending: "Sending..."
         case .failed: "Failed to send"
+        case .refused: "Not sent"
         case .none: raw
         }
     }
