@@ -7,7 +7,7 @@ import { useMutation } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { ChatRoomWithDetails, ChatMessage } from '@pantopus/types';
 import { getInitials } from '@pantopus/ui-utils';
-import { useChatMessages, getDateKey, formatDateLabel, extractAttachments } from '../../hooks/useChatMessages';
+import { useChatMessages, getDateKey, formatDateLabel, extractAttachments, shareFailureMessage } from '../../hooks/useChatMessages';
 import { useSocketEvent } from '../../hooks/useSocket';
 import ChatMessageList from './ChatMessageList';
 import ChatInput from './ChatInput';
@@ -183,7 +183,8 @@ export default function ChatRoomView({
     onSuccess: async () => {
       if (!chat.connected) await chat.refresh();
     },
-    onError: () => {},
+    // Say why instead of closing the picker with nothing sent.
+    onError: (err: unknown) => chat.setError(shareFailureMessage(err)),
   });
 
   const handleGigSelected = useCallback((gig: { id: string; title: string; category: string | null; price: number | null; status: string }) => {
@@ -204,7 +205,7 @@ export default function ChatRoomView({
     onSuccess: async () => {
       if (!chat.connected) await chat.refresh();
     },
-    onError: () => {},
+    onError: (err: unknown) => chat.setError(shareFailureMessage(err)),
   });
 
   const handleListingSelected = useCallback((listing: { id: string; title: string; category: string | null; price: number | null; condition: string | null; status: string; imageUrl: string | null; isFree: boolean }) => {
