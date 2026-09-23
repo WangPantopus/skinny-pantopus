@@ -1937,9 +1937,9 @@ router.get('/autocomplete', async (req, res) => {
       return res.json(cached.data);
     }
 
-    // Query distinct titles
+    // Query distinct titles (open gigs only; titles only, like the public list)
     const { data: titleRows } = await supabaseAdmin
-      .from('gigs')
+      .from('Gig')
       .select('title')
       .eq('status', 'open')
       .ilike('title', `%${q}%`)
