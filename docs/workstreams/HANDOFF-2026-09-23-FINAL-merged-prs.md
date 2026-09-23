@@ -1,13 +1,19 @@
 # Appendix: every PR merged on 2026-09-23 (generated from GitHub)
 
-## Live additions — checked 2026-09-23T22:12:47Z
+## Live additions — checked 2026-09-23T23:50:35Z
 
-The187-row table below is the original handoff snapshot on master1a15514cc. These later merges are also done; check both sections before starting a repair. Current master is `61c64f9c1778b9b11fda12dd0cfa4762fff3bef0`. Event times are GitHub-reported; merge SHAs are verified in Git.
+The187-row table below is the original handoff snapshot on master1a15514cc. These later merges are also done; check both sections before starting a repair. Current master is `b8815ad5095c0e848d1f3f45f36f1195aacdc8e3`. Event times are GitHub-reported; merge SHAs are verified in Git.
 
 | PR | Merged (UTC) | Merge commit | Branch | Title |
 |---|---|---|---|---|
 | [#389](https://github.com/WangPantopus/skinny-pantopus/pull/389) | 21:09:55 | `cef95ab67864ccca3ca243cc0d936a87d342cc8f` | `claude/stream1-api-offer-error-copy` | fix(api): offer and completion routes stop echoing raw database errors |
 | [#391](https://github.com/WangPantopus/skinny-pantopus/pull/391) | 21:47:44 | `61c64f9c1778b9b11fda12dd0cfa4762fff3bef0` | `claude/docs-handoff-2026-09-23` | docs: session handoff and backlog status for 2026-09-23 |
+
+| [#394](https://github.com/WangPantopus/skinny-pantopus/pull/394) | 23:42:23 | `b8815ad5095c0e848d1f3f45f36f1195aacdc8e3` | `claude/coord-merge-batch-4` | Combined reviewed batch: #356, #388, #325, #392 |
+| [#356](https://github.com/WangPantopus/skinny-pantopus/pull/356) | 23:42:25 | `29e064edc3b70cc06acd72d568211b1e32ac6218` | via batch4 #394 | Native error copy (C-15) |
+| [#388](https://github.com/WangPantopus/skinny-pantopus/pull/388) | 23:42:25 | `0d2e9848f3c0212d8da1d4a2c371df3758f22a54` | via batch4 #394 | Native mail trust chips |
+| [#325](https://github.com/WangPantopus/skinny-pantopus/pull/325) | 23:42:25 | `cc3d41f5b14f4ca2cb6cbe56db263462246409a9` | via batch4 #394 | Native mail-task conflict handling and vacation dates |
+| [#392](https://github.com/WangPantopus/skinny-pantopus/pull/392) | 23:42:25 | `68b31f2e984f16d456fa5f444fdda666618c946e` | via batch4 #394 | Native business-profile location decode |
 
 ## Preserved original snapshot
 
