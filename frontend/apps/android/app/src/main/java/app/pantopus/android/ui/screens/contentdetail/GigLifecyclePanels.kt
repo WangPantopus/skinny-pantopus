@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -354,6 +356,23 @@ private fun GigOwnerBidsPanel(
 }
 
 @Composable
+private fun BestMatchPill(bidId: String?) {
+    Text(
+        text = "BEST MATCH",
+        fontSize = 9.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 0.5.sp,
+        color = PantopusColors.primary700,
+        modifier =
+            Modifier
+                .clip(CircleShape)
+                .background(PantopusColors.primary50)
+                .padding(horizontal = Spacing.s2, vertical = 2.dp)
+                .testTag("gigDetail.bid_$bidId.bestMatch"),
+    )
+}
+
+@Composable
 private fun GigOwnerBidRow(
     bid: GigBidDto,
     busy: Boolean,
@@ -368,6 +387,8 @@ private fun GigOwnerBidRow(
     val rejected = bid.status?.lowercase() in listOf("rejected", "declined", "withdrawn")
     val countered = bid.hasPendingCounter
     val amount = bid.bidAmount ?: bid.amount ?: 0.0
+    // With large text the pill moves under the name instead of squeezing it.
+    val largeText = LocalDensity.current.fontScale >= LARGE_TEXT_SCALE
     Column(
         modifier =
             Modifier
@@ -399,6 +420,7 @@ private fun GigOwnerBidRow(
                         )
                     }
                 }
+                if (largeText && ranking?.isRecommended == true) BestMatchPill(bid.id)
                 relativeAgeLabel(bid.createdAt)?.let { age ->
                     Text(text = age, fontSize = 11.sp, color = PantopusColors.appTextMuted)
                 }
@@ -413,21 +435,7 @@ private fun GigOwnerBidRow(
                     )
                 }
             }
-            if (ranking?.isRecommended == true) {
-                Text(
-                    text = "BEST MATCH",
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp,
-                    color = PantopusColors.primary700,
-                    modifier =
-                        Modifier
-                            .clip(CircleShape)
-                            .background(PantopusColors.primary50)
-                            .padding(horizontal = Spacing.s2, vertical = 2.dp)
-                            .testTag("gigDetail.bid_${bid.id}.bestMatch"),
-                )
-            }
+            if (!largeText && ranking?.isRecommended == true) BestMatchPill(bid.id)
             Text(
                 text = formatBidAmount(amount),
                 fontSize = 16.sp,
@@ -611,14 +619,14 @@ fun GigCounterSheetContent(
                 text = "Send a counter-offer",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = PantopusColors.appText,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text =
                     "Their bid is ${formatBidAmount(bid.bidAmount ?: bid.amount ?: 0.0)}. " +
                         "Propose your price — they can accept or decline.",
                 fontSize = 13.sp,
-                color = PantopusColors.appTextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Row(
@@ -714,12 +722,12 @@ private fun GigRejectConfirmContent(
             text = "Reject this bid?",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = "$name will be notified that their bid wasn't selected. This can't be undone.",
             fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             SheetGhostButton(label = "Keep bid", modifier = Modifier.weight(1f), onClick = onCancel)
@@ -885,8 +893,15 @@ private fun GigActiveTaskPanel(
 
 private val PHASE_LABELS = listOf("Assigned", "In progress", "Marked done", "Confirmed")
 
+/** At this text scale and above, labels no longer fit a quarter of the row. */
+private const val LARGE_TEXT_SCALE = 1.3f
+
 @Composable
 private fun GigPhaseStrip(activeIndex: Int) {
+    if (LocalDensity.current.fontScale >= LARGE_TEXT_SCALE) {
+        GigPhaseList(activeIndex)
+        return
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -932,6 +947,41 @@ private fun GigPhaseStrip(activeIndex: Int) {
                             .background(
                                 if (index < activeIndex) PantopusColors.primary600 else PantopusColors.appBorder,
                             ),
+                )
+            }
+        }
+    }
+}
+
+/** Large-text form of [GigPhaseStrip]: one phase per line, so labels never break mid-word. */
+@Composable
+private fun GigPhaseList(activeIndex: Int) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        PHASE_LABELS.forEachIndexed { index, label ->
+            val reached = index <= activeIndex
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(22.dp)
+                            .clip(CircleShape)
+                            .background(if (reached) PantopusColors.primary600 else PantopusColors.appSurfaceSunken),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (reached) {
+                        PantopusIconImage(
+                            icon = PantopusIcon.Check,
+                            contentDescription = null,
+                            size = 12.dp,
+                            tint = PantopusColors.appTextInverse,
+                        )
+                    }
+                }
+                Text(
+                    text = label,
+                    fontSize = 10.sp,
+                    fontWeight = if (index == activeIndex) FontWeight.Bold else FontWeight.Medium,
+                    color = if (reached) PantopusColors.appText else PantopusColors.appTextMuted,
                 )
             }
         }
@@ -992,14 +1042,14 @@ private fun GigNoShowSheetContent(
             text = "Report a no-show",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text =
                 "This cancels the task and files an incident against the " +
                     "other party. Only report after the agreed start time has passed.",
             fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Box(
             modifier =
@@ -1065,12 +1115,12 @@ fun GigRunningLateSheetContent(
             text = "Running late?",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = "Let the owner know roughly how long you'll be.",
             fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             LATE_ETA_CHOICES_MINUTES.forEach { minutes ->
@@ -1318,12 +1368,12 @@ fun GigProposeChangeSheetContent(
             text = "Propose a change",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = "The other party has to approve before it takes effect.",
             fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             GigChangeOrderType.entries.forEach { type ->
@@ -1696,7 +1746,7 @@ private fun GigReviewSheetContent(
             text = if (revieweeName.isNullOrEmpty()) "Leave a review" else "Review $revieweeName",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             for (value in 1..5) {
@@ -1791,7 +1841,7 @@ fun GigReportSheetContent(
             text = "Report this task",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             GigReportReason.entries.forEach { reason ->
@@ -1984,12 +2034,12 @@ fun GigRescheduleSheetContent(
             text = "Reschedule this task",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = "Pick a new start time — your helper will be notified.",
             fontSize = 13.sp,
-            color = PantopusColors.appTextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(
             modifier =
@@ -2194,7 +2244,7 @@ private fun SheetGhostButton(
             text = label,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.appText,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }

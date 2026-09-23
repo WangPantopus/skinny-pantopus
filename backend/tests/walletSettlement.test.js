@@ -129,3 +129,43 @@ test('a paid-gig row missing its Gig link cannot fall through to legacy wallet c
   expect(getTable('Payment')[0].payment_status).toBe('refunded_partial');
   expect(notifications.createNotification).not.toHaveBeenCalled();
 });
+describe('charged poster-fault fee settlement', () => {
+  // Fee 250 of a 1000 hold; the worker share is floor(250*850/1000)=212.
+  const captured = { kind: 'poster_no_show', state: 'captured', fee_cents: 250, released_cents: 750, charge_id: 'ch_exact' };
+  const feePayment = extra => payment({ payment_status: 'captured_hold', refunded_amount: 0, metadata: { gig_fee: captured }, ...extra });
+  function schedule(p) {
+    seedTable('Payment', [p]); seedTable('PaymentRefundReceipt', []);
+    const rpc = jest.fn(async () => ({ data: { payment: p, settlement: receipt(p, { amount_cents: 212, refund_basis_cents: 0 }), reused: false } }));
+    setRpcMock(rpc); return rpc;
+  }
+  test('only a recorded fee capture routes to the fee settlement', async () => {
+    const rpc = schedule(feePayment());
+    await processTransfers();
+    expect(rpc).toHaveBeenCalledWith('settle_gig_fee_wallet_income', expect.objectContaining({ p_payment_id: 'payment' }));
+  });
+  test.each([['pending', { ...captured, state: 'pending' }], ['not charged', { kind: 'poster_no_show', state: 'not_charged', fee_cents: 0 }]])(
+    'a %s fee record on a captured task payment keeps the task settlement', async (_, gigFee) => {
+      const rpc = schedule(feePayment({ metadata: { gig_fee: gigFee } }));
+      await processTransfers();
+      expect(rpc).toHaveBeenCalledWith('settle_paid_gig_wallet_income', expect.objectContaining({ p_payment_id: 'payment' }));
+      expect(rpc).not.toHaveBeenCalledWith('settle_gig_fee_wallet_income', expect.anything());
+    });
+  test('a fee settled after a partial refund of the fee is read with its refund basis', async () => {
+    // 100 refunded before settlement: 212 - floor(100*850/1000)=212-85=127.
+    const p = feePayment({ payment_status: 'refunded_partial', refunded_amount: 100 });
+    seedTable('PaymentRefundReceipt', [{ payment_id: 'payment', amount_cents: 100, status: 'succeeded' }]);
+    seedTable('PaymentWalletSettlement', [receipt(p, { amount_cents: 127, refund_basis_cents: 100 })]);
+    seedTable('WalletTransaction', [credit({ amount: 127 })]);
+    expect((await service.readProjection(p)).payee_release_status).toBe('wallet_credited');
+    seedTable('PaymentWalletSettlement', [receipt(p, { amount_cents: 212, refund_basis_cents: 100 })]);
+    seedTable('WalletTransaction', [credit({ amount: 212 })]);
+    expect((await service.readProjection(p)).payee_release_status).toBe('unknown');
+  });
+  test('a fully refunded fee settles with no earnings', async () => {
+    const p = feePayment({ payment_status: 'refunded_full', refunded_amount: 250 });
+    seedTable('PaymentRefundReceipt', [{ payment_id: 'payment', amount_cents: 250, status: 'succeeded' }]);
+    seedTable('PaymentWalletSettlement', [receipt(p, { amount_cents: 0, refund_basis_cents: 250, status: 'no_earnings', wallet_transaction_id: null })]);
+    seedTable('WalletTransaction', []);
+    expect((await service.readProjection(p)).payee_release_status).toBe('no_earnings');
+  });
+});

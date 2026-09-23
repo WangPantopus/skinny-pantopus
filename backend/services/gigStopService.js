@@ -5,7 +5,7 @@ const { createHash } = require('node:crypto');
 const { getStripeClient } = require('../stripe/getStripeClient');
 const { assertIntentBinding, providerId } = require('../stripe/gigPaymentProof');
 const refunds = require('./paymentRefundService');
-const { deliverStoredGigNotification } = require('./notificationService');
+const { deliverStoredGigNotification, createNotification } = require('./notificationService');
 const logger = require('../utils/logger');
 const stripe = getStripeClient();
 const fail = (code, message, statusCode = 409) => Object.assign(new Error(message), { code, statusCode });
@@ -65,7 +65,9 @@ function project(data) {
 async function preview({ gigId, actorId, action }) {
   const data = await rpc('read_gig_stop_preview', { p_gig_id: gigId, p_actor_id: actorId, p_action: action });
   return { action, terms: data.terms, eligible: data.eligible === true, unavailableReason: data.unavailableReason || null,
-    financialAction: data.financialAction, activeRequestId: data.activeRequestId || null };
+    financialAction: data.financialAction, activeRequestId: data.activeRequestId || null,
+    // A policy fee below the provider's 50-cent minimum is not charged; the preview says why.
+    ...(data.feeReason ? { feeStatus: data.feeStatus, feeReason: data.feeReason } : {}) };
 }
 async function readRequest({ gigId, actorId, requestId }) {
   return project(await rpc('read_gig_stop_request', { p_gig_id: gigId, p_actor_id: actorId, p_request_id: requestId }));
@@ -257,17 +259,25 @@ async function reconcilePending(limit = 100) {
 // record the capture and cancel the task in one transaction. The Payment's
 // capture_pending reservation is the durable retry identity.
 const noShowFail = (code, message, statusCode) => Object.assign(new Error(message), { code, statusCode });
+const NO_SHOW_ADMISSIONS = new Set(['NO_HOLD', 'FEE_BELOW_MINIMUM']);
+const NO_SHOW_MESSAGES = {
+  NOT_ELIGIBLE: 'The task changed. Reopen it and check its status.',
+  STOP_ACTIVE: 'A cancellation for this task is already in progress. Check its status.',
+  FEE_CHANGED: 'A different no-show report for this task is already in progress. Check its status.',
+  INVALID_FEE: 'The no-show fee could not be verified. Reopen the task and try again.',
+  PAYMENT_CHANGED: 'The task payment changed while the no-show was being recorded. Support will review it.',
+  INVALID_PROOF: 'The no-show fee could not be confirmed with the payment provider. Support will review it.',
+};
 async function noShowRpc(name, args) {
   const { data, error } = await db.rpc(name, args);
   if (error || !data) {
     throw noShowFail('NO_SHOW_FEE_UNKNOWN', 'The no-show fee is not confirmed yet. Report the no-show again to finish.', 503);
   }
-  if (data.error === 'NO_HOLD') return data;
+  if (NO_SHOW_ADMISSIONS.has(data.error)) return data;
   if (data.error) {
     const status = data.error === 'NOT_FOUND' ? 404 : data.error === 'FORBIDDEN' ? 403 : 409;
-    throw noShowFail(data.error === 'NOT_ELIGIBLE' ? 'NO_SHOW_NOT_ELIGIBLE' : `NO_SHOW_${data.error}`,
-      data.error === 'NOT_ELIGIBLE' ? 'The task changed. Reopen it and check its status.'
-        : 'This task payment needs review before a no-show can be reported. Check its status.', status);
+    throw noShowFail(`NO_SHOW_${data.error}`, NO_SHOW_MESSAGES[data.error]
+      || 'This task payment needs review before a no-show can be reported. Check its status.', status);
   }
   return data;
 }
@@ -278,20 +288,29 @@ function noShowFeeOutcome(payment) {
   if (fee.state === 'not_charged') return { status: 'not_charged', reason: fee.reason || 'HOLD_UNAVAILABLE', feeCents: 0 };
   return { status: 'pending', feeCents: fee.fee_cents, releasedCents: fee.released_cents };
 }
-async function reserveNoShowFee({ gigId, actorId, feeCents }) {
-  const data = await noShowRpc('prepare_gig_fee_capture', { p_gig_id: gigId, p_actor_id: actorId, p_fee_cents: feeCents });
-  return data.error === 'NO_HOLD' ? { noHold: true } : { payment: data.payment, gig: data.gig };
+// The SQL admission also writes the report's incident once, under the task lock.
+// No capturable hold, or a fee below the provider's 50-cent capture minimum:
+// the report proceeds and nothing is charged.
+async function reserveNoShowFee({ gigId, actorId, feeCents, description = null, evidenceUrls = [] }) {
+  const data = await noShowRpc('prepare_gig_fee_capture', { p_gig_id: gigId, p_actor_id: actorId, p_fee_cents: feeCents,
+    p_description: typeof description === 'string' && description ? description : null,
+    p_evidence_urls: Array.isArray(evidenceUrls) ? evidenceUrls.filter(url => typeof url === 'string') : [] });
+  const incident = data.incident?.id ? data.incident : null;
+  if (data.error === 'NO_HOLD') return { noHold: true, incident };
+  if (data.error === 'FEE_BELOW_MINIMUM') return { belowMinimum: true, incident };
+  return { payment: data.payment, gig: data.gig, incident };
 }
 async function recordNoShowFee(payment, actorId, proof) {
   if (proof.status === 'canceled') logUncharged('poster_no_show', payment);
   const data = await noShowRpc('record_gig_fee_capture', { p_payment_id: payment.id, p_actor_id: actorId, p_proof: proof });
-  return { payment: data.payment, gig: data.gig, reused: data.reused === true, outcome: noShowFeeOutcome(data.payment) };
+  return { payment: data.payment, gig: data.gig, reused: data.reused === true, review: data.review || null,
+    outcome: noShowFeeOutcome(data.payment) };
 }
 function providerPending(error) {
   // Provider evidence that proves neither a live hold, the exact fee capture,
   // nor a canceled hold stays reserved for review; it is never captured again.
   if (error.code === 'STOP_PROVIDER_REVIEW' || error.code === 'payment_proof_required') {
-    return noShowFail('NO_SHOW_PROVIDER_REVIEW', 'This task payment needs review before a no-show can be reported. Check its status.', 409);
+    return noShowFail('NO_SHOW_PROVIDER_REVIEW', 'The payment provider shows a different state for this task payment. Support will review it.', 409);
   }
   return noShowFail('NO_SHOW_FEE_UNKNOWN', 'The no-show fee is not confirmed yet. Report the no-show again to finish.', 503);
 }
@@ -306,16 +325,50 @@ async function chargeNoShowFee({ payment, actorId }) {
   if (!['succeeded', 'canceled'].includes(proof.status)) throw providerPending({});
   return recordNoShowFee(payment, actorId, proof);
 }
-// Webhook recovery for a reservation whose reporter did not return: read-only,
-// it records an exact provider outcome and never captures.
-async function reconcileNoShowFee(paymentId) {
+// The poster's no-show notice, one per task: the report route and every recovery
+// path (webhook, scheduled replay) send the same notice at most once.
+async function notifyPosterNoShow({ gigId, posterId, workerId, gigTitle = null, feeCharge = null, incidentId = null }) {
+  const [{ data: reporter }, { data: gig }] = await Promise.all([
+    db.from('User').select('name, username').eq('id', workerId).maybeSingle(),
+    gigTitle ? Promise.resolve({ data: { title: gigTitle } }) : db.from('Gig').select('title').eq('id', gigId).maybeSingle(),
+  ]);
+  const reporterName = reporter?.name || reporter?.username || 'The other party';
+  const chargedCents = feeCharge?.status === 'charged' ? feeCharge.feeCents : 0;
+  const feeLine = chargedCents > 0
+    ? ` No-show fee $${(chargedCents / 100).toFixed(2)} charged · $${(feeCharge.releasedCents / 100).toFixed(2)} released.` : '';
+  return createNotification({
+    userId: posterId,
+    type: 'no_show_reported',
+    title: `No-show reported for "${gig?.title || 'a gig'}"`,
+    body: `${reporterName} reported you as a no-show.${feeLine} This affects your reliability score.`,
+    icon: '⚠️',
+    link: `/gigs/${gigId}`,
+    metadata: { gig_id: gigId, ...(incidentId ? { incident_id: incidentId } : {}), fee: chargedCents / 100 },
+    idempotencyKey: `gig-no-show:${gigId}:${posterId}`,
+  });
+}
+// Recovery for a reservation whose reporter did not return. Webhooks only record
+// an exact provider outcome (the hold captured or canceled). The scheduled replay
+// (replay: true) also completes the same reserved capture under its stable key;
+// it never creates a new capture or payment.
+async function reconcileNoShowFee(paymentId, { replay = false } = {}) {
   const { data: payment, error } = await db.from('Payment').select('*').eq('id', paymentId).maybeSingle();
   if (error) throw noShowFail('NO_SHOW_FEE_UNKNOWN', 'The no-show fee could not be checked.', 503);
   const fee = payment?.metadata?.gig_fee;
-  if (fee?.kind !== 'poster_no_show' || fee.state !== 'pending' || payment.payment_status !== 'capture_pending') return null;
-  const proof = await readFeeProof(payment, fee.fee_cents);
+  if (fee?.kind !== 'poster_no_show' || fee.state !== 'pending'
+      || !['capture_pending', 'canceled', 'disputed'].includes(payment.payment_status)) return null;
+  let proof = await readFeeProof(payment, fee.fee_cents);
+  if (proof.status === 'requires_capture') {
+    if (!replay) return null;
+    proof = await captureFee(payment, fee.fee_cents);
+  }
   if (!['succeeded', 'canceled'].includes(proof.status)) return null;
-  return recordNoShowFee(payment, fee.actor_id, proof);
+  const recorded = await recordNoShowFee(payment, fee.actor_id, proof);
+  if (!recorded.reused && !recorded.review && recorded.gig?.status === 'cancelled') {
+    await notifyPosterNoShow({ gigId: recorded.gig.id, posterId: recorded.gig.user_id, workerId: fee.actor_id,
+      gigTitle: recorded.gig.title, feeCharge: recorded.outcome });
+  }
+  return recorded;
 }
 // Webhook recovery for a late-cancel fee whose owner request did not finish:
 // the same read-only adoption as the scheduled reconciler, for one payment.
@@ -333,4 +386,4 @@ async function reconcileFeeStop(paymentId) {
   return project(await rpc('finish_gig_stop', { ...args, p_proof: proof }));
 }
 module.exports = { preview, readRequest, execute, readReleaseProof, deliverPending, reconcilePending,
-  reserveNoShowFee, chargeNoShowFee, reconcileNoShowFee, reconcileFeeStop, noShowFeeOutcome };
+  reserveNoShowFee, chargeNoShowFee, reconcileNoShowFee, reconcileFeeStop, noShowFeeOutcome, notifyPosterNoShow };

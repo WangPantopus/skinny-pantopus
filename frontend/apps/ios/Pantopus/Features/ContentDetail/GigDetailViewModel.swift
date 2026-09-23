@@ -152,6 +152,13 @@ public final class GigDetailViewModel {
         await refreshSilently()
     }
 
+    /// A confirmed or canceled tip changes the payment card's Tip line, so
+    /// refetch once it is terminal, as Android does on its tip receipt.
+    private func refreshAfterTerminalTip() async {
+        guard tipIsCurrent, tipProgress?.terminal == true, bidAcceptance.isCurrentAccount else { return }
+        await refreshSilently()
+    }
+
     /// Change orders on an assigned / in-progress gig (newest first).
     public private(set) var changeOrders: [GigChangeOrderDTO] = []
 
@@ -1104,6 +1111,7 @@ public final class GigDetailViewModel {
         if tipServerSession == nil { await prepareTip() }
         guard tipIsCurrent, !tipBusy else { return }
         if tipConflict != nil { await adoptOtherTip()
+            await refreshAfterTerminalTip()
             return
         }
         guard tipProgress?.terminal != true else { return }
@@ -1113,11 +1121,13 @@ public final class GigDetailViewModel {
         }
         guard tipOriginal != nil || mayChooseTip, (50...99_999_999).contains(amountCents) else { return }
         await performTip(mode: tipOriginal != nil && !tipMayResume ? "check" : "resume", amount: amountCents)
+        await refreshAfterTerminalTip()
     }
 
     func cancelOriginalTip() async {
         guard mayCancelTip, let original = tipOriginal else { return }
         await performTip(mode: "cancel", amount: original.amountCents)
+        await refreshAfterTerminalTip()
     }
 
     private func performTip(mode: String, amount: Int) async {

@@ -19,6 +19,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const walletService = require('../services/walletService');
 const walletSettlement = require('../services/walletSettlementService');
+const { capturedFeeCents } = require('../stripe/gigPaymentProof');
 const { PAYMENT_STATES, transitionPaymentStatus } = require('../stripe/paymentStateMachine');
 const { createNotification } = require('../services/notificationService');
 const { sendAlert, SEVERITY } = require('../services/alertingService');
@@ -159,8 +160,9 @@ async function processPendingTransfers() {
 
         if (protectedWalletPayment) {
           // A cancelled task's charged poster-fault fee has its own settlement:
-          // only the worker share of the fee, never the task payment path.
-          const result = payment.payment_type === 'gig_payment' && payment.metadata?.gig_fee
+          // only the worker share of the fee, never the task payment path. Only
+          // a recorded fee capture routes there; any other fee record does not.
+          const result = payment.payment_type === 'gig_payment' && capturedFeeCents(payment) !== null
             ? await walletSettlement.settleFee(payment) : await walletSettlement.settle(payment);
           if (result.reused || result.settlement.status === 'no_earnings') { skipCount++; continue; }
           // Money, in-app notices and delivery events committed together. The

@@ -102,18 +102,22 @@ async function verifyProvider(payment, release = false) {
       || (intent.amount_received || 0) !== 0) throw fail('This payment can no longer be released as an authorization hold.');
     return { intent };
   }
-  if (intent.status !== 'succeeded' || intent.amount_received !== payment.amount_total
+  // A recorded poster-fault fee captured only the fee from the authorized hold.
+  const feeCents = capturedFeeCents(payment);
+  const captured = feeCents ?? payment.amount_total;
+  if (intent.status !== 'succeeded' || intent.amount_received !== captured
     || !payment.stripe_charge_id || providerId(intent.latest_charge) !== payment.stripe_charge_id) throw fail('The exact payment capture must be reconciled before refunding.');
   const charge = await stripe.charges.retrieve(payment.stripe_charge_id);
   if (!charge || charge.id !== payment.stripe_charge_id || charge.paid !== true || charge.captured !== true
     || charge.amount !== payment.amount_total || providerId(charge.payment_intent) !== intent.id
+    || (feeCents !== null && charge.amount_captured !== feeCents)
     || providerId(charge.customer) !== payment.stripe_customer_id || String(charge.currency).toLowerCase() !== 'usd') throw fail('Provider charge proof does not match.');
   return { intent, charge };
 }
 function verifiedReceipt(payment, refund, requests) {
   if (!refund?.id || providerId(refund.payment_intent) !== payment.stripe_payment_intent_id
     || providerId(refund.charge) !== payment.stripe_charge_id || !Number.isSafeInteger(refund.amount)
-    || refund.amount <= 0 || refund.amount > payment.amount_total || String(refund.currency).toLowerCase() !== 'usd'
+    || refund.amount <= 0 || refund.amount > (capturedFeeCents(payment) ?? payment.amount_total) || String(refund.currency).toLowerCase() !== 'usd'
     || !STATUSES.has(refund.status) || !Number.isSafeInteger(refund.created)) throw fail('Provider refund proof does not match.');
   const requestId = refund.metadata?.refund_request_id || null;
   if (refund.metadata?.payment_id && refund.metadata.payment_id !== payment.id) throw fail('Provider refund belongs to another payment.');

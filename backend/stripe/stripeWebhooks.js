@@ -626,6 +626,9 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
         const gigStop = require('../services/gigStopService');
         if (!(await gigStop.reconcileNoShowFee(payment.id))) await gigStop.reconcileFeeStop(payment.id);
       } catch (feeErr) {
+        // An unavailable database or provider read is retried by the provider's
+        // redelivery; a definitive review outcome is logged, not retried forever.
+        if (!feeErr.statusCode || feeErr.statusCode >= 500) throw feeErr;
         logger.warn('PI succeeded: partial gig capture awaits its fee command', { paymentId: payment.id, error: feeErr.message });
       }
       return;
@@ -806,6 +809,20 @@ async function handlePaymentIntentCanceled(paymentIntent, req) {
   const payment = await findPaymentByPI(paymentIntent.id);
   if (!payment) return;
   if (await reconcileLegacyAuthorization(payment, req)) return;
+
+  // A reserved poster no-show fee whose hold was canceled (expired or released)
+  // records that nothing was charged and finishes the report. A transient error
+  // is retried by the provider's redelivery. After a definitive review outcome the
+  // payment still becomes canceled below, and the same record accepts that later.
+  if (payment.payment_type === 'gig_payment' && payment.metadata?.gig_fee?.kind === 'poster_no_show'
+    && payment.metadata.gig_fee.state === 'pending') {
+    try {
+      if (await require('../services/gigStopService').reconcileNoShowFee(payment.id)) return;
+    } catch (feeErr) {
+      if (!feeErr.statusCode || feeErr.statusCode >= 500) throw feeErr;
+      logger.warn('PI canceled: reserved no-show fee needs review', { paymentId: payment.id, error: feeErr.message });
+    }
+  }
 
   // If still in a pre-canceled state, transition cleanly
   if (payment.payment_status !== PAYMENT_STATES.CANCELED) {
