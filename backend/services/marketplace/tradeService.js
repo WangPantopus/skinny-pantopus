@@ -29,8 +29,8 @@ async function fetchTrade(tradeId) {
 
 // ─── Public API ──────────────────────────────────────────────
 
-// Put listings held for a trade (pending_pickup) back on sale. Used when an accept can't finish or a
-// trade is cancelled; a failed write is logged, since the caller is already failing or finishing.
+// Put listings held by this accept attempt (pending_pickup) back on sale when it can't finish.
+// A failed rollback is logged, since the caller is already failing.
 async function releaseHeldListings(listingIds) {
   if (!listingIds || listingIds.length === 0) return;
   const { error } = await supabaseAdmin
@@ -308,8 +308,8 @@ async function cancelTrade({ tradeId, userId }) {
 
   if (updateErr) throw new Error(`Failed to cancel trade: ${updateErr.message}`);
 
-  // Release any held listings back to active (safety — shouldn't happen for 'proposed' trades)
-  await releaseHeldListings([trade.target_listing_id, ...(trade.offered_listing_ids || [])]);
+  // A proposed trade owns no listing hold. A listing may now be held for a different accepted
+  // trade or offer, so cancelling this proposal must leave every listing's status unchanged.
 
   return { trade: updated };
 }
