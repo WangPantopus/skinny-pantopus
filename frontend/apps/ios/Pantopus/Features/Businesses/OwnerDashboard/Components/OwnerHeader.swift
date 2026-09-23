@@ -134,6 +134,9 @@ struct OwnerHeaderBanner: View {
     let locality: String
     let logoIcon: PantopusIcon?
     let status: BizStatusBadge?
+    /// "Business · Verified" only for a verified business; otherwise the
+    /// "Verification pending" state the My businesses card uses.
+    let isVerified: Bool
     /// Opens Edit Business Page (shared by the camera / logo / name fabs).
     let onEdit: @MainActor () -> Void
 
@@ -252,13 +255,23 @@ struct OwnerHeaderBanner: View {
 
     private var chipRow: some View {
         HStack(spacing: 6) {
-            chip(
-                icon: .shieldCheck,
-                dot: nil,
-                text: "Business · Verified",
-                background: Theme.Color.businessBg,
-                foreground: Theme.Color.businessDark
-            )
+            if isVerified {
+                chip(
+                    icon: .shieldCheck,
+                    dot: nil,
+                    text: "Business · Verified",
+                    background: Theme.Color.businessBg,
+                    foreground: Theme.Color.businessDark
+                )
+            } else {
+                chip(
+                    icon: .hourglass,
+                    dot: nil,
+                    text: "Verification pending",
+                    background: Theme.Color.warningBg,
+                    foreground: Theme.Color.warning
+                )
+            }
             if let status {
                 chip(
                     icon: nil,
@@ -333,7 +346,8 @@ private struct EditFab: View {
             handle: "@marlowco",
             locality: "Elm Park",
             logoIcon: .sparkles,
-            status: .open("Open now")
+            status: .open("Open now"),
+            isVerified: true
         ) {}
         Spacer()
     }
