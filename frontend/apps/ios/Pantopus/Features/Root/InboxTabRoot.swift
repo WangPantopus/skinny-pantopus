@@ -47,6 +47,9 @@ public struct InboxConversationDestination: Hashable, Sendable {
     /// For gig-room rows: the backing gig id (unified-conversations
     /// `gig_id`), so the thread can pin the gig context strip.
     public let gigId: String?
+    /// The room a chat link named when it opened as a person thread, so the
+    /// link's arrival still completes for that room.
+    public let arrivalRoomId: String?
 
     public init(
         mode: Mode,
@@ -57,7 +60,8 @@ public struct InboxConversationDestination: Hashable, Sendable {
         verified: Bool,
         scrollToMessageId: String? = nil,
         initialTopic: ChatInitialTopic? = nil,
-        gigId: String? = nil
+        gigId: String? = nil,
+        arrivalRoomId: String? = nil
     ) {
         self.mode = mode
         self.kind = kind
@@ -68,6 +72,7 @@ public struct InboxConversationDestination: Hashable, Sendable {
         self.scrollToMessageId = scrollToMessageId
         self.initialTopic = initialTopic
         self.gigId = gigId
+        self.arrivalRoomId = arrivalRoomId
     }
 }
 
@@ -117,6 +122,10 @@ public struct InboxTabRoot: View {
     }
 
     private func completeConversationArrival(_ destination: InboxConversationDestination) {
+        if let roomId = destination.arrivalRoomId {
+            router.completeConversationArrival(id: roomId)
+            return
+        }
         guard case let .room(id) = destination.mode else { return }
         router.completeConversationArrival(id: id)
     }
@@ -163,18 +172,54 @@ public struct InboxTabRoot: View {
         guard let pending else { return }
         switch pending {
         case let .conversation(id):
-            path.append(.conversation(InboxConversationDestination(
-                mode: .room(id: id),
-                kind: .dm,
-                displayName: "Conversation",
-                initials: "C",
-                identityKind: nil,
-                verified: false
-            )))
             _ = router.consume()
+            let viewerId = currentUserId
+            Task { @MainActor in
+                let destination = await Self.linkedConversation(roomId: id, viewerId: viewerId)
+                path.append(.conversation(destination))
+            }
         default:
             break
         }
+    }
+
+    /// A chat link (`/chat/:roomId`, what chat pushes carry) names only the
+    /// room. A direct room with exactly one other person, who the viewer has
+    /// not blocked, opens that person's thread as the Messages list does, so
+    /// its details keep Report and Block. Anything else, or a failed read,
+    /// opens the room exactly as before.
+    private static func linkedConversation(roomId: String, viewerId: String) async -> InboxConversationDestination {
+        let room = InboxConversationDestination(
+            mode: .room(id: roomId),
+            kind: .dm,
+            displayName: "Conversation",
+            initials: "C",
+            identityKind: nil,
+            verified: false
+        )
+        guard !viewerId.isEmpty,
+              let detail = try? await APIClient.shared.request(
+                  ChatEndpoints.room(roomId: roomId), as: ChatRoomDetailResponse.self
+              ),
+              detail.room.type == "direct"
+        else { return room }
+        let others = (detail.room.participants ?? []).filter { $0.userId != viewerId }
+        guard others.count == 1,
+              let otherId = others.first?.userId, !otherId.isEmpty,
+              let name = others.first?.user?.displayName, !name.isEmpty,
+              let blocks = try? await APIClient.shared.request(BlocksEndpoints.blocked, as: UserBlocksResponse.self),
+              !blocks.blocked.contains(where: { $0.userId == otherId })
+        else { return room }
+        let initials = name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
+        return InboxConversationDestination(
+            mode: .person(otherUserId: otherId),
+            kind: .dm,
+            displayName: name,
+            initials: initials.isEmpty ? "?" : initials,
+            identityKind: nil,
+            verified: false,
+            arrivalRoomId: roomId
+        )
     }
 
     @ViewBuilder
