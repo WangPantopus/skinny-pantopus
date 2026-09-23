@@ -5829,7 +5829,7 @@ router.post('/:gigId/confirm-completion', verifyToken, async (req, res) => {
     return res.json({ gig: updatedGig });
   } catch (err) {
     logger.error('Confirm completion error', { error: err.message });
-    return res.status(err.statusCode || 500).json({ error: err.message || 'Failed to confirm completion' });
+    return res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Failed to confirm completion' });
   }
 });
 
@@ -5846,7 +5846,7 @@ router.post('/:gigId/complete', verifyToken, async (req, res) => {
     return res.json({ gig: updatedGig });
   } catch (err) {
     logger.error('Complete gig error', { error: err.message });
-    return res.status(err.statusCode || 500).json({ error: err.message || 'Failed to confirm completion' });
+    return res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Failed to confirm completion' });
   }
 });
 

@@ -66,7 +66,7 @@ router.post('/:listingId/offers', verifyToken, validate(createOfferSchema), asyn
     return res.status(201).json({ offer });
   } catch (err) {
     logger.error('Create listing offer failed', { error: err.message, listingId: req.params.listingId });
-    return res.status(err.status || 500).json({ error: err.message || 'Failed to create offer' });
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Failed to create offer' });
   }
 });
 
@@ -152,7 +152,7 @@ router.post('/:listingId/offers/:offerId/counter', verifyToken, verifyOfferBelon
     return res.json({ offer });
   } catch (err) {
     logger.error('Counter offer failed', { error: err.message, offerId: req.params.offerId });
-    return res.status(err.status || 500).json({ error: err.message || 'Failed to counter offer' });
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Failed to counter offer' });
   }
 });
 
@@ -169,7 +169,7 @@ router.post('/:listingId/offers/:offerId/accept', verifyToken, verifyOfferBelong
     return res.json({ offer });
   } catch (err) {
     logger.error('Accept offer failed', { error: err.message, offerId: req.params.offerId });
-    return res.status(err.status || 500).json({ error: err.message || 'Failed to accept offer' });
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Failed to accept offer' });
   }
 });
 
@@ -186,7 +186,7 @@ router.post('/:listingId/offers/:offerId/decline', verifyToken, verifyOfferBelon
     return res.json({ offer });
   } catch (err) {
     logger.error('Decline offer failed', { error: err.message, offerId: req.params.offerId });
-    return res.status(err.status || 500).json({ error: err.message || 'Failed to decline offer' });
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Failed to decline offer' });
   }
 });
 
@@ -203,7 +203,7 @@ router.post('/:listingId/offers/:offerId/withdraw', verifyToken, verifyOfferBelo
     return res.json({ offer });
   } catch (err) {
     logger.error('Withdraw offer failed', { error: err.message, offerId: req.params.offerId });
-    return res.status(err.status || 500).json({ error: err.message || 'Failed to withdraw offer' });
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Failed to withdraw offer' });
   }
 });
 
@@ -220,7 +220,7 @@ router.post('/:listingId/offers/:offerId/complete', verifyToken, verifyOfferBelo
     return res.json({ offer });
   } catch (err) {
     logger.error('Complete transaction failed', { error: err.message, offerId: req.params.offerId });
-    return res.status(err.status || 500).json({ error: err.message || 'Failed to complete transaction' });
+    return res.status(err.status || 500).json({ error: err.status ? err.message : 'Failed to complete transaction' });
   }
 });
 
