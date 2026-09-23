@@ -30,6 +30,7 @@ const {
   eventDetailsSchema,
 } = require('../utils/moduleSchemas');
 const stripeService = require('../stripe/stripeService');
+const blockService = require('../services/blockService');
 const { publicPayment } = require('../stripe/gigPaymentProof');
 const paidGigAcceptance = require('../services/gigPaymentAcceptance');
 const gigStop = require('../services/gigStopService');
@@ -3970,6 +3971,12 @@ router.post('/:gigId/bids', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'You cannot bid on your own gig' });
     }
 
+    // A personal block in either direction refuses the bid, like follows and
+    // direct messages: blocked people can't bid on the blocker's tasks.
+    if (await blockService.isBlocked(gig.user_id, userId)) {
+      return res.status(403).json({ error: 'Cannot bid on this task' });
+    }
+
     // For paid gigs, bidder must have started payout onboarding (Stripe account created).
     // They don't need to be fully verified — just need to have begun the process.
     const gigPrice = parseFloat(gig.price || 0);
@@ -4086,6 +4093,7 @@ router.post('/:gigId/bids', verifyToken, async (req, res) => {
     emitGigUpdate(req, gigId, 'bid-update');
     res.status(201).json({ bid });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Place bid error', { error: err.message });
     res.status(500).json({ error: 'Failed to place bid' });
   }

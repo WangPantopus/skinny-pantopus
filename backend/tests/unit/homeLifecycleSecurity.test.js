@@ -124,10 +124,14 @@ describe('CRIT-03 — household mail access has exactly one definition', () => {
   test('the per-item gate on mailbox.js uses the shared helper', () => {
     // The list path was consolidated but canAccessMail kept its own query,
     // which matched any HomeOccupancy row for the home — no is_active filter
-    // and no verification_status filter — on eight per-item routes.
-    const src = fs.readFileSync(path.join(routesDir, 'mailbox.js'), 'utf8');
-    const gate = src.slice(src.indexOf('const canAccessMail'));
+    // and no verification_status filter — on eight per-item routes. The gate
+    // now lives beside the helper and is shared with the v2 per-item routes.
+    const helper = fs.readFileSync(path.join(__dirname, '../../utils/homeMailAccess.js'), 'utf8');
+    const gate = helper.slice(helper.indexOf('const canAccessMail'));
     expect(gate.slice(0, 600)).toContain('getAccessibleHomeIds');
+    const mailbox = fs.readFileSync(path.join(routesDir, 'mailbox.js'), 'utf8');
+    expect(mailbox).not.toMatch(/const\s+canAccessMail\s*=/);
+    expect(mailbox).toContain("canAccessMail } = require('../utils/homeMailAccess')");
   });
 });
 

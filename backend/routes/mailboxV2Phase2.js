@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
-const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+// canAccessMail / readableMail: the mailbox's per-item rule (own mail, or mail
+// for a Home whose mail the caller may read), checked before any read or change.
+const { getAccessibleHomeIds, canAccessMail, readableMail } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -403,7 +405,7 @@ router.get('/booklet/:mailId', async (req, res, next) => {
       .eq('mail_object_type', 'booklet')
       .single();
 
-    if (!mail) return res.status(404).json({ error: 'Booklet not found' });
+    if (!mail || !(await canAccessMail(mail, req.user.id))) return res.status(404).json({ error: 'Booklet not found' });
 
     const { data: pages } = await supabaseAdmin
       .from('BookletPage')
@@ -421,6 +423,7 @@ router.get('/booklet/:mailId', async (req, res, next) => {
 router.get('/booklet/:mailId/page/:pageNumber', async (req, res, next) => {
   try {
     const { mailId, pageNumber } = req.params;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Page not found' });
     const { data: page } = await supabaseAdmin
       .from('BookletPage')
       .select('*')
@@ -442,11 +445,11 @@ router.post('/booklet/:mailId/download', async (req, res, next) => {
     const { mailId } = req.params;
     const { data: mail } = await supabaseAdmin
       .from('Mail')
-      .select('download_url, download_size_bytes')
+      .select('download_url, download_size_bytes, recipient_user_id, recipient_home_id')
       .eq('id', mailId)
       .single();
 
-    if (!mail?.download_url) return res.status(404).json({ error: 'Download not available' });
+    if (!mail?.download_url || !(await canAccessMail(mail, req.user.id))) return res.status(404).json({ error: 'Download not available' });
 
     await logMailEvent(req.user.id, 'booklet_downloaded', mailId, {
       size_bytes: mail.download_size_bytes,
@@ -469,7 +472,7 @@ router.get('/bundle/:bundleId/items', async (req, res, next) => {
       .eq('mail_object_type', 'bundle')
       .single();
 
-    if (!bundle) return res.status(404).json({ error: 'Bundle not found' });
+    if (!bundle || !(await canAccessMail(bundle, req.user.id))) return res.status(404).json({ error: 'Bundle not found' });
 
     const { data: items } = await supabaseAdmin
       .from('Mail')
@@ -490,9 +493,25 @@ router.get('/bundle/:bundleId/items', async (req, res, next) => {
 router.post('/bundle/action', validate(bundleActionSchema), async (req, res, next) => {
   try {
     const { bundleId, action, folderId, itemId } = req.body;
+    // Only a bundle the caller may read (the mailbox per-item rule).
+    const { data: bundleMail } = await supabaseAdmin
+      .from('Mail')
+      .select('id, recipient_user_id, recipient_home_id')
+      .eq('id', bundleId)
+      .eq('mail_object_type', 'bundle')
+      .maybeSingle();
+    if (!bundleMail || !(await canAccessMail(bundleMail, req.user.id))) return res.status(404).json({ error: 'Bundle not found' });
 
     if (action === 'file_all') {
       if (!folderId) return res.status(400).json({ error: 'folderId required for file_all' });
+      // Vault folders are per user (GET /vault/folders lists user_id = caller).
+      const { data: ownFolder } = await supabaseAdmin
+        .from('VaultFolder')
+        .select('id')
+        .eq('id', folderId)
+        .eq('user_id', req.user.id)
+        .maybeSingle();
+      if (!ownFolder) return res.status(404).json({ error: 'Folder not found' });
       const { data: items } = await supabaseAdmin
         .from('Mail')
         .select('id')
@@ -543,7 +562,8 @@ router.post('/bundle/action', validate(bundleActionSchema), async (req, res, nex
       await supabaseAdmin
         .from('Mail')
         .update({ bundle_id: null })
-        .eq('id', itemId);
+        .eq('id', itemId)
+        .eq('bundle_id', bundleId);
 
       // Update bundle item count
       const { data: remaining } = await supabaseAdmin
@@ -706,6 +726,10 @@ router.get('/certified/:mailId/proof', async (req, res, next) => {
       .single();
 
     if (!mail) return res.status(404).json({ error: 'Certified mail not found' });
+    // Same rule as the other certified routes: only the named recipient.
+    if (mail.recipient_user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the named recipient can download proof' });
+    }
     if (!mail.acknowledged_at) {
       return res.status(400).json({ error: 'Must acknowledge before downloading proof' });
     }
@@ -742,7 +766,7 @@ router.post('/party/create', validate(createPartySchema), async (req, res, next)
       .eq('id', mailId)
       .single();
 
-    if (!mail) return res.status(404).json({ error: 'Mail not found' });
+    if (!mail || !(await canAccessMail(mail, req.user.id))) return res.status(404).json({ error: 'Mail not found' });
     if (mail.drawer !== 'home') {
       return res.status(400).json({ error: 'Mail Party only for Home drawer items' });
     }
@@ -816,7 +840,10 @@ router.post('/party/join', validate(joinPartySchema), async (req, res, next) => 
       .in('status', ['pending', 'active'])
       .single();
 
-    if (!session) return res.status(404).json({ error: 'Session not found or expired' });
+    // Only the session's household may join (the rule GET /party/active lists by).
+    if (!session || !(await getAccessibleHomeIds(req.user.id)).includes(session.home_id)) {
+      return res.status(404).json({ error: 'Session not found or expired' });
+    }
 
     // Check 90-second expiry
     const elapsed = Date.now() - new Date(session.created_at).getTime();
@@ -880,6 +907,7 @@ router.post('/party/reaction', validate(partyReactionSchema), async (req, res, n
 router.post('/party/assign', validate(partyAssignSchema), async (req, res, next) => {
   try {
     const { sessionId, mailId, assignToUserId } = req.body;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Mail not found' });
 
     // Move to assigned user's Counter
     await supabaseAdmin
@@ -1027,6 +1055,14 @@ router.get('/vault/folder/:folderId/items', async (req, res, next) => {
   try {
     const { folderId } = req.params;
     const { limit = 20, offset = 0 } = req.query;
+    // Vault folders are per user (GET /vault/folders lists user_id = caller).
+    const { data: ownFolder } = await supabaseAdmin
+      .from('VaultFolder')
+      .select('id')
+      .eq('id', folderId)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (!ownFolder) return res.status(404).json({ error: 'Folder not found' });
 
     const { data: items, count } = await supabaseAdmin
       .from('Mail')
@@ -1047,6 +1083,15 @@ router.get('/vault/folder/:folderId/items', async (req, res, next) => {
 router.post('/vault/file', validate(fileToVaultSchema), async (req, res, next) => {
   try {
     const { mailId, folderId } = req.body;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Mail not found' });
+    // Vault folders are per user (GET /vault/folders lists user_id = caller).
+    const { data: ownFolder } = await supabaseAdmin
+      .from('VaultFolder')
+      .select('id')
+      .eq('id', folderId)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (!ownFolder) return res.status(404).json({ error: 'Folder not found' });
 
     await supabaseAdmin
       .from('Mail')
@@ -1210,6 +1255,7 @@ router.get('/vault/search', async (req, res, next) => {
 router.post('/package/:mailId/unboxing', validate(packageUnboxingSchema), async (req, res, next) => {
   try {
     const { mailId } = req.params;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Package not found' });
     const { conditionPhotoUrl, unboxingVideoUrl, skip } = req.body;
 
     const updates = {};
@@ -1239,6 +1285,7 @@ router.post('/package/:mailId/unboxing', validate(packageUnboxingSchema), async 
 router.post('/package/:mailId/save-warranty', async (req, res, next) => {
   try {
     const { mailId } = req.params;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Package not found' });
     const { type } = req.body; // 'warranty' | 'manual'
 
     const updates = {};
@@ -1273,6 +1320,7 @@ router.post('/package/:mailId/save-warranty', async (req, res, next) => {
 router.post('/package/:mailId/gig', validate(packageGigSchema), async (req, res, next) => {
   try {
     const { mailId } = req.params;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Package not found' });
     const { gigType, title, description, suggestedStart, compensation } = req.body;
 
     const { data: pkg } = await supabaseAdmin
@@ -1320,6 +1368,7 @@ router.post('/package/:mailId/gig', validate(packageGigSchema), async (req, res,
 router.post('/package/:mailId/gig-accepted', async (req, res, next) => {
   try {
     const { mailId } = req.params;
+    if (!(await readableMail(mailId, req.user.id))) return res.status(404).json({ error: 'Package not found' });
     const { neighborId, neighborName } = req.body;
 
     await supabaseAdmin
