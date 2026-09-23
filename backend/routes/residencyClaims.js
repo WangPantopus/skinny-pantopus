@@ -14,7 +14,7 @@
 // Gates mirror letters:
 //   * every route needs home access (checkHomePermission);
 //   * ISSUING needs verified occupancy (T4) — ownership alone is not
-//     residency;
+//     residency — in a resident role (not guest or service provider);
 //   * claims are personal: list/views/revoke are scoped to the issuing
 //     user inside the service.
 //
@@ -29,6 +29,7 @@ const verifyToken = require('../middleware/verifyToken');
 const { residencyClaimIssueLimiter } = require('../middleware/rateLimiter');
 const { checkHomePermission, isVerifiedResident } = require('../utils/homePermissions');
 const residencyClaimService = require('../services/residencyClaimService');
+const { NON_RESIDENT_ROLES } = require('../utils/homeAccessPolicy');
 const logger = require('../utils/logger');
 
 
@@ -45,6 +46,14 @@ router.post('/:id/residency-claims', verifyToken, residencyClaimIssueLimiter, as
       return res.status(403).json({
         error: 'Verify your address to issue a residency claim.',
         code: 'VERIFICATION_REQUIRED',
+      });
+    }
+    // A claim states "<name> is a verified resident of …". Guest and
+    // service-provider access is not residency (same rule as letters).
+    if (NON_RESIDENT_ROLES.has(access.role_base)) {
+      return res.status(403).json({
+        error: 'Only residents of this home can issue a residency claim.',
+        code: 'RESIDENT_ROLE_REQUIRED',
       });
     }
 
