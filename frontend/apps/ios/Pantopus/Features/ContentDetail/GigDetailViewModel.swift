@@ -2469,7 +2469,7 @@ extension GigDetailViewModel {
             // no-op — `gigDetail.bids` renders below the modules.
         } else if bidCount > 0, !bids.isEmpty {
             modules.append(.bids(ContentDetailBidsModule(
-                title: "\(bidCount) bids",
+                title: "\(bidCount) \(bidCount == 1 ? "bid" : "bids")",
                 sub: bidRangeSub(bids),
                 bids: bids.map { projectBid($0) }
             )))
@@ -2643,7 +2643,7 @@ extension GigDetailViewModel {
         }
         if !bids.isEmpty, !suppressBidsModule {
             modules.append(.bids(ContentDetailBidsModule(
-                title: "\(bidCount) bids",
+                title: "\(bidCount) \(bidCount == 1 ? "bid" : "bids")",
                 sub: awarded ? "closed" : nil,
                 bids: bids.map { projectBid($0, acceptedBy: awarded ? gig.acceptedBy : nil) }
             )))
@@ -2724,12 +2724,23 @@ extension GigDetailViewModel {
             initials: initials.isEmpty ? "?" : initials,
             displayName: name,
             avatarColor: "primary",
-            ratingLine: "verified neighbor",
+            ratingLine: bidderTrustLine(bid.bidder),
             amount: amountLabel,
             verified: bid.bidder?.resolvedVerified ?? false,
             won: won,
             dimmed: dimmed
         )
+    }
+
+    /// A bid row's trust line, from the bid payload only: "Verified neighbor" when the bidder is
+    /// verified, else their rating ("4.8 · 12 jobs"), else no line.
+    static func bidderTrustLine(_ bidder: GigCreator?) -> String? {
+        guard let bidder else { return nil }
+        if bidder.resolvedVerified { return "Verified neighbor" }
+        guard let rating = bidder.averageRating, rating > 0 else { return nil }
+        let base = String(format: "%.1f", rating)
+        guard let jobs = bidder.gigsCompleted, jobs > 0 else { return base }
+        return "\(base) · \(jobs) \(jobs == 1 ? "job" : "jobs")"
     }
 
     private static func gigPriceLabel(_ price: Double, payType: String?) -> String {
