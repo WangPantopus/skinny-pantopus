@@ -327,6 +327,10 @@ public enum HubRoute: Hashable {
     /// preview's "Manage privacy" link when it lands in the Hub stack
     /// (via the `pantopus://identity/preview` deep link).
     case privacySettings
+    /// Privacy → "Download your data": the existing Data export screen.
+    case dataExport
+    /// Privacy → "What we collect": a Legal document (the privacy policy).
+    case legalContent(LegalDocument)
     /// Edit profile form — pushed by Settings → "Edit profile". P1.4.
     case editProfile
     /// Mailbox search target (P4.2). Client-side filter over the user's
@@ -3093,7 +3097,16 @@ public struct HubTabRoot: View {
                 onEdit: { Task { @MainActor in push(.editProfile) } }
             )
         case .privacySettings:
-            PrivacyView(viewModel: PrivacySettingsViewModel()) { Task { @MainActor in pop() } }
+            PrivacyView(viewModel: PrivacySettingsViewModel { link in
+                switch link {
+                case .dataExport: push(.dataExport)
+                case .privacyPolicy: push(.legalContent(.privacy))
+                }
+            }) { Task { @MainActor in pop() } }
+        case .dataExport:
+            DataExportView { Task { @MainActor in pop() } }
+        case let .legalContent(doc):
+            LegalContentView(document: doc) { Task { @MainActor in pop() } }
         case let .waitingRoom(homeId):
             WaitingRoomView(
                 viewModel: WaitingRoomViewModel(homeId: homeId, state: .active),

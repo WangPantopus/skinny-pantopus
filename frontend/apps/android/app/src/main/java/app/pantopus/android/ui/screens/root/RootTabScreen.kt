@@ -5091,7 +5091,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     NotificationSettingsScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.SETTINGS_PRIVACY) {
-                    PrivacySettingsScreen(onBack = { navController.popBackStack() })
+                    PrivacySettingsScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenDataExport = { navController.navigate(ChildRoutes.SETTINGS_DATA_EXPORT) },
+                        onOpenPrivacyPolicy = {
+                            navController.navigate(ChildRoutes.settingsLegalContent(LegalDocument.Privacy.rowId))
+                        },
+                    )
                 }
                 composable(ChildRoutes.SETTINGS_BLOCKED_USERS) {
                     BlockedUsersScreen(onBack = { navController.popBackStack() })

@@ -39,6 +39,8 @@ public enum YouRoute: Hashable {
     case placeholder(label: String)
     case helpCenter
     case privacySettings
+    /// Privacy → "Download your data": the existing Data export screen.
+    case dataExport
     case legal
     case legalContent(LegalDocument)
     case addHome
@@ -1160,7 +1162,14 @@ public struct YouTabRoot: View {
         case .privacySettings:
             // `PrivacyView` (not a bare `GroupedListView`) — it hosts the
             // account-delete confirm sheet the destructive row opens.
-            PrivacyView(viewModel: PrivacySettingsViewModel()) { Task { @MainActor in pop() } }
+            PrivacyView(viewModel: PrivacySettingsViewModel { link in
+                switch link {
+                case .dataExport: path.append(.dataExport)
+                case .privacyPolicy: path.append(.legalContent(.privacy))
+                }
+            }) { Task { @MainActor in pop() } }
+        case .dataExport:
+            DataExportView { Task { @MainActor in pop() } }
         case .legal:
             LegalIndexView(
                 onBack: { Task { @MainActor in pop() } },
