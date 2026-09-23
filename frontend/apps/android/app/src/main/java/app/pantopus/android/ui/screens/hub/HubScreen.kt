@@ -61,6 +61,7 @@ fun HubScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val discoveryFilter by viewModel.discoveryFilter.collectAsStateWithLifecycle()
     val discoveryLoading by viewModel.discoveryLoading.collectAsStateWithLifecycle()
+    val discoveryFailed by viewModel.discoveryFailed.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
         viewModel.load()
         viewModel.refreshUnread()
@@ -92,6 +93,8 @@ fun HubScreen(
                     discoveryFilter = discoveryFilter,
                     discoveryLoading = discoveryLoading,
                     onDiscoveryFilterChange = viewModel::selectDiscoveryFilter,
+                    discoveryFailed = discoveryFailed,
+                    onRetryDiscovery = viewModel::retryDiscovery,
                 )
             is HubUiState.Populated ->
                 PopulatedLayout(
@@ -103,6 +106,8 @@ fun HubScreen(
                     discoveryFilter = discoveryFilter,
                     discoveryLoading = discoveryLoading,
                     onDiscoveryFilterChange = viewModel::selectDiscoveryFilter,
+                    discoveryFailed = discoveryFailed,
+                    onRetryDiscovery = viewModel::retryDiscovery,
                 )
             is HubUiState.Error -> ErrorLayout(current.message, viewModel::refresh)
         }
@@ -125,6 +130,8 @@ private fun PopulatedLayout(
     discoveryFilter: HubDiscoveryFilter,
     discoveryLoading: Boolean,
     onDiscoveryFilterChange: (HubDiscoveryFilter) -> Unit,
+    discoveryFailed: Boolean = false,
+    onRetryDiscovery: () -> Unit = {},
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -189,6 +196,8 @@ private fun PopulatedLayout(
                 onSeeAll = { onIntent(HubNavigationIntent.OpenDiscoverHub) },
                 onExploreMap = { onIntent(HubNavigationIntent.OpenExploreMap) },
                 onFindBusinesses = { onIntent(HubNavigationIntent.OpenFindBusinesses) },
+                loadFailed = discoveryFailed,
+                onRetry = onRetryDiscovery,
             )
         }
         if (content.jumpBackIn.isNotEmpty()) {
@@ -215,6 +224,8 @@ private fun FirstRunLayout(
     discoveryFilter: HubDiscoveryFilter,
     discoveryLoading: Boolean,
     onDiscoveryFilterChange: (HubDiscoveryFilter) -> Unit,
+    discoveryFailed: Boolean = false,
+    onRetryDiscovery: () -> Unit = {},
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -246,6 +257,8 @@ private fun FirstRunLayout(
                 onSeeAll = { onIntent(HubNavigationIntent.OpenDiscoverHub) },
                 onExploreMap = { onIntent(HubNavigationIntent.OpenExploreMap) },
                 onFindBusinesses = { onIntent(HubNavigationIntent.OpenFindBusinesses) },
+                loadFailed = discoveryFailed,
+                onRetry = onRetryDiscovery,
             )
             // Bottom padding leaves room for the floating progress card.
             Spacer(Modifier.height(96.dp))

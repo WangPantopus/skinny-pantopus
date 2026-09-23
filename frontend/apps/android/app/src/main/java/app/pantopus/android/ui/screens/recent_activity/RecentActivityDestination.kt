@@ -19,6 +19,14 @@ sealed interface RecentActivityDestination {
 
     data class HomeDashboard(val id: String) : RecentActivityDestination
 
-    /** Fallback for routes that don't match a known domain. */
+    /**
+     * Any other route (e.g. `/app/notifications`, `/app/connections`): the
+     * host hands it to [app.pantopus.android.core.routing.DeepLinkRouter],
+     * as the Notifications list does, and only falls back to the
+     * placeholder when nothing resolves.
+     */
+    data class Link(val path: String, val label: String) : RecentActivityDestination
+
+    /** A row without a route. */
     data class Placeholder(val label: String) : RecentActivityDestination
 }

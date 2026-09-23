@@ -221,6 +221,15 @@ enum class HubDiscoveryFilter(
     People("people", "People"),
     Businesses("businesses", "Businesses"),
     Posts("posts", "Posts"),
+    ;
+
+    companion object {
+        /**
+         * Tabs the Hub shows. People is left out: `filter=people` never
+         * returns anyone today, so the tab could only ever be empty.
+         */
+        val visibleTabs: List<HubDiscoveryFilter> = listOf(Gigs, Businesses, Posts)
+    }
 }
 
 /**
