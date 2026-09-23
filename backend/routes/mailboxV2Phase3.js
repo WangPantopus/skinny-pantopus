@@ -293,6 +293,22 @@ router.post('/records/link', verifyToken, validate(linkAssetSchema), async (req,
     const userId = req.user.id;
     const { mailId, assetId, linkType } = req.body;
 
+    // Link only mail the caller may read (routes/mailbox.js canAccessMail: their
+    // own mail or their accessible Home's) to an asset of a Home they can access.
+    const accessible = await getAccessibleHomeIds(userId);
+    const [assetRes, mailRes] = await Promise.all([
+      supabaseAdmin.from('HomeAsset').select('home_id').eq('id', assetId).maybeSingle(),
+      supabaseAdmin.from('Mail').select('recipient_user_id, recipient_home_id').eq('id', mailId).maybeSingle(),
+    ]);
+    if (assetRes.error || mailRes.error) throw assetRes.error || mailRes.error;
+    if (!assetRes.data || !accessible.includes(assetRes.data.home_id)) {
+      return res.status(404).json({ error: 'Asset not found' });
+    }
+    const mail = mailRes.data;
+    if (!mail || (mail.recipient_user_id !== userId && !accessible.includes(mail.recipient_home_id))) {
+      return res.status(404).json({ error: 'Mail not found' });
+    }
+
     const { data: link, error } = await supabaseAdmin
       .from('MailAssetLink')
       .insert({
@@ -317,6 +333,23 @@ router.post('/records/link', verifyToken, validate(linkAssetSchema), async (req,
 // DELETE /records/unlink/:id — remove a link
 router.delete('/records/unlink/:id', verifyToken, async (req, res) => {
   try {
+    // Only the household whose asset carries the link may remove it.
+    if (!isUuid(req.params.id)) return res.status(404).json({ error: 'Link not found' });
+    const { data: link, error: linkErr } = await supabaseAdmin
+      .from('MailAssetLink')
+      .select('asset_id')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (linkErr) throw linkErr;
+    const assetRes = link
+      ? await supabaseAdmin.from('HomeAsset').select('home_id').eq('id', link.asset_id).maybeSingle()
+      : { data: null, error: null };
+    if (assetRes.error) throw assetRes.error;
+    const accessible = await getAccessibleHomeIds(req.user.id);
+    if (!assetRes.data || !accessible.includes(assetRes.data.home_id)) {
+      return res.status(404).json({ error: 'Link not found' });
+    }
+
     const { error } = await supabaseAdmin
       .from('MailAssetLink')
       .delete()
