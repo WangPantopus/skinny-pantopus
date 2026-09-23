@@ -284,9 +284,19 @@ router.post('/:id/reply', verifyToken, validate(replySchema), async (req, res) =
     const reply = getReplyTemplate(replyTemplateId);
     if (!reply) return res.status(400).json({ error: 'Unknown reply template.' });
 
-    // Reply allowed unless the sender has been blocked by the recipient.
+    // Replies are off while either person blocks the other. Only the person
+    // who blocked is told why; when the sender blocked the recipient, the
+    // recipient gets a neutral answer that does not reveal the block.
     if (await isBlocked(userId, row.sender_user_id)) {
-      return res.status(403).json({ error: "You've blocked this neighbor, so replies are off." });
+      const { count, error: blockReadError } = await supabaseAdmin
+        .from('UserBlock')
+        .select('id', { count: 'exact', head: true })
+        .eq('blocker_user_id', userId)
+        .eq('blocked_user_id', row.sender_user_id);
+      const viewerBlocked = !blockReadError && count > 0;
+      return res.status(403).json({
+        error: viewerBlocked ? "You've blocked this neighbor, so replies are off." : 'Replies to this message are off.',
+      });
     }
 
     const isFirstReply = !row.reply_template_id;

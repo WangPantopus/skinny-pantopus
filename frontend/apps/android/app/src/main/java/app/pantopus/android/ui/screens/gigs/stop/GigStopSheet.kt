@@ -102,6 +102,9 @@ private fun GigStopPreviewForm(
             when (preview.financialAction) {
                 "refund" -> "This requests the remaining charge refund. The action stays pending until the refund is confirmed."
                 "release" -> "This releases the verified payment hold. The action stays pending until the release is confirmed."
+                "fee" ->
+                    "This charges the ${GigStopPresentation.money(preview.terms.policyFeeCents)} cancellation fee from the " +
+                        "verified payment hold and releases the rest. The action stays pending until the charge is confirmed."
                 else -> "The verified preview requires no payment operation. Confirm to finish this task action."
             },
         )
