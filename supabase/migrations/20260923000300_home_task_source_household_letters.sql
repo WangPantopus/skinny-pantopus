@@ -8,6 +8,7 @@
 -- send-time create_task fan-out both failed with HOME_TASK_SOURCE_DENIED. Only
 -- the final household test changes; recipient, attention, expiry, shred and
 -- Home-binding checks are untouched.
+SET LOCAL lock_timeout='5s';
 CREATE OR REPLACE FUNCTION public.home_task_source_access(p_home_id uuid,p_user_id uuid,p_source_mail_id uuid,
   p_external boolean DEFAULT false) RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp SET lock_timeout='5s' AS $$
