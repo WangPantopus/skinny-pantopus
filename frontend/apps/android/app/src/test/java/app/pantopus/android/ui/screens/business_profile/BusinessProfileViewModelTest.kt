@@ -111,7 +111,7 @@ class BusinessProfileViewModelTest {
                             state = "MA",
                             zipcode = "02139",
                             country = "US",
-                            location = BusinessGeoPoint(lat = 42.37, lng = -71.11),
+                            location = BusinessGeoPoint(latitude = 42.37, longitude = -71.11),
                         ),
                 ),
             locations = emptyList(),
