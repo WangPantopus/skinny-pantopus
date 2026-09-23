@@ -1682,7 +1682,10 @@ router.get('/:id', verifyToken, async (req, res) => {
         const steps = (events || []).map((event, index) => ({
           id: event.id,
           title: titles[event.status] || (event.status === 'pre_receipt' ? 'Awaiting package' : event.status === 'exception' ? 'Delivery exception' : 'Tracking update'),
-          subtitle: [event.location, event.occurred_at].filter(Boolean).join(' · '),
+          subtitle: [event.location, new Date(event.occurred_at).toLocaleString('en-US', {
+            year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+            timeZone: 'UTC', timeZoneName: 'short',
+          })].filter(Boolean).join(' · '),
           state: index === events.length - 1 ? 'current' : 'done',
         }));
         if (steps.length && events[events.length - 1].status !== pkg.status) {
