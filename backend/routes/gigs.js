@@ -6964,8 +6964,18 @@ function noShowEligibility(gig, userId, now = Date.now()) {
     return { can_report: false, reason: `Status is ${gig.status}` };
   }
 
-  if (!gig.user_id || !gig.accepted_by || String(gig.user_id) === String(gig.accepted_by) || gig.started_at) {
-    return { can_report: false, reason: 'No grounds for no-show report' };
+  // A refused report is shown to the person who tried it, so each reason says
+  // plainly why a no-show can't be reported yet.
+  if (gig.started_at) {
+    return {
+      can_report: false,
+      reason: isPoster
+        ? "The worker has already started, so this can't be reported as a no-show."
+        : "You've already started this task, so it can't be reported as a no-show.",
+    };
+  }
+  if (!gig.user_id || !gig.accepted_by || String(gig.user_id) === String(gig.accepted_by)) {
+    return { can_report: false, reason: "This task can't be reported as a no-show." };
   }
 
   // Check if enough time has passed to suspect a no-show
@@ -6993,7 +7003,7 @@ function noShowEligibility(gig, userId, now = Date.now()) {
       reason:
         now > canReportAfter
           ? 'Worker has not started after expected time'
-          : 'Too early to report',
+          : 'You can report a no-show 30 minutes after the agreed start time.',
     };
   }
 
@@ -7002,12 +7012,12 @@ function noShowEligibility(gig, userId, now = Date.now()) {
   // scheduled task also needs its agreed start plus the same buffer to pass.
   if (isWorker && gig.status === 'assigned') {
     const acceptedAt = gig.accepted_at ? new Date(gig.accepted_at).getTime() : now;
-    if (!Number.isFinite(acceptedAt)) return { can_report: false, reason: 'No valid acceptance time' };
+    if (!Number.isFinite(acceptedAt)) return { can_report: false, reason: "This task can't be reported as a no-show." };
     const hoursOverdue = (now - acceptedAt) / (60 * 60 * 1000);
     let scheduledStart = null;
     if (gig.scheduled_start) {
       scheduledStart = new Date(gig.scheduled_start).getTime();
-      if (!Number.isFinite(scheduledStart)) return { can_report: false, reason: 'No valid scheduled start' };
+      if (!Number.isFinite(scheduledStart)) return { can_report: false, reason: "This task can't be reported as a no-show." };
     }
     const canReportAfter = scheduledStart === null ? null : scheduledStart + NO_SHOW_BUFFER_MS;
     const canReport = hoursOverdue > 24 && (canReportAfter === null || now > canReportAfter);
@@ -7018,11 +7028,16 @@ function noShowEligibility(gig, userId, now = Date.now()) {
         expected_start: new Date(scheduledStart).toISOString(),
         can_report_after: new Date(canReportAfter).toISOString(),
       }),
-      reason: canReport ? 'Poster unresponsive for 24+ hours' : 'Too early to report',
+      // Too early: name the rule that is still waiting (the later of the two).
+      reason: canReport
+        ? 'Poster unresponsive for 24+ hours'
+        : canReportAfter !== null && canReportAfter >= acceptedAt + 24 * 60 * 60 * 1000
+          ? 'You can report the poster as a no-show 30 minutes after the agreed start time.'
+          : 'You can report the poster as a no-show 24 hours after the task was assigned to you.',
     };
   }
 
-  return { can_report: false, reason: 'No grounds for no-show report' };
+  return { can_report: false, reason: "This task can't be reported as a no-show right now." };
 }
 
 // A no-show cancel refused by a database guard that holds the task for another
@@ -7082,9 +7097,11 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
 
     // Must be in assigned or in_progress state
     if (!resumingPosterNoShow && !['assigned', 'in_progress'].includes(gig.status)) {
+      const state = { open: 'still open', completed: 'already completed', cancelled: 'already cancelled' }[gig.status]
+        || 'no longer active';
       return res
         .status(400)
-        .json({ error: `Cannot report no-show for a gig in "${gig.status}" status` });
+        .json({ error: `This task is ${state}, so it can't be reported as a no-show.` });
     }
 
     const eligibility = resumingPosterNoShow ? { can_report: true } : noShowEligibility(gig, userId);
