@@ -171,6 +171,17 @@ data class GigPaymentDto(
     @Json(name = "tip_amount") val tipAmount: Int? = null,
     @Json(name = "refunded_amount") val refundedAmount: Int? = null,
     val currency: String? = null,
+    /** A poster-fault fee charged from the hold; `null` for every other state. */
+    @Json(name = "gig_fee") val gigFee: GigPaymentFeeDto? = null,
+)
+
+/** `gig_fee`: a no-show or late-cancel fee captured from the hold; the rest was released. */
+@JsonClass(generateAdapter = true)
+data class GigPaymentFeeDto(
+    val kind: String,
+    @Json(name = "fee_cents") val feeCents: Int,
+    @Json(name = "released_cents") val releasedCents: Int,
+    @Json(name = "worker_share_cents") val workerShareCents: Int,
 )
 
 /** `{ label, color, description }` from `getPaymentStateInfo`. */
