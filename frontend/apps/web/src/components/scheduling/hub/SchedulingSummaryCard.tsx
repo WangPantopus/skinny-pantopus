@@ -39,6 +39,7 @@ interface SummaryCardProps {
   /** Resolves byEventType ids to names for the breakdown chips. */
   eventTypes?: EventType[];
   insightsHref?: string;
+  readOnly?: boolean;
   className?: string;
 }
 
@@ -162,6 +163,7 @@ export default function SchedulingSummaryCard({
   eventTypes,
   insightsHref = "/app/scheduling/insights",
   className,
+  readOnly,
 }: SummaryCardProps) {
   const tk = pillarTokens(pillar);
   const [data, setData] = useState<BookingsSummary | null>(null);
@@ -282,7 +284,7 @@ export default function SchedulingSummaryCard({
               No bookings yet
             </p>
             <p className="mt-0.5 text-[12.5px] text-app-text-secondary">
-              Share your link to get your first one.
+              {readOnly ? "Upcoming bookings will show up here." : "Share your link to get your first one."}
             </p>
           </div>
         </div>
@@ -385,7 +387,7 @@ export default function SchedulingSummaryCard({
       )}
 
       {/* See insights link */}
-      <div className="mt-3 flex justify-end">
+      {!readOnly && <div className="mt-3 flex justify-end">
         <Link
           href={insightsHref}
           className={clsx(
@@ -396,7 +398,7 @@ export default function SchedulingSummaryCard({
           See insights
           <ChevronRight className="h-3.5 w-3.5" aria-hidden />
         </Link>
-      </div>
+      </div>}
     </Shell>
   );
 }
