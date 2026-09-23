@@ -746,33 +746,38 @@ const sendHomeVerificationRequired = (res) =>
 
 const normalizeBusinessName = (name) => String(name || '').trim().replace(/\s+/g, ' ').toLowerCase();
 
-// A letter names a business as its sender only when the sender may send mail for that business (business IAM
-// 'mail.send'; owners always may). Compose sends a typed name, which only picks among those businesses; the letter
-// then carries the business's own name. It is 'verified_business' only when that business is document- or
-// government-verified. Otherwise the letter goes out under the sender's own name and the typed name is not stored.
+// The businesses a user may send mail as: business IAM 'mail.send' (owners always may), each with its own name and
+// whether it is verified (document- or government-verified). Compose lists them in its "Send as" picker.
+const listSenderBusinesses = async (senderId) => {
+  const businessIds = await getBusinessIdsWithPermissions(senderId, ['mail.send']);
+  if (businessIds.length === 0) return [];
+  const [{ data: businesses, error }, { data: profiles }] = await Promise.all([
+    supabaseAdmin.from('User').select('id, name').in('id', businessIds).eq('account_type', 'business'),
+    supabaseAdmin.from('BusinessProfile').select('business_user_id, verification_status').in('business_user_id', businessIds),
+  ]);
+  if (error) {
+    logger.warn('Sender business lookup failed', { senderId, error: error.message });
+    return [];
+  }
+  const statusById = new Map((profiles || []).map((profile) => [profile.business_user_id, profile.verification_status]));
+  return (businesses || [])
+    .filter((business) => typeof business.name === 'string' && business.name.trim())
+    .map((business) => ({
+      id: business.id,
+      name: business.name.trim(),
+      verified: (VERIFICATION_RANK[statusById.get(business.id)] || 0) >= VERIFICATION_RANK.document_verified,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+};
+
+// A letter names a business as its sender only when it is one of listSenderBusinesses. The requested name only picks
+// among them; the letter then carries the business's own name. It is 'verified_business' only when that business is
+// verified. Otherwise the letter goes out under the sender's own name and the requested name is not stored.
 const resolveSenderBusiness = async (senderId, requestedName) => {
   const wanted = normalizeBusinessName(requestedName);
   if (!wanted) return null;
-  const businessIds = await getBusinessIdsWithPermissions(senderId, ['mail.send']);
-  if (businessIds.length === 0) return null;
-  const { data: businesses, error } = await supabaseAdmin
-    .from('User')
-    .select('id, name')
-    .in('id', businessIds)
-    .eq('account_type', 'business');
-  if (error) {
-    logger.warn('Sender business lookup failed', { senderId, error: error.message });
-    return null;
-  }
-  const business = (businesses || []).find((candidate) => normalizeBusinessName(candidate.name) === wanted);
-  if (!business) return null;
-  const { data: profile } = await supabaseAdmin
-    .from('BusinessProfile')
-    .select('verification_status')
-    .eq('business_user_id', business.id)
-    .maybeSingle();
-  const rank = VERIFICATION_RANK[profile?.verification_status] || 0;
-  return { id: business.id, name: business.name.trim(), verified: rank >= VERIFICATION_RANK.document_verified };
+  const businesses = await listSenderBusinesses(senderId);
+  return businesses.find((business) => normalizeBusinessName(business.name) === wanted) || null;
 };
 
 
@@ -1585,6 +1590,20 @@ router.patch('/preferences', verifyToken, validate(updatePreferencesSchema), asy
 });
 
 /**
+ * GET /api/mailbox/sender-businesses
+ * The businesses the signed-in user may send mail as, for compose's "Send as" picker (the list POST /send accepts).
+ */
+router.get('/sender-businesses', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    res.json({ businesses: await listSenderBusinesses(req.user.id) });
+  } catch (err) {
+    logger.error('Sender businesses fetch error', { error: err.message, userId: req.user.id });
+    res.status(500).json({ error: "Couldn't load the businesses you can send as." });
+  }
+});
+
+/**
  * GET /api/mailbox/:id
  * Get single mail item
  */
@@ -2277,6 +2296,8 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
         attnUserId: mail.attn_user_id || null,
         attnLabel: mail.attn_label || null,
         deliveryVisibility: mail.delivery_visibility || null,
+        // The business the letter went out as (null: the sender's own name), so compose can tell a dropped choice.
+        senderBusinessName: mail.sender_business_name || null,
         links: fanoutLinks,
         createdAt: mail.created_at,
         objectId: objectResult?.objectId || mail.object_id || null
