@@ -3705,13 +3705,14 @@ router.delete('/hidden-categories/:category', verifyToken, async (req, res) => {
 
 /**
  * GET /api/gigs/:id
- * Get a single gig by ID
+ * Get a single gig by ID. optionalAuth resolves the viewer from a Bearer token (native) or the web
+ * session cookie; a revoked session reads as anonymous, as on the app's other soft-auth reads.
  */
-router.get('/:id', async (req, res) => {
+router.get('/:id', optionalAuth, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   try {
     const { id } = req.params;
-    const currentUserId = req.user?.id || (await extractOptionalUserId(req));
+    const currentUserId = req.user?.id || null;
 
     // Public reads should not depend on RLS (server does not forward user JWT to Supabase).
     // Use the service role client for consistent behavior.
