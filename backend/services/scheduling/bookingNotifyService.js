@@ -214,7 +214,9 @@ async function notifyBookingEvent({ booking, eventType, page, kind, manageToken 
         type: copy.invType,
         title: copy.invSubject,
         body: whenInvitee,
-        link,
+        // The host detail is owner-only; an invitee's own bookings live in
+        // My bookings (same rule as the reminder below).
+        link: booking.invitee_user_id === booking.host_user_id ? link : '/app/scheduling/my-bookings',
         metadata: { booking_id: booking.id, kind },
       });
     } else if (booking.invitee_email) {
