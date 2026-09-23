@@ -141,8 +141,9 @@ class PulsePostTargetPickerViewModel
                 detail.locations.firstOrNull { it.isPrimary == true }
                     ?: detail.locations.firstOrNull()
             val point = primary?.location ?: return null
-            val latitude = point.lat ?: return null
-            val longitude = point.lng ?: return null
+            val latitude = point.lat
+            val longitude = point.lng
+            if (latitude == null || longitude == null) return null
             val labelParts =
                 listOfNotNull(primary?.city, primary?.state)
                     .filter { it.isNotBlank() }
