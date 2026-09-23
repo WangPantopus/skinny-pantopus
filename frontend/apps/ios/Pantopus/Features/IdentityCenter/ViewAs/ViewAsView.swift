@@ -58,6 +58,10 @@ public struct ViewAsView: View {
         switch viewModel.state {
         case .loading:
             ViewAsLoadingLayout()
+        case .failed:
+            ErrorState(headline: "Couldn't load this preview") {
+                await viewModel.load()
+            }
         case let .loaded(loaded):
             VStack(spacing: Spacing.s0) {
                 ScrollView {
