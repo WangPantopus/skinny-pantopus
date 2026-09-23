@@ -82,42 +82,24 @@ enum class MailCategoryAction(
 
 object MailCategoryActions {
     /**
-     * `CATEGORY_ACTIONS` — ported verbatim from
-     * `src/components/mailbox/constants.ts:25-33`. Keyed on the backend's
-     * free-text `Mail.category` column, *not* on `mail_type`.
+     * RN's `CATEGORY_ACTIONS` (`src/components/mailbox/constants.ts:25-33`),
+     * keyed on the backend's free-text `Mail.category` column, *not* on
+     * `mail_type`. Only tiles that do what they say are offered: Pay, Sign,
+     * Remind, Forward, Dispute, Share with Household and Acknowledge only
+     * logged a click (`POST /item/:id/action`) while toasting a success, so
+     * they stay out until they have real flows (a letter that asks for an
+     * acknowledgement already shows the detail's own Acknowledge button).
+     * Create Task runs the detail's create-task flow (`MailDetailScreen`).
      */
     val byCategory: Map<String, List<MailCategoryAction>> =
         mapOf(
-            "bill" to
-                listOf(
-                    MailCategoryAction.Pay,
-                    MailCategoryAction.Remind,
-                    MailCategoryAction.File,
-                    MailCategoryAction.Forward,
-                    MailCategoryAction.Dispute,
-                ),
-            "legal" to
-                listOf(
-                    MailCategoryAction.FileNow,
-                    MailCategoryAction.Forward,
-                    MailCategoryAction.Remind,
-                ),
-            "notice" to
-                listOf(
-                    MailCategoryAction.Acknowledge,
-                    MailCategoryAction.ShareWithHousehold,
-                    MailCategoryAction.CreateTask,
-                    MailCategoryAction.File,
-                ),
-            "receipt" to listOf(MailCategoryAction.File, MailCategoryAction.Forward),
-            "community" to
-                listOf(
-                    MailCategoryAction.Acknowledge,
-                    MailCategoryAction.ShareWithHousehold,
-                    MailCategoryAction.File,
-                ),
+            "bill" to listOf(MailCategoryAction.File),
+            "legal" to listOf(MailCategoryAction.FileNow),
+            "notice" to listOf(MailCategoryAction.CreateTask, MailCategoryAction.File),
+            "receipt" to listOf(MailCategoryAction.File),
+            "community" to listOf(MailCategoryAction.File),
             "promo" to listOf(MailCategoryAction.SaveOffer, MailCategoryAction.Dismiss),
-            "other" to listOf(MailCategoryAction.File, MailCategoryAction.Forward),
+            "other" to listOf(MailCategoryAction.File),
         )
 
     /** RN's `CATEGORY_ACTIONS[item.category] || CATEGORY_ACTIONS.other`. */

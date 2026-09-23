@@ -11,17 +11,21 @@ import org.junit.Test
  * `PantopusTests/Features/Mailbox/MailboxP3ParityTests.swift`.
  */
 class MailCategoryActionsTest {
+    /**
+     * RN's rows minus the tiles that only logged a click (Pay, Sign, Remind,
+     * Forward, Dispute, Share with Household, Acknowledge).
+     */
     @Test
-    fun categoryActions_matchRnVerbatim() {
+    fun categoryActions_offerOnlyTilesThatWork() {
         val expected =
             mapOf(
-                "bill" to listOf("Pay", "Remind", "File", "Forward", "Dispute"),
-                "legal" to listOf("File Now", "Forward", "Remind"),
-                "notice" to listOf("Acknowledge", "Share with Household", "Create Task", "File"),
-                "receipt" to listOf("File", "Forward"),
-                "community" to listOf("Acknowledge", "Share with Household", "File"),
+                "bill" to listOf("File"),
+                "legal" to listOf("File Now"),
+                "notice" to listOf("Create Task", "File"),
+                "receipt" to listOf("File"),
+                "community" to listOf("File"),
                 "promo" to listOf("Save Offer", "Dismiss"),
-                "other" to listOf("File", "Forward"),
+                "other" to listOf("File"),
             )
         expected.forEach { (category, labels) ->
             assertEquals(
@@ -34,11 +38,11 @@ class MailCategoryActionsTest {
     @Test
     fun unknownCategory_fallsBackToOther() {
         assertEquals(
-            listOf("File", "Forward"),
+            listOf("File"),
             MailCategoryActions.actions("not-a-category", isSenderUnknown = false).map { it.label },
         )
         assertEquals(
-            listOf("File", "Forward"),
+            listOf("File"),
             MailCategoryActions.actions(null, isSenderUnknown = false).map { it.label },
         )
     }
@@ -46,7 +50,7 @@ class MailCategoryActionsTest {
     @Test
     fun unknownSender_suppressesPayAndSign() {
         val actions = MailCategoryActions.actions("bill", isSenderUnknown = true)
-        assertEquals(listOf("Remind", "File", "Forward", "Dispute"), actions.map { it.label })
+        assertEquals(listOf("File"), actions.map { it.label })
         assertTrue(MailCategoryAction.Pay !in actions)
         assertTrue(MailCategoryAction.Sign !in actions)
     }
