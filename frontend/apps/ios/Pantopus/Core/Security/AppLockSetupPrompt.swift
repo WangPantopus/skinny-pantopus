@@ -32,7 +32,9 @@ public struct AppLockSetupPromptModifier: ViewModifier {
 
     public func body(content: Content) -> some View {
         content
-            .onChange(of: promptKey, initial: true) { _, _ in evaluate() }
+            // A task, not `onChange`: the offer may have to wait for a
+            // deep link to land first (see `evaluate()`).
+            .task(id: promptKey) { await evaluate() }
             .alert(
                 "Enable \(unlockLabel)?",
                 isPresented: $isPresented
@@ -84,7 +86,8 @@ public struct AppLockSetupPromptModifier: ViewModifier {
         return label == "Face ID" || label == "Touch ID" ? label : "Biometric unlock"
     }
 
-    private func evaluate() {
+    @MainActor
+    private func evaluate() async {
         guard isSignedIn,
               let signInAt = lastInteractiveSignInAt,
               manager.setupPromptState == .pending,
@@ -92,8 +95,33 @@ public struct AppLockSetupPromptModifier: ViewModifier {
               manager.capability == .available,
               promptedSignInAt != signInAt
         else { return }
+        // A link opened before sign-in replays right after it. Showing the
+        // offer at the same time made UIKit refuse the destination's sheet,
+        // so the link was lost. Let the link land, and wait until nothing
+        // covers the shell, where UIKit would refuse the offer instead.
+        while Self.isDeepLinkInFlight || Self.isShellCovered {
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+        }
         promptedSignInAt = signInAt
         isPresented = true
+    }
+
+    /// A link is stashed for replay, waiting for its tab, or still loading.
+    @MainActor
+    private static var isDeepLinkInFlight: Bool {
+        DeepLinkRouter.shared.pending != nil
+            || DeepLinkRouter.shared.activeContentArrival != nil
+            || PendingDeepLinkStore.peek() != nil
+    }
+
+    /// Something is presented over the shell: a destination's sheet, the
+    /// login cover on its way out, or a system prompt.
+    @MainActor
+    private static var isShellCovered: Bool {
+        let scene = UIApplication.shared.connectedScenes
+            .first { $0.activationState == .foregroundActive } as? UIWindowScene
+        return scene?.keyWindow?.rootViewController?.presentedViewController != nil
     }
 
     @MainActor
