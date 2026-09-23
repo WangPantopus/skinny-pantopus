@@ -65,6 +65,24 @@ enum class GigComposeCategory(
     Other("other", "Other"),
     ;
 
+    /**
+     * The backend's category name (`magicTaskService.js` VALID_CATEGORIES),
+     * sent on `POST /api/gigs/magic-post` as iOS and web send it.
+     */
+    val backendLabel: String
+        get() =
+            when (this) {
+                Handyman -> "Handyman"
+                Cleaning -> "Cleaning"
+                Moving -> "Moving"
+                PetCare -> "Pet Care"
+                ChildCare -> "Child Care"
+                Tutoring -> "Tutoring"
+                Delivery -> "Delivery"
+                Tech -> "Tech Support"
+                Other -> "Other"
+            }
+
     companion object {
         /**
          * Maps a `GigsCategory.key` (or any unrecognised string) into
