@@ -51,7 +51,8 @@ import app.pantopus.android.ui.theme.pantopusShadow
  * A10.11 — Recent-earnings card. Grouped-by-day rows, each a
  * category-tinted tile + description (+ amber "Pending" chip) + the
  * counterparty / time line + a trailing "+$amount" (green cleared, amber
- * on-hold). Also hosts [EarnLockedRow] — the gated placeholder the empty
+ * on-hold, muted "Not cashable yet" for a mail-offer or ad payout). Also
+ * hosts [EarnLockedRow] — the gated placeholder the empty
  * new-earner frame shows in place of real earnings (reused by the gated
  * Taxes row).
  */
@@ -110,6 +111,18 @@ private fun EarnEarningRow(
     val isPending = item.status is EarnStatus.Pending
     val amountText = "+$" + item.amount
     val subtext = subtextFor(item)
+    val statusLabel =
+        when (item.status) {
+            EarnStatus.Paid -> "Paid"
+            is EarnStatus.Pending -> "On hold"
+            EarnStatus.Offer -> "Not cashable yet"
+        }
+    val amountColor =
+        when (item.status) {
+            EarnStatus.Paid -> PantopusColors.success
+            is EarnStatus.Pending -> WalletPalette.amberDeep
+            EarnStatus.Offer -> PantopusColors.appTextSecondary
+        }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -119,8 +132,7 @@ private fun EarnEarningRow(
                     .padding(horizontal = 14.dp, vertical = 11.dp)
                     .semantics {
                         contentDescription =
-                            "${item.description}. $subtext. plus $${item.amount}. " +
-                            if (isPending) "On hold." else "Paid."
+                            "${item.description}. $subtext. plus $${item.amount}. $statusLabel."
                     }
                     .testTag("earnEarningRow-${item.id}"),
             verticalAlignment = Alignment.CenterVertically,
@@ -159,13 +171,13 @@ private fun EarnEarningRow(
             ) {
                 Text(
                     text = amountText,
-                    color = if (isPending) WalletPalette.amberDeep else PantopusColors.success,
+                    color = amountColor,
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.2).sp,
                 )
                 Text(
-                    text = if (isPending) "On hold" else "Paid",
+                    text = statusLabel,
                     color = PantopusColors.appTextMuted,
                     fontSize = 10.sp,
                 )

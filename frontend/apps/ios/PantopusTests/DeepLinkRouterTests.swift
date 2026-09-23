@@ -255,16 +255,10 @@ final class DeepLinkRouterTests: XCTestCase {
         XCTAssertEqual(DeepLinkRouter.shared.pending, .vacationHold)
     }
 
-    func testMailboxRootWithoutVacationFallsBack() throws {
+    func testMailboxRootOpensTheMailTab() throws {
         let url = try XCTUnwrap(URL(string: "pantopus://mailbox"))
-        // WS1.4 classifies `.unknown` as `.discard`, so it is deliberately
-        // never published to `pending`. Assert the classification itself —
-        // this mirrors Android, whose equivalent cases assert `resolveString`.
-        if case .unknown = DeepLinkRouter.shared.resolve(url: url) {
-            // ok — only the `/vacation` sub-path is wired today.
-        } else {
-            XCTFail("Expected .unknown for bare /mailbox path")
-        }
+        // `/mailbox` is the Mail Day summary notification's link: the Mail tab.
+        XCTAssertEqual(DeepLinkRouter.shared.resolve(url: url), .mailbox)
     }
 
     // MARK: - T6.1c P5 — auth deep links
@@ -352,16 +346,9 @@ final class DeepLinkRouterTests: XCTestCase {
         XCTAssertEqual(DeepLinkRouter.shared.pending, .mailDay)
     }
 
-    func testMailboxRootWithoutSubrouteFallsBack() throws {
-        let url = try XCTUnwrap(URL(string: "pantopus://mailbox"))
-        // WS1.4 classifies `.unknown` as `.discard`, so it is deliberately
-        // never published to `pending`. Assert the classification itself —
-        // this mirrors Android, whose equivalent cases assert `resolveString`.
-        if case .unknown = DeepLinkRouter.shared.resolve(url: url) {
-            // ok — bare `pantopus://mailbox` is not a typed destination today.
-        } else {
-            XCTFail("Expected .unknown for bare /mailbox")
-        }
+    func testMailboxRootWithoutSubrouteOpensTheMailTab() throws {
+        let url = try XCTUnwrap(URL(string: "https://pantopus.app/mailbox"))
+        XCTAssertEqual(DeepLinkRouter.shared.resolve(url: url), .mailbox)
     }
 
     // MARK: - Path entry point (notification payload `link` field)

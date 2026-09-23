@@ -825,11 +825,13 @@ public struct TransactionalDetailShell: View {
                         bidTagPill(tag, foreground: Theme.Color.primary700, background: Theme.Color.primary50)
                     }
                 }
-                HStack(spacing: Spacing.s1) {
-                    Icon(.star, size: 9, color: Theme.Color.warning)
-                    Text(bid.ratingLine)
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
+                if let ratingLine = bid.ratingLine {
+                    HStack(spacing: Spacing.s1) {
+                        Icon(.star, size: 9, color: Theme.Color.warning)
+                        Text(ratingLine)
+                            .font(.system(size: 10.5, weight: .medium))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                    }
                 }
             }
             Spacer()

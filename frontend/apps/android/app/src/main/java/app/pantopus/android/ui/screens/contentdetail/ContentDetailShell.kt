@@ -1541,9 +1541,11 @@ private fun BidRow(bid: ContentDetailBidRow) {
                 if (!largeText) BidRowTag(bid)
             }
             if (largeText) BidRowTag(bid)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                PantopusIconImage(icon = PantopusIcon.Star, contentDescription = null, size = 9.dp, tint = PantopusColors.warning)
-                Text(text = bid.ratingLine, fontSize = 10.5.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextSecondary)
+            bid.ratingLine?.let { line ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                    PantopusIconImage(icon = PantopusIcon.Star, contentDescription = null, size = 9.dp, tint = PantopusColors.warning)
+                    Text(text = line, fontSize = 10.5.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextSecondary)
+                }
             }
         }
         Text(

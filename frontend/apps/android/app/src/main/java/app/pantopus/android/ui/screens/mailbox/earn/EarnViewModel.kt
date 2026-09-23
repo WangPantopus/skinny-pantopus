@@ -5,9 +5,10 @@ package app.pantopus.android.ui.screens.mailbox.earn
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.mailbox.EarningEntryDto
-import app.pantopus.android.data.api.models.mailbox.EarningsSummaryResponse
+import app.pantopus.android.data.api.models.wallet.WalletDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.mailbox.MailboxRepository
+import app.pantopus.android.data.wallet.WalletRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,18 +19,18 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.temporal.WeekFields
 import java.util.Locale
 import javax.inject.Inject
 
 /**
  * A10.11 / Block 2A — backs the Earn dashboard. The live path fetches
- * `GET /api/mailbox/earnings/summary` + `/earnings/history` and projects
- * the earnings DISPLAY: the available/pending balance hero and the recent
- * earnings list. The weekly-goal ring, linked payout method, auto-cash-out,
- * and 1099 tax docs have no source on those endpoints (the last three are
- * Stripe Connect — Phase 3), so they stay null and the screen hides them
- * rather than faking them. [setFixture] is the preview/test seam.
+ * `GET /api/wallet` + `GET /api/mailbox/earnings/history`. The hero's
+ * "Available to cash out" is the wallet balance, the same figure Payments
+ * shows and withdraws. Mail-offer and ad payouts (the history rows) are shown
+ * apart from it and marked not cashable: nothing credits them to the wallet.
+ * The weekly-goal ring, linked payout method, auto-cash-out, and 1099 tax
+ * docs have no source, so they stay null and the screen hides them rather
+ * than faking them. [setFixture] is the preview/test seam.
  *
  * Mirrors iOS `EarnViewModel`.
  */
@@ -38,6 +39,7 @@ class EarnViewModel
     @Inject
     constructor(
         private val repository: MailboxRepository,
+        private val walletRepository: WalletRepository,
     ) : ViewModel() {
         private var fixture: EarnContent? = null
         private var hasFixture = false
@@ -68,14 +70,16 @@ class EarnViewModel
             viewModelScope.launch {
                 val history =
                     (repository.earningsHistory() as? NetworkResult.Success)?.data?.earnings ?: emptyList()
-                when (val summary = repository.earningsSummary()) {
+                when (val wallet = walletRepository.balance()) {
                     is NetworkResult.Success -> {
                         val rows = history.map(::earningFrom)
+                        val dto = wallet.data.wallet
+                        val hasWalletMoney = dto.balance > 0L || (dto.lifetimeReceived ?: 0L) > 0L
                         _state.value =
-                            if (summary.data.totalEarned > 0 || rows.isNotEmpty()) {
-                                EarnUiState.Populated(contentFrom(summary.data, history, rows))
+                            if (hasWalletMoney || rows.isNotEmpty()) {
+                                EarnUiState.Populated(contentFrom(dto, history, rows))
                             } else {
-                                EarnUiState.Empty(EarnSampleData.waysToEarn)
+                                EarnUiState.Empty(WAYS_TO_EARN)
                             }
                     }
                     is NetworkResult.Failure -> {
@@ -93,23 +97,21 @@ class EarnViewModel
         // MARK: - DTO → projection
 
         private fun contentFrom(
-            summary: EarningsSummaryResponse,
+            wallet: WalletDto,
             history: List<EarningEntryDto>,
             rows: List<EarnEarning>,
         ): EarnContent {
-            val available = (summary.totalEarned - summary.pendingEarnings).coerceAtLeast(0.0)
-            val thisWeekRows = history.filter { isThisWeek(it.viewedAt ?: it.createdAt) }
-            val thisWeekSum = thisWeekRows.sumOf { it.payoutAmount ?: 0.0 }
-            val pendingCount = history.count { (it.payoutStatus ?: "").lowercase(Locale.US) == "pending" }
+            val offerSum = history.sumOf { it.payoutAmount ?: 0.0 }
             return EarnContent(
-                available = money(available),
-                thisWeek = "\$" + money(thisWeekSum),
-                thisWeekMeta = if (thisWeekRows.size == 1) "1 this week" else "${thisWeekRows.size} this week",
-                pending = "\$" + money(summary.pendingEarnings),
-                pendingMeta = if (pendingCount == 1) "1 on hold" else "$pendingCount on hold",
-                // Deferred slots — no `/earnings/*` source (Stripe = Phase 3).
+                available = money(wallet.balance / 100.0),
+                thisWeek = "",
+                thisWeekMeta = "",
+                pending = "",
+                pendingMeta = "",
+                offerEarnings = if (rows.isEmpty()) null else "\$" + money(offerSum),
+                // Deferred slots — no source yet (Stripe Connect = Phase 3).
                 weeklyGoal = null,
-                waysToEarn = EarnSampleData.waysToEarn,
+                waysToEarn = WAYS_TO_EARN,
                 earnings = rows,
                 payoutMethod = null,
                 autoCashOut = null,
@@ -119,7 +121,6 @@ class EarnViewModel
 
         private fun earningFrom(dto: EarningEntryDto): EarnEarning {
             val instant = parseInstant(dto.viewedAt) ?: parseInstant(dto.createdAt)
-            val isPending = (dto.payoutStatus ?: "").lowercase(Locale.US) == "pending"
             return EarnEarning(
                 id = dto.id,
                 day = dayLabel(instant),
@@ -129,7 +130,8 @@ class EarnViewModel
                 // Ad-payout rows have no gig category — the row renders a
                 // neutral tile rather than a faked cleaning/handyman glyph.
                 category = null,
-                status = if (isPending) EarnStatus.Pending("soon") else EarnStatus.Paid,
+                // Nothing pays an ad payout out or credits it to the wallet.
+                status = EarnStatus.Offer,
                 amount = money(dto.payoutAmount ?: 0.0),
             )
         }
@@ -154,13 +156,6 @@ class EarnViewModel
             return instant.atZone(ZoneId.systemDefault()).format(TIME_FORMAT).lowercase(Locale.US)
         }
 
-        private fun isThisWeek(value: String?): Boolean {
-            val instant = parseInstant(value) ?: return false
-            val date = instant.atZone(ZoneId.systemDefault()).toLocalDate()
-            val startOfWeek = LocalDate.now().with(WeekFields.of(Locale.US).dayOfWeek(), 1)
-            return !date.isBefore(startOfWeek)
-        }
-
         private fun parseInstant(value: String?): Instant? {
             value ?: return null
             return runCatching { OffsetDateTime.parse(value).toInstant() }
@@ -172,5 +167,26 @@ class EarnViewModel
         private companion object {
             private val TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
             private val DAY_MONTH_FORMAT = DateTimeFormatter.ofPattern("MMM d", Locale.US)
+
+            /**
+             * Live `Ways to earn` rows. Only real facts: no sample counts or
+             * amounts, and no Refer row until referrals exist.
+             */
+            private val WAYS_TO_EARN =
+                listOf(
+                    EarnWayToEarn(
+                        kind = EarnWayKind.Browse,
+                        title = "Browse open tasks",
+                        meta = "Paid tasks near you",
+                        accent = EarnAccent.Primary,
+                        featured = true,
+                    ),
+                    EarnWayToEarn(
+                        kind = EarnWayKind.Offer,
+                        title = "Offer a service",
+                        meta = "Get matched to repeat clients",
+                        accent = EarnAccent.Business,
+                    ),
+                )
         }
     }

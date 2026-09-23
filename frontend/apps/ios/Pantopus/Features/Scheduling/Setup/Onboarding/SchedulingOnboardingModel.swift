@@ -4,9 +4,12 @@
 //
 //  A6 Scheduling Onboarding view-model — Home (green, 3 steps: Members ·
 //  Combine · Share) and Business (violet, 4 steps: Link · Service · Team ·
-//  Confirm). On finish: Business claims its slug (PUT booking-page/slug), then
-//  both create an event type for the owner (collective/round_robin for Home;
-//  one_on_one + requires_approval for Business). Conforms `WizardModel`.
+//  Confirm). The Members / Team steps list the real household (occupants) or
+//  team (business members). On finish: Business claims its slug (PUT
+//  booking-page/slug), then both create an event type for the owner
+//  (collective/round_robin for Home; one_on_one + requires_approval for
+//  Business) and make the chosen people its assignees, as web's
+//  OnboardingWizard does. Conforms `WizardModel`.
 //  Matches `onboarding-home-frames.jsx` / `onboarding-business-frames.jsx`.
 //
 
@@ -35,8 +38,22 @@ final class SchedulingOnboardingModel: WizardModel {
     /// `OnboardingHomeBusinessViewModel.submitError`.
     private(set) var submitError: String?
 
+    /// A real occupant or teammate; `id` is the user id assignees take.
+    struct Person: Identifiable, Hashable {
+        let id: String
+        let name: String
+        let role: String
+    }
+
+    enum PeopleState: Equatable { case loading, ready, failed }
+
+    /// The household (Home) or team (Business) from the server, never seeded.
+    private(set) var people: [Person] = []
+    private(set) var peopleState: PeopleState = .loading
+    private var peopleEdited = false
+
     // Home state.
-    var selectedMembers: Set<String> = ["you"]
+    var selectedMembers: Set<String> = []
     var combineMode: String = "collective" // collective | round_robin
     var roundRobinRule: String = "balanced" // balanced | priority
 
@@ -55,7 +72,7 @@ final class SchedulingOnboardingModel: WizardModel {
     var serviceType = "consultation"
     var duration = 30
     var priceText = "120"
-    var seatedTeam: Set<String> = ["owner"]
+    var seatedTeam: Set<String> = []
     var confirmMode = "approve" // auto | approve
 
     private let client = SchedulingClient.shared
@@ -186,7 +203,7 @@ final class SchedulingOnboardingModel: WizardModel {
             primaryCTAIdentifier: "onboardingPrimary",
             secondaryCTA: secondaryCTA,
             isSubmitting: isSubmitting,
-            dirty: stepIndex > 1 || !slug.isEmpty || selectedMembers.count > 1,
+            dirty: stepIndex > 1 || !slug.isEmpty || peopleEdited,
             showsProgressBar: false
         )
     }
@@ -209,7 +226,8 @@ final class SchedulingOnboardingModel: WizardModel {
 
     private var primaryEnabled: Bool {
         if flow == .business && stepIndex == 1 { return bizStep1Ready }
-        if flow == .home && stepIndex == 1 { return !selectedMembers.isEmpty }
+        // An empty household can still continue, as on web.
+        if flow == .home && stepIndex == 1 { return !selectedMembers.isEmpty || (peopleState == .ready && people.isEmpty) }
         return true
     }
 
@@ -262,6 +280,8 @@ final class SchedulingOnboardingModel: WizardModel {
         if isSuccess { isFinished = true
             return
         }
+        // "Skip · just me" seats only the signed-in user.
+        if flow == .business, stepIndex == 3, case let .signedIn(user) = AuthManager.shared.state { seatedTeam = [user.id] }
         // Defaults / skip simply advance. Gate on `inputSteps`, not `totalSteps`, or Home's
         // skip would jump straight to the success frame without ever running finishSetup().
         if stepIndex < inputSteps { stepIndex += 1 } else { Task { await finishSetup() } }
@@ -274,11 +294,54 @@ final class SchedulingOnboardingModel: WizardModel {
     // MARK: Members / team selection
 
     func toggleMember(_ id: String) {
+        peopleEdited = true
         if selectedMembers.contains(id) { selectedMembers.remove(id) } else { selectedMembers.insert(id) }
     }
 
     func toggleSeat(_ id: String) {
+        peopleEdited = true
         if seatedTeam.contains(id) { seatedTeam.remove(id) } else { seatedTeam.insert(id) }
+    }
+
+    /// Loads the real household (occupants) or team (business members), the same
+    /// sources web's OnboardingWizard uses, and selects everyone by default.
+    func loadPeople() async {
+        peopleState = .loading
+        do {
+            switch owner {
+            case let .home(homeId):
+                let response: OccupantsResponse = try await client.request(
+                    HomesEndpoints.listOccupants(homeId: homeId)
+                )
+                people = response.occupants.filter(\.isActive).map {
+                    Person(id: $0.userId, name: $0.displayName ?? $0.username ?? "Member", role: Self.roleLabel($0.role))
+                }
+                selectedMembers = Set(people.map(\.id))
+            case let .business(businessId):
+                let response: BusinessTeamMembersResponse = try await client.request(
+                    BusinessTeamEndpoints.members(businessId: businessId)
+                )
+                people = response.members.compactMap { member in
+                    guard let user = member.user else { return nil }
+                    return Person(
+                        id: user.id,
+                        name: user.name ?? user.username ?? "Member",
+                        role: member.title ?? Self.roleLabel(member.roleBase)
+                    )
+                }
+                seatedTeam = Set(people.map(\.id))
+            case .personal:
+                people = []
+            }
+            peopleState = .ready
+        } catch {
+            peopleState = .failed
+        }
+    }
+
+    private static func roleLabel(_ raw: String?) -> String {
+        guard let raw, !raw.isEmpty else { return "Member" }
+        return raw.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
     func pickSuggestion(_ s: String) {
@@ -357,6 +420,7 @@ final class SchedulingOnboardingModel: WizardModel {
 
         let name = flow == .home ? "Household meeting" : "\(serviceTypeLabel)"
         var created = false
+        var eventTypeId: String?
         var attempt = 0
         while attempt < 4 {
             let suffix = attempt == 0 ? "" : "-\(attempt + 1)"
@@ -372,7 +436,10 @@ final class SchedulingOnboardingModel: WizardModel {
                 priceCents: priceCents
             )
             do {
-                _ = try await client.request(SchedulingEndpoints.createEventType(owner: owner, request)) as EventTypeResponse
+                let response: EventTypeResponse = try await client.request(
+                    SchedulingEndpoints.createEventType(owner: owner, request)
+                )
+                eventTypeId = response.eventType.id
                 created = true
                 break
             } catch let error as SchedulingError {
@@ -389,6 +456,20 @@ final class SchedulingOnboardingModel: WizardModel {
         guard created else {
             submitError = "Couldn't finish setup. Try again."
             return
+        }
+
+        // The chosen members / seated teammates host the event type. Availability
+        // for Home and Business comes from its assignees, so without this the
+        // new event type had no bookable times. Best effort, as on web.
+        let hostIds = flow == .home ? selectedMembers : seatedTeam
+        if let eventTypeId, !hostIds.isEmpty {
+            let assignees = hostIds.sorted().map {
+                AssigneesRequest.Assignee(subjectId: $0, subjectType: "user", weight: 1, priority: 0, isActive: true)
+            }
+            _ = try? await client.request(
+                SchedulingEndpoints.setEventTypeAssignees(owner: owner, id: eventTypeId, AssigneesRequest(assignees: assignees)),
+                as: AssigneesResponse.self
+            )
         }
 
         // Seed page timezone and publish only AFTER the event type exists. Pages insert
