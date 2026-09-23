@@ -162,11 +162,9 @@ final class ListingOffersViewModelTests: ListingOffersViewModelTestCase {
             return
         }
         let countered = sections.first?.rows.first { $0.id == "o-marcus" }
-        XCTAssertEqual(countered?.footer?.actions.count, 2)
+        XCTAssertEqual(countered?.footer?.actions.count, 1)
         XCTAssertEqual(countered?.footer?.actions.first?.title, "Decline offer")
         XCTAssertEqual(countered?.footer?.actions.first?.variant, .destructive)
-        XCTAssertEqual(countered?.footer?.actions.last?.title, "Send counter")
-        XCTAssertEqual(countered?.footer?.actions.last?.variant, .primary)
         // Counter pill chip is present alongside the status chip.
         XCTAssertEqual(countered?.chips?.count, 2)
         XCTAssertEqual(countered?.chips?.first?.text, "Countered")

@@ -413,12 +413,6 @@ class ListingOffersViewModel
                                         variant = CompactButtonVariant.Destructive,
                                         onClick = callbacks.onDecline,
                                     ),
-                                    RowFooterAction(
-                                        title = "Send counter",
-                                        icon = PantopusIcon.ArrowsRepeat,
-                                        variant = CompactButtonVariant.Primary,
-                                        onClick = callbacks.onCounter,
-                                    ),
                                 ),
                         )
                     ListingOfferFooter.ViewTransaction ->
