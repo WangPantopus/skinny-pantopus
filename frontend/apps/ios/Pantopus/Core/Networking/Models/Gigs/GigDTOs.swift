@@ -310,12 +310,19 @@ public struct GigCreator: Decodable, Sendable, Hashable {
     public let avatarUrl: String?
     public let verified: Bool?
     public let badges: [String]?
+    /// Bid rows (`GET /api/gigs/:gigId/bids`) add the bidder's track record.
+    public let averageRating: Double?
+    public let reviewCount: Int?
+    public let gigsCompleted: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, username, name, displayName, handle, badges
         case profilePictureUrl = "profile_picture_url"
         case avatarUrl
         case verified
+        case averageRating = "average_rating"
+        case reviewCount = "review_count"
+        case gigsCompleted = "gigs_completed"
     }
 
     public init(
@@ -327,7 +334,10 @@ public struct GigCreator: Decodable, Sendable, Hashable {
         profilePictureUrl: String? = nil,
         avatarUrl: String? = nil,
         verified: Bool? = nil,
-        badges: [String]? = nil
+        badges: [String]? = nil,
+        averageRating: Double? = nil,
+        reviewCount: Int? = nil,
+        gigsCompleted: Int? = nil
     ) {
         self.id = id
         self.username = username
@@ -338,6 +348,26 @@ public struct GigCreator: Decodable, Sendable, Hashable {
         self.avatarUrl = avatarUrl
         self.verified = verified
         self.badges = badges
+        self.averageRating = averageRating
+        self.reviewCount = reviewCount
+        self.gigsCompleted = gigsCompleted
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id)
+        username = try c.decodeIfPresent(String.self, forKey: .username)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
+        handle = try c.decodeIfPresent(String.self, forKey: .handle)
+        profilePictureUrl = try c.decodeIfPresent(String.self, forKey: .profilePictureUrl)
+        avatarUrl = try c.decodeIfPresent(String.self, forKey: .avatarUrl)
+        verified = try c.decodeIfPresent(Bool.self, forKey: .verified)
+        badges = try c.decodeIfPresent([String].self, forKey: .badges)
+        // The track record only labels a bid row: an odd value hides the line instead of failing the bid.
+        averageRating = try? c.decodeIfPresent(Double.self, forKey: .averageRating)
+        reviewCount = try? c.decodeIfPresent(Int.self, forKey: .reviewCount)
+        gigsCompleted = try? c.decodeIfPresent(Int.self, forKey: .gigsCompleted)
     }
 
     /// Best-effort public name across identity-serializer and legacy User shapes.
