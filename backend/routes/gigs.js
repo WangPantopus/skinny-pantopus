@@ -6220,25 +6220,43 @@ router.post('/:gigId/change-orders/:orderId/approve', verifyToken, async (req, r
     }
 
     const nowIso = new Date().toISOString();
+    // Claim the still-pending order, so a repeated approve can't apply its price twice.
     const { data: updated, error: updateErr } = await supabaseAdmin
       .from('GigChangeOrder')
       .update({ status: 'approved', reviewed_by: userId, reviewed_at: nowIso, updated_at: nowIso })
       .eq('id', orderId)
+      .eq('status', 'pending')
       .select()
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       return res.status(500).json({ error: 'Failed to approve change order' });
     }
+    if (!updated) {
+      return res.status(409).json({ error: 'This change request was already answered.' });
+    }
 
-    // Apply price change to gig if applicable
+    // Apply price change to gig if applicable. If the price can't be saved, the
+    // order goes back to pending and nobody is told it was approved.
     if (order.amount_change && order.amount_change !== 0) {
       const currentPrice = parseFloat(gig.price) || 0;
       const newPrice = Math.max(0, currentPrice + parseFloat(order.amount_change));
-      await supabaseAdmin
+      const { error: priceErr } = await supabaseAdmin
         .from('Gig')
         .update({ price: newPrice, updated_at: nowIso })
         .eq('id', gigId);
+      if (priceErr) {
+        logger.error('Approve change order: price update failed', { gigId, orderId, error: priceErr.message });
+        const { error: revertErr } = await supabaseAdmin
+          .from('GigChangeOrder')
+          .update({ status: 'pending', reviewed_by: null, reviewed_at: null, updated_at: new Date().toISOString() })
+          .eq('id', orderId)
+          .eq('status', 'approved');
+        if (revertErr) {
+          logger.error('Approve change order: could not return the order to pending', { gigId, orderId, error: revertErr.message });
+        }
+        return res.status(500).json({ error: 'Failed to approve change order' });
+      }
     }
 
     // Notify the requester
