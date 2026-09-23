@@ -518,8 +518,8 @@ object DeepLinkRouter {
                 // through to Unknown.
                 when {
                     tabQuery?.lowercase() == "receipt" -> Destination.MonthlyReceipt
-                    segments.size == 4 && segments[1] == "schedule" && segments[2] == "bookings" ->
-                        HomeTaskNotificationRoute.canonicalId(segments[3])
+                    segments.drop(1).dropLast(1) == listOf("schedule", "bookings") ->
+                        HomeTaskNotificationRoute.canonicalId(segments.last())
                             ?.let { Destination.BookingDetail(it) } ?: Destination.Unknown(raw)
                     else -> Destination.Unknown(raw)
                 }
@@ -527,9 +527,9 @@ object DeepLinkRouter {
                 // Booking reminder links. Owner-scoped (`?ot=home|business&oid=`) host links
                 // stay unrouted: the destination carries no owner.
                 when {
-                    segments.size == 2 && segments[1] == "my-bookings" -> Destination.MyBookings
-                    segments.size == 3 && segments[1] == "bookings" && Paths.queryParam(queryPart, "ot") == null ->
-                        HomeTaskNotificationRoute.canonicalId(segments[2])
+                    segments.drop(1) == listOf("my-bookings") -> Destination.MyBookings
+                    segments.drop(1).dropLast(1) == listOf("bookings") && Paths.queryParam(queryPart, "ot") == null ->
+                        HomeTaskNotificationRoute.canonicalId(segments.last())
                             ?.let { Destination.BookingDetail(it) } ?: Destination.Unknown(raw)
                     else -> Destination.Unknown(raw)
                 }
