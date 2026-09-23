@@ -1224,8 +1224,11 @@ const autoFanoutMailTargets = async ({
   // Determine which fan-out targets to create based on type AND outcomes
   const targets = [];
 
-  // Type-based fan-out
-  if (rawType === 'bill' || rawType === 'statement' || mailType === 'bill' || oc.includes('pay_now')) {
+  // Type-based fan-out. A HomeBill is read by every finance viewer of the Home,
+  // so a letter meant for one person (attn_only) does not become one: the
+  // attention person keeps the bill in their mailbox.
+  const forOnePerson = String(mail.delivery_visibility || '') === 'attn_only';
+  if (!forOnePerson && (rawType === 'bill' || rawType === 'statement' || mailType === 'bill' || oc.includes('pay_now'))) {
     targets.push('bill');
   }
   if (rawType === 'package') {
