@@ -48,6 +48,15 @@ public final class SupportTrainDetailViewModel {
     public var toast: String?
     /// Last action failure, surfaced as an inline banner + alert.
     public var actionError: String?
+
+    /// Shown when "Sign up for a slot" finds nothing open — a notice, not a failure.
+    public static let noOpenDatesNotice = "There are no open dates left on this train."
+
+    /// Alert title for `actionError`.
+    public var actionErrorTitle: String {
+        actionError == Self.noOpenDatesNotice ? "No open dates" : "Something went wrong"
+    }
+
     /// Slot the reserve sheet is open for. `nil` hides the sheet;
     /// `.some(nil)` opens it on the slot-picker step.
     public var reserveSelection: ReserveSheetSelection?
@@ -141,7 +150,7 @@ public final class SupportTrainDetailViewModel {
     /// Open the reserve sheet. Pass a slot id to skip the picker step.
     public func startReserve(slotId: String? = nil) {
         guard let content = currentContent, !content.reserveOptions.isEmpty else {
-            actionError = "There are no open dates left on this train."
+            actionError = Self.noOpenDatesNotice
             return
         }
         let resolved = slotId.flatMap { candidate in
@@ -316,7 +325,7 @@ extension SupportTrainDetailViewModel {
             typeDates: typeDates,
             calendarDays: calendar(slots: slots, reservations: reservations),
             sections: sections(slots: slots, reservations: reservations),
-            hostedBy: hostedBy(primaryName: primaryName),
+            hostedBy: hostedBy(primaryName: primaryName, primaryUserId: primary?.user?.id),
             dock: isFull ? .sendCardAndBackup : .signUp(label: "Sign up for a slot"),
             celebrationBanner: isFull
                 ? SupportTrainDetailContent.CelebrationBanner(
@@ -397,12 +406,13 @@ extension SupportTrainDetailViewModel {
         )
     }
 
-    private nonisolated static func hostedBy(primaryName: String?) -> HostedByFooter {
+    private nonisolated static func hostedBy(primaryName: String?, primaryUserId: String?) -> HostedByFooter {
         let name = primaryName ?? "Organizer"
         return HostedByFooter(
             organizerInitials: initials(from: name),
             organizerDisplayName: name,
-            neighborHint: nil
+            neighborHint: nil,
+            organizerUserId: primaryUserId
         )
     }
 

@@ -97,7 +97,7 @@ public final class ReviewSignupsViewModel: ListOfRowsDataSource {
     private let supportTrainId: String
     private let onShareTrain: @MainActor () -> Void
     private let onConfirm: @MainActor (String) -> Void
-    private let onMessage: @MainActor (String) -> Void
+    private let onMessage: @MainActor (SupportTrainReservationDTO) -> Void
     /// Hands the host the full reservation so it can push the
     /// `EditSignupFormView` prefilled — the form needs the seed DTO,
     /// so threading only the id would force a redundant re-fetch.
@@ -111,7 +111,7 @@ public final class ReviewSignupsViewModel: ListOfRowsDataSource {
         api: APIClient = .shared,
         onShareTrain: @escaping @MainActor () -> Void = {},
         onConfirm: @escaping @MainActor (String) -> Void = { _ in },
-        onMessage: @escaping @MainActor (String) -> Void = { _ in },
+        onMessage: @escaping @MainActor (SupportTrainReservationDTO) -> Void = { _ in },
         onEdit: @escaping @MainActor (SupportTrainReservationDTO) -> Void = { _ in }
     ) {
         self.api = api
@@ -327,13 +327,14 @@ public final class ReviewSignupsViewModel: ListOfRowsDataSource {
                 }
             ])
         case "confirmed":
-            RowFooter(actions: [
+            // A guest signup has no account to message.
+            r.isGuestSignup || (r.userId ?? "").isEmpty ? nil : RowFooter(actions: [
                 RowFooterAction(
                     title: "Message",
                     icon: .messageCircle,
                     variant: .ghost
                 ) { [weak self] in
-                    MainActor.assumeIsolated { self?.onMessage(r.id) }
+                    MainActor.assumeIsolated { self?.onMessage(r) }
                 }
             ])
         default:

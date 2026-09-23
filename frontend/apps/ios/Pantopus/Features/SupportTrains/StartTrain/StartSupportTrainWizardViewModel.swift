@@ -89,12 +89,11 @@ public final class StartSupportTrainWizardViewModel: WizardModel {
         return "\(kind.title) for \(name)"
     }
 
-    /// Mutual connections shared with the selected verified neighbor,
-    /// surfaced as the recipient card's micro-avatar strip. The lookup is
-    /// stubbed from sample data — a real implementation would fetch the
-    /// organizer↔recipient mutuals when a beneficiary is selected.
+    /// Mutual connections shared with the selected recipient, for the
+    /// recipient card's micro-avatar strip. There is no mutuals lookup yet,
+    /// so none are shown (the sample names were shown for everyone).
     public var recipientMutuals: [StartSupportTrainMutual] {
-        selectedBeneficiary == nil ? [] : StartSupportTrainSampleData.mutuals
+        []
     }
 
     /// The Frame-2 invite candidate when the organizer typed a name that

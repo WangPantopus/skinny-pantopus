@@ -209,12 +209,10 @@ class StartSupportTrainViewModel
             return current.endDateMillis >= current.startDateMillis && generatedSlots().isNotEmpty()
         }
 
-        /** Mutual connections shared with the selected verified neighbor —
-         *  drives the recipient card's micro-avatar strip. Stubbed from
-         *  sample data; a real implementation would fetch the mutuals when
-         *  a beneficiary is selected. */
-        fun recipientMutuals(): List<StartSupportTrainMutual> =
-            if (_selectedBeneficiary.value == null) emptyList() else StartSupportTrainSampleData.mutuals
+        /** Mutual connections shared with the selected recipient, for the
+         *  recipient card's micro-avatar strip. There is no mutuals lookup
+         *  yet, so none are shown (the sample names were shown for everyone). */
+        fun recipientMutuals(): List<StartSupportTrainMutual> = emptyList()
 
         /** The Frame-2 invite candidate when the typed name matched no
          *  verified neighbor. Contact handles are stubbed (real

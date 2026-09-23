@@ -24,7 +24,7 @@ public struct SupportTrainDetailView: View {
     private let onEditSlot: (@MainActor (SlotRowContent) -> Void)?
     private let onSendCard: (@MainActor () -> Void)?
     private let onJoinAsBackup: (@MainActor () -> Void)?
-    private let onMessageHost: (@MainActor () -> Void)?
+    private let onMessageHost: (@MainActor (HostedByFooter) -> Void)?
     private let isOrganizer: Bool
 
     public init(
@@ -37,7 +37,7 @@ public struct SupportTrainDetailView: View {
         onEditSlot: (@MainActor (SlotRowContent) -> Void)? = nil,
         onSendCard: (@MainActor () -> Void)? = nil,
         onJoinAsBackup: (@MainActor () -> Void)? = nil,
-        onMessageHost: (@MainActor () -> Void)? = nil
+        onMessageHost: (@MainActor (HostedByFooter) -> Void)? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.isOrganizer = isOrganizer
@@ -87,7 +87,7 @@ public struct SupportTrainDetailView: View {
             Text("Leave \(row.title) on \(row.dayLabel) \(row.dateLabel)? This reopens the date for someone else.")
         }
         .alert(
-            "Something went wrong",
+            viewModel.actionErrorTitle,
             isPresented: Binding(
                 get: { viewModel.actionError != nil },
                 set: { if !$0 { viewModel.acknowledgeActionError() } }
@@ -186,7 +186,7 @@ public struct SupportTrainDetailView: View {
                         exactAddressCard(address, instructions: content.deliveryInstructions)
                     }
 
-                    HostedByRow(content: content.hostedBy, onMessageHost: onMessageHost)
+                    HostedByRow(content: content.hostedBy, onMessageHost: messageHostAction(content))
                         .padding(.top, Spacing.s3)
 
                     Spacer().frame(height: Spacing.s3)
@@ -196,7 +196,34 @@ public struct SupportTrainDetailView: View {
             }
             .background(Theme.Color.appBg)
 
-            dock(content.dock)
+            if hasDock(content.dock) {
+                dock(content.dock)
+            }
+        }
+    }
+
+    /// Organizers see Manage; the flag also comes from the loaded train, so a
+    /// host that can't know the viewer's role still shows it.
+    private var viewerIsOrganizer: Bool {
+        if isOrganizer { return true }
+        if case let .loaded(content) = viewModel.state { return content.viewerRole.isOrganizer }
+        return false
+    }
+
+    /// "Message the host": only for non-organizers, and only when the train
+    /// names its organizer's account.
+    private func messageHostAction(_ content: SupportTrainDetailContent) -> (@MainActor () -> Void)? {
+        guard !content.viewerRole.isOrganizer, let onMessageHost,
+              content.hostedBy.organizerUserId != nil else { return nil }
+        return { onMessageHost(content.hostedBy) }
+    }
+
+    /// A fully covered train has no dock unless the host wires Send a card
+    /// or Join as backup (neither has a backend route yet).
+    private func hasDock(_ dock: SupportTrainDock) -> Bool {
+        switch dock {
+        case .signUp: true
+        case .sendCardAndBackup: onSendCard != nil || onJoinAsBackup != nil
         }
     }
 
@@ -312,8 +339,8 @@ public struct SupportTrainDetailView: View {
     }
 
     private func editAction(for row: SlotRowContent) -> (@MainActor () -> Void)? {
-        guard row.mine else { return nil }
-        return { onEditSlot?(row) }
+        guard row.mine, let onEditSlot else { return nil }
+        return { onEditSlot(row) }
     }
 
     private func overline(_ label: String, action: String? = nil) -> some View {
@@ -406,6 +433,39 @@ public struct SupportTrainDetailView: View {
         .accessibilityIdentifier("supportTrainDetailError")
     }
 
+    private var manageAction: (@MainActor () -> Void)? {
+        guard viewerIsOrganizer, let onOpenManage else { return nil }
+        return onOpenManage
+    }
+
+    private var loadedMessageHostAction: (@MainActor () -> Void)? {
+        guard case let .loaded(content) = viewModel.state else { return nil }
+        return messageHostAction(content)
+    }
+
+    private func moreMenu(
+        manage: (@MainActor () -> Void)?,
+        messageHost: (@MainActor () -> Void)?
+    ) -> some View {
+        Menu {
+            if let manage {
+                Button(action: manage) {
+                    Label("Manage signups", systemImage: "list.bullet.rectangle")
+                }
+            }
+            if let messageHost {
+                Button(action: messageHost) {
+                    Label("Message the host", systemImage: "message")
+                }
+            }
+        } label: {
+            Icon(.moreHorizontal, size: 22, color: Theme.Color.appText)
+                .frame(width: 44, height: 44)
+        }
+        .accessibilityLabel("More options")
+        .accessibilityIdentifier("supportTrainDetailMoreButton")
+    }
+
     // MARK: - Top bar
 
     private var topBar: some View {
@@ -437,31 +497,11 @@ public struct SupportTrainDetailView: View {
                 .accessibilityLabel("Share train")
                 .accessibilityIdentifier("supportTrainDetailShareButton")
             }
-            Menu {
-                if isOrganizer, let onOpenManage {
-                    Button {
-                        onOpenManage()
-                    } label: {
-                        Label("Manage signups", systemImage: "list.bullet.rectangle")
-                    }
-                }
-                Button {
-                    onMessageHost?()
-                } label: {
-                    Label("Message the host", systemImage: "message")
-                }
-                Button(role: .destructive) {
-                    // Report sheet wiring is a follow-up — keep the
-                    // affordance visible for parity with the design.
-                } label: {
-                    Label("Report this train", systemImage: "flag")
-                }
-            } label: {
-                Icon(.moreHorizontal, size: 22, color: Theme.Color.appText)
-                    .frame(width: 44, height: 44)
+            // Only live actions: "Report this train" had no backend route and
+            // did nothing, so it's gone; the menu hides when it would be empty.
+            if manageAction != nil || loadedMessageHostAction != nil {
+                moreMenu(manage: manageAction, messageHost: loadedMessageHostAction)
             }
-            .accessibilityLabel("More options")
-            .accessibilityIdentifier("supportTrainDetailMoreButton")
         }
         .padding(.horizontal, Spacing.s2)
         .frame(height: 48)
@@ -558,7 +598,9 @@ private struct HostedByRow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                Icon(.messageSquare, size: 14, color: Theme.Color.appTextMuted)
+                if onMessageHost != nil {
+                    Icon(.messageSquare, size: 14, color: Theme.Color.appTextMuted)
+                }
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s2)
@@ -570,6 +612,9 @@ private struct HostedByRow: View {
             )
         }
         .buttonStyle(.plain)
+        // Only the host's contact line is tappable, and only when it can
+        // open a chat.
+        .disabled(onMessageHost == nil)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Hosted by \(content.organizerDisplayName)\(content.neighborHint.map { ", \($0)" } ?? "")")
         .accessibilityIdentifier("supportTrainHostedBy")

@@ -40,8 +40,8 @@ final class StartSupportTrainSnapshotTests: XCTestCase {
         assertRenders(StartSupportTrainWizardView(viewModel: vm))
         XCTAssertEqual(vm.chrome.primaryCTALabel, "Continue")
         XCTAssertEqual(vm.chrome.progressLabel, .stepOf(current: 1, total: 5))
-        // Mutuals strip is wired for the selected verified neighbor.
-        XCTAssertFalse(vm.recipientMutuals.isEmpty)
+        // No mutuals lookup exists yet, so no (sample) mutuals are shown.
+        XCTAssertTrue(vm.recipientMutuals.isEmpty)
         XCTAssertNil(vm.inviteCandidate)
     }
 
