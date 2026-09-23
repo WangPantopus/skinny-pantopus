@@ -6,7 +6,7 @@
 // manage rows. Powered by GET /booking-page + /bookings/summary + /event-types
 // + /bookings. States: loading · first-run · loaded · paused · unavailable.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import clsx from "clsx";
@@ -15,6 +15,7 @@ import {
   CalendarPlus,
   Clock,
   Inbox,
+  Info,
   LayoutGrid,
   Settings,
   Share2,
@@ -61,17 +62,38 @@ export default function SchedulingHub() {
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+  const loadGeneration = useRef(0);
 
   const load = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     if (!owner) {
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
+    setAccessDenied(false);
+    setCanEdit(false);
+    setBusy(false);
     try {
       const { page: loaded } = await api.scheduling.getBookingPage(owner);
+      if (generation !== loadGeneration.current) return;
+      let editable = true;
+      if (owner.ownerType === "home") {
+        try {
+          const access = await api.homeIam.getMyHomeAccess(owner.homeId!);
+          editable = access.hasAccess && access.permissions.includes("calendar.edit");
+        } catch {
+          if (generation !== loadGeneration.current) return;
+          setError("Couldn't check your Home scheduling access. Try again.");
+          return;
+        }
+      }
+      if (generation !== loadGeneration.current) return;
+      setCanEdit(editable);
       setPage(loaded);
       // Enrichment — tolerate failures (e.g. view-only contexts).
       const [etRes, upRes, pendRes] = await Promise.allSettled([
@@ -79,6 +101,7 @@ export default function SchedulingHub() {
         api.scheduling.listBookings({ status: "upcoming" }, owner),
         api.scheduling.listBookings({ status: "pending" }, owner),
       ]);
+      if (generation !== loadGeneration.current) return;
       setEventTypes(etRes.status === "fulfilled" ? etRes.value.eventTypes : []);
       const upcoming = upRes.status === "fulfilled" ? upRes.value.bookings : [];
       const pending =
@@ -86,9 +109,14 @@ export default function SchedulingHub() {
       setPendingCount(pending.length);
       setBookings([...upcoming, ...pending].slice(0, 12));
     } catch (err) {
-      setError(decodeError(err).message);
+      if (generation !== loadGeneration.current) return;
+      const denied = (err as { statusCode?: number })?.statusCode === 403;
+      setAccessDenied(denied);
+      setError(denied
+        ? "You don't have access to this scheduling hub. Ask an owner for access, or choose another profile above."
+        : decodeError(err).message);
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) setLoading(false);
     }
   }, [owner]);
 
@@ -101,23 +129,26 @@ export default function SchedulingHub() {
       patch: Parameters<typeof api.scheduling.updateBookingPage>[0],
       successMsg: string,
     ) => {
-      if (!owner) return;
+      if (!owner || !canEdit) return;
+      const generation = loadGeneration.current;
       setBusy(true);
       try {
         const { page: updated } = await api.scheduling.updateBookingPage(
           patch,
           owner,
         );
+        if (generation !== loadGeneration.current) return;
         setPage(updated);
         toast.success(successMsg);
       } catch (err) {
+        if (generation !== loadGeneration.current) return;
         const decoded = decodeError(err);
         toast.error(decoded.message || "Something went wrong");
       } finally {
-        setBusy(false);
+        if (generation === loadGeneration.current) setBusy(false);
       }
     },
-    [owner],
+    [owner, canEdit],
   );
 
   const handleTogglePause = useCallback(
@@ -138,7 +169,8 @@ export default function SchedulingHub() {
   }, [patchPage]);
 
   const handleRegenerate = useCallback(async () => {
-    if (!owner) return;
+    if (!owner || !canEdit) return;
+    const generation = loadGeneration.current;
     const ok = await confirmStore.open({
       title: "Regenerate booking link?",
       description:
@@ -147,18 +179,20 @@ export default function SchedulingHub() {
       cancelLabel: "Keep current",
       variant: "destructive",
     });
-    if (!ok) return;
+    if (!ok || generation !== loadGeneration.current) return;
     setBusy(true);
     try {
       const { page: updated } = await api.scheduling.resetSlug(owner);
+      if (generation !== loadGeneration.current) return;
       setPage(updated);
       toast.success("New booking link generated");
     } catch (err) {
+      if (generation !== loadGeneration.current) return;
       toast.error(decodeError(err).message || "Couldn’t regenerate the link");
     } finally {
-      setBusy(false);
+      if (generation === loadGeneration.current) setBusy(false);
     }
-  }, [owner]);
+  }, [owner, canEdit]);
 
   const ownerName = owners[pillar].name;
   const subtitle =
@@ -233,7 +267,11 @@ export default function SchedulingHub() {
         ) : isLoading ? (
           <HubSkeleton />
         ) : error ? (
-          <ErrorState message={error} onRetry={() => void load()} />
+          <ErrorState
+            title={accessDenied ? "Scheduling access needed" : undefined}
+            message={error}
+            onRetry={() => void load()}
+          />
         ) : !page ? (
           <ErrorState
             message="No booking page found."
@@ -242,6 +280,7 @@ export default function SchedulingHub() {
         ) : needsSetup ? (
           <FirstRunHub
             pillar={pillar}
+            readOnly={!canEdit}
             onSetup={() =>
               router.push(
                 pillar === "personal"
@@ -252,13 +291,20 @@ export default function SchedulingHub() {
           />
         ) : (
           <>
+            {!canEdit && (
+              <div className="flex items-center gap-2 rounded-xl bg-app-info-bg px-3 py-3 text-xs text-app-text-strong">
+                <Info className="h-4 w-4 shrink-0 text-app-info" aria-hidden />
+                You have view-only access. Ask an owner to make changes.
+              </div>
+            )}
             {/* A5 summary card — sits atop the rest of the Hub per design */}
             {owner && (
               <SchedulingSummaryCard
                 owner={owner}
                 pillar={pillar}
                 eventTypes={eventTypes}
-                onShare={() => router.push(`${BASE}/booking-page`)}
+                readOnly={!canEdit}
+                onShare={canEdit ? () => router.push(`${BASE}/booking-page`) : undefined}
               />
             )}
             <BookingLinkCard
@@ -266,6 +312,8 @@ export default function SchedulingHub() {
               pillar={pillar}
               name={page.title || ownerName}
               role={page.tagline || "Book time"}
+              readOnly={!canEdit}
+              eventTypeSlug={eventTypes.find((type) => type.is_active)?.slug}
               onTurnOn={handleTurnOn}
               onRegenerate={handleRegenerate}
             />
@@ -273,6 +321,7 @@ export default function SchedulingHub() {
               page={page}
               pillar={pillar}
               busy={busy}
+              readOnly={!canEdit}
               onTogglePause={handleTogglePause}
             />
             <AgendaSection
@@ -280,15 +329,16 @@ export default function SchedulingHub() {
               eventTypes={eventTypes}
               tz={page.timezone}
               paused={page.is_paused}
+              readOnly={!canEdit}
             />
-            <ManageRows items={manageItems} />
+            <ManageRows items={manageItems} readOnly={!canEdit} />
             {/* pinned footer CTA — matches design FooterCTA; pb-28 on wrapper accounts for this */}
-            <HubFooterCTA
+            {canEdit && <HubFooterCTA
               pillar={pillar}
               paused={page.is_paused}
               onShare={() => router.push(`${BASE}/booking-page`)}
               onResume={() => handleTogglePause(false)}
-            />
+            />}
           </>
         )}
       </div>
@@ -328,10 +378,12 @@ function HubFooterCTA({
 
 function FirstRunHub({
   pillar,
+  readOnly,
   onSetup,
 }: {
   pillar: Pillar;
   onSetup: () => void;
+  readOnly?: boolean;
 }) {
   const tk = pillarTokens(pillar);
   return (
@@ -347,15 +399,14 @@ function FirstRunHub({
           <CalendarPlus className="h-9 w-9" strokeWidth={1.7} aria-hidden />
         </div>
         <h2 className="text-xl font-bold tracking-tight text-app-text">
-          Set up your booking link
+          {readOnly ? "No event types yet" : "Set up your booking link"}
         </h2>
         <p className="mt-2 max-w-sm text-[13px] leading-5 text-app-text-secondary">
-          Create a link anyone can use to book time with you. Pick your hours
-          and the meeting types you offer.
+          {readOnly ? "You have view-only access. Ask an owner to set up scheduling." : "Create a link anyone can use to book time with you. Pick your hours and the meeting types you offer."}
         </p>
       </div>
 
-      <div className="mt-4 rounded-2xl border border-app-warning-light bg-app-warning-bg p-4">
+      {!readOnly && <div className="mt-4 rounded-2xl border border-app-warning-light bg-app-warning-bg p-4">
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-app-warning-bg text-app-warning ring-1 ring-app-warning-light">
             <Wand2 className="h-[19px] w-[19px]" aria-hidden />
@@ -379,7 +430,7 @@ function FirstRunHub({
           Set up your booking link
           <ArrowRight className="h-4 w-4" aria-hidden />
         </button>
-      </div>
+      </div>}
 
       <div className="mt-5 space-y-2 opacity-50">
         {[
