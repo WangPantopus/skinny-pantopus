@@ -30,12 +30,8 @@ const MAIL_OPTIONS: { value: HoldAction; label: string; description: string }[] 
   },
 ];
 
+// "Ask a Verified Neighbor" (an auto-posted package gig) isn't offered: package gigs aren't available yet.
 const PACKAGE_OPTIONS: { value: PackageHoldAction; label: string; description: string }[] = [
-  {
-    value: 'ask_neighbor',
-    label: 'Ask a Verified Neighbor to hold packages',
-    description: 'Auto-post gig when package arrives',
-  },
   {
     value: 'locker',
     label: 'Auto-request locker delivery if available',
@@ -266,7 +262,7 @@ export default function TravelModePage() {
   const [departure, setDeparture] = useState('');
   const [returnDate, setReturnDate] = useState('');
   const [holdAction, setHoldAction] = useState<HoldAction>('hold_in_vault');
-  const [packageAction, setPackageAction] = useState<PackageHoldAction>('ask_neighbor');
+  const [packageAction, setPackageAction] = useState<PackageHoldAction>(PACKAGE_OPTIONS[0].value);
   const [autoGig, setAutoGig] = useState(true);
 
   // ── Validation ────────────────────────────────────────

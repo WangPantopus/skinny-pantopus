@@ -14,8 +14,8 @@ const MAIL_OPTIONS: { id: HoldAction; label: string; sub: string }[] = [
   { id: 'notify_urgent_only', label: 'Urgent items only', sub: 'Bills due, certified, time-sensitive' },
 ];
 
+// "Ask a Verified Neighbor" (an auto-posted package gig) isn't offered: package gigs aren't available yet.
 const PKG_OPTIONS: { id: PackageHoldAction; label: string; sub: string }[] = [
-  { id: 'ask_neighbor', label: 'Ask a Verified Neighbor', sub: 'Auto-gig posted when package arrives' },
   { id: 'locker', label: 'Auto-request locker delivery', sub: 'If carrier locker available nearby' },
   { id: 'hold_at_carrier', label: 'Hold at carrier facility', sub: 'Pick up when you return' },
 ];
@@ -33,7 +33,7 @@ function VacationContent() {
     return d.toISOString().split('T')[0];
   });
   const [mailAction, setMailAction] = useState<HoldAction>('hold_in_vault');
-  const [pkgAction, setPkgAction] = useState<PackageHoldAction>('ask_neighbor');
+  const [pkgAction, setPkgAction] = useState<PackageHoldAction>(PKG_OPTIONS[0].id);
   const [autoGig, setAutoGig] = useState(true);
   const [creating, setCreating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -60,7 +60,7 @@ function VacationContent() {
         endDate,
         holdAction: mailAction,
         packageAction: pkgAction,
-        autoNeighborRequest: autoGig,
+        autoNeighborRequest: pkgAction === 'ask_neighbor' && autoGig,
       });
       setActive(result.hold);
       toast.success('Travel mode activated');
