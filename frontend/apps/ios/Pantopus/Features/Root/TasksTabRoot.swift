@@ -113,7 +113,12 @@ public struct TasksTabRoot: View {
         switch pending {
         case let .gig(id):
             path.replaceNavigationPath(NavigationPath())
-            path.append(.gigDetail(gigId: id))
+            // `/gigs/new` is the web composer's path: open the native composer.
+            if id == "new" {
+                path.append(.composeGig(category: GigsCategory.all.rawValue))
+            } else {
+                path.append(.gigDetail(gigId: id))
+            }
             _ = router.consume()
         default:
             break
