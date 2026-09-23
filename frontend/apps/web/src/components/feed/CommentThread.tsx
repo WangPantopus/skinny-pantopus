@@ -5,6 +5,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Heart, ImagePlus, Smile, X } from 'lucide-react';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import EmojiPickerPopover from '@/components/chat/EmojiPickerPopover';
+import { confirmStore } from '@/components/ui/confirm-store';
 import FeedMediaImage from './FeedMediaImage';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import type { PostComment } from '@pantopus/types';
@@ -95,8 +96,13 @@ export default function CommentThread({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  // Cmd/Ctrl+Enter can fire again before the parent's `isPosting` arrives.
+  const submittingRef = useRef(false);
+
   const handleSubmit = async () => {
     if (!newComment.trim() && selectedFiles.length === 0) return;
+    if (isPosting || submittingRef.current) return;
+    submittingRef.current = true;
     try {
       const saved = await onAddComment({
         text: newComment.trim(),
@@ -106,6 +112,8 @@ export default function CommentThread({
       if (saved !== false) resetComposer();
     } catch {
       // The caller reports the error. Keep the unsent draft available to retry.
+    } finally {
+      submittingRef.current = false;
     }
   };
 
@@ -270,7 +278,14 @@ export default function CommentThread({
               </button>
               {isOwn && (
                 <button
-                  onClick={() => void onDeleteComment(comment.id)}
+                  onClick={async () => {
+                    const yes = await confirmStore.open({
+                      title: 'Delete this comment?',
+                      confirmLabel: 'Delete',
+                      variant: 'destructive',
+                    });
+                    if (yes) void onDeleteComment(comment.id);
+                  }}
                   className="text-[10px] font-semibold text-red-400 hover:text-red-500 transition"
                 >
                   Delete
