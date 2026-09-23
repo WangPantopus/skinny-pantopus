@@ -34,6 +34,7 @@ const {
 } = require('../utils/moduleSchemas');
 const { fanoutUrgentTask } = require('../services/urgentFanoutService');
 const { alertMatchingSavedSearches } = require('../services/savedSearchAlertService');
+const { checkHomePermission } = require('../utils/homePermissions');
 
 // ── Undo window duration (ms) ────────────────────────────────
 const UNDO_WINDOW_MS = 10_000; // 10 seconds
@@ -429,6 +430,11 @@ router.post('/magic-post', verifyToken, validate(magicPostSchema), async (req, r
 
     // ── Build gig data ──
     const normalizedLocation = normalizeMagicPostLocation(location);
+    // Posting from a Home needs home.view there: its members see these tasks on the Home help card.
+    if (normalizedLocation?.homeId
+      && !(await checkHomePermission(normalizedLocation.homeId, userId, 'home.view')).hasAccess) {
+      return res.status(403).json({ error: "You can't post from that Home." });
+    }
     const approx = normalizedLocation
       ? calculateApproxLocation(normalizedLocation.latitude, normalizedLocation.longitude)
       : null;
