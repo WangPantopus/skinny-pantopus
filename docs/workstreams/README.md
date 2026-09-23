@@ -7,7 +7,16 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — 2026-09-23T21:39:56Z (isolated runtime recovery)
+## CURRENT RESUME POINT — 2026-09-23T21:45:07Z (runtime restored; trade hold repair)
+
+- **Three isolated runtimes recovered:** Stream 1 fresh canonical replay also passed (89 through `20260923000300`), API18132 healthy. Stream 2 API18143 healthy, real GoTrue login/Home setup and household-mail creation restored; Stream 3 API18130 healthy and native sign-in succeeded. These are runtime/auth prerequisites; the pending feature journeys remain unverified until their captures complete.
+- **New coordinator review finding, reproduced:** on the unpublished pending-pickup candidate, accept trade A, then cancel still-proposed B sharing its target. Real ordinary API + SQL showed B released A's listing to active. Stream 1 removed only the proposed-cancellation release, since proposals hold no listings; no accepted-cancellation/refund policy was added. Pushed head `9304317518a48d70a6ff8b0c4c89e7bbbd89c2ed`. API/SQL after now keeps A accepted and target pending_pickup; native gate remains. Receipts: coordinator evidence store `20260923-stream1-runtime-resume-r1/evidence/trade-cancel-before.json` and `trade-cancel-after.json` (bundle still in progress).
+- **Batch4 preflight:** #356 + #388 + #325 merge cleanly with current master; 33 files, no cross-PR file overlap. Whitespace checks pass. Preflight is local object-store work only, not published or accepted. Await #325 exact-head iOS re-check, geo Android PR and exact-head CI.
+- **Docs #391:** current head `74f0d8194cbd91c34024945c29f300446abb7c91` includes the takeover/recovery resume blocks and preserves the original seven-file scope. Recovery helper scripts stay only on the hub branch. Required CI reruns for the update; do not assume prior green applies.
+- **Heavy build order:** Stream3 geo Android, then Stream2 #325 iOS, then Stream1. Shared UX starts at the next available worker slot, reusing its checkpoint. Read-only use of the existing Maestro binary is allowed on each stream's owned device with separate output directories.
+- **No whole-row closure:** 13 closed / 67 partial. No fresh full-app pass yet. Founder queue and all hard limits unchanged; no main checkout edits, data repairs, search audit, maintenance or unit-test campaign.
+
+## Resume point history — 2026-09-23T21:39:56Z (isolated runtime recovery)
 
 - **Verified recovery boundary:** both local Docker contexts resolve to the same empty engine; old stream ports had no listeners. The coordinator approved fresh canonical replay and synthetic fixtures only, on the existing stream ports. No database archive restore, founder data repair, existing ledger rewrite or application schema change is authorized.
 - **Stream 3:** fresh owned API64531/SQL64532 replay succeeded, 89 canonical migrations through `20260923000300`, source `cef95ab67864ccca3ca243cc0d936a87d342cc8f`. Geo Android build and fresh fixture setup continue. Retain the accepted iOS evidence.
