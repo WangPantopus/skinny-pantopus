@@ -2271,7 +2271,7 @@ router.get('/search', verifyToken, async (req, res) => {
  * This endpoint is intentionally public (no verifyToken) because it powers the main browsing feed.
  * We enrich each gig with bidsCount (number of bids/offers).
  */
-router.get('/', async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   try {
     const {
@@ -2307,7 +2307,7 @@ router.get('/', async (req, res) => {
     }
 
     const requestedUserId = userId || user_id;
-    const currentUserId = req.user?.id || (await extractOptionalUserId(req));
+    const currentUserId = req.user?.id || null; // optionalAuth: Bearer (native) or session cookie (web)
     const shouldExcludeOwnGigs = Boolean(currentUserId && !requestedUserId);
 
     // Resolve pagination: support both page (1-based) and offset
@@ -2792,7 +2792,7 @@ router.get('/', async (req, res) => {
  *  - min_lat, min_lon, max_lat, max_lon (required)
  *  - status (optional, default 'open')
  */
-router.get('/in-bounds', async (req, res) => {
+router.get('/in-bounds', optionalAuth, async (req, res) => {
   const startTime = process.hrtime.bigint();
   try {
     const min_lat = parseFloat(req.query.min_lat);
@@ -2806,7 +2806,7 @@ router.get('/in-bounds', async (req, res) => {
     }
     const includeRemote = parseBooleanQuery(req.query.includeRemote, true);
     const category = req.query.category || null;
-    const currentUserId = req.user?.id || (await extractOptionalUserId(req));
+    const currentUserId = req.user?.id || null; // optionalAuth: Bearer (native) or session cookie (web)
 
     if (![min_lat, min_lon, max_lat, max_lon].every(Number.isFinite)) {
       return res
@@ -3380,7 +3380,7 @@ const { getGigClusters } = require('../services/gig/clusterService');
  * Returns pre-sectioned data for the task browse feed.
  * Query params: lat, lng (required), radius (optional, meters, default 100mi)
  */
-router.get('/browse', async (req, res) => {
+router.get('/browse', optionalAuth, async (req, res) => {
   const startTime = Date.now();
   try {
     const lat = parseFloat(req.query.lat);
@@ -3402,7 +3402,7 @@ router.get('/browse', async (req, res) => {
       MAX_BROWSE_RADIUS_METERS
     );
     const taskArchetype = req.query.task_archetype || null;
-    const userId = await extractOptionalUserId(req);
+    const userId = req.user?.id || null; // optionalAuth: Bearer (native) or session cookie (web)
 
     // ── Cache check ──
     if (!userId) {
