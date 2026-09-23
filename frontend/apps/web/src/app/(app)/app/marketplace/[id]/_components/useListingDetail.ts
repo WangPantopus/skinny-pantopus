@@ -216,9 +216,20 @@ export function useListingDetail() {
   };
 
   const handleStatusChange = async (status: string) => {
+    // Sold and archived take the listing off the marketplace (browse lists active listings only), so ask first.
+    if (status === 'sold' || status === 'archived') {
+      const yes = await confirmStore.open({
+        title: status === 'sold' ? 'Mark this listing sold?' : 'Archive this listing?',
+        description: 'It comes off the marketplace and stops taking offers.',
+        confirmLabel: status === 'sold' ? 'Mark sold' : 'Archive',
+        variant: status === 'sold' ? 'primary' : 'destructive',
+      });
+      if (!yes) return;
+    }
     try {
       await api.listings.updateListingStatus(listingId, status as ListingStatus);
       await fetchListing();
+      toast.success(`Listing marked ${status.replace(/_/g, ' ')}.`);
     } catch {
       toast.error('Failed to update status.');
     }
