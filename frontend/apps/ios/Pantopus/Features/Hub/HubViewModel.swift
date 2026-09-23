@@ -46,6 +46,8 @@ final class HubViewModel {
     var densityHomeId: String?
     var densityCount = 0
     private let bannerDismissedKey = "hub.setupBanner.dismissed"
+    /// Setup steps the "Verify your address" banner stands for (the claim and verify steps).
+    private static let addressSetupSteps: Set<String> = ["home", "verify"]
     private var bannerDismissed: Bool {
         get { UserDefaults.standard.bool(forKey: bannerDismissedKey) }
         set { UserDefaults.standard.set(newValue, forKey: bannerDismissedKey) }
@@ -229,8 +231,14 @@ final class HubViewModel {
             return
         }
 
+        // The banner asks the user to verify their address, so only an
+        // unfinished claim/verify step shows it. Profile steps alone must not
+        // tell an already-verified resident to verify.
+        let addressStepPending = hub.setup.steps.contains { step in
+            Self.addressSetupSteps.contains(step.key) && !step.done
+        }
         let banner: SetupBannerContent? =
-            (!hub.setup.allDone && !bannerDismissed)
+            (addressStepPending && !bannerDismissed)
                 ? SetupBannerContent()
                 : nil
 
