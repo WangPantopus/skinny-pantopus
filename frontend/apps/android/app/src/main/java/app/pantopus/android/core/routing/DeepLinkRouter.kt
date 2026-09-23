@@ -354,6 +354,13 @@ object DeepLinkRouter {
         )
     }
 
+    /** The task id when [path] (a notification link) opens a gig; screens that host the list push it themselves. */
+    fun gigIdForLink(path: String): String? {
+        val normalized = Paths.normalizeIncoming(path)
+        if (Paths.isOAuthCallback(normalized)) return null
+        return (resolveString(normalized) as? Destination.Gig)?.id
+    }
+
     fun consume(): Destination? {
         val current = _pending.value
         _pending.value = null

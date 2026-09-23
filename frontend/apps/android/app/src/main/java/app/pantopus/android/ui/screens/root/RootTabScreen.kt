@@ -4817,7 +4817,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     // The VM reads `context` from SavedStateHandle; a plain
                     // `notifications` navigate leaves it null (unscoped list).
-                    NotificationsScreen(onBack = { navController.popBackStack() })
+                    NotificationsScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
+                    )
                 }
                 composable(ChildRoutes.RECENT_ACTIVITY) {
                     RecentActivityScreen(
