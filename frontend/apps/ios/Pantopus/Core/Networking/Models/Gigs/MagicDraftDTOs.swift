@@ -60,6 +60,9 @@ public struct MagicDraftResponse: Decodable, Sendable {
     public let draft: MagicDraftDTO
     public let confidence: Double?
     public let fieldConfidence: [String: Double]?
+    /// The follow-up question's text. The backend sends
+    /// `{ field, question, options }` (`magicTaskService.js`); a bare
+    /// string decodes too.
     public let clarifyingQuestion: String?
     public let source: String?
     public let elapsed: Int?
@@ -68,6 +71,29 @@ public struct MagicDraftResponse: Decodable, Sendable {
     enum CodingKeys: String, CodingKey {
         case draft, confidence, fieldConfidence, clarifyingQuestion, source, elapsed
         case isFallback = "_fallback"
+    }
+}
+
+extension MagicDraftResponse {
+    private struct ClarifyingQuestionObject: Decodable {
+        let question: String?
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        draft = try container.decode(MagicDraftDTO.self, forKey: .draft)
+        confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
+        fieldConfidence = try container.decodeIfPresent([String: Double].self, forKey: .fieldConfidence)
+        if let text = try? container.decodeIfPresent(String.self, forKey: .clarifyingQuestion) {
+            clarifyingQuestion = text
+        } else {
+            clarifyingQuestion = try? container
+                .decodeIfPresent(ClarifyingQuestionObject.self, forKey: .clarifyingQuestion)?
+                .question
+        }
+        source = try container.decodeIfPresent(String.self, forKey: .source)
+        elapsed = try container.decodeIfPresent(Int.self, forKey: .elapsed)
+        isFallback = try container.decodeIfPresent(Bool.self, forKey: .isFallback)
     }
 }
 
