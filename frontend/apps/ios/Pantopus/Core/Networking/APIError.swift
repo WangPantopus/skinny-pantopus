@@ -37,16 +37,15 @@ public enum APIError: Error, LocalizedError, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidURL: "Could not build request URL."
-        case .invalidResponse: "Invalid response from server."
+        case .invalidURL, .invalidResponse: "Something went wrong. Please try again."
         case .unauthorized: "Your session has expired. Please sign in again."
         case .forbidden: "You don't have permission to do that."
         case .notFound: "We couldn't find what you were looking for."
-        case let .clientError(_, message):
-            Self.friendlyClientMessage(message) ?? "Request failed."
-        case let .server(status, _): "Server error \(status). Please try again."
+        case let .clientError(status, message):
+            Self.friendlyClientMessage(message) ?? Self.plainClientMessage(status: status)
+        case .server: "Something went wrong on our side. Please try again."
         case .transport: "Can't reach Pantopus. Check your connection."
-        case .decoding: "Received an unexpected response."
+        case .decoding: "Something went wrong loading this. Please try again."
         case .retriesExhausted: "The server is having trouble. Please try again."
         }
     }
@@ -77,20 +76,38 @@ public enum APIError: Error, LocalizedError, Sendable {
         return json["code"] as? String
     }
 
-    /// Turn a raw 4xx JSON body into a short user-facing string.
+    /// Turn a raw 4xx body into a short user-facing string, or nil when it
+    /// holds nothing a person should read (raw JSON, HTML, machine codes).
     static func friendlyClientMessage(_ raw: String?) -> String? {
         guard let raw, !raw.isEmpty else { return nil }
         guard let data = raw.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return raw
+            // A short plain-text body ("Too many requests, please try again
+            // later.") reads fine; an HTML page or a long dump does not.
+            let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.count <= 160 && !text.hasPrefix("<") ? text : nil
         }
         if let details = json["details"] as? [[String: Any]] {
             let messages = details.compactMap { $0["message"] as? String }.filter { !$0.isEmpty }
             if let first = messages.first { return first }
         }
         if let message = json["message"] as? String, !message.isEmpty { return message }
-        if let error = json["error"] as? String, !error.isEmpty { return error }
-        return raw
+        if let error = json["error"] as? String, !error.isEmpty, !isMachineCode(error) { return error }
+        return nil
+    }
+
+    /// `NOT_FOUND`, `SLOT_FULL`: a code for the app, not copy for people.
+    static func isMachineCode(_ value: String) -> Bool {
+        value.range(of: "^[A-Z][A-Z0-9_]*$", options: .regularExpression) != nil
+    }
+
+    /// Plain copy for a 4xx whose body carries no readable message.
+    static func plainClientMessage(status: Int) -> String {
+        switch status {
+        case 413: "That file is too large."
+        case 429: "Too many attempts. Please wait a moment and try again."
+        default: "Something went wrong. Please try again."
+        }
     }
 }
 
