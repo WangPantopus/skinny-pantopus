@@ -97,7 +97,8 @@ public struct HelpCenterView: View {
     @MainActor
     private func openURL(_ url: URL) async {
         // No mail app → say where to write instead of doing nothing.
-        if !(await UIApplication.shared.open(url, options: [:])) {
+        let opened = await UIApplication.shared.open(url, options: [:])
+        if !opened {
             showsEmailFallback = true
         }
     }
