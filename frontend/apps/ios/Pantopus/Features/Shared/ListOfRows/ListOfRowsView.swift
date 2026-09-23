@@ -353,6 +353,11 @@ private struct LoadingRows: View {
 }
 
 private struct LoadedList: View {
+    /// The system's default plain-list header insets (measured on iOS 26.5:
+    /// 10 pt above and below the title, 16 pt either side), owned explicitly
+    /// so the header can paint its own background edge to edge.
+    static let headerInsets = EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16)
+
     let sections: [RowSection]
     let hasMore: Bool
     let banner: BannerConfig?
@@ -470,27 +475,39 @@ private struct LoadedList: View {
 
     @ViewBuilder private func sectionHeader(_ section: RowSection) -> some View {
         if let header = section.header {
-            HStack(spacing: Spacing.s2) {
-                SectionHeader(header)
-                    .textCase(nil)
-                if let count = section.count {
-                    Text("(\(count))")
-                        .pantopusTextStyle(.caption)
-                        .foregroundStyle(Theme.Color.appTextMuted)
-                }
-                Spacer()
-                if let onSeeAll = section.onSeeAll {
-                    Button(action: onSeeAll) {
-                        HStack(spacing: Spacing.s1) {
-                            Text("See all")
-                                .pantopusTextStyle(.caption)
-                                .foregroundStyle(Theme.Color.primary600)
-                            Icon(.chevronRight, size: 12, color: Theme.Color.primary600)
-                        }
+            sectionHeaderContent(section, header: header)
+                // Plain-list headers stay pinned while rows scroll under them,
+                // so the header owns its insets and paints the list's own
+                // background behind itself; rows no longer show through the
+                // title. Same colour as the list, so nothing changes at rest.
+                .padding(Self.headerInsets)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.Color.appBg)
+                .listRowInsets(EdgeInsets())
+        }
+    }
+
+    private func sectionHeaderContent(_ section: RowSection, header: String) -> some View {
+        HStack(spacing: Spacing.s2) {
+            SectionHeader(header)
+                .textCase(nil)
+            if let count = section.count {
+                Text("(\(count))")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextMuted)
+            }
+            Spacer()
+            if let onSeeAll = section.onSeeAll {
+                Button(action: onSeeAll) {
+                    HStack(spacing: Spacing.s1) {
+                        Text("See all")
+                            .pantopusTextStyle(.caption)
+                            .foregroundStyle(Theme.Color.primary600)
+                        Icon(.chevronRight, size: 12, color: Theme.Color.primary600)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("See all \(header)")
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("See all \(header)")
             }
         }
     }

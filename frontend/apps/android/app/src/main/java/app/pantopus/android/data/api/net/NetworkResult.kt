@@ -61,7 +61,7 @@ sealed class NetworkError(
     class Server(
         code: Int,
         val body: String?,
-    ) : NetworkError(code, "Server error $code. Please try again.")
+    ) : NetworkError(code, "Something went wrong on our side. Please try again.")
 
     /** Network-layer failure (offline, timeout, DNS). */
     class Transport(

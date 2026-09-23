@@ -144,6 +144,9 @@ public enum HubRoute: Hashable {
     /// "My Businesses" row (previously fell back to the NotYetAvailable
     /// placeholder).
     case myBusinesses
+    /// The viewer's own listings (Active / Sold / Drafts). Reached from the
+    /// Hub nav-drawer's "My Listings" row.
+    case myListings
     case pulsePost(postId: String)
     /// Bills list for a home (T5.2.2 / P13).
     case homeBills(homeId: String)
@@ -231,7 +234,7 @@ public enum HubRoute: Hashable {
     /// `jumpToStep == .price`).
     case editListing(listingId: String, jumpToStep: ListingComposeStep?)
     /// Invoice detail (T2.6 TransactionalDetailShell · invoice variant).
-    /// Reached from wallet / payments surfaces when those land.
+    /// Reached from invoice notification links (`DeepLinkRouter.invoiceDetail`).
     case invoiceDetail(invoiceId: String)
     /// Bell icon target. Replaced by the real notifications screen in T4.1.
     case notifications
@@ -778,7 +781,7 @@ public struct HubTabRoot: View {
         case .search: return .universalSearch
         case .discoverNeighbors: return .discoverHub
         case .myBeacon: return .myBeacon
-        case .myListings: return .marketplace
+        case .myListings: return .myListings
         case .myPulse: return .myPosts
         case .myTasks: return .myTasks
         case .myBids: return .myBids
@@ -1025,11 +1028,14 @@ public struct HubTabRoot: View {
             path.append(.homeDashboard(homeId: homeId))
             path.append(.waitingRoom(homeId: homeId))
             _ = router.consume()
-        case let .bookingDetail(bookingId):
-            path.append(.scheduling(.bookingDetail(owner: .personal, bookingId: bookingId)))
+        case let .bookingDetail(bookingId, owner):
+            path.append(.scheduling(.bookingDetail(owner: owner, bookingId: bookingId)))
             _ = router.consume()
         case .myBookings:
             path.append(.scheduling(.customerMyBookings))
+            _ = router.consume()
+        case let .invoiceDetail(invoiceId):
+            path.append(.invoiceDetail(invoiceId: invoiceId))
             _ = router.consume()
         default:
             break
@@ -1181,7 +1187,30 @@ public struct HubTabRoot: View {
         if path.hasPrefix("/gigs") {
             return .gigsFeed
         }
+        // Hub status pills: "N notifications" and "$X ready · Tap to
+        // withdraw". The wallet holds the balance and the Withdraw action.
+        if path.hasPrefix("/app/notifications") {
+            return .notifications
+        }
+        if path.hasPrefix("/app/settings/payments") || path.hasPrefix("/app/wallet") {
+            return .wallet
+        }
+        if path.hasPrefix("/app/map") {
+            return .explore
+        }
+        if let businessId = Self.businessId(inDashboardRoute: path) {
+            return .businessOwner(businessId: businessId)
+        }
         return .placeholder(label: item.title)
+    }
+
+    /// Extracts `<id>` from `/app/businesses/<id>/dashboard`.
+    private static func businessId(inDashboardRoute route: String) -> String? {
+        let prefix = "/app/businesses/"
+        guard route.hasPrefix(prefix) else { return nil }
+        let rest = route.dropFirst(prefix.count)
+        let id = rest.split { $0 == "/" || $0 == "?" }.first.map(String.init) ?? ""
+        return id.isEmpty ? nil : id
     }
 
     /// Two-letter initials derived from a display name. Falls back to
@@ -1244,6 +1273,15 @@ public struct HubTabRoot: View {
                     },
                     onRegister: { Task { @MainActor in push(.createBusiness) } },
                     onClaim: { Task { @MainActor in push(.discoverBusinesses) } }
+                )
+            )
+        case .myListings:
+            MyListingsView(
+                viewModel: MyListingsViewModel(
+                    onOpenListing: { listingId in
+                        Task { @MainActor in push(.listingDetail(listingId: listingId)) }
+                    },
+                    onCompose: { Task { @MainActor in push(.composeListing) } }
                 )
             )
         case .myClaims:

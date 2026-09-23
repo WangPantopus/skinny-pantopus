@@ -1238,7 +1238,12 @@ class AuthRepository
             when {
                 loginArrival != null && PendingDeepLinkStore.peek() == loginArrival -> Unit
                 manual -> PendingDeepLinkStore.clear()
-                else -> PendingDeepLinkStore.retainForReauthentication(userId)
+                else -> {
+                    // Still hydrating the stored session (cold start): a link
+                    // stashed meanwhile belongs to the account being ended.
+                    if (_state.value == State.Unknown) PendingDeepLinkStore.adoptHydrationArrival(userId)
+                    PendingDeepLinkStore.retainForReauthentication(userId)
+                }
             }
         }
 

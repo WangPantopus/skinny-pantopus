@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +32,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
@@ -63,6 +65,34 @@ data class EditBidDraft(
 )
 
 /**
+ * A failed submit as the server explained it: its message, and whether it asked the helper to set up payouts first
+ * (`payout_onboarding_required`). The host records the failed request here; the sheet shows it.
+ */
+@Stable
+class EditBidFailure {
+    var message by mutableStateOf<String?>(null)
+        private set
+    var needsPayoutSetup by mutableStateOf(false)
+        private set
+
+    fun record(error: NetworkError) {
+        message = error.message
+        needsPayoutSetup =
+            error is NetworkError.ClientError &&
+            runCatching { org.json.JSONObject(error.body.orEmpty()).optString("code") }.getOrNull() == PAYOUT_ONBOARDING_REQUIRED
+    }
+
+    fun clear() {
+        message = null
+        needsPayoutSetup = false
+    }
+
+    private companion object {
+        const val PAYOUT_ONBOARDING_REQUIRED = "payout_onboarding_required"
+    }
+}
+
+/**
  * P3.4 — Bid form sheet. Reused by:
  *
  *   • `GigDetailScreen`  → place a new bid
@@ -77,6 +107,8 @@ fun EditBidSheetContent(
     target: EditBidSheetTarget,
     onSubmit: suspend (EditBidDraft) -> Boolean,
     onCancel: () -> Unit,
+    failure: EditBidFailure? = null,
+    onSetUpPayouts: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
 
@@ -161,6 +193,14 @@ fun EditBidSheetContent(
                 modifier = Modifier.testTag("edit-bid-error"),
             )
         }
+        if (failure?.needsPayoutSetup == true && onSetUpPayouts != null) {
+            OutlinedTextButton(
+                text = "Go to Wallet",
+                enabled = !submitting,
+                modifier = Modifier.fillMaxWidth().testTag("edit-bid-set-up-payouts"),
+                onClick = onSetUpPayouts,
+            )
+        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             OutlinedTextButton(
@@ -179,6 +219,7 @@ fun EditBidSheetContent(
                     if (value != null) {
                         submitting = true
                         errorText = null
+                        failure?.clear()
                         scope.launch {
                             try {
                                 val composed = composeMessage(message.trim(), terms.trim())
@@ -189,7 +230,7 @@ fun EditBidSheetContent(
                                         proposedTime = eta.trim().ifEmpty { null },
                                     )
                                 val ok = onSubmit(draft)
-                                if (!ok) errorText = "Couldn't submit. Try again in a moment."
+                                if (!ok) errorText = failure?.message ?: "Couldn't submit. Try again in a moment."
                             } finally {
                                 submitting = false
                             }

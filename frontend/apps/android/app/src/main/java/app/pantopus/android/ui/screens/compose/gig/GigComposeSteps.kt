@@ -65,6 +65,24 @@ enum class GigComposeCategory(
     Other("other", "Other"),
     ;
 
+    /**
+     * The backend's category name (`magicTaskService.js` VALID_CATEGORIES),
+     * sent on `POST /api/gigs/magic-post` as iOS and web send it.
+     */
+    val backendLabel: String
+        get() =
+            when (this) {
+                Handyman -> "Handyman"
+                Cleaning -> "Cleaning"
+                Moving -> "Moving"
+                PetCare -> "Pet Care"
+                ChildCare -> "Child Care"
+                Tutoring -> "Tutoring"
+                Delivery -> "Delivery"
+                Tech -> "Tech Support"
+                Other -> "Other"
+            }
+
     companion object {
         /**
          * Maps a `GigsCategory.key` (or any unrecognised string) into
@@ -75,6 +93,29 @@ enum class GigComposeCategory(
             val key = raw?.lowercase().orEmpty()
             if (key.isEmpty() || key == "all") return null
             return entries.firstOrNull { it.key == key }
+        }
+
+        /**
+         * Maps a magic-draft `category` onto the compose enum. The backend
+         * answers with display names ("Pet Care", "Tech Support",
+         * "Gardening"…), so separators are ignored, errand buckets land on
+         * Delivery and any other bucket lands on Other. Mirrors iOS
+         * `GigComposeCategory.from(backendCategory:)`. Null for blank input.
+         */
+        fun fromBackendCategory(raw: String?): GigComposeCategory? {
+            val key =
+                raw
+                    ?.lowercase()
+                    ?.replace("_", "")
+                    ?.replace("-", "")
+                    ?.replace(" ", "")
+                    .orEmpty()
+            if (key.isBlank()) return null
+            return when (key) {
+                "errands", "grocerypickup" -> Delivery
+                "techsupport" -> Tech
+                else -> entries.firstOrNull { it.key == key } ?: Other
+            }
         }
     }
 }

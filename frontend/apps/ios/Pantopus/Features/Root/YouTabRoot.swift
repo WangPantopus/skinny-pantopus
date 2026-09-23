@@ -445,9 +445,12 @@ public struct YouTabRoot: View {
     /// True when opened from the `monthly_receipt` push — the Monthly
     /// Receipt card renders expanded (RN `/(tabs)/profile?tab=receipt`).
     private let expandMonthlyReceipt: Bool
+    /// Closes the profile cover (RootTabView presents it full screen).
+    private let onClose: (@MainActor () -> Void)?
 
-    public init(expandMonthlyReceipt: Bool = false) {
+    public init(expandMonthlyReceipt: Bool = false, onClose: (@MainActor () -> Void)? = nil) {
         self.expandMonthlyReceipt = expandMonthlyReceipt
+        self.onClose = onClose
     }
 
     public var body: some View {
@@ -456,7 +459,8 @@ public struct YouTabRoot: View {
                 expandMonthlyReceipt: expandMonthlyReceipt,
                 onAction: { tile in handleAction(tile) },
                 onSection: { row in handleSection(row) },
-                onLogOut: { showsSignOutConfirm = true }
+                onLogOut: { showsSignOutConfirm = true },
+                onClose: onClose
             )
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: YouRoute.self) { route in

@@ -14,6 +14,8 @@
 //  URLs ride `POST /api/gigs/:gigId/mark-completed` with the note.
 //
 
+// swiftlint:disable file_length
+
 import PhotosUI
 import SwiftUI
 
@@ -66,6 +68,8 @@ public struct DeliveryProofSheetView: View {
     private let target: DeliveryProofTarget
     private let onSubmit: Submit
     private let onDismiss: @MainActor () -> Void
+    /// The failed send's own reason, read after `onSubmit` reports failure.
+    private let failureMessage: @MainActor () -> String?
 
     @State private var photos: [DeliveryProofPhoto] = []
     @State private var note: String = ""
@@ -79,11 +83,13 @@ public struct DeliveryProofSheetView: View {
     public init(
         target: DeliveryProofTarget,
         onSubmit: @escaping Submit,
-        onDismiss: @escaping @MainActor () -> Void
+        onDismiss: @escaping @MainActor () -> Void,
+        failureMessage: @escaping @MainActor () -> String? = { nil }
     ) {
         self.target = target
         self.onSubmit = onSubmit
         self.onDismiss = onDismiss
+        self.failureMessage = failureMessage
     }
 
     public var body: some View {
@@ -482,7 +488,7 @@ extension DeliveryProofSheetView {
             submittedAt = Date()
             withAnimation { submitted = true }
         } else {
-            errorText = "Couldn't send your proof. Check your connection and try again."
+            errorText = failureMessage() ?? "Couldn't send your proof. Check your connection and try again."
         }
     }
 }

@@ -209,9 +209,10 @@ private extension MeViewModel {
     }
 
     private static func buildPersonal(profile: UserProfile, stats: UserStatsDTO?) -> MeIdentityContent {
-        let name = profile.name.isEmpty
-            ? [profile.firstName, profile.lastName].filter { !$0.isEmpty }.joined(separator: " ")
-            : profile.name
+        let fullName = profile.name ?? ""
+        let name = fullName.isEmpty
+            ? [profile.firstName, profile.lastName].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
+            : fullName
         let displayName = name.isEmpty ? "Pantopus user" : name
         let locality = localityString(profile)
         let tagline = (profile.tagline?.isEmpty == false ? profile.tagline : nil) ?? profile.bio

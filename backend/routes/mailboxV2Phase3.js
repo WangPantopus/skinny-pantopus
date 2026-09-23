@@ -6,10 +6,14 @@
 // Mounted at /api/mailbox/v2/p3
 // ============================================================
 
+const crypto = require('crypto');
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
+const taskMediaStorage = require('../services/homeTaskMediaStorage');
+const { checkHomePermission } = require('../utils/homePermissions');
 const { getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
@@ -187,6 +191,59 @@ function assetRecordFields(asset) {
 //                      RECORDS ENDPOINTS
 // ====================================================================
 
+// ── Record photos ──
+// A record's photos are stored in the private Home documents bucket, never at a public URL. AssetPhoto.url holds
+// `storage:<object key>`. Reads replace it with a short-lived signed URL, and only for viewers with assets.view on the
+// asset's Home; everyone else gets no photos.
+const PHOTO_REF = 'storage:';
+const PHOTO_URL_TTL_SECONDS = 300;
+const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+const photoMultipart = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: taskMediaStorage.MAX_BYTES, files: 1, fields: 1, fieldSize: 100, parts: 3 },
+}).single('file');
+
+async function photoBucket() {
+  const name = (process.env.HOME_DOCUMENTS_BUCKET || '').trim();
+  if (!/^[a-z0-9][a-z0-9-]{2,62}$/.test(name)) return null;
+  const { data, error } = await supabaseAdmin.storage.getBucket(name);
+  // A public bucket would serve every photo without a Home permission check.
+  if (error || !data || data.public !== false) return null;
+  return supabaseAdmin.storage.from(name);
+}
+
+// The Homes, of those given, where the viewer may see records' photos.
+async function photoViewHomes(homeIds, userId) {
+  const allowed = new Set();
+  await Promise.all([...new Set(homeIds)].map(async (homeId) => {
+    if ((await checkHomePermission(homeId, userId, 'assets.view')).hasAccess) allowed.add(homeId);
+  }));
+  return allowed;
+}
+
+// The photos a viewer may see, each stored photo with a fresh signed URL. A photo whose URL can't be signed is left out.
+async function presentPhotos(photos, homeOfAsset, viewHomes) {
+  const visible = (photos || []).filter((p) => viewHomes.has(homeOfAsset(p.asset_id)));
+  const isStored = (p) => typeof p.url === 'string' && p.url.startsWith(PHOTO_REF);
+  const stored = visible.filter(isStored);
+  const signed = new Map();
+  if (stored.length) {
+    const bucket = await photoBucket();
+    if (bucket) {
+      const { data, error } = await bucket.createSignedUrls(stored.map((p) => p.url.slice(PHOTO_REF.length)), PHOTO_URL_TTL_SECONDS);
+      if (!error) (data || []).forEach((d, i) => { if (d && d.signedUrl && !d.error) signed.set(stored[i].id, d.signedUrl); });
+    }
+  }
+  return visible.flatMap((p) => {
+    if (!isStored(p)) return [p];
+    return signed.has(p.id) ? [{ ...p, url: signed.get(p.id) }] : [];
+  });
+}
+
+function photoError(res, status, message) {
+  return res.status(status).json({ error: message });
+}
+
 // GET /records/assets — list home assets with mail link counts
 router.get('/records/assets', verifyToken, async (req, res) => {
   try {
@@ -219,16 +276,19 @@ router.get('/records/assets', verifyToken, async (req, res) => {
       });
     }
 
-    // The assets' photos (AssetPhoto), newest first; cards show the first.
+    // The assets' photos (AssetPhoto), newest first; cards show the first. Only viewers with assets.view see them.
     const photosByAsset = {};
     if (assetIds.length) {
-      const { data: photos, error: photoError } = await supabaseAdmin
+      const { data: rows, error: photoReadError } = await supabaseAdmin
         .from('AssetPhoto')
         .select('id, asset_id, url, caption, taken_at')
         .in('asset_id', assetIds)
         .order('taken_at', { ascending: false });
-      if (photoError) throw photoError;
-      (photos || []).forEach((p) => {
+      if (photoReadError) throw photoReadError;
+      const homeOf = new Map((assets || []).map((a) => [a.id, a.home_id]));
+      const viewHomes = await photoViewHomes([...homeOf.values()], userId);
+      const photos = await presentPhotos(rows, (assetId) => homeOf.get(assetId), viewHomes);
+      photos.forEach((p) => {
         (photosByAsset[p.asset_id] = photosByAsset[p.asset_id] || [])
           .push({ id: p.id, url: p.url, caption: p.caption, taken_at: p.taken_at });
       });
@@ -297,12 +357,14 @@ router.get('/records/asset/:id/mail', verifyToken, async (req, res) => {
       mail = mailItems || [];
     }
 
-    // Get photos
-    const { data: photos } = await supabaseAdmin
+    // Get photos: only for viewers with assets.view on this Home, each with a fresh signed URL.
+    const { data: photoRows, error: photoReadError } = await supabaseAdmin
       .from('AssetPhoto')
-      .select('*')
+      .select('id, asset_id, url, caption, taken_at, uploaded_by, created_at')
       .eq('asset_id', assetId)
       .order('taken_at', { ascending: false });
+    if (photoReadError) throw photoReadError;
+    const photos = await presentPhotos(photoRows, () => asset.home_id, await photoViewHomes([asset.home_id], userId));
 
     const enrichedAsset = {
       ...asset,
@@ -315,6 +377,70 @@ router.get('/records/asset/:id/mail', verifyToken, async (req, res) => {
   } catch (err) {
     logger.error('[P3] GET /records/asset/:id/mail failed', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch asset details' });
+  }
+});
+
+// POST /records/asset/:id/photos — add a photo to a record (multipart field `file`). Needs assets.manage on the
+// asset's Home. The photo goes to private storage; the response carries a signed URL for it.
+router.post('/records/asset/:id/photos', verifyToken, async (req, res, next) => {
+  try {
+    if (!isUuid(req.params.id)) return photoError(res, 404, 'Record not found');
+    const { data: asset, error } = await supabaseAdmin
+      .from('HomeAsset').select('id, home_id').eq('id', req.params.id).maybeSingle();
+    if (error) throw error;
+    // Someone outside the Home can't learn that the record exists.
+    if (!asset || !(await checkHomePermission(asset.home_id, req.user.id)).hasAccess) {
+      return photoError(res, 404, 'Record not found');
+    }
+    if (!(await checkHomePermission(asset.home_id, req.user.id, 'assets.manage')).hasAccess) {
+      return photoError(res, 403, "You don't have permission to add photos to this record.");
+    }
+    req.photoAsset = asset;
+    return next();
+  } catch (err) {
+    logger.error('[P3] POST /records/asset/:id/photos access check failed', { error: err.message });
+    return photoError(res, 500, "Couldn't add this photo. Try again.");
+  }
+}, (req, res, next) => photoMultipart(req, res, (err) => {
+  if (!err) return next();
+  logger.warn('[P3] record photo upload rejected', { code: err.code, message: err.message });
+  return err.code === 'LIMIT_FILE_SIZE'
+    ? photoError(res, 413, 'Choose a photo of 25 MB or less.')
+    : photoError(res, 400, 'Choose one photo to upload.');
+}), async (req, res) => {
+  const asset = req.photoAsset;
+  try {
+    if (!req.file) return photoError(res, 400, 'Choose one photo to upload.');
+    let meta;
+    try {
+      meta = taskMediaStorage.inspect(req.file);
+    } catch (e) {
+      if (e.status === 413) return photoError(res, 413, 'Choose a photo of 25 MB or less.');
+      if (e.status === 415) return photoError(res, 415, 'Choose a JPEG, PNG, WebP or HEIC photo.');
+      return photoError(res, 400, 'Choose one photo to upload.');
+    }
+    // inspect() has checked the bytes match the declared type; photos must also be images.
+    if (!PHOTO_TYPES.has(meta.mime_type)) return photoError(res, 415, 'Choose a JPEG, PNG, WebP or HEIC photo.');
+    const bucket = await photoBucket();
+    if (!bucket) return photoError(res, 503, 'Photo storage is unavailable. Try again later.');
+    const photoId = crypto.randomUUID();
+    const key = `asset-photos/${asset.home_id}/${asset.id}/${photoId}/${meta.sha256}`;
+    const uploaded = await bucket.upload(key, req.file.buffer, { contentType: meta.mime_type, cacheControl: '0', upsert: false });
+    if (!uploaded || uploaded.error) return photoError(res, 503, "Couldn't upload this photo. Try again.");
+    const { data: row, error: insertError } = await supabaseAdmin
+      .from('AssetPhoto')
+      .insert({ id: photoId, asset_id: asset.id, url: PHOTO_REF + key, uploaded_by: req.user.id })
+      .select('id, asset_id, url, caption, taken_at')
+      .single();
+    if (insertError || !row) {
+      await bucket.remove([key]).catch(() => {});
+      return photoError(res, 500, "Couldn't save this photo. Try again.");
+    }
+    const [photo] = await presentPhotos([row], () => asset.home_id, new Set([asset.home_id]));
+    return res.status(201).json({ photo: photo || { ...row, url: null } });
+  } catch (err) {
+    logger.error('[P3] POST /records/asset/:id/photos failed', { error: err.message });
+    return photoError(res, 500, "Couldn't add this photo. Try again.");
   }
 });
 

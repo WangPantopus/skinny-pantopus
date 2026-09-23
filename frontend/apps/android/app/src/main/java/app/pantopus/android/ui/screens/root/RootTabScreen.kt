@@ -250,6 +250,7 @@ import app.pantopus.android.ui.screens.inbox.conversation.ChatCreatorThreadChrom
 import app.pantopus.android.ui.screens.inbox.conversation.ChatCreatorThreadContext
 import app.pantopus.android.ui.screens.inbox.conversation.ChatInitialTopic
 import app.pantopus.android.ui.screens.inbox.conversation.ChatThreadMode
+import app.pantopus.android.ui.screens.inbox.conversation.DeepLinkChatResolverViewModel
 import app.pantopus.android.ui.screens.inbox.newmessage.NewMessageScreen
 import app.pantopus.android.ui.screens.inbox.search.ChatSearchResult
 import app.pantopus.android.ui.screens.inbox.search.ChatSearchResultKind
@@ -1323,6 +1324,10 @@ private object ChildRoutes {
     /** P4.3 — message id to scroll to on open (Chat Search deep-link).
      *  Empty for normal opens, which land on the latest message. */
     const val CHAT_SCROLL_TO_KEY = "scrollTo"
+
+    /** The room a chat link named when it opened as a person thread, so the
+     *  link's arrival still completes (empty for every other open). */
+    const val CHAT_ARRIVAL_ROOM_KEY = "arrivalRoom"
     const val CHAT_CONVERSATION =
         "chat/{$CHAT_KIND_KEY}/{$CHAT_ID_KEY}?" +
             "$CHAT_NAME_KEY={$CHAT_NAME_KEY}" +
@@ -1337,7 +1342,8 @@ private object ChildRoutes {
             "&$CHAT_TOPIC_TYPE_KEY={$CHAT_TOPIC_TYPE_KEY}" +
             "&$CHAT_TOPIC_REF_ID_KEY={$CHAT_TOPIC_REF_ID_KEY}" +
             "&$CHAT_TOPIC_TITLE_KEY={$CHAT_TOPIC_TITLE_KEY}" +
-            "&$CHAT_GIG_ID_KEY={$CHAT_GIG_ID_KEY}"
+            "&$CHAT_GIG_ID_KEY={$CHAT_GIG_ID_KEY}" +
+            "&$CHAT_ARRIVAL_ROOM_KEY={$CHAT_ARRIVAL_ROOM_KEY}"
 
     /** New message contact picker (T6.6b P25). Reached from Chat list
      *  compose button + empty-state CTA. */
@@ -1531,6 +1537,12 @@ private object ChildRoutes {
             "&$CHAT_TOPIC_REF_ID_KEY=${enc(topicRefId ?: "")}" +
             "&$CHAT_TOPIC_TITLE_KEY=${enc(topicTitle ?: "")}"
     }
+
+    /** Adds the linked room id to a person-thread route (see [CHAT_ARRIVAL_ROOM_KEY]). */
+    fun withArrivalRoom(
+        route: String,
+        roomId: String,
+    ): String = "$route&$CHAT_ARRIVAL_ROOM_KEY=${java.net.URLEncoder.encode(roomId, "UTF-8").replace("+", "%20")}"
 
     /** Build the chat-conversation path for a gig-scoped room. */
     fun chatConversationRoom(
@@ -1955,6 +1967,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val pendingDeepLink by DeepLinkRouter.pending.collectAsStateWithLifecycle()
     // Fetches nothing until a bare Place link actually needs the primary home.
     val deepLinkPlaceResolver: DeepLinkPlaceResolverViewModel = hiltViewModel()
+    // Fetches nothing until a chat link needs its direct room's other person.
+    val deepLinkChatResolver: DeepLinkChatResolverViewModel = hiltViewModel()
     LaunchedEffect(pendingDeepLink) {
         when (val pending = pendingDeepLink) {
             null -> Unit
@@ -2014,7 +2028,31 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 // Land on the Messages tab first so Back pops to the chat
                 // list, then push the thread itself.
                 navController.navigateToRootTab(PantopusRoute.Messages)
-                if (pending.id.isNotBlank()) {
+                // A direct room with one other person opens that person's
+                // thread (Report / Block in its details); anything else, or a
+                // failed read, opens the room exactly as before.
+                val person = pending.id.takeIf { it.isNotBlank() }?.let { deepLinkChatResolver.directCounterpart(it) }
+                if (person != null) {
+                    navController.navigate(
+                        ChildRoutes.withArrivalRoom(
+                            ChildRoutes.chatConversationFromPicker(
+                                userId = person.userId,
+                                displayName = person.displayName,
+                                initials =
+                                    person.displayName
+                                        .split(" ")
+                                        .take(2)
+                                        .mapNotNull { it.firstOrNull()?.toString() }
+                                        .joinToString("")
+                                        .uppercase()
+                                        .ifEmpty { "?" },
+                                verified = false,
+                                locality = null,
+                            ),
+                            pending.id,
+                        ),
+                    )
+                } else if (pending.id.isNotBlank()) {
                     val display = pending.name?.takeIf { it.isNotBlank() } ?: "Conversation"
                     val initials =
                         display
@@ -2237,11 +2275,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.BookingDetail -> {
-                navController.navigate(SchedulingRoutes.bookingDetail(pending.bookingId))
+                navController.navigate(SchedulingRoutes.bookingDetail(pending.bookingId, pending.ownerKind, pending.ownerId))
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.MyBookings -> {
                 navController.navigate(SchedulingRoutes.MY_BOOKINGS)
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.InvoiceDetail -> {
+                navController.navigate(ChildRoutes.invoiceDetail(pending.invoiceId))
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.ResetPassword,
@@ -2531,6 +2573,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.placeholder(label))
                         },
                         onOpenSettings = { navController.navigate(ChildRoutes.MENU) },
+                        onOpenHelp = { navController.navigate(ChildRoutes.SETTINGS_HELP) },
+                        onOpenLegal = { navController.navigate(ChildRoutes.SETTINGS_LEGAL) },
+                        onOpenPrivacySettings = { navController.navigate(ChildRoutes.SETTINGS_PRIVACY) },
                         onOpenOffers = { navController.navigate(ChildRoutes.OFFERS) },
                         onOpenMyBids = { navController.navigate(ChildRoutes.MY_BIDS) },
                         onOpenMyTasks = { navController.navigate(ChildRoutes.MY_TASKS) },
@@ -3153,7 +3198,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 composable(
                     route = SchedulingRoutes.BOOKING_DETAIL,
-                    arguments = listOf(navArgument(SchedulingRoutes.ARG_BOOKING_ID) { type = NavType.StringType }),
+                    arguments =
+                        listOf(navArgument(SchedulingRoutes.ARG_BOOKING_ID) { type = NavType.StringType }) +
+                            schedulingOwnerNavArgs(),
                 ) { entry ->
                     BookingDetailScreen(
                         bookingId = entry.arguments?.getString(SchedulingRoutes.ARG_BOOKING_ID).orEmpty(),
@@ -4339,6 +4386,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.CHAT_ARRIVAL_ROOM_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val args = entry.arguments ?: return@composable
@@ -4356,6 +4407,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val topicRefId = args.getString(ChildRoutes.CHAT_TOPIC_REF_ID_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val topicTitle = args.getString(ChildRoutes.CHAT_TOPIC_TITLE_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val gigId = args.getString(ChildRoutes.CHAT_GIG_ID_KEY).orEmpty().takeIf { it.isNotEmpty() }
+                    val arrivalRoomId = args.getString(ChildRoutes.CHAT_ARRIVAL_ROOM_KEY).orEmpty().takeIf { it.isNotEmpty() }
                     val initialTopic =
                         if (topicType != null && topicTitle != null) {
                             ChatInitialTopic(topicType = topicType, topicRefId = topicRefId, title = topicTitle)
@@ -4425,6 +4477,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
                         onOpenListing = { listingId -> navController.navigate(ChildRoutes.listingDetail(listingId)) },
+                        arrivalRoomId = arrivalRoomId,
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {
@@ -4638,6 +4691,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     GigDetailScreen(
                         onBack = { navController.popBackStack() },
+                        onOpenPayouts = { navController.navigate(ChildRoutes.SETTINGS_PAYMENTS) },
                         onOpenChat = { roomId, displayName, initials, verified ->
                             navController.navigate(
                                 ChildRoutes.chatConversationRoom(
@@ -4763,7 +4817,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     // The VM reads `context` from SavedStateHandle; a plain
                     // `notifications` navigate leaves it null (unscoped list).
-                    NotificationsScreen(onBack = { navController.popBackStack() })
+                    NotificationsScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
+                    )
                 }
                 composable(ChildRoutes.RECENT_ACTIVITY) {
                     RecentActivityScreen(
@@ -6325,7 +6382,21 @@ private fun routeForJumpBackIn(item: JumpBackItem): String {
     if (path.startsWith("/app/chat")) return ChildRoutes.placeholder("Messages")
     if (path.startsWith("/gigs/new")) return ChildRoutes.composeGig(GigsCategory.All.key)
     if (path.startsWith("/gigs")) return ChildRoutes.GIGS_FEED
+    // Hub status pills: "N notifications" and "$X ready · Tap to withdraw".
+    // The wallet holds the balance and the Withdraw action.
+    if (path.startsWith("/app/notifications")) return ChildRoutes.NOTIFICATIONS
+    if (path.startsWith("/app/settings/payments") || path.startsWith("/app/wallet")) return ChildRoutes.WALLET
+    if (path.startsWith("/app/map")) return ChildRoutes.EXPLORE
+    businessIdFromDashboardRoute(path)?.let { return ChildRoutes.businessOwner(it) }
     return ChildRoutes.placeholder(item.title)
+}
+
+/** Extracts `<id>` from `/app/businesses/<id>/dashboard`. */
+private fun businessIdFromDashboardRoute(route: String): String? {
+    val prefix = "/app/businesses/"
+    if (!route.startsWith(prefix)) return null
+    val segment = route.removePrefix(prefix).substringBefore('/').substringBefore('?')
+    return segment.takeIf { it.isNotEmpty() }
 }
 
 /** Extracts `<id>` from `/app/homes/<id>/dashboard`. */
