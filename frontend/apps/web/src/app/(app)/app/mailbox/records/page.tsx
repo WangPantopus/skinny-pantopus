@@ -9,11 +9,8 @@ import {
   useLinkMailToAsset,
 } from '@/lib/mailbox-queries';
 import { AssetCard } from '@/components/mailbox';
-
-// ── Stub: home context ───────────────────────────────────────
-function useHomeProfile() {
-  return { homeId: 'home_1' };
-}
+// The user's Home; each page used a hard-coded 'home_1' stub.
+import useHomeProfile from '../_components/useMailboxHome';
 
 // ── Room filter tabs ─────────────────────────────────────────
 const ROOM_TABS = ['All', 'Living Room', 'Kitchen', 'Basement', 'Garage', 'Bedroom', 'Office'];
