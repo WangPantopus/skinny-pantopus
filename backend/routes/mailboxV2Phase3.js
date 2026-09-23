@@ -335,13 +335,17 @@ router.post('/records/auto-detect', verifyToken, validate(autoDetectSchema), asy
     const { homeId } = req.body;
 
     // Get recent mail with key_facts
-    const { data: recentMail } = await supabaseAdmin
+    // Mail has no delivered_at/sender_name columns: read created_at and
+    // sender_display (aliased to the existing response keys) and fail loudly
+    // instead of reporting no detections.
+    const { data: recentMail, error: recentErr } = await supabaseAdmin
       .from('Mail')
-      .select('id, subject, key_facts, sender_name')
+      .select('id, subject, key_facts, sender_name:sender_display')
       .eq('recipient_user_id', userId)
       .not('key_facts', 'is', null)
-      .order('delivered_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(50);
+    if (recentErr) throw recentErr;
 
     // Simple keyword detection for appliances / assets
     const ASSET_KEYWORDS = ['warranty', 'appliance', 'model', 'serial number', 'installation', 'repair', 'maintenance', 'manual'];
@@ -377,18 +381,20 @@ router.get('/records/suggestions', verifyToken, async (req, res) => {
     const homeId = req.query.homeId;
 
     // Find mail items with warranty/appliance keywords that aren't linked yet
-    const { data: linkedMailIds } = await supabaseAdmin
+    const { data: linkedMailIds, error: linkedErr } = await supabaseAdmin
       .from('MailAssetLink')
       .select('mail_id');
+    if (linkedErr) throw linkedErr;
     const excludeIds = (linkedMailIds || []).map(l => l.mail_id);
 
-    const { data: candidates } = await supabaseAdmin
+    const { data: candidates, error: candidatesErr } = await supabaseAdmin
       .from('Mail')
-      .select('id, subject, key_facts, sender_name, category')
+      .select('id, subject, key_facts, sender_name:sender_display, category')
       .eq('recipient_user_id', userId)
       .not('key_facts', 'is', null)
-      .order('delivered_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(30);
+    if (candidatesErr) throw candidatesErr;
 
     const ASSET_KEYWORDS = ['warranty', 'appliance', 'model', 'serial', 'installation', 'repair'];
     const suggestions = [];
@@ -876,30 +882,35 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    // Get today's new mail
-    const { data: newMail } = await supabaseAdmin
+    // Mail has no delivered_at/read columns (created_at and viewed are the
+    // delivery time and read state); a failed read must not become "no mail".
+    const { data: newMail, error: newErr } = await supabaseAdmin
       .from('Mail')
       .select('*')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', todayStart.toISOString())
-      .order('delivered_at', { ascending: false });
+      .gte('created_at', todayStart.toISOString())
+      .order('created_at', { ascending: false });
+    if (newErr) throw newErr;
 
     // Get needs attention (unread, overdue, certified)
-    const { data: attention } = await supabaseAdmin
+    const { data: attention, error: attentionErr } = await supabaseAdmin
       .from('Mail')
       .select('*')
       .eq('recipient_user_id', userId)
-      .eq('read', false)
+      .eq('viewed', false)
       .in('category', ['certified', 'government', 'bill', 'legal'])
-      .order('delivered_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(5);
+    if (attentionErr) throw attentionErr;
 
-    // Earn count
-    const { count: earnCount } = await supabaseAdmin
+    // Earn count: the same active, unexpired offers the Earn list shows
+    // (EarnOffer has no is_published column).
+    const { count: earnCount, error: earnErr } = await supabaseAdmin
       .from('EarnOffer')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active')
-      .eq('is_published', true);
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+    if (earnErr) throw earnErr;
 
     // Community count (today)
     let communityCount = 0;
@@ -924,13 +935,14 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     const dayStr = `${oneYearAgo.getMonth() + 1}-${oneYearAgo.getDate()}`;
-    const { data: oldMail } = await supabaseAdmin
+    const { data: oldMail, error: oldErr } = await supabaseAdmin
       .from('Mail')
-      .select('id, subject, sender_name, delivered_at')
+      .select('id, subject, sender_name:sender_display, delivered_at:created_at')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate()).toISOString())
-      .lt('delivered_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate() + 1).toISOString())
+      .gte('created_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate()).toISOString())
+      .lt('created_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate() + 1).toISOString())
       .limit(3);
+    if (oldErr) throw oldErr;
 
     if (oldMail && oldMail.length > 0) {
       memory = {
@@ -1173,14 +1185,15 @@ router.get('/memory/on-this-day', verifyToken, async (req, res) => {
       const nextDay = new Date(targetDate);
       nextDay.setDate(nextDay.getDate() + 1);
 
-      const { data: items } = await supabaseAdmin
+      const { data: items, error: itemsErr } = await supabaseAdmin
         .from('Mail')
-        .select('id, subject, sender_name, category, delivered_at')
+        .select('id, subject, sender_name:sender_display, category, delivered_at:created_at')
         .eq('recipient_user_id', userId)
-        .gte('delivered_at', targetDate.toISOString())
-        .lt('delivered_at', nextDay.toISOString())
+        .gte('created_at', targetDate.toISOString())
+        .lt('created_at', nextDay.toISOString())
         // Positive items only
         .in('category', ['postcard', 'package', 'personal', 'greeting', 'gift']);
+      if (itemsErr) throw itemsErr;
 
       if (items && items.length > 0) {
         memories.push({
@@ -1223,21 +1236,24 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
     const yearStart = new Date(year, 0, 1).toISOString();
     const yearEnd = new Date(year + 1, 0, 1).toISOString();
 
-    // Total items
-    const { count: totalItems } = await supabaseAdmin
+    // Total items (Mail's delivery time is created_at; a failed read must not
+    // become an empty year).
+    const { count: totalItems, error: totalErr } = await supabaseAdmin
       .from('Mail')
       .select('*', { count: 'exact', head: true })
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd);
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd);
+    if (totalErr) throw totalErr;
 
     // By drawer
-    const { data: byDrawer } = await supabaseAdmin
+    const { data: byDrawer, error: drawerErr } = await supabaseAdmin
       .from('Mail')
       .select('drawer')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd);
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd);
+    if (drawerErr) throw drawerErr;
 
     const drawerCounts = {};
     (byDrawer || []).forEach(m => {
@@ -1245,12 +1261,13 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
     });
 
     // By type
-    const { data: byType } = await supabaseAdmin
+    const { data: byType, error: typeErr } = await supabaseAdmin
       .from('Mail')
       .select('category')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd);
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd);
+    if (typeErr) throw typeErr;
 
     const typeCounts = {};
     (byType || []).forEach(m => {
@@ -1258,12 +1275,13 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
     });
 
     // Top senders
-    const { data: senders } = await supabaseAdmin
+    const { data: senders, error: sendersErr } = await supabaseAdmin
       .from('Mail')
-      .select('sender_name, sender_trust, category')
+      .select('sender_name:sender_display, sender_trust, category')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd);
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd);
+    if (sendersErr) throw sendersErr;
 
     const senderMap = {};
     (senders || []).forEach(m => {
@@ -1290,14 +1308,15 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
       .lt('created_at', yearEnd);
 
     // First mail date
-    const { data: firstMail } = await supabaseAdmin
+    const { data: firstMail, error: firstErr } = await supabaseAdmin
       .from('Mail')
-      .select('delivered_at')
+      .select('delivered_at:created_at')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd)
-      .order('delivered_at')
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd)
+      .order('created_at')
       .limit(1);
+    if (firstErr) throw firstErr;
 
     logMailEvent(userId, 'year_in_mail_viewed', null, { year });
     res.json({
