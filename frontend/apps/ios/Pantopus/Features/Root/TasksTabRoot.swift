@@ -328,6 +328,10 @@ public struct TasksTabRoot: View {
                 Task { @MainActor in
                     path.append(.editListing(listingId: dto.id, jumpToStep: nil))
                 }
+            },
+            onFindSimilar: {
+                // Tasks is a Nearby surface: switch it to the marketplace.
+                NeighborhoodDoorStore.shared.pendingSurface = .marketplace
             }
         )
     }

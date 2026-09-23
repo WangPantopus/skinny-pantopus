@@ -53,12 +53,19 @@ public struct TransactionalDetailShell: View {
     /// Optional trailing top-bar control rendered before the overflow
     /// menu (e.g. the gig-detail bookmark toggle).
     private let topBarAccessory: AnyView?
+    /// Taps on the cover's glass chips (share, bookmark). Without it the
+    /// chips are decorative.
+    private let onGlassAction: (@MainActor (PantopusIcon) -> Void)?
+    /// Glass chips drawn in their "on" state (a saved bookmark).
+    private let activeGlassActions: Set<PantopusIcon>
     private let scrollFooter: AnyView?
 
     public init(
         state: ContentDetailState,
         overflowItems: [ContentDetailOverflowItem] = [],
         topBarAccessory: AnyView? = nil,
+        onGlassAction: (@MainActor (PantopusIcon) -> Void)? = nil,
+        activeGlassActions: Set<PantopusIcon> = [],
         onBack: @escaping @MainActor () -> Void,
         onPrimaryAction: @escaping @MainActor () -> Void = {},
         onSecondaryAction: (@MainActor () -> Void)? = nil,
@@ -74,6 +81,8 @@ public struct TransactionalDetailShell: View {
         self.onMessageCounterparty = onMessageCounterparty
         self.overflowItems = overflowItems
         self.topBarAccessory = topBarAccessory
+        self.onGlassAction = onGlassAction
+        self.activeGlassActions = activeGlassActions
         self.scrollFooter = AnyView(scrollFooter())
     }
 
@@ -209,10 +218,7 @@ public struct TransactionalDetailShell: View {
                     topBarAccessory
                 }
                 ForEach(Array(icons.enumerated()), id: \.offset) { _, icon in
-                    Icon(icon, size: 18, strokeWidth: 2, color: Theme.Color.appText)
-                        .frame(width: 36, height: 36)
-                        .background(Color.white.opacity(0.85))
-                        .clipShape(Circle())
+                    glassChip(icon)
                 }
                 if !overflowItems.isEmpty {
                     OverflowMenuButton(items: overflowItems, transparent: true)
@@ -220,6 +226,32 @@ public struct TransactionalDetailShell: View {
             }
             .accessibilityIdentifier("contentDetailGlassActions")
         )
+    }
+
+    /// One cover chip: a button when the host handles taps, else decoration.
+    @MainActor @ViewBuilder
+    private func glassChip(_ icon: PantopusIcon) -> some View {
+        let active = activeGlassActions.contains(icon)
+        let chip = Icon(icon, size: 18, strokeWidth: 2, color: active ? Theme.Color.primary600 : Theme.Color.appText)
+            .frame(width: 36, height: 36)
+            .background(Color.white.opacity(0.85))
+            .clipShape(Circle())
+        if let onGlassAction {
+            Button { onGlassAction(icon) } label: { chip }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Self.glassActionLabel(icon, active: active))
+                .accessibilityIdentifier("contentDetailGlassAction.\(icon.rawValue)")
+        } else {
+            chip
+        }
+    }
+
+    private static func glassActionLabel(_ icon: PantopusIcon, active: Bool) -> String {
+        switch icon {
+        case .share: "Share"
+        case .bookmark: active ? "Saved — tap to remove" : "Save"
+        default: icon.rawValue
+        }
     }
 
     private func contentBody(_ content: ContentDetailContent) -> some View {

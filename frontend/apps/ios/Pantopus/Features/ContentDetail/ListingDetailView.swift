@@ -17,29 +17,36 @@ public struct ListingDetailView: View {
     @State private var offerSending = false
     @State private var offerError: String?
     @State private var toast: ToastMessage?
+    @State private var shareSheetVisible = false
     private let onBack: @MainActor () -> Void
     private let onMessage: (@MainActor (ListingDTO) -> Void)?
     private let onViewOffers: (@MainActor (ListingDTO) -> Void)?
     private let onEditListing: (@MainActor (ListingDTO) -> Void)?
+    /// A sold listing's "Find similar": the host opens the marketplace.
+    private let onFindSimilar: (@MainActor () -> Void)?
 
     public init(
         viewModel: ListingDetailViewModel,
         onBack: @escaping @MainActor () -> Void = {},
         onMessage: (@MainActor (ListingDTO) -> Void)? = nil,
         onViewOffers: (@MainActor (ListingDTO) -> Void)? = nil,
-        onEditListing: (@MainActor (ListingDTO) -> Void)? = nil
+        onEditListing: (@MainActor (ListingDTO) -> Void)? = nil,
+        onFindSimilar: (@MainActor () -> Void)? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onBack = onBack
         self.onMessage = onMessage
         self.onViewOffers = onViewOffers
         self.onEditListing = onEditListing
+        self.onFindSimilar = onFindSimilar
     }
 
     public var body: some View {
         TransactionalDetailShell(
             state: viewModel.state,
             overflowItems: overflowItems,
+            onGlassAction: { icon in handleGlassAction(icon) },
+            activeGlassActions: viewModel.isSaved ? [.bookmark] : [],
             onBack: onBack,
             onPrimaryAction: { handlePrimaryAction() },
             onSecondaryAction: { if let listing = viewModel.rawListing { onMessage?(listing) } },
@@ -49,6 +56,9 @@ public struct ListingDetailView: View {
         .task { await viewModel.load() }
         .sheet(isPresented: $offerSheetVisible) {
             offerSheet
+        }
+        .sheet(isPresented: $shareSheetVisible) {
+            SystemShareSheet(items: [shareText])
         }
         .overlay(alignment: .bottom) { toastOverlay }
     }
@@ -94,6 +104,11 @@ public struct ListingDetailView: View {
     /// — and the host wired an `onViewOffers` callback, we push to the
     /// seller's offers panel instead of the buyer's "Make offer" sheet.
     private func handlePrimaryAction() {
+        // A sold listing's "Find similar" browses the marketplace; a sold listing takes no offers.
+        if viewModel.isSold {
+            onFindSimilar?()
+            return
+        }
         if let listing = viewModel.rawListing,
            viewModel.isOwnedByMe,
            let onViewOffers {
@@ -106,6 +121,34 @@ public struct ListingDetailView: View {
             }
             offerSheetVisible = true
         }
+    }
+
+    /// The cover's chips: share sends the listing's web link (as the gig
+    /// detail shares); the bookmark saves or unsaves it.
+    private func handleGlassAction(_ icon: PantopusIcon) {
+        switch icon {
+        case .share:
+            shareSheetVisible = true
+        case .bookmark:
+            let saving = !viewModel.isSaved
+            Task {
+                let ok = await viewModel.toggleSave()
+                if !ok {
+                    toast = ToastMessage(
+                        text: saving ? "Couldn't save this listing." : "Couldn't remove the save.",
+                        kind: .error
+                    )
+                }
+            }
+        default:
+            break
+        }
+    }
+
+    private var shareText: String {
+        let url = viewModel.shareURL.absoluteString
+        guard let title = viewModel.rawListing?.title, !title.isEmpty else { return url }
+        return "\(title) — \(url)"
     }
 
     private var offerSheet: some View {

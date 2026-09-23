@@ -324,7 +324,8 @@ final class ContentDetailProjectionTests: XCTestCase {
         XCTAssertTrue(content.hero.priceStrikethrough)
         XCTAssertEqual(content.dock.secondary?.label, "Seller")
         XCTAssertEqual(content.dock.primary.label, "Find similar")
-        XCTAssertTrue(content.modules.contains {
+        // No "Alert me when similar appears": there is nothing behind its "Set".
+        XCTAssertFalse(content.modules.contains {
             if case let .callout(m) = $0 { m.identifier == "alert-similar" } else { false }
         })
     }
