@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import type { MailTask } from '@/types/mailbox';
 import {
   useTasks,
@@ -55,7 +56,7 @@ function TaskCreationPanel({
   mailDueDate?: string;
   onCreated: () => void;
   onCancel: () => void;
-  onGig: () => void;
+  onGig: (draft: { title: string; description: string }) => void;
 }) {
   const [title, setTitle] = useState(mailTitle || '');
   const [dueAt, setDueAt] = useState(mailDueDate || '');
@@ -190,7 +191,7 @@ function TaskCreationPanel({
           </div>
           <button
             type="button"
-            onClick={onGig}
+            onClick={() => onGig({ title: title.trim(), description: description.trim() })}
             className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
           >
             Post as Gig instead →
@@ -390,6 +391,7 @@ function TaskDetailPanel({
 // ── Main Page ────────────────────────────────────────────────
 
 export default function MailTasksPage() {
+  const router = useRouter();
   const home = useHomeProfile();
   const { data: taskData, isLoading } = useTasks(home.homeId, { enabled: !!home.homeId });
   const updateTask = useUpdateTask();
@@ -555,9 +557,12 @@ export default function MailTasksPage() {
             homeAddress={home.address}
             onCreated={() => setShowCreate(false)}
             onCancel={() => setShowCreate(false)}
-            onGig={() => {
+            onGig={(draft) => {
+              // The real task form, prefilled with the draft; the modal here had no task and only
+              // pretended to post.
               setShowCreate(false);
-              setShowGigModal(true);
+              const prefill = { ...(draft.title ? { title: draft.title } : {}), ...(draft.description ? { description: draft.description } : {}) };
+              router.push(`/app/gigs/new?prefill=${encodeURIComponent(JSON.stringify(prefill))}`);
             }}
           />
         ) : selectedTask ? (
@@ -579,7 +584,7 @@ export default function MailTasksPage() {
       </div>
 
       {/* ── Gig Creation Modal ───────────────────────────────── */}
-      {showGigModal && (
+      {showGigModal && gigTaskContext && (
         <GigCreationModal
           source="post_delivery"
           packageTitle={gigTaskContext?.title || 'Home task'}
