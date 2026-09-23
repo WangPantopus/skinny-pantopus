@@ -3978,6 +3978,11 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { subject } = req.body;
 
+    // Same gates as POST /api/chat/direct, which this route parallels.
+    if (req.user.accountType === 'curator') {
+      return res.status(403).json({ error: 'This account cannot send messages' });
+    }
+
     // Verify business exists
     const { data: biz } = await supabaseAdmin
       .from('User')
@@ -3986,6 +3991,11 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
       .eq('account_type', 'business')
       .single();
     if (!biz) return res.status(404).json({ error: 'Business not found' });
+
+    const { isBlocked } = require('../services/blockService');
+    if (await isBlocked(userId, businessId)) {
+      return res.status(403).json({ error: 'Unable to message this user' });
+    }
 
     // Check if there's already a direct chat between this user and business
     const { data: existingRooms } = await supabaseAdmin
@@ -4023,7 +4033,6 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
       .insert({
         type: 'direct',
         name: subject || `Inquiry to ${biz.name}`,
-        created_by: userId,
       })
       .select('id')
       .single();
@@ -4039,6 +4048,7 @@ router.post('/:businessId/inbox/start', verifyToken, async (req, res) => {
 
     res.json({ roomId: room.id, existing: false });
   } catch (err) {
+    if (err.code === 'BLOCK_CHECK_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
     logger.error('Business inbox start error', { error: err.message });
     res.status(500).json({ error: 'Failed to start conversation' });
   }
