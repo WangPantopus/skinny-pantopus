@@ -10,7 +10,7 @@ const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
-const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+const { getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -88,7 +88,8 @@ const taskToGigSchema = Joi.object({
 
 // ── MailDay ──
 const updateMailDaySchema = Joi.object({
-  delivery_time: Joi.string().pattern(/^\d{2}:\d{2}$/).optional(),
+  // The GET returns the stored time column as HH:MM:SS; accept it back.
+  delivery_time: Joi.string().pattern(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
   timezone: Joi.string().max(50).optional(),
   enabled: Joi.boolean().optional(),
   sound_enabled: Joi.boolean().optional(),
@@ -256,13 +257,17 @@ router.get('/records/asset/:id/mail', verifyToken, async (req, res) => {
       .eq('asset_id', assetId)
       .order('created_at', { ascending: false });
 
+    // Only linked mail the caller may see: their own, or Home letters the Home
+    // mail rule shows them (utils/homeMailAccess, M01).
     const mailIds = (links || []).map(l => l.mail_id);
     let mail = [];
     if (mailIds.length) {
-      const { data: mailItems } = await supabaseAdmin
+      const { data: mailItems, error: mailError } = await supabaseAdmin
         .from('Mail')
         .select('*')
-        .in('id', mailIds);
+        .in('id', mailIds)
+        .or(visibleMailFilter(userId, homeIds));
+      if (mailError) throw mailError;
       mail = mailItems || [];
     }
 
@@ -276,7 +281,7 @@ router.get('/records/asset/:id/mail', verifyToken, async (req, res) => {
     const enrichedAsset = {
       ...asset,
       warranty_status: warrantyStatus(asset.warranty_expires),
-      linked_mail_count: mailIds.length,
+      linked_mail_count: mail.length,
       linked_gig_count: 0,
     };
 
@@ -292,6 +297,23 @@ router.post('/records/link', verifyToken, validate(linkAssetSchema), async (req,
   try {
     const userId = req.user.id;
     const { mailId, assetId, linkType } = req.body;
+
+    // Link only mail the caller may read (utils/homeMailAccess canAccessMail:
+    // their own mail, or their accessible Home's letters the Home mail rule
+    // shows them) to an asset of a Home they can access.
+    const accessible = await getAccessibleHomeIds(userId);
+    const [assetRes, mailRes] = await Promise.all([
+      supabaseAdmin.from('HomeAsset').select('home_id').eq('id', assetId).maybeSingle(),
+      supabaseAdmin.from('Mail').select('id, recipient_user_id, recipient_home_id').eq('id', mailId).maybeSingle(),
+    ]);
+    if (assetRes.error || mailRes.error) throw assetRes.error || mailRes.error;
+    if (!assetRes.data || !accessible.includes(assetRes.data.home_id)) {
+      return res.status(404).json({ error: 'Asset not found' });
+    }
+    const mail = mailRes.data;
+    if (!mail || !(await canAccessMail(mail, userId))) {
+      return res.status(404).json({ error: 'Mail not found' });
+    }
 
     const { data: link, error } = await supabaseAdmin
       .from('MailAssetLink')
@@ -317,6 +339,23 @@ router.post('/records/link', verifyToken, validate(linkAssetSchema), async (req,
 // DELETE /records/unlink/:id — remove a link
 router.delete('/records/unlink/:id', verifyToken, async (req, res) => {
   try {
+    // Only the household whose asset carries the link may remove it.
+    if (!isUuid(req.params.id)) return res.status(404).json({ error: 'Link not found' });
+    const { data: link, error: linkErr } = await supabaseAdmin
+      .from('MailAssetLink')
+      .select('asset_id')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (linkErr) throw linkErr;
+    const assetRes = link
+      ? await supabaseAdmin.from('HomeAsset').select('home_id').eq('id', link.asset_id).maybeSingle()
+      : { data: null, error: null };
+    if (assetRes.error) throw assetRes.error;
+    const accessible = await getAccessibleHomeIds(req.user.id);
+    if (!assetRes.data || !accessible.includes(assetRes.data.home_id)) {
+      return res.status(404).json({ error: 'Link not found' });
+    }
+
     const { error } = await supabaseAdmin
       .from('MailAssetLink')
       .delete()
@@ -336,13 +375,17 @@ router.post('/records/auto-detect', verifyToken, validate(autoDetectSchema), asy
     const { homeId } = req.body;
 
     // Get recent mail with key_facts
-    const { data: recentMail } = await supabaseAdmin
+    // Mail has no delivered_at/sender_name columns: read created_at and
+    // sender_display (aliased to the existing response keys) and fail loudly
+    // instead of reporting no detections.
+    const { data: recentMail, error: recentErr } = await supabaseAdmin
       .from('Mail')
-      .select('id, subject, key_facts, sender_name')
+      .select('id, subject, key_facts, sender_name:sender_display')
       .eq('recipient_user_id', userId)
       .not('key_facts', 'is', null)
-      .order('delivered_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(50);
+    if (recentErr) throw recentErr;
 
     // Simple keyword detection for appliances / assets
     const ASSET_KEYWORDS = ['warranty', 'appliance', 'model', 'serial number', 'installation', 'repair', 'maintenance', 'manual'];
@@ -378,18 +421,20 @@ router.get('/records/suggestions', verifyToken, async (req, res) => {
     const homeId = req.query.homeId;
 
     // Find mail items with warranty/appliance keywords that aren't linked yet
-    const { data: linkedMailIds } = await supabaseAdmin
+    const { data: linkedMailIds, error: linkedErr } = await supabaseAdmin
       .from('MailAssetLink')
       .select('mail_id');
+    if (linkedErr) throw linkedErr;
     const excludeIds = (linkedMailIds || []).map(l => l.mail_id);
 
-    const { data: candidates } = await supabaseAdmin
+    const { data: candidates, error: candidatesErr } = await supabaseAdmin
       .from('Mail')
-      .select('id, subject, key_facts, sender_name, category')
+      .select('id, subject, key_facts, sender_name:sender_display, category')
       .eq('recipient_user_id', userId)
       .not('key_facts', 'is', null)
-      .order('delivered_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(30);
+    if (candidatesErr) throw candidatesErr;
 
     const ASSET_KEYWORDS = ['warranty', 'appliance', 'model', 'serial', 'installation', 'repair'];
     const suggestions = [];
@@ -475,6 +520,8 @@ router.post('/map/pin', verifyToken, validate(createPinSchema), async (req, res)
     if (!homeIds.includes(homeId)) {
       return res.status(403).json({ error: 'Not a member of this home' });
     }
+    // A pin may only link mail the caller may read (the mailbox per-item rule).
+    if (mailId && !(await readableMail(mailId, userId))) return res.status(404).json({ error: 'Mail not found' });
 
     const { data: pin, error } = await supabaseAdmin
       .from('HomeMapPin')
@@ -881,30 +928,35 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    // Get today's new mail
-    const { data: newMail } = await supabaseAdmin
+    // Mail has no delivered_at/read columns (created_at and viewed are the
+    // delivery time and read state); a failed read must not become "no mail".
+    const { data: newMail, error: newErr } = await supabaseAdmin
       .from('Mail')
       .select('*')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', todayStart.toISOString())
-      .order('delivered_at', { ascending: false });
+      .gte('created_at', todayStart.toISOString())
+      .order('created_at', { ascending: false });
+    if (newErr) throw newErr;
 
     // Get needs attention (unread, overdue, certified)
-    const { data: attention } = await supabaseAdmin
+    const { data: attention, error: attentionErr } = await supabaseAdmin
       .from('Mail')
       .select('*')
       .eq('recipient_user_id', userId)
-      .eq('read', false)
+      .eq('viewed', false)
       .in('category', ['certified', 'government', 'bill', 'legal'])
-      .order('delivered_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(5);
+    if (attentionErr) throw attentionErr;
 
-    // Earn count
-    const { count: earnCount } = await supabaseAdmin
+    // Earn count: the same active, unexpired offers the Earn list shows
+    // (EarnOffer has no is_published column).
+    const { count: earnCount, error: earnErr } = await supabaseAdmin
       .from('EarnOffer')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active')
-      .eq('is_published', true);
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+    if (earnErr) throw earnErr;
 
     // Community count (today)
     let communityCount = 0;
@@ -929,13 +981,14 @@ router.get('/mailday/summary', verifyToken, async (req, res) => {
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     const dayStr = `${oneYearAgo.getMonth() + 1}-${oneYearAgo.getDate()}`;
-    const { data: oldMail } = await supabaseAdmin
+    const { data: oldMail, error: oldErr } = await supabaseAdmin
       .from('Mail')
-      .select('id, subject, sender_name, delivered_at')
+      .select('id, subject, sender_name:sender_display, delivered_at:created_at')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate()).toISOString())
-      .lt('delivered_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate() + 1).toISOString())
+      .gte('created_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate()).toISOString())
+      .lt('created_at', new Date(oneYearAgo.getFullYear(), oneYearAgo.getMonth(), oneYearAgo.getDate() + 1).toISOString())
       .limit(3);
+    if (oldErr) throw oldErr;
 
     if (oldMail && oldMail.length > 0) {
       memory = {
@@ -1009,12 +1062,15 @@ router.patch('/mailday/settings', verifyToken, validate(updateMailDaySchema), as
   try {
     const userId = req.user.id;
 
-    // Upsert
-    const { data: existing } = await supabaseAdmin
+    // Upsert. MailDaySettings is keyed by user_id and has no id column: the
+    // old select('id') always failed, so every save after the first tried a
+    // second insert and hit the primary key.
+    const { data: existing, error: existingErr } = await supabaseAdmin
       .from('MailDaySettings')
-      .select('id')
+      .select('user_id')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+    if (existingErr) throw existingErr;
 
     let settings;
     if (existing) {
@@ -1178,14 +1234,15 @@ router.get('/memory/on-this-day', verifyToken, async (req, res) => {
       const nextDay = new Date(targetDate);
       nextDay.setDate(nextDay.getDate() + 1);
 
-      const { data: items } = await supabaseAdmin
+      const { data: items, error: itemsErr } = await supabaseAdmin
         .from('Mail')
-        .select('id, subject, sender_name, category, delivered_at')
+        .select('id, subject, sender_name:sender_display, category, delivered_at:created_at')
         .eq('recipient_user_id', userId)
-        .gte('delivered_at', targetDate.toISOString())
-        .lt('delivered_at', nextDay.toISOString())
+        .gte('created_at', targetDate.toISOString())
+        .lt('created_at', nextDay.toISOString())
         // Positive items only
         .in('category', ['postcard', 'package', 'personal', 'greeting', 'gift']);
+      if (itemsErr) throw itemsErr;
 
       if (items && items.length > 0) {
         memories.push({
@@ -1228,21 +1285,24 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
     const yearStart = new Date(year, 0, 1).toISOString();
     const yearEnd = new Date(year + 1, 0, 1).toISOString();
 
-    // Total items
-    const { count: totalItems } = await supabaseAdmin
+    // Total items (Mail's delivery time is created_at; a failed read must not
+    // become an empty year).
+    const { count: totalItems, error: totalErr } = await supabaseAdmin
       .from('Mail')
       .select('*', { count: 'exact', head: true })
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd);
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd);
+    if (totalErr) throw totalErr;
 
     // By drawer
-    const { data: byDrawer } = await supabaseAdmin
+    const { data: byDrawer, error: drawerErr } = await supabaseAdmin
       .from('Mail')
       .select('drawer')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd);
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd);
+    if (drawerErr) throw drawerErr;
 
     const drawerCounts = {};
     (byDrawer || []).forEach(m => {
@@ -1250,12 +1310,13 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
     });
 
     // By type
-    const { data: byType } = await supabaseAdmin
+    const { data: byType, error: typeErr } = await supabaseAdmin
       .from('Mail')
       .select('category')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd);
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd);
+    if (typeErr) throw typeErr;
 
     const typeCounts = {};
     (byType || []).forEach(m => {
@@ -1263,12 +1324,13 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
     });
 
     // Top senders
-    const { data: senders } = await supabaseAdmin
+    const { data: senders, error: sendersErr } = await supabaseAdmin
       .from('Mail')
-      .select('sender_name, sender_trust, category')
+      .select('sender_name:sender_display, sender_trust, category')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd);
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd);
+    if (sendersErr) throw sendersErr;
 
     const senderMap = {};
     (senders || []).forEach(m => {
@@ -1295,14 +1357,15 @@ router.get('/memory/year/:year', verifyToken, async (req, res) => {
       .lt('created_at', yearEnd);
 
     // First mail date
-    const { data: firstMail } = await supabaseAdmin
+    const { data: firstMail, error: firstErr } = await supabaseAdmin
       .from('Mail')
-      .select('delivered_at')
+      .select('delivered_at:created_at')
       .eq('recipient_user_id', userId)
-      .gte('delivered_at', yearStart)
-      .lt('delivered_at', yearEnd)
-      .order('delivered_at')
+      .gte('created_at', yearStart)
+      .lt('created_at', yearEnd)
+      .order('created_at')
       .limit(1);
+    if (firstErr) throw firstErr;
 
     logMailEvent(userId, 'year_in_mail_viewed', null, { year });
     res.json({

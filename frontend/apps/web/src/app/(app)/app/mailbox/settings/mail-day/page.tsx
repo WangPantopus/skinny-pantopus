@@ -8,6 +8,7 @@ import {
   useMailDaySettings,
   useUpdateMailDaySettings,
 } from '@/lib/mailbox-queries';
+import { toast } from '@/components/ui/toast-store';
 
 // ── Timezone list (common US + intl) ─────────────────────────
 
@@ -157,6 +158,8 @@ export default function MailDayPage() {
         setSaveToast(true);
         setTimeout(() => setSaveToast(false), 3000);
       },
+      // A failed save must not look like nothing happened.
+      onError: (err) => toast.error(err.message || "Couldn't save your Mail Day settings."),
     });
   }, [draft, updateSettings]);
 

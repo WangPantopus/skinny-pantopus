@@ -41,6 +41,9 @@ function seedScannedMail(userId, kinds) {
     const mailId = `${userId}-mail-${i}`;
     getTable('Mail').push({
       id: mailId,
+      // A letter to the Home (column default privacy), which every member sees.
+      recipient_home_id: homeId,
+      privacy: 'private_to_person',
       // kindFor() maps category/object type onto the triage kind.
       category: kind === 'bill' ? 'bill' : null,
       mail_object_type: kind === 'package' ? 'package' : 'envelope',
