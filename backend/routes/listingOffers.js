@@ -83,7 +83,7 @@ router.get('/:listingId/offers', verifyToken, async (req, res) => {
     // Determine if caller is the seller
     const { data: listing, error: listingErr } = await supabaseAdmin
       .from('Listing')
-      .select('user_id')
+      .select('user_id, status, is_free, listing_type')
       .eq('id', listingId)
       .single();
 
@@ -124,6 +124,7 @@ router.get('/:listingId/offers', verifyToken, async (req, res) => {
 
         return {
           ...offer,
+          ...(!isSeller ? { checkout: await listingOfferService.buyerCheckoutSummary({ offer, listing, buyerId: userId }) } : {}),
           buyer: userMap[offer.buyer_id] || null,
           seller: userMap[offer.seller_id] || null,
         };

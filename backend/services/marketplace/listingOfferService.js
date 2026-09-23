@@ -10,6 +10,7 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const notificationService = require('../notificationService');
+const { PAYMENT_STATES } = require('../../stripe/paymentStateMachine');
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -46,6 +47,59 @@ async function getUserName(userId) {
   if (data.first_name) return data.first_name;
   if (data.username) return data.username;
   return 'Someone';
+}
+
+// Safe display state for the buyer's existing checkout. Intent creation still
+// revalidates identity, amount, listing and payment terms in routes/pays.js.
+async function buyerCheckoutSummary({ offer, listing, buyerId }) {
+  if (offer.buyer_id !== buyerId || offer.status !== 'accepted') return undefined;
+  const amount = Math.round(Number(offer.amount) * 100);
+  if (listing.is_free || listing.listing_type === 'free_item' || !Number.isSafeInteger(amount) || amount < 50) {
+    return { state: 'not_payable', can_continue: false };
+  }
+  const unavailable = { state: 'unavailable', can_continue: false };
+  if (offer.seller_id !== listing.user_id || !['active', 'pending_pickup'].includes(listing.status)) return unavailable;
+  const metadata = { type: 'listing_offer_checkout', listing_id: offer.listing_id, offer_id: offer.id };
+  const { data, error } = await supabaseAdmin.from('Payment')
+    .select('payer_id, payee_id, amount_total, payment_status, stripe_payment_intent_id, metadata')
+    .eq('payment_type', 'gig_payment').is('gig_id', null).contains('metadata', metadata)
+    .order('created_at', { ascending: false }).limit(10);
+  if (error) {
+    logger.warn('Could not read listing checkout state', { offerId: offer.id });
+    return unavailable;
+  }
+  // Same matching/ignored-state rules as resolveExistingCheckoutIntent. Never
+  // choose a convenient row while another active row conflicts with the order.
+  const active = (data || []).filter(payment =>
+    Object.entries(metadata).every(([key, value]) => String(payment.metadata?.[key] || '') === String(value))
+    && ![PAYMENT_STATES.CANCELED, 'failed'].includes(String(payment.payment_status || '').toLowerCase()));
+  if (active.some(payment => String(payment.payer_id) !== String(buyerId)
+      || String(payment.payee_id) !== String(offer.seller_id) || Number(payment.amount_total) !== amount)) return unavailable;
+  const knownStatuses = new Set([
+    PAYMENT_STATES.AUTHORIZE_PENDING, PAYMENT_STATES.AUTHORIZED, PAYMENT_STATES.AUTHORIZATION_FAILED,
+    PAYMENT_STATES.CAPTURE_PENDING, PAYMENT_STATES.CAPTURED_HOLD, PAYMENT_STATES.TRANSFER_SCHEDULED,
+    PAYMENT_STATES.TRANSFER_PENDING, PAYMENT_STATES.TRANSFERRED, PAYMENT_STATES.REFUND_PENDING,
+    PAYMENT_STATES.REFUNDED_PARTIAL, PAYMENT_STATES.REFUNDED_FULL, PAYMENT_STATES.DISPUTED,
+    'pending', 'requires_payment_method', 'requires_confirmation', 'processing', 'succeeded', 'refunded', 'partially_refunded',
+  ]);
+  if (active.some(payment => !knownStatuses.has(String(payment.payment_status || '').toLowerCase()))) return unavailable;
+  const payment = active[0];
+  if (!payment) return { state: 'ready', can_continue: true };
+  const status = String(payment.payment_status || '').toLowerCase();
+  const summary = (state, canContinue = false) => ({ state, can_continue: canContinue, payment_status: status });
+  if (status === PAYMENT_STATES.AUTHORIZATION_FAILED) return summary('retry', true);
+  if ([PAYMENT_STATES.AUTHORIZE_PENDING, 'pending', 'requires_payment_method', 'requires_confirmation'].includes(status)) {
+    return payment.stripe_payment_intent_id ? summary('pending', true) : unavailable;
+  }
+  if (status === PAYMENT_STATES.AUTHORIZED) return summary('authorized');
+  if ([PAYMENT_STATES.CAPTURE_PENDING, 'processing'].includes(status)) return summary('processing');
+  if ([PAYMENT_STATES.CAPTURED_HOLD, PAYMENT_STATES.TRANSFER_SCHEDULED, PAYMENT_STATES.TRANSFER_PENDING,
+    PAYMENT_STATES.TRANSFERRED, 'succeeded'].includes(status)) return summary('paid');
+  if (status === PAYMENT_STATES.REFUND_PENDING) return summary('refund_pending');
+  if ([PAYMENT_STATES.REFUNDED_PARTIAL, 'partially_refunded'].includes(status)) return summary('partially_refunded');
+  if ([PAYMENT_STATES.REFUNDED_FULL, 'refunded'].includes(status)) return summary('refunded');
+  if (status === PAYMENT_STATES.DISPUTED) return summary('disputed');
+  return unavailable;
 }
 
 // ─── createOffer ─────────────────────────────────────────────
@@ -653,6 +707,7 @@ async function expireStaleOffers() {
 // ─── Exports ─────────────────────────────────────────────────
 
 module.exports = {
+  buyerCheckoutSummary,
   createOffer,
   counterOffer,
   acceptOffer,
