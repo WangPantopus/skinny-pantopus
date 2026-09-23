@@ -31,7 +31,7 @@ const {
 } = require('../utils/moduleSchemas');
 const stripeService = require('../stripe/stripeService');
 const blockService = require('../services/blockService');
-const { publicPayment } = require('../stripe/gigPaymentProof');
+const { publicPayment, publicGigFee } = require('../stripe/gigPaymentProof');
 const paidGigAcceptance = require('../services/gigPaymentAcceptance');
 const gigStop = require('../services/gigStopService');
 const { PAYMENT_STATES, getPaymentStateInfo } = require('../stripe/paymentStateMachine');
@@ -6933,19 +6933,50 @@ function noShowEligibility(gig, userId, now = Date.now()) {
   }
 
   // For worker: can report poster no-show if poster becomes unresponsive
-  // (e.g., after gig is assigned for 24+ hours with no communication)
+  // (e.g., after gig is assigned for 24+ hours with no communication). A
+  // scheduled task also needs its agreed start plus the same buffer to pass.
   if (isWorker && gig.status === 'assigned') {
     const acceptedAt = gig.accepted_at ? new Date(gig.accepted_at).getTime() : now;
     if (!Number.isFinite(acceptedAt)) return { can_report: false, reason: 'No valid acceptance time' };
     const hoursOverdue = (now - acceptedAt) / (60 * 60 * 1000);
+    let scheduledStart = null;
+    if (gig.scheduled_start) {
+      scheduledStart = new Date(gig.scheduled_start).getTime();
+      if (!Number.isFinite(scheduledStart)) return { can_report: false, reason: 'No valid scheduled start' };
+    }
+    const canReportAfter = scheduledStart === null ? null : scheduledStart + NO_SHOW_BUFFER_MS;
+    const canReport = hoursOverdue > 24 && (canReportAfter === null || now > canReportAfter);
     return {
-      can_report: hoursOverdue > 24,
+      can_report: canReport,
       hours_since_accept: Math.floor(hoursOverdue),
-      reason: hoursOverdue > 24 ? 'Poster unresponsive for 24+ hours' : 'Too early to report',
+      ...(canReportAfter === null ? {} : {
+        expected_start: new Date(scheduledStart).toISOString(),
+        can_report_after: new Date(canReportAfter).toISOString(),
+      }),
+      reason: canReport ? 'Poster unresponsive for 24+ hours' : 'Too early to report',
     };
   }
 
   return { can_report: false, reason: 'No grounds for no-show report' };
+}
+
+// A no-show cancel refused by a database guard that holds the task for another
+// in-flight operation: each guard gets its own plain reason.
+const NO_SHOW_REFUSALS = {
+  feeReserved: { code: 'NO_SHOW_REPORT_ACTIVE', error: 'A no-show report for this task is already being processed. Refresh the task to see its status.' },
+  stopActive: { code: 'STOP_ACTIVE', error: 'A cancellation for this task is already in progress. Refresh the task to see its status.' },
+  holdExpiring: { code: 'PAYMENT_HOLD_EXPIRING', error: 'This task\'s payment hold expired and is being released. Refresh the task to see its status.' },
+  completionPending: { code: 'COMPLETION_PENDING', error: 'This task\'s completion is being confirmed. Refresh the task to see its status.' },
+  changed: { code: 'NO_SHOW_NOT_ELIGIBLE', error: 'The task changed. Reopen it and check its status.' },
+};
+function noShowCancelRefusal(error) {
+  if (error?.code !== '23514') return null;
+  const message = String(error.message || '');
+  if (message.includes('reserved no-show fee')) return NO_SHOW_REFUSALS.feeReserved;
+  if (message.includes('saved stop request')) return NO_SHOW_REFUSALS.stopActive;
+  if (message.includes('Authorization expiry')) return NO_SHOW_REFUSALS.holdExpiring;
+  if (message.includes('completion')) return NO_SHOW_REFUSALS.completionPending;
+  return NO_SHOW_REFUSALS.changed;
 }
 
 /**
@@ -6979,14 +7010,19 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
         .json({ error: 'Only the poster or assigned worker can report a no-show' });
     }
 
+    // The worker's own poster no-show report that already cancelled this task
+    // converges on its recorded fee outcome; it never charges again.
+    const resumingPosterNoShow = !isPoster && gig.status === 'cancelled'
+      && gig.cancellation_reason === 'no_show_poster' && String(gig.cancelled_by) === String(userId);
+
     // Must be in assigned or in_progress state
-    if (!['assigned', 'in_progress'].includes(gig.status)) {
+    if (!resumingPosterNoShow && !['assigned', 'in_progress'].includes(gig.status)) {
       return res
         .status(400)
         .json({ error: `Cannot report no-show for a gig in "${gig.status}" status` });
     }
 
-    const eligibility = noShowEligibility(gig, userId);
+    const eligibility = resumingPosterNoShow ? { can_report: true } : noShowEligibility(gig, userId);
     if (!eligibility.can_report) {
       return res.status(409).json({ code: 'NO_SHOW_NOT_ELIGIBLE', error: eligibility.reason });
     }
@@ -6995,61 +7031,149 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
     const reportedAgainst = isPoster ? gig.accepted_by : gig.user_id;
     const nowIso = new Date().toISOString();
 
-    // 1) Create the incident record
-    const { data: incident, error: incidentErr } = await supabaseAdmin
-      .from('GigIncident')
-      .insert({
-        gig_id: gigId,
-        reported_by: userId,
-        reported_against: reportedAgainst,
-        type: incidentType,
-        description: description || null,
-        evidence_urls: evidence_urls || [],
-        status: 'open',
-      })
-      .select()
-      .single();
-
-    if (incidentErr) {
-      logger.error('Failed to create no-show incident', { error: incidentErr.message });
-      return res.status(500).json({ error: 'Failed to report no-show' });
-    }
-
-    // 2) Cancel the gig with zone 3 (no-show)
     const gigPrice = parseFloat(gig.price) || 0;
     const policyKey = gig.cancellation_policy || 'standard';
     // A worker no-show costs the worker reliability only, and the poster's
-    // hold is released in full below. A poster no-show records the 25% fee.
+    // hold is released in full below. A poster no-show charges the 25% fee
+    // from the poster's existing hold; the rest of the hold is released.
     const noShowFee = isPoster ? 0 : Math.round(gigPrice * 0.25 * 100) / 100;
+    const noShowFeeCents = Math.round(noShowFee * 100);
+    const reportActive = () => res.status(409).json(NO_SHOW_REFUSALS.feeReserved);
 
-    // Only the unstarted assignment that was checked above may be cancelled;
-    // a concurrent Start Work keeps the task and its payment hold.
-    const { data: updatedGig, error: cancelErr } = await supabaseAdmin
-      .from('Gig')
-      .update({
-        status: 'cancelled',
-        cancelled_at: nowIso,
-        cancelled_by: userId,
-        cancellation_reason: incidentType,
-        cancellation_zone: 3,
-        cancellation_fee: noShowFee,
-        updated_at: nowIso,
-      })
-      .eq('id', gigId)
-      .eq('status', gig.status)
-      .select()
-      .maybeSingle();
-
-    if (cancelErr) {
-      return res.status(500).json({ error: 'Failed to cancel gig' });
-    }
-    if (!updatedGig) {
-      return res.status(409).json({ code: 'NO_SHOW_NOT_ELIGIBLE', error: 'The task changed. Reopen it and check its status.' });
-    }
-
-    // Worker no-show: release the poster's authorization hold in full.
-    let holdRelease = 'none';
+    // The worker's report holds the task while its fee is captured; the poster's
+    // report cannot cancel it in that window (the database fence also refuses it).
     if (isPoster && gig.payment_id) {
+      const { data: heldPayment, error: heldErr } = await supabaseAdmin.from('Payment')
+        .select('payment_status, metadata').eq('id', gig.payment_id).maybeSingle();
+      if (heldErr) return res.status(503).json({ error: 'The no-show report could not be checked. Please retry.' });
+      if (heldPayment?.payment_status === 'capture_pending' || heldPayment?.metadata?.gig_fee?.state === 'pending') return reportActive();
+    }
+
+    // Poster no-show with a payment: the database admits the report, writes its
+    // incident once and reserves the fee capture before any other effect. A
+    // retry resumes the same reservation. Without a capturable hold, or with a
+    // fee below the provider's 50-cent minimum, nothing is charged.
+    let feeReservation = null;
+    if (!isPoster && !resumingPosterNoShow && gig.payment_id && noShowFeeCents > 0) {
+      try {
+        feeReservation = await gigStop.reserveNoShowFee({ gigId, actorId: userId, feeCents: noShowFeeCents,
+          description, evidenceUrls: evidence_urls });
+      } catch (reserveErr) {
+        return res.status(reserveErr.statusCode || 503).json({ code: reserveErr.code, error: reserveErr.message });
+      }
+    }
+    const feeFromHold = Boolean(feeReservation && !feeReservation.noHold && !feeReservation.belowMinimum);
+    const feeBelowMinimum = !isPoster && noShowFeeCents > 0 && noShowFeeCents < 50;
+
+    // 1) Create the incident record (the worker's report reuses its own). The
+    // poster's incident is written only after its cancel succeeds, so a refused
+    // report leaves no incident behind.
+    const insertIncident = async () => {
+      const { data: inserted, error: incidentErr } = await supabaseAdmin
+        .from('GigIncident')
+        .insert({
+          gig_id: gigId,
+          reported_by: userId,
+          reported_against: reportedAgainst,
+          type: incidentType,
+          description: description || null,
+          evidence_urls: evidence_urls || [],
+          status: 'open',
+        })
+        .select()
+        .single();
+      if (incidentErr) logger.error('Failed to create no-show incident', { error: incidentErr.message });
+      return incidentErr ? null : inserted;
+    };
+    let incident = feeReservation?.incident || null;
+    if (!incident && !isPoster) {
+      const { data: existing, error: existingErr } = await supabaseAdmin.from('GigIncident').select('*')
+        .eq('gig_id', gigId).eq('reported_by', userId).eq('type', incidentType)
+        .order('created_at', { ascending: true }).limit(1).maybeSingle();
+      if (existingErr) return res.status(503).json({ error: 'The no-show report could not be checked. Please retry.' });
+      incident = existing || await insertIncident();
+      if (!incident) return res.status(500).json({ error: 'Failed to report no-show' });
+    }
+
+    // 2) Cancel the gig with zone 3 (no-show)
+    let updatedGig = resumingPosterNoShow ? gig : null;
+    let feeCharge = null;
+    let cancelledHere = false;
+    if (!isPoster && feeFromHold) {
+      // Capture only the fee from the hold, then record it and cancel the task
+      // in one transaction. An unknown outcome keeps the same reservation.
+      let charged;
+      try {
+        charged = await gigStop.chargeNoShowFee({ payment: feeReservation.payment, actorId: userId });
+      } catch (chargeErr) {
+        return res.status(chargeErr.statusCode || 503).json({ code: chargeErr.code, error: chargeErr.message });
+      }
+      if (charged.review) {
+        // Unreachable while the database fence holds the task: the provider
+        // outcome is recorded, and support reviews the changed task.
+        return res.status(409).json({ code: 'NO_SHOW_REVIEW', feeCharge: charged.outcome,
+          error: 'The no-show fee outcome is recorded, but the task changed at the same time. Support will review it.' });
+      }
+      updatedGig = charged.gig || null;
+      feeCharge = charged.outcome;
+      if (!updatedGig) {
+        const { data: current } = await supabaseAdmin.from('Gig').select('*').eq('id', gigId).maybeSingle();
+        updatedGig = current || gig;
+      }
+    } else if (resumingPosterNoShow) {
+      if (gig.payment_id) {
+        const { data: payment, error: paymentErr } = await supabaseAdmin.from('Payment').select('*')
+          .eq('id', gig.payment_id).maybeSingle();
+        if (paymentErr) return res.status(503).json({ error: 'The no-show report could not be checked. Please retry.' });
+        feeCharge = gigStop.noShowFeeOutcome(payment)
+          || (payment && noShowFeeCents > 0
+            ? { status: 'not_charged', reason: feeBelowMinimum ? 'FEE_BELOW_MINIMUM' : 'HOLD_UNAVAILABLE', feeCents: 0 } : null);
+      }
+    } else {
+      // Only the unstarted assignment that was checked above may be cancelled;
+      // a concurrent Start Work keeps the task and its payment hold. A poster
+      // no-show without a capturable hold records no fee: nothing is charged.
+      const { data: cancelled, error: cancelErr } = await supabaseAdmin
+        .from('Gig')
+        .update({
+          status: 'cancelled',
+          cancelled_at: nowIso,
+          cancelled_by: userId,
+          cancellation_reason: incidentType,
+          cancellation_zone: 3,
+          cancellation_fee: 0,
+          updated_at: nowIso,
+        })
+        .eq('id', gigId)
+        .eq('status', gig.status)
+        .select()
+        .maybeSingle();
+
+      if (cancelErr) {
+        // A database guard holds this task for another in-flight operation.
+        const refusal = noShowCancelRefusal(cancelErr);
+        if (refusal) return res.status(409).json(refusal);
+        return res.status(500).json({ error: 'Failed to cancel gig' });
+      }
+      if (!cancelled) {
+        return res.status(409).json({ code: 'NO_SHOW_NOT_ELIGIBLE', error: 'The task changed. Reopen it and check its status.' });
+      }
+      updatedGig = cancelled;
+      cancelledHere = true;
+      if (!incident) incident = await insertIncident();
+      if (!isPoster && (feeReservation?.noHold || feeReservation?.belowMinimum)) {
+        const reason = feeReservation.belowMinimum ? 'FEE_BELOW_MINIMUM' : 'HOLD_UNAVAILABLE';
+        feeCharge = { status: 'not_charged', reason, feeCents: 0 };
+        logger.warn('Poster-fault fee not charged', { kind: 'poster_no_show', gigId, paymentId: gig.payment_id, reason });
+      }
+    }
+    const chargedFeeCents = feeCharge?.status === 'charged' ? feeCharge.feeCents : 0;
+
+    // Worker no-show, or a poster no-show whose fee is below the provider's
+    // 50-cent minimum: release the poster's authorization hold in full.
+    let holdRelease = 'none';
+    const releaseHold = isPoster || (feeCharge?.status === 'not_charged' && feeCharge.reason === 'FEE_BELOW_MINIMUM');
+    if (releaseHold && gig.payment_id) {
       try {
         await stripeService.cancelAuthorization(gig.payment_id);
         holdRelease = 'released';
@@ -7060,13 +7184,15 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
       }
     }
 
-    // 3) Update reliability metrics for the no-show party
+    // 3) Update reliability metrics for the no-show party once: only the request
+    // that cancelled the task applies it. A fee charged or recorded from the hold
+    // applies the same rule inside its recording transaction.
     // Increment no_show_count and recalculate reliability_score
-    const { data: currentUser } = await supabaseAdmin
+    const { data: currentUser } = cancelledHere ? await supabaseAdmin
       .from('User')
       .select('no_show_count, late_cancel_count, gigs_completed, reliability_score')
       .eq('id', reportedAgainst)
-      .single();
+      .single() : { data: null };
 
     if (currentUser) {
       const newNoShowCount = (currentUser.no_show_count || 0) + 1;
@@ -7087,24 +7213,29 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
         .eq('id', reportedAgainst);
     }
 
-    // 4) Notify the no-show party
-    const { data: reporter } = await supabaseAdmin
-      .from('User')
-      .select('name, username')
-      .eq('id', userId)
-      .single();
-    const reporterName = reporter?.name || reporter?.username || 'The other party';
-    const gigTitle = gig.title || 'a gig';
-
-    createNotification({
-      userId: reportedAgainst,
-      type: 'no_show_reported',
-      title: `No-show reported for "${gigTitle}"`,
-      body: `${reporterName} reported you as a no-show.${noShowFee > 0 ? ` Fee: $${noShowFee.toFixed(2)}` : ''} This affects your reliability score.`,
-      icon: '⚠️',
-      link: `/gigs/${gigId}`,
-      metadata: { gig_id: gigId, incident_id: incident?.id, fee: noShowFee },
-    });
+    // 4) Notify the no-show party. The worker's report shares one notice per
+    // task with its recovery paths, so a retry or a recorded webhook never repeats it.
+    if (isPoster) {
+      const { data: reporter } = await supabaseAdmin
+        .from('User')
+        .select('name, username')
+        .eq('id', userId)
+        .single();
+      const reporterName = reporter?.name || reporter?.username || 'The other party';
+      createNotification({
+        userId: reportedAgainst,
+        type: 'no_show_reported',
+        title: `No-show reported for "${gig.title || 'a gig'}"`,
+        body: `${reporterName} reported you as a no-show. This affects your reliability score.`,
+        icon: '⚠️',
+        link: `/gigs/${gigId}`,
+        metadata: { gig_id: gigId, incident_id: incident?.id, fee: 0 },
+      });
+    } else {
+      gigStop.notifyPosterNoShow({ gigId, posterId: reportedAgainst, workerId: userId, gigTitle: gig.title, feeCharge,
+        incidentId: incident?.id })
+        .catch(notifyErr => logger.warn('No-show notice failed', { gigId, error: notifyErr.message }));
+    }
 
     logger.info('No-show reported', {
       gigId,
@@ -7115,8 +7246,9 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
     res.json({
       incident,
       gig: updatedGig,
-      fee: noShowFee,
+      fee: chargedFeeCents / 100,
       holdRelease,
+      ...(!isPoster ? { feeCharge } : {}),
       message: 'No-show reported successfully. The gig has been cancelled.',
     });
   } catch (err) {
@@ -7664,6 +7796,8 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
         return res.status(409).json({ error: 'Payment ownership needs verification' });
       }
       Object.assign(payment, await require('../services/walletSettlementService').readProjection(payment));
+      // A charged poster-fault fee: the fee, the released rest and the worker share.
+      payment.gig_fee = publicGigFee(payment);
       payment.tip_amount = (successfulTips || []).reduce((sum, tip) => {
         const grossTip = Number(tip?.tip_amount || 0) || 0;
         const refundedTip = Number(tip?.refunded_amount || 0) || 0;
@@ -7686,6 +7820,10 @@ router.get('/:gigId/payment', verifyToken, async (req, res) => {
       delete payment.stripe_setup_intent_id;
       delete payment.stripe_customer_id;
       delete payment.stripe_charge_id;
+      if (payment.metadata?.gig_fee) {
+        const { gig_fee: _feeReceipt, ...metadata } = payment.metadata;
+        payment.metadata = metadata;
+      }
     }
 
     const stateInfo = payment?.payment_status

@@ -51,4 +51,28 @@ function publicPayment(payment) {
   const { gig_completion_original: _original, ...visible } = payment;
   return visible;
 }
-module.exports = { publicPayment, conflict, providerId, assertPaymentTerms, assertIntentBinding, assertAuthorizedIntent, assertCapturedIntent };
+// A poster-fault fee captured from the hold (metadata.gig_fee, recorded only by
+// the fee transactions). Settlement credits the worker share of the fee alone.
+function capturedFeeCents(p) {
+  const fee = p?.metadata?.gig_fee;
+  return fee?.state === 'captured' && Number.isSafeInteger(fee.fee_cents) && fee.fee_cents > 0 ? fee.fee_cents : null;
+}
+const feeWorkerShare = (p, feeCents) => Number(BigInt(feeCents) * BigInt(p.amount_to_payee) / BigInt(p.amount_total));
+// Client contract for a charged fee; provider and request identities stay private.
+function publicGigFee(p) {
+  const feeCents = capturedFeeCents(p);
+  if (feeCents === null || !Number.isSafeInteger(p.amount_total) || !Number.isSafeInteger(p.amount_to_payee)
+    || p.amount_total < 50 || feeCents >= p.amount_total || p.amount_to_payee < 0 || p.amount_to_payee > p.amount_total) return null;
+  const fee = p.metadata.gig_fee;
+  if (!['poster_no_show', 'late_cancel'].includes(fee.kind) || fee.released_cents !== p.amount_total - feeCents) return null;
+  return { kind: fee.kind, fee_cents: feeCents, released_cents: fee.released_cents, worker_share_cents: feeWorkerShare(p, feeCents) };
+}
+// The amounts a payment history row shows: a charged poster-fault fee moved only
+// the fee (payer) and later its worker share (payee), never the authorized amount.
+function paymentRowAmounts(p) {
+  const fee = publicGigFee(p);
+  if (fee) return { payerCents: fee.fee_cents, payeeCents: fee.worker_share_cents };
+  return { payerCents: Number(p?.amount_total || 0) || 0, payeeCents: Number(p?.amount_to_payee ?? p?.amount_total ?? 0) || 0 };
+}
+module.exports = { publicPayment, conflict, providerId, assertPaymentTerms, assertIntentBinding, assertAuthorizedIntent, assertCapturedIntent,
+  capturedFeeCents, feeWorkerShare, publicGigFee, paymentRowAmounts };
