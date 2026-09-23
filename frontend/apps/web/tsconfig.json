@@ -33,10 +33,11 @@
     "**/*.ts",
     "**/*.tsx",
     ".next-dev/types/**/*.ts",
+    ".next-e2e/types/**/*.ts",
     ".next-review/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-e2e/types/**/*.ts"
+    ".next-stream1-items-r1/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
