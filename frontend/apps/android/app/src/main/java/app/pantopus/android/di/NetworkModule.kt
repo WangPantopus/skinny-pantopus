@@ -173,6 +173,8 @@ object NetworkModule {
             .add(app.pantopus.android.data.api.models.homes.BillDecimalAdapter())
             .add(app.pantopus.android.data.api.models.homes.PollOptionAdapter())
             .add(app.pantopus.android.data.api.models.gigs.GigStopJsonAdapterFactory)
+            // `gig.items` stored as a JSON string by older writers reads as the list inside it.
+            .add(app.pantopus.android.data.api.models.gigs.GigItemsJsonAdapterFactory)
             // Payments earnings/spending: the summary arrives both nested and
             // spread at the envelope root, in snake_case and camelCase.
             .add(app.pantopus.android.data.api.models.payments.PaymentsEarningsJsonAdapter())
