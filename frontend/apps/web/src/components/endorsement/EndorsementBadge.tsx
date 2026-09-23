@@ -134,7 +134,7 @@ export default function EndorsementBadge({
           </div>
           <div className="px-3 pt-1.5 border-t border-app-border-subtle">
             <p className="text-[10px] text-app-text-muted">
-              Endorsements from verified neighbors
+              Endorsements from households on Pantopus
             </p>
           </div>
         </div>
