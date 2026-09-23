@@ -4,7 +4,8 @@ const crypto = require('crypto');
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
-const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+// canAccessMail: the per-item rule, shared with the v2 mailbox routes.
+const { getAccessibleHomeIds, canAccessMail, homeMailFilter, visibleMailFilter } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -672,21 +673,6 @@ const normalizeSendMailPayload = (rawBody, senderId) => {
   };
 };
 
-// CRIT-03, per-item half. The list-scoping helper on this file was consolidated
-// into utils/homeMailAccess, but this gate — which guards the eight per-item
-// routes (GET/PATCH/DELETE of an individual mail) — kept its own query, and that
-// query matched ANY HomeOccupancy row for the home: no is_active filter and no
-// verification_status filter. Both leave paths soft-deactivate rather than
-// delete the row, so a roommate who properly moved out kept read, mutate and
-// delete access to the household's individual mail on exactly the surface
-// CRIT-03 named. One definition now, shared with the list path.
-const canAccessMail = async (mail, userId) => {
-  if (mail.recipient_user_id === userId) return true;
-  if (!mail.recipient_home_id) return false;
-
-  const accessibleHomeIds = await getAccessibleHomeIds(userId);
-  return accessibleHomeIds.includes(mail.recipient_home_id);
-};
 
 const getHomeForRouting = async (homeId) => {
   if (!homeId) return null;
@@ -753,16 +739,19 @@ const sendHomeVerificationRequired = (res) =>
   });
 
 
+// Home letters are filtered by the Home mail rule (utils/homeMailAccess, M01):
+// a member sees the household's letters and their own, not a letter addressed
+// to another member or for another member's attention only.
 const applyMailboxScopeToQuery = (query, { scope, userId, homeId, accessibleHomeIds }) => {
   if (scope === 'home') {
-    return query.eq('recipient_home_id', homeId);
+    return query.eq('recipient_home_id', homeId).or(homeMailFilter(homeId, userId));
   }
 
   if (scope === 'all') {
     if (!accessibleHomeIds || accessibleHomeIds.length === 0) {
       return query.eq('recipient_user_id', userId);
     }
-    return query.or(`recipient_user_id.eq.${userId},recipient_home_id.in.(${accessibleHomeIds.join(',')})`);
+    return query.or(visibleMailFilter(userId, accessibleHomeIds));
   }
 
   return query.eq('recipient_user_id', userId);
@@ -2119,7 +2108,10 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
         const notifyUserIds = [];
 
         if (deliveryTargetType === 'home' && (addressHomeId || recipientHomeId)) {
-          // Home-targeted mail: notify all household members except sender
+          // Home-targeted mail: notify the household members, except the
+          // sender, who may open this letter (canAccessMail: a trusted member
+          // whom the Home mail rule shows it; M01). The notice carries the
+          // sender and, for a bill, the amount.
           const { data: occupants } = await supabaseAdmin
             .from('HomeOccupancy')
             .select('user_id')
@@ -2128,7 +2120,7 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
 
           if (occupants) {
             for (const occ of occupants) {
-              if (occ.user_id !== senderId) {
+              if (occ.user_id !== senderId && await canAccessMail(mail, occ.user_id)) {
                 notifyUserIds.push(occ.user_id);
               }
             }
@@ -2693,7 +2685,7 @@ router.patch('/:id/star', verifyToken, async (req, res) => {
     // Get current mail
     const { data: mail, error: fetchError } = await supabaseAdmin
       .from('Mail')
-      .select('starred, recipient_user_id, recipient_home_id')
+      .select('id, starred, recipient_user_id, recipient_home_id')
       .eq('id', id)
       .single();
 
@@ -2745,7 +2737,7 @@ router.patch('/:id/archive', verifyToken, async (req, res) => {
 
     const { data: mail, error: fetchError } = await supabaseAdmin
       .from('Mail')
-      .select('archived, recipient_user_id, recipient_home_id')
+      .select('id, archived, recipient_user_id, recipient_home_id')
       .eq('id', id)
       .single();
 
@@ -2792,7 +2784,7 @@ router.patch('/:id/ack', verifyToken, async (req, res) => {
 
     const { data: mail, error: fetchError } = await supabaseAdmin
       .from('Mail')
-      .select('ack_required, ack_status, recipient_user_id, recipient_home_id')
+      .select('id, ack_required, ack_status, recipient_user_id, recipient_home_id')
       .eq('id', id)
       .single();
 
@@ -2867,7 +2859,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
 
     const { data: mail, error: fetchError } = await supabaseAdmin
       .from('Mail')
-      .select('recipient_user_id, recipient_home_id')
+      .select('id, recipient_user_id, recipient_home_id')
       .eq('id', id)
       .single();
 
