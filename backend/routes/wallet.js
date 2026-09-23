@@ -18,6 +18,7 @@ const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
 const stripeService = require('../stripe/stripeService');
+const { publicGigFee } = require('../stripe/gigPaymentProof');
 
 const walletReadLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -170,7 +171,7 @@ router.get('/pending-release', verifyToken, async (req, res) => {
     // Payments where this user is the payee and funds are in hold
     const { data: holdPayments, error: holdErr } = await supabaseAdmin
       .from('Payment')
-      .select('id, amount_to_payee, cooling_off_ends_at, payment_status, payment_type, created_at')
+      .select('id, amount_total, amount_to_payee, cooling_off_ends_at, payment_status, payment_type, created_at, metadata')
       .eq('payee_id', userId)
       .in('payment_status', ['captured_hold', 'transfer_scheduled', 'transfer_pending'])
       .is('dispute_id', null);
@@ -186,7 +187,8 @@ router.get('/pending-release', verifyToken, async (req, res) => {
     const releasingSoonItems = [];
 
     for (const p of (holdPayments || [])) {
-      const amount = p.amount_to_payee || 0;
+      // A charged poster-fault fee pays the worker only its share of the fee.
+      const amount = publicGigFee(p)?.worker_share_cents ?? (p.amount_to_payee || 0);
       const coolingEnds = p.cooling_off_ends_at ? new Date(p.cooling_off_ends_at) : null;
       const isPastCooling = coolingEnds && coolingEnds <= new Date(now);
 

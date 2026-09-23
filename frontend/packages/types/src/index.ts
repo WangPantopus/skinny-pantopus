@@ -1200,6 +1200,14 @@ export type PaymentType =
 
 export type PayeeReleaseStatus = 'held' | 'wallet_credited' | 'no_earnings' | 'external_transfer' | 'unknown';
 
+export interface PaymentGigFee {
+  kind: 'poster_no_show' | 'late_cancel';
+  fee_cents: number;
+  released_cents: number;
+  /** floor(fee_cents * amount_to_payee / amount_total), credited after cooling-off. */
+  worker_share_cents: number;
+}
+
 export interface PaymentWalletSettlement {
   id: string;
   paymentId: string;
@@ -1231,6 +1239,9 @@ export interface Payment {
   // omit this projection; clients must not infer release from a status label.
   payee_release_status?: PayeeReleaseStatus;
   wallet_settlement?: PaymentWalletSettlement | null;
+  // A poster-fault fee charged from the hold (no-show or late cancel); the rest
+  // of the hold was released. Not self-refundable in the app.
+  gig_fee?: PaymentGigFee | null;
   // Stripe references
   stripe_payment_intent_id?: string;
   stripe_setup_intent_id?: string;

@@ -127,7 +127,8 @@ public final class GigDetailViewModel {
     }
 
     var canOpenRefunds: Bool {
-        guard viewerIsOwner, bidAcceptance.isCurrentAccount, let payment,
+        // A charged cancellation or no-show fee is not self-refundable in the app.
+        guard viewerIsOwner, bidAcceptance.isCurrentAccount, let payment, payment.gigFee == nil,
               payment.gigId == gigId, payment.payerId == currentUserId,
               payment.currency?.lowercased() == "usd", let id = payment.id, UUID(uuidString: id) != nil,
               let amount = payment.amountTotal, let cents = Int(exactly: amount), cents >= 50 else { return false }

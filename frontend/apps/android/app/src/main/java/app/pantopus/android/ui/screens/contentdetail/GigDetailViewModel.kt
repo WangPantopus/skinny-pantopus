@@ -461,7 +461,10 @@ class GigDetailViewModel
 
         fun canOpenRefunds(): Boolean =
             viewerIsOwner &&
-                _payment.value?.payment?.let { GigRefundCoordinator.validTarget(gigId, it, currentUserId()) } == true
+                // A charged cancellation or no-show fee is not self-refundable in the app.
+                _payment.value?.payment?.let {
+                    it.gigFee == null && GigRefundCoordinator.validTarget(gigId, it, currentUserId())
+                } == true
 
         fun openRefunds() {
             if (!canOpenRefunds()) return
@@ -1290,7 +1293,9 @@ class GigDetailViewModel
             val revision = ++paymentGeneration
             val mayReadPayerSummary = uid != null && uid != gig.acceptedBy
             val assignedPlus = gig.status?.lowercase() in listOf("assigned", "in_progress", "completed")
-            if (!mayReadPayerSummary || !assignedPlus) {
+            // A cancelled task shows its card only for a charged no-show or cancellation fee.
+            val cancelledWithPayment = gig.status?.lowercase() == "cancelled" && gig.paymentId != null
+            if (!mayReadPayerSummary || !(assignedPlus || cancelledWithPayment)) {
                 _payment.value = null
                 return
             }
@@ -1305,16 +1310,22 @@ class GigDetailViewModel
                     return@launch
                 }
                 when (result) {
-                    is NetworkResult.Success ->
-                        _payment.value =
-                            result.data.takeIf {
-                                val receipt = it.payment
-                                receipt != null && receipt.id == gig.paymentId && receipt.gigId == gig.id &&
-                                    receipt.payerId == gig.userId && receipt.payeeId == gig.acceptedBy
-                            }
+                    is NetworkResult.Success -> _payment.value = result.data.takeIf { paymentCardMatches(it, gig, assignedPlus) }
                     is NetworkResult.Failure -> _payment.value = null
                 }
             }
+        }
+
+        /** The gig's own payer receipt; a cancelled task keeps it only for a charged fee. */
+        private fun paymentCardMatches(
+            response: GigPaymentResponse,
+            gig: GigDto,
+            assignedPlus: Boolean,
+        ): Boolean {
+            val receipt = response.payment ?: return false
+            return receipt.id == gig.paymentId && receipt.gigId == gig.id &&
+                receipt.payerId == gig.userId && receipt.payeeId == gig.acceptedBy &&
+                (assignedPlus || receipt.gigFee != null)
         }
 
         // MARK: - Phase 5b · change orders (work item 2)

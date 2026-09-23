@@ -50,6 +50,8 @@ export default function ComposeMailModal({
 }: ComposeMailModalProps) {
   const [composeMode, setComposeMode] = useState<ComposeMode>('quick');
   const [composeLoading, setComposeLoading] = useState(false);
+  // The page banner that also gets this sits behind the modal's overlay.
+  const [sendError, setSendError] = useState('');
 
   // Quick compose state
   const [quickComposeData, setQuickComposeData] = useState<QuickComposeForm>(() => ({
@@ -292,6 +294,7 @@ export default function ComposeMailModal({
     e.preventDefault();
     setActionError('');
     setActionSuccess('');
+    setSendError('');
     setComposeLoading(true);
     try {
       const payload = composeMode === 'quick' ? buildQuickPayload() : buildStructuredPayload();
@@ -300,7 +303,9 @@ export default function ComposeMailModal({
       onSent();
       setActionSuccess('Mail sent successfully.');
     } catch (err: unknown) {
-      setActionError(getApiErrorMessage(err, 'Failed to send mail.'));
+      const message = getApiErrorMessage(err, 'Failed to send mail.');
+      setSendError(message);
+      setActionError(message);
     } finally { setComposeLoading(false); }
   };
 
@@ -597,6 +602,12 @@ export default function ComposeMailModal({
                   className={COMPOSE_FIELD_CLASS}
                 />
               </div>
+            </div>
+          )}
+
+          {sendError && (
+            <div role="alert" className="mt-3 text-sm px-3 py-2 rounded-lg border bg-red-50 text-red-700 border-red-200">
+              {sendError}
             </div>
           )}
 
