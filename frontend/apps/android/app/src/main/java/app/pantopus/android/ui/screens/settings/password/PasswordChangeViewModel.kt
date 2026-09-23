@@ -8,6 +8,7 @@ import app.pantopus.android.data.account.AccountRepository
 import app.pantopus.android.data.api.models.settings.PasswordUpdateBody
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.ui.components.PasswordStrength
 import app.pantopus.android.ui.screens.shared.form.FormFieldState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -45,6 +46,7 @@ class PasswordChangeViewModel
     @Inject
     constructor(
         private val account: AccountRepository,
+        auth: AuthRepository,
     ) : ViewModel() {
         sealed interface FormState {
             data object Loading : FormState
@@ -89,12 +91,13 @@ class PasswordChangeViewModel
         val shouldDismiss: StateFlow<Boolean> = _shouldDismiss.asStateFlow()
 
         /**
-         * Identity reminder rendered in the context band. Sample data — the
-         * auth-methods endpoint carries neither the email nor a last-changed
-         * timestamp, so these are seeded defaults until the backend exposes them.
+         * Identity reminder rendered in the context band: the signed-in
+         * account's email. No endpoint reports when the password last
+         * changed, so that line stays hidden (null) rather than showing a
+         * made-up date.
          */
-        val accountEmail: String = "maria@pantopus.app"
-        val lastChangedLabel: String = "84 days ago"
+        val accountEmail: String? = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.email
+        val lastChangedLabel: String? = null
 
         val requiresCurrent: Boolean get() = _hasPassword.value
 

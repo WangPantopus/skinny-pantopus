@@ -42,7 +42,9 @@ final class PasswordChangeSnapshotTests: XCTestCase {
             .status(200, body: "{\"has_password\":true}"),
             .status(401, body: "{\"error\":\"Current password is incorrect\"}")
         ]
-        let vm = PasswordChangeViewModel(api: makeAPI())
+        let vm = PasswordChangeViewModel(
+            api: makeAPI(), accountEmail: "maria@pantopus.app", lastChangedLabel: "84 days ago"
+        )
         await vm.load()
         // A valid submit that the server rejects on the current password.
         vm.update(.current, to: "autum-river-2018")
@@ -64,7 +66,9 @@ final class PasswordChangeSnapshotTests: XCTestCase {
 
     private func loadedViewModel() async -> PasswordChangeViewModel {
         SequencedURLProtocol.sequence = [.status(200, body: "{\"has_password\":true}")]
-        let vm = PasswordChangeViewModel(api: makeAPI())
+        let vm = PasswordChangeViewModel(
+            api: makeAPI(), accountEmail: "maria@pantopus.app", lastChangedLabel: "84 days ago"
+        )
         await vm.load()
         return vm
     }
