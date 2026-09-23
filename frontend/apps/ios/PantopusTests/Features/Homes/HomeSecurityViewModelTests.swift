@@ -2,11 +2,11 @@
 //  HomeSecurityViewModelTests.swift
 //  PantopusTests
 //
-//  P5.1 / A14.2 — projection tests for the per-home Security toggles.
-//  Locks the audit's required shape (3 groups × 3 toggles = 9) plus
-//  the helper-line copy contract — the strings here MUST stay in
-//  sync with the Android `HomeSecurityHelpers` object so that
-//  iOS+Android parity holds.
+//  P5.1 / A14.2 — projection tests for the per-home Security screen.
+//  Locks the shape (only the enforced address-precision toggle is offered;
+//  all nine stored toggles stay in the model) plus the helper-line copy —
+//  the strings here MUST stay in sync with the Android
+//  `HomeSecurityHelpers` object so that iOS+Android parity holds.
 //
 //  P3F: the view-model now reads `GET /api/homes/:id/privacy` and PATCHes
 //  each flip. The projection tests drive a stubbed `APIClient` whose GET
@@ -60,13 +60,11 @@ final class HomeSecurityViewModelTests: XCTestCase {
             XCTFail("Expected .loaded")
             return
         }
-        XCTAssertEqual(groups.map(\.id), ["accessControl", "privacy", "documents"])
-        for group in groups {
-            XCTAssertEqual(group.rows.count, 3, "Group \(group.id) should have 3 toggles")
-            for row in group.rows {
-                if case .toggle = row.control { /* ok */ } else {
-                    XCTFail("Row \(row.id) should be a toggle")
-                }
+        XCTAssertEqual(groups.map(\.id), ["accessControl"])
+        XCTAssertEqual(groups.first?.rows.map(\.id), [HomeSecurityViewModel.Toggles.addressPrecision])
+        for row in groups.flatMap(\.rows) {
+            if case .toggle = row.control { /* ok */ } else {
+                XCTFail("Row \(row.id) should be a toggle")
             }
         }
     }
@@ -81,15 +79,7 @@ final class HomeSecurityViewModelTests: XCTestCase {
         let helpers = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0.helper) })
         XCTAssertEqual(
             helpers["accessControl"],
-            "Guest approval is on, so guests need an owner-tap to enter."
-        )
-        XCTAssertEqual(
-            helpers["privacy"],
-            "Visible to verified neighbors only. Address used for deliveries."
-        )
-        XCTAssertEqual(
-            helpers["documents"],
-            "Docs unlock with Face ID. Previews still appear in chat."
+            "Place shows this Home's full street address, including the unit number."
         )
     }
 
@@ -103,32 +93,7 @@ final class HomeSecurityViewModelTests: XCTestCase {
         let helpers = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0.helper) })
         XCTAssertEqual(
             helpers["accessControl"],
-            "All guest activity requires your explicit approval. Names and street precision are hidden from outsiders."
-        )
-        XCTAssertEqual(
-            helpers["privacy"],
-            "Hidden from the neighborhood map, previews suppressed. Outsiders only see your home name."
-        )
-        XCTAssertEqual(
-            helpers["documents"],
-            "All docs require Face ID. Previews stay blurred everywhere, including notifications."
-        )
-    }
-
-    func testGuestApprovalOffShowsTighten() async {
-        // GET fails → balanced seed; PATCH succeeds so the flip sticks.
-        SequencedURLProtocol.sequence = [.status(500, body: "{}"), .status(200, body: "{}")]
-        let vm = HomeSecurityViewModel(homeId: "home-1", api: makeAPI(), variant: .balanced)
-        await vm.load()
-        await vm.toggleRow(HomeSecurityViewModel.Toggles.guestApproval, isOn: false)
-        guard case let .loaded(groups) = vm.state else {
-            XCTFail("Expected .loaded")
-            return
-        }
-        let access = groups.first { $0.id == "accessControl" }
-        XCTAssertEqual(
-            access?.helper,
-            "Guest approval is off — anyone with a code is in. Tighten this if you're away."
+            "Place shows this Home's street without the unit number."
         )
     }
 

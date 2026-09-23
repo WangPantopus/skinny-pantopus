@@ -25,10 +25,11 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * P5.1 / A14.2 — projection tests for the per-home Security toggles.
- * Locks the audit's required shape (3 groups × 3 toggles = 9) plus the
- * helper-line copy contract — the strings here MUST stay in sync with the
- * iOS `HomeSecurityViewModel` helpers so iOS+Android parity holds.
+ * P5.1 / A14.2 — projection tests for the per-home Security screen.
+ * Locks the shape (only the enforced address-precision toggle is offered;
+ * all nine stored toggles stay in the model) plus the helper-line copy —
+ * the strings here MUST stay in sync with the iOS `HomeSecurityViewModel`
+ * helpers so iOS+Android parity holds.
  *
  * P3F: the view-model now reads `GET /api/homes/:id/privacy` and PATCHes
  * each flip. The projection/helper tests drive the seed (via [setVariant]
@@ -95,12 +96,10 @@ class HomeSecurityViewModelTest {
             val vm = makeVm()
             vm.load() // GET fails → keeps Balanced seed
             val groups = (vm.state.value as GroupedListUiState.Loaded).groups
-            assertEquals(listOf("accessControl", "privacy", "documents"), groups.map { it.id })
-            for (group in groups) {
-                assertEquals(3, group.rows.size)
-                for (row in group.rows) {
-                    assertTrue("Row ${row.id} should be a toggle", row.control is RowControl.Toggle)
-                }
+            assertEquals(listOf("accessControl"), groups.map { it.id })
+            assertEquals(listOf(HomeSecurityToggles.ADDRESS_PRECISION), groups.first().rows.map { it.id })
+            for (row in groups.flatMap { it.rows }) {
+                assertTrue("Row ${row.id} should be a toggle", row.control is RowControl.Toggle)
             }
         }
 
@@ -111,16 +110,8 @@ class HomeSecurityViewModelTest {
         val groups = (vm.state.value as GroupedListUiState.Loaded).groups
         val helpers = groups.associate { it.id to it.helper }
         assertEquals(
-            "Guest approval is on, so guests need an owner-tap to enter.",
+            "Place shows this Home's full street address, including the unit number.",
             helpers["accessControl"],
-        )
-        assertEquals(
-            "Visible to verified neighbors only. Address used for deliveries.",
-            helpers["privacy"],
-        )
-        assertEquals(
-            "Docs unlock with Face ID. Previews still appear in chat.",
-            helpers["documents"],
         )
     }
 
@@ -131,32 +122,10 @@ class HomeSecurityViewModelTest {
         val groups = (vm.state.value as GroupedListUiState.Loaded).groups
         val helpers = groups.associate { it.id to it.helper }
         assertEquals(
-            "All guest activity requires your explicit approval. Names and street precision are hidden from outsiders.",
+            "Place shows this Home's street without the unit number.",
             helpers["accessControl"],
         )
-        assertEquals(
-            "Hidden from the neighborhood map, previews suppressed. Outsiders only see your home name.",
-            helpers["privacy"],
-        )
-        assertEquals(
-            "All docs require Face ID. Previews stay blurred everywhere, including notifications.",
-            helpers["documents"],
-        )
     }
-
-    @Test
-    fun guest_approval_off_shows_tighten() =
-        runTest {
-            val vm = makeVm()
-            vm.setVariant(HomeSecurityViewModel.Variant.Balanced)
-            vm.onToggle(HomeSecurityToggles.GUEST_APPROVAL, false)
-            val groups = (vm.state.value as GroupedListUiState.Loaded).groups
-            val helper = groups.first { it.id == "accessControl" }.helper
-            assertEquals(
-                "Guest approval is off — anyone with a code is in. Tighten this if you're away.",
-                helper,
-            )
-        }
 
     @Test
     fun toggle_flip_updates_state() =
