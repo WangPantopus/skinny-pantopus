@@ -771,9 +771,8 @@ object DeepLinkRouter {
     ): Destination.BookingDetail? {
         val bookingId = HomeTaskNotificationRoute.canonicalId(rawId) ?: return null
         if (ownerKind == null) return Destination.BookingDetail(bookingId)
-        if (ownerKind != "home" && ownerKind != "business") return null
-        val owner = HomeTaskNotificationRoute.canonicalId(ownerId) ?: return null
-        return Destination.BookingDetail(bookingId, ownerKind, owner)
+        val owner = HomeTaskNotificationRoute.canonicalId(ownerId)?.takeIf { ownerKind == "home" || ownerKind == "business" }
+        return owner?.let { Destination.BookingDetail(bookingId, ownerKind, it) }
     }
 
     /**
