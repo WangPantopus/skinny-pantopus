@@ -171,8 +171,9 @@ private fun BusinessesIntroCard(count: Int) {
             PantopusIconImage(PantopusIcon.Building2, null, size = 18.dp, tint = PantopusColors.business)
         }
         Column(modifier = Modifier.weight(1f)) {
+            // Counts every business the user runs, verified or not.
             Text(
-                text = if (count == 1) "1 verified business" else "$count verified businesses",
+                text = if (count == 1) "1 business" else "$count businesses",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,

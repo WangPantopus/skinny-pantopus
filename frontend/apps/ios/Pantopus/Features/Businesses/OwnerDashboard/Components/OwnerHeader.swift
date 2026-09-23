@@ -134,6 +134,9 @@ struct OwnerHeaderBanner: View {
     let locality: String
     let logoIcon: PantopusIcon?
     let status: BizStatusBadge?
+    /// The business's identity tier says verified (`BusinessCardModel.isVerified`).
+    /// Unverified shows the plain "Business" chip.
+    var isVerified = false
     /// Opens Edit Business Page (shared by the camera / logo / name fabs).
     let onEdit: @MainActor () -> Void
 
@@ -253,9 +256,9 @@ struct OwnerHeaderBanner: View {
     private var chipRow: some View {
         HStack(spacing: 6) {
             chip(
-                icon: .shieldCheck,
+                icon: isVerified ? .shieldCheck : nil,
                 dot: nil,
-                text: "Business · Verified",
+                text: isVerified ? "Business · Verified" : "Business",
                 background: Theme.Color.businessBg,
                 foreground: Theme.Color.businessDark
             )

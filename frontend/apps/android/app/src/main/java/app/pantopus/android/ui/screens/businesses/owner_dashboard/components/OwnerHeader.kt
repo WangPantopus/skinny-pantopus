@@ -172,6 +172,8 @@ fun OwnerHeaderBanner(
     locality: String,
     logoIcon: PantopusIcon?,
     status: BizStatusBadge?,
+    // The business's identity tier says verified; unverified shows the plain chip.
+    isVerified: Boolean = false,
     onEdit: () -> Unit,
 ) {
     Column(
@@ -248,9 +250,9 @@ fun OwnerHeaderBanner(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 OwnerChip(
-                    icon = PantopusIcon.ShieldCheck,
+                    icon = if (isVerified) PantopusIcon.ShieldCheck else null,
                     dot = null,
-                    text = "Business · Verified",
+                    text = if (isVerified) "Business · Verified" else "Business",
                     background = PantopusColors.businessBg,
                     foreground = PantopusColors.businessDark,
                 )

@@ -318,6 +318,7 @@ internal fun OwnerEditFrame(
                     locality = profile.header.locality ?: "",
                     logoIcon = profile.header.logoIcon,
                     status = bannerStatus(profile.status),
+                    isVerified = profile.header.isVerified,
                     onEdit = onEditPage,
                 )
                 Column(

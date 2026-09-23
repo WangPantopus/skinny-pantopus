@@ -258,6 +258,7 @@ struct OwnerEditFrame: View {
                         locality: profile.header.locality ?? "",
                         logoIcon: profile.header.logoIcon,
                         status: bannerStatus,
+                        isVerified: profile.header.isVerified,
                         onEdit: onEditPage
                     )
                     scrollBody(in: profile)
