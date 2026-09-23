@@ -321,7 +321,27 @@ async function canAccessPublicUserProfile(viewerId, targetUserId, visibility = '
   if (!canViewProfile(viewerId, targetUserId, visibility)) return false;
   if (!(await isSearchable(viewerId, targetUserId))) return false;
   if (viewerId && await isScopedBlocked(viewerId, targetUserId, 'any')) return false;
+  if ((await personalBlockersOf(viewerId)).has(String(targetUserId))) return false;
   return true;
+}
+
+/**
+ * Users who put a personal block (`UserBlock`) on the viewer. Their profiles
+ * and search entries are hidden from the viewer, as the Blocked users screens
+ * promise ("can't … see your profile"). Directional: a blocker still sees the
+ * person they blocked. An unreadable block list fails closed.
+ */
+async function personalBlockersOf(viewerId) {
+  if (!viewerId) return new Set();
+  const { data, error } = await supabaseAdmin
+    .from('UserBlock')
+    .select('blocker_user_id')
+    .eq('blocked_user_id', viewerId);
+  if (error || !Array.isArray(data)) {
+    logger.warn('Personal blocker lookup unavailable', { error: error?.message });
+    throw require('../services/blockService').blockCheckUnavailable();
+  }
+  return new Set(data.map((row) => String(row.blocker_user_id)));
 }
 
 async function canAccessLegacyLocalProfileRoute(profile, viewerId, userData) {
@@ -2887,12 +2907,14 @@ router.get('/search', verifyToken, async (req, res) => {
       }
     }
 
+    const blockers = await personalBlockersOf(userId);
     const visibleCandidates = [];
     for (const candidate of candidateByProfileId.values()) {
       const { profile } = candidate;
       const account = candidate.account || {};
       const accountType = account.account_type || 'individual';
       if (accountType === 'curator') continue;
+      if (blockers.has(String(profile.user_id))) continue;
       if (normalizedType === 'people' && accountType === 'business') continue;
       if (normalizedType === 'business' && accountType !== 'business') continue;
       if (!(await canDiscoverLocalProfileForUserSearch(profile, userId))) continue;
