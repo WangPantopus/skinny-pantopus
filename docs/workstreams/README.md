@@ -5,7 +5,43 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 11:34 UTC (coordinator session `92cc4526`)
+## CURRENT RESUME POINT — September 23, 2026, 12:34 UTC (coordinator session `92cc4526`)
+
+This updates the 11:34 block below; read both. The count is **13 closed / 67 partial**.
+
+### Merged since the last block
+- #296: web task edit sees the cookie viewer.
+- #297: posting from a Home requires `home.view`.
+- #298: task lists use `optionalAuth` and filter blocked users in both directions.
+- #293: relationships conceal blocks.
+- #295: neutral reply copy.
+- #299: a failed load on web Settings or Privacy no longer leads to a public-overwriting Save.
+- #300: web business creation works.
+- **#255: search terms escaped.** This is the defensive edit from HANDOFF §0, and it is now on master.
+- #278: HomeAsset categories (migration `000200`).
+
+### Queue
+280 283 291 290 289 292 221 236 219 214 215 224 199 208 251 252 257 279 262 264 287 266 285 286 
+
+### Coordinator decisions
+- **Price changes are unavailable on every task.**
+  - A free task with an approved price increase can never be confirmed, and a paid task's hold gets bricked.
+  - Scope and time changes stay.
+  - **Founder:** the real design, either settling the difference at completion or re-authorizing, plus an operator path for stuck tasks.
+- **Support email.** Native used `support@pantopus.app`, which has no MX records and so bounces. Every client now uses `support@pantopus.com`.
+
+### Notes since the last block
+- 11:39 #297 merged (-> 9deb8e3ae); 11:43 #298 merged (-> b8788b85e); 11:48 #293 merged (-> 44b0a5483). #295/#299/#300 queued. Native support email support@pantopus.app is DEAD (pantopus.app has no MX; pantopus.com has Google MX) -> Stream 3 switching to support@pantopus.com.
+- MONEY DESIGN (coordinator decision): approved price change on a FREE task -> owner confirm 409 'The agreed payment must be verified before confirmation' forever (confirmCompletionHelper refuses price>0 without payment_id). With #269 (paid tasks bricked), price change orders break in every case -> price changes unavailable on EVERY task (extend #269 guard + #287 hide rule to all tasks); scope/time changes stay. FOUNDER: real price-change design (settle delta at completion or re-authorize) + operator path for tasks stuck with price>0 and no payment. Bundle 20260923-stream1-free-task-price-change-r1 MANIFEST 39fbae1d….
+- Stream 1 native batch verified on iOS: S1-06 bid errors show the payout-onboarding reason + Go to Wallet; S1-19 confirm step ('Release $30.00 to <worker>?') + Stripe TEST capture; iOS gig link over an open gig opens the linked gig. Android checks next.
+- 11:52 #295, 11:58 #299, 12:04 #300 merged. #292 (S3-02 regression) verified on both platforms, queued after the fast group.
+- Stream 3 native batch verified on Android (bell dot = unread, 'N businesses', real verification chip, 'No email app found' alert, refused send to a blocker: master showed 'Failed to send · Retry' and swallowed the 403 -> now 'Unable to message this user' + 'Not sent', no Retry). Native business creation OK (create-full maps business_type per category). Latent: create-full validates business_type with .valid(...Object.keys(Set)) = accepts any string -> tiny PR approved. Web 'Business Type' free-text requiring exact keys -> select with human labels approved. Native entity-type editor: recorded parity gap.
+- iOS double back buttons (~70 Hub/You routes) handed to the shared-UX agent with Stream 3's inventory (/private/tmp/pantopus-tools/ios-double-back-inventory.md). Disk recovered to 24 GiB; shared-UX may create its own AVD (one device at a time).
+- Shared-UX PRs: #313 iOS profile cover Close (C-01); #314 Hub pills -> Notifications/Wallet + iOS My Listings (C-02/C-20); #315 You Home/Business rows -> My homes/My businesses (C-04/C-05/C-11); #316 honest placeholders with Go back, no raw ids (C-22); #311 web client rejects with Error so real reasons show (C-23) + retry guard reads statusCode (C-24) + Today error state (C-13). Android checks pending (own AVD Pantopus_Shared_UX). C-36 not a defect. Web /app/chat/<room not in> 403 renders 'No messages yet. Say hello!' + composer -> Stream 3.
+- Stream 1 PRs: #301 bid refusal reason + Go to Wallet (S1-06); #302 confirm step before releasing payment (S1-19); #303 Android notification gig Back -> Notifications + iOS gig link over an open gig; #312 iOS tip dock parity + '3-tip limit' copy (iOS/Android). All-task price rule: backend branch 4ea5098d6 (409 on any non-zero amount_change; free vs held messages) + clients branch 11d7ff8f6 (price types never offered; pending price order shows the reason instead of Approve) — publishing after device checks.
+- Stream 2 #320 (S2-07): native mail action tiles stop claiming fake success (Pay/Sign/Remind/Forward/Dispute/Share/Acknowledge removed; master Forward even moved bills out of Incoming); Create Task opens the real task-from-mail flow. #321 (S2-09): native Home dashboard tabs open their screens (Android Tasks/Packages/Members/Bills/Ownership; iOS Tasks). #288 native: iOS magic post verified (201, in_person); ANDROID magic composer 'Review & post' stays disabled after description + Flexible + address -> Stream 1 top priority. Findings: Android task-from-mail shows 'Could not create task' on 409 'already has a linked task' (Stream 2); pantopus://gigs/new opens task detail 'new' (Stream 1).
+
+## Resume point history — September 23, 2026, 11:34 UTC (coordinator session `92cc4526`)
 
 This updates the 11:01 block below; read both.
 
