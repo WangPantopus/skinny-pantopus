@@ -2342,6 +2342,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.invoiceDetail(pending.invoiceId))
                 DeepLinkRouter.consume()
             }
+            DeepLinkRouter.Destination.CreatorInbox -> {
+                navController.navigate(ChildRoutes.CREATOR_INBOX)
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.FanInbox -> {
+                navController.navigate(ChildRoutes.fanInbox(pending.personaId))
+                DeepLinkRouter.consume()
+            }
+            DeepLinkRouter.Destination.CreatorAudienceMembers -> {
+                navController.navigate(ChildRoutes.CREATOR_AUDIENCE_MEMBERS)
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.ResetPassword,
             is DeepLinkRouter.Destination.VerifyEmail,
             is DeepLinkRouter.Destination.Unknown,

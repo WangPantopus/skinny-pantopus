@@ -449,9 +449,13 @@ public struct YouTabRoot: View {
     private let expandMonthlyReceipt: Bool
     /// Closes the profile cover (RootTabView presents it full screen).
     private let onClose: (@MainActor () -> Void)?
+    /// Pushed once when a notification opens the cover on a screen inside it.
+    private let initialRoute: YouRoute?
+    @State private var didOpenInitialRoute = false
 
-    public init(expandMonthlyReceipt: Bool = false, onClose: (@MainActor () -> Void)? = nil) {
+    public init(expandMonthlyReceipt: Bool = false, initialRoute: YouRoute? = nil, onClose: (@MainActor () -> Void)? = nil) {
         self.expandMonthlyReceipt = expandMonthlyReceipt
+        self.initialRoute = initialRoute
         self.onClose = onClose
     }
 
@@ -465,6 +469,11 @@ public struct YouTabRoot: View {
                 onClose: onClose
             )
             .toolbar(.hidden, for: .navigationBar)
+            .task {
+                guard !didOpenInitialRoute, let initialRoute else { return }
+                didOpenInitialRoute = true
+                path.append(initialRoute)
+            }
             .navigationDestination(for: YouRoute.self) { route in
                 destination(for: route)
                     .modifier(OwnHeaderBar(drawsOwnHeader: Self.drawsOwnHeader(route)))

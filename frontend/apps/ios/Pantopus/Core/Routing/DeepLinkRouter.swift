@@ -181,6 +181,16 @@ final class DeepLinkRouter {
         /// existing recipient invoice detail, whose endpoint only returns an
         /// invoice addressed to the signed-in user.
         case invoiceDetail(invoiceId: String)
+        /// `/app/audience/inbox/:membershipId` — a fan's persona DM to the
+        /// creator (`persona_dm_received_creator`). Opens the Creator Inbox;
+        /// the link names a membership, not a thread.
+        case creatorInbox
+        /// `/app/audience/membership/:personaId/inbox` — the creator's reply
+        /// to a fan (`persona_dm_reply_fan`). Opens that persona's fan inbox.
+        case fanInbox(personaId: String)
+        /// `/app/persona?tab=followers` — `persona_follow_request` and
+        /// `persona_follow`. Opens "Your audience" (requests and members).
+        case creatorAudienceMembers
         case unknown(URL)
     }
 
@@ -490,6 +500,17 @@ final class DeepLinkRouter {
         case "listing", "listings":
             if let id = segments.dropFirst().first { return .listing(id: id) }
             return .unknown(url)
+        case "marketplace":
+            // The web listing path `/marketplace/:listingId` (address_revealed).
+            if let id = segments.dropFirst().first, UUID(uuidString: id) != nil { return .listing(id: id) }
+            return .unknown(url)
+        case "audience":
+            // Persona DM notifications: `/audience/inbox/:membershipId` and
+            // `/audience/membership/:personaId/inbox`.
+            let rest = Array(segments.dropFirst())
+            if rest.count == 2, rest[0] == "inbox" { return .creatorInbox }
+            if rest.count == 3, rest[0] == "membership", rest[2] == "inbox" { return .fanInbox(personaId: rest[1]) }
+            return .unknown(url)
         case "homes":
             return homeDestination(url: url, segments: segments, tabQuery: tabQuery)
         case "businesses":
@@ -528,6 +549,8 @@ final class DeepLinkRouter {
             // `pantopus://persona/:handle` is the public Beacon profile — the
             // same destination Android resolves and the `/@handle` alias above.
             if let handle = segments.dropFirst().first { return .beaconProfile(handle: handle) }
+            // `/app/persona?tab=followers` — follow and follow-request notifications.
+            if tabQuery?.lowercased() == "followers" { return .creatorAudienceMembers }
             return .unknown(url)
         case "join":
             // RN `/join/:code` → register-with-invite. Root presents the same
@@ -609,12 +632,13 @@ final class DeepLinkRouter {
         }
     }
 
-    /// Server notification links are web paths. The `new_follower` link is
-    /// the web's canonical profile URL `/<username>`, which has no native
-    /// route (unknown paths are deliberately discarded); rewrite just that
-    /// type to the native short profile form `/u/<username>`.
+    /// Server notification links are web paths. The `new_follower` and
+    /// `connection_accepted` links are the web's canonical profile URL
+    /// `/<username>`, which has no native route (unknown paths are
+    /// deliberately discarded); rewrite just those types to the native short
+    /// profile form `/u/<username>`.
     nonisolated static func notificationPath(type: String?, link: String?) -> String? {
-        guard type == "new_follower", let link else { return link }
+        guard type == "new_follower" || type == "connection_accepted", let link else { return link }
         let trimmed = link.hasPrefix("/") ? String(link.dropFirst()) : link
         let segments = trimmed.split(separator: "/", omittingEmptySubsequences: true)
         guard segments.count == 1, !trimmed.contains("?"), !trimmed.hasPrefix("@") else { return link }
