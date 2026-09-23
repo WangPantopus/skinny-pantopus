@@ -1352,7 +1352,12 @@ router.get('/', verifyToken, async (req, res) => {
         priority,
         attachments,
         expires_at,
-        created_at
+        created_at,
+        sender:sender_user_id (
+          id,
+          username,
+          name
+        )
       `, { count: 'exact' })
       .eq('archived', archived === 'true')
       .order('created_at', { ascending: false })
