@@ -583,6 +583,8 @@ describe('public gig detail keeps completion evidence within the current work re
     completion_checklist: [{ item: 'Private checklist', done: true }],
     owner_confirmation_note: 'Private owner review', owner_satisfaction: 4 };
   const read = actor => {
+    // GET /api/gigs/:id resolves the viewer through optionalAuth, which caches each token's user for 15 s.
+    require('../../middleware/optionalAuth')._tokenCache.clear();
     if (actor) db.setAuthMocks({ getUser: async () => ({ data: { user: { id: actor } }, error: null }) });
     const req = request(app).get('/api/gigs/gig');
     return actor ? req.set('Authorization', 'Bearer synthetic-read') : req;
@@ -1024,6 +1026,8 @@ describe('general gig responses do not disclose share credentials or helper coor
       urgent_details: { shareLocationDuringTask: share, helper_last_location: privateLocation, helper_eta_minutes: 9, current_fulfillment_status: 'on_the_way' } });
   }
   const read = actor => {
+    // GET /api/gigs/:id resolves the viewer through optionalAuth, which caches each token's user for 15 s.
+    require('../../middleware/optionalAuth')._tokenCache.clear();
     if (actor) db.setAuthMocks({ getUser: async () => ({ data: { user: { id: actor } }, error: null }) });
     const req = request(app).get('/api/gigs/gig');
     return actor ? req.set('Authorization', 'Bearer synthetic-read') : req;
