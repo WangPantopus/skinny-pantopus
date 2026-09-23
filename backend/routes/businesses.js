@@ -4871,14 +4871,24 @@ router.post('/:businessId/invoices', verifyToken, validate(createInvoiceSchema),
       .eq('id', businessId)
       .maybeSingle();
 
-    // Send notification to recipient (non-blocking)
-    supabaseAdmin.from('Notification').insert({
-      user_id: recipient_user_id,
-      type: 'invoice_received',
-      title: 'Invoice Received',
-      body: `${bizUser?.name || bizUser?.username || 'A business'} sent you an invoice for $${(total_cents / 100).toFixed(2)}`,
-      data: { invoice_id: invoice.id, business_id: businessId, amount_cents: total_cents },
-    }).then(() => {}).catch(() => {});
+    // Notify the recipient (non-blocking) through the shared notification
+    // service, which stores the payload in `metadata`. Nothing is sent when
+    // either the recipient or the business has blocked the other, or when the
+    // block check itself fails.
+    const { isBlocked } = require('../services/blockService');
+    isBlocked(recipient_user_id, businessId)
+      .then((blocked) => (blocked ? null : require('../services/notificationService').createNotification({
+        userId: recipient_user_id,
+        type: 'invoice_received',
+        title: 'Invoice Received',
+        body: `${bizUser?.name || bizUser?.username || 'A business'} sent you an invoice for $${(total_cents / 100).toFixed(2)}`,
+        link: `/app/invoice/${invoice.id}`,
+        metadata: { invoice_id: invoice.id, business_id: businessId, amount_cents: total_cents },
+        context: 'personal',
+      })))
+      .catch((err) => {
+        logger.warn('Invoice notification skipped', { invoiceId: invoice.id, error: err.message });
+      });
 
     res.status(201).json({ invoice });
   } catch (err) {
