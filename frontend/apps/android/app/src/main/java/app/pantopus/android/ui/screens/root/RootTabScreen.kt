@@ -6325,7 +6325,21 @@ private fun routeForJumpBackIn(item: JumpBackItem): String {
     if (path.startsWith("/app/chat")) return ChildRoutes.placeholder("Messages")
     if (path.startsWith("/gigs/new")) return ChildRoutes.composeGig(GigsCategory.All.key)
     if (path.startsWith("/gigs")) return ChildRoutes.GIGS_FEED
+    // Hub status pills: "N notifications" and "$X ready · Tap to withdraw".
+    // The wallet holds the balance and the Withdraw action.
+    if (path.startsWith("/app/notifications")) return ChildRoutes.NOTIFICATIONS
+    if (path.startsWith("/app/settings/payments") || path.startsWith("/app/wallet")) return ChildRoutes.WALLET
+    if (path.startsWith("/app/map")) return ChildRoutes.EXPLORE
+    businessIdFromDashboardRoute(path)?.let { return ChildRoutes.businessOwner(it) }
     return ChildRoutes.placeholder(item.title)
+}
+
+/** Extracts `<id>` from `/app/businesses/<id>/dashboard`. */
+private fun businessIdFromDashboardRoute(route: String): String? {
+    val prefix = "/app/businesses/"
+    if (!route.startsWith(prefix)) return null
+    val segment = route.removePrefix(prefix).substringBefore('/').substringBefore('?')
+    return segment.takeIf { it.isNotEmpty() }
 }
 
 /** Extracts `<id>` from `/app/homes/<id>/dashboard`. */
