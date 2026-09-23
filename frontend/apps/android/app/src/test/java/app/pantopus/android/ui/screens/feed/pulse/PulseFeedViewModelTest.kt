@@ -21,8 +21,10 @@ import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.sports.SportsRepository
 import app.pantopus.android.ui.screens.feed.FeedSurface
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -89,6 +91,39 @@ class PulseFeedViewModelTest {
             vm.load()
             val loaded = vm.state.value as PulseFeedUiState.Loaded
             assertEquals(listOf("https://cdn.example.com/thumb.jpg"), loaded.rows.single().mediaUrls)
+        }
+
+    @Test
+    fun selectIntent_whileALoadIsInFlight_refetchesAndKeepsTheLatest() =
+        runTest {
+            val vm = makeVm()
+            val firstLoad = CompletableDeferred<NetworkResult<FeedResponse>>()
+            coEvery {
+                repo.feed(any(), any(), any(), null, any(), any(), any(), any(), any(), any())
+            } coAnswers { firstLoad.await() }
+            coEvery {
+                repo.feed(any(), any(), any(), "recommendation", any(), any(), any(), any(), any(), any())
+            } returns
+                NetworkResult.Success(
+                    FeedResponse(
+                        posts = listOf(askPost(id = "rec1").copy(postType = "recommendation")),
+                        pagination = FeedPagination(hasMore = false),
+                    ),
+                )
+
+            vm.load() // All: still loading
+            vm.selectIntent(PulseIntent.Recommend) // tapped during that load (C-17)
+            firstLoad.complete(
+                NetworkResult.Success(
+                    FeedResponse(posts = listOf(askPost(id = "all1")), pagination = FeedPagination(hasMore = false)),
+                ),
+            )
+
+            // The tap refetched, and the late All response didn't overwrite it.
+            coVerify(exactly = 2) { repo.feed(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+            val loaded = vm.state.value as PulseFeedUiState.Loaded
+            assertEquals(listOf("rec1"), loaded.rows.map { it.id })
+            assertEquals(PulseIntent.Recommend, vm.activeIntent.value)
         }
 
     private fun askPost(
