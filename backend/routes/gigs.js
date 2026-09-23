@@ -6021,11 +6021,19 @@ router.get('/:gigId/change-orders', verifyToken, async (req, res) => {
   }
 });
 
-// A paid task's price is bound to its payment hold: Start Work, capture, stop
-// and every settlement compare them, so a price change strands the hold.
-// Until a price change can move the hold, refuse one while it is live.
+// A price change can't be settled yet on any task. A paid task's price is bound
+// to its payment hold (Start Work, capture, stop and every settlement compare
+// them), so a change strands the hold; a task without a payment can't be
+// confirmed once its price is above zero. Until a price change can move money,
+// every price change order is refused at create and at approve. The reason says
+// which case applies.
 const PAID_PRICE_CHANGE_UNAVAILABLE =
   "Price changes aren't available once a task has a payment hold. The task keeps its agreed price.";
+const PRICE_CHANGE_UNAVAILABLE = "Price changes aren't available for this task. It keeps its agreed price.";
+async function priceChangeRefusal(gig) {
+  const error = (await hasLivePaymentHold(gig)) ? PAID_PRICE_CHANGE_UNAVAILABLE : PRICE_CHANGE_UNAVAILABLE;
+  return { error, code: 'PAID_PRICE_CHANGE_UNAVAILABLE' };
+}
 async function hasLivePaymentHold(gig) {
   if (!gig.payment_id) return false;
   const { data: payment, error } = await supabaseAdmin
@@ -6091,8 +6099,8 @@ router.post('/:gigId/change-orders', verifyToken, async (req, res) => {
         .status(403)
         .json({ error: 'Only the poster or assigned worker can request changes' });
     }
-    if (Number(amount_change) && (await hasLivePaymentHold(gig))) {
-      return res.status(409).json({ error: PAID_PRICE_CHANGE_UNAVAILABLE, code: 'PAID_PRICE_CHANGE_UNAVAILABLE' });
+    if (Number(amount_change)) {
+      return res.status(409).json(await priceChangeRefusal(gig));
     }
 
     const safeAmountChange = amount_change ? parseFloat(amount_change) : 0;
@@ -6280,8 +6288,8 @@ router.post('/:gigId/change-orders/:orderId/approve', verifyToken, async (req, r
     if (!isPoster && !isWorker) {
       return res.status(403).json({ error: 'Only the poster or worker can approve' });
     }
-    if (Number(order.amount_change) && (await hasLivePaymentHold(gig))) {
-      return res.status(409).json({ error: PAID_PRICE_CHANGE_UNAVAILABLE, code: 'PAID_PRICE_CHANGE_UNAVAILABLE' });
+    if (Number(order.amount_change)) {
+      return res.status(409).json(await priceChangeRefusal(gig));
     }
 
     const nowIso = new Date().toISOString();
