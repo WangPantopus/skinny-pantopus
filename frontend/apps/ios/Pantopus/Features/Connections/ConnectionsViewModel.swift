@@ -562,7 +562,8 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
                 imageURL: Self.avatarURL(user),
                 background: .gradient(ConnectionAvatarTone.tone(for: user?.id ?? rel.id).gradient),
                 size: .large,
-                verified: true
+                // No verification in the relationship payload, so no check.
+                verified: false
             ),
             trailing: .circularAction(
                 icon: .messageCircle,

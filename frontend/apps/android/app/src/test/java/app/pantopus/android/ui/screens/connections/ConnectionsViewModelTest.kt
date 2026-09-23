@@ -334,7 +334,7 @@ class ConnectionsViewModelTest {
     // MARK: - Row mapping
 
     @Test
-    fun accepted_row_uses_avatar_with_verified_and_circular_message_action() {
+    fun accepted_row_uses_avatar_without_verified_and_circular_message_action() {
         val vm = ConnectionsViewModel(repo, connectionsRepo)
         val row =
             vm.rowForAccepted(
@@ -348,7 +348,8 @@ class ConnectionsViewModelTest {
         assertEquals(PantopusIcon.UserPlus, row.bodyIcon)
         val leading = row.leading
         assertTrue(leading is RowLeading.AvatarWithBadge)
-        assertTrue((leading as RowLeading.AvatarWithBadge).verified)
+        // The relationship payload carries no verification.
+        assertFalse((leading as RowLeading.AvatarWithBadge).verified)
         val trailing = row.trailing
         assertTrue(trailing is RowTrailing.CircularAction)
     }

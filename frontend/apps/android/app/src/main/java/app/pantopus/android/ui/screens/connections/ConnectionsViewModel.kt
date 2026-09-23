@@ -554,7 +554,8 @@ class ConnectionsViewModel
                         imageUrl = user?.profilePictureUrl,
                         background = AvatarBackground.Gradient(ConnectionAvatarTone.toneFor(user?.id ?: rel.id).gradient),
                         size = AvatarBadgeSize.Large,
-                        verified = true,
+                        // No verification in the relationship payload, so no check.
+                        verified = false,
                     ),
                 trailing =
                     RowTrailing.CircularAction(

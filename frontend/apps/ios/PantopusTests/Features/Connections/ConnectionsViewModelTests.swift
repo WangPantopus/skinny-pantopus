@@ -366,7 +366,7 @@ final class ConnectionsViewModelTests: XCTestCase {
 
     // MARK: - Row mapping
 
-    func testAcceptedRowUsesAvatarWithVerifiedAndCircularMessageAction() {
+    func testAcceptedRowUsesAvatarWithoutVerifiedAndCircularMessageAction() {
         let vm = makeVM()
         let user = RelationshipUserDTO(
             id: "u",
@@ -398,7 +398,7 @@ final class ConnectionsViewModelTests: XCTestCase {
             return
         }
         XCTAssertEqual(size, .large)
-        XCTAssertTrue(verified, "Accepted rows must show verified-check overlay")
+        XCTAssertFalse(verified, "The relationship payload carries no verification")
         guard case .circularAction = row.trailing else {
             XCTFail("Expected circularAction trailing for accepted row")
             return
