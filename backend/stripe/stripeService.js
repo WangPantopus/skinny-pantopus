@@ -1109,13 +1109,17 @@ class StripeService {
       }
     }
     assertCapturedIntent(payment, intent);
+    let disputed = false;
     if (isGig && payment.gig_completion_original) {
       const chargeId = providerId(intent.latest_charge);
       const charge = await stripe.charges.retrieve(chargeId);
       assertCapturedIntent(payment, { ...intent, latest_charge: charge });
       if (charge?.id !== chargeId || providerId(charge.customer) !== payment.stripe_customer_id
         || charge.currency !== String(payment.currency).toLowerCase() || charge.refunded !== false
-        || charge.amount_refunded !== 0 || charge.disputed !== false) throw conflict('Captured charge needs reconciliation');
+        || charge.amount_refunded !== 0 || typeof charge.disputed !== 'boolean') throw conflict('Captured charge needs reconciliation');
+      // A charge can be disputed before its exact capture is recorded. Record
+      // that capture, then apply the same hold as charge.dispute.created.
+      disputed = charge.disputed;
     }
     const chargeId = providerId(intent.latest_charge);
     if (isGig) {
@@ -1129,7 +1133,19 @@ class StripeService {
       if (payment.gig_completion_original && !data.confirmation?.gig?.owner_confirmed_at) {
         throw Object.assign(new Error('Capture is awaiting original completion confirmation. Please retry.'), { statusCode: 503 });
       }
-      return { success: true, alreadyCaptured: Boolean(data.reused), chargeId, confirmation: data.confirmation };
+      if (disputed) {
+        try {
+          await transitionPaymentStatus(payment.id, PAYMENT_STATES.DISPUTED);
+        } catch (freezeError) {
+          // The dispute event may have frozen it first. Otherwise that event
+          // still freezes this captured payment during its cooling-off hold.
+          const { data: current } = await supabaseAdmin.from('Payment').select('payment_status').eq('id', payment.id).maybeSingle();
+          if (current?.payment_status !== PAYMENT_STATES.DISPUTED) {
+            logger.error('Disputed capture could not be frozen', { paymentId: payment.id, error: freezeError.message });
+          }
+        }
+      }
+      return { success: true, alreadyCaptured: Boolean(data.reused), chargeId, confirmation: data.confirmation, disputed };
     }
     if (payment.payment_status !== PAYMENT_STATES.CAPTURED_HOLD) {
       const now = new Date();
