@@ -131,7 +131,7 @@ describe('CRIT-03 — household mail access has exactly one definition', () => {
     expect(gate.slice(0, 600)).toContain('getAccessibleHomeIds');
     const mailbox = fs.readFileSync(path.join(routesDir, 'mailbox.js'), 'utf8');
     expect(mailbox).not.toMatch(/const\s+canAccessMail\s*=/);
-    expect(mailbox).toContain("canAccessMail } = require('../utils/homeMailAccess')");
+    expect(mailbox).toMatch(/\bcanAccessMail\b[^}]*\}\s*=\s*require\('\.\.\/utils\/homeMailAccess'\)/);
   });
 });
 

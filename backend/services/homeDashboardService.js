@@ -4,6 +4,7 @@ const { SAFE_CREATOR_SELECT, serializeUserAsLocalIdentity } = require('../serial
 const { getUserAccess } = require('../utils/homePermissions');
 const { ROLE_RANK, currentOccupancy, resolveHomeRole } = require('../utils/homeAccessPolicy');
 const { staleAffectsTrust } = require('../utils/verificationAge');
+const { homeMailVisibilityClauses } = require('../utils/homeMailAccess');
 const { HOME_LIST, HOME_BILL_LIST, HOME_ISSUE_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
 const parsePostGISPoint = require('../utils/parsePostGISPoint');
 const records = require('./homeRecordService');
@@ -149,21 +150,19 @@ async function readResource({ homeId, actorId, kind, status, severity }) {
 }
 
 // A Home badge must not reveal someone else's personal/attention-only mail.
-// These predicates follow the existing Home task source-mail boundary, without
-// fetching content, opening mail, or consuming a limited-access envelope.
+// Who may see a letter is the one Home mail rule in utils/homeMailAccess, which
+// the mailbox lists and the per-item gate share; the other filters count only
+// unread, current Home mail, without fetching content, opening mail, or
+// consuming a limited-access envelope.
 function unreadMailQuery(homeId, actorId, now) {
   let query = db.from('Mail').select('id', { count: 'exact', head: true })
     .eq('recipient_home_id', homeId).eq('viewed', false).eq('archived', false)
     .is('access_count_max', null).in('privacy', ['private_to_person', 'shared_household']);
   for (const key of ['expires_at', 'time_limited_expires_at']) query = query.or(`${key}.is.null,${key}.gt.${now}`);
   for (const key of ['address_home_id', 'address_id']) query = query.or(`${key}.is.null,${key}.eq.${homeId}`);
-  for (const key of ['recipient_user_id', 'attn_user_id']) query = query.or(`${key}.is.null,${key}.eq.${actorId}`);
-  for (const [type, id] of [['delivery_target_type', 'delivery_target_id'], ['recipient_type', 'recipient_id']]) {
-    query = query.or(`${type}.is.null,and(${type}.eq.home,${id}.eq.${homeId}),and(${type}.eq.user,${id}.eq.${actorId})`);
-  }
-  return query.or('lifecycle.is.null,lifecycle.neq.shredded')
-    .or(`delivery_visibility.is.null,delivery_visibility.eq.home_members,and(delivery_visibility.in.(attn_only,attn_plus_admins),attn_user_id.eq.${actorId})`)
-    .or(`privacy.eq.shared_household,recipient_user_id.eq.${actorId},attn_user_id.eq.${actorId}`);
+  query = query.or('lifecycle.is.null,lifecycle.neq.shredded');
+  for (const clause of homeMailVisibilityClauses(homeId, actorId)) query = query.or(clause);
+  return query;
 }
 
 async function read({ homeId, actorId, includeHealthScore = false }) {

@@ -445,7 +445,7 @@ router.post('/booklet/:mailId/download', async (req, res, next) => {
     const { mailId } = req.params;
     const { data: mail } = await supabaseAdmin
       .from('Mail')
-      .select('download_url, download_size_bytes, recipient_user_id, recipient_home_id')
+      .select('id, download_url, download_size_bytes, recipient_user_id, recipient_home_id')
       .eq('id', mailId)
       .single();
 

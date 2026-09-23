@@ -198,7 +198,7 @@ export default function HomeSettingsTab({
       await api.homes.deleteHome(homeId);
       window.location.href = '/app';
     } catch (err: unknown) {
-      setSaveMsg(err instanceof Error ? err.message : 'Failed to delete home');
+      setSaveMsg(failureMessage(err, 'Failed to delete home'));
       setDeleting(false);
     }
   };

@@ -4,7 +4,9 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 // canAccessMail / readableMail: the mailbox's per-item rule (own mail, or mail
 // for a Home whose mail the caller may read). Every per-item route checks it
 // before reading or changing anything and otherwise answers its not-found.
-const { getAccessibleHomeIds, canAccessMail, readableMail } = require('../utils/homeMailAccess');
+const {
+  getAccessibleHomeIds, canAccessMail, readableMail, homesMailFilter, visibleMailIds,
+} = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -226,7 +228,8 @@ router.get('/drawers', verifyToken, async (req, res) => {
         query = query.eq('recipient_user_id', userId);
       } else if (drawer === 'home') {
         if (homeIds.length > 0) {
-          query = query.in('recipient_home_id', homeIds);
+          // Only Home letters the Home mail rule shows this member (M01).
+          query = query.or(homesMailFilter(homeIds, userId));
         } else {
           return { unread_count: 0, urgent_count: 0, last_item_at: null };
         }
@@ -297,7 +300,8 @@ router.get('/drawer/:drawer', verifyToken, async (req, res) => {
       query = query.eq('recipient_user_id', userId);
     } else if (drawer === 'home') {
       if (homeIds.length > 0) {
-        query = query.in('recipient_home_id', homeIds);
+        // Only Home letters the Home mail rule shows this member (M01).
+        query = query.or(homesMailFilter(homeIds, userId));
       } else {
         return res.json({ mail: [], total: 0, drawer });
       }
@@ -622,7 +626,10 @@ router.get('/pending', verifyToken, async (req, res) => {
       .eq('resolved', false)
       .order('created_at', { ascending: false });
 
-    return res.json({ pending: data || [] });
+    // Each item embeds its Mail: keep only mail this member may see (their own,
+    // or Home letters the Home mail rule shows them; M01).
+    const visible = await visibleMailIds((data || []).map((row) => row.mail_id), userId, homeIds);
+    return res.json({ pending: (data || []).filter((row) => visible.has(row.mail_id)) });
   } catch (err) {
     logger.error('Pending fetch error', { error: err.message });
     return res.status(500).json({ error: 'Server error' });
@@ -732,7 +739,7 @@ router.post('/package/:mailId/share-eta', verifyToken, async (req, res) => {
 
     const { data: mail } = await supabaseAdmin
       .from('Mail')
-      .select('recipient_user_id, recipient_home_id, address_home_id, sender_display')
+      .select('id, recipient_user_id, recipient_home_id, address_home_id, sender_display')
       .eq('id', mailId)
       .single();
 
