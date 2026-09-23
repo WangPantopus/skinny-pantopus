@@ -7,6 +7,8 @@ import {
   useCreateVacationHold,
   useCancelVacationHold,
 } from '@/lib/mailbox-queries';
+// The user's Home; the page sent a hard-coded 'home_1'.
+import useHomeProfile from '../_components/useMailboxHome';
 
 // ── Hold action options ──────────────────────────────────────
 
@@ -256,6 +258,7 @@ function ActiveHoldView({
 // ── Main Page ────────────────────────────────────────────────
 
 export default function TravelModePage() {
+  const home = useHomeProfile();
   const { data: hold, isLoading, refetch } = useVacationHold();
   const createMutation = useCreateVacationHold();
 
@@ -293,7 +296,7 @@ export default function TravelModePage() {
     if (!canSubmit) return;
     createMutation.mutate(
       {
-        homeId: 'home_1', // Would come from user context in production
+        homeId: home.homeId,
         startDate: departure,
         endDate: returnDate,
         holdAction,
@@ -304,7 +307,7 @@ export default function TravelModePage() {
         onSuccess: () => refetch(),
       },
     );
-  }, [canSubmit, departure, returnDate, holdAction, packageAction, autoGig, createMutation, refetch]);
+  }, [canSubmit, home.homeId, departure, returnDate, holdAction, packageAction, autoGig, createMutation, refetch]);
 
   if (isLoading) {
     return (

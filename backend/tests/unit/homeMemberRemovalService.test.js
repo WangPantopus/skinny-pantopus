@@ -95,7 +95,7 @@ test('first committed self-leave rechecks candidates and emits only a generic cu
  expect(r.state).toBe('completed');expect(r._notify_user_ids).toBeUndefined();
  expect(memberAccess.getActiveOccupancy.mock.calls).toEqual([[home,target],[home,id(3)]]);
  expect(notice.createBulkNotifications).toHaveBeenCalledTimes(1);
- expect(notice.createBulkNotifications.mock.calls[0][0]).toEqual([{userId:target,type:'member_moved_out',title:'Household member left',body:'A household member left.',link:`/homes/${home}/occupants`,metadata:{home_id:home,moved_out_user_id:actor}}]);
+ expect(notice.createBulkNotifications.mock.calls[0][0]).toEqual([{userId:target,type:'member_moved_out',title:'Household member left',body:'A household member left.',link:`/homes/${home}/members`,metadata:{home_id:home,moved_out_user_id:actor}}]);
 });
 test.each(['read','replay','cancel','other'])('history/cancel/other-target does not notify: %s',async mode=>{
  const selfIntent={...intent,target_user_id:mode==='other'?target:actor};

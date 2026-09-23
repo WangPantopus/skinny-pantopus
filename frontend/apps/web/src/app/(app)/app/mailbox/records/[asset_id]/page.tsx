@@ -11,11 +11,8 @@ import {
   useDrawerItems,
 } from '@/lib/mailbox-queries';
 import { GigCreationModal } from '@/components/mailbox';
-
-// ── Stub: home context ───────────────────────────────────────
-function useHomeProfile() {
-  return { homeId: 'home_1', address: 'Camas, WA' };
-}
+// The user's Home; each page used a hard-coded 'home_1' stub.
+import useHomeProfile from '../../_components/useMailboxHome';
 
 // ── Category icons ───────────────────────────────────────────
 const categoryIcons: Record<string, string> = {
