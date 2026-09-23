@@ -240,15 +240,6 @@ export async function getBriefingDelivery(id: string): Promise<{ briefing: Brief
   return get<{ briefing: BriefingDelivery }>(`/api/hub/briefings/${id}`);
 }
 
-/**
- * Update user's hub preferences (active home, persona)
- */
-export async function updateHubContext(data: {
-  activeHomeId?: string | null;
-  activePersona?: { type: 'personal' } | { type: 'business'; businessId: string };
-}): Promise<{ success: boolean }> {
-  return post<{ success: boolean }>('/api/hub/context', data);
-}
 
 /**
  * Get discovery items for the hub (nearby gigs, people, businesses, posts)

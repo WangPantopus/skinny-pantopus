@@ -17,6 +17,7 @@ const { asyncHandler } = require('../errorHandler');
 const logger = require('../utils/logger');
 const availabilityService = require('../services/scheduling/availabilityService');
 const bookingService = require('../services/scheduling/bookingService');
+const { hostBookingLink } = require('../services/scheduling/bookingNotifyService');
 const bookingMetrics = require('../services/scheduling/bookingMetricsService');
 const schedulingNotifyPrefs = require('../services/scheduling/schedulingNotifyPrefs');
 const packages = require('../services/scheduling/packageService');
@@ -1281,10 +1282,12 @@ router.post('/invoices/:id/send', withOwner('edit'), asyncHandler(async (req, re
   }
   // Notify the recipient in-app (no status mutation — avoid touching the gig invoice state machine).
   if (inv.recipient_user_id) {
+    const currency = String(inv.currency || 'USD').toUpperCase();
+    const amount = (inv.total_cents / 100).toFixed(2);
     await notificationService.createNotification({
       userId: inv.recipient_user_id, type: 'invoice_sent', title: 'You have a new invoice',
-      body: `Invoice for ${(inv.total_cents / 100).toFixed(2)} ${inv.currency || 'USD'}`, icon: '🧾',
-      link: `/app/invoices/${inv.id}`, metadata: { invoice_id: inv.id }, context: 'personal',
+      body: currency === 'USD' ? `Invoice for $${amount}` : `Invoice for ${amount} ${currency}`, icon: '🧾',
+      link: `/app/invoice/${inv.id}`, metadata: { invoice_id: inv.id }, context: 'personal',
     });
   }
   res.json({ ok: true });
@@ -1399,7 +1402,7 @@ router.post('/bookings/:id/nudge', validate(Joi.object({ message: Joi.string().m
   if (booking.invitee_user_id) {
     // The host detail is owner-only; the invitee's destination is My bookings.
     const link = booking.invitee_user_id === booking.host_user_id
-      ? `/app/profile/schedule/bookings/${booking.id}` : '/app/scheduling/my-bookings';
+      ? hostBookingLink(booking) : '/app/scheduling/my-bookings';
     await notificationService.createNotification({ userId: booking.invitee_user_id, type: 'booking_nudge', title: 'A note about your booking', body: msg, icon: '📅', link, metadata: { booking_id: booking.id }, context: 'personal' });
   } else if (booking.invitee_email) {
     await emailService.sendEmail({ to: booking.invitee_email, subject: 'A note about your booking', html: `<p>${msg.replace(/</g, '&lt;')}</p>` });

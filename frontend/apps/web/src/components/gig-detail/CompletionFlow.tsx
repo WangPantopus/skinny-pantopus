@@ -224,7 +224,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       setNoShowDescription('');
       onStatusChange?.();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to report no-show');
+      toast.error(getErrorMessage(err, 'Failed to report no-show'));
     } finally {
       setReportingNoShow(false);
     }
@@ -265,7 +265,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
         toast.error(typeof serverData.error === 'string' ? serverData.error : 'The task changed before work could start. Refresh its details.');
         onStatusChange?.();
       } else {
-        toast.error(err instanceof Error ? err.message : 'Failed to start work');
+        toast.error(getErrorMessage(err, 'Failed to start work'));
       }
     } finally {
       if (current()) { startAttempt.current = null; setStartingWork(false); }
@@ -321,7 +321,7 @@ export default forwardRef<CompletionFlowHandle, CompletionFlowProps>(function Co
       setCompletionFiles([]);
       onStatusChange?.();
     } catch (err: unknown) {
-      if (current()) toast.error(err instanceof Error ? err.message : 'Failed to mark completed');
+      if (current()) toast.error(getErrorMessage(err, 'Failed to mark completed'));
     } finally {
       if (current()) { completionAttempt.current = null; setSubmittingCompletion(false); }
     }

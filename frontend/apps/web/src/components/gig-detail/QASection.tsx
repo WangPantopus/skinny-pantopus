@@ -10,6 +10,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { getErrorMessage } from '@pantopus/utils';
 
 // ─── Types ───
 
@@ -79,7 +80,7 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
       setQuestionFiles([]);
       await loadQuestions();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to post question');
+      toast.error(getErrorMessage(err, 'Failed to post question'));
     } finally {
       setUploadingQuestionFiles(false);
       setSubmitting(false);
@@ -102,7 +103,7 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
       setAnswerFiles([]);
       await loadQuestions();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to answer');
+      toast.error(getErrorMessage(err, 'Failed to answer'));
     } finally {
       setUploadingAnswerFiles(false);
       setAnswerSubmitting(false);
@@ -114,7 +115,7 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
       await api.gigs.toggleUpvoteQuestion(gigId, questionId);
       await loadQuestions();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update upvote');
+      toast.error(getErrorMessage(err, 'Failed to update upvote'));
     }
   };
 
@@ -123,7 +124,7 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
       await api.gigs.togglePinQuestion(gigId, questionId);
       await loadQuestions();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update pin');
+      toast.error(getErrorMessage(err, 'Failed to update pin'));
     }
   };
 
@@ -134,7 +135,7 @@ export default function QASection({ gigId, isMyGig, currentUserId }: QASectionPr
       await api.gigs.deleteGigQuestion(gigId, questionId);
       await loadQuestions();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete question');
+      toast.error(getErrorMessage(err, 'Failed to delete question'));
     }
   };
 
