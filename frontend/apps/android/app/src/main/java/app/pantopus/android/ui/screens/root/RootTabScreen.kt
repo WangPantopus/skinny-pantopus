@@ -2061,7 +2061,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             }
             is DeepLinkRouter.Destination.Gig -> {
                 navController.navigateToRootTab(PantopusRoute.Tasks)
-                navController.navigate(ChildRoutes.gigDetail(pending.id))
+                // `/gigs/new` is the web composer's path: open the native composer.
+                if (pending.id == "new") {
+                    navController.navigate(ChildRoutes.composeGig(GigsCategory.All.key))
+                } else {
+                    navController.navigate(ChildRoutes.gigDetail(pending.id))
+                }
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.Listing -> {
