@@ -4,7 +4,8 @@ const crypto = require('crypto');
 const supabase = require('../config/supabase');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
-const { getAccessibleHomeIds } = require('../utils/homeMailAccess');
+// canAccessMail: the per-item rule, shared with the v2 mailbox routes.
+const { getAccessibleHomeIds, canAccessMail } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -672,21 +673,6 @@ const normalizeSendMailPayload = (rawBody, senderId) => {
   };
 };
 
-// CRIT-03, per-item half. The list-scoping helper on this file was consolidated
-// into utils/homeMailAccess, but this gate — which guards the eight per-item
-// routes (GET/PATCH/DELETE of an individual mail) — kept its own query, and that
-// query matched ANY HomeOccupancy row for the home: no is_active filter and no
-// verification_status filter. Both leave paths soft-deactivate rather than
-// delete the row, so a roommate who properly moved out kept read, mutate and
-// delete access to the household's individual mail on exactly the surface
-// CRIT-03 named. One definition now, shared with the list path.
-const canAccessMail = async (mail, userId) => {
-  if (mail.recipient_user_id === userId) return true;
-  if (!mail.recipient_home_id) return false;
-
-  const accessibleHomeIds = await getAccessibleHomeIds(userId);
-  return accessibleHomeIds.includes(mail.recipient_home_id);
-};
 
 const getHomeForRouting = async (homeId) => {
   if (!homeId) return null;

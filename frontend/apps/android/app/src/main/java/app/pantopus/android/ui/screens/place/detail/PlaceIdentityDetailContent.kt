@@ -283,8 +283,7 @@ private fun ResidencyLetterSection(viewModel: PlaceDetailViewModel) {
                     isLoading = isIssuing,
                     isEnabled = !isIssuing && purpose.isNotBlank(),
                     onClick = {
-                        viewModel.issueLetter(purpose)
-                        purpose = ""
+                        viewModel.issueLetter(purpose) { purpose = "" }
                     },
                 )
             }
