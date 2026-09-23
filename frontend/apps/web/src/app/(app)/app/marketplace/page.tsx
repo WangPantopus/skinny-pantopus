@@ -773,7 +773,7 @@ export default function MarketplacePage() {
               loading={loading}
               userLocation={userLocation}
               onOpenCategoryModal={() => setShowCategoryModal(true)}
-              onOpenCreateModal={() => setShowCreateModal(false)}
+              onOpenCreateModal={() => setShowCreateModal(true)}
               totalCount={totalInBounds}
               onSave={handleSave}
               nearestActivityCenter={nearestActivityCenter}
