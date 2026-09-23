@@ -11,6 +11,7 @@ const { homeOutboundLimiter } = require('../middleware/rateLimiter');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
+const { escapeIlike } = require('../utils/escapeIlike');
 const { computeAddressHash } = require('../utils/normalizeAddress');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeListService = require('../services/homeListService');
@@ -1528,8 +1529,8 @@ router.get('/discover', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Query must be at least 2 characters' });
     }
 
-    const fullSearchTerm = `%${queryText}%`;
-    const broadSearchTerm = `%${primaryToken}%`;
+    const fullSearchTerm = `%${escapeIlike(queryText)}%`;
+    const broadSearchTerm = `%${escapeIlike(primaryToken)}%`;
     const candidateLimit = Math.min(Math.max((safeOffset + safeLimit) * 8, 80), 400);
 
     const { data: homes, error } = await supabaseAdmin
@@ -3653,7 +3654,7 @@ router.get('/:id/businesses/search', verifyToken, async (req, res) => {
       .from('User')
       .select('id, username, name, profile_picture_url, average_rating, review_count')
       .eq('account_type', 'business')
-      .or(`name.ilike.%${q}%,username.ilike.%${q}%`)
+      .or(`name.ilike.%${escapeIlike(q)}%,username.ilike.%${escapeIlike(q)}%`)
       .limit(10);
 
     // Also get profile info for results
