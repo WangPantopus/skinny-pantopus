@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-23T22:37:11Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-23T22:48:24Z (active Codex coordinator)
 
-All three streams and Shared UX continue in staged slots. Master is `61c64f9c1778b9b11fda12dd0cfa4762fff3bef0`. #325 fresh iOS acceptance and geo#392 Android acceptance are complete within their recorded scopes; batch4 awaits current-head CI. Founder confirmed manually updating the four branches and delegated future updates/merges to the coordinator. Stream1 is repairing the reproduced accepted-buyer checkout dead end using existing payment contracts; Stream3 is verifying scheduling/You, and Shared UX is running native checks. The authoritative [coordination block](workstreams/README.md) records decisions, exact heads, runtime reservations and verification limits. Existing155-item inventory remains63 tracked fixed/merged,30 in flight,62 not started; broad acceptance13 closed/67 partial. No whole-app coverage claim. App quality/full E2E remain the priority; founder queue and hard limits unchanged.
+All three streams and Shared UX continue in staged slots. Master is `61c64f9c1778b9b11fda12dd0cfa4762fff3bef0`. #325 fresh iOS acceptance and geo#392 Android acceptance are complete within their recorded scopes; batch4 awaits current-head CI. Founder confirmed manually updating the four branches and delegated future updates/merges to the coordinator. Stream1 is repairing the accepted-buyer checkout dead end; new package-entry PR393 has an outstanding real package-layout/API-contract check. Stream3 is verifying scheduling/You, and Shared UX is repairing two reproduced Pulse races before native afters. The authoritative [coordination block](workstreams/README.md) records decisions, exact heads, runtime reservations and verification limits. Existing155-item inventory remains63 tracked fixed/merged,30 in flight,62 not started; broad acceptance13 closed/67 partial. No whole-app coverage claim. App quality/full E2E remain the priority; founder queue and hard limits unchanged.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 
