@@ -28,8 +28,7 @@
 //        metaTail : "N days old · 1 of M offers"
 //        footer   :
 //          pending   → [Decline (ghost), Counter (ghost), Accept (primary)]
-//          countered → [Decline offer (destructive ghost),
-//                       Send counter (primary)]
+//          countered → [Decline offer (destructive ghost)]
 //          accepted  → [Message buyer (primary)] — single button
 //          declined  → no footer
 //    - Top offer (highest amount among pending) gets the `LEADING`
@@ -1136,12 +1135,6 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
                     icon: .x,
                     variant: .destructive,
                     handler: callbacks.onDecline
-                ),
-                RowFooterAction(
-                    title: "Send counter",
-                    icon: .arrowsRepeat,
-                    variant: .primary,
-                    handler: callbacks.onCounter
                 )
             ])
         case .viewTransaction:

@@ -301,10 +301,9 @@ class ListingOffersViewModelTest {
             vm.load()
             val rows = (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows
             val countered = rows.first { it.id == "o-marcus" }
-            assertEquals(2, countered.footer?.actions?.size)
+            assertEquals(1, countered.footer?.actions?.size)
             assertEquals("Decline offer", countered.footer!!.actions[0].title)
             assertEquals(CompactButtonVariant.Destructive, countered.footer!!.actions[0].variant)
-            assertEquals("Send counter", countered.footer!!.actions[1].title)
             assertEquals(2, countered.chips?.size)
             assertEquals("Countered", countered.chips!![0].text)
             assertEquals("Your counter $235", countered.chips!![1].text)
