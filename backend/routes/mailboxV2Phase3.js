@@ -922,7 +922,9 @@ router.post('/tasks/from-mail', verifyToken, validate(createTaskSchema), async (
     const result = await homeRecordService.mutate({ homeId, actorId: req.user.id, kind: 'task', action: 'create',
       sourceMailId: mailId, payload: { task_type: 'reminder', title, description: description ?? null,
         due_at: dueAt ?? null, priority, status: 'open' } });
-    res.json({ task: mailTaskDto(result.record) });
+    // A creator re-submitting a mail that already has their task gets that task back; say so, so apps don't
+    // announce a new one.
+    res.json({ task: mailTaskDto(result.record), ...(result.replayed === true ? { replayed: true } : {}) });
   } catch (error) { homeRecordService.sendError(res, error); }
 });
 router.patch('/tasks/:id', verifyToken, validate(updateTaskSchema), async (req, res) => {

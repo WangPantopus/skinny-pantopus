@@ -75,7 +75,10 @@ public struct P3TaskUpdateRequest: Encodable, Sendable {
     }
 }
 
-/// Envelope for `PATCH /api/mailbox/v2/p3/tasks/:id` — `{ task }`.
+/// Envelope for `PATCH /api/mailbox/v2/p3/tasks/:id` and
+/// `POST .../tasks/from-mail` — `{ task }`. From-mail adds `replayed: true`
+/// when the caller already had a task for that mail and got it back.
 public struct P3TaskResponse: Decodable, Sendable, Hashable {
     public let task: P3TaskDTO
+    public let replayed: Bool?
 }

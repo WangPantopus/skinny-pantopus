@@ -159,6 +159,13 @@ class MailTaskListViewModel
             _alert.value = null
         }
 
+        /** The alert's button: closes it, and opens its task when it names one. */
+        fun confirmAlert() {
+            val taskId = _alert.value?.openTaskId
+            _alert.value = null
+            taskId?.let(onOpenTask)
+        }
+
         fun toggleShowCompleted() {
             _showsCompleted.value = !_showsCompleted.value
         }
@@ -252,6 +259,18 @@ class MailTaskListViewModel
                     when (result) {
                         is NetworkResult.Success -> {
                             val row = rowFrom(result.data.task)
+                            if (result.data.replayed == true) {
+                                // This mail already had the caller's task: show it and offer to open it.
+                                _mode.value = MailTaskListMode.List
+                                fetch()
+                                _alert.value =
+                                    MailTaskListAlert(
+                                        "This mail already has a task",
+                                        "You already made “${row.title}” from this mail.",
+                                        openTaskId = row.id,
+                                    )
+                                return@launch
+                            }
                             insertActive(row)
                             _draftDescription.value = ""
                             _draftPriority.value = MailTaskPriority.Medium

@@ -118,6 +118,14 @@ public final class MailTaskListViewModel {
         onOpenTask(row.id)
     }
 
+    /// The alert's button: closes it, and opens its task when it names one.
+    public func confirmAlert(_ shown: MailTaskListAlert) {
+        alert = nil
+        if let taskId = shown.openTaskId {
+            onOpenTask(taskId)
+        }
+    }
+
     /// Enter the create frame from the list (only meaningful when the
     /// screen carries an originating mail).
     public func startCreate() {
@@ -189,6 +197,17 @@ public final class MailTaskListViewModel {
         switch result {
         case let .success(response):
             let row = Self.row(from: response.task)
+            if response.replayed == true {
+                // This mail already had the caller's task: show it and offer to open it.
+                mode = .list
+                await fetch()
+                alert = MailTaskListAlert(
+                    title: "This mail already has a task",
+                    message: "You already made \u{201C}\(row.title)\u{201D} from this mail.",
+                    openTaskId: row.id
+                )
+                return
+            }
             insertActive(row)
             draftDescription = ""
             draftPriority = .medium
