@@ -5,7 +5,42 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 08:34 UTC (coordinator session `92cc4526`)
+## CURRENT RESUME POINT — September 23, 2026, 10:33 UTC (coordinator session `92cc4526`)
+
+This updates the 08:34 block below; read both. The count is **11 closed / 69 partial**.
+
+### Usage-limit pause
+- All four agents stopped at about 09:35 UTC on the account's session limit: Streams 1, 2 and 3, and the UX inventory agent.
+- The merge queue kept running.
+- The agents were resumed at 10:33 UTC with their context intact.
+
+### Merged by the queue (09:17–10:30)
+#274, #276, #256, #260, #263, #265, #275, #267, #268, #270, #272, #284, #277, #245, #281. Master is `4f2983c5d`.
+
+### Queue
+282 253 254 255 278 280 221 236 219 214 215 224 199 208 251 252 279 257 262 264 287 266 285.
+
+### Conflict plan
+- **#255 (search escaping):** it collides with #253 in the gigs.js import lines. The coordinator merges master into #255 right after #253 lands.
+- **#283 (no-show reasons):** it collides with #253's eligibility rule. Stream 1 rebases it after #253 and aligns the copy with the new scheduled-start rule.
+- **#257 and #280:** both now conflict with master. Stream 2 is rebasing them first.
+- **#279:** queued ahead of #257, which absorbs #279 in its rebase.
+- **#286:** red CI. An existing Android test asserts the old 5xx copy; Stream 1 is updating that expectation.
+
+### Findings since the last block
+- **Magic post (core flow):** `POST /api/gigs/magic-post` returns 500 for every in-person task on all clients.
+  - Cause: `magicTask.js` inserts `task_format: null` into a NOT NULL column.
+  - Web `MagicTaskComposerV2` swallows the error.
+  - Stream 2 is fixing it as the top priority.
+- **Security, decided:** posting a task with another household's `location.homeId` (the `origin_home_id` field) was accepted from a non-member. Setting it now requires `home.view` on that Home. Stream 2 is implementing this.
+- **Web Change Orders banner** shows the owner "The worker has requested changes" when the pending orders are the owner's own. Fix approved (Stream 1).
+- **iOS gig deep link** doesn't navigate while another gig detail is open. Fix approved (Stream 1).
+- **Fee follow-ups:**
+  - payer history labels a fee "Captured hold" → "No-show fee" / "Cancellation fee" (Stream 1, after #253/#254);
+  - iOS `pantopus://settings/payments` shows two back buttons (Stream 3).
+- **Founder: draftBusinessReminder email.** Its email path calls a `sendTransactionalEmail` that doesn't exist, so the reminder email has never been sent. It is left off, because enabling it would start emailing business contacts.
+
+## Resume point history — September 23, 2026, 08:34 UTC (coordinator session `92cc4526`)
 
 This updates the 08:19 block below; read both. The count is **11 closed / 69 partial**.
 
