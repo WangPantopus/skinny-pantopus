@@ -73,9 +73,12 @@ class MeViewModel
         /** Share text for the receipt card — RN `handleShareReceipt`. */
         fun receiptShareMessage(): String? = _monthlyReceipt.value?.let(MonthlyReceiptFormat::shareMessage)
 
-        /** Share text for the invite CTA — RN `handleShareInvite`. */
-        fun inviteShareMessage(): String {
-            val code = _inviteCode.value?.takeIf { it.isNotEmpty() } ?: "INVITE"
+        /**
+         * Share text for the invite CTA — RN `handleShareInvite`. Null until a
+         * real invite code has loaded: a made-up code would share a dead link.
+         */
+        fun inviteShareMessage(): String? {
+            val code = _inviteCode.value?.takeIf { it.isNotEmpty() } ?: return null
             return "Join me on Pantopus! Use my invite code to get started: " +
                 "https://pantopus.com/join/$code"
         }

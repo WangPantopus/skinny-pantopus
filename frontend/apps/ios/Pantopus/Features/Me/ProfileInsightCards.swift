@@ -282,9 +282,10 @@ public struct MonthlyReceiptCard: View {
 
 public struct InviteProgressCard: View {
     private let progress: InviteProgressDTO
-    private let onShare: @MainActor () -> Void
+    /// Nil hides "Invite a neighbor" (no invite code to share yet).
+    private let onShare: (@MainActor () -> Void)?
 
-    public init(progress: InviteProgressDTO, onShare: @escaping @MainActor () -> Void = {}) {
+    public init(progress: InviteProgressDTO, onShare: (@MainActor () -> Void)? = {}) {
         self.progress = progress
         self.onShare = onShare
     }
@@ -301,7 +302,9 @@ public struct InviteProgressCard: View {
             if let next = progress.nextUnlock {
                 nextUnlockRow(next)
             }
-            shareButton
+            if let onShare {
+                shareButton(onShare)
+            }
         }
         .padding(Spacing.s4)
         .background(
@@ -385,7 +388,7 @@ public struct InviteProgressCard: View {
         .accessibilityIdentifier("inviteProgress.nextUnlock")
     }
 
-    private var shareButton: some View {
+    private func shareButton(_ onShare: @escaping @MainActor () -> Void) -> some View {
         Button(action: onShare) {
             HStack(spacing: Spacing.s2) {
                 Icon(.send, size: 16, color: Theme.Color.appTextInverse)
