@@ -1425,7 +1425,10 @@ private object ChildRoutes {
     fun postcardVerification(homeId: String): String = "homes/$homeId/verify-postcard"
 
     /** Build the generic placeholder path with an encoded label. */
-    fun placeholder(label: String): String = "_placeholder/generic?$PLACEHOLDER_LABEL_KEY=${java.net.URLEncoder.encode(label, "UTF-8")}"
+    // `%20`, not URLEncoder's `+`: Navigation decodes the query value
+    // literally, so "Edit dates" showed as "Edit+dates".
+    fun placeholder(label: String): String =
+        "_placeholder/generic?$PLACEHOLDER_LABEL_KEY=${java.net.URLEncoder.encode(label, "UTF-8").replace("+", "%20")}"
 
     /** Build the compose-post path with the pre-fill intent encoded. */
     fun composePost(
