@@ -11,6 +11,8 @@ import SwiftUI
 public struct DataExportView: View {
     private let onBack: @MainActor () -> Void
 
+    @State private var showsEmailFallback = false
+
     public init(onBack: @escaping @MainActor () -> Void) {
         self.onBack = onBack
     }
@@ -25,6 +27,7 @@ public struct DataExportView: View {
         )
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("dataExport")
+        .emailFallbackAlert(address: "privacy@pantopus.com", isPresented: $showsEmailFallback)
     }
 
     private var headerView: some View {
@@ -92,6 +95,9 @@ public struct DataExportView: View {
 
     @MainActor
     private func openURL(_ url: URL) async {
-        _ = await UIApplication.shared.open(url, options: [:])
+        // No mail app → say where to write instead of doing nothing.
+        if !(await UIApplication.shared.open(url, options: [:])) {
+            showsEmailFallback = true
+        }
     }
 }

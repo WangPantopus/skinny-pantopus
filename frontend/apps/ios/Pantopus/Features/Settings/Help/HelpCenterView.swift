@@ -13,6 +13,8 @@ import SwiftUI
 public struct HelpCenterView: View {
     private let onBack: @MainActor () -> Void
 
+    @State private var showsEmailFallback = false
+
     public init(onBack: @escaping @MainActor () -> Void) {
         self.onBack = onBack
     }
@@ -27,6 +29,7 @@ public struct HelpCenterView: View {
         )
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("helpCenter")
+        .emailFallbackAlert(address: "support@pantopus.app", isPresented: $showsEmailFallback)
     }
 
     private var headerView: some View {
@@ -93,7 +96,10 @@ public struct HelpCenterView: View {
 
     @MainActor
     private func openURL(_ url: URL) async {
-        _ = await UIApplication.shared.open(url, options: [:])
+        // No mail app → say where to write instead of doing nothing.
+        if !(await UIApplication.shared.open(url, options: [:])) {
+            showsEmailFallback = true
+        }
     }
 
     private struct Section {
