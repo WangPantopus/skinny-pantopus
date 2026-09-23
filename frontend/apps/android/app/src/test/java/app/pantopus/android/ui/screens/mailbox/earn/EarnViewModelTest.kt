@@ -16,8 +16,7 @@ import org.junit.Test
  * seeded path never touches. Mirrors the iOS `EarnViewModelTests`.
  */
 class EarnViewModelTest {
-    private fun makeVm(): EarnViewModel =
-        EarnViewModel(repository = mockk(relaxed = true), walletRepository = mockk(relaxed = true))
+    private fun makeVm(): EarnViewModel = EarnViewModel(repository = mockk(relaxed = true), walletRepository = mockk(relaxed = true))
 
     @Test
     fun initial_state_is_loading() {
