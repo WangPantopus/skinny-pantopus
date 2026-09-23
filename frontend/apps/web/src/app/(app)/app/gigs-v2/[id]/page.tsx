@@ -14,6 +14,7 @@ import dynamic from 'next/dynamic';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
+import { confirmStore } from '@/components/ui/confirm-store';
 import { useBadges } from '@/contexts/BadgeContext';
 
 // Import existing web gig-detail components
@@ -568,19 +569,33 @@ function GigDetailV2Content() {
     if (!gigId || !isSessionCurrent()) return;
     try {
       const res = await api.gigs.getGigChatRoom(gigId);
-      if (isSessionCurrent() && res?.roomId) router.push(`/app/mailbox?roomId=${res.roomId}`);
-    } catch { /* ignore */ }
+      if (!isSessionCurrent()) return;
+      // The chat page reads the room from its path; the Mailbox ignores `?roomId=`.
+      if (res?.roomId) router.push(`/app/chat/${res.roomId}`);
+      else toast.info('Chat thread not available yet for this task.');
+    } catch (err: unknown) {
+      if (isSessionCurrent()) toast.error(err instanceof Error ? err.message : "Couldn't open the chat.");
+    }
   };
   const handleAcceptOffer = (offerId: string) => {
     if (gigId && isSessionCurrent()) router.push(gigBidCheckoutUrl(gigId, offerId));
   };
   const handleDeclineOffer = async (offerId: string) => {
     if (!gigId || !isSessionCurrent()) return;
+    const yes = await confirmStore.open({
+      title: 'Decline this offer?',
+      description: 'The helper is notified that you declined their offer.',
+      confirmLabel: 'Decline',
+      variant: 'destructive',
+    });
+    if (!yes || !isSessionCurrent()) return;
     try {
       await api.gigs.rejectBid(gigId, offerId);
       loadGig();
       loadOffers();
-    } catch { /* ignore */ }
+    } catch (err: unknown) {
+      if (isSessionCurrent()) toast.error(err instanceof Error ? err.message : "Couldn't decline the offer.");
+    }
   };
 
   // Loading
