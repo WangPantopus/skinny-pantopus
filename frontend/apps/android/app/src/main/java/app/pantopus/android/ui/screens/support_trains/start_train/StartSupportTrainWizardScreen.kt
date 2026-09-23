@@ -195,7 +195,7 @@ internal fun WhoAndWhyStep(
                     ResultList(results = results, onSelect = onSelectBeneficiary)
                 }
                 Text(
-                    text = "Search verified neighbors, or type a name to invite them directly.",
+                    text = "Search neighbors, or type a name to invite them directly.",
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextMuted,
                 )
@@ -340,7 +340,9 @@ private fun PrivacyToggleList(
         PrivacyToggleRow(
             icon = PantopusIcon.Home,
             title = "Block-visible",
-            subtitle = "Verified neighbors at 412 Elm can see and offer",
+            // The Tasks list shows block-visible trains to people nearby
+            // (about 25 mi); it doesn't check verification or a block.
+            subtitle = "People nearby on Pantopus can see and offer",
             checked = blockVisible,
             onToggle = onToggleBlockVisible,
             testTag = "startSupportTrainBlockVisible",

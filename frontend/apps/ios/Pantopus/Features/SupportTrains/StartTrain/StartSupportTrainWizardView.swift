@@ -156,7 +156,7 @@ private struct StartSupportTrainWhoAndWhyStep: View {
                     if !viewModel.beneficiaryResults.isEmpty {
                         resultList
                     }
-                    Text("Search verified neighbors, or type a name to invite them directly.")
+                    Text("Search neighbors, or type a name to invite them directly.")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.Color.appTextMuted)
                 }
@@ -287,7 +287,9 @@ private struct StartSupportTrainWhoAndWhyStep: View {
             privacyToggleRow(
                 icon: .home,
                 title: "Block-visible",
-                subtitle: "Verified neighbors at 412 Elm can see and offer",
+                // The Tasks list shows block-visible trains to people nearby
+                // (about 25 mi); it doesn't check verification or a block.
+                subtitle: "People nearby on Pantopus can see and offer",
                 isOn: Binding(
                     get: { viewModel.blockVisible },
                     set: { viewModel.toggleBlockVisible($0) }
