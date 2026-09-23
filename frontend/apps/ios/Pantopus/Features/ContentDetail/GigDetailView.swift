@@ -31,6 +31,8 @@ public struct GigDetailView: View {
     // Phase 5 — lifecycle sheets
     @State private var counterTarget: GigCounterSheetTarget?
     @State private var rejectCandidate: GigBidDTO?
+    /// Set while the owner is asked to check before confirming completion.
+    @State private var completionPrompt: GigCompletionConfirmation?
     /// Bid whose pending counter-offer the poster is about to withdraw.
     @State private var withdrawCounterCandidate: GigBidDTO?
     @State private var showReportSheet = false
@@ -169,6 +171,20 @@ public struct GigDetailView: View {
             toast: $toast
         ))
         .confirmationDialog(
+            completionPrompt?.title ?? "",
+            isPresented: Binding(
+                get: { completionPrompt != nil },
+                set: { if !$0 { completionPrompt = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: completionPrompt
+        ) { prompt in
+            Button(prompt.confirmLabel) { confirmCompletion() }
+            Button("Not yet", role: .cancel) { completionPrompt = nil }
+        } message: { prompt in
+            Text(prompt.message)
+        }
+        .confirmationDialog(
             "Reject this bid?",
             isPresented: Binding(
                 get: { rejectCandidate != nil },
@@ -298,6 +314,7 @@ public struct GigDetailView: View {
                     showWorkerAck: viewModel.showWorkerAck,
                     canStartTask: viewModel.canStartTask,
                     canConfirmCompletion: viewModel.canConfirmCompletion,
+                    confirmingCompletion: viewModel.confirmingCompletion,
                     noShowEligible: viewModel.noShowEligible,
                     runningLateLabel: viewModel.runningLateLabel,
                     canReportRunningLate: viewModel.canReportRunningLate,
@@ -316,15 +333,7 @@ public struct GigDetailView: View {
                             }
                         }
                     },
-                    onConfirmCompletion: {
-                        Task {
-                            switch await viewModel.confirmCompletion() {
-                            case .confirmed: toast = ToastMessage(text: "Completion confirmed.", kind: .success)
-                            case let .failed(message): toast = ToastMessage(text: message, kind: .error)
-                            case .ignored: break
-                            }
-                        }
-                    },
+                    onConfirmCompletion: { completionPrompt = viewModel.completionConfirmation() },
                     onReportNoShow: { showNoShowSheet = true },
                     onRunningLate: { showRunningLateSheet = true },
                     onCantMakeIt: { presentStop(.workerRelease) },
@@ -423,6 +432,17 @@ public struct GigDetailView: View {
             toast = ToastMessage(text: message, kind: .success)
         case let .failure(message):
             toast = ToastMessage(text: message, kind: .error)
+        }
+    }
+
+    private func confirmCompletion() {
+        completionPrompt = nil
+        Task {
+            switch await viewModel.confirmCompletion() {
+            case .confirmed: toast = ToastMessage(text: "Completion confirmed.", kind: .success)
+            case let .failed(message): toast = ToastMessage(text: message, kind: .error)
+            case .ignored: break
+            }
         }
     }
 

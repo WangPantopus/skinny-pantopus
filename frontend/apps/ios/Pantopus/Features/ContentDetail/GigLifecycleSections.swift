@@ -341,6 +341,30 @@ private struct BidderAvatar: View {
     }
 }
 
+// MARK: - Confirm completion check
+
+/// What the owner confirms: the worker's name and, on a paid task, the held amount confirming charges.
+public struct GigCompletionConfirmation: Equatable, Sendable {
+    public let workerName: String
+    public let amountCents: Double?
+
+    var title: String {
+        if let amountCents {
+            return "Release \(GigPaymentCard.centsLabel(amountCents)) to \(workerName)?"
+        }
+        return "Confirm \(workerName) finished?"
+    }
+
+    var message: String {
+        amountCents == nil ? "This marks the task complete."
+            : "This confirms the task is done and charges the payment you authorized."
+    }
+
+    var confirmLabel: String {
+        amountCents == nil ? "Confirm" : "Release payment"
+    }
+}
+
 // MARK: - Active-task panel
 
 /// Phase strip (Assigned → In progress → Marked done → Confirmed) plus
@@ -350,6 +374,8 @@ struct GigActiveTaskPanel: View {
     let showWorkerAck: Bool
     let canStartTask: Bool
     let canConfirmCompletion: Bool
+    /// The owner's confirm-completion request is running.
+    var confirmingCompletion: Bool = false
     let noShowEligible: Bool
     /// "Running ~X min late" copy — non-nil renders the late badge for
     /// both roles (Phase 5b).
@@ -492,11 +518,12 @@ struct GigActiveTaskPanel: View {
         }
         if canConfirmCompletion {
             actionButton(
-                "Confirm completion",
+                confirmingCompletion ? "Confirming…" : "Confirm completion",
                 icon: .checkCheck,
                 identifier: "gigDetail.confirmCompletion",
                 action: onConfirmCompletion
             )
+            .disabled(confirmingCompletion)
         }
         if noShowEligible {
             Button(action: onReportNoShow) {

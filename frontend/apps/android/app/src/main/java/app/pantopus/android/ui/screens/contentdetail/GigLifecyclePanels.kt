@@ -95,8 +95,12 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
     val changeOrderActionInFlight by viewModel.changeOrderActionInFlight.collectAsStateWithLifecycle()
     val fulfillment by viewModel.fulfillment.collectAsStateWithLifecycle()
     val fulfillmentActionInFlight by viewModel.fulfillmentActionInFlight.collectAsStateWithLifecycle()
+    val confirmingCompletion by viewModel.confirmingCompletion.collectAsStateWithLifecycle()
 
     var counterTarget by remember { mutableStateOf<GigBidDto?>(null) }
+
+    /** Set while the owner is asked to check before confirming completion (and releasing a held payment). */
+    var completionPrompt by remember { mutableStateOf<CompletionConfirmation?>(null) }
     var rejectTarget by remember { mutableStateOf<GigBidDto?>(null) }
 
     /** Bid whose pending counter-offer the poster is about to withdraw. */
@@ -120,6 +124,42 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
             onReject = { rejectTarget = it },
             onWithdrawCounter = { withdrawCounterTarget = it },
             rankings = offerRankings,
+        )
+    }
+
+    completionPrompt?.let { prompt ->
+        val paid = prompt.amountCents != null
+        AlertDialog(
+            onDismissRequest = { completionPrompt = null },
+            title = {
+                Text(
+                    prompt.amountCents?.let { "Release ${formatCents(it)} to ${prompt.workerName}?" }
+                        ?: "Confirm ${prompt.workerName} finished?",
+                )
+            },
+            text = {
+                Text(
+                    if (paid) {
+                        "This confirms the task is done and charges the payment you authorized."
+                    } else {
+                        "This marks the task complete."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        completionPrompt = null
+                        viewModel.confirmCompletion()
+                    },
+                    modifier = Modifier.testTag("gigDetail.confirmCompletionConfirm"),
+                ) {
+                    Text(if (paid) "Release payment" else "Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { completionPrompt = null }) { Text("Not yet") }
+            },
         )
     }
 
@@ -183,7 +223,8 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
             onWorkerAck = { viewModel.workerAck() },
             onRunningLate = { runningLateSheetVisible = true },
             onStartTask = { viewModel.startTask() },
-            onConfirmCompletion = { viewModel.confirmCompletion() },
+            onConfirmCompletion = { completionPrompt = viewModel.completionConfirmation() },
+            confirmingCompletion = confirmingCompletion,
             onReportNoShow = { noShowSheetVisible = true },
             onCantMakeIt = { viewModel.openTaskStop("worker_release") },
             canRemindWorker = viewModel.canRemindWorker(),
@@ -751,6 +792,8 @@ private fun GigActiveTaskPanel(
     onConfirmCompletion: () -> Unit,
     onReportNoShow: () -> Unit,
     onCantMakeIt: () -> Unit,
+    /** Owner's confirm-completion request is running; the button shows it. */
+    confirmingCompletion: Boolean = false,
     /** Poster-only "Remind worker" nudge — assigned, pre-start. */
     canRemindWorker: Boolean = false,
     /** `"Sent · retry in 12m"` while the server's cooldown stands. */
@@ -855,9 +898,10 @@ private fun GigActiveTaskPanel(
             }
             if (panel.showConfirmCompletion) {
                 ActivePanelButton(
-                    label = "Confirm completion",
+                    label = if (confirmingCompletion) "Confirming…" else "Confirm completion",
                     icon = PantopusIcon.CheckCheck,
                     prominent = true,
+                    enabled = !confirmingCompletion,
                     modifier = Modifier.testTag("gigDetail.confirmCompletion"),
                     onClick = onConfirmCompletion,
                 )
