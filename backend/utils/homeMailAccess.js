@@ -92,5 +92,128 @@ async function trustedHomeIdsOrThrow(userId) {
   return [...new Set(trusted.map((r) => r.home_id).filter(Boolean))];
 }
 
-module.exports = { getAccessibleHomeIds, trustedHomeIdsOrThrow,
+/**
+ * M01: which of a Home's letters a member may see.
+ *
+ * Membership alone used to be enough: any member read every letter on the
+ * Home, including one addressed to another member or marked for their
+ * attention only. The rule below is the one the Home dashboard badge already
+ * applied (homeDashboardService.unreadMailQuery). The badge, the mailbox lists,
+ * the per-item gate and the Home drawers all build their filters from it, so a
+ * letter a member can open is the letter their badge counts.
+ *   - A letter addressed or targeted to a person is that person's.
+ *   - delivery_visibility attn_only / attn_plus_admins: the attn user only.
+ *   - A letter with no personal recipient follows its delivery_visibility:
+ *     home_members or unset means the household. v1 letters sent to a Home keep
+ *     the column default privacy 'private_to_person', so privacy alone cannot
+ *     decide them.
+ *   - Otherwise privacy 'shared_household' means the household.
+ * The owner is a member like any other here. business_team mail keeps its
+ * existing rule (any member of the Home) and is not counted by the badge.
+ *
+ * Each clause is the body of one PostgREST or(); the clauses are ANDed.
+ * homeId and userId are UUIDs from the caller's own occupancy and session.
+ */
+function homeMailVisibilityClauses(homeId, userId) {
+  const household = 'or(delivery_visibility.is.null,delivery_visibility.eq.home_members)';
+  return [
+    ...[['delivery_target_type', 'delivery_target_id'], ['recipient_type', 'recipient_id']].map(([type, id]) => (
+      `${type}.is.null,and(${type}.eq.home,${id}.eq.${homeId}),and(${type}.eq.user,${id}.eq.${userId})`)),
+    `recipient_user_id.is.null,recipient_user_id.eq.${userId}`,
+    `attn_user_id.is.null,attn_user_id.eq.${userId},and(recipient_user_id.is.null,${household})`,
+    `delivery_visibility.is.null,delivery_visibility.eq.home_members,and(delivery_visibility.in.(attn_only,attn_plus_admins),attn_user_id.eq.${userId})`,
+    `privacy.eq.shared_household,recipient_user_id.eq.${userId},attn_user_id.eq.${userId},and(privacy.eq.private_to_person,recipient_user_id.is.null)`,
+  ];
+}
+
+/** The rule for one Home's letters, as the body of a PostgREST or(). */
+function homeMailFilter(homeId, userId) {
+  const clauses = homeMailVisibilityClauses(homeId, userId).map((clause) => `or(${clause})`);
+  return `privacy.eq.business_team,and(${clauses.join(',')})`;
+}
+
+/** Letters on these Homes the member may see, as the body of an or(). */
+function homesMailFilter(homeIds, userId) {
+  return homeIds.map((homeId) => `and(recipient_home_id.eq.${homeId},or(${homeMailFilter(homeId, userId)}))`).join(',');
+}
+
+/** The caller's own mail, or letters on these Homes they may see. */
+function visibleMailFilter(userId, homeIds) {
+  const own = `recipient_user_id.eq.${userId}`;
+  return homeIds && homeIds.length ? `${own},${homesMailFilter(homeIds, userId)}` : own;
+}
+
+/**
+ * Of these mail ids, the ones the user may see: their own, or letters on
+ * their accessible Homes that the Home rule shows them. Throws on a read
+ * failure so each caller keeps its own failure semantics.
+ */
+async function visibleMailIds(mailIds, userId, homeIds = null) {
+  const ids = [...new Set((mailIds || []).filter(Boolean))];
+  if (!ids.length || !userId) return new Set();
+  const homes = homeIds || await getAccessibleHomeIds(userId);
+  const { data, error } = await supabaseAdmin
+    .from('Mail')
+    .select('id')
+    .in('id', ids)
+    .or(visibleMailFilter(userId, homes));
+  if (error) throw new Error(error.message);
+  return new Set((data || []).map((row) => row.id));
+}
+
+/** Whether the Home rule shows this Home letter to the member. Fails closed. */
+async function homeMailVisible(mailId, homeId, userId) {
+  if (!mailId || !homeId || !userId) return false;
+  const { data, error } = await supabaseAdmin
+    .from('Mail')
+    .select('id')
+    .eq('id', mailId)
+    .eq('recipient_home_id', homeId)
+    .or(homeMailFilter(homeId, userId))
+    .maybeSingle();
+  if (error) {
+    logger.error('homeMailVisible: failing closed', { mailId, error: error.message });
+    return false;
+  }
+  return Boolean(data);
+}
+
+// CRIT-03, per-item half. The list-scoping helper on this file was consolidated
+// into utils/homeMailAccess, but this gate — which guards the eight per-item
+// routes (GET/PATCH/DELETE of an individual mail) — kept its own query, and that
+// query matched ANY HomeOccupancy row for the home: no is_active filter and no
+// verification_status filter. Both leave paths soft-deactivate rather than
+// delete the row, so a roommate who properly moved out kept read, mutate and
+// delete access to the household's individual mail on exactly the surface
+// CRIT-03 named. One definition now, shared with the list path.
+// (Moved from routes/mailbox.js so the v2 per-item routes share it.) A Home
+// letter also has to pass the Home mail rule above (M01); callers pass the
+// mail's id with its recipient fields.
+const canAccessMail = async (mail, userId) => {
+  if (mail.recipient_user_id === userId) return true;
+  if (!mail.recipient_home_id) return false;
+
+  const accessibleHomeIds = await getAccessibleHomeIds(userId);
+  if (!accessibleHomeIds.includes(mail.recipient_home_id)) return false;
+  return homeMailVisible(mail.id, mail.recipient_home_id, userId);
+};
+
+/**
+ * Load one mail's access fields and apply canAccessMail. Returns the row
+ * (id, recipient_user_id, recipient_home_id) when the caller may read it,
+ * otherwise null — callers answer their existing not-found.
+ */
+async function readableMail(mailId, userId) {
+  if (!mailId || !userId) return null;
+  const { data: mail, error } = await supabaseAdmin
+    .from('Mail')
+    .select('id, recipient_user_id, recipient_home_id')
+    .eq('id', mailId)
+    .maybeSingle();
+  if (error || !mail) return null;
+  return (await canAccessMail(mail, userId)) ? mail : null;
+}
+
+module.exports = { getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail,
+  homeMailVisibilityClauses, homeMailFilter, homesMailFilter, visibleMailFilter, visibleMailIds,
 };
