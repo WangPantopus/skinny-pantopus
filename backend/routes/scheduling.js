@@ -1270,9 +1270,11 @@ router.post('/invoices/:id/send', withOwner('edit'), asyncHandler(async (req, re
   if (!inv || inv.business_user_id !== req.scheduling.ownerId) return res.status(404).json({ error: 'NOT_FOUND' });
   // Notify the recipient in-app (no status mutation — avoid touching the gig invoice state machine).
   if (inv.recipient_user_id) {
+    const currency = String(inv.currency || 'USD').toUpperCase();
+    const amount = (inv.total_cents / 100).toFixed(2);
     await notificationService.createNotification({
       userId: inv.recipient_user_id, type: 'invoice_sent', title: 'You have a new invoice',
-      body: `Invoice for ${(inv.total_cents / 100).toFixed(2)} ${inv.currency || 'USD'}`, icon: '🧾',
+      body: currency === 'USD' ? `Invoice for $${amount}` : `Invoice for ${amount} ${currency}`, icon: '🧾',
       link: `/app/invoice/${inv.id}`, metadata: { invoice_id: inv.id }, context: 'personal',
     });
   }
