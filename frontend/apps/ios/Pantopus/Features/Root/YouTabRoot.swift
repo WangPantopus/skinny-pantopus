@@ -461,6 +461,7 @@ public struct YouTabRoot: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: YouRoute.self) { route in
                 destination(for: route)
+                    .modifier(OwnHeaderBar(drawsOwnHeader: Self.drawsOwnHeader(route)))
             }
             .confirmationDialog(
                 "Sign out of Pantopus?",
@@ -594,6 +595,39 @@ public struct YouTabRoot: View {
                     ) { debugDisambiguateFormMailId = nil }
                 }
             #endif
+        }
+    }
+
+    /// Pushed screens that draw their own header (a Back or Close of their
+    /// own). The stack's system bar is hidden on them so each shows exactly
+    /// one Back. Every other route keeps the system bar, which is its only
+    /// Back (lists, `.homeDashboard`, placeholders).
+    static func drawsOwnHeader(_ route: YouRoute) -> Bool {
+        switch route {
+        case .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
+             .documentDetail, .packageDetail, .helpCenter, .publicProfile, .pulsePost,
+             .legalContent, .privacySettings, .legal, .settings, .paymentsSettings,
+             .mailItemDetail, .gigDetail, .listingDetail, .businessProfile, .editBusinessPage,
+             .gigsFeed, .marketplace, .audienceProfile, .supportTrainDetail, .manageTrain,
+             .chatConversation, .explore, .ceremonialMailOpen, .mailboxMap, .vacationHold,
+             .stamps, .mailTask, .mailTaskList, .mailTranslation, .packageGig, .earn,
+             .businessOwner, .viewAs, .membershipDetail, .identityCenter,
+             .creatorAudienceMembers, .broadcastDetail, .creatorInbox,
+             .creatorInboxConversation, .fanInbox, .cancelClaim, .editGig,
+             .transferOwnership, .mailRoutingQueue, .mailDay:
+            true
+        // Forms and wizards with their own Close.
+        case .logMaintenance, .editMaintenance, .startPoll, .editAccessCode, .addCalendarEvent,
+             .addEmergencyInfo, .uploadDocument, .addHouseholdTask, .editPersona,
+             .composeBroadcast, .composePost, .editPost, .editSignup, .addBill,
+             .claimOwnership, .verifyResidency, .verifyLandlord, .businessWaitlist,
+             .createBusiness, .composeTask, .composeListing, .editListing,
+             .startSupportTrain, .ceremonialMail, .privacyHandshake:
+            true
+        case let .scheduling(route):
+            HubTabRoot.schedulingDrawsOwnHeader(route)
+        default:
+            false
         }
     }
 
@@ -1035,9 +1069,10 @@ public struct YouTabRoot: View {
             )
         case .vacationHold:
             VacationHoldView(
-                viewModel: VacationHoldViewModel {
-                    Task { @MainActor in pop() }
-                }
+                // Keep the `onBack:` label: as a trailing closure it binds to
+                // the last closure (`onPickToDate`) and Back does nothing.
+                // swiftlint:disable:next trailing_closure
+                viewModel: VacationHoldViewModel(onBack: { Task { @MainActor in pop() } })
             )
         case let .mailItemDetail(mailId):
             // T6.5b (P20) — Generic A17.1 mail detail. P21–P23 will
@@ -1552,8 +1587,12 @@ public struct YouTabRoot: View {
             )
         case let .supportTrainDetail(supportTrainId):
             SupportTrainDetailView(
-                viewModel: SupportTrainDetailViewModel(trainId: supportTrainId)
-            ) { Task { @MainActor in pop() } }
+                viewModel: SupportTrainDetailViewModel(trainId: supportTrainId),
+                // Keep the `onBack:` label: as a trailing closure it binds to
+                // the last closure (`onMessageHost`) and Back does nothing.
+                // swiftlint:disable:next trailing_closure
+                onBack: { Task { @MainActor in pop() } }
+            )
         case .searchSupportTrains:
             SupportTrainsSearchView(
                 viewModel: SupportTrainsSearchViewModel(

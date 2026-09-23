@@ -165,6 +165,9 @@ struct LogPackageSheetView: View {
         .background(Theme.Color.appBg.ignoresSafeArea())
         .navigationTitle("Log a package")
         .navigationBarTitleDisplayMode(.inline)
+        // Cancel is this form's way out; the stack's own Back beside it
+        // would be a second one.
+        .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Cancel", action: onClose)
