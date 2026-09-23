@@ -246,4 +246,4 @@ function sendError(res, error) {
   const safe = error && Object.hasOwn(MESSAGES, error.code) ? error : failure();
   return res.status(safe.statusCode).json({ error: safe.message, code: safe.code });
 }
-module.exports = { read, readResource, readAuthority, withCurrentAccess, sendError };
+module.exports = { read, readResource, readAuthority, withCurrentAccess, sendError, unreadMailQuery };
