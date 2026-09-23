@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DollarSign,
   TrendingDown,
@@ -50,6 +50,9 @@ export default function ChangeOrdersSection({
   const [formAmount, setFormAmount] = useState('');
   const [formTime, setFormTime] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // One approve at a time: a double click must not send the approval twice.
+  const approvingRef = useRef<string | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const loadOrders = async () => {
     try {
@@ -88,11 +91,17 @@ export default function ChangeOrdersSection({
   };
 
   const handleApprove = async (orderId: string) => {
+    if (approvingRef.current) return;
+    approvingRef.current = orderId;
+    setApprovingId(orderId);
     try {
       await api.gigs.approveChangeOrder(gigId, orderId);
       await loadOrders();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to approve'));
+    } finally {
+      approvingRef.current = null;
+      setApprovingId(null);
     }
   };
 
@@ -117,7 +126,14 @@ export default function ChangeOrdersSection({
     }
   };
 
-  const pendingCount = orders.filter((o) => o.status === 'pending').length;
+  const pendingOrders = orders.filter((o) => o.status === 'pending');
+  const pendingCount = pendingOrders.length;
+  const isOwnOrder = (o: GigChangeOrder) => Boolean(currentUserId) && String(o.requested_by) === String(currentUserId);
+  // The banner speaks to the viewer: the other party's requests need a review here; the viewer's own wait on them.
+  const awaitingMyReview = pendingOrders.some((o) => !isOwnOrder(o));
+  const pendingBanner = awaitingMyReview
+    ? isMyGig ? 'The worker has requested changes — review below.' : iAmWorker ? 'The poster has requested changes — review below.' : 'Change requests pending review.'
+    : pendingCount > 1 ? 'Your change requests are awaiting review.' : 'Your change request is awaiting review.';
 
   return (
     <div className="bg-app-surface rounded-xl p-6 border border-app-border">
@@ -136,7 +152,7 @@ export default function ChangeOrdersSection({
       {pendingCount > 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 mb-4">
           <p className="text-xs text-yellow-800 font-medium">
-            {isMyGig ? 'The worker has requested changes — review below.' : iAmWorker ? 'Your change request is awaiting review.' : 'Change requests pending review.'}
+            {pendingBanner}
           </p>
         </div>
       )}
@@ -201,7 +217,8 @@ export default function ChangeOrdersSection({
                       <>
                         <button
                           onClick={() => handleApprove(o.id)}
-                          className="text-xs bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700 font-medium"
+                          disabled={approvingId === o.id}
+                          className="text-xs bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700 font-medium disabled:opacity-50"
                         >
                           Approve
                         </button>
