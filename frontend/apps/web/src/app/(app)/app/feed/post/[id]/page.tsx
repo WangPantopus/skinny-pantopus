@@ -118,7 +118,8 @@ export default function PostDetailPage() {
       setPost((p: Post | null) => (p ? { ...p, userHasLiked: res.liked, like_count: res.likeCount } : p));
     },
     onError: () => {
-      // Revert
+      // Revert, and say so — a silent revert looks like the tap did nothing.
+      showToast("Couldn't update your like. Please try again.");
       setPost((p) =>
         p
           ? { ...p, userHasLiked: !p.userHasLiked, like_count: p.userHasLiked ? Math.max(0, p.like_count - 1) : p.like_count + 1 }
@@ -210,6 +211,7 @@ export default function PostDetailPage() {
       );
     } catch {
       console.warn('Failed to toggle comment like');
+      showToast("Couldn't update your like. Please try again.");
     }
   };
 
