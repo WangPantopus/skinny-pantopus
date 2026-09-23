@@ -19,8 +19,10 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.ui.components.StatusChipVariant
+import app.pantopus.android.ui.screens.gigs.OPEN_TO_OFFERS_LABEL
 import app.pantopus.android.ui.screens.gigs.checkout.GigCheckoutIdentity
 import app.pantopus.android.ui.screens.gigs.checkout.GigPaymentIdentitySource
+import app.pantopus.android.ui.screens.gigs.isOpenToOffers
 import app.pantopus.android.ui.screens.offers.OffersCategory
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilter
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivitySortOrder
@@ -693,7 +695,7 @@ class MyTasksViewModel
             val dto = projection.dto
             val generation = screenGeneration
             val category = OffersCategory.fromRaw(dto.category)
-            val budget = formatBudget(dto.price, dto.payType)
+            val budget = if (isOpenToOffers(dto.payType, dto.acceptedBy)) OPEN_TO_OFFERS_LABEL else formatBudget(dto.price, dto.payType)
             val title = dto.title.takeIf { it.isNotBlank() } ?: "Untitled task"
             val isMagic = isMagicTask(dto)
             val archetype = MyTasksArchetype.fromRaw(dto.taskArchetype)

@@ -195,3 +195,14 @@ public struct GigClusterChipContent: Identifiable, Sendable, Hashable {
         self.priceHint = priceHint
     }
 }
+
+/// Shown instead of a price while an offers-priced task hasn't accepted anyone.
+public enum GigOffers {
+    public static let label = "Open to offers"
+
+    /// An offers-priced task (`pay_type` "offers") has no price until a bid is accepted: its stored
+    /// price is only the database floor ($1). True until someone is accepted.
+    public static func isOpen(payType: String?, acceptedBy: String?) -> Bool {
+        payType == "offers" && (acceptedBy ?? "").isEmpty
+    }
+}
