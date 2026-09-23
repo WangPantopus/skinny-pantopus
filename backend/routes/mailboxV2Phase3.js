@@ -10,7 +10,7 @@ const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 const homeRecordService = require('../services/homeRecordService');
-const { getAccessibleHomeIds, readableMail } = require('../utils/homeMailAccess');
+const { getAccessibleHomeIds, canAccessMail, readableMail, visibleMailFilter } = require('../utils/homeMailAccess');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
@@ -257,13 +257,17 @@ router.get('/records/asset/:id/mail', verifyToken, async (req, res) => {
       .eq('asset_id', assetId)
       .order('created_at', { ascending: false });
 
+    // Only linked mail the caller may see: their own, or Home letters the Home
+    // mail rule shows them (utils/homeMailAccess, M01).
     const mailIds = (links || []).map(l => l.mail_id);
     let mail = [];
     if (mailIds.length) {
-      const { data: mailItems } = await supabaseAdmin
+      const { data: mailItems, error: mailError } = await supabaseAdmin
         .from('Mail')
         .select('*')
-        .in('id', mailIds);
+        .in('id', mailIds)
+        .or(visibleMailFilter(userId, homeIds));
+      if (mailError) throw mailError;
       mail = mailItems || [];
     }
 
@@ -277,7 +281,7 @@ router.get('/records/asset/:id/mail', verifyToken, async (req, res) => {
     const enrichedAsset = {
       ...asset,
       warranty_status: warrantyStatus(asset.warranty_expires),
-      linked_mail_count: mailIds.length,
+      linked_mail_count: mail.length,
       linked_gig_count: 0,
     };
 
@@ -294,19 +298,20 @@ router.post('/records/link', verifyToken, validate(linkAssetSchema), async (req,
     const userId = req.user.id;
     const { mailId, assetId, linkType } = req.body;
 
-    // Link only mail the caller may read (routes/mailbox.js canAccessMail: their
-    // own mail or their accessible Home's) to an asset of a Home they can access.
+    // Link only mail the caller may read (utils/homeMailAccess canAccessMail:
+    // their own mail, or their accessible Home's letters the Home mail rule
+    // shows them) to an asset of a Home they can access.
     const accessible = await getAccessibleHomeIds(userId);
     const [assetRes, mailRes] = await Promise.all([
       supabaseAdmin.from('HomeAsset').select('home_id').eq('id', assetId).maybeSingle(),
-      supabaseAdmin.from('Mail').select('recipient_user_id, recipient_home_id').eq('id', mailId).maybeSingle(),
+      supabaseAdmin.from('Mail').select('id, recipient_user_id, recipient_home_id').eq('id', mailId).maybeSingle(),
     ]);
     if (assetRes.error || mailRes.error) throw assetRes.error || mailRes.error;
     if (!assetRes.data || !accessible.includes(assetRes.data.home_id)) {
       return res.status(404).json({ error: 'Asset not found' });
     }
     const mail = mailRes.data;
-    if (!mail || (mail.recipient_user_id !== userId && !accessible.includes(mail.recipient_home_id))) {
+    if (!mail || !(await canAccessMail(mail, userId))) {
       return res.status(404).json({ error: 'Mail not found' });
     }
 

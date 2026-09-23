@@ -6936,8 +6936,12 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
     // 2) Cancel the gig with zone 3 (no-show)
     const gigPrice = parseFloat(gig.price) || 0;
     const policyKey = gig.cancellation_policy || 'standard';
-    const noShowFee = Math.round(gigPrice * 0.25 * 100) / 100; // 25% no-show fee
+    // A worker no-show costs the worker reliability only, and the poster's
+    // hold is released in full below. A poster no-show records the 25% fee.
+    const noShowFee = isPoster ? 0 : Math.round(gigPrice * 0.25 * 100) / 100;
 
+    // Only the unstarted assignment that was checked above may be cancelled;
+    // a concurrent Start Work keeps the task and its payment hold.
     const { data: updatedGig, error: cancelErr } = await supabaseAdmin
       .from('Gig')
       .update({
@@ -6950,11 +6954,28 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
         updated_at: nowIso,
       })
       .eq('id', gigId)
+      .eq('status', gig.status)
       .select()
-      .single();
+      .maybeSingle();
 
     if (cancelErr) {
       return res.status(500).json({ error: 'Failed to cancel gig' });
+    }
+    if (!updatedGig) {
+      return res.status(409).json({ code: 'NO_SHOW_NOT_ELIGIBLE', error: 'The task changed. Reopen it and check its status.' });
+    }
+
+    // Worker no-show: release the poster's authorization hold in full.
+    let holdRelease = 'none';
+    if (isPoster && gig.payment_id) {
+      try {
+        await stripeService.cancelAuthorization(gig.payment_id);
+        holdRelease = 'released';
+      } catch (releaseErr) {
+        // The task stays cancelled; an unreleased hold still expires at the provider.
+        holdRelease = 'pending';
+        logger.error('No-show hold release failed', { gigId, paymentId: gig.payment_id, error: releaseErr.message });
+      }
     }
 
     // 3) Update reliability metrics for the no-show party
@@ -7013,6 +7034,7 @@ router.post('/:gigId/report-no-show', verifyToken, async (req, res) => {
       incident,
       gig: updatedGig,
       fee: noShowFee,
+      holdRelease,
       message: 'No-show reported successfully. The gig has been cancelled.',
     });
   } catch (err) {

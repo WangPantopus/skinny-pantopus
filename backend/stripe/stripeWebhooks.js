@@ -683,7 +683,7 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
       logger.warn('Auto-capture PI: transition to captured_hold failed, direct update', {
         paymentId: payment.id, currentStatus: payment.payment_status, error: transErr.message,
       });
-      await supabaseAdmin
+      assertSupabaseOk(await supabaseAdmin
         .from('Payment')
         .update({
           payment_status: PAYMENT_STATES.CAPTURED_HOLD,
@@ -693,7 +693,7 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
           ...cardUpdates,
           updated_at: nowIso,
         })
-        .eq('id', payment.id);
+        .eq('id', payment.id), 'Auto-capture payment record failed', { paymentId: payment.id });
     }
 
   }
@@ -773,14 +773,14 @@ async function handlePaymentIntentFailed(paymentIntent, req) {
         logger.error('PI failed: transition to canceled error', {
           paymentId: payment.id, currentStatus: payment.payment_status, error: transErr.message,
         });
-        await supabaseAdmin
+        assertSupabaseOk(await supabaseAdmin
           .from('Payment')
           .update({
             payment_status: PAYMENT_STATES.CANCELED,
             ...failureFields,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', payment.id);
+          .eq('id', payment.id), 'Payment cancel record failed', { paymentId: payment.id });
       }
     }
   }
@@ -799,13 +799,13 @@ async function handlePaymentIntentCanceled(paymentIntent, req) {
       await transitionPaymentStatus(payment.id, PAYMENT_STATES.CANCELED);
     } catch (transErr) {
       // Fall back to direct update
-      await supabaseAdmin
+      assertSupabaseOk(await supabaseAdmin
         .from('Payment')
         .update({
           payment_status: PAYMENT_STATES.CANCELED,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', payment.id);
+        .eq('id', payment.id), 'Payment cancel record failed', { paymentId: payment.id });
     }
   }
 }
@@ -925,7 +925,7 @@ async function handleChargeSucceeded(charge) {
   const payment = await findPaymentByPI(charge.payment_intent);
   if (!payment) return;
 
-  await supabaseAdmin
+  assertSupabaseOk(await supabaseAdmin
     .from('Payment')
     .update({
       stripe_charge_id: charge.id,
@@ -936,7 +936,7 @@ async function handleChargeSucceeded(charge) {
       payment_method_brand: charge.payment_method_details?.card?.brand,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', payment.id);
+    .eq('id', payment.id), 'Charge record failed', { paymentId: payment.id });
 }
 
 async function handleChargeFailed(charge) {
@@ -976,9 +976,9 @@ async function handleChargeFailed(charge) {
       logger.error('handleChargeFailed: transition to authorization_failed error', {
         paymentId: payment.id, error: transErr.message,
       });
-      await supabaseAdmin.from('Payment').update({
+      assertSupabaseOk(await supabaseAdmin.from('Payment').update({
         payment_status: PAYMENT_STATES.AUTHORIZATION_FAILED, ...failureFields, updated_at: nowIso,
-      }).eq('id', payment.id);
+      }).eq('id', payment.id), 'Authorization failure record failed', { paymentId: payment.id });
     }
   } else if (POST_CAPTURE_STATES.includes(payment.payment_status)) {
     // Post-capture: don't change status, just record failure details
@@ -996,9 +996,9 @@ async function handleChargeFailed(charge) {
       logger.error('handleChargeFailed: transition to canceled error', {
         paymentId: payment.id, error: transErr.message,
       });
-      await supabaseAdmin.from('Payment').update({
+      assertSupabaseOk(await supabaseAdmin.from('Payment').update({
         payment_status: PAYMENT_STATES.CANCELED, ...failureFields, updated_at: nowIso,
-      }).eq('id', payment.id);
+      }).eq('id', payment.id), 'Payment cancel record failed', { paymentId: payment.id });
     }
   }
 }
@@ -1081,17 +1081,17 @@ async function handleDisputeCreated(dispute) {
         paymentId: payment.id,
         error: transErr.message,
       });
-      await supabaseAdmin
+      assertSupabaseOk(await supabaseAdmin
         .from('Payment')
         .update({ ...disputeUpdates, payment_status: PAYMENT_STATES.DISPUTED })
-        .eq('id', payment.id);
+        .eq('id', payment.id), 'Dispute freeze record failed', { paymentId: payment.id });
     }
   } else {
     // Already in a non-freezable state — just store dispute info
-    await supabaseAdmin
+    assertSupabaseOk(await supabaseAdmin
       .from('Payment')
       .update(disputeUpdates)
-      .eq('id', payment.id);
+      .eq('id', payment.id), 'Dispute record failed', { paymentId: payment.id });
   }
 
   // Check if we already transferred funds to the provider
@@ -1192,13 +1192,13 @@ async function handleDisputeUpdated(dispute) {
     return;
   }
 
-  await supabaseAdmin
+  assertSupabaseOk(await supabaseAdmin
     .from('Payment')
     .update({
       dispute_status: dispute.status,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', payment.id);
+    .eq('id', payment.id), 'Dispute status record failed', { paymentId: payment.id });
 }
 
 /**
@@ -1335,13 +1335,13 @@ async function handleDisputeClosed(dispute) {
 
   } else {
     // warning_closed or other status
-    await supabaseAdmin
+    assertSupabaseOk(await supabaseAdmin
       .from('Payment')
       .update({
         dispute_status: status,
         updated_at: nowIso,
       })
-      .eq('id', payment.id);
+      .eq('id', payment.id), 'Dispute status record failed', { paymentId: payment.id });
   }
 }
 
@@ -1380,14 +1380,14 @@ async function handleTransferCreated(transfer) {
     return;
   }
 
-  await supabaseAdmin
+  assertSupabaseOk(await supabaseAdmin
     .from('Payment')
     .update({
       stripe_transfer_id: transfer.id,
       transfer_status: 'in_transit',
       updated_at: new Date().toISOString(),
     })
-    .eq('id', payment.id);
+    .eq('id', payment.id), 'Transfer record failed', { paymentId: payment.id });
 }
 
 async function handleTransferPaid(transfer) {
@@ -1409,7 +1409,7 @@ async function handleTransferPaid(transfer) {
       });
     } catch (transErr) {
       // Direct update fallback
-      await supabaseAdmin
+      assertSupabaseOk(await supabaseAdmin
         .from('Payment')
         .update({
           payment_status: PAYMENT_STATES.TRANSFERRED,
@@ -1417,7 +1417,7 @@ async function handleTransferPaid(transfer) {
           transfer_completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq('id', payment.id);
+        .eq('id', payment.id), 'Transfer paid record failed', { paymentId: payment.id });
     }
 
     // Notify provider: payout received
@@ -1430,14 +1430,14 @@ async function handleTransferPaid(transfer) {
     });
   } else {
     // Fallback update
-    await supabaseAdmin
+    assertSupabaseOk(await supabaseAdmin
       .from('Payment')
       .update({
         transfer_status: 'paid',
         transfer_completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq('stripe_transfer_id', transfer.id);
+      .eq('stripe_transfer_id', transfer.id), 'Transfer paid record failed', { transferId: transfer.id });
   }
 }
 
@@ -1450,14 +1450,14 @@ async function handleTransferFailed(transfer) {
   const payment = await findPaymentByTransfer(transfer.id);
   if (!payment) return;
 
-  await supabaseAdmin
+  assertSupabaseOk(await supabaseAdmin
     .from('Payment')
     .update({
       transfer_status: 'failed',
       failure_message: transfer.failure_message,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', payment.id);
+    .eq('id', payment.id), 'Transfer failure record failed', { paymentId: payment.id });
 
   // Notify provider about failed transfer
   const gig = await getGigInfo(payment.gig_id);
@@ -1492,14 +1492,14 @@ async function handleTransferReversed(transfer) {
   // Get the latest reversal
   const latestReversal = transfer.reversals?.data?.[0];
 
-  await supabaseAdmin
+  assertSupabaseOk(await supabaseAdmin
     .from('Payment')
     .update({
       stripe_transfer_reversal_id: latestReversal?.id || null,
       transfer_status: transfer.amount_reversed >= transfer.amount ? 'reversed' : 'partially_reversed',
       updated_at: new Date().toISOString(),
     })
-    .eq('id', payment.id);
+    .eq('id', payment.id), 'Transfer reversal record failed', { paymentId: payment.id });
 
   // Notify provider about reversal
   const gig = await getGigInfo(payment.gig_id);
@@ -1551,7 +1551,7 @@ async function handlePayoutCreated(payout, connectedAccountId) {
   }
 
   if (account) {
-    await supabaseAdmin.from('Payout').insert({
+    const inserted = await supabaseAdmin.from('Payout').insert({
       stripe_account_id: account.id,
       user_id: account.user_id,
       stripe_payout_id: payout.id,
@@ -1562,19 +1562,21 @@ async function handlePayoutCreated(payout, connectedAccountId) {
       destination_last4: (typeof payout.destination === 'object' && payout.destination?.last4) || null,
       arrival_date: new Date(payout.arrival_date * 1000).toISOString().split('T')[0],
     });
+    // A redelivered event may find this payout already recorded.
+    if (inserted.error?.code !== '23505') assertSupabaseOk(inserted, 'Payout record failed', { payoutId: payout.id });
   }
 }
 
 async function handlePayoutPaid(payout, connectedAccountId) {
   logger.info('Payout paid', { payoutId: payout.id, connectedAccountId });
 
-  await supabaseAdmin
+  assertSupabaseOk(await supabaseAdmin
     .from('Payout')
     .update({
       payout_status: 'paid',
       updated_at: new Date().toISOString(),
     })
-    .eq('stripe_payout_id', payout.id);
+    .eq('stripe_payout_id', payout.id), 'Payout paid record failed', { payoutId: payout.id });
 }
 
 async function handlePayoutFailed(payout, connectedAccountId) {
@@ -1584,7 +1586,7 @@ async function handlePayoutFailed(payout, connectedAccountId) {
     error: payout.failure_message,
   });
 
-  await supabaseAdmin
+  assertSupabaseOk(await supabaseAdmin
     .from('Payout')
     .update({
       payout_status: 'failed',
@@ -1592,7 +1594,7 @@ async function handlePayoutFailed(payout, connectedAccountId) {
       failure_message: payout.failure_message,
       updated_at: new Date().toISOString(),
     })
-    .eq('stripe_payout_id', payout.id);
+    .eq('stripe_payout_id', payout.id), 'Payout failure record failed', { payoutId: payout.id });
 }
 
 // ============================================================

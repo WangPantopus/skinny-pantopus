@@ -218,8 +218,12 @@ export async function fileItemToVault(itemId: string, folderId: string): Promise
 
 export async function getCounterItems(): Promise<MailItemV2[]> {
   return call(async () => {
-    const res = await get<{ items: MailItemV2[] }>('/api/mailbox/v2/counter');
-    return res.items;
+    // The Counter is each drawer's existing `tab=counter` list (items with a due
+    // date, delivered or opened, not archived); there is no /v2/counter route.
+    const drawers = ['personal', 'home', 'business'] as const;
+    const pages = await Promise.all(drawers.map((drawer) =>
+      get<{ mail: MailItemV2[] }>(`/api/mailbox/v2/drawer/${drawer}`, { tab: 'counter', limit: 50 })));
+    return pages.flatMap((page) => page.mail ?? []);
   });
 }
 
