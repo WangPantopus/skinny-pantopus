@@ -5,7 +5,80 @@
 > must NOT resume). The blocks below are the running history it summarizes. Read the 06:52 block first; it
 > records what the next coordinator session (`92cc4526`) did with the handoff.
 
-## CURRENT RESUME POINT — September 23, 2026, 07:52 UTC (coordinator session `92cc4526`)
+## CURRENT RESUME POINT — September 23, 2026, 08:19 UTC (coordinator session `92cc4526`)
+
+This updates the 07:52 block below; read both. The count is **11 closed / 69 partial**; P08 closed at 07:5x.
+
+### FOUNDER DIRECTION (08:15 UTC, in chat)
+*"keep working on all 3 workstreams until all features, functions, workflows within the app are verified, tested with
+all cases … errors are handled properly, with great best user experience … think carefully whether the user
+experience is good enough or not. if not, fulfill it. We do not care about unit test … launch the apps in iOS,
+Android, simulator and emulator, web app, test everything end to end, and fix anything you find … merge whenever you
+think they are ready."*
+
+- **UX improvements are authorized**, within the existing design system, with before/after on the real app.
+- **No new unit tests.** CI must stay green.
+- **Rules:** `/private/tmp/pantopus-tools/AGENT-RULES-2026-09-23.md` (UPDATE 08:20).
+- **Consequence:** the coordinator decided the items that had been waiting on the founder, as listed next. Each
+  decision is recorded here so the founder can override it.
+
+### Coordinator decisions (formerly founder questions)
+- **Stream 1:**
+  - Error toasts go red and are drawn above sheets.
+  - Copy: "Server error N…" → "Something went wrong on our side. Please try again." on native; the 409 no-show copy
+    gets a specific reason.
+  - **Paid price changes:** option 1. The interim server guard in #269 stays, and the UI stops offering price types on
+    paid tasks.
+  - iOS tip dock parity and tip-limit copy.
+  - Back from a notification-opened gig returns to the list.
+  - P06 native dispute presentation.
+  - P07 copy. The P07 recovery job is escalated first, because it moves money.
+  - **Account delete:** an interim 409 before any destructive step. **Retention/anonymise stays a founder/legal
+    question**, and production accounts may already have lost Refund/Wallet/Payout rows this way.
+- **Stream 2:**
+  - **v1 sender gate:** the Home mail rule.
+  - **Route item 6 (package unboxing on web):** built by reusing the native two-step upload.
+  - **Route item 8:** a read-only `GET /api/homes/:id/gigs` (`origin_home_id`, `home.view`).
+  - **Route item 9 (landlord Notices/Settings):** an honest "not available yet" state.
+  - **`business_team` drawer:** honours attention.
+  - **v1 bill send:** no fan-out for attn_only letters.
+  - **HomeAsset CHECK:** extended by a forward migration.
+  - **Landlord dispute route:** left as recorded.
+- **Stream 3:**
+  - "N businesses", dropping "verified".
+  - The "Business · Verified" chip shows the real status.
+  - Email support with no mail app shows an alert and a Copy action.
+  - Sending to a blocker shows the server copy, with no Retry on 403.
+  - The hub bell dot means unread notifications.
+  - The iOS "EARLIER" header overlap is fixed.
+  - A blocked business can't invoice the person who blocked it.
+  - Business-scheduled notifications go to owners/admins.
+  - One-on-one business host notifications go to the owner or the assignee.
+- **Fee (FYI):** fees under $0.50 are waived.
+
+### Fee PRs (#253/#254)
+- **Second review:** "safe to merge on money safety"; F1–F4 and F7/F8 are closed.
+- **Before merge:**
+  - payer spending totals (Medium);
+  - replay capture only on `capture_pending`;
+  - poster guard reasons and incident ordering;
+  - dispute-branch rethrow;
+  - replay parking.
+- **Bundle r2:** 364 files, MANIFEST `5abf2216…`. #253 CI OK.
+- Both PRs stay in draft until those items are done.
+
+### Merged since the last block
+- #213 → `348ccb638`
+- #261 → `327364fa1` (privacy)
+- #258 → `27d45c027`
+
+### Queue
+259 231 221 236 219 214 215 224 199 208 251 252 255 256 260 257 263 265 267 268 262 270 264.
+- #269 goes right after #259 once its iOS check lands.
+- #264 is new: Android sheet errors are inline, with an in-flight guard; idle states are pixel-identical. Bundle
+  `…-sheet-error-feedback-r1`, MANIFEST `60cc03f4…`.
+
+## Resume point history — September 23, 2026, 07:52 UTC (coordinator session `92cc4526`)
 
 This updates the 07:24 block below; read both. The count is **10 closed / 70 partial**.
 
