@@ -31,6 +31,7 @@ const {
 } = require('../utils/moduleSchemas');
 const stripeService = require('../stripe/stripeService');
 const blockService = require('../services/blockService');
+const { escapeIlike } = require('../utils/escapeIlike');
 const { publicPayment, publicGigFee } = require('../stripe/gigPaymentProof');
 const paidGigAcceptance = require('../services/gigPaymentAcceptance');
 const gigStop = require('../services/gigStopService');
@@ -2139,8 +2140,8 @@ router.get('/search', verifyToken, async (req, res) => {
     const tokens = normalizedQuery.split(/\s+/).filter(Boolean).slice(0, 6);
     const primaryToken = tokens[0] || normalizedQuery;
 
-    const fullSearchTerm = `%${queryText}%`;
-    const broadSearchTerm = `%${primaryToken}%`;
+    const fullSearchTerm = `%${escapeIlike(queryText)}%`;
+    const broadSearchTerm = `%${escapeIlike(primaryToken)}%`;
     const candidateLimit = Math.min(Math.max((safeOffset + safeLimit) * 8, 80), 400);
 
     // Build base query
@@ -2708,7 +2709,8 @@ router.get('/', optionalAuth, async (req, res) => {
     // Search filter (non-spatial path)
     const searchTerm = (search || '').trim();
     if (searchTerm) {
-      query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+      const escapedSearch = escapeIlike(searchTerm);
+      query = query.or(`title.ilike.%${escapedSearch}%,description.ilike.%${escapedSearch}%`);
     }
 
     // Deadline filter (non-spatial path)
