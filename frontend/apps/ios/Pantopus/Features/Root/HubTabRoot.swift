@@ -2843,9 +2843,10 @@ public struct HubTabRoot: View {
             MailboxMapView { pop() }
         case .vacationHold:
             VacationHoldView(
-                viewModel: VacationHoldViewModel {
-                    pop()
-                }
+                // Labelled: an unlabelled trailing closure matched the last
+                // parameter (onPickToDate), so To closed the screen and Back did nothing.
+                // swiftlint:disable:next trailing_closure
+                viewModel: VacationHoldViewModel(onBack: { pop() })
             )
         case let .mailDay(variant):
             MailDayView(viewModel: MailDayViewModel(variant: variant)) {

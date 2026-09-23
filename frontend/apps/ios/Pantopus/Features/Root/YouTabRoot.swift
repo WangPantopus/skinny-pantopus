@@ -1035,9 +1035,10 @@ public struct YouTabRoot: View {
             )
         case .vacationHold:
             VacationHoldView(
-                viewModel: VacationHoldViewModel {
-                    Task { @MainActor in pop() }
-                }
+                // Labelled: an unlabelled trailing closure matched the last
+                // parameter (onPickToDate), so To closed the screen and Back did nothing.
+                // swiftlint:disable:next trailing_closure
+                viewModel: VacationHoldViewModel(onBack: { Task { @MainActor in pop() } })
             )
         case let .mailItemDetail(mailId):
             // T6.5b (P20) — Generic A17.1 mail detail. P21–P23 will
