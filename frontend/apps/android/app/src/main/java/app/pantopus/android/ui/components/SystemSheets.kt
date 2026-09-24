@@ -45,8 +45,7 @@ object InviteLinks {
     const val DOWNLOAD_URL = "https://pantopus.app"
 
     /** The existing public train page, using this build's web origin. */
-    fun supportTrainUrl(trainId: String): String =
-        BuildConfig.PANTOPUS_WEB_BASE_URL.trimEnd('/') + "/support-trains/${Uri.encode(trainId)}"
+    fun supportTrainUrl(trainId: String): String = BuildConfig.PANTOPUS_WEB_BASE_URL.trimEnd('/') + "/support-trains/${Uri.encode(trainId)}"
 
     const val INVITE_MESSAGE =
         "Join me on Pantopus — your neighborhood for trusted home help, " +
