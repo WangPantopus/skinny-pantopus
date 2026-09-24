@@ -11,6 +11,7 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const notificationService = require('../notificationService');
 const { PAYMENT_STATES } = require('../../stripe/paymentStateMachine');
+const stripeService = require('../../stripe/stripeService');
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ async function buyerCheckoutSummary({ offer, listing, buyerId }) {
   if (offer.seller_id !== listing.user_id || !['active', 'pending_pickup'].includes(listing.status)) return unavailable;
   const metadata = { type: 'listing_offer_checkout', listing_id: offer.listing_id, offer_id: offer.id };
   const { data, error } = await supabaseAdmin.from('Payment')
-    .select('payer_id, payee_id, amount_total, payment_status, stripe_payment_intent_id, metadata')
+    .select('payment_type, gig_id, payer_id, payee_id, amount_total, currency, payment_status, stripe_payment_intent_id, stripe_customer_id, metadata')
     .eq('payment_type', 'gig_payment').is('gig_id', null).contains('metadata', metadata)
     .order('created_at', { ascending: false }).limit(10);
   if (error) {
@@ -89,7 +90,20 @@ async function buyerCheckoutSummary({ offer, listing, buyerId }) {
   const summary = (state, canContinue = false) => ({ state, can_continue: canContinue, payment_status: status });
   if (status === PAYMENT_STATES.AUTHORIZATION_FAILED) return summary('retry', true);
   if ([PAYMENT_STATES.AUTHORIZE_PENDING, 'pending', 'requires_payment_method', 'requires_confirmation'].includes(status)) {
-    return payment.stripe_payment_intent_id ? summary('pending', true) : unavailable;
+    if (!payment.stripe_payment_intent_id) return unavailable;
+    try {
+      const intent = await stripeService.readListingCheckoutIntent(payment);
+      if (['requires_payment_method', 'requires_confirmation', 'requires_action'].includes(intent.status)) {
+        return summary('pending', true);
+      }
+      if (intent.status === 'requires_capture') return summary('authorized');
+      // A provider result cannot establish recorded settlement. Wait for the
+      // existing webhook before projecting a durable paid state.
+      if (['processing', 'succeeded'].includes(intent.status)) return summary('processing');
+    } catch (_error) {
+      logger.warn('Could not verify listing checkout state', { offerId: offer.id });
+    }
+    return unavailable;
   }
   if (status === PAYMENT_STATES.AUTHORIZED) return summary('authorized');
   if ([PAYMENT_STATES.CAPTURE_PENDING, 'processing'].includes(status)) return summary('processing');

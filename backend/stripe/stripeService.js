@@ -461,6 +461,21 @@ class StripeService {
     return paymentIntent.client_secret;
   }
 
+  // Read-only proof for an existing listing checkout. Webhooks remain the
+  // authority for persisted payment transitions and authorization deadlines.
+  async readListingCheckoutIntent(payment) {
+    const metadata = payment?.metadata;
+    if (payment?.payment_type !== 'gig_payment' || payment.gig_id
+        || metadata?.type !== 'listing_offer_checkout' || !metadata.listing_id || !metadata.offer_id
+        || !payment.stripe_payment_intent_id || !payment.stripe_customer_id
+        || !Number.isSafeInteger(payment.amount_total) || payment.amount_total < 50
+        || String(payment.currency).toLowerCase() !== 'usd') throw conflict();
+    const intent = assertIntentBinding(payment, await stripe.paymentIntents.retrieve(payment.stripe_payment_intent_id));
+    if (['type', 'listing_id', 'offer_id'].some(key => intent.metadata?.[key] !== metadata[key])) throw conflict();
+    if (intent.status === 'requires_capture') assertAuthorizedIntent(payment, intent);
+    return intent;
+  }
+
   /**
    * Best-effort reconciliation for local/dev environments where webhook
    * delivery may be delayed. If Stripe already shows manual-capture auth
