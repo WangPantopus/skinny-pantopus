@@ -13,6 +13,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.data.api.models.feed.FeedPost
+import app.pantopus.android.data.api.models.location.ViewingLocationDto
 import app.pantopus.android.data.api.models.sports.ActiveSportsEventDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -44,6 +45,7 @@ private data class FeedArea(
     val latitude: Double?,
     val longitude: Double?,
     val radiusMiles: Double? = null,
+    val viewingLocation: ViewingLocationDto? = null,
 )
 
 /** Render state for the Pulse feed screen. */
@@ -301,6 +303,9 @@ class PulseFeedViewModel
         }
 
         fun refresh() = fetch(isRefresh = true)
+
+        /** Keep the context bar aligned with the accepted feed request's area. */
+        var onViewingAreaResolved: (ViewingLocationDto) -> Unit = {}
 
         /**
          * Nearby ↔ Connections toggle. Clears the chip filter like RN's
@@ -838,6 +843,7 @@ class PulseFeedViewModel
                 try {
                     val area = resolvedArea()
                     if (generation != fetchGeneration) return@launch
+                    area.viewingLocation?.let(onViewingAreaResolved)
                     val result =
                         repo.feed(
                             surface = _surface.value.backendSurface,
@@ -911,7 +917,7 @@ class PulseFeedViewModel
                     is NetworkResult.Success -> result.data.viewingLocation
                     is NetworkResult.Failure -> throw result.error
                 } ?: return null
-            return FeedArea(chosen.latitude, chosen.longitude, chosen.radiusMiles)
+            return FeedArea(chosen.latitude, chosen.longitude, chosen.radiusMiles, chosen)
         }
 
         private fun explicitCoordinates(): Pair<Double, Double>? {
