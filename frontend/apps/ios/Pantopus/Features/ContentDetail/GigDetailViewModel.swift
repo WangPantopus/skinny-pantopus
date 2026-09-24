@@ -52,6 +52,8 @@ public final class GigDetailViewModel {
 
     /// Raw bids for the owner's interactive bids panel (status open).
     public private(set) var ownerBids: [GigBidDTO] = []
+    public private(set) var ownerBidsReadError: String?
+    public private(set) var ownerBidsRefreshing = false
 
     /// Ranking metadata keyed by bid id, populated only when the owner's
     /// bids came from the v2 scored-offers endpoint
@@ -386,8 +388,15 @@ public final class GigDetailViewModel {
         await fetch(silently: true, whileCurrent: whileCurrent)
     }
 
+    public func retryOwnerBids() async {
+        guard !ownerBidsRefreshing else { return }
+        await refreshSilently()
+    }
+
     private func fetch(silently: Bool, whileCurrent: () -> Bool = { true }) async {
         guard whileCurrent() else { return }
+        ownerBidsRefreshing = true
+        defer { ownerBidsRefreshing = false }
         do {
             let detail: GigDetailResponse = try await api.request(GigsEndpoints.detail(id: gigId))
             guard whileCurrent() else { return }
@@ -419,6 +428,7 @@ public final class GigDetailViewModel {
                 bids = await fetchOwnerBids(gig: detail.gig)
             } else {
                 offerRankings = [:]
+                ownerBidsReadError = nil
             }
             guard whileCurrent() else { return }
             ownerBids = viewerIsOwner ? bids : []
@@ -438,7 +448,8 @@ public final class GigDetailViewModel {
                 viewerUserId: currentUserId,
                 canInstantAccept: canInstantAccept,
                 suppressBidsModule: Self.ownerPanelHandlesBids(gig: detail.gig, viewerIsOwner: viewerIsOwner),
-                viewerCanUpdateBid: viewerCanEditBid
+                viewerCanUpdateBid: viewerCanEditBid,
+                ownerBidsUnavailable: viewerIsOwner && ownerBidsReadError != nil && bids.isEmpty
             ))
             await loadQuestions(whileCurrent: whileCurrent)
             guard whileCurrent() else { return }
@@ -457,7 +468,8 @@ public final class GigDetailViewModel {
                     viewerUserId: currentUserId,
                     canInstantAccept: canInstantAccept,
                     suppressBidsModule: Self.ownerPanelHandlesBids(gig: detail.gig, viewerIsOwner: viewerIsOwner),
-                    viewerCanUpdateBid: viewerCanEditBid
+                    viewerCanUpdateBid: viewerCanEditBid,
+                    ownerBidsUnavailable: viewerIsOwner && ownerBidsReadError != nil && bids.isEmpty
                 ))
             }
             await loadLifecycleExtras(gig: detail.gig, whileCurrent: whileCurrent)
@@ -505,12 +517,15 @@ public final class GigDetailViewModel {
                     )
                 }
             )
+            ownerBidsReadError = nil
             return scored.offers.map(\.asBid)
         }
-        offerRankings = [:]
         guard let bidsResponse: GigBidsResponse = try? await api.request(GigsEndpoints.bids(gigId: gigId)) else {
-            return []
+            ownerBidsReadError = "Couldn't load bids. Please try again."
+            return ownerBids
         }
+        offerRankings = [:]
+        ownerBidsReadError = nil
         return bidsResponse.bids
     }
 
@@ -2300,7 +2315,8 @@ extension GigDetailViewModel {
         viewerUserId: String? = nil,
         canInstantAccept: Bool = false,
         suppressBidsModule: Bool = false,
-        viewerCanUpdateBid: Bool = false
+        viewerCanUpdateBid: Bool = false,
+        ownerBidsUnavailable: Bool = false
     ) -> ContentDetailContent {
         let content = shouldProjectTaskV2(gig: gig)
             ? projectTaskV2(
@@ -2324,7 +2340,12 @@ extension GigDetailViewModel {
         return ContentDetailContent(
             kind: content.kind,
             cover: content.cover,
-            statusPill: currentStatus(gig, fallback: content.statusPill),
+            statusPill: currentStatus(
+                gig,
+                fallback: ownerBidsUnavailable
+                    ? ContentDetailPill(label: "Open · Bids unavailable", icon: .circle, tone: .warning)
+                    : content.statusPill
+            ),
             hero: content.hero,
             statStrip: content.statStrip,
             counterparty: content.counterparty,
