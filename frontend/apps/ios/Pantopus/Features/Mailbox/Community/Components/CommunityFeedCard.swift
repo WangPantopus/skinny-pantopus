@@ -106,7 +106,6 @@ struct CommunityFeedCard: View {
     private var statsRow: some View {
         HStack(spacing: Spacing.s3) {
             stat(icon: .eye, text: "\(item.views)")
-            stat(icon: .users, text: "\(item.neighborsReceived) reached")
             if item.rsvpCount > 0 {
                 stat(icon: .calendarCheck, text: "\(item.rsvpCount) RSVP")
             }

@@ -302,7 +302,8 @@ class ContentDetailProjectionTest {
         assertTrue(content.hero.priceStrikethrough)
         assertEquals("Seller", content.dock.secondary?.label)
         assertEquals("Find similar", content.dock.primary.label)
-        assertTrue(content.modules.any { it is ContentDetailModule.Callout && it.id == "alert-similar" })
+        // No "Alert me when similar appears": there is nothing behind its "Set".
+        assertFalse(content.modules.any { it is ContentDetailModule.Callout && it.id == "alert-similar" })
     }
 
     @Test fun listing_free_renders_free_price() {

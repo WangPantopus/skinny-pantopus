@@ -54,6 +54,7 @@ class VacationHoldNetworkTest {
         id: String = "hold_1",
     ) = VacationHoldDto(
         id = id,
+        homeId = "home_1",
         status = status,
         startDate = "2026-12-02",
         endDate = "2026-12-12",
@@ -98,9 +99,12 @@ class VacationHoldNetworkTest {
             coEvery { homesRepository.myHomes() } returns NetworkResult.Success(homesResponse)
             coEvery { repository.startVacation(any()) } returns
                 NetworkResult.Success(StartVacationResponse(hold = holdDto("active")))
+            coEvery { repository.vacationStatus() } returns
+                NetworkResult.Success(VacationStatusResponse())
             val vm = VacationHoldViewModel(repository, homesRepository)
 
-            // Initial mode is the scheduling composer; Save persists it.
+            // A successful initial read permits saving a new date range.
+            vm.load()
             vm.tapTrailingAction()
 
             coVerify { repository.startVacation(match<StartVacationRequest> { it.homeId == "home_1" }) }
@@ -110,8 +114,11 @@ class VacationHoldNetworkTest {
     @Test
     fun endHoldEarly_callsCancel_andReturnsToScheduling() =
         runTest {
-            coEvery { repository.vacationStatus() } returns
-                NetworkResult.Success(VacationStatusResponse(active = holdDto("active", "hold_42"), upcoming = null))
+            coEvery { repository.vacationStatus() } returnsMany
+                listOf(
+                    NetworkResult.Success(VacationStatusResponse(active = holdDto("active", "hold_42"))),
+                    NetworkResult.Success(VacationStatusResponse()),
+                )
             coEvery { repository.cancelVacation("hold_42") } returns
                 NetworkResult.Success(CancelVacationResponse(message = "Vacation hold cancelled"))
             val vm = VacationHoldViewModel(repository, homesRepository)
@@ -153,7 +160,7 @@ class VacationHoldNetworkTest {
         }
 
     @Test
-    fun saveAfterEdit_cancelsTheOldHoldBeforeStartingTheNewOne() =
+    fun saveAfterEdit_sendsExistingHoldWithoutCancelling() =
         runTest {
             val home = mockk<MyHome>()
             every { home.id } returns "home_1"
@@ -165,20 +172,20 @@ class VacationHoldNetworkTest {
             coEvery { repository.cancelVacation("hold_42") } returns
                 NetworkResult.Success(CancelVacationResponse(message = "Vacation hold cancelled"))
             coEvery { repository.startVacation(any()) } returns
-                NetworkResult.Success(StartVacationResponse(hold = holdDto("active", "hold_43")))
+                NetworkResult.Success(StartVacationResponse(hold = holdDto("active", "hold_42")))
             val vm = VacationHoldViewModel(repository, homesRepository)
             vm.load()
 
             vm.tapTrailingAction() // Edit → composer seeded from the live hold
-            vm.tapTrailingAction() // Save → retire the old hold, then start
+            vm.tapTrailingAction() // Save → update the same actor-owned record
 
-            coVerify(exactly = 1) { repository.cancelVacation("hold_42") }
-            coVerify(exactly = 1) { repository.startVacation(any()) }
+            coVerify(exactly = 0) { repository.cancelVacation("hold_42") }
+            coVerify(exactly = 1) { repository.startVacation(match { it.holdId == "hold_42" && it.homeId == "home_1" }) }
             assertTrue(vm.mode.value is VacationHoldMode.Active)
         }
 
     @Test
-    fun saveAfterEdit_whenCancelFails_doesNotStartASecondHold() =
+    fun saveAfterEdit_whenWriteFails_keepsComposer() =
         runTest {
             val home = mockk<MyHome>()
             every { home.id } returns "home_1"
@@ -187,7 +194,7 @@ class VacationHoldNetworkTest {
             coEvery { homesRepository.myHomes() } returns NetworkResult.Success(homesResponse)
             coEvery { repository.vacationStatus() } returns
                 NetworkResult.Success(VacationStatusResponse(active = holdDto("active", "hold_42"), upcoming = null))
-            coEvery { repository.cancelVacation("hold_42") } returns
+            coEvery { repository.startVacation(any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
             val vm = VacationHoldViewModel(repository, homesRepository)
             vm.load()
@@ -195,11 +202,12 @@ class VacationHoldNetworkTest {
             vm.tapTrailingAction() // Edit
             vm.tapTrailingAction() // Save
 
-            coVerify(exactly = 0) { repository.startVacation(any()) }
+            coVerify(exactly = 1) { repository.startVacation(match { it.holdId == "hold_42" }) }
+            assertTrue(vm.mode.value is VacationHoldMode.Scheduling)
         }
 
     @Test
-    fun load_failure_fallsBackToScheduling() =
+    fun load_failure_blocksSavingUntilRetry() =
         runTest {
             coEvery { repository.vacationStatus() } returns
                 NetworkResult.Failure(NetworkError.Server(500, null))
@@ -207,6 +215,7 @@ class VacationHoldNetworkTest {
 
             vm.load()
 
-            assertTrue(vm.mode.value is VacationHoldMode.Scheduling)
+            assertTrue(vm.loadError.value != null)
+            assertTrue(!vm.trailingActionEnabled)
         }
 }

@@ -377,7 +377,6 @@ public final class HomeSettingsViewModel: GroupedListDataSource {
     private func accessGroup() -> GroupedListGroup {
         let rows: [GroupedListRow] = [
             GroupedListRow(id: "accessCodes", label: "Access codes", subtext: subtexts.accessCodes, control: .chevron),
-            GroupedListRow(id: "trustedNeighbors", label: "Trusted neighbors", subtext: subtexts.trustedNeighbors, control: .chevron),
             GroupedListRow(id: "privacy", label: "Privacy", subtext: subtexts.privacy, control: .chevron),
             GroupedListRow(
                 id: "ownershipSecurity",

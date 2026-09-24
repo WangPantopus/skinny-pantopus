@@ -53,6 +53,11 @@ final class ExploreMapMappingTests: XCTestCase {
         SequencedURLProtocol.reset()
         defer { SequencedURLProtocol.reset() }
         let session = SequencedURLProtocol.makeSession(routeResponses: [
+            "/api/location": [
+                .status(200, body: """
+                {"viewingLocation":null,"recentLocations":[],"homes":[],"businessLocations":[]}
+                """)
+            ],
             "/api/gigs/in-bounds": [
                 .status(200, body: """
                 {"gigs":[{"id":"g1","title":"Mow lawn","price":40,"status":"open",\
@@ -88,6 +93,11 @@ final class ExploreMapMappingTests: XCTestCase {
         SequencedURLProtocol.reset()
         defer { SequencedURLProtocol.reset() }
         let session = SequencedURLProtocol.makeSession(routeResponses: [
+            "/api/location": [
+                .status(200, body: """
+                {"viewingLocation":null,"recentLocations":[],"homes":[],"businessLocations":[]}
+                """)
+            ],
             "/api/gigs/in-bounds": [
                 .status(500, body: "{\"error\":\"boom\"}")
             ],
@@ -109,6 +119,11 @@ final class ExploreMapMappingTests: XCTestCase {
         SequencedURLProtocol.reset()
         defer { SequencedURLProtocol.reset() }
         let session = SequencedURLProtocol.makeSession(routeResponses: [
+            "/api/location": [
+                .status(200, body: """
+                {"viewingLocation":null,"recentLocations":[],"homes":[],"businessLocations":[]}
+                """)
+            ],
             "/api/gigs/in-bounds": [
                 .status(200, body: """
                 {"gigs":[{"id":"g1","title":"Mow lawn","price":40,"status":"open",\

@@ -28,7 +28,7 @@ public struct ListingOffersView: View {
                     target: target,
                     onCancel: { viewModel.cancelCounter() },
                     onConfirm: { amount, message in
-                        Task { await viewModel.confirmCounter(amount: amount, message: message) }
+                        Task { await viewModel.confirmCounter(amount: amount, message: message, target: target) }
                     }
                 )
                 .presentationDetents([.medium])
@@ -43,6 +43,42 @@ public struct ListingOffersView: View {
                 )
                 .presentationDetents([.medium, .large])
             }
+            .confirmationDialog(
+                declineTitle,
+                isPresented: Binding(
+                    get: { viewModel.declineTarget != nil },
+                    set: { if !$0 { viewModel.cancelDecline() } }
+                ),
+                titleVisibility: .visible,
+                presenting: viewModel.declineTarget
+            ) { target in
+                Button("Decline", role: .destructive) {
+                    Task { await viewModel.confirmDecline(target) }
+                }
+                Button("Keep offer", role: .cancel) { viewModel.cancelDecline() }
+            } message: { _ in
+                Text("A declined offer can't be reopened.")
+            }
+            .overlay(alignment: .bottom) { errorToast }
+    }
+
+    private var declineTitle: String {
+        guard let target = viewModel.declineTarget else { return "Decline this offer?" }
+        return "Decline \(ListingOffersViewModel.displayName(for: target.buyer))'s offer?"
+    }
+
+    /// A seller action the server refused, with its reason.
+    @ViewBuilder private var errorToast: some View {
+        if let message = viewModel.actionError {
+            ToastView(message: ToastMessage(text: message, kind: .error))
+                .padding(.bottom, Spacing.s8)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .task(id: message) {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    viewModel.actionError = nil
+                }
+                .accessibilityIdentifier("listing-offers-error-toast")
+        }
     }
 }
 

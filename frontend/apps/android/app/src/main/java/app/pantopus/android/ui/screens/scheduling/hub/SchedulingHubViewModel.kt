@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.scheduling.hub
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.scheduling.AvailabilityRuleDto
@@ -10,10 +11,12 @@ import app.pantopus.android.data.api.models.scheduling.BookingPageDto
 import app.pantopus.android.data.api.models.scheduling.BookingSummaryResponse
 import app.pantopus.android.data.api.models.scheduling.ConnectedCalendarDto
 import app.pantopus.android.data.api.models.scheduling.EventTypeDto
+import app.pantopus.android.data.api.models.scheduling.SlotDto
 import app.pantopus.android.data.api.models.scheduling.UpdateBookingPageRequest
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.businesses.BusinessTeamRepository
+import app.pantopus.android.data.businesses.BusinessesRepository
+import app.pantopus.android.data.homes.HomeAdminRepository
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.scheduling.SchedulingError
@@ -30,19 +33,22 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 import javax.inject.Inject
 
 /**
  * A1 Scheduling Hub. One owner-polymorphic front door: the pillar pill row
  * re-scopes the whole screen (Personal default; Home/Business resolve the
- * owner id from [HomesRepository]/[AuthRepository] since the A0 route is
+ * owner id from [HomesRepository]/[BusinessesRepository] since the A0 route is
  * arg-less), the booking-link card is the hero, a master toggle pauses new
  * bookings, and the agenda + manage rows route onward via [onNavigate].
  */
@@ -54,10 +60,24 @@ class SchedulingHubViewModel
         private val homes: HomesRepository,
         private val homeMembers: HomeMembersRepository,
         private val businessTeam: BusinessTeamRepository,
-        private val auth: AuthRepository,
+        private val businesses: BusinessesRepository,
         private val errors: SchedulingErrorDecoder,
+        private val homeAdmin: HomeAdminRepository,
+        savedStateHandle: SavedStateHandle = SavedStateHandle(),
     ) : ViewModel() {
-        private val _pillar = MutableStateFlow(SchedulingPillar.Personal)
+        private var owner: SchedulingOwner =
+            SchedulingOwner.fromRoute(
+                savedStateHandle[SchedulingRoutes.ARG_OWNER_KIND],
+                savedStateHandle[SchedulingRoutes.ARG_OWNER_ID],
+            )
+        private val _pillar =
+            MutableStateFlow(
+                when (owner) {
+                    is SchedulingOwner.Home -> SchedulingPillar.Home
+                    is SchedulingOwner.Business -> SchedulingPillar.Business
+                    SchedulingOwner.Personal -> SchedulingPillar.Personal
+                },
+            )
         val pillar: StateFlow<SchedulingPillar> = _pillar.asStateFlow()
 
         private val _state = MutableStateFlow<SchedulingHubUiState>(SchedulingHubUiState.Loading)
@@ -71,10 +91,18 @@ class SchedulingHubViewModel
         private val _copied = MutableStateFlow(false)
         val copied: StateFlow<Boolean> = _copied.asStateFlow()
 
-        private var owner: SchedulingOwner = SchedulingOwner.Personal
+        /**
+         * The Business pill shows only for a user who runs a business: the first
+         * one from `GET /api/businesses/my-businesses`, the source web's hub uses.
+         */
+        private val _hasBusiness = MutableStateFlow(false)
+        val hasBusiness: StateFlow<Boolean> = _hasBusiness.asStateFlow()
+        private var businessOwnerId: String? = null
+
         private var started = false
         private var fetchJob: Job? = null
         private var pauseJob: Job? = null
+        private var ownerGeneration = 0
         private var summaryJob: Job? = null
 
         // Cached for actions that don't re-fetch the whole screen.
@@ -92,21 +120,29 @@ class SchedulingHubViewModel
         }
 
         fun load() {
+            invalidatePause()
             fetchJob?.cancel()
             fetchJob =
                 viewModelScope.launch {
                     _state.value = SchedulingHubUiState.Loading
+                    val business = async { resolveFirstBusinessId() }
                     fetch()
+                    business.await()?.let {
+                        businessOwnerId = it
+                        _hasBusiness.value = true
+                    }
                 }
         }
 
         fun refresh() {
+            invalidatePause()
             fetchJob?.cancel()
             fetchJob = viewModelScope.launch { fetch() }
         }
 
         fun selectPillar(target: SchedulingPillar) {
             if (target == _pillar.value) return
+            invalidatePause()
             _pillar.value = target
             fetchJob?.cancel()
             fetchJob =
@@ -137,24 +173,48 @@ class SchedulingHubViewModel
                         is NetworkResult.Success -> r.data.sharedHomes.firstOrNull()?.id?.let { SchedulingOwner.Home(it) }
                         is NetworkResult.Failure -> null
                     }
+                // A business the user can manage, never the signed-in user's own id.
                 SchedulingPillar.Business ->
-                    (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id?.let { SchedulingOwner.Business(it) }
+                    (businessOwnerId ?: resolveFirstBusinessId())?.let {
+                        businessOwnerId = it
+                        SchedulingOwner.Business(it)
+                    }
             }
 
-        @Suppress("LongMethod", "CyclomaticComplexMethod")
+        private suspend fun resolveFirstBusinessId(): String? =
+            businesses.myBusinesses().dataOrNull()?.businesses?.firstOrNull()?.businessUserId?.takeIf { it.isNotBlank() }
+
+        // Early exits keep failed reads and obsolete owners from falling through to an empty or stale hub.
+        @Suppress("LongMethod", "CyclomaticComplexMethod", "ReturnCount")
         private suspend fun fetch() {
-            canEdit = true
-            val pageResult = repo.getBookingPage(owner)
+            canEdit = false
+            val fetchOwner = owner
+            val pageResult = repo.getBookingPage(fetchOwner)
             val loadedPage =
                 when (pageResult) {
                     is NetworkResult.Success -> pageResult.data.page
                     is NetworkResult.Failure -> {
                         val decoded = errors.decode(pageResult.error)
                         canEdit = decoded !is SchedulingError.Secret
-                        _state.value = SchedulingHubUiState.Error(decoded.hubMessage())
+                        _state.value = SchedulingHubUiState.Error(decoded.hubMessage(), accessDenied = !canEdit)
                         return
                     }
                 }
+            if (owner != fetchOwner) return
+            canEdit =
+                when (fetchOwner) {
+                    is SchedulingOwner.Home ->
+                        when (val access = homeAdmin.myAccess(fetchOwner.homeId)) {
+                            is NetworkResult.Success -> access.data.can("calendar.edit")
+                            is NetworkResult.Failure -> {
+                                if (owner != fetchOwner) return
+                                _state.value = SchedulingHubUiState.Error("Couldn't check your Home scheduling access. Try again.")
+                                return
+                            }
+                        }
+                    else -> true
+                }
+            if (owner != fetchOwner) return
             page = loadedPage
 
             val pillar = _pillar.value
@@ -164,10 +224,10 @@ class SchedulingHubViewModel
             // pillar switch / refresh that cancels fetchJob cancels them too.
             val data =
                 coroutineScope {
-                    val eventTypesDef = async { repo.getEventTypes(owner).dataOrNull()?.eventTypes.orEmpty() }
+                    val eventTypesDef = async { repo.getEventTypes(owner).dataOrNull()?.eventTypes }
                     val summaryDef = async { repo.getBookingsSummary(owner) }
-                    val upcomingDef = async { repo.getBookings(owner, status = "upcoming").dataOrNull()?.bookings.orEmpty() }
-                    val pendingDef = async { repo.getBookings(owner, status = "pending").dataOrNull()?.bookings.orEmpty() }
+                    val upcomingDef = async { repo.getBookings(owner, status = "upcoming").dataOrNull()?.bookings }
+                    val pendingDef = async { repo.getBookings(owner, status = "pending").dataOrNull()?.bookings }
                     val availabilityDef = async { if (isPersonal) repo.getAvailability().dataOrNull()?.rules.orEmpty() else emptyList() }
                     val calendarsDef =
                         async { if (isPersonal) repo.getConnectedCalendars().dataOrNull()?.calendars.orEmpty() else emptyList() }
@@ -183,10 +243,18 @@ class SchedulingHubViewModel
                     )
                 }
             val eventTypes = data.eventTypes
-            this.eventTypes = eventTypes
-            val summaryResult = data.summaryResult
+            if (eventTypes == null) {
+                _state.value = SchedulingHubUiState.Error("Couldn't load event types. Try again.")
+                return
+            }
             val upcoming = data.upcoming
             val pending = data.pending
+            if (upcoming == null || pending == null) {
+                _state.value = SchedulingHubUiState.Error("Couldn't load your bookings. Try again.")
+                return
+            }
+            this.eventTypes = eventTypes
+            val summaryResult = data.summaryResult
             val availability = data.availability
             val calendars = data.calendars
 
@@ -218,6 +286,32 @@ class SchedulingHubViewModel
                     manageRows = buildManageRows(isPersonal, eventTypes, availability, calendars, pending),
                     memberInitials = data.memberNames.values.sorted().take(2).map(::initials),
                 )
+            refreshPreviewTimes(loadedPage, eventTypes, zone)
+        }
+
+        /**
+         * The link preview's chips: the first day's next open start times (up to
+         * three) of the first active event type, from the public slots read over
+         * the next 14 days in the page's zone. Empty when none; null when unread.
+         */
+        private suspend fun refreshPreviewTimes(
+            page: BookingPageDto,
+            eventTypes: List<EventTypeDto>,
+            zone: ZoneId,
+        ) {
+            val slug = page.slug?.takeIf { it.isNotBlank() }
+            val type = eventTypes.firstOrNull { it.isActive != false }
+            val times: List<String>? =
+                if (slug == null || type == null) {
+                    emptyList()
+                } else {
+                    val today = LocalDate.now(java.time.ZoneOffset.UTC)
+                    repo.publicGetSlots(slug, type.slug, today.toString(), today.plusDays(14).toString(), zone.id)
+                        .dataOrNull()
+                        ?.let { previewTimesFrom(it.slots, zone) }
+                }
+            val live = _state.value as? SchedulingHubUiState.Loaded ?: return
+            _state.value = live.copy(previewTimes = times)
         }
 
         /**
@@ -276,14 +370,29 @@ class SchedulingHubViewModel
                 }
         }
 
+        private fun invalidatePause() {
+            ownerGeneration += 1
+            pauseJob?.cancel()
+            val live = _state.value as? SchedulingHubUiState.Loaded ?: return
+            _state.value = live.copy(pauseError = null)
+        }
+
         fun setPaused(paused: Boolean) {
             if (!canEdit) return
             val current = _state.value as? SchedulingHubUiState.Loaded ?: return
-            _state.value = current.copy(isPaused = paused)
+            val requestOwner = owner
+            val requestPillar = _pillar.value
+            val requestGeneration = ownerGeneration
+            _state.value = current.copy(isPaused = paused, pauseError = null)
             pauseJob?.cancel()
             pauseJob =
                 viewModelScope.launch {
-                    when (val r = repo.updateBookingPage(owner, UpdateBookingPageRequest(isPaused = paused))) {
+                    val r = repo.updateBookingPage(requestOwner, UpdateBookingPageRequest(isPaused = paused))
+                    if (!isActive) return@launch
+                    if (ownerGeneration != requestGeneration || owner != requestOwner || _pillar.value != requestPillar) {
+                        return@launch
+                    }
+                    when (r) {
                         is NetworkResult.Success -> {
                             page = r.data.page
                             val live = _state.value as? SchedulingHubUiState.Loaded ?: return@launch
@@ -294,7 +403,15 @@ class SchedulingHubViewModel
                             if (decoded is SchedulingError.Secret) canEdit = false
                             val live = _state.value as? SchedulingHubUiState.Loaded ?: return@launch
                             // Only revert if our optimistic value still stands (no newer toggle won the race).
-                            if (live.isPaused == paused) _state.value = live.copy(isPaused = !paused, canEdit = canEdit)
+                            if (live.isPaused == paused) {
+                                val message =
+                                    if (decoded is SchedulingError.Secret) {
+                                        "Your access changed. Ask an owner to update bookings."
+                                    } else {
+                                        "Couldn't ${if (paused) "pause" else "resume"} bookings. Try again."
+                                    }
+                                _state.value = live.copy(isPaused = !paused, canEdit = canEdit, pauseError = message)
+                            }
                         }
                     }
                 }
@@ -643,6 +760,18 @@ private fun locationKind(mode: String?): HubBookingKind =
  */
 private fun firstName(name: String): String = name.trim().split(" ").firstOrNull { it.isNotBlank() } ?: name
 
+/** The first day's next open start times, up to three, as short local times in [zone]. */
+private fun previewTimesFrom(
+    slots: List<SlotDto>,
+    zone: ZoneId,
+): List<String> {
+    val now = Instant.now()
+    val future = slots.mapNotNull { runCatching { Instant.parse(it.start) }.getOrNull() }.filter { it.isAfter(now) }
+    val firstDay = future.firstOrNull()?.atZone(zone)?.toLocalDate() ?: return emptyList()
+    val format = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(Locale.getDefault())
+    return future.filter { it.atZone(zone).toLocalDate() == firstDay }.take(3).map { it.atZone(zone).format(format) }
+}
+
 private fun initials(name: String): String {
     val parts = name.trim().split(" ", "@").filter { it.isNotBlank() }
     if (parts.isEmpty()) return "?"
@@ -657,10 +786,10 @@ private fun toneFor(seed: String): HubAvatarTone {
 
 /** Bundle of the hub's parallel reads, awaited together inside a [coroutineScope]. */
 private data class HubFetchData(
-    val eventTypes: List<EventTypeDto>,
+    val eventTypes: List<EventTypeDto>?,
     val summaryResult: NetworkResult<BookingSummaryResponse>,
-    val upcoming: List<BookingDto>,
-    val pending: List<BookingDto>,
+    val upcoming: List<BookingDto>?,
+    val pending: List<BookingDto>?,
     val availability: List<AvailabilityRuleDto>,
     val calendars: List<ConnectedCalendarDto>,
     /** Member user-id → display name for cross-owner host attribution (empty on personal hubs). */

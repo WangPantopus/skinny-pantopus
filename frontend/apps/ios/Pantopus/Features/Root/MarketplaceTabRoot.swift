@@ -132,6 +132,10 @@ public struct MarketplaceTabRoot: View {
                     Task { @MainActor in
                         path.append(.editListing(listingId: dto.id, jumpToStep: nil))
                     }
+                },
+                onFindSimilar: {
+                    // This stack's root is the marketplace.
+                    Task { @MainActor in path.removeAll { _ in true } }
                 }
             )
         case .composeListing:
@@ -162,7 +166,12 @@ public struct MarketplaceTabRoot: View {
                     onOpenBuyer: { buyer in
                         Task { @MainActor in path.append(.publicProfile(userId: buyer.id)) }
                     },
-                    onOpenTransaction: { _ in },
+                    onMessageBuyer: { offer in
+                        guard let chat = ListingOffersViewModel.buyerChat(
+                            for: offer, listingId: listingId, listingTitle: titleHint
+                        ) else { return }
+                        Task { @MainActor in path.append(.chatConversation(chat)) }
+                    },
                     onEditPrice: {
                         Task { @MainActor in
                             path.append(.editListing(listingId: listingId, jumpToStep: .price))

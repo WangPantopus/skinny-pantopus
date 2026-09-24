@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -64,6 +65,7 @@ fun SummaryCard(
     onRetry: () -> Unit,
     onInsights: () -> Unit,
     modifier: Modifier = Modifier,
+    readOnly: Boolean = false,
 ) {
     Column(
         modifier =
@@ -83,8 +85,8 @@ fun SummaryCard(
             SummaryHeader(pillar = pillar, showPeriod = showPeriod)
             Spacer(Modifier.height(Spacing.s3 + 2.dp))
             when (content) {
-                is SummaryCardContent.Data -> SummaryData(content.summary, pillar, onInsights)
-                SummaryCardContent.Empty -> SummaryEmpty(pillar, onShare)
+                is SummaryCardContent.Data -> SummaryData(content.summary, pillar, onInsights, readOnly)
+                SummaryCardContent.Empty -> SummaryEmpty(pillar, onShare, readOnly)
                 SummaryCardContent.Error -> SummaryError(onRetry)
                 SummaryCardContent.Loading -> Unit // handled above
             }
@@ -142,6 +144,7 @@ private fun SummaryData(
     summary: HubSummaryUi,
     pillar: SchedulingPillar,
     onInsights: () -> Unit,
+    readOnly: Boolean,
 ) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s2 + 2.dp)) {
         StatCell(value = summary.bookings.toString(), label = "Bookings", modifier = Modifier.weight(1f))
@@ -151,7 +154,7 @@ private fun SummaryData(
                 value = formatDelta(summary.deltaPct),
                 label = "vs last month",
                 delta = summary.deltaPct,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(IntrinsicSize.Min),
             )
             StatDivider()
         }
@@ -183,6 +186,7 @@ private fun SummaryData(
             }
         }
     }
+    if (readOnly) return
     Spacer(Modifier.height(Spacing.s3))
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
         Row(
@@ -219,7 +223,7 @@ private fun StatCell(
                     tint = color,
                 )
             }
-            Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+            Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = 22.sp, softWrap = delta == null)
         }
         Text(label, color = PantopusColors.appTextSecondary, fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp)
     }
@@ -264,6 +268,7 @@ private fun Sparkline(
 private fun SummaryEmpty(
     pillar: SchedulingPillar,
     onShare: () -> Unit,
+    readOnly: Boolean,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
@@ -275,9 +280,14 @@ private fun SummaryEmpty(
         Spacer(Modifier.width(Spacing.s3))
         Column(Modifier.weight(1f)) {
             Text("No bookings yet", color = PantopusColors.appText, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            Text("Share your link to get your first one.", color = PantopusColors.appTextSecondary, fontSize = 12.5.sp)
+            Text(
+                if (readOnly) "Upcoming bookings will show up here." else "Share your link to get your first one.",
+                color = PantopusColors.appTextSecondary,
+                fontSize = 12.5.sp,
+            )
         }
     }
+    if (readOnly) return
     Spacer(Modifier.height(Spacing.s3))
     Row(
         modifier =

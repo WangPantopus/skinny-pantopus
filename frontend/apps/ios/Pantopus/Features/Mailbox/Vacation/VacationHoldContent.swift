@@ -129,6 +129,7 @@ public struct VacationActiveHold: Sendable, Hashable {
     public let forwarding: VacationForwardingTarget?
     public let emergency: VacationEmergencyContact?
     public let activeSinceLabel: String
+    public let statusLabel: String
 
     public init(
         daysLeft: Int,
@@ -138,7 +139,8 @@ public struct VacationActiveHold: Sendable, Hashable {
         heldItems: [VacationHeldItem],
         forwarding: VacationForwardingTarget?,
         emergency: VacationEmergencyContact?,
-        activeSinceLabel: String
+        activeSinceLabel: String,
+        statusLabel: String = "Current"
     ) {
         self.daysLeft = daysLeft
         self.untilLabel = untilLabel
@@ -148,6 +150,7 @@ public struct VacationActiveHold: Sendable, Hashable {
         self.forwarding = forwarding
         self.emergency = emergency
         self.activeSinceLabel = activeSinceLabel
+        self.statusLabel = statusLabel
     }
 }
 
@@ -196,11 +199,9 @@ public struct VacationScheduleDraft: Sendable, Hashable {
         return max(0, (components.day ?? 0) + 1)
     }
 
-    /// The form is valid when there is at least 1 day of hold and at
-    /// least one scope toggled on (locked civic notices don't count —
-    /// they're delivery, not hold).
+    /// Only the saved date range is editable; handling controls are unavailable.
     public var isValid: Bool {
-        spanDays >= 1 && scopes.contains { $0.isOn && !$0.isLocked }
+        spanDays >= 1
     }
 
     /// Blank composer the live screen opens with when
@@ -220,37 +221,11 @@ public struct VacationScheduleDraft: Sendable, Hashable {
         return VacationScheduleDraft(
             fromDate: from,
             toDate: to,
-            scopes: [
-                VacationHoldScope(
-                    kind: .mail,
-                    label: "Mail & flyers",
-                    sub: "Postal hold via USPS API",
-                    isOn: true
-                ),
-                VacationHoldScope(
-                    kind: .packages,
-                    label: "Packages",
-                    sub: "Carriers hold at neighborhood hub",
-                    isOn: true
-                ),
-                VacationHoldScope(
-                    kind: .marketplacePickups,
-                    label: "Marketplace pickups",
-                    sub: "Buyers see away status",
-                    isOn: true
-                ),
-                VacationHoldScope(
-                    kind: .civic,
-                    label: "Civic notices",
-                    sub: "Permits, voting, service alerts",
-                    isOn: false,
-                    isLocked: true
-                )
-            ],
+            scopes: [],
             forwardingEnabled: false,
             forwarding: nil,
             emergency: nil,
-            footerBlurb: "Applies to your primary home address."
+            footerBlurb: "Dates are saved to your home. Status changes at midnight UTC."
         )
     }
 }

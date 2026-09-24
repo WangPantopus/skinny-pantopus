@@ -48,7 +48,16 @@ class TodayTabViewModel
         fun refresh() {
             _state.value = TodayTabUiState.Loading
             viewModelScope.launch {
-                val id = homeId ?: resolvePrimaryHome()
+                val id =
+                    homeId ?: when (val homes = resolvePrimaryHome()) {
+                        is NetworkResult.Success -> homes.data
+                        is NetworkResult.Failure -> {
+                            // A failed lookup isn't "no place": offer a retry instead of
+                            // sending a resident off to claim an address they already have.
+                            _state.value = TodayTabUiState.Error(homes.error.displayMessage("Couldn't load your place."))
+                            return@launch
+                        }
+                    }
                 if (id == null) {
                     _state.value = TodayTabUiState.NoPlace
                     return@launch
@@ -62,13 +71,14 @@ class TodayTabViewModel
             }
         }
 
-        private suspend fun resolvePrimaryHome(): String? =
+        /** The primary home's id (null when there is none), or the failure. */
+        private suspend fun resolvePrimaryHome(): NetworkResult<String?> =
             when (val result = homesRepository.myHomes()) {
                 is NetworkResult.Success -> {
                     val homes = result.data.sharedHomes
-                    (homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull())?.id
+                    NetworkResult.Success((homes.firstOrNull { it.isPrimaryOwner == true } ?: homes.firstOrNull())?.id)
                 }
-                is NetworkResult.Failure -> null
+                is NetworkResult.Failure -> result
             }
 
         override fun setPickupDay(request: app.pantopus.android.data.api.models.place.SetPickupDayRequest) {

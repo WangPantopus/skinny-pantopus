@@ -75,11 +75,13 @@ struct SetupTopBar: View {
 /// and fills its pill; tapping re-scopes the hub.
 struct SetupIdentityPills: View {
     let active: SchedulingOwner
+    /// The pills to show; the hub drops Business when the user runs none.
+    var choices: [SchedulingPillarChoice] = SchedulingPillarChoice.allCases
     let onSelect: (SchedulingPillarChoice) -> Void
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(SchedulingPillarChoice.allCases) { choice in
+            ForEach(choices) { choice in
                 pill(choice)
             }
         }

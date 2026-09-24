@@ -76,7 +76,7 @@ class ListingOffersViewModelTest {
         vm.bindCallbacks(
             onShareListing = {},
             onOpenBuyer = {},
-            onOpenTransaction = {},
+            onMessageBuyer = {},
             now = { fixedNow },
         )
         return vm
@@ -280,11 +280,13 @@ class ListingOffersViewModelTest {
             vm.load()
             val rows = (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows
             val pending = rows.first { it.id == "o-anika" }
-            assertEquals(2, pending.footer?.actions?.size)
-            assertEquals("Counter", pending.footer!!.actions[0].title)
+            assertEquals(3, pending.footer?.actions?.size)
+            assertEquals("Decline", pending.footer!!.actions[0].title)
             assertEquals(CompactButtonVariant.Ghost, pending.footer!!.actions[0].variant)
-            assertEquals("Accept", pending.footer!!.actions[1].title)
-            assertEquals(CompactButtonVariant.Primary, pending.footer!!.actions[1].variant)
+            assertEquals("Counter", pending.footer!!.actions[1].title)
+            assertEquals(CompactButtonVariant.Ghost, pending.footer!!.actions[1].variant)
+            assertEquals("Accept", pending.footer!!.actions[2].title)
+            assertEquals(CompactButtonVariant.Primary, pending.footer!!.actions[2].variant)
             assertEquals(RowHighlight.Leading, pending.highlight)
         }
 
@@ -299,10 +301,9 @@ class ListingOffersViewModelTest {
             vm.load()
             val rows = (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows
             val countered = rows.first { it.id == "o-marcus" }
-            assertEquals(2, countered.footer?.actions?.size)
-            assertEquals("Withdraw counter", countered.footer!!.actions[0].title)
+            assertEquals(1, countered.footer?.actions?.size)
+            assertEquals("Decline offer", countered.footer!!.actions[0].title)
             assertEquals(CompactButtonVariant.Destructive, countered.footer!!.actions[0].variant)
-            assertEquals("Send counter", countered.footer!!.actions[1].title)
             assertEquals(2, countered.chips?.size)
             assertEquals("Countered", countered.chips!![0].text)
             assertEquals("Your counter $235", countered.chips!![1].text)
@@ -343,7 +344,7 @@ class ListingOffersViewModelTest {
             val rows = (vm.state.value as ListOfRowsUiState.Loaded).sections.first().rows
             val row = rows.first { it.id == "o-done" }
             assertEquals(2, row.footer?.actions?.size)
-            assertEquals("View transaction", row.footer!!.actions[0].title)
+            assertEquals("Message buyer", row.footer!!.actions[0].title)
             assertEquals("Leave a review", row.footer!!.actions[1].title)
         }
 
@@ -436,7 +437,7 @@ class ListingOffersViewModelTest {
             val row = state.sections.first().rows.first { it.id == "o-anika" }
             assertEquals("Accepted", row.chips!![0].text)
             assertEquals(1, row.footer?.actions?.size)
-            assertEquals("View transaction", row.footer!!.actions.first().title)
+            assertEquals("Message buyer", row.footer!!.actions.first().title)
         }
 
     @Test

@@ -82,6 +82,7 @@ data class VacationActiveHold(
     val forwarding: VacationForwardingTarget?,
     val emergency: VacationEmergencyContact?,
     val activeSinceLabel: String,
+    val statusLabel: String = "Current",
 )
 
 /** Mutable scheduling state. */
@@ -105,11 +106,10 @@ data class VacationScheduleDraft(
         }
 
     /**
-     * Form is valid when there is at least 1 day of hold and at least
-     * one un-locked scope is on.
+     * Only the saved date range is editable; handling controls are unavailable.
      */
     val isValid: Boolean
-        get() = spanDays >= 1 && scopes.any { it.isOn && !it.isLocked }
+        get() = spanDays >= 1
 
     companion object {
         /**
@@ -125,38 +125,11 @@ data class VacationScheduleDraft(
             VacationScheduleDraft(
                 fromDate = today,
                 toDate = today.plusDays(DEFAULT_HOLD_DAYS),
-                scopes =
-                    listOf(
-                        VacationHoldScope(
-                            kind = VacationHoldScope.Kind.Mail,
-                            label = "Mail & flyers",
-                            sub = "Postal hold via USPS API",
-                            isOn = true,
-                        ),
-                        VacationHoldScope(
-                            kind = VacationHoldScope.Kind.Packages,
-                            label = "Packages",
-                            sub = "Carriers hold at neighborhood hub",
-                            isOn = true,
-                        ),
-                        VacationHoldScope(
-                            kind = VacationHoldScope.Kind.MarketplacePickups,
-                            label = "Marketplace pickups",
-                            sub = "Buyers see away status",
-                            isOn = true,
-                        ),
-                        VacationHoldScope(
-                            kind = VacationHoldScope.Kind.Civic,
-                            label = "Civic notices",
-                            sub = "Permits, voting, service alerts",
-                            isOn = false,
-                            isLocked = true,
-                        ),
-                    ),
+                scopes = emptyList(),
                 forwardingEnabled = false,
                 forwarding = null,
                 emergency = null,
-                footerBlurb = "Applies to your primary home address.",
+                footerBlurb = "Dates are saved to your home. Status changes at midnight UTC.",
             )
 
         private const val DEFAULT_HOLD_DAYS = 7L

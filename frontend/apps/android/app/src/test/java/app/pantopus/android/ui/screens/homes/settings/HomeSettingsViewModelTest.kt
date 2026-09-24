@@ -148,7 +148,7 @@ class HomeSettingsViewModelTest {
         val byGroup = loadedGroups(vm).associate { it.id to it.rows.map { row -> row.id } }
         assertEquals(listOf("address", "propertyDetails", "photos", "documents"), byGroup["homeIdentity"])
         assertEquals(
-            listOf("accessCodes", "trustedNeighbors", "privacy", "ownershipSecurity"),
+            listOf("accessCodes", "privacy", "ownershipSecurity"),
             byGroup["access"],
         )
         assertEquals(listOf("people", "inviteLink"), byGroup["members"])

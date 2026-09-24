@@ -108,6 +108,7 @@ public struct MeView: View {
             VStack(alignment: .leading, spacing: Spacing.s0) {
                 MeHeader(
                     content: active,
+                    showBusiness: viewModel.showBusiness,
                     onClose: onClose
                 ) { viewModel.selectIdentity($0) }
                 if !active.isUnbound {
@@ -209,6 +210,7 @@ public struct MeView: View {
 
 private struct MeHeader: View {
     let content: MeIdentityContent
+    let showBusiness: Bool
     let onClose: (@MainActor () -> Void)?
     let onSwitch: @MainActor (MeIdentity) -> Void
 
@@ -310,7 +312,7 @@ private struct MeHeader: View {
 
     private var identityPillRow: some View {
         IdentitySwitcherPillRow(
-            options: MeIdentity.allCases.map { identity in
+            options: MeIdentity.allCases.filter { showBusiness || $0 != .business }.map { identity in
                 IdentityOption(
                     id: identity.rawValue,
                     label: identity.label,

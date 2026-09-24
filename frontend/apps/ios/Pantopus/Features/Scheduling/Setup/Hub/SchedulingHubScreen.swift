@@ -33,10 +33,10 @@ struct SchedulingHubScreen: View {
                 // right={info}, mirrored on Android) as a view-only indicator — inert,
                 // since the body already carries the view-only explainer banner.
                 trailingIcon: model.canEdit ? .moreHorizontal : .info,
-                trailingLabel: model.canEdit ? "Scheduling settings" : "View-only access",
+                trailingLabel: model.canEdit ? "Scheduling settings" : "Scheduling access",
                 onTrailing: model.canEdit ? { model.openSettings() } : nil
             )
-            SetupIdentityPills(active: model.owner) { choice in
+            SetupIdentityPills(active: model.owner, choices: model.pillarChoices) { choice in
                 Task { await model.selectPillar(choice) }
             }
             content
@@ -64,7 +64,15 @@ struct SchedulingHubScreen: View {
             SchedulingHubSkeleton(owner: model.owner)
         case .empty:
             ScrollView {
-                HubEmptyState(owner: model.owner) { model.startSetup() }
+                if model.canEdit {
+                    HubEmptyState(owner: model.owner) { model.startSetup() }
+                } else {
+                    viewOnlyBanner
+                    Text("No event types yet. Ask an owner to set up scheduling.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .padding(Spacing.s4)
+                }
             }
             .background(Theme.Color.appBg)
         case .loaded:
@@ -95,19 +103,18 @@ struct SchedulingHubScreen: View {
                         role: model.displayRole,
                         paused: model.isPaused,
                         readOnly: !model.canEdit,
+                        previewTimes: model.previewTimes,
                         onCopy: copyLink,
                         onShare: shareLink
                     )
                     statusRow
                     agenda
                     manageSection
-                    Color.clear.frame(height: model.canEdit ? 96 : Spacing.s6)
+                    Color.clear.frame(height: (model.canEdit ? 96 : Spacing.s6) + (model.pauseError == nil ? 0 : 60))
                 }
             }
             .background(Theme.Color.appBg)
-            if model.canEdit {
-                HubFooterCTA(owner: model.owner, isPaused: model.isPaused, action: footerAction)
-            }
+            statusFooter
         }
     }
 
@@ -123,7 +130,8 @@ struct SchedulingHubScreen: View {
             nameFor: { model.eventTypeName(for: $0) },
             onShare: shareLink,
             onRetry: { Task { await model.retrySummary() } },
-            onInsights: { model.openInsights() }
+            onInsights: { model.openInsights() },
+            readOnly: !model.canEdit
         )
     }
 
@@ -136,7 +144,7 @@ struct SchedulingHubScreen: View {
     @ViewBuilder
     private var statusRow: some View {
         if !model.canEdit {
-            HubReadOnlyStatus(owner: model.owner)
+            HubReadOnlyStatus(owner: model.owner, isPaused: model.isPaused)
         } else if model.isPaused {
             HubPausedBanner { Task { await model.setPaused(false) } }
         } else {
@@ -272,7 +280,8 @@ struct SchedulingHubScreen: View {
                 Circle().fill(Theme.Color.appSurfaceSunken).frame(width: 64, height: 64)
                 Icon(.cloudOff, size: 28, strokeWidth: 1.8, color: Theme.Color.appTextSecondary)
             }
-            Text("Couldn't load scheduling").font(.system(size: 18, weight: .semibold)).foregroundStyle(Theme.Color.appText)
+            Text(model.accessDenied ? "Scheduling access needed" : "Couldn't load scheduling")
+                .font(.system(size: 18, weight: .semibold)).foregroundStyle(Theme.Color.appText)
             Text(message)
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
@@ -421,4 +430,20 @@ private struct HubShareSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_: UIActivityViewController, context _: Context) {}
+}
+
+private extension SchedulingHubScreen {
+    var statusFooter: some View {
+        VStack(spacing: Spacing.s0) {
+            if let message = model.pauseError {
+                ExtrasInlineError(message: message)
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.bottom, Spacing.s2)
+                    .accessibilityIdentifier("schedulingPauseError")
+            }
+            if model.canEdit {
+                HubFooterCTA(owner: model.owner, isPaused: model.isPaused, action: footerAction)
+            }
+        }
+    }
 }
