@@ -112,10 +112,13 @@ async function writeRow(cacheKey, sectionId, payload, ttlMs, fetchedAtIso) {
  * @param {number} params.ttlMs      Freshness budget for this section.
  * @param {function(): Promise<*>} params.fetch  Provider fetch; runs only on miss/expiry.
  * @param {boolean} [params.allowStale=true]     Serve an expired row when `fetch` fails.
+ * @param {number}  [params.maxStaleMs]          Oldest `fetched_at` age a stale row may
+ *                                               have; older rows are not served. Omitted
+ *                                               ⇒ no limit (the long-standing behavior).
  * @returns {Promise<{payload: *, fetchedAt: string|null, hit: boolean, stale: boolean}>}
  * @throws When `fetch` fails and no (allowed) cached row exists.
  */
-async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = true }) {
+async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = true, maxStaleMs }) {
   if (!cacheKey || !sectionId || !Number.isFinite(ttlMs) || typeof fetch !== 'function') {
     throw new Error('placeSectionCache.readThrough: cacheKey, sectionId, ttlMs and fetch are required');
   }
@@ -152,7 +155,9 @@ async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = tru
         cooldown_ms: TIMEOUT_COOLDOWN_MS,
       });
     }
-    if (row && allowStale) {
+    const staleAgeOk = !Number.isFinite(maxStaleMs)
+      || (row && now - Date.parse(row.fetched_at) <= maxStaleMs);
+    if (row && allowStale && staleAgeOk) {
       logger.warn('placeSectionCache: fetch failed — serving stale', {
         cacheKey,
         sectionId,

@@ -18,6 +18,8 @@ const placePreviewService = require('../services/placePreviewService');
 const { foundingSlotsOpen } = require('../services/place/foundingWindow');
 const { recordFunnelEvent, CLIENT_POSTABLE_EVENT_TYPES } = require('../services/funnelEvents');
 const { resolveUsState } = require('../utils/usState');
+const featureFlagService = require('../services/featureFlagService');
+const ballotSummary = require('../services/ballot/summary');
 
 // ============================================================
 // Public Preview Endpoints
@@ -586,6 +588,26 @@ async function buildPlacePreview(place) {
   };
 }
 
+// Ballot P0 teaser (docs/ballot-implementation-plan-2026-09-24.md §5.3).
+// Anonymous, so it follows the flag's GLOBAL switch only. Coordinates only;
+// its geocoder call is live and writes nothing. Degrades to null on the
+// preview's per-section time budget. `undefined` = flag off (key omitted).
+async function ballotTeaserFor(place) {
+  try {
+    const flag = await featureFlagService.getFlag('ballot_p0');
+    if (!flag || !flag.enabled_globally) return undefined;
+    const [teaser] = await placePreviewService.withBudget(
+      async () => [await ballotSummary.teaserForPoint({ lat: place.lat, lng: place.lng, state: place.state })],
+      placePreviewService.sectionBudgetMs(),
+      () => [null],
+    );
+    return teaser || null;
+  } catch (err) {
+    console.warn('[public/place] ballot teaser failed:', err.message);
+    return null;
+  }
+}
+
 router.get('/place', async (req, res) => {
   try {
     // Same reason as /unlisted: a 200 with an ETag and no Cache-Control is
@@ -628,7 +650,13 @@ router.get('/place', async (req, res) => {
       });
     }
 
-    return res.json(await buildPlacePreview(place));
+    // The Ballot teaser rides beside the preview of a typed address only; a
+    // saved place's preview (routes/savedPlaces.js) carries no Ballot.
+    const [preview, ballotTeaser] = await Promise.all([
+      buildPlacePreview(place),
+      ballotTeaserFor(place),
+    ]);
+    return res.json(ballotTeaser !== undefined ? { ...preview, ballot_teaser: ballotTeaser } : preview);
   } catch (err) {
     console.error('[public/place] Error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
