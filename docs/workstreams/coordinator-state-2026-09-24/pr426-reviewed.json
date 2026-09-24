@@ -1,0 +1,20 @@
+{
+  "at": "2026-09-24T09:46:42.519123+00:00",
+  "pr": 426,
+  "head": "ba2098642ecf53a8d1ab0cdff204c0e1625c0144",
+  "base": "91cc3b772300dffca9abae95d96a23394e4744ae",
+  "full6FileDiffReviewed": true,
+  "manifestSHA256": "b7cb1eecb1ee185339e4a6d451cd406a6b8efce24d64064b6189a9c0408c7e24",
+  "filesRehashed": 181,
+  "mismatch": 0,
+  "sourceBindingsChecked": 6,
+  "screensReviewed": [
+    "ios-after-reject-refresh503",
+    "android-final-fallback-retry-after304",
+    "android25-after-review-delivery"
+  ],
+  "cleanup": "Exact4101 removed with25FKzero/full retained fingerprints equal;18132/33 and both devices stopped",
+  "limits": "HTTP304 distinguished, synthetic fixture auth, no physical flash/AI provider/listing publication/money/full-app acceptance",
+  "ci": "pending",
+  "merge": "not queued"
+}

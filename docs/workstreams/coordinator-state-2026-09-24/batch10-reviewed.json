@@ -1,0 +1,102 @@
+{
+  "at": "2026-09-24T09:54:13.755394+00:00",
+  "base": "91cc3b772300dffca9abae95d96a23394e4744ae",
+  "heads": [
+    {
+      "pr": 424,
+      "head": "023880e5ccb81157c0733143049fe0651cbe4d28",
+      "base": "master",
+      "failed": [],
+      "pending": [
+        "ios / Lint (SwiftLint + SwiftFormat)",
+        "ios / Build iOS test bundles",
+        "android / Lint, test, assemble",
+        "android / Instrumented tests (emulator)"
+      ]
+    },
+    {
+      "pr": 423,
+      "head": "7aace33551a0907d356a1afb2b1265eb356568cf",
+      "base": "master",
+      "failed": [],
+      "pending": [
+        "ios / Build iOS test bundles",
+        "android / Lint, test, assemble",
+        "android / Instrumented tests (emulator)"
+      ]
+    },
+    {
+      "pr": 422,
+      "head": "9164158c815e4079f28ac3b483f3546e0592565c",
+      "base": "master",
+      "failed": [],
+      "pending": [
+        "ios / Tests on iPhone 16 Pro",
+        "android / Lint, test, assemble"
+      ]
+    },
+    {
+      "pr": 421,
+      "head": "9d0224ed35a356faf58acd2e371c736e3a98de4c",
+      "base": "master",
+      "failed": [],
+      "pending": [
+        "ios / Tests on iPhone 16",
+        "ios / Tests on iPhone 16 Pro",
+        "ios / Tests on iPhone SE (3rd generation)",
+        "android / Lint, test, assemble",
+        "android / Instrumented tests (emulator)"
+      ]
+    },
+    {
+      "pr": 420,
+      "head": "7cefe476a14b4c247fa97b4fd7f2becf0c617912",
+      "base": "master",
+      "failed": [],
+      "pending": []
+    },
+    {
+      "pr": 417,
+      "head": "62d543f75f9c5ec8e245711486a9a511f1b6154a",
+      "base": "master",
+      "failed": [],
+      "pending": []
+    },
+    {
+      "pr": 411,
+      "head": "670ba0366ff5e10fa1505ca679e462724b34da93",
+      "base": "master",
+      "failed": [],
+      "pending": []
+    }
+  ],
+  "interPRShared": {
+    "frontend/apps/android/app/src/main/java/app/pantopus/android/ui/screens/root/RootTabScreen.kt": [
+      422,
+      421
+    ],
+    "frontend/apps/ios/Pantopus/Features/Root/HubTabRoot.swift": [
+      422,
+      421
+    ],
+    "frontend/apps/ios/Pantopus/Features/Root/YouTabRoot.swift": [
+      422,
+      421
+    ]
+  },
+  "boundary": "Read-only preliminary overlap/CI inventory; no batch tree or merge authorization claim. Hub final PR still pending.",
+  "preliminaryTip": "e1bfa1bcfd1c7cd5b6de569469e44fddb0dd0a39",
+  "allHeadsAncestral": true,
+  "conflicts": [],
+  "combinedSharedReview": "276-line 3-file diff reviewed, plus BookingDetailScreen preserves merged408 notify removal",
+  "swiftLint": "0.63.3 pass two combined shared Swift files",
+  "swiftFormat": "0.61.1 pass two combined shared Swift files",
+  "ciGate": "Original check-candidates2.sh returned READY for all7exactheads at09:53Z; CI OK allsuccess",
+  "tip": "e1bfa1bcfd1c7cd5b6de569469e44fddb0dd0a39",
+  "sharedDiffSHA256": "897594b77d761bb87b3c3e4be415891887caf221d6d3d339a9e5bc17f07267b1",
+  "sourceChanges": "No additional source/fixup; reviewed heads merged unchanged",
+  "branch": "codex/coord-merge-batch-10",
+  "pr": 428,
+  "url": "https://github.com/WangPantopus/skinny-pantopus/pull/428",
+  "queuedAt": "2026-09-24T09:54:49.590403+00:00"
+}

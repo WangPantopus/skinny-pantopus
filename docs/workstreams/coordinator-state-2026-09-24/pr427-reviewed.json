@@ -1,0 +1,25 @@
+{
+  "at": "2026-09-24T10:06:55.511238+00:00",
+  "pr": 427,
+  "head": "5cdcecba697bced63ca956058be1344d75330364",
+  "full4FileDiffReviewed": true,
+  "evidenceFilesRehashed": 78,
+  "mismatch": 0,
+  "seals": [
+    "e27a5f01d6a2f630026563047e57cda2f7223eb730046ffa7914c6ef91c9705c",
+    "5470b53891d8fa40f3f648ad3cc36c2a5ecca7c976908a3a0d143a66457baf00"
+  ],
+  "combinedPreflight": {
+    "at": "2026-09-24T10:05:36.820751+00:00",
+    "basePrivateTip": "03e3a279c76b5f06e308a2a18bf071193e021fea",
+    "head": "5cdcecba697bced63ca956058be1344d75330364",
+    "conflict": "one import block only",
+    "resolution": "retain417 useRef and427 useRouter",
+    "wholeResolvedFileMatchesExercisedRuntime": true,
+    "sha256": "0a5a0487888244cc836cabe38e002776529f5d1231d9a74c4faa19edf8093864",
+    "published": false
+  },
+  "limits": "No message/send/redemption/lifecycle/provider/native acceptance; retained implicit Personal page807 explicitly corrected",
+  "ci": "pending",
+  "merge": "not queued"
+}
