@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-24T05:12:58Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-24T05:28:01Z (active Codex coordinator)
 
-Master `5cf4a26c35f79e04503a2e734ef6a1582e90af24`; original155 remains68 fixed/merged,25 in flight,62 not started; broad80 remains13 closed/67 partial. These are item counts, not app coverage. PR405/a31 green;406/5682,407/fdb64a95,408/28ed reviewed and awaiting exact-head CI;407 correction is four existing assertions only. No batch published/queued. Root actual iOS Pulse area/header/paging and Hub reply-order failures are repaired in frozen96e but not built/verified after. Discover fabricated data and empty Support calendar remain open. Home Android verification/Back passed; iOS pending. Coordinator authorized only a minimal participant booking read contract; existing-file plan, implementation and role/privacy afters still required, see [live hub](workstreams/README.md). Founder§7/A17 reserved; no security audit/new unit tests. Fresh full-app sweep remains ahead.
+Master `5cf4a26c35f79e04503a2e734ef6a1582e90af24`; original155 remains68 fixed/merged,25 in flight,62 not started; broad80 remains13 closed/67 partial, not app coverage. PR405/406/408 green; reviewed407/fdb awaits CI, then fixed four-source batch8. PR397 updated to7fd312fb with sealed actual Android/iOS share/return and iOS Tasks Manage evidence; new CI pending. Root96e iOS app build passed but install/Pulse/Hub afters await Home UI release. Home observed-form Visit repair925088b6 unbuilt; other Place afters continue. Minimal participant booking read and narrow granted-address detail projection approved within existing contracts; final reviews remain. See [live hub](workstreams/README.md) for exact evidence and leases. Empty Support calendar/Discover samples and fresh full-app sweep remain ahead. Founder§7/A17 reserved; no security audit/new unit tests.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 
