@@ -43,6 +43,7 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
 
     private let api: APIClient
     private var isPreview = false
+    private var saveError: String?
 
     /// Source variant for explicit previews and projection fixtures.
     public enum Variant: Sendable, Hashable { case balanced, strict }
@@ -80,6 +81,7 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
 
     public func load() async {
         guard !isPreview else { return }
+        saveError = nil
         state = .loading
         do {
             let response: HomePrivacyResponse = try await api.request(
@@ -101,6 +103,7 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
 
     public func toggleRow(_ rowId: String, isOn: Bool) async {
         guard case .loaded = state, let previous = toggles[rowId] else { return }
+        saveError = nil
         // Optimistic flip.
         toggles[rowId] = isOn
         state = .loaded(groups())
@@ -115,6 +118,8 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
         } catch {
             // Roll back the single key on failure.
             toggles[rowId] = previous
+            let reason = (error as? APIError)?.errorDescription ?? "Please try again."
+            saveError = "Your change wasn't saved. \(reason)"
             state = .loaded(groups())
         }
     }
@@ -130,7 +135,7 @@ public final class HomeSecurityViewModel: GroupedListDataSource {
         GroupedListGroup(
             id: "accessControl",
             overline: "Access control",
-            helper: Self.helperForAccessControl(toggles: toggles),
+            helper: saveError ?? Self.helperForAccessControl(toggles: toggles),
             rows: [
                 toggleRow(id: Toggles.addressPrecision, label: "Address precision", sub: "Street only · hide unit number")
             ]

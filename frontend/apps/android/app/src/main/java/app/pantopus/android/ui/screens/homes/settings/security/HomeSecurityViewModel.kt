@@ -63,10 +63,13 @@ class HomeSecurityViewModel
         private val _toggles: MutableMap<String, Boolean> = HomeSecurityToggles.seed(Variant.Balanced).toMutableMap()
         val toggles: Map<String, Boolean> get() = _toggles
 
+        private var saveError: String? = null
+
         private val _state = MutableStateFlow<GroupedListUiState>(GroupedListUiState.Loading)
         val state: StateFlow<GroupedListUiState> = _state.asStateFlow()
 
         fun load() {
+            saveError = null
             _state.value = GroupedListUiState.Loading
             viewModelScope.launch {
                 when (val result = repository.getPrivacy(homeId)) {
@@ -97,6 +100,7 @@ class HomeSecurityViewModel
         ) {
             if (_state.value !is GroupedListUiState.Loaded || !_toggles.containsKey(rowId)) return
             val previous = _toggles[rowId] ?: return
+            saveError = null
             // Optimistic flip.
             _toggles[rowId] = isOn
             _state.value = GroupedListUiState.Loaded(groups())
@@ -105,6 +109,7 @@ class HomeSecurityViewModel
                 if (result is NetworkResult.Failure) {
                     // Roll back the single key.
                     _toggles[rowId] = previous
+                    saveError = "Your change wasn't saved. ${result.error.displayMessage("Please try again.")}"
                     _state.value = GroupedListUiState.Loaded(groups())
                 }
             }
@@ -148,7 +153,7 @@ class HomeSecurityViewModel
             GroupedListGroup(
                 id = "accessControl",
                 overline = "Access control",
-                helper = HomeSecurityHelpers.forAccessControl(_toggles),
+                helper = saveError ?: HomeSecurityHelpers.forAccessControl(_toggles),
                 rows =
                     listOf(
                         toggleRow(
