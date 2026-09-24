@@ -1,0 +1,37 @@
+{
+  "at": "2026-09-24T07:41:46Z",
+  "base": "fd48ccfd2a4da525c82175cf479889bc785f9fe3",
+  "batchPR": 419,
+  "reviewedHead": "d07663cdc4ce885de0db39481b0104d5af7da83f",
+  "sourceHeads": {
+    "397": "544d1db26ac21d145d67f683234107e7505e90b0",
+    "409": "e426c59986074bf71a9f5aff5850ad011de269ea",
+    "412": "6ae580356b2526e255d252744ffc4bd0b6945d1d",
+    "413": "34f8dbad8ff33d2b272723ba0e409cbe1e388482",
+    "414": "c259c120557285ef2ee514eeb9899290e37251d7",
+    "415": "040131672a5f9b3bc5e8c5a3fba81b687af01966",
+    "416": "828119e579251bf8b51186aa7c370ac964c3cfd2"
+  },
+  "allSourceAncestors": true,
+  "conflicts": [],
+  "sharedBetweenBatchPRs": [],
+  "masterOverlapReviewed": [
+    "RootTabScreen.kt",
+    "HubTabRoot.swift",
+    "TasksTabRoot.swift",
+    "YouTabRoot.swift"
+  ],
+  "newDuplicateDeclarations": [],
+  "swiftLint": "0.63.3 pass, three combined Swift files",
+  "swiftFormat": "0.61.1 pass, three combined Swift files",
+  "diffCheck": "pass",
+  "integrationFixups": [],
+  "realAppEvidence": "Reused exact-head accepted evidence from paused handoff; no new full-app claim",
+  "excluded": [
+    46,
+    411,
+    417,
+    418
+  ],
+  "requiredCombinedCI": "pending"
+}
