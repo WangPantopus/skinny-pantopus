@@ -13,13 +13,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.data.api.models.feed.FeedPost
+import app.pantopus.android.data.api.models.location.ViewingLocationDto
 import app.pantopus.android.data.api.models.sports.ActiveSportsEventDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.feed.FeedActionsRepository
 import app.pantopus.android.data.feed.FeedModerationStore
 import app.pantopus.android.data.location.LocationProvider
+import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
 import app.pantopus.android.data.sports.SportsRepository
@@ -36,6 +39,14 @@ import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
+
+/** Where a feed request looks: coordinates plus the viewing radius, when known. */
+private data class FeedArea(
+    val latitude: Double?,
+    val longitude: Double?,
+    val radiusMiles: Double? = null,
+    val viewingLocation: ViewingLocationDto? = null,
+)
 
 /** Render state for the Pulse feed screen. */
 sealed interface PulseFeedUiState {
@@ -84,6 +95,8 @@ class PulseFeedViewModel
          * RN's `PantopusProvider` (`mutedEntities` + `hiddenPostIds`).
          */
         private val moderation: FeedModerationStore,
+        /** `GET /api/location` — the area chosen in the Nearby context bar. */
+        private val viewingLocation: ViewingLocationRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<PulseFeedUiState>(PulseFeedUiState.Loading)
         val state: StateFlow<PulseFeedUiState> = _state.asStateFlow()
@@ -177,6 +190,8 @@ class PulseFeedViewModel
         /** True while a next-page fetch is in flight (drives the list footer). */
         private val _isLoadingMore = MutableStateFlow(false)
         val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
+        private val _loadMoreError = MutableStateFlow<String?>(null)
+        val loadMoreError: StateFlow<String?> = _loadMoreError.asStateFlow()
 
         /** Client-side search over the loaded pages. */
         private val _searchText = MutableStateFlow("")
@@ -223,7 +238,16 @@ class PulseFeedViewModel
         private var longitude: Double? = null
         private var resolvedLatitude: Double? = null
         private var resolvedLongitude: Double? = null
+
+        /** The area the last first-page fetch used; later pages reuse it. */
+        private var lastArea: FeedArea? = null
         private var loading = false
+
+        /**
+         * Bumped per fetch; only the latest fetch's response is applied, so a
+         * filter tapped while a load is in flight still takes effect.
+         */
+        private var fetchGeneration = 0
 
         /** All pages loaded so far — search filters project from this. */
         private var loadedPosts: List<FeedPost> = emptyList()
@@ -279,6 +303,9 @@ class PulseFeedViewModel
         }
 
         fun refresh() = fetch(isRefresh = true)
+
+        /** Keep the context bar aligned with the accepted feed request's area. */
+        var onViewingAreaResolved: (ViewingLocationDto) -> Unit = {}
 
         /**
          * Nearby ↔ Connections toggle. Clears the chip filter like RN's
@@ -452,9 +479,15 @@ class PulseFeedViewModel
          * No-ops while a fetch is in flight or when the feed is exhausted.
          */
         fun loadMoreIfNeeded(rowId: String) {
-            if (!hasMore || _isLoadingMore.value || loading) return
+            val canFetchMore = hasMore && !_isLoadingMore.value && !loading
+            if (!canFetchMore || _loadMoreError.value != null) return
             val lastId = visiblePosts().lastOrNull()?.id ?: return
             if (rowId != lastId) return
+            fetchNextPage()
+        }
+
+        fun retryLoadMore() {
+            if (!hasMore || _isLoadingMore.value || loading) return
             fetchNextPage()
         }
 
@@ -710,34 +743,47 @@ class PulseFeedViewModel
         private fun fetchNextPage() {
             val cursorCreatedAt = nextCursorCreatedAt ?: return
             val cursorId = nextCursorId ?: return
+            val generation = fetchGeneration
+            _loadMoreError.value = null
             _isLoadingMore.value = true
             viewModelScope.launch {
                 try {
-                    val (lat, lng) = resolvedCoordinates()
+                    // Later pages stay in the area the first page used.
+                    val area = lastArea ?: resolvedArea()
+                    if (generation != fetchGeneration) return@launch
                     when (
                         val result =
                             repo.feed(
                                 surface = _surface.value.backendSurface,
-                                latitude = lat,
-                                longitude = lng,
+                                latitude = area.latitude,
+                                longitude = area.longitude,
                                 postType = if (isInSportsLane) null else _activeIntent.value.postType,
                                 cursorCreatedAt = cursorCreatedAt,
                                 cursorId = cursorId,
                                 topic = topicQueryValue(),
                                 sportsMode = if (isInSportsLane) _sportsMode.value.key else null,
                                 eventKey = if (isInSportsLane) resolvedEventKey() else null,
+                                radiusMiles = area.radiusMiles,
                             )
                     ) {
                         is NetworkResult.Success -> {
+                            if (generation != fetchGeneration) return@launch
                             val known = loadedPosts.map { it.id }.toSet()
                             loadedPosts = loadedPosts + result.data.posts.filter { it.id !in known }
                             applyPagination(result.data.pagination)
                             rebuildLoadedState()
                         }
-                        is NetworkResult.Failure -> Unit // keep the loaded rows; retry on next appear
+                        is NetworkResult.Failure -> {
+                            if (generation != fetchGeneration) return@launch
+                            _loadMoreError.value = result.error.displayMessage("Couldn't load more posts.")
+                        }
+                    }
+                } catch (error: NetworkError) {
+                    if (generation == fetchGeneration) {
+                        _loadMoreError.value = error.displayMessage("Couldn't load your viewing area. Try again.")
                     }
                 } finally {
-                    _isLoadingMore.value = false
+                    if (generation == fetchGeneration) _isLoadingMore.value = false
                 }
             }
         }
@@ -784,29 +830,38 @@ class PulseFeedViewModel
         }
 
         private fun fetch(isRefresh: Boolean = false) {
-            if (loading) return
+            val generation = ++fetchGeneration
+            _isLoadingMore.value = false
+            _loadMoreError.value = null
+            _radiusSuggestion.value = null
             loading = true
             if (isRefresh) _isRefreshing.value = true
-            if (_state.value !is PulseFeedUiState.Loaded) {
+            // A different query must recreate the list, including its page-boundary effects.
+            if (!isRefresh || _state.value !is PulseFeedUiState.Loaded) {
                 _state.value = PulseFeedUiState.Loading
             }
             viewModelScope.launch {
                 try {
-                    val (lat, lng) = resolvedCoordinates()
-                    when (
-                        val result =
-                            repo.feed(
-                                surface = _surface.value.backendSurface,
-                                latitude = lat,
-                                longitude = lng,
-                                postType = if (isInSportsLane) null else _activeIntent.value.postType,
-                                topic = topicQueryValue(),
-                                sportsMode = if (isInSportsLane) _sportsMode.value.key else null,
-                                eventKey = if (isInSportsLane) resolvedEventKey() else null,
-                            )
-                    ) {
+                    val area = resolvedArea()
+                    if (generation != fetchGeneration) return@launch
+                    area.viewingLocation?.let(onViewingAreaResolved)
+                    val result =
+                        repo.feed(
+                            surface = _surface.value.backendSurface,
+                            latitude = area.latitude,
+                            longitude = area.longitude,
+                            postType = if (isInSportsLane) null else _activeIntent.value.postType,
+                            topic = topicQueryValue(),
+                            sportsMode = if (isInSportsLane) _sportsMode.value.key else null,
+                            eventKey = if (isInSportsLane) resolvedEventKey() else null,
+                            radiusMiles = area.radiusMiles,
+                        )
+                    // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
+                    if (generation != fetchGeneration) return@launch
+                    when (result) {
                         is NetworkResult.Success -> {
                             val response = result.data
+                            lastArea = area
                             scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
                             loadedPosts = response.posts
                             applyPagination(response.pagination)
@@ -828,18 +883,43 @@ class PulseFeedViewModel
                             _state.value = PulseFeedUiState.Error(result.error.displayMessage("Couldn't load Pulse."))
                         }
                     }
+                } catch (error: NetworkError) {
+                    if (generation == fetchGeneration) {
+                        _state.value =
+                            PulseFeedUiState.Error(error.displayMessage("Couldn't load your viewing area. Try again."))
+                    }
                 } finally {
-                    loading = false
-                    _isRefreshing.value = false
+                    if (generation == fetchGeneration) {
+                        loading = false
+                        _isRefreshing.value = false
+                    }
                 }
             }
         }
 
-        private suspend fun resolvedCoordinates(): Pair<Double?, Double?> =
-            explicitCoordinates()
-                ?: storedCoordinates()
-                ?: awaitFreshCoordinates()
-                ?: (null to null)
+        /**
+         * Where the feed looks: the host's explicit coordinates, else (Nearby)
+         * the area chosen in the context bar, else the device location — the
+         * order web's `useFeedData` uses. Without the chosen area, Nearby sent
+         * no coordinates when location was off and stayed empty however many
+         * times an area was picked.
+         */
+        private suspend fun resolvedArea(): FeedArea =
+            explicitCoordinates()?.let { (lat, lng) -> FeedArea(lat, lng) }
+                ?: viewingArea()
+                ?: (storedCoordinates() ?: awaitFreshCoordinates())?.let { (lat, lng) -> FeedArea(lat, lng) }
+                ?: FeedArea(null, null)
+
+        /** A failed read is not an absent selection: never silently fall back to a different area. */
+        private suspend fun viewingArea(): FeedArea? {
+            if (_surface.value != FeedSurface.Pulse) return null
+            val chosen =
+                when (val result = viewingLocation.current()) {
+                    is NetworkResult.Success -> result.data.viewingLocation
+                    is NetworkResult.Failure -> throw result.error
+                } ?: return null
+            return FeedArea(chosen.latitude, chosen.longitude, chosen.radiusMiles, chosen)
+        }
 
         private fun explicitCoordinates(): Pair<Double, Double>? {
             val lat = latitude ?: return null
@@ -899,7 +979,9 @@ class PulseFeedViewModel
                 authorName = authorName,
                 authorInitials = initials(authorName),
                 // Beacon credentials come from the public profile, never the surface.
-                authorVerified = if (surfaceValue == FeedSurface.Beacons) post.creator?.credential?.status == "verified" else isBusiness,
+                // Other surfaces carry no verification field, so no badge (being
+                // a business isn't being verified).
+                authorVerified = surfaceValue == FeedSurface.Beacons && post.creator?.credential?.status == "verified",
                 avatarTint = if (isBusiness) FeedAvatarTint.Violet else FeedAvatarTint.Sky,
                 meta = metaString(post),
                 intent = intent,

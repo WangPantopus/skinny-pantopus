@@ -409,11 +409,25 @@ export interface BookingAttendee {
 }
 
 /** GET /bookings/:id response. */
-export interface BookingDetail {
+export interface OwnerBookingDetail {
   booking: Booking;
   attendees: BookingAttendee[];
   eventType: Pick<EventType, "id" | "name" | "location_mode"> | null;
+  participant?: never;
 }
+
+/** Exact signed-in participant whitelist; no owner, invitee or payment fields. */
+export interface ParticipantBookingDetail {
+  booking: Pick<Booking, "id" | "status" | "start_at" | "end_at">;
+  eventType: Pick<EventType, "name"> | null;
+  participant: {
+    role: "assigned_host" | "attendee";
+    rsvp_status: RsvpStatus | null;
+    is_required: boolean | null;
+  };
+}
+
+export type BookingDetail = OwnerBookingDetail | ParticipantBookingDetail;
 
 /**
  * GET /bookings/summary — drives the A5 summary card.

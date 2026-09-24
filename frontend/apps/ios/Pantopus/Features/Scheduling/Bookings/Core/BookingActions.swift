@@ -67,6 +67,12 @@ struct BookingActions {
         try await client.request(SchedulingEndpoints.getBooking(owner: owner, id: id))
     }
 
+    func rsvp(id: String, status: String) async throws {
+        let _: BookingRsvpResponse = try await client.request(
+            SchedulingEndpoints.rsvpBooking(bookingId: id, BookingRsvpRequest(status: status))
+        )
+    }
+
     /// `GET /bookings/:id/available-slots?from&to&tz` — reschedule/reassign slots
     /// (excludes the booking being moved). Always passes `tz`.
     func availableSlots(id: String, from: String, to: String, tz: String) async throws -> [SlotDTO] {

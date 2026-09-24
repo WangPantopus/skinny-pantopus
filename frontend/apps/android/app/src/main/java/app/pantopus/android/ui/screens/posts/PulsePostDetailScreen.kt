@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -26,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -36,6 +34,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastKind
+import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
@@ -45,7 +46,6 @@ import app.pantopus.android.ui.screens.shared.content_detail.ctas.InlineReplyCta
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostAuthorHeader
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
-import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
@@ -123,7 +123,12 @@ fun PulsePostDetailScreen(
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
         when (val s = state) {
             PulsePostDetailUiState.Loading -> LoadingLayout(onBack = onBack)
-            is PulsePostDetailUiState.Error -> ErrorLayout(message = s.message, onRetry = { viewModel.refresh() })
+            is PulsePostDetailUiState.Error ->
+                ErrorLayout(
+                    message = s.message,
+                    onRetry = if (s.retryable) ({ viewModel.refresh() }) else null,
+                    onBack = onBack,
+                )
             is PulsePostDetailUiState.Loaded -> {
                 val content = s.content
                 PulsePostDetailLoadedContent(
@@ -161,17 +166,15 @@ fun PulsePostDetailScreen(
             }
         }
         toast?.let { message ->
-            Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 100.dp)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.error)
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-            ) {
-                Text(message, style = PantopusTextStyle.small, color = PantopusColors.appTextInverse)
-            }
+            // Tinted by kind: "Report submitted" is good news, the rest are failures.
+            Toast(
+                message =
+                    ToastMessage(
+                        text = message,
+                        kind = if (message == POST_REPORT_SUBMITTED_TOAST) ToastKind.Success else ToastKind.Error,
+                    ),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp),
+            )
         }
     }
 
@@ -442,13 +445,19 @@ private fun LoadingLayout(onBack: () -> Unit) {
 @Composable
 private fun ErrorLayout(
     message: String,
-    onRetry: () -> Unit,
+    onRetry: (() -> Unit)?,
+    onBack: () -> Unit,
 ) {
-    EmptyState(
-        icon = PantopusIcon.AlertCircle,
-        headline = "Couldn't load this post",
-        subcopy = message,
-        ctaTitle = "Try again",
-        onCta = onRetry,
-    )
+    // Keeps the top bar (and Back) the loading state has; a post that is
+    // gone offers "Go back" instead of a retry that can't succeed.
+    Column(modifier = Modifier.fillMaxSize()) {
+        ContentDetailTopBar(title = "Post", onBack = onBack, action = null)
+        EmptyState(
+            icon = PantopusIcon.AlertCircle,
+            headline = "Couldn't load this post",
+            subcopy = message,
+            ctaTitle = if (onRetry != null) "Try again" else "Go back",
+            onCta = onRetry ?: onBack,
+        )
+    }
 }

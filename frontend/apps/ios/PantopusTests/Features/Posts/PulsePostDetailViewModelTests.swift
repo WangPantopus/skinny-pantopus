@@ -198,6 +198,41 @@ final class PulsePostDetailViewModelTests: XCTestCase {
         XCTAssertFalse(vm.isSendingComment)
     }
 
+    /// C-18: the feed and My posts refetch on this notification; without it
+    /// a deleted post stayed listed and comment counts went stale.
+    func testSendCommentTellsTheFeedToRefetch() async {
+        SequencedURLProtocol.sequence = [
+            .status(200, body: Self.postJSON),
+            .status(
+                201,
+                body: """
+                {"comment":{"id":"c3","post_id":"p1","user_id":"u1","parent_comment_id":null,
+                "comment":"hi","created_at":"2026-04-30T12:07:00.000Z","is_deleted":false}}
+                """
+            ),
+            .status(200, body: Self.postJSON)
+        ]
+        let vm = PulsePostDetailViewModel(postId: "p1", client: makeAPI())
+        await vm.load()
+        let changed = expectation(forNotification: .pulsePostsDidChange, object: nil)
+        vm.composerText = "hi"
+        await vm.sendComment()
+        await fulfillment(of: [changed], timeout: 2)
+    }
+
+    func testDeletePostTellsTheFeedToRefetch() async {
+        SequencedURLProtocol.sequence = [
+            .status(200, body: Self.postJSON),
+            .status(200, body: "{\"message\":\"Post deleted\"}")
+        ]
+        let vm = PulsePostDetailViewModel(postId: "p1", client: makeAPI())
+        await vm.load()
+        let changed = expectation(forNotification: .pulsePostsDidChange, object: nil)
+        await vm.deletePost()
+        XCTAssertTrue(vm.didDeletePost)
+        await fulfillment(of: [changed], timeout: 2)
+    }
+
     // MARK: - Errors
 
     func testNotFoundProducesFriendlyError() async {
