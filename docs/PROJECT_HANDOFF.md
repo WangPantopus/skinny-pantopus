@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-24T01:35:45Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-24T01:46:15Z (active Codex coordinator)
 
-Git master2768759bd845a8582583688eb53671a65ba3c45d includes batch6 vacation399/400 and real-web-verified Support402. NativeHome/Support397 still pending; S3 actual iOS owner/error/viewer afters advancing, S1 Android afters running. Root prepared missing Tasks Manage route with lint only; next Shared rotation must verify it on app. Original155 stays66fixed/merged,27inflight,62notstarted; broad80 stays13closed/67partial; fresh full-app sweep unstarted. [Live hub](workstreams/README.md) records exact evidence and gates. Founder§7/A17/hard limits unchanged.
+Git master `2768759bd845a8582583688eb53671a65ba3c45d` includes batch 6 and Support web 402. Root accepted bounded Android Marketplace/Explore location, retry and delayed-response afters, plus iOS scheduling Member/Solo access states. Home Android is installed and beginning afters; checkout, remaining iOS/Android groups and Shared native 397 remain pending. Original 155 remains 66 fixed/merged, 27 in flight, 62 not started; broad 80 remains 13 closed/67 partial. Fresh full-app sweep is unstarted. The [live hub](workstreams/README.md) records evidence, lease order and limits. Founder §7/A17 remain reserved.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 
