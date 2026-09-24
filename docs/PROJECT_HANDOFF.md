@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-24T01:55:29Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-24T02:17:15Z (active Codex coordinator)
 
-Master remains `2768759bd845a8582583688eb53671a65ba3c45d`. S3 bounded iOS scheduling afters are complete; Android parity is next. Android Home vacation afters are advancing; iOS remains. Real Android Stripe TEST restart exposed an already-authorized-intent recovery bug; the coordinator approved a narrow read-only provider-status repair, still awaiting diff and actual afters. No capture or duplicate intent. Original 155 stays 66 fixed/merged, 27 in flight, 62 not started; broad 80 stays 13 closed/67 partial. The [live hub](workstreams/README.md) holds exact decisions, evidence and leases. Full-app sweep is unstarted; founder §7/A17 remain reserved.
+Master remains `2768759bd845a8582583688eb53671a65ba3c45d`;393/397 held,46 founder-owned. S1 Android checkout restart/read guard and S3 bounded iOS scheduling afters are accepted; final counterpart-platform gates remain. Actual Home privacy403 showed default settings, and Android Pulse pagination503 had no visible retry; focused repairs are underway. Android Discover sample-content destination is newly reproduced, iOS source-only. Original155 remains66fixed/merged,27inflight,62notstarted; broad80 is13closed/67partial, not full-app coverage. Full-app sweep remains ahead. The [live hub](workstreams/README.md) records evidence, exact leases, runtime ownership and limits. Founder§7/A17 remain reserved.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 
