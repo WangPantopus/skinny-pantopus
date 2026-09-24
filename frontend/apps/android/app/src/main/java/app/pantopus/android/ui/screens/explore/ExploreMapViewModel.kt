@@ -136,17 +136,7 @@ class ExploreMapViewModel
         }
 
         private suspend fun fetchAroundUser(generation: Int) {
-            val result = resolveCenter()
-            if (generation != fetchGeneration) return
-            if (result is NetworkResult.Failure) {
-                _state.value = ExploreMapUiState.Error("Couldn't load your selected area. Please try again.")
-                return
-            }
-            val center = (result as NetworkResult.Success).data
-            if (center == null) {
-                _state.value = ExploreMapUiState.Error("Choose an area or turn on location to explore nearby.")
-                return
-            }
+            val center = resolveCurrentCenter(generation) ?: return
             val minLat = center.latitude - 0.012
             val maxLat = center.latitude + 0.012
             val minLon = center.longitude - 0.016
@@ -184,6 +174,23 @@ class ExploreMapViewModel
             _viewingCenter.value = center
             allEntities = project(gigs ?: emptyList(), listings ?: emptyList(), markers ?: emptyList(), center)
             rebuild(selectedId = null)
+        }
+
+        private suspend fun resolveCurrentCenter(generation: Int): UserCoordinate? {
+            val result = resolveCenter()
+            if (generation != fetchGeneration) return null
+            return when (result) {
+                is NetworkResult.Failure -> {
+                    _state.value = ExploreMapUiState.Error("Couldn't load your selected area. Please try again.")
+                    null
+                }
+                is NetworkResult.Success ->
+                    result.data.also { center ->
+                        if (center == null) {
+                            _state.value = ExploreMapUiState.Error("Choose an area or turn on location to explore nearby.")
+                        }
+                    }
+            }
         }
 
         private suspend fun resolveCenter(): NetworkResult<UserCoordinate?> {
