@@ -67,8 +67,7 @@ public struct FeedView: View {
         let resolved = viewModel ?? PulseFeedViewModel()
         _viewModel = State(initialValue: resolved)
         _mapViewModel = State(initialValue: mapViewModel ?? FeedMapViewModel(surface: resolved.surface))
-        // No retain cycle: the feed view-model never references the
-        // context bar back.
+        // The feed's area callback references the context bar weakly.
         _contextBarViewModel = State(initialValue: FeedContextBarViewModel {
             Task { await resolved.refresh() }
         })
@@ -162,11 +161,11 @@ public struct FeedView: View {
             }
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-        .task { await viewModel.load() }
         .task {
-            guard viewModel.surface == .pulse else { return }
-            await contextBarViewModel.load()
-            viewModel.viewingRadiusMiles = contextBarViewModel.radiusMiles
+            viewModel.onAreaResolved = { [weak contextBarViewModel] in
+                contextBarViewModel?.applyCurrent($0)
+            }
+            await viewModel.load()
         }
         .onReceive(NotificationCenter.default.publisher(for: .pulsePostsDidChange)) { _ in
             Task { await viewModel.refresh() }
@@ -570,6 +569,20 @@ public struct FeedView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, Spacing.s3)
                         .accessibilityLabel("Loading more posts")
+                } else if let message = viewModel.loadMoreError {
+                    VStack(spacing: Spacing.s2) {
+                        Text(message)
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                        Button("Try again") {
+                            Task { await viewModel.retryLoadMore() }
+                        }
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("pulseFeedLoadMoreRetry")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Spacing.s3)
                 }
                 Spacer(minLength: 80)
             }
