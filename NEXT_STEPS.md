@@ -97,6 +97,18 @@ rebuild, no parallel tables, preserve screen designs, propose design changes bef
 
 Bill paying by the keeper · generic shopping and deals · any navigation relabel · the source-discovery engine and new owner-scoped tables · a news feed against Nextdoor · Recent conditions and Moment posts · photoreal 3D homes · per-city permit adapters · nationwide paid acquisition before the pilot.
 
+## Ballot (added September 24)
+
+Plan: [docs/ballot-implementation-plan-2026-09-24.md](docs/ballot-implementation-plan-2026-09-24.md). Visual source: the [Ballot canvas](https://claude.ai/artifact/KCuXBiAYYaX13gpoqUCdmq). P0 is the October edition of sections 2–3 above (voter-registration headline, election dates, voter step), not a parallel track. Everything stays behind `ballot_p0`, which is off.
+
+- [ ] Founder approves the "Proposed, September 24" canvas boards and the pilot (plan §11).
+- [ ] P0 backend: reference data (Washington verified, others links-only), exact-point governments, `civic_election` extension, `/start` teaser, flag row.
+- [ ] P0 web: Place "Your ballot" card, still governments view, deadline timeline, `/start` teaser, Today card, "Moved this year?" line.
+- [ ] P0 iOS and Android: the same card, view and Today card.
+- [ ] Release checks: a person opens every source and link; real Clark County and out-of-state addresses through the real API; device passes.
+- [ ] P0.5: one reminder opt-in (at most three per election) and the share card, once the push copy is approved.
+- [ ] P1 only if Washington voterInfo coverage checks out against official sample ballots.
+
 ## Parallel, unchanged
 
 The three verification workstreams on the 80-row acceptance backlog (`docs/REMAINING_WORK_2026-09-11.md`) continue; this checklist adds no scope to them.
