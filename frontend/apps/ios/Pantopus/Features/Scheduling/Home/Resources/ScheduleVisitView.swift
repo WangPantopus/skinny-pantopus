@@ -65,7 +65,7 @@ struct ScheduleVisitView: View {
         HStack(alignment: .top, spacing: Spacing.s2) {
             Icon(.info, size: 15, color: Theme.Color.info)
             // Spec explainer copy (visit-setup-frames `VisitExplainer`).
-            Text("Slots come from when your chosen hosts are personally free.")
+            Text("Add a visit to the home calendar. Confirm availability with your chosen hosts.")
                 .font(.system(size: 11.5, weight: .medium))
                 .lineSpacing(2)
                 .foregroundStyle(Theme.Color.primary800)

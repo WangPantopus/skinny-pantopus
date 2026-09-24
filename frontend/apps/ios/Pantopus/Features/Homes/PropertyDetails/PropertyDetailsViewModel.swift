@@ -107,8 +107,8 @@ final class PropertyDetailsViewModel {
             address: PropertyAddress(
                 line1: line1.isEmpty ? "Address unavailable" : line1,
                 line2: line2,
-                latitude: home.location?.latitude ?? 0,
-                longitude: home.location?.longitude ?? 0
+                latitude: home.location?.latitude,
+                longitude: home.location?.longitude
             ),
             propertyFacts: facts,
             records: [],

@@ -336,7 +336,7 @@ private fun Explainer() {
             tint = PantopusColors.info,
         )
         Text(
-            "Slots come from when your chosen hosts are personally free.",
+            "Add a visit to the home calendar. Confirm availability with your chosen hosts.",
             fontSize = 11.5.sp,
             lineHeight = 16.sp,
             color = PantopusColors.primary800,
