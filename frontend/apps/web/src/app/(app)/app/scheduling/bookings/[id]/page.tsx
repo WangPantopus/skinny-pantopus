@@ -8,7 +8,7 @@
 // then refetch; PAST_DEADLINE / ALREADY_* / INVALID_HOST guards live in the
 // sheets/handlers.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -71,37 +71,89 @@ export default function BookingDetailPage() {
   );
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [responseError, setResponseError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState("We couldn't load this booking.");
+  const generation = useRef(0);
+  const actorId = useRef<string | null>(null);
+  const cancelReads = useCallback(() => {
+    ++generation.current;
+    actorId.current = null;
+  }, []);
 
   const load = useCallback(() => {
-    let alive = true;
+    const requestGeneration = ++generation.current;
+    actorId.current = null;
     setPhase("loading");
-    api.scheduling
-      .getBooking(id, owner)
-      .then((d) => {
-        if (!alive) return;
+    setDetail(null);
+    setSheet(null);
+    setMenuOpen(false);
+    setBusy(false);
+    setResponseError(null);
+    void (async () => {
+      try {
+        const actor = await api.users.getMyProfile();
+        if (generation.current !== requestGeneration) return;
+        actorId.current = actor.id;
+        const d = await api.scheduling.getBooking(id, owner);
+        if (generation.current !== requestGeneration || actorId.current !== actor.id) return;
         setDetail(d);
         setPhase("ready");
-      })
-      .catch(() => {
-        if (alive) setPhase("error");
-      });
+      } catch (error) {
+        if (generation.current !== requestGeneration) return;
+        setLoadError((error as { statusCode?: number })?.statusCode === 403
+          ? "You don't have access to this booking."
+          : "We couldn't load this booking. Check your connection and try again.");
+        setPhase("error");
+      }
+    })();
     return () => {
-      alive = false;
+      if (generation.current === requestGeneration) ++generation.current;
     };
   }, [id, owner]);
 
-  useEffect(() => load(), [load]);
+  useEffect(() => {
+    const stop = load();
+    const unsubscribe = api.onTokenChange(() => load());
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === api.AUTH_SESSION_CHANGE_KEY) load();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      stop();
+      cancelReads();
+      unsubscribe();
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [load, cancelReads]);
 
   const refetch = useCallback(() => {
-    api.scheduling
-      .getBooking(id, owner)
-      .then(setDetail)
-      .catch(() => {});
-  }, [id, owner]);
+    load();
+  }, [load]);
 
-  const booking = detail?.booking ?? null;
+  const booking = detail && !detail.participant ? detail.booking : null;
   const eventName = detail?.eventType?.name || "Booking";
   const elapsed = booking ? isPast(booking) : false;
+
+  const respond = async (status: "going" | "maybe" | "declined") => {
+    if (!detail?.participant || detail.participant.is_required === null || busy || !actorId.current) return;
+    const requestGeneration = generation.current;
+    const actor = actorId.current;
+    setBusy(true);
+    setResponseError(null);
+    try {
+      await api.scheduling.rsvpBooking(id, status);
+      if (generation.current !== requestGeneration || actorId.current !== actor) return;
+      refetch();
+    } catch (error) {
+      if (generation.current !== requestGeneration || actorId.current !== actor) return;
+      if ((error as { statusCode?: number })?.statusCode === 403) {
+        refetch();
+        return;
+      }
+      setBusy(false);
+      setResponseError("Couldn't save your response. Try again.");
+    }
+  };
 
   const openApprove = (mode: "review" | "decline") => {
     setApproveMode(mode);
@@ -213,14 +265,14 @@ export default function BookingDetailPage() {
       {/* Top bar */}
       <div className="mb-4 flex items-center gap-2">
         <Link
-          href="/app/scheduling/bookings"
-          aria-label="Back to bookings"
+          href={detail?.participant ? "/app/notifications" : "/app/scheduling/bookings"}
+          aria-label={detail?.participant ? "Back to notifications" : "Back to bookings"}
           className="flex h-9 w-9 items-center justify-center rounded-lg text-app-text-secondary transition hover:bg-app-hover"
         >
           <ChevronLeft className="h-5 w-5" aria-hidden />
         </Link>
         <div className="flex-1" />
-        {booking && <BookingStatusPill status={booking.status} />}
+        {detail && <BookingStatusPill status={detail.booking.status} />}
         {menuItems.length > 0 && (
           <div className="relative">
             <button
@@ -273,10 +325,15 @@ export default function BookingDetailPage() {
       {phase === "loading" && <DetailSkeleton />}
 
       {phase === "error" && (
-        <ErrorState message="We couldn't load this booking." onRetry={load} />
+        <ErrorState message={loadError} onRetry={load} />
       )}
 
-      {phase === "ready" && detail && booking && (
+      {phase === "ready" && detail?.participant && (
+        <BookingDetailView detail={detail} pillar={pillar} tz={tz} ownerLabel={PILLAR_LABEL[pillar]}
+          onRespond={respond} savingResponse={busy} responseError={responseError} />
+      )}
+
+      {phase === "ready" && detail && !detail.participant && booking && (
         <>
           <BookingDetailView
             detail={detail}

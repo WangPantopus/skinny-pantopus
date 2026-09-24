@@ -15,6 +15,11 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
   const trimmed = link.trim();
   if (!trimmed) return null;
 
+  // Stored Support Train notices used this exact custom-scheme API-style path.
+  // Keep all other non-web schemes rejected.
+  const legacySupport = trimmed.match(/^pantopus:\/\/activities\/support-trains\/([^/?#]+)$/i);
+  if (legacySupport && uuid.test(legacySupport[1])) return `/app/support-trains/${legacySupport[1]}`;
+
   const path = extractPath(trimmed);
   if (!path || !safeInternalPath(path)) return null;
 
