@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-24T04:51:16Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-24T05:12:58Z (active Codex coordinator)
 
-Master `5cf4a26c35f79e04503a2e734ef6a1582e90af24`; original155 remains 68 fixed/merged, 25 in flight, 62 not started; broad80 remains 13 closed/67 partial. These are item counts, not app coverage. PR405 exact a31 is green; 406/5682, 407/cf8 and 408/28ed are fully reviewed, pending required CI. No new batch published or queued. Root actual iOS Support Manage/Back and copied link → Safari → native return passed on frozen326b; hosted/provider/full-lifecycle limits remain. S3 scoped scheduling cleanup verified; Me success HTTP status unlogged, paid refund inference and iOS Notify still open. S1 web and Home Place actual failures have focused repairs underway; Pulse/Hub iOS parity, Discover and empty calendar remain open. Fresh full-app sweep is ahead. Exact evidence and leases are in the [live hub](workstreams/README.md). Founder§7/A17 reserved; no security audit or new unit tests.
+Master `5cf4a26c35f79e04503a2e734ef6a1582e90af24`; original155 remains68 fixed/merged,25 in flight,62 not started; broad80 remains13 closed/67 partial. These are item counts, not app coverage. PR405/a31 green;406/5682,407/fdb64a95,408/28ed reviewed and awaiting exact-head CI;407 correction is four existing assertions only. No batch published/queued. Root actual iOS Pulse area/header/paging and Hub reply-order failures are repaired in frozen96e but not built/verified after. Discover fabricated data and empty Support calendar remain open. Home Android verification/Back passed; iOS pending. Coordinator authorized only a minimal participant booking read contract; existing-file plan, implementation and role/privacy afters still required, see [live hub](workstreams/README.md). Founder§7/A17 reserved; no security audit/new unit tests. Fresh full-app sweep remains ahead.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 
