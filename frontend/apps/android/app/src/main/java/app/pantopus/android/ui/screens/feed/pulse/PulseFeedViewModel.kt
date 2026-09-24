@@ -14,6 +14,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.models.sports.ActiveSportsEventDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.auth.AuthRepository
@@ -771,6 +772,10 @@ class PulseFeedViewModel
                             _loadMoreError.value = result.error.displayMessage("Couldn't load more posts.")
                         }
                     }
+                } catch (error: NetworkError) {
+                    if (generation == fetchGeneration) {
+                        _loadMoreError.value = error.displayMessage("Couldn't load your viewing area. Try again.")
+                    }
                 } finally {
                     if (generation == fetchGeneration) _isLoadingMore.value = false
                 }
@@ -822,6 +827,7 @@ class PulseFeedViewModel
             val generation = ++fetchGeneration
             _isLoadingMore.value = false
             _loadMoreError.value = null
+            _radiusSuggestion.value = null
             loading = true
             if (isRefresh) _isRefreshing.value = true
             if (_state.value !is PulseFeedUiState.Loaded) {
@@ -869,6 +875,11 @@ class PulseFeedViewModel
                             _state.value = PulseFeedUiState.Error(result.error.displayMessage("Couldn't load Pulse."))
                         }
                     }
+                } catch (error: NetworkError) {
+                    if (generation == fetchGeneration) {
+                        _state.value =
+                            PulseFeedUiState.Error(error.displayMessage("Couldn't load your viewing area. Try again."))
+                    }
                 } finally {
                     if (generation == fetchGeneration) {
                         loading = false
@@ -891,10 +902,14 @@ class PulseFeedViewModel
                 ?: (storedCoordinates() ?: awaitFreshCoordinates())?.let { (lat, lng) -> FeedArea(lat, lng) }
                 ?: FeedArea(null, null)
 
-        /** The viewing location from `GET /api/location`, for the Nearby surface. */
+        /** A failed read is not an absent selection: never silently fall back to a different area. */
         private suspend fun viewingArea(): FeedArea? {
             if (_surface.value != FeedSurface.Pulse) return null
-            val chosen = (viewingLocation.current() as? NetworkResult.Success)?.data?.viewingLocation ?: return null
+            val chosen =
+                when (val result = viewingLocation.current()) {
+                    is NetworkResult.Success -> result.data.viewingLocation
+                    is NetworkResult.Failure -> throw result.error
+                } ?: return null
             return FeedArea(chosen.latitude, chosen.longitude, chosen.radiusMiles)
         }
 
