@@ -651,6 +651,10 @@ public struct HubTabRoot: View {
         .onChange(of: router.pending) { _, pending in
             consumeDeepLinkIfNeeded(pending: pending)
         }
+        // In the Mail tab, the Mailbox/Messages switch hides below the root.
+        .onChange(of: path.isEmpty, initial: true) { _, atRoot in
+            if mode == .mailbox { MailTabStore.shared.mailboxAtRoot = atRoot }
+        }
         .onChange(of: rootTabs.selected) { _, _ in
             // Cross-tab dispatch may select this tab *after* the pending
             // destination landed — re-attempt once ownership arrives.
