@@ -412,10 +412,10 @@ export default function MarketplaceMap({
         </svg>
       </button>
 
-      {/* + New Listing FAB — bottom right */}
+      {/* Keep the map action above the shell's bottom-right quick actions. */}
       <button
         onClick={onOpenCreateModal}
-        className="absolute bottom-4 right-3 z-30 w-12 h-12 bg-primary-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-primary-700 transition"
+        className="absolute bottom-24 right-3 z-30 w-12 h-12 bg-primary-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-primary-700 transition"
         title="New Listing"
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
