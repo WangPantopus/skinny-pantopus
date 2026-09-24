@@ -327,7 +327,7 @@ class VacationHoldViewModel
                         // Keep the composer; the CTA can be retried.
                         is NetworkResult.Failure -> {
                             val message = result.error.displayMessage("Couldn't save your travel dates.")
-                            if (result.error.code == 409) _loadError.value = message else _toast.value = message
+                            if (result.error.code == EDIT_CONFLICT_STATUS) _loadError.value = message else _toast.value = message
                         }
                     }
                 } finally {
@@ -360,9 +360,10 @@ class VacationHoldViewModel
 
         private suspend fun resolveHomeId(homesRepo: HomesRepository): String? =
             when (val result = homesRepo.myHomes()) {
-                is NetworkResult.Success -> result.data.homes.firstOrNull()?.id.also {
-                    if (it == null) _toast.value = "Add a home before saving travel dates."
-                }
+                is NetworkResult.Success ->
+                    result.data.homes.firstOrNull()?.id.also {
+                        if (it == null) _toast.value = "Add a home before saving travel dates."
+                    }
                 is NetworkResult.Failure -> {
                     _toast.value = result.error.displayMessage("Couldn't load your home. Try saving again.")
                     null
@@ -370,7 +371,9 @@ class VacationHoldViewModel
             }
     }
 
-/** Backend `hold_action` value for "forward urgent mail to the household". */
+private const val EDIT_CONFLICT_STATUS = 409
+
+/** Stored compatibility preference; it does not execute mail forwarding. */
 private const val FORWARD_TO_HOUSEHOLD = "forward_to_household"
 
 private fun makeMode(seed: VacationHoldSeed): VacationHoldMode =
@@ -394,11 +397,12 @@ private fun VacationHoldDto.toActiveHold(today: LocalDate = LocalDate.now(ZoneOf
     val start = parseDate(startDate)
     val daysLeft = end?.let { ChronoUnit.DAYS.between(today, it).toInt().coerceAtLeast(0) } ?: 0
     val untilLabel = end?.format(untilFormat) ?: (endDate ?: "")
-    val statusLabel = when (status) {
-        "scheduled" -> "Scheduled"
-        "completed" -> "Completed"
-        else -> "Current"
-    }
+    val statusLabel =
+        when (status) {
+            "scheduled" -> "Scheduled"
+            "completed" -> "Completed"
+            else -> "Current"
+        }
     val fromLabel = start?.format(untilFormat) ?: startDate.orEmpty()
     return VacationActiveHold(
         daysLeft = daysLeft,

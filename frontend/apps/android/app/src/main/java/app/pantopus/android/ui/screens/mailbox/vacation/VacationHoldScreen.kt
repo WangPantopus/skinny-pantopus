@@ -21,8 +21,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -48,8 +48,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.components.DateSpan
-import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.DateSpanTone
+import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.FutureDatePickerDialog
 import app.pantopus.android.ui.screens.mailbox.vacation.components.HeldList
 import app.pantopus.android.ui.screens.mailbox.vacation.components.HoldStatusHero
@@ -95,6 +95,7 @@ fun VacationHoldScreen(
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
+    val mutationInFlight by viewModel.mutationInFlight.collectAsStateWithLifecycle()
 
     /**
      * A14.8 — "End hold early" is destructive (the backend marks the hold
@@ -133,7 +134,11 @@ fun VacationHoldScreen(
                     .background(PantopusColors.appBg)
                     .testTag("vacationHold"),
         ) {
-            TopBar(viewModel = viewModel, mode = mode)
+            TopBar(
+                viewModel = viewModel,
+                mode = mode,
+                trailingEnabled = !isLoading && loadError == null && !mutationInFlight && viewModel.trailingActionEnabled,
+            )
             Column(
                 modifier =
                     Modifier
@@ -241,13 +246,9 @@ fun VacationHoldScreen(
 private fun TopBar(
     viewModel: VacationHoldViewModel,
     mode: VacationHoldMode,
+    trailingEnabled: Boolean,
 ) {
     val trailingLabel = if (mode is VacationHoldMode.Active) "Edit" else "Save"
-    val trailingEnabled =
-        when (mode) {
-            is VacationHoldMode.Scheduling -> mode.draft.isValid
-            is VacationHoldMode.Active -> true
-        }
     val trailingColor: Color =
         when (mode) {
             is VacationHoldMode.Scheduling ->

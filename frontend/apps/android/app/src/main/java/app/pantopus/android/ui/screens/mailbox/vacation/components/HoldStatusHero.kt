@@ -127,7 +127,10 @@ private fun HeaderRow(
 }
 
 @Composable
-private fun ActivePill(reduceMotion: Boolean, statusLabel: String) {
+private fun ActivePill(
+    reduceMotion: Boolean,
+    statusLabel: String,
+) {
     Row(
         modifier =
             Modifier
@@ -197,7 +200,10 @@ private fun PulsingDot(reduceMotion: Boolean) {
 }
 
 @Composable
-private fun DaysRow(daysLeft: Int, daysLabel: String) {
+private fun DaysRow(
+    daysLeft: Int,
+    daysLabel: String,
+) {
     Row(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
