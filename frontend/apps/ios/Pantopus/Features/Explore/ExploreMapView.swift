@@ -62,7 +62,10 @@ public struct ExploreMapView: View {
         .overlay(alignment: .bottom) { savedAffordanceOverlay }
         .onAppear { focusOnMap(focus) }
         .onChange(of: focus) { _, newValue in focusOnMap(newValue) }
-        .task { await viewModel.load() }
+        .task(id: focus) {
+            viewModel.configureFocus(focus)
+            await viewModel.load()
+        }
         .task { await savedStore.loadIfNeeded() }
         .sheet(isPresented: $showFilterSheet) {
             ExploreFilterSheet(
@@ -165,27 +168,23 @@ public struct ExploreMapView: View {
                         ExploreYouAreHereDot()
                             .accessibilityLabel("You are here")
                     }
-                    if loaded.isEmpty {
-                        // Dashed search-radius ring — the design's empty-frame
-                        // "you-are-here + radius" treatment.
-                        MapCircle(
-                            center: CLLocationCoordinate2D(latitude: coord.latitude, longitude: coord.longitude),
-                            radius: 800
-                        )
-                        .foregroundStyle(Theme.Color.primary600.opacity(0.05))
-                        .stroke(
-                            Theme.Color.primary600.opacity(0.45),
-                            style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
-                        )
-                    }
+                }
+                if loaded.isEmpty, let center = viewModel.viewingCenter {
+                    MapCircle(
+                        center: CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude),
+                        radius: 800
+                    )
+                    .foregroundStyle(Theme.Color.primary600.opacity(0.05))
+                    .stroke(
+                        Theme.Color.primary600.opacity(0.45),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
+                    )
                 }
             }
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
-        .onChange(of: viewModel.userCoordinate) { _, newCoord in
-            if focus == nil {
-                recenter(on: newCoord)
-            }
+        .onChange(of: viewModel.viewingCenter) { _, newCoord in
+            recenter(on: newCoord)
         }
         // Collapse the constantly-changing MapKit a11y subtree to a single
         // labeled element (same rationale as the Nearby map) — the sheet
@@ -215,7 +214,7 @@ public struct ExploreMapView: View {
     /// "Fit all" control — frame the bounding box of every visible entity.
     private func fitAll() {
         guard case let .loaded(loaded) = viewModel.state, !loaded.entities.isEmpty else {
-            recenter(on: viewModel.userCoordinate)
+            recenter(on: viewModel.viewingCenter)
             return
         }
         let lats = loaded.entities.map(\.latitude)

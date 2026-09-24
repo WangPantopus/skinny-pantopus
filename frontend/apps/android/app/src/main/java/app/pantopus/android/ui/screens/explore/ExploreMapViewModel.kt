@@ -12,6 +12,7 @@ import app.pantopus.android.data.gigs.GigsRepository
 import app.pantopus.android.data.listings.ListingsRepository
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
+import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.postsmap.PostsMapLayer
 import app.pantopus.android.data.postsmap.PostsMapRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -53,6 +54,7 @@ class ExploreMapViewModel
         private val listingsRepository: ListingsRepository,
         private val postsMapRepository: PostsMapRepository,
         private val locationProvider: LocationProvider,
+        private val viewingLocation: ViewingLocationRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<ExploreMapUiState>(ExploreMapUiState.Loading)
         val state: StateFlow<ExploreMapUiState> = _state.asStateFlow()
@@ -68,6 +70,10 @@ class ExploreMapViewModel
 
         private val _userCoordinate = MutableStateFlow<UserCoordinate?>(null)
         val userCoordinate: StateFlow<UserCoordinate?> = _userCoordinate.asStateFlow()
+        private val _viewingCenter = MutableStateFlow<UserCoordinate?>(null)
+        val viewingCenter: StateFlow<UserCoordinate?> = _viewingCenter.asStateFlow()
+        private var explicitCenter: UserCoordinate? = null
+        private var fetchGeneration = 0
 
         private val _filters = MutableStateFlow(ExploreFilterCriteria())
         val filters: StateFlow<ExploreFilterCriteria> = _filters.asStateFlow()
@@ -84,7 +90,9 @@ class ExploreMapViewModel
                 _userCoordinate.value = locationProvider.cachedCoordinate()
             }
             _state.value = ExploreMapUiState.Loading
-            viewModelScope.launch { fetchAroundUser() }
+            fetchGeneration += 1
+            val generation = fetchGeneration
+            viewModelScope.launch { fetchAroundUser(generation) }
         }
 
         /** Sample/preview load — local sample entities, no network. */
@@ -94,6 +102,7 @@ class ExploreMapViewModel
             allEntities = ExploreMapSampleData.entities(scenario)
             _filters.value = ExploreMapSampleData.filters(scenario)
             _userCoordinate.value = ExploreMapSampleData.center
+            _viewingCenter.value = ExploreMapSampleData.center
             when (scenario) {
                 ExploreScenario.Loading -> _state.value = ExploreMapUiState.Loading
                 ExploreScenario.Error -> _state.value = ExploreMapUiState.Error("Couldn't load the map.")
@@ -105,11 +114,35 @@ class ExploreMapViewModel
             if (liveMode) load() else load(scenario)
         }
 
-        private suspend fun fetchAroundUser() {
-            if (_userCoordinate.value == null) {
-                _userCoordinate.value = locationProvider.requestCurrent()
+        fun configureFocus(focus: ExploreMapFocus?) {
+            explicitCenter = focus?.let { UserCoordinate(it.latitude, it.longitude, 0.0) }
+        }
+
+        fun locate() {
+            viewModelScope.launch {
+                val coordinate = locationProvider.requestCurrent(timeoutMillis = 4_000L)
+                if (coordinate == null) {
+                    _state.value = ExploreMapUiState.Error("Turn on location to find your current area.")
+                } else {
+                    _userCoordinate.value = coordinate
+                    explicitCenter = coordinate
+                    load()
+                }
             }
-            val center = _userCoordinate.value ?: UserCoordinate(40.7484, -73.9857, 100.0)
+        }
+
+        private suspend fun fetchAroundUser(generation: Int) {
+            val result = resolveCenter()
+            if (generation != fetchGeneration) return
+            if (result is NetworkResult.Failure) {
+                _state.value = ExploreMapUiState.Error("Couldn't load your selected area. Please try again.")
+                return
+            }
+            val center = (result as NetworkResult.Success).data
+            if (center == null) {
+                _state.value = ExploreMapUiState.Error("Choose an area or turn on location to explore nearby.")
+                return
+            }
             val minLat = center.latitude - 0.012
             val maxLat = center.latitude + 0.012
             val minLon = center.longitude - 0.016
@@ -136,6 +169,7 @@ class ExploreMapViewModel
             val gigsResult = gigsDeferred.await()
             val listingsResult = listingsDeferred.await()
             val markersResult = markersDeferred.await()
+            if (generation != fetchGeneration) return
             val gigs = if (gigsResult is NetworkResult.Success) gigsResult.data.gigs else null
             val listings = if (listingsResult is NetworkResult.Success) listingsResult.data.listings else null
             val markers = if (markersResult is NetworkResult.Success) markersResult.data.markers else null
@@ -143,8 +177,28 @@ class ExploreMapViewModel
                 _state.value = ExploreMapUiState.Error("Couldn't load the map.")
                 return
             }
+            _viewingCenter.value = center
             allEntities = project(gigs ?: emptyList(), listings ?: emptyList(), markers ?: emptyList(), center)
             rebuild(selectedId = null)
+        }
+
+        private suspend fun resolveCenter(): NetworkResult<UserCoordinate?> {
+            _userCoordinate.value = locationProvider.cachedCoordinate()
+            explicitCenter?.let { return NetworkResult.Success(it) }
+            return when (val payload = viewingLocation.current()) {
+                is NetworkResult.Failure -> payload
+                is NetworkResult.Success -> {
+                    val selected = payload.data.viewingLocation
+                    if (selected != null) {
+                        NetworkResult.Success(UserCoordinate(selected.latitude, selected.longitude, 0.0))
+                    } else {
+                        if (_userCoordinate.value == null) {
+                            _userCoordinate.value = locationProvider.requestCurrent(timeoutMillis = 4_000L)
+                        }
+                        NetworkResult.Success(_userCoordinate.value)
+                    }
+                }
+            }
         }
 
         // MARK: Type toggle
