@@ -314,11 +314,12 @@ public struct BusinessActionDock: Sendable, Hashable {
         case call
     }
 
-    public let secondary: Secondary
+    /// Ghost button beside Contact; `nil` shows Contact alone.
+    public let secondary: Secondary?
     /// Closed note ("Closed now — messages answered at 8 AM"); `nil` when open.
     public let note: String?
 
-    public init(secondary: Secondary, note: String?) {
+    public init(secondary: Secondary?, note: String?) {
         self.secondary = secondary
         self.note = note
     }

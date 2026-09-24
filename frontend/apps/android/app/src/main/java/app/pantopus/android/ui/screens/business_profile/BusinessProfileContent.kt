@@ -125,7 +125,8 @@ data class BusinessReviewCard(
 
 /** The sticky bottom dock. Primary is always "Contact" (message). */
 data class BusinessActionDock(
-    val secondary: Secondary,
+    /** Ghost button beside Contact; `null` shows Contact alone. */
+    val secondary: Secondary?,
     /** Closed note; `null` when open. */
     val note: String?,
 ) {

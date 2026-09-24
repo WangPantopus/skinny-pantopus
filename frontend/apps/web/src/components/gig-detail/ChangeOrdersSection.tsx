@@ -41,15 +41,22 @@ const CHANGE_ORDER_TYPES = [
 ];
 
 const PRICE_CHANGE_TYPES = new Set(['price_increase', 'price_decrease']);
+// Price change orders are off on every task until a price change can be settled (the server refuses them with
+// 409 PAID_PRICE_CHANGE_UNAVAILABLE); scope and time changes stay.
+const PRICE_CHANGES_AVAILABLE = false;
 
 // ─── Component ───
 
 export default function ChangeOrdersSection({
   gigId, isMyGig, iAmWorker, currentUserId, paymentId, paymentStatus,
 }: ChangeOrdersSectionProps) {
-  // A live payment hold (a payment that isn't canceled or fully refunded) rules out price changes
-  // (server: 409 PAID_PRICE_CHANGE_UNAVAILABLE), so the form doesn't offer them.
-  const priceChangesAvailable = !paymentId || ['canceled', 'refunded_full'].includes(String(paymentStatus || '').toLowerCase());
+  // The form doesn't offer price changes and a pending price order can't be approved. The sentence says whether the
+  // task has a live payment hold (a payment that isn't canceled or fully refunded).
+  const hasLiveHold = Boolean(paymentId) && !['canceled', 'refunded_full'].includes(String(paymentStatus || '').toLowerCase());
+  const priceChangeUnavailableReason = hasLiveHold
+    ? "Price changes aren't available once a task has a payment hold."
+    : "Price changes aren't available for this task.";
+  const priceChangesAvailable = PRICE_CHANGES_AVAILABLE;
   const offeredTypes = CHANGE_ORDER_TYPES.filter((t) => priceChangesAvailable || !PRICE_CHANGE_TYPES.has(t.value));
   const [orders, setOrders] = useState<GigChangeOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -219,18 +226,25 @@ export default function ChangeOrdersSection({
                   <p className="text-xs text-red-500 mt-1 italic">Reason: {o.rejection_reason}</p>
                 )}
 
+                {/* A pending price order can't be approved now: say why instead of offering Approve. */}
+                {canApproveReject && amountChange !== 0 && !priceChangesAvailable && (
+                  <p className="text-xs text-app-text-secondary mt-2">{priceChangeUnavailableReason}</p>
+                )}
+
                 {/* Action buttons */}
                 {(canApproveReject || canWithdraw) && (
                   <div className="flex gap-2 mt-2">
                     {canApproveReject && (
                       <>
-                        <button
-                          onClick={() => handleApprove(o.id)}
-                          disabled={approvingId === o.id}
-                          className="text-xs bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700 font-medium disabled:opacity-50"
-                        >
-                          Approve
-                        </button>
+                        {(amountChange === 0 || priceChangesAvailable) && (
+                          <button
+                            onClick={() => handleApprove(o.id)}
+                            disabled={approvingId === o.id}
+                            className="text-xs bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700 font-medium disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                        )}
                         <button
                           onClick={() => handleReject(o.id)}
                           className="text-xs bg-app-surface border border-app-border text-app-text-strong px-3 py-1 rounded-md hover:bg-app-hover font-medium"
@@ -263,9 +277,7 @@ export default function ChangeOrdersSection({
           <p className="text-sm font-medium text-app-text-strong">Request a Change</p>
 
           {!priceChangesAvailable && (
-            <p className="text-xs text-app-text-secondary">
-              Price changes aren&apos;t available once a task has a payment hold.
-            </p>
+            <p className="text-xs text-app-text-secondary">{priceChangeUnavailableReason}</p>
           )}
 
           {/* Type picker */}

@@ -531,12 +531,14 @@ class ConnectionsViewModel
             val user = rel.otherUser
             val displayName = displayNameFor(user) ?: "Member"
             val initials = initialsFor(user, displayName)
+            // The relationship payload carries no verification, so the chat
+            // this opens doesn't claim "Verified neighbor".
             val target =
                 ConnectionsChatTarget(
                     userId = user?.id ?: rel.id,
                     displayName = displayName,
                     initials = initials,
-                    verified = true,
+                    verified = false,
                 )
             val acceptedRaw = rel.acceptedAt ?: rel.createdAt
             val timeFragment = formatRelativeTime(acceptedRaw, now, zone) ?: "recently"
@@ -552,7 +554,8 @@ class ConnectionsViewModel
                         imageUrl = user?.profilePictureUrl,
                         background = AvatarBackground.Gradient(ConnectionAvatarTone.toneFor(user?.id ?: rel.id).gradient),
                         size = AvatarBadgeSize.Large,
-                        verified = true,
+                        // No verification in the relationship payload, so no check.
+                        verified = false,
                     ),
                 trailing =
                     RowTrailing.CircularAction(

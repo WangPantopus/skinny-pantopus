@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.models.businesses.BusinessPublicResponse
 import app.pantopus.android.data.api.models.businesses.BusinessUserDetailDto
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.profile.PublicProfileReview
+import app.pantopus.android.ui.screens.businesses.MyBusinessesViewModel
 import app.pantopus.android.ui.screens.saved_places.PendingSavePlace
 import app.pantopus.android.ui.theme.PantopusIcon
 import java.time.Duration
@@ -59,7 +60,10 @@ object BusinessProfileMapper {
                         ?: "Business",
                 handle = business.username,
                 locality = locality(business, primaryLocation),
-                isVerified = isVerified(business, profile),
+                // The business's own identity tier, as on My businesses and the
+                // owner header. `business.verified` is the account row's flag, not
+                // the business's verification, so it never earns the mark on its own.
+                isVerified = MyBusinessesViewModel.isVerified(profile?.identityVerificationTier),
                 logoIcon = null,
             )
 
@@ -73,6 +77,7 @@ object BusinessProfileMapper {
                 ?: business.tagline?.takeIf { it.isNotEmpty() }
 
         val serviceArea = buildServiceArea(primaryLocation, profile)
+        val phoneNumber = profile?.publicPhone ?: primaryLocation?.phone
 
         return BusinessProfileContent(
             businessId = business.id,
@@ -88,21 +93,13 @@ object BusinessProfileMapper {
             gallery = emptyList(),
             reviewSummary = buildReviewSummary(business, reviewsResponse),
             reviews = (reviewsResponse?.reviews ?: emptyList()).map { buildReview(it) },
-            dock = buildDock(status, isNewlyClaimed),
+            dock = buildDock(status, phoneNumber),
             savedPlace = savedPlace(business, header.displayName, primaryLocation, serviceArea, detail.access?.isOwner == true),
             isNewlyClaimed = isNewlyClaimed,
-            phoneNumber = profile?.publicPhone ?: primaryLocation?.phone,
+            phoneNumber = phoneNumber,
             websiteUrl = normalizedWebsite(profile?.website),
             viewerIsOwner = detail.access?.isOwner == true,
         )
-    }
-
-    private fun isVerified(
-        business: BusinessUserDetailDto,
-        profile: BusinessProfileDetailDto?,
-    ): Boolean {
-        business.verified?.let { return it }
-        return profile?.verificationStatus?.let { it != "unverified" } == true
     }
 
     private fun locality(
@@ -482,11 +479,12 @@ object BusinessProfileMapper {
 
     private fun buildDock(
         status: BusinessOpenState?,
-        isNewlyClaimed: Boolean,
+        phoneNumber: String?,
     ): BusinessActionDock {
         val isClosed = status?.isOpen == false
-        val secondary =
-            if (isNewlyClaimed || isClosed) BusinessActionDock.Secondary.Call else BusinessActionDock.Secondary.Book
+        // "Book" needs the business's booking page, which the payload doesn't
+        // carry yet, so it isn't offered. "Call" only when there is a number.
+        val secondary = if (phoneNumber.isNullOrBlank()) null else BusinessActionDock.Secondary.Call
         val note = if (isClosed) "Closed now — messages answered when they reopen" else null
         return BusinessActionDock(secondary = secondary, note = note)
     }

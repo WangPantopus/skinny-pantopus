@@ -34,7 +34,7 @@ import javax.inject.Inject
  *   as the Connections center).
  * - Recent — derived from `GET /api/chat/unified-conversations` (DM
  *   peers, top 10 by `lastMessageAt`).
- * - All verified — search-driven via `GET /api/users/search?q=…` when
+ * - People — search-driven via `GET /api/users/search?q=…` when
  *   the search query reaches the backend's 2-character minimum. With
  *   no query the section is hidden; Connections + Recent stay visible.
  *
@@ -63,7 +63,7 @@ class NewMessageViewModel
 
         val emptyHeadline: String = "Search for someone to message"
         val emptyBody: String =
-            "You can message anyone with a verified Pantopus account. Search by name, " +
+            "You can message anyone on Pantopus. Search by name, " +
                 "or invite someone who isn't on the platform yet."
         val emptySearchHints: List<String> = listOf("A neighbor's name", "Your block", "A local business")
 
@@ -243,11 +243,11 @@ class NewMessageViewModel
 
         private fun makeAllVerifiedSection(excluding: Set<String>): NewMessageSection {
             if (normalizedSearch().isEmpty()) {
-                return NewMessageSection(id = NewMessageSectionId.AllVerified, label = "All verified", rows = emptyList())
+                return NewMessageSection(id = NewMessageSectionId.AllVerified, label = "People", rows = emptyList())
             }
             val filtered = verifiedResults.filter { it.id !in excluding }
             val rows = filtered.map { rowForVerified(it) }
-            return NewMessageSection(id = NewMessageSectionId.AllVerified, label = "All verified", rows = rows)
+            return NewMessageSection(id = NewMessageSectionId.AllVerified, label = "People", rows = rows)
         }
 
         private fun normalizedSearch(): String = _searchText.value.trim().lowercase()
@@ -269,7 +269,8 @@ class NewMessageViewModel
                 locality = localityText(user),
                 sub = sub,
                 subIcon = subIcon,
-                verified = true,
+                // Relationship rows carry no verification, so no badge.
+                verified = false,
                 identity = NewMessageIdentityBadge.Personal,
             )
         }
@@ -283,7 +284,7 @@ class NewMessageViewModel
                 )
                     ?: "Pantopus user"
             val initials = initialsFrom(displayName)
-            val verified = dto.otherParticipantIdentity?.verified == true
+            val verified = dto.otherParticipantIdentity?.isVerified == true
             val identityKind = dto.otherParticipantIdentity?.identityKind
             val identity =
                 when (identityKind) {
@@ -321,7 +322,8 @@ class NewMessageViewModel
                 locality = searchLocality(dto),
                 sub = null,
                 subIcon = null,
-                verified = true,
+                // Search results carry no verification, so no badge.
+                verified = false,
                 identity = identity,
             )
         }

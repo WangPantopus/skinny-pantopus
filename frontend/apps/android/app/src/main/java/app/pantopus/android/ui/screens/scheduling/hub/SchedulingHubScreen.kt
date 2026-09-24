@@ -271,7 +271,8 @@ private fun HubLoadedBody(
     if (state.isComposed) {
         Spacer(Modifier.height(Spacing.s3))
         val lead = state.displayName.trim().firstOrNull()?.uppercase() ?: "Y"
-        HubComposedNote(pillar = state.pillar, initials = listOf(lead, "JD", "AV"))
+        // Real roster initials only; an empty or failed lookup leaves the owner alone.
+        HubComposedNote(pillar = state.pillar, initials = listOf(lead) + state.memberInitials)
     }
     Spacer(Modifier.height(Spacing.s3 + 2.dp))
     BookingLinkCard(

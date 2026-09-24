@@ -394,7 +394,7 @@ class MailboxRootViewModel
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.Wallet,
                         headline = "No earn items yet",
-                        subcopy = "Complete gigs to see payouts, 1099s, and tax docs land here automatically.",
+                        subcopy = "Task earnings go to your wallet in Payments.",
                         ctaTitle = "Open Earn dashboard",
                         onCta = { onOpenEarn() },
                     )
@@ -402,13 +402,13 @@ class MailboxRootViewModel
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.Wallet,
                         headline = "Nothing to action",
-                        subcopy = "Payout approvals and tax to-dos for your gigs show up here.",
+                        subcopy = "Earn mail that needs you shows up here.",
                     )
                 drawer == MailboxDrawer.Earn && tab == MailboxTab.Vault ->
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.Archive,
                         headline = "No saved earn mail",
-                        subcopy = "Save payout statements and 1099s to find them fast.",
+                        subcopy = "Earn mail you save shows up here.",
                     )
                 else ->
                     ListOfRowsUiState.Empty(

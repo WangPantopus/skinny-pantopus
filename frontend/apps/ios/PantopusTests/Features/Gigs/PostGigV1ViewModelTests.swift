@@ -138,7 +138,7 @@ final class PostGigV1ViewModelTests: XCTestCase {
         vm.updatePrice("")
         let id = await vm.submit()
         XCTAssertNil(id)
-        XCTAssertEqual(vm.error(for: .price), "Enter a price, or pick Free.")
+        XCTAssertEqual(vm.error(for: .price), "Enter a price, or pick Open to offers.")
     }
 
     // MARK: - Photo uploads

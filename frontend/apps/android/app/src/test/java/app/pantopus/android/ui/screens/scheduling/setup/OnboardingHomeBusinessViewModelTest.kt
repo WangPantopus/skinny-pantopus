@@ -12,6 +12,8 @@ import app.pantopus.android.data.api.models.scheduling.EventTypeDto
 import app.pantopus.android.data.api.models.scheduling.EventTypeResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.businesses.BusinessTeamRepository
+import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.scheduling.SchedulingErrorDecoder
 import app.pantopus.android.data.scheduling.SchedulingFeatureFlags
@@ -43,6 +45,8 @@ class OnboardingHomeBusinessViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val repo: SchedulingRepository = mockk(relaxed = true)
     private val homes: HomesRepository = mockk()
+    private val homeMembers: HomeMembersRepository = mockk(relaxed = true)
+    private val businessTeam: BusinessTeamRepository = mockk(relaxed = true)
     private val auth: AuthRepository = mockk(relaxed = true)
     private val errors = SchedulingErrorDecoder(Moshi.Builder().build())
     private val flags = SchedulingFeatureFlags().apply { environment = "development" }
@@ -58,6 +62,8 @@ class OnboardingHomeBusinessViewModelTest {
     ) = OnboardingHomeBusinessViewModel(
         repo,
         homes,
+        homeMembers,
+        businessTeam,
         auth,
         errors,
         flags,

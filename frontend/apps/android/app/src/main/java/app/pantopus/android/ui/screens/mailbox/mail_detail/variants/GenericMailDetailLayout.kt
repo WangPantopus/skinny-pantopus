@@ -507,23 +507,26 @@ private fun SenderAvatar(content: MailDetailContent) {
                 color = PantopusColors.appTextInverse,
             )
         }
-        Box(
-            modifier =
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .offset(x = 3.dp, y = 3.dp)
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(PantopusColors.success)
-                    .border(2.dp, PantopusColors.appSurface, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Check,
-                contentDescription = null,
-                size = 9.dp,
-                tint = PantopusColors.appTextInverse,
-            )
+        // The green check only when the letter's stored trust is verified.
+        if (content.trust == MailTrust.Verified) {
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 3.dp, y = 3.dp)
+                        .size(16.dp)
+                        .clip(CircleShape)
+                        .background(PantopusColors.success)
+                        .border(2.dp, PantopusColors.appSurface, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.Check,
+                    contentDescription = null,
+                    size = 9.dp,
+                    tint = PantopusColors.appTextInverse,
+                )
+            }
         }
     }
 }
