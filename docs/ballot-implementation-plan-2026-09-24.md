@@ -293,7 +293,38 @@ These use the existing funnel, with no political data: useful visits (official l
 | Card, timeline, stack, teaser, Today rendering and states | Web Jest + `/dev/ballot` Playwright screenshots beside the rendered canvas boards | Run here. Cards differ from their boards on 0.00–0.01% of pixels; the governments finished frame on 0.09%. Story frames were checked against the Peel board at 0.6 s and 1.8 s |
 | iOS and Android card, governments view and Today | Written to the existing patterns, with unit tests for decoding, timeline geometry, placement and story timing | **Not compiled here.** iOS passed swiftformat, strict SwiftLint, and the icon, overline and token checks. Android passes the project's ktlint and detekt (stand-alone harness) and the hex check; it can't compile here because the proxy refuses dl.google.com (Google Maven). No Xcode in this container: a PR runs `ios-ci` / `android-ci`, then a device pass |
 | Real addresses, real links | Release check 1: a person opens every source and link; release check 2: three Clark County addresses and one address outside Washington through the real API | **Not done.** Egress is blocked here |
-| End-to-end on simulator, emulator and web | Existing acceptance catalog | **Not done** |
+| End-to-end on the web | A local stack: Postgres 16 with PostGIS, PostgREST 12.2.12, Supabase Auth 2.196.0, a gateway in place of Kong, the real backend and the Next.js app, driven in Chromium through the real UI | **Done September 24** (section 10.1) |
+| End-to-end on simulator and emulator | Existing acceptance catalog | **Not done.** No Xcode or Android SDK here |
+
+### 10.1 Web end-to-end run (September 24)
+
+I signed up, confirmed the email and signed in through the web. Everything after that went through the real pages, the real API and the database.
+
+- **Flag off:** the Place page and `civic_election` behave exactly as before ("Election data is not configured yet").
+- **Flag on for one user** (`beta_user_ids`):
+  - The Place page shows "This season" and the in-season card: 40 days, the timeline, how it works, and the registration, VoteWA and Clark County drop-box links, with the source line dated Sep 24.
+  - With the Census lookup failing, the card drops the governments line and button, and the backend logs the failure.
+  - With governments, "See your governments" plays the story. Skip and Close go to the finished frame; Done and Escape close it.
+- **Today:** on September 24, the "Moved this year?" line shows with 32 days left and links to the state's registration page. On October 17, the "Ballot week" card shows, and "Open your ballot" lands on the Place card.
+- **Other states:**
+  - On Election Day, the card shows the notice and the mover line is gone.
+  - After the election, the card shows only the results link.
+  - An Oregon home gets the links-only card.
+- **Signed-out /start:** the teaser and its governments view work end to end.
+
+**What was controlled, and why:**
+
+| What | Why | How |
+|---|---|---|
+| The home | Home creation needs Google or Smarty address validation, which fails closed without keys | Seeded in SQL, as the repo's HTTP fixtures do |
+| Mapbox and the Census geocoder | Blocked here | A preloaded module answered in each API's own response format; nothing else was stubbed |
+| The clock | Needed for the October and November states | `faketime`, on the backend only |
+
+For the local run, three Postgres 17 details were patched out of a copy of the baseline, never the repo: `transaction_timeout`, `GRANT MAINTAIN`, and the PostGIS version pin. The 92 migrations then applied cleanly, including `ballot_p0`.
+
+**Found and fixed:** the governments sheet rendered under the app shell's header, tab bar and floating buttons, so Skip and Close were covered. It now portals to the body, like `SlidePanel`.
+
+**Found and left for a separate task:** `/start?address=` deep links never preview. The autocomplete API returns `center: [lng, lat]`, but the funnel reads `center.lat`. This predates Ballot.
 
 ## 11. Founder approvals needed before release
 
