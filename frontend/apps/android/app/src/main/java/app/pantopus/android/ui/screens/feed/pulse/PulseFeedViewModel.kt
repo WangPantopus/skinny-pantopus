@@ -474,7 +474,8 @@ class PulseFeedViewModel
          * No-ops while a fetch is in flight or when the feed is exhausted.
          */
         fun loadMoreIfNeeded(rowId: String) {
-            if (!hasMore || _isLoadingMore.value || loading || _loadMoreError.value != null) return
+            val canFetchMore = hasMore && !_isLoadingMore.value && !loading
+            if (!canFetchMore || _loadMoreError.value != null) return
             val lastId = visiblePosts().lastOrNull()?.id ?: return
             if (rowId != lastId) return
             fetchNextPage()
