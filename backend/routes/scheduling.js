@@ -714,7 +714,48 @@ async function loadOwnedBooking(req) {
 }
 
 router.get('/bookings/:id', asyncHandler(async (req, res) => {
-  const booking = await loadOwnedBooking(req);
+  let booking;
+  try {
+    booking = await loadOwnedBooking(req);
+  } catch (error) {
+    if (error.statusCode !== 403) throw error;
+    // A notification recipient may be an assigned host or attendee without
+    // owner-calendar access. This GET alone exposes their minimal read view;
+    // the owner loader and every lifecycle/availability handler stay gated.
+    const current = await supabaseAdmin.from('Booking')
+      .select('id, event_type_id, owner_type, owner_id, host_user_id, status, start_at, end_at')
+      .eq('id', req.params.id).maybeSingle();
+    if (current.error) throw current.error;
+    if (!current.data) throw error;
+    const row = current.data;
+    // The existing business owner helper treats a failed membership read as
+    // denied. Never turn that unavailable permission check into participant access.
+    if (row.owner_type === 'business') {
+      const membership = await supabaseAdmin.from('BusinessTeam').select('id')
+        .eq('business_user_id', row.owner_id).eq('user_id', req.user.id)
+        .eq('is_active', true).maybeSingle();
+      if (membership.error) throw membership.error;
+    }
+    const own = await supabaseAdmin.from('BookingAttendee')
+      .select('rsvp_status, is_required').eq('booking_id', row.id)
+      .eq('user_id', req.user.id).maybeSingle();
+    if (own.error) throw own.error;
+    const isHost = row.host_user_id === req.user.id;
+    if (!isHost && !own.data) throw error;
+    const event = row.event_type_id
+      ? await supabaseAdmin.from('EventType').select('name').eq('id', row.event_type_id).maybeSingle()
+      : { data: null, error: null };
+    if (event.error) throw event.error;
+    return res.json({
+      booking: { id: row.id, status: row.status, start_at: row.start_at, end_at: row.end_at },
+      eventType: event.data ? { name: event.data.name } : null,
+      participant: {
+        role: isHost ? 'assigned_host' : 'attendee',
+        rsvp_status: own.data?.rsvp_status ?? null,
+        is_required: own.data?.is_required ?? null,
+      },
+    });
+  }
   const [{ data: attendees }, { data: et }] = await Promise.all([
     supabaseAdmin.from('BookingAttendee').select('*').eq('booking_id', booking.id),
     supabaseAdmin.from('EventType').select('id, name, location_mode').eq('id', booking.event_type_id).maybeSingle(),
