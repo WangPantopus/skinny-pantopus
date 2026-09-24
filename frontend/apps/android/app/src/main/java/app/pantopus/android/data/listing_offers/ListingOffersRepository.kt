@@ -3,6 +3,7 @@
 package app.pantopus.android.data.listing_offers
 
 import app.pantopus.android.data.api.models.listing_offers.CounterListingOfferBody
+import app.pantopus.android.data.api.models.listing_offers.CreateListingOfferBody
 import app.pantopus.android.data.api.models.listing_offers.ListingOfferResponseEnvelope
 import app.pantopus.android.data.api.models.listing_offers.ListingOffersResponse
 import app.pantopus.android.data.api.net.NetworkResult
@@ -23,6 +24,13 @@ class ListingOffersRepository
         private val api: ListingOffersApi,
     ) {
         suspend fun listOffers(listingId: String): NetworkResult<ListingOffersResponse> = safeApiCall { api.listOffers(listingId) }
+
+        suspend fun create(
+            listingId: String,
+            amount: Double?,
+            message: String?,
+        ): NetworkResult<ListingOfferResponseEnvelope> =
+            safeApiCall { api.createOffer(listingId, CreateListingOfferBody(amount = amount, message = message)) }
 
         suspend fun accept(
             listingId: String,

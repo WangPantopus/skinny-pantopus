@@ -3,8 +3,9 @@
 //  Pantopus
 //
 //  A10.6 — the sticky bottom dock: a business-violet primary "Contact"
-//  button beside a ghost secondary ("Book" when open, "Call" when
-//  newly-claimed / closed), with an optional closed note above.
+//  button beside an optional ghost secondary ("Call" when the business has
+//  a phone; "Book" once the payload carries a booking page), with an
+//  optional closed note above.
 //
 //  Design reference: `docs/designs/A10/business-frames.jsx` (ActionBar).
 //
@@ -34,7 +35,9 @@ struct ActionBar: View {
             }
 
             HStack(spacing: Spacing.s2) {
-                secondaryButton
+                if let secondary = dock.secondary {
+                    secondaryButton(secondary)
+                }
                 primaryButton
             }
         }
@@ -69,13 +72,13 @@ struct ActionBar: View {
         .accessibilityIdentifier("businessProfile.contact")
     }
 
-    private var secondaryButton: some View {
+    private func secondaryButton(_ secondary: BusinessActionDock.Secondary) -> some View {
         Button {
-            if dock.secondary == .book { onBook() } else { onCall() }
+            if secondary == .book { onBook() } else { onCall() }
         } label: {
             HStack(spacing: Spacing.s1) {
-                Icon(secondaryIcon, size: 16, color: Theme.Color.appText)
-                Text(secondaryLabel)
+                Icon(secondary == .book ? .calendarPlus : .phone, size: 16, color: Theme.Color.appText)
+                Text(Self.label(secondary))
                     .font(.system(size: 14, weight: .semibold))
                     .tracking(-0.1)
                     .foregroundStyle(Theme.Color.appText)
@@ -89,16 +92,12 @@ struct ActionBar: View {
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(secondaryLabel)
-        .accessibilityIdentifier("businessProfile.\(dock.secondary == .book ? "book" : "call")")
+        .accessibilityLabel(Self.label(secondary))
+        .accessibilityIdentifier("businessProfile.\(secondary == .book ? "book" : "call")")
     }
 
-    private var secondaryIcon: PantopusIcon {
-        dock.secondary == .book ? .calendarPlus : .phone
-    }
-
-    private var secondaryLabel: String {
-        dock.secondary == .book ? "Book" : "Call"
+    private static func label(_ secondary: BusinessActionDock.Secondary) -> String {
+        secondary == .book ? "Book" : "Call"
     }
 }
 

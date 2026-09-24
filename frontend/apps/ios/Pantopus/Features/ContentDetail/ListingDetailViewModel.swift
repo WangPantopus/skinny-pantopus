@@ -61,21 +61,32 @@ public final class ListingDetailViewModel {
         }
     }
 
-    /// Send the seller a message — optionally with an offer amount.
-    /// Returns `true` on success so the host can dismiss its sheet.
-    @discardableResult
-    public func sendMessage(text: String, offerAmount: Double? = nil) async -> Bool {
+    /// The buyer's offer → `POST /api/listings/:id/offers`, the route whose offers the seller sees
+    /// under "View offers". Returns `nil` on success, or the reason it wasn't sent (e.g. an offer
+    /// is already pending) for the sheet to show.
+    public func makeOffer(amount: Double?, message: String?) async -> String? {
         do {
-            let _: MessageListingResponse = try await api.request(
-                ListingsEndpoints.messageListing(
-                    id: listingId,
-                    body: MessageListingBody(message: text, offerAmount: offerAmount)
+            let _: ListingOfferResponse = try await api.request(
+                ListingOffersEndpoints.create(
+                    listingId: listingId,
+                    body: CreateListingOfferBody(amount: amount, message: message)
                 )
             )
-            return true
+            return nil
         } catch {
-            return false
+            return (error as? LocalizedError)?.errorDescription ?? "Couldn't send your offer. Please try again."
         }
+    }
+
+    /// An amount as the buyer typed it: `25.50` or, in a comma-decimal locale, `25,50`.
+    static func parseOfferAmount(_ text: String, locale: Locale = .current) -> Double? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "$", with: "")
+        guard !trimmed.isEmpty else { return nil }
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .decimal
+        if let number = formatter.number(from: trimmed) { return number.doubleValue }
+        return Double(trimmed.replacingOccurrences(of: ",", with: "."))
     }
 
     // MARK: - Projection
@@ -153,12 +164,16 @@ public final class ListingDetailViewModel {
         )
     }
 
+    /// The real seller (name, photo, verification) from the listing's creator identity.
     private static func counterparty(for listing: ListingDTO) -> ContentDetailCounterparty {
-        ContentDetailCounterparty(
-            displayName: "Seller",
-            initials: "S",
+        let seller = listing.creator
+        let name = seller?.resolvedDisplayName ?? "Seller"
+        return ContentDetailCounterparty(
+            displayName: name,
+            initials: GigDetailViewModel.initialsFromName(name),
+            avatarUrl: seller?.resolvedAvatarURL,
             identityKind: "personal",
-            verified: true,
+            verified: seller?.resolvedVerified ?? false,
             rating: nil,
             trailing: listing.locationName,
             showsMessageButton: true

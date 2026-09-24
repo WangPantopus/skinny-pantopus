@@ -72,6 +72,9 @@ public enum MailSegment: String, CaseIterable, Hashable {
 public final class MailTabStore {
     public static let shared = MailTabStore()
     public var pendingSegment: MailSegment?
+    /// Segment roots showing; the switch hides below a root (switching would discard it).
+    public var mailboxAtRoot = true
+    public var messagesAtRoot = true
     public init() {}
 }
 
@@ -187,7 +190,8 @@ public struct RootTabView: View {
         // Mailbox-cluster destinations resolve in the Mail tab's stack
         // (a mailbox-rooted HubTabRoot sharing the same destinations).
         case .vacationHold, .mailDay,
-             .stamps, .mailTask, .mailTranslation, .unboxing, .packageGig, .earn:
+             .stamps, .mailTask, .mailTranslation, .unboxing, .packageGig, .earn,
+             .mailbox, .mailItem:
             model.selected = .mail
         case .supportTrain, .supportTrainManage, .user, .beaconProfile,
              .connections, .beacons, .discoverHub,
@@ -197,7 +201,7 @@ public struct RootTabView: View {
              .notifications, .createBusiness, .businessProfile, .businessPage,
              .editBusinessPage,
              .wallet, .paymentsSettings,
-             .businessOwner, .viewAs, .waitingRoom,
+             .businessOwner, .viewAs, .waitingRoom, .neighborMessage,
              .bookingDetail, .myBookings,
              .invoiceDetail:
             model.selected = .place
@@ -325,18 +329,20 @@ public struct MailTabRoot: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            Picker("Mail", selection: $segment) {
-                ForEach(MailSegment.allCases, id: \.self) { seg in
-                    Text(seg.label)
-                        .tag(seg)
-                        .accessibilityIdentifier("mailSegment.\(seg.rawValue)")
+            if segment == .mailbox ? store.mailboxAtRoot : store.messagesAtRoot {
+                Picker("Mail", selection: $segment) {
+                    ForEach(MailSegment.allCases, id: \.self) { seg in
+                        Text(seg.label)
+                            .tag(seg)
+                            .accessibilityIdentifier("mailSegment.\(seg.rawValue)")
+                    }
                 }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, Spacing.s4)
+                .padding(.top, Spacing.s2)
+                .padding(.bottom, Spacing.s2)
+                .accessibilityIdentifier("mailSegments")
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, Spacing.s4)
-            .padding(.top, Spacing.s2)
-            .padding(.bottom, Spacing.s2)
-            .accessibilityIdentifier("mailSegments")
 
             switch segment {
             case .mailbox:

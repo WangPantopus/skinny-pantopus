@@ -349,13 +349,14 @@ public extension UnboxingContent {
                         label: "Condition photos",
                         text: photosLabel(count: shots.count)
                     ),
-                    AIElfBullet(
+                    // Offered only while posting a package task is available.
+                    PackageGigAvailability.isAvailable ? AIElfBullet(
                         id: "ub-elf-c3",
                         icon: .usersRound,
                         label: "Need a hand?",
                         text: "post an assembly task"
-                    )
-                ]
+                    ) : nil
+                ].compactMap { $0 }
             ),
             filedElf: AIElfStripContent(
                 headline: "Filed to your Home drawer",

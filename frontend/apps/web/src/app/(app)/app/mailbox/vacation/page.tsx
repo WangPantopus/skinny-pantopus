@@ -20,17 +20,21 @@ const PKG_OPTIONS: { id: PackageHoldAction; label: string; sub: string }[] = [
   { id: 'hold_at_carrier', label: 'Hold at carrier facility', sub: 'Pick up when you return' },
 ];
 
+function localDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function VacationContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<VacationHold | null>(null);
   const [upcoming, setUpcoming] = useState<VacationHold | null>(null);
 
-  // Setup form
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+  // Setup form: the user's own calendar days (toISOString() is the UTC day, a day off in some hours).
+  const [startDate, setStartDate] = useState(() => localDay(new Date()));
   const [endDate, setEndDate] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() + 7);
-    return d.toISOString().split('T')[0];
+    return localDay(d);
   });
   const [mailAction, setMailAction] = useState<HoldAction>('hold_in_vault');
   const [pkgAction, setPkgAction] = useState<PackageHoldAction>('ask_neighbor');
@@ -158,8 +162,8 @@ function VacationContent() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-app-text-muted mb-1 block">Departure</label>
-            <input type="date" value={startDate} min={new Date().toISOString().split('T')[0]}
-              onChange={e => { setStartDate(e.target.value); if (e.target.value >= endDate) { const d = new Date(e.target.value); d.setDate(d.getDate() + 1); setEndDate(d.toISOString().split('T')[0]); } }}
+            <input type="date" value={startDate} min={localDay(new Date())}
+              onChange={e => { setStartDate(e.target.value); if (e.target.value >= endDate) { const d = new Date(`${e.target.value}T00:00:00`); d.setDate(d.getDate() + 1); setEndDate(localDay(d)); } }}
               className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text focus:outline-none focus:ring-1 focus:ring-emerald-500" />
           </div>
           <div>

@@ -5,7 +5,7 @@
 //  P1-F — covers the live wiring of the "View as" privacy preview:
 //    - audience → backend (surface, viewer) param mapping,
 //    - pure ViewAsResponse → ViewAsRender projection (disclosure ladder),
-//    - the live load() path (incl. error → sample fallback).
+//    - the live load() path (incl. error → failed state, not the sample).
 //
 
 import XCTest
@@ -123,7 +123,7 @@ final class ViewAsMappingTests: XCTestCase {
         XCTAssertEqual(disclosure(loaded.render, "contact")?.isHidden, false)
     }
 
-    func testLiveLoadErrorFallsBackToSample() async {
+    func testLiveLoadErrorShowsFailedNotSample() async {
         SequencedURLProtocol.reset()
         defer { SequencedURLProtocol.reset() }
         let session = SequencedURLProtocol.makeSession(routeResponses: [
@@ -131,9 +131,8 @@ final class ViewAsMappingTests: XCTestCase {
         ])
         let vm = ViewAsViewModel(api: APIClient(session: session, retryPolicy: .none), selected: .connection)
         await vm.load()
-        guard case let .loaded(loaded) = vm.state else {
-            return XCTFail("Expected sample-fallback loaded, got \(vm.state)")
+        guard case .failed = vm.state else {
+            return XCTFail("Expected failed, got \(vm.state)")
         }
-        XCTAssertEqual(loaded.render.viewer, .connection)
     }
 }

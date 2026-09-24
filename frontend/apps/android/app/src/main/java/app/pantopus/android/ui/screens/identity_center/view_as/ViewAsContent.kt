@@ -147,9 +147,8 @@ data class ViewAsRender(
 )
 
 /**
- * Top-level render state. A loading (shimmer) frame and the resolved
- * preview; there's no empty/error path because the data is local sample
- * content, not a fetch.
+ * Top-level render state: loading (shimmer), the resolved preview, or a
+ * failed live fetch (error with Try again).
  */
 sealed interface ViewAsUiState {
     data object Loading : ViewAsUiState
@@ -158,4 +157,6 @@ sealed interface ViewAsUiState {
         val selected: ViewerAudience,
         val render: ViewAsRender,
     ) : ViewAsUiState
+
+    data object Failed : ViewAsUiState
 }

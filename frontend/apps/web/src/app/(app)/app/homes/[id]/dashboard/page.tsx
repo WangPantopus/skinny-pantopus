@@ -76,10 +76,6 @@ function writeFailureMessage(err: unknown, fallback: string): string {
     : typeof (err as { message?: unknown } | null)?.message === 'string' ? (err as { message: string }).message : '';
   return message || fallback;
 }
-function attachmentsNotSavedNotice(kind: 'issue' | 'bill' | 'package', count: number): string {
-  const files = count === 1 ? '1 attachment was' : `${count} attachments were`;
-  return `${kind.charAt(0).toUpperCase()}${kind.slice(1)} saved, but ${files} not uploaded: attachments for ${kind}s are not available yet.`;
-}
 
 export default function HomeDashboardPage() {
   const params = useParams();
@@ -256,9 +252,6 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
 
   const handleIssueSave = useCallback(
     async (data: Record<string, any>) => {
-      const mediaFiles: File[] | undefined = data._mediaFiles;
-      delete data._mediaFiles;
-
       if (issuePanel.issue) {
         const result = await api.homeProfile.updateHomeIssue(homeId, issuePanel.issue.id, data);
         setIssues((prev) => prev.map((i) => (i.id === issuePanel.issue.id ? { ...i, ...result.issue } : i)));
@@ -266,10 +259,6 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
         const result = await api.homeProfile.createHomeIssue(homeId, data);
         setIssues((prev) => [result.issue, ...prev]);
       }
-
-      // No server contract binds attachments to a HomeIssue yet; say so
-      // instead of discarding the selected files without a word.
-      if (mediaFiles?.length) toast.warning(attachmentsNotSavedNotice('issue', mediaFiles.length));
     },
     [homeId, issuePanel.issue, setIssues]
   );
@@ -278,9 +267,6 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
 
   const handleBillSave = useCallback(
     async (data: Record<string, any>) => {
-      const mediaFiles: File[] | undefined = data._mediaFiles;
-      delete data._mediaFiles;
-
       if (billPanel.bill) {
         const result = await api.homeProfile.updateHomeBill(homeId, billPanel.bill.id, data);
         setBills((prev) => prev.map((b) => (b.id === billPanel.bill.id ? { ...b, ...result.bill } : b)));
@@ -288,10 +274,6 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
         const result = await api.homeProfile.createHomeBill(homeId, data);
         setBills((prev) => [result.bill, ...prev]);
       }
-
-      // No server contract binds attachments to a HomeBill yet; say so
-      // instead of discarding the selected files without a word.
-      if (mediaFiles?.length) toast.warning(attachmentsNotSavedNotice('bill', mediaFiles.length));
     },
     [homeId, billPanel.bill, setBills]
   );
@@ -322,9 +304,6 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
 
   const handlePackageSave = useCallback(
     async (data: Record<string, any>) => {
-      const mediaFiles: File[] | undefined = data._mediaFiles;
-      delete data._mediaFiles;
-
       if (packagePanel.pkg) {
         const result = await api.homeProfile.updateHomePackage(homeId, packagePanel.pkg.id, data);
         setPackages((prev) =>
@@ -334,10 +313,6 @@ function HomeDashboardReady({ homeId, data }: { homeId: string; data: UseHomeDat
         const result = await api.homeProfile.createHomePackage(homeId, data);
         setPackages((prev) => [result.package, ...prev]);
       }
-
-      // No server contract binds attachments to a HomePackage yet; say so
-      // instead of discarding the selected files without a word.
-      if (mediaFiles?.length) toast.warning(attachmentsNotSavedNotice('package', mediaFiles.length));
     },
     [homeId, packagePanel.pkg, setPackages]
   );

@@ -386,14 +386,17 @@ private struct SenderCard: View {
             .background(content.category.accent)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
             .overlay(alignment: .bottomTrailing) {
-                Circle()
-                    .fill(Theme.Color.successSolid)
-                    .frame(width: 16, height: 16)
-                    .overlay {
-                        Icon(.check, size: 9, color: Theme.Color.appTextInverse)
-                    }
-                    .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
-                    .offset(x: 3, y: 3)
+                // The green check only when the letter's stored trust is verified.
+                if content.trust == .verified {
+                    Circle()
+                        .fill(Theme.Color.successSolid)
+                        .frame(width: 16, height: 16)
+                        .overlay {
+                            Icon(.check, size: 9, color: Theme.Color.appTextInverse)
+                        }
+                        .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
+                        .offset(x: 3, y: 3)
+                }
             }
     }
 

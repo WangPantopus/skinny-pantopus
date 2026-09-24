@@ -156,7 +156,9 @@ export async function generateMetadata({
       description:
         result.status === 403
           ? 'This Support Train is not publicly shareable.'
-          : 'This Support Train could not be found.',
+          : result.status === 404
+            ? 'This Support Train could not be found.'
+            : 'This Support Train could not be loaded. Please try again.',
     };
   }
 
@@ -194,6 +196,7 @@ export default async function PublicSupportTrainPage({
   }
 
   if (!train) {
+    const accessRestricted = result.status === 403;
     return (
       <main className="min-h-screen bg-app text-app">
         <div className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center px-4 text-center sm:px-6">
@@ -201,12 +204,24 @@ export default async function PublicSupportTrainPage({
             Support Train Share
           </p>
           <h1 className="mt-6 text-3xl font-semibold tracking-tight text-app">
-            This Support Train isn&apos;t publicly shareable
+            {accessRestricted
+              ? "This Support Train isn't publicly shareable"
+              : "Couldn't load this Support Train"}
           </h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-app-text-secondary">
-            The link is valid, but this Support Train is limited to Pantopus members with access.
+            {accessRestricted
+              ? 'The link is valid, but this Support Train is limited to Pantopus members with access.'
+              : 'Something went wrong while loading this page. Please try again.'}
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            {!accessRestricted ? (
+              <a
+                href={buildSupportTrainPath(id)}
+                className="rounded-full border border-app px-5 py-2.5 text-sm font-semibold text-app hover:bg-surface-muted"
+              >
+                Try Again
+              </a>
+            ) : null}
             <Link
               href="/"
               className="rounded-full border border-app px-5 py-2.5 text-sm font-semibold text-app hover:bg-surface-muted"

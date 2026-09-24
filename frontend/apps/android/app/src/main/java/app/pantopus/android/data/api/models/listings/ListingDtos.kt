@@ -2,6 +2,7 @@
 
 package app.pantopus.android.data.api.models.listings
 
+import app.pantopus.android.data.api.models.gigs.GigCreator
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -49,6 +50,8 @@ data class ListingDto(
     @Json(name = "active_offer_count") val activeOfferCount: Int? = null,
     @Json(name = "sold_at") val soldAt: String? = null,
     @Json(name = "archived_at") val archivedAt: String? = null,
+    /** The seller, as the identity serializer shapes it (`GET /api/listings/:id`); null on list rows. */
+    val creator: GigCreator? = null,
 )
 
 /**

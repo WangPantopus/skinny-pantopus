@@ -53,8 +53,12 @@ data class P3TaskUpdateRequest(
     val dueAt: String? = null,
 )
 
-/** Envelope for `PATCH /api/mailbox/v2/p3/tasks/:id` — `{ task }`. */
+/**
+ * Envelope for `PATCH /api/mailbox/v2/p3/tasks/:id` and `POST .../tasks/from-mail` — `{ task }`. From-mail adds
+ * `replayed: true` when the caller already had a task for that mail and got it back.
+ */
 @JsonClass(generateAdapter = true)
 data class P3TaskResponse(
     val task: P3TaskDto,
+    val replayed: Boolean? = null,
 )

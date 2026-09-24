@@ -255,10 +255,12 @@ struct SchedulingHubScreen: View {
     }
 
     private var composedMembers: [String] {
-        // Avatar-stack initials are decorative; full household listing is another
-        // stream's domain, so seed from the owner display name.
+        // The owner's initials, then real members from the hub's roster lookup
+        // (home occupants / business team). No sample initials: a failed or
+        // empty lookup leaves the owner alone.
         let base = setupInitials(model.displayName)
-        return [base, "JD", "AV"]
+        let members = model.memberNames.values.sorted().prefix(2).map { setupInitials($0) }
+        return [base] + members
     }
 
     // MARK: Error

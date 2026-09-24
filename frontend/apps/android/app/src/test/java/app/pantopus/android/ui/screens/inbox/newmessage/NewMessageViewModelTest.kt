@@ -263,7 +263,7 @@ class NewMessageViewModelTest {
     // MARK: - Row mapping (pure projections)
 
     @Test
-    fun rowForConnection_projectsPersonalVerified() {
+    fun rowForConnection_projectsPersonalWithoutBadge() {
         val viewModel = makeVM()
         val rel =
             RelationshipDto(
@@ -288,7 +288,8 @@ class NewMessageViewModelTest {
         assertEquals("TU", row.initials)
         assertEquals("Elm Park, OR", row.locality)
         assertEquals(NewMessageIdentityBadge.Personal, row.identity)
-        assertTrue(row.verified)
+        // Relationship rows carry no verification, so no badge.
+        assertFalse(row.verified)
     }
 
     @Test

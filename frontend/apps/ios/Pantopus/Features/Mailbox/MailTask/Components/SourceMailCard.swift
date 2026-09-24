@@ -4,7 +4,7 @@
 //
 //  A17.12 — "Pulled from this mail" card. A section overline over a
 //  tappable card (orange accent strip) showing the originating mail's
-//  trust + category chips, sender overline, title, snippet, and an
+//  category chip, sender overline, title, snippet, and an
 //  "Open original mail" footer row. The whole card taps through to the
 //  source mail detail.
 //
@@ -35,7 +35,6 @@ struct SourceMailCard: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
             HStack(spacing: Spacing.s1 + 2) {
-                trustChip
                 categoryChip
                 Spacer(minLength: Spacing.s0)
                 Text(source.time)
@@ -89,19 +88,6 @@ struct SourceMailCard: View {
             }
             .padding(.top, Spacing.s2 + 2)
         }
-    }
-
-    private var trustChip: some View {
-        HStack(spacing: Spacing.s1) {
-            Icon(.shieldCheck, size: 11, color: Theme.Color.success)
-            Text("Verified")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(Theme.Color.success)
-        }
-        .padding(.horizontal, Spacing.s2)
-        .padding(.vertical, 3)
-        .background(Theme.Color.successBg)
-        .clipShape(Capsule())
     }
 
     private var categoryChip: some View {

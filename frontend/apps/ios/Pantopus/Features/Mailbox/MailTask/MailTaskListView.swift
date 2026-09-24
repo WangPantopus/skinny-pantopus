@@ -48,8 +48,8 @@ public struct MailTaskListView: View {
                 set: { if !$0 { viewModel.alert = nil } }
             ),
             presenting: viewModel.alert
-        ) { _ in
-            Button("OK", role: .cancel) { viewModel.alert = nil }
+        ) { shown in
+            Button(shown.openTaskId == nil ? "OK" : "Open task", role: .cancel) { viewModel.confirmAlert(shown) }
         } message: { alert in
             Text(alert.message)
         }
@@ -378,20 +378,22 @@ public struct MailTaskListView: View {
 
                 // A17.8 → "Ask a Neighbor". RN's escalation out of the task
                 // pipeline (`src/app/mailbox/tasks.tsx:231-240`).
-                Button(action: { viewModel.postAsNeighborTask() }, label: {
-                    HStack(spacing: Spacing.s2) {
-                        Icon(.usersRound, size: 15, color: Theme.Color.business)
-                        Text("Post as Neighbor Task Instead")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Theme.Color.business)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, Spacing.s3)
-                    .background(Theme.Color.businessBg)
-                    .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
-                })
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("mailTaskList_postAsNeighborTask")
+                if PackageGigAvailability.isAvailable {
+                    Button(action: { viewModel.postAsNeighborTask() }, label: {
+                        HStack(spacing: Spacing.s2) {
+                            Icon(.usersRound, size: 15, color: Theme.Color.business)
+                            Text("Post as Neighbor Task Instead")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(Theme.Color.business)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, Spacing.s3)
+                        .background(Theme.Color.businessBg)
+                        .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+                    })
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("mailTaskList_postAsNeighborTask")
+                }
 
                 Button(action: { viewModel.cancelCreate() }, label: {
                     Text("See all mail tasks")

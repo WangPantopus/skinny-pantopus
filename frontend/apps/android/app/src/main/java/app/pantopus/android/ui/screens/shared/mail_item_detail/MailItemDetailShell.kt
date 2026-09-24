@@ -34,6 +34,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,6 +43,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -101,6 +104,10 @@ fun MailItemDetailShell(
     sender: @Composable () -> Unit = {},
     actions: (@Composable () -> Unit)? = null,
 ) {
+    // Measured height of the sticky actions shelf; the scroll content leaves at least this much room below the last
+    // card so it can scroll clear of the shelf.
+    var actionsShelfHeightPx by remember { mutableIntStateOf(0) }
+    val actionsShelfHeight = with(LocalDensity.current) { actionsShelfHeightPx.toDp() }
     Box(
         modifier =
             Modifier
@@ -128,9 +135,9 @@ fun MailItemDetailShell(
                     AttachmentsRowView(content = attachments)
                 }
                 Box(modifier = Modifier.testTag("mailItemDetail_sender")) { sender() }
-                // Leave room for the sticky actions shelf.
+                // Leave room for the sticky actions shelf (a tall shelf used to hide the sender card).
                 if (actions != null) {
-                    Spacer(Modifier.height(96.dp))
+                    Spacer(Modifier.height(maxOf(96.dp, actionsShelfHeight)))
                 } else {
                     Spacer(Modifier.height(Spacing.s4))
                 }
@@ -142,6 +149,7 @@ fun MailItemDetailShell(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
+                        .onSizeChanged { actionsShelfHeightPx = it.height }
                         .background(PantopusColors.appSurface)
                         .testTag("mailItemDetail_actions"),
             ) {
