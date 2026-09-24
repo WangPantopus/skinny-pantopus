@@ -72,6 +72,7 @@ class HubViewModel
         val state: StateFlow<HubUiState> = _state.asStateFlow()
 
         private val _discoveryFilter = MutableStateFlow(HubDiscoveryFilter.Gigs)
+        private var discoveryGeneration = 0
 
         /**
          * Active Discover filter tab. Drives the `filter` query param on
@@ -109,8 +110,10 @@ class HubViewModel
         }
 
         private suspend fun refreshDiscovery() {
+            val generation = ++discoveryGeneration
             _discoveryLoading.value = true
             val result = repo.discovery(filter = _discoveryFilter.value.queryValue)
+            if (generation != discoveryGeneration) return
             _discoveryFailed.value = result !is NetworkResult.Success
             val items = (result as? NetworkResult.Success)?.data?.items.orEmpty()
             applyDiscovery(projectDiscovery(items))
@@ -136,6 +139,8 @@ class HubViewModel
 
         /** Pull-to-refresh / retry. */
         fun refresh() {
+            discoveryGeneration += 1
+            _discoveryLoading.value = false
             _state.value = HubUiState.Skeleton
             viewModelScope.launch { fetch() }
         }
