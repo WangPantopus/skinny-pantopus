@@ -1,8 +1,8 @@
 # Pantopus project handoff
 
-## CURRENT RESUME POINT — 2026-09-24T04:14:45Z (active Codex coordinator)
+## CURRENT RESUME POINT — 2026-09-24T04:30:35Z (active Codex coordinator)
 
-Master5cf4a26c35f79e04503a2e734ef6a1582e90af24; batch7 merged. Original155 is68fixed/merged,25inflight,62notstarted; broad80 is13closed/67partial, not app coverage.405/a31 and406/ef769 pre-reviewed with real-app evidence/manifests/sourcebindings; required CI still running, no nextbatch published. Root Android326b actual area/headerRetry and changed-query paging/stale-error gates passed. iOS326b build passed but install/afters wait HomeUI. Home iOS vacation failure/recovery passed; remaining privacy/navigation gates continue. S3 Me build has heavy; next S1 onewebsession. New scheduling cancellation notification/copy mismatch has bounded Android followup approval, no money-policy change. Fresh full-app sweep remains ahead. Details in [live hub](workstreams/README.md); founder§7/A17 reserved.
+Master `5cf4a26c35f79e04503a2e734ef6a1582e90af24`; original155 remains68 fixed/merged,25 in flight,62 not started; broad80 remains13 closed/67 partial. These are item counts, not app coverage. PR405 required CI pending; PR406 has two existing selected-area fixture failures under review, no batch published. Home iOS bounded privacy/vacation/transport/community afters reported complete and fixtures restored; root seal review remains. S3 actual Android business recovery passed and final free-cancellation copy build is running. S1 actual web session found map action overlap. Root takes released iOS UI for prepared Shared326b install/afters. C28 now reproduced on both native platforms, no repair yet. Discover/empty-calendar findings remain open; do not wire existing posts discovery without its access contract or resume the security audit. Fresh full-app sweep remains ahead. Exact state, evidence limits and leases are in the [live hub](workstreams/README.md); founder§7/A17 reserved.
 
 ## Resume point history — 2026-09-23T21:36:01Z (coordinator takeover)
 
