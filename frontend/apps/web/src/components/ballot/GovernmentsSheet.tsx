@@ -17,6 +17,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useReducedMotion } from '@/components/scheduling/polish/a11y';
 import GovernmentStack, { STACK_POLYGONS, STORY_STEP_MS } from './GovernmentStack';
 
@@ -149,9 +150,11 @@ export default function GovernmentsSheet({
 }) {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || !mounted) return undefined;
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -163,15 +166,18 @@ export default function GovernmentsSheet({
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = overflow;
     };
-  }, [open, onClose]);
+  }, [open, onClose, mounted]);
 
-  if (!open || !governments) return null;
-  return (
+  if (!mounted || !open || !governments) return null;
+  // The app shell creates a stacking context below its fixed header (see
+  // SlidePanel), so the sheet goes to the body; z-[70] then clears the
+  // header, tab bar and buttons, as AppShell's own composer does.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/40 sm:items-center"
+      className="fixed inset-0 z-[70] flex items-stretch justify-center bg-black/40 sm:items-center"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -179,6 +185,7 @@ export default function GovernmentsSheet({
       <div className="h-full w-full overflow-y-auto sm:h-[844px] sm:max-h-[calc(100dvh-32px)] sm:w-[390px] sm:overflow-hidden sm:rounded-2xl">
         <GovernmentsView governments={governments} address={address} onClose={onClose} titleId={titleId} closeRef={closeRef} />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
