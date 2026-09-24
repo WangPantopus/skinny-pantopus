@@ -38,6 +38,7 @@ sealed interface SchedulingHubUiState {
         val memberInitials: List<String> = emptyList(),
         /** The link preview's next open start times; empty = none open, null = unknown. */
         val previewTimes: List<String>? = null,
+        val pauseError: String? = null,
     ) : SchedulingHubUiState
 
     data class Error(

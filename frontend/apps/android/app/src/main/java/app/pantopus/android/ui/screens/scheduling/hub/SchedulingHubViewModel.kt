@@ -33,6 +33,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -101,6 +102,7 @@ class SchedulingHubViewModel
         private var started = false
         private var fetchJob: Job? = null
         private var pauseJob: Job? = null
+        private var ownerGeneration = 0
         private var summaryJob: Job? = null
 
         // Cached for actions that don't re-fetch the whole screen.
@@ -118,6 +120,7 @@ class SchedulingHubViewModel
         }
 
         fun load() {
+            invalidatePause()
             fetchJob?.cancel()
             fetchJob =
                 viewModelScope.launch {
@@ -132,12 +135,14 @@ class SchedulingHubViewModel
         }
 
         fun refresh() {
+            invalidatePause()
             fetchJob?.cancel()
             fetchJob = viewModelScope.launch { fetch() }
         }
 
         fun selectPillar(target: SchedulingPillar) {
             if (target == _pillar.value) return
+            invalidatePause()
             _pillar.value = target
             fetchJob?.cancel()
             fetchJob =
@@ -362,17 +367,27 @@ class SchedulingHubViewModel
                 }
         }
 
+        private fun invalidatePause() {
+            ownerGeneration += 1
+            pauseJob?.cancel()
+            val live = _state.value as? SchedulingHubUiState.Loaded ?: return
+            _state.value = live.copy(pauseError = null)
+        }
+
         fun setPaused(paused: Boolean) {
             if (!canEdit) return
             val current = _state.value as? SchedulingHubUiState.Loaded ?: return
             val requestOwner = owner
             val requestPillar = _pillar.value
-            _state.value = current.copy(isPaused = paused)
+            val requestGeneration = ownerGeneration
+            _state.value = current.copy(isPaused = paused, pauseError = null)
             pauseJob?.cancel()
             pauseJob =
                 viewModelScope.launch {
                     val r = repo.updateBookingPage(requestOwner, UpdateBookingPageRequest(isPaused = paused))
-                    if (owner != requestOwner || _pillar.value != requestPillar) return@launch
+                    if (!isActive || ownerGeneration != requestGeneration || owner != requestOwner || _pillar.value != requestPillar) {
+                        return@launch
+                    }
                     when (r) {
                         is NetworkResult.Success -> {
                             page = r.data.page
@@ -384,7 +399,15 @@ class SchedulingHubViewModel
                             if (decoded is SchedulingError.Secret) canEdit = false
                             val live = _state.value as? SchedulingHubUiState.Loaded ?: return@launch
                             // Only revert if our optimistic value still stands (no newer toggle won the race).
-                            if (live.isPaused == paused) _state.value = live.copy(isPaused = !paused, canEdit = canEdit)
+                            if (live.isPaused == paused) {
+                                val message =
+                                    if (decoded is SchedulingError.Secret) {
+                                        "Your access changed. Ask an owner to update bookings."
+                                    } else {
+                                        "Couldn't ${if (paused) "pause" else "resume"} bookings. Try again."
+                                    }
+                                _state.value = live.copy(isPaused = !paused, canEdit = canEdit, pauseError = message)
+                            }
                         }
                     }
                 }

@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
+import app.pantopus.android.ui.screens.scheduling.bookings_extra.ExtrasInlineError
 import app.pantopus.android.ui.screens.shared.identity.IdentityOption
 import app.pantopus.android.ui.screens.shared.identity.IdentitySwitcherPillRow
 import app.pantopus.android.ui.theme.PantopusColors
@@ -149,6 +150,13 @@ fun SchedulingHubScreen(
                             )
                     }
                 }
+            }
+            (state as? SchedulingHubUiState.Loaded)?.pauseError?.let { message ->
+                ExtrasInlineError(
+                    message = message,
+                    modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s2),
+                    centered = true,
+                )
             }
             if (showFooter) {
                 val loaded = state as SchedulingHubUiState.Loaded
