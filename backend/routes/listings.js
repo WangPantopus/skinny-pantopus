@@ -1404,7 +1404,10 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }
 
     const visibleListing = applyLocationPrivacy(
-      await normalizeListingWithHydratedCreator(listing),
+      {
+        ...await normalizeListingWithHydratedCreator(listing),
+        location_address: listing.location_address,
+      },
       viewerUserId,
       { grantedUserIds }
     );
