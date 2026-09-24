@@ -1,0 +1,29 @@
+{
+ "id": "f7-widget-howto-sheet",
+ "name": "Add the widget (how-to, with a live preview)",
+ "feature": "F7",
+ "disposition": "NEW_SHEET_OR_MODAL",
+ "platforms": [
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Presented from the place file's 'Put today on your home screen' row \u2014 iOS .sheet with a medium detent; Android ModalBottomSheet.",
+ "purpose": "No public API can place a widget for the user, so the only way this converts is by showing the reward first and then teaching three OS gestures.",
+ "contents": "A live preview of the user's OWN widget rendered from their real snapshot, then three numbered platform-correct steps, then Done. No fake 'Add it for me' button.",
+ "states": [
+  "default (live preview)",
+  "no snapshot yet (falls back to the gallery sample)",
+  "no place (CTA becomes 'Save an address first')",
+  "iOS step set vs Android step set",
+  "dark mode"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Place file widget row",
+  "Notification settings (for a user who declined push \u2014 the widget is the better offer)"
+ ],
+ "visualization": "Preview at true size at the top, three compact illustrated gesture steps beneath, fitting a medium detent without scrolling. The preview, not the instructions, is the top of the sheet: the user sees their own recycling day before being asked to do anything.",
+ "uxNote": "Keep the steps to gestures ('touch and hold the home screen') rather than exact menu items, and never screenshot a specific OS version. Ranking the widget above the briefing opt-in for a permission-denied user is the best UX decision in F7 \u2014 it is the only return trigger that needs no permission at all.",
+ "effortDays": 0.75
+}

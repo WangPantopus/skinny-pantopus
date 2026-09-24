@@ -1,0 +1,30 @@
+{
+ "id": "f9-founding-meter-preview",
+ "name": "Founding slots \u2014 honest meter, fails closed",
+ "feature": "F9 / F8",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "The block_density card in the T0 preview (web DensityCard, iOS/Android PreviewSections) and the sticky WallBar's same-block line.",
+ "purpose": "Never promise a Founding Neighbor slot the system cannot honour \u2014 including when the founding-window lookup fails, which today defaults to 'open'.",
+ "contents": "Three label states instead of two: open, no slots, unknown. The web CTA 'Claim this address and be one of the first here' is hard-coded client-side and must follow founding_open or the button re-promises what the label just withdrew. When a compare sender and viewer share a geohash-6 and slots remain, the wall line replaces (not stacks on) 'Keep this address handy.'",
+ "states": [
+  "founding open (meter + date)",
+  "zero slots or window ended (no meter, no line, silently)",
+  "lookup failed \u2192 render NO density card at all",
+  "preview loading",
+  "legacy free-tiles fallback"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "T0 preview density section",
+  "Sticky wall on a compare arrival"
+ ],
+ "visualization": "A 5-SEGMENT slot meter \u2014 filled = taken, hollow = open, always exactly five segments so the denominator is visible \u2014 plus a thin bar for days remaining out of the 21-day window. Deliberately a different shape from DensityCard's four qualitative dots for 'verified homes nearby', or users will read density dots as slots. An empty meter would read as 'five open', which is the exact false promise the fails-open fix exists to kill \u2014 so a failed lookup renders nothing.",
+ "uxNote": "Keep the same-block sentence about the BLOCK's remaining slots, never about the sender: the compare card's whole promise is 'readings and a city, never your address', and 'you two are on the same block' tells the recipient something the sender never explicitly agreed to share.",
+ "effortDays": 0.75
+}

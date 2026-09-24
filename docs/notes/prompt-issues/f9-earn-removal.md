@@ -1,0 +1,29 @@
+# Last review findings for f9-earn-removal (round 2). The fix after this round was applied but not re-verified.
+
+- [minor] (substance) The research-backed change asks for a verb-led CTA back to a tab on the landing. The prompt deliberately drops it ("no back-to-tab button") without recording the deviation on Notes.
+  - evidence: per-surface-changes: "The calm landing for old links uses text.secondary/strong only, never text.muted, and has a verb-led CTA back to a tab". Prompt: "The landing has no back-to-tab button, because it already is the Mail root with the Mail tab selected."
+  - fix: Add to Notes: "Research asked for a verb-led CTA back to a tab; dropped because the landing is the Mail root itself; 'Hide this' is the only action."
+- [minor] (substance) 'Hide this' dismisses the line for good on this account, which needs per-account persistence, and the Notes engineering list doesn't mention it. The signed-out arrival state isn't drawn and isn't named among omitted states.
+  - evidence: Prompt: "'Hide this' ... dismisses it for good on this account." Derive proposal states: "signed-out → auth redirect preserving the destination". Prompt Notes: "Omitted states." (generic)
+  - fix: Add to Notes engineering: "Store the landing-line dismissal per account (server or synced preference)." Add to omitted states: "Signed-out arrival: sign-in preserving the destination, then the same decision."
+- [minor] (substance) The InlineErrorRow copy uses a sentence break before Retry, while the contract's variants use the ' · Retry' form.
+  - evidence: Prompt: "We couldn't check your Earn balance. Retry". component-contract InlineErrorRow variants: "'We couldn't move your furnace warranty · Retry'", "'Upload failed · Retry'".
+  - fix: Use "We couldn't check your Earn balance · Retry".
+- [major] (ux) The prompt contradicts itself about what eligible people see in the status strip. Rule 2 removes the offers chip only for non-eligible people, which implies Sam keeps '2 offers available'. Yet the wallet shows 'No offers' and DONE WHEN says nothing may invite anyone to earn. No frame draws the eligible strip, so Claude Design has to guess.
+  - evidence: TYPE: "2. The status strip loses its offers chip for everyone else."; CONTENT: "Status strip before: ... \"2 offers available\""; Wallet: "No offers, no \"earn more\""; DONE WHEN: "Nothing on any frame invites anyone to earn". Design doc F9: "push the inbox_offers item only when the user has an EarnTransaction".
+  - fix: Decide and state one rule: "The offers chip is removed for everyone. Eligible people reach their balance only through the drawer's Earn Wallet row." Record the deviation from the doc on Notes. Add frame '… · android · 12b-status-strip-eligible · light' showing Sam's strip with two chips (or, if the product keeps a chip for eligible accounts, word it 'Earn Wallet · $18.50' with no offers wording and draw it).
+- [minor] (ux) A per-surface change is deliberately not applied: the landing has no verb-led action back to a tab. The reasoning holds, but the deviation isn't recorded.
+  - evidence: per-surface-changes/f9-earn-removal.md: "has a verb-led CTA back to a tab"; prompt: "The landing has no back-to-tab button, because it already is the Mail root with the Mail tab selected."
+  - fix: Add to Notes: "Deviation: no back-to-tab CTA, because the landing is the Mail root itself. 'Hide this' is the only action."
+- [minor] (ux) The eligibility test may lock out pending payouts. It counts only 'available or paid' transactions, while the stated goal is never to hide money.
+  - evidence: TYPE: "'eligible' means an account with at least one Earn transaction that is available or paid"; derive-proposals: "Never hide the wallet from someone holding a pending payout".
+  - fix: Add a Notes open question: "Do pending (not yet available) Earn transactions exist? If so, they must count toward eligibility."
+- [minor] (ux) The wallet shows an 'available' balance with no way to withdraw it and no way to ask about it. The open question exists, but the frames will show money the person cannot reach.
+  - evidence: CONTENT: "two history rows, both available"; "no withdraw button"; Notes: "Should the read-only wallet offer \"Ask about your balance\" to reach support?"
+  - fix: Draw one inset in frame 6 with a text link "Ask about your balance" under the footer, marked on Notes as pending the product decision, so both options can be reviewed.
+- [minor] (ux) An invented history label implies cash referral rewards, which contradicts F9's change to postcard-invite referral tiers.
+  - evidence: CONTENT: "Referral payout · Thu 2 Jul · $12.50"; design doc F9: "1 referral → +1 weekly postcard invite".
+  - fix: Rename the row to "Offer reward · Thu 2 Jul · $12.50" and update the a11y example and Notes.
+- [minor] (ux) The platform coverage has gaps: there is no Android drawer for someone not eligible and no iOS status strip, although both are attached.
+  - evidence: ATTACH: "the status strip on Today with its offers chip (web, iOS, Android)"; the artboards include only a web-1440 and an Android strip, and only an eligible Android drawer.
+  - fix: Turn frame 12 into a two-up (Android and iOS strips after the change), and add an inset to frame 5 showing Maya's Android drawer without Earn.

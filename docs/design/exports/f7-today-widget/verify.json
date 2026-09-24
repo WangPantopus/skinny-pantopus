@@ -1,0 +1,15 @@
+{
+ "id": "f7-today-widget",
+ "export": "docs/design/exports/f7-today-widget/f7-today-widget.html",
+ "manifest": 25,
+ "mode": "bundle",
+ "pages": 25,
+ "exact": 25,
+ "labelled": 25,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f7-today-widget/pages",
+ "placeholders": []
+}

@@ -1,0 +1,1345 @@
+{
+ "00a-00": {
+  "words": 2345,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00a-01": {
+  "words": 3079,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00a-02": {
+  "words": 2907,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00a-03": {
+  "words": 2366,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00a-04": {
+  "words": 2478,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00a-05": {
+  "words": 2019,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00a-06": {
+  "words": 1724,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00a-07": {
+  "words": 3280,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00a-08": {
+  "words": 1913,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00a-09": {
+  "words": 2217,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00b-00": {
+  "words": 2819,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00b-01": {
+  "words": 2529,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "100-year :: \u2026compare summary's \"3 of 4 bands\". - Never write: \"100-year floodplain\", \"minimal risk\", \u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00b-01b": {
+  "words": 994,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00b-02": {
+  "words": 2188,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00b-02b": {
+  "words": 1012,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00b-03": {
+  "words": 3174,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00b-04": {
+  "words": 3417,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00b-05": {
+  "words": 1875,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00b-06": {
+  "words": 2768,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00b-07": {
+  "words": 1627,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "Ollie knows :: \u2026file\" exactly. Never \"X of Y\", never \"knows\" (no \"Ollie knows\"), never a percentage.  PLATF\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00c-00": {
+  "words": 2442,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00c-01": {
+  "words": 2308,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00c-02": {
+  "words": 1901,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00c-03": {
+  "words": 1452,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00c-04": {
+  "words": 1550,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00c-05": {
+  "words": 1462,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00c-06": {
+  "words": 1557,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00c-07": {
+  "words": 1635,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00c-08": {
+  "words": 1414,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00c-09": {
+  "words": 1696,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00c-10": {
+  "words": 1652,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00c-11": {
+  "words": 1465,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "Oops :: \u2026rm differences.  INSTEAD OF (panel) - Instead of \"Oops, something went wrong\", draw \u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00c-12": {
+  "words": 1430,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00d-00": {
+  "words": 2014,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00d-01": {
+  "words": 1807,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00d-02": {
+  "words": 1866,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00d-03": {
+  "words": 2483,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00d-04": {
+  "words": 2298,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "Are you sure? :: \u2026what survives, buttons name outcomes. Never just \"Are you sure?\" or \"This can't be undone\". U\u2026",
+   "Are you sure? :: \u2026ance, f11-keeper-naming  INSTEAD OF - Instead of \"Are you sure?\" / \"OK\" / \"Cancel\", draw \"Del\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00d-05": {
+  "words": 2198,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00d-06": {
+  "words": 2752,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00d-07": {
+  "words": 2815,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "Open Pantopus to :: \u2026MY, VARIANTS and STATES; use them exactly. Never \"Open Pantopus to\u2026\". No keeper name or voice. N\u2026",
+   "Open Pantopus to :: \u2026an imitation of system UI misleads. - Instead of \"Open Pantopus to see today's pickup\", draw the\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "00d-08": {
+  "words": 3270,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 0,
+  "bad_artboard_names": []
+ },
+ "f1-add-place-sheet": {
+  "words": 3155,
+  "weekday_errors": [],
+  "foreign_addresses": [
+   "12808 NE Lacamas Shores Rd",
+   "408 NE Juniper Ct",
+   "408 NE Juniper St",
+   "408 NW Juniper Ave",
+   "408 SE Juniper Dr",
+   "480 NE Juniper St"
+  ],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 23,
+  "bad_artboard_names": []
+ },
+ "f1-claim-receipt": {
+  "words": 3154,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "confetti :: \u2026ing, because silence is not consent. - Instead of confetti, a badge or a progress bar, d\u2026",
+   "Ollie knows :: \u2026because this is a receipt to check. - Instead of \"Ollie knows 11 things\", draw a separate \"\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 21,
+  "bad_artboard_names": []
+ },
+ "f1-email-verify-handoff": {
+  "words": 2714,
+  "weekday_errors": [],
+  "foreign_addresses": [
+   "12808 NE Lacamas Shores Rd"
+  ],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 19,
+  "bad_artboard_names": []
+ },
+ "f1-save-confirmation": {
+  "words": 2746,
+  "weekday_errors": [],
+  "foreign_addresses": [
+   "12808 NE Lacamas Shores Rd"
+  ],
+  "banned_hits": [
+   "Congratulations :: \u2026 an animated check, a full-bleed illustration or \"Congratulations\", draw one still tick and one\u2026",
+   "confetti :: \u2026mary is Switch account.  INSTEAD OF: - Instead of confetti, an animated check, a full-bl\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 18,
+  "bad_artboard_names": []
+ },
+ "f1-today-air-band": {
+  "words": 2924,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 22,
+  "bad_artboard_names": []
+ },
+ "f1-today-tab": {
+  "words": 4349,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 22,
+  "bad_artboard_names": []
+ },
+ "f1-your-places": {
+  "words": 3647,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 26,
+  "bad_artboard_names": []
+ },
+ "f10-bill-provenance": {
+  "words": 3620,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 22,
+  "bad_artboard_names": []
+ },
+ "f10-bill-trend": {
+  "words": 3105,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 18,
+  "bad_artboard_names": []
+ },
+ "f10-extraction-confirm": {
+  "words": 4201,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 28,
+  "bad_artboard_names": []
+ },
+ "f10-mail-day-triage": {
+  "words": 4363,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 24,
+  "bad_artboard_names": []
+ },
+ "f10-mail-piece-photo": {
+  "words": 4357,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 28,
+  "bad_artboard_names": []
+ },
+ "f10-mail-snap-privacy": {
+  "words": 3623,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 22,
+  "bad_artboard_names": []
+ },
+ "f10-snap-capture-tray": {
+  "words": 3458,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 25,
+  "bad_artboard_names": []
+ },
+ "f11-keeper-naming": {
+  "words": 3037,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "confetti :: \u2026e sighted users need the reason too. - Instead of confetti, a badge, \"Level 1 keeper\" or\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 21,
+  "bad_artboard_names": []
+ },
+ "f11-keeper-strip": {
+  "words": 3847,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "Ollie knows :: \u2026e with gaps reads as \"almost done\". - Instead of \"Ollie knows 14 things\", a level or XP, dr\u2026",
+   "Ollie knows :: \u2026l is past its due date.\" (the thing as subject); \"Ollie knows 6 things\" \u2192 \"7 on file\" (Foun\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 25,
+  "bad_artboard_names": []
+ },
+ "f3-bill-detail-web": {
+  "words": 3688,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 26,
+  "bad_artboard_names": []
+ },
+ "f3-bills-list": {
+  "words": 2947,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 25,
+  "bad_artboard_names": []
+ },
+ "f3-household-block": {
+  "words": 3408,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 22,
+  "bad_artboard_names": []
+ },
+ "f3-household-calendar": {
+  "words": 4530,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 20,
+  "bad_artboard_names": []
+ },
+ "f3-household-notifications": {
+  "words": 3782,
+  "weekday_errors": [],
+  "foreign_addresses": [
+   "2207 SE Cedar Ave"
+  ],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 25,
+  "bad_artboard_names": []
+ },
+ "f3-invite-banner": {
+  "words": 3589,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 28,
+  "bad_artboard_names": []
+ },
+ "f3-invite-composer": {
+  "words": 3341,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 22,
+  "bad_artboard_names": []
+ },
+ "f3-member-home-dashboard": {
+  "words": 2894,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 15,
+  "bad_artboard_names": []
+ },
+ "f3-members-roster": {
+  "words": 4066,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 24,
+  "bad_artboard_names": []
+ },
+ "f3b-invitation-decision": {
+  "words": 3268,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 26,
+  "bad_artboard_names": []
+ },
+ "f3b-locked-action-row": {
+  "words": 2622,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 19,
+  "bad_artboard_names": []
+ },
+ "f3b-owner-attestation": {
+  "words": 2831,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 25,
+  "bad_artboard_names": []
+ },
+ "f3b-verify-address-sheet": {
+  "words": 3772,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 32,
+  "bad_artboard_names": []
+ },
+ "f4-briefing-optin-card": {
+  "words": 3082,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 27,
+  "bad_artboard_names": []
+ },
+ "f4-notification-primer": {
+  "words": 3288,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 17,
+  "bad_artboard_names": []
+ },
+ "f4-notification-settings": {
+  "words": 4034,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 20,
+  "bad_artboard_names": []
+ },
+ "f4-today-pickup-card": {
+  "words": 4066,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 32,
+  "bad_artboard_names": []
+ },
+ "f5-today-calendar-strip": {
+  "words": 4417,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 22,
+  "bad_artboard_names": []
+ },
+ "f6-home-basics-rows": {
+  "words": 3224,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 20,
+  "bad_artboard_names": []
+ },
+ "f6-place-section-details": {
+  "words": 3493,
+  "weekday_errors": [],
+  "foreign_addresses": [
+   "540 SE Harbor Way"
+  ],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 24,
+  "bad_artboard_names": []
+ },
+ "f7-today-widget": {
+  "words": 5767,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "Open Pantopus to :: \u2026 Oct, 7:40 AM \u00b7 Open to refresh\". - No snapshot: \"Open Pantopus to see today at your address\", w\u2026",
+   "Open Pantopus to :: \u2026s \u00b7 As of Mon 19 Oct, 7:40 AM \u00b7 Open to refresh \u00b7 Open Pantopus to see today at your address \u00b7 S\u2026",
+   "Open Pantopus to :: \u2026 sheet exists on that platform. Until then, show \"Open Pantopus to see today at your address\". -\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 25,
+  "bad_artboard_names": []
+ },
+ "f7-widget-gallery": {
+  "words": 2334,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 14,
+  "bad_artboard_names": []
+ },
+ "f7-widget-howto-sheet": {
+  "words": 2586,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 15,
+  "bad_artboard_names": []
+ },
+ "f7-widget-tap-landing": {
+  "words": 2804,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 20,
+  "bad_artboard_names": []
+ },
+ "f8-compare-arrival-header": {
+  "words": 3998,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 18,
+  "bad_artboard_names": []
+ },
+ "f8-compare-reveal": {
+  "words": 3808,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "100-year :: \u2026racter values wrap raggedly at 390. - Instead of \"100-year floodplain\", write \"1% chance\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 19,
+  "bad_artboard_names": []
+ },
+ "f8-compare-sheet": {
+  "words": 3132,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 17,
+  "bad_artboard_names": []
+ },
+ "f8-native-share-compare": {
+  "words": 3301,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 18,
+  "bad_artboard_names": []
+ },
+ "f8-og-compare-card": {
+  "words": 3199,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 11,
+  "bad_artboard_names": []
+ },
+ "f8-positioning-copy": {
+  "words": 2438,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 18,
+  "bad_artboard_names": []
+ },
+ "f8-scale-strips": {
+  "words": 4152,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "100-year :: \u2026l and compare sizes. Never write \"minimal risk\", \"100-year\", \"better\" or \"worse\".  EDGE \u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 20,
+  "bad_artboard_names": []
+ },
+ "f8-seasonal-aha": {
+  "words": 4062,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 23,
+  "bad_artboard_names": []
+ },
+ "f9-block-founders-panel": {
+  "words": 3708,
+  "weekday_errors": [],
+  "foreign_addresses": [
+   "2426 NE Larkspur Loop",
+   "2430 NE Larkspur Loop"
+  ],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 22,
+  "bad_artboard_names": []
+ },
+ "f9-curator-chip": {
+  "words": 2905,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 19,
+  "bad_artboard_names": []
+ },
+ "f9-earn-removal": {
+  "words": 2566,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 18,
+  "bad_artboard_names": []
+ },
+ "f9-founding-meter-preview": {
+  "words": 2452,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 20,
+  "bad_artboard_names": []
+ },
+ "f9-invite-rewards-card": {
+  "words": 3209,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "confetti :: \u2026y link. - Instead of a leaderboard, a prize draw, confetti, the keeper, or \"homes for ev\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 18,
+  "bad_artboard_names": []
+ },
+ "f9-nearby-cells-map": {
+  "words": 4065,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 17,
+  "bad_artboard_names": []
+ },
+ "f9-privacy-mirror": {
+  "words": 3555,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 19,
+  "bad_artboard_names": []
+ },
+ "f9-verification-promise-copy": {
+  "words": 3217,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "confetti :: \u2026he platform confirm haptic once; web has none. No confetti, no badge animation. Success \u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 20,
+  "bad_artboard_names": []
+ },
+ "flow-01": {
+  "words": 12267,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 95,
+  "bad_artboard_names": [
+   "F4 \u00b7 web-1440 \u00b7 ext:start-wallbar \u00b7 host WallBar, no open slots (the 07-wall-no-open-slots case) \u00b7 REDRAWN from host: /s",
+   "F5 \u00b7 web-1440 \u00b7 ext:register \u00b7 host register form, carrying the preview \u00b7 REDRAWN from host: /start register form.",
+   "F17 \u00b7 iOS \u00b7 Today after the grant \u00b7 REDRAWN from f4-today-pickup-card \u00b7 ios \u00b7 07-saved-place-confirmed-just-now and f4-b",
+   "F20 \u00b7 iOS \u00b7 ext:os-push-tray \u00b7 lock screen \u00b7 REDRAWN from host: iOS lock screen, with the collapsed notification in the ",
+   "- Shows: location row \"1107 NE Birchfield Ct \u00b7 Saved place \u00b7 Only you\" \u00b7 \"Updated just now\"; the pinned slot takes no sp",
+   "- H2 \u00b7 F7 and F8 must agree on the landing: the confirm opens f1-save-confirmation 03-saved directly, never its pre-save",
+   "- H23 \u00b7 F20 and F21 (with the thumbnail of f4-today-pickup-card \u00b7 ios \u00b7 20-arrived-from-push) must agree on the night-be"
+  ]
+ },
+ "flow-02": {
+  "words": 9433,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 67,
+  "bad_artboard_names": [
+   "F01 \u00b7 iOS \u00b7 ext:os-push-tray (lock screen) \u00b7 Mon 19 Oct, 6:00 PM. REDRAW from the confirmed inset of f4-today-pickup-car",
+   "- Beside it, a smaller inset from f4-today-pickup-card \u00b7 android \u00b7 21-tray with the same strings, annotated \"Android DEF",
+   "- The PickupCard uses the f4-today-pickup-card \u00b7 ios \u00b7 02-confirmed-by-sam content.",
+   "F07 \u00b7 iOS \u00b7 x-provenance-sheet \u00b7 schedule report view with the PLACE B payload. REDRAW from x-provenance-sheet \u00b7 ios \u00b7 0",
+   "- Result half: REDRAW the F09 ask area, collapsed to the status \"Saved \u00b7 6:00 PM\". The briefing card below now shows the",
+   "- Inset, labelled \"Only if a widget is placed (Jordan has none in this story)\": REDRAW from f7-today-widget \u00b7 ios \u00b7 05-e",
+   "F13 \u00b7 iOS \u00b7 lock screen \u00b7 Wed 28 Oct, 6:00 PM. REDRAW from the confirmed inset of f4-today-pickup-card \u00b7 ios \u00b7 21-tray, ",
+   "- Use the strip from f5-today-calendar-strip \u00b7 ios \u00b7 04-holiday-move, with window Wed 25 Nov \u2192 Tue 8 Dec. Thu 26 Nov has",
+   "- Inset: the evening row \"Skipped tonight \u2014 nothing needed you\", using the row pattern of f4-notification-settings \u00b7 web",
+   "F16 \u00b7 iOS \u00b7 lock screen \u00b7 Thu 26 Nov, 6:00 PM. REDRAW from the holiday inset of f4-today-pickup-card \u00b7 ios \u00b7 21-tray.",
+   "- X01 \u00b7 Push arrives while Today is open. Frame: f1-today-tab \u00b7 ios \u00b7 15-foreground-push. There is no banner; the Pickup",
+   "- X02 \u00b7 iOS Scheduled Summary holds the push. Frame: f4-notification-settings \u00b7 ios \u00b7 07-summary-and-time-sensitive, wit",
+   "- Frame: the expanded inset of f4-today-pickup-card \u00b7 ios \u00b7 21-tray, with deltas: body \"Garbage \u00b7 city schedule\" (the ex",
+   "- Then: f7-today-widget \u00b7 ios \u00b7 05-evening-confirmed, with the delta headline \"Garbage tomorrow\", shows the tick and \"Yo",
+   "- X05 \u00b7 Offline at F06. Frame: f4-today-pickup-card \u00b7 ios \u00b7 14-offline, with PLACE B values: \"You're offline \u00b7 as of 6:0",
+   "- X06 \u00b7 Stale. Frame: f4-today-pickup-card \u00b7 ios \u00b7 15-stale, with PLACE B values (F06's strings: \"Garbage tomorrow\", Cit",
+   "- X07 \u00b7 The report fails at F07. Frame: x-provenance-sheet \u00b7 ios \u00b7 17-report-failed, with PLACE B values (F07's header, ",
+   "- Frame: f4-today-pickup-card \u00b7 ios \u00b7 18-declined-undo, with PLACE B values: \"No reminder for now \u00b7 Undo\"; \"No thanks\" s",
+   "- The night-before row counts as answered, so the briefing card never asks about it again: f4-briefing-optin-card \u00b7 web-",
+   "- Frame: f4-today-pickup-card \u00b7 ios \u00b7 16-notifications-denied-widget-offer, with PLACE B values: \"Pickup still shows her",
+   "- X12 \u00b7 Android asks. Frames: f4-today-pickup-card \u00b7 android \u00b7 22-reminder-ask-denied-once (\"Turn on reminders\" re-asks ",
+   "- Frame: f4-notification-settings \u00b7 ios \u00b7 05-os-denied, with the banner \"Notifications are off for Pantopus. These rows ",
+   "- Also: f4-briefing-optin-card \u00b7 ios \u00b7 10-on-but-blocked, with the amber glyph, \"Notifications are off for Pantopus\" and",
+   "- X14 \u00b7 2027 holiday calendar not yet published. Frame: the year band of x-place-file \u00b7 ios \u00b7 02-saved-place-first-week ",
+   "- Thumbnails: F09 beside f4-notification-primer \u00b7 ios \u00b7 01-default-pickup.",
+   "- New 50% redraw 1, the F14 organic variant: REDRAW from f4-today-pickup-card \u00b7 ios \u00b7 20-arrived-from-push with F14's PL",
+   "- New 50% redraw 2, the web-390 row (two frames): REDRAW f4-today-pickup-card \u00b7 web-390 \u00b7 01-unconfirmed with the PLACE ",
+   "- Add the permission-free glance as a 25% copy, from f4-briefing-optin-card \u00b7 ios \u00b7 17-declined-at-os-widget-offer: \"Pic"
+  ]
+ },
+ "flow-03": {
+  "words": 8218,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 58,
+  "bad_artboard_names": []
+ },
+ "flow-04": {
+  "words": 10996,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 68,
+  "bad_artboard_names": [
+   "F07 \u00b7 Priya \u00b7 web-390 \u00b7 f3b-invitation-decision \u00b7 01-offer-signed-out \u00b7 6:10 PM (opened), Accept tapped 6:11 PM",
+   "F08 \u00b7 Priya \u00b7 web-390 \u00b7 ext:register \u00b7 sign-up with invite token kept (REDRAWN; no export; PROPOSED strings) \u00b7 6:11 PM (",
+   "F09 \u00b7 Priya \u00b7 web-390 \u00b7 f3b-invitation-decision \u00b7 07-accepted-after-sign-up \u00b7 6:12 PM (the acceptance commits at this mi",
+   "F10 \u00b7 Priya \u00b7 web-390 \u00b7 f3-member-home-dashboard \u00b7 10-member-view (recast to Priya) \u00b7 6:13 PM",
+   "F11 \u00b7 Priya \u00b7 web-390 \u00b7 f1-today-tab \u00b7 after-join (REDRAWN at web-390 from ios \u00b7 14-after-join) \u00b7 6:14 PM",
+   "- No FirstWeekRow. The briefing opt-in card sits in its own slot (slot 10) at the bottom of the scroll, placed from f4-b",
+   "F11a \u00b7 Priya \u00b7 web-390 \u00b7 f3-household-calendar \u00b7 16-agenda-dense (recast to Priya's member view) \u00b7 6:18 PM",
+   "F12 \u00b7 Priya \u00b7 web-390 \u00b7 f3-household-calendar \u00b7 create-event sheet (REDRAWN from ios \u00b7 03-create-event-sheet) \u00b7 6:19 PM",
+   "F13 \u00b7 Priya \u00b7 web-390 \u00b7 f3-household-calendar \u00b7 saved highlight (REDRAWN from ios \u00b7 04-saved-highlight) \u00b7 6:20 PM",
+   "F19 \u00b7 Maya \u00b7 iOS \u00b7 ext:os-push-tray \u00b7 lock screen (REDRAWN from f3b-owner-attestation \u00b7 ios \u00b7 13-entries-and-results) \u00b7 ",
+   "2. The source artboard name, e.g. \"f3b-invitation-decision \u00b7 web-390 \u00b7 01-offer-signed-out\", or \"REDRAWN \u00b7 from \u2026\", foll",
+   "- B01 \u00b7 Send failed. f3-invite-composer \u00b7 ios \u00b7 12-send-error: \"We couldn't send the invitation. Your details are still ",
+   "- f3-invite-composer \u00b7 ios \u00b7 02-share-instead shows the single-use warning at the point of choice: \"The first person who",
+   "- Then Priya's side: f3b-invitation-decision \u00b7 web-390 \u00b7 16-waiting-for-approval (\"Waiting for Maya's OK. You'll see the",
+   "- B03 \u00b7 Earlier path inset (not a failure). f3-household-block \u00b7 ios \u00b7 01-visible, captioned \"Mon 5 Oct: Maya alone. The",
+   "- B06 \u00b7 Account mismatch. ALTERNATE SCENARIO: in this branch only, Priya already has an account as priya.raman@example.c",
+   "- B10 \u00b7 The household block inside Priya's 7-day window. The place file People section (REDRAWN from f3-household-block ",
+   "- B11 \u00b7 Access revoked later. f3-member-home-dashboard \u00b7 ios \u00b7 04-access-revoked (recast): \"Your access to Larkspur Loop",
+   "- B15 \u00b7 Maya taps \"Don't confirm\" (Tue 20 Oct, 12:30 PM). f3b-owner-attestation \u00b7 ios \u00b7 05-declined (recast): \"You didn'",
+   "- B17 \u00b7 Access ended while the request was open. f3b-owner-attestation \u00b7 ios \u00b7 06-access-ended (recast): \"Priya no longe",
+   "- H14 \u00b7 F11 and \u00a75 activation must agree. f1-today-tab 14 removes the FirstWeekRow for a joined member, so the only path"
+  ]
+ },
+ "flow-05": {
+  "words": 13459,
+  "weekday_errors": [],
+  "foreign_addresses": [
+   "3315 NE Cedar Hollow Dr",
+   "918 NE Alder Crest Way"
+  ],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 47,
+  "bad_artboard_names": []
+ },
+ "flow-06": {
+  "words": 12446,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "what we know :: \u2026ffers \"See your place file\". The inventory's \"See what we know\" is retired. 8. Frame 7 and f\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 58,
+  "bad_artboard_names": [
+   "MAIN LANE PLATFORM: iOS 393x852 for every happy-path frame; Jordan does this whole journey on his iPhone. Every web-390 ",
+   "TIME GAP: \"Two days later \u00b7 Wed 21 Oct, 6:12 PM\". Inside the gap, draw a small inset of f4-today-pickup-card \u00b7 ios \u00b7 07-",
+   "- Shows, in the section order of f1-today-tab \u00b7 ios \u00b7 02-saved-place-quiet:",
+   "- the export it comes from, in caption text.secondary, for example \"from f1-claim-receipt \u00b7 ios \u00b7 03-only-you-so-far-pen",
+   "- Frame: f1-claim-receipt \u00b7 web-390 \u00b7 08-carry-failed, recast at iOS width (393x852).",
+   "- Frame: f1-claim-receipt \u00b7 web-390 \u00b7 09-nothing-to-carry at iOS width (393x852): the plain host success screen plus \"To",
+   "- Frame 1: f1-claim-receipt \u00b7 web-390 \u00b7 13-different-address, recast at iOS width (393x852). The plain success reads \"To",
+   "- Frame 2: Today's one-time notice in the f1-today-tab \u00b7 ios \u00b7 14-after-join form: the two-line \"Today now uses 1107 NE ",
+   "- Frame 3: tapping \"See your places\" (or the notice) lands on f1-your-places \u00b7 web-390 \u00b7 20-claim-notice-arrival, recast",
+   "- Frame: f1-claim-receipt \u00b7 web-390 \u00b7 14-existing-keeper at iOS width (393x852), recast:",
+   "- Frame: f1-claim-receipt \u00b7 web-1440 \u00b7 05-revisited-sam-pending, recast at iOS width (393x852) for Thu 29 Oct: the revis",
+   "- Frame 1: f6-home-basics-rows \u00b7 ios \u00b7 04-not-set, recast to Birchfield: \"Moved in \u00b7 Not set\", with its own Add and the ",
+   "- Frame: f1-claim-receipt \u00b7 web-390 \u00b7 17-offline at iOS width (393x852). Both consent buttons are disabled, with \"You're",
+   "- Frame: f1-claim-receipt \u00b7 web-390 \u00b7 16-loading at iOS width (393x852): skeleton rows under the headline, shown only af",
+   "- Frame: f3b-verify-address-sheet \u00b7 ios \u00b7 12-wrong-code, recast to step 4's content: under \"Code from your postcard\", \"T",
+   "17. f11-keeper-strip \u00b7 ios \u00b7 11-removed-undo (recast to Pepper) and frame 14 must agree on the household form of keeper ",
+   "22. Frame 3, frame 5, frame 8, frame 12 and x-date-sheet \u00b7 ios \u00b7 19-saved-lease-saved-place must agree on relative-date ",
+   "32. Frame 9 (signals) and f1-today-tab \u00b7 ios \u00b7 02-saved-place-quiet must agree on the property-tax signal: 02 draws it o",
+   "Scope is carried everywhere by the glyph shape plus visible words, never by colour or strikethrough alone. Draw one AX5 "
+  ]
+ },
+ "flow-07": {
+  "words": 8898,
+  "weekday_errors": [],
+  "foreign_addresses": [
+   "1420 NE Garfield St"
+  ],
+  "banned_hits": [
+   "Open Pantopus to :: \u2026ed-in Add a place sheet exists, the widget shows \"Open Pantopus to see today at your address\", t\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 82,
+  "bad_artboard_names": [
+   "- ext:os-pin-dialog, which is the neutral Material 3 system dialog. Use f7-widget-howto-sheet \u00b7 android \u00b7 03-pin-dialog.",
+   "MAIN LANE PLATFORM: Android. Maya uses a Pixel 8 running Android 15, with the Pixel Launcher in its 5-column grid, and p",
+   "- Android reading (one reading, used everywhere): because the denial happened in this visit's own dialog, the card uses ",
+   "Step 1 \u00b7 Android \u00b7 Mon 19 Oct, 6:10 PM \u00b7 f4-briefing-optin-card \u00b7 declined at the system dialog, morning-row variant (th",
+   "Step 4 \u00b7 Android \u00b7 Mon 19 Oct, 6:15 PM \u00b7 ext:os-pin-dialog (f7-widget-howto-sheet \u00b7 android \u00b7 03-pin-dialog), then 04-pi",
+   "Step 11 \u00b7 Android \u00b7 Thu 22 Oct, 4:10 PM \u00b7 f7-widget-tap-landing \u00b7 12-arrived-air, with f1-today-air-band \u00b7 android \u00b7 02-",
+   "- the source export in caption text.secondary (\"from f7-widget-tap-landing \u00b7 android \u00b7 11-arrived-pickup \u00b7 recast\", or \"",
+   "- The iOS lane (artboard 05) is drawn left to right on its own artboard and ends in a terminal chip, \"rejoins step 7 (ar",
+   "- Frame 1: f7-widget-howto-sheet \u00b7 android \u00b7 05-steps-fallback: \"Touch and hold the Pantopus app icon.\" \u00b7 \"Tap Widgets.\"",
+   "- Frame 1: f7-widget-howto-sheet \u00b7 ios \u00b7 01-default, recast. Her own medium preview (338x158) with the tick, then the th",
+   "- Frame 2: the OS widget gallery, f7-widget-gallery \u00b7 ios \u00b7 01-gallery-medium, with the preview in the 04-own-snapshot l",
+   "- Frame 3: f7-today-widget \u00b7 ios \u00b7 05-evening-confirmed (medium, \"Bins out tonight\", tick \"You \u00b7 Tuesday\").",
+   "- Terminal chip: \"rejoins step 7 (artboard 03) \u00b7 iOS landing f7-widget-tap-landing \u00b7 ios \u00b7 01-arrived-pickup matches and",
+   "- Frames: f7-widget-howto-sheet \u00b7 ios \u00b7 06-no-snapshot and android \u00b7 07-no-snapshot, each showing the sample captioned \"",
+   "- Frame 1: f7-today-widget \u00b7 ios \u00b7 11-no-snapshot-no-place, with \"Save an address to see today here\".",
+   "- Frame 2: tapping it opens pantopus://today?src=widget, which lands on f7-widget-tap-landing \u00b7 ios \u00b7 08-no-place: the A",
+   "- Frame 2: the correct landing, f7-widget-tap-landing \u00b7 android \u00b7 13-saved-place (Jordan, \"1107 NE Birchfield Ct\" \u00b7 \"Sav",
+   "- Terminal chip: \"correct landing: f7-widget-tap-landing \u00b7 android \u00b7 13-saved-place\".",
+   "- Frame: f7-widget-tap-landing \u00b7 android \u00b7 14-refresh-failed, recast to 9:40 PM: \"Couldn't refresh \u00b7 Retry\" above \"Updat",
+   "- Frame: f7-widget-tap-landing \u00b7 ios \u00b7 06-cold-start, redrawn on Android: the full WarmingSkeleton with the address alre",
+   "- Frame: f7-today-widget \u00b7 ios \u00b7 10-past-horizon, recast on the Android 4x2 as seen on Tue 10 Nov: marks and cells dimme",
+   "- Frame: f7-today-widget \u00b7 ios \u00b7 06-partial (the air-missing medium), redrawn at the 4x2. The air row drops and the layo",
+   "B11 \u00b7 iOS StandBy and tinted modes [lane 05]. Frames: f7-today-widget \u00b7 ios \u00b7 13-standby (dark) and 12-tinted-clear (dar",
+   "- Frame: f7-widget-tap-landing \u00b7 ios \u00b7 07-offline, redrawn on Android and recast: \"You're offline \u00b7 as of 6:10 PM\" (the ",
+   "8. Frame 7 and f1-today-tab \u00b7 ios \u00b7 07-from-widget must agree on how a widget arrival is highlighted. f1-today-tab's rul",
+   "20. Frame 5 and the iOS lane must agree on placement detection: the pin callback or the placed widget IDs on Android, an",
+   "21. Frame 1 and f4-briefing-optin-card \u00b7 android \u00b7 19-denied-once-reask must agree on the Android reading: a first denia",
+   "22. Frame 1 and f4-today-pickup-card \u00b7 ios \u00b7 03-confirmed-just-now-reminder-ask must agree on the premise: the card and ",
+   "23. Frame 11 and f7-widget-tap-landing \u00b7 android \u00b7 12-arrived-air must agree on whether the PickupCard shows on a day wi",
+   "- At 200% (Android) and AX5 (iOS), the widget becomes text only. The medium keeps the hero and the place label as wrappi",
+   "- the recast: flows-spec's Hannah Ruiz and 1420 NE Garfield St are replaced by Maya Chen at HOME A (label \"Larkspur Loop",
+   "- check 13 compares only the 101 threshold row of f4-notification-settings \u00b7 android \u00b7 03-default; that frame's other sw",
+   "- omitted: dark twins beyond B11, the 2x2 and 4x4 sizes in the main lane (see f7-today-widget \u00b7 android \u00b7 15-minimum-siz"
+  ]
+ },
+ "flow-08": {
+  "words": 12768,
+  "weekday_errors": [],
+  "foreign_addresses": [
+   "1428 NE Maple St"
+  ],
+  "banned_hits": [
+   ".tsx :: \u2026eb delete must write status 'canceled' (bills/page.tsx:91) so the deleted bill leave\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 79,
+  "bad_artboard_names": [
+   "- R1 = F01. Source: f10-mail-day-triage \u00b7 ios \u00b7 01-populated-dense. Deltas: time Mon 19 Oct, 6:03 PM, before the scan. C",
+   "- R2 = F06. Source: f10-mail-day-triage \u00b7 web-390 \u00b7 03-just-scanned, drawn in the iOS chrome of f10-mail-day-triage \u00b7 io",
+   "- R3 = F13. Source: f10-mail-day-triage \u00b7 web-390 \u00b7 02-decide-open, drawn in the iOS chrome. Time 6:18 PM. Row 1 reads \"",
+   "- R4 = F14. Source: f10-mail-day-triage \u00b7 web-390 \u00b7 05-day-finished (variant b), drawn in the iOS chrome. Time 6:21 PM. ",
+   "- R5 = F18. Source: the PushCopy bill-reminder variant, as in f3-household-notifications \u00b7 android \u00b7 10-tray-date-and-bi",
+   "- R6 = F19. Source: f10-bill-provenance \u00b7 ios \u00b7 03-corrected-date. Deltas: Thu 22 Oct, 6:01 PM, arriving from the push. ",
+   "- R7 = F20. Source: R6, with the behaviour of f3-bill-detail-web \u00b7 web-1440 \u00b7 02-marked-paid-undo and the native wording",
+   "- R8 = F21. Row styling from f3-household-notifications \u00b7 ios \u00b7 07-tray-household-passive; the source supplies only the ",
+   "- R9 = F22. Source: f3-household-notifications \u00b7 ios \u00b7 01-unread-list-dense. Deltas: Thu 22 Oct, 6:30 PM, Sam's list ope",
+   "- R10 = F23. Source: f3-household-notifications \u00b7 ios \u00b7 11-landing-resolves, with the provenance block from f10-bill-pro",
+   "- R11 = B15's Today strip. Source: f5-today-calendar-strip \u00b7 ios \u00b7 15-phase2-money-rows. Deltas: Thu 22 Oct, 6:00 PM, Ma",
+   "- R12 = fallback inset beside F11, labelled \"only if the backend 7-day bill lead is not built\". Source: f10-extraction-c",
+   "- R13 = B11b's removed-state copy. Source: f10-bill-provenance \u00b7 ios \u00b7 14-bill-removed. Deltas: Thu 22 Oct, 6:06 PM; the",
+   "- R14 = F15. Source: f5-today-calendar-strip \u00b7 ios \u00b7 15-phase2-money-rows (exported for Tue 20 Oct at 6:10 PM). Deltas: ",
+   "- Inset on the arrow to F11: f10-extraction-confirm \u00b7 ios \u00b7 06-reading (\"Reading your mail\u2026\"), labelled \"6:13 PM \u00b7 piece",
+   "- Shows: \"$142.18\", \"Paid\", \"Marked paid by Maya \u00b7 Thu 22 Oct\", \"Next due Mon 23 Nov\", and \"From a photo Maya took \u00b7 Mon",
+   "- B1 \u00b7 No claimed home (Jordan Lee at PLACE B, \"Saved place \u00b7 Only you\"). Starts at F01. Before any camera, f10-mail-day",
+   "- B2 \u00b7 Scanner not supported (iOS isSupported false; Android with under 1.7 GB of RAM). Starts at F01. f10-snap-capture-",
+   "- B3 \u00b7 Upload failed or offline. Starts at F03. f10-snap-capture-tray \u00b7 ios \u00b7 05-upload-failed (\"Retry 3 pages\", Done st",
+   "- B4 \u00b7 Reading unavailable. Starts at F07. f10-mail-day-triage \u00b7 web-390 \u00b7 10-reading-unavailable (\"We can't read photos",
+   "- B5 \u00b7 Unreadable photo. Starts at F08. f10-extraction-confirm \u00b7 ios \u00b7 08-unreadable-photo: \"We couldn't read this photo",
+   "- B6 \u00b7 Duplicate suspected. Starts from F10, later that evening, when a second photo of the same Clark bill is confirmed",
+   "- B7 \u00b7 Someone without bill access (Alex Kim, guest; this replaces flow-spec's \"member without finance.view\"). Starts at",
+   "- B9 \u00b7 A second Mark paid on a paid bill (the race). Only Maya can mark paid at HOME A, so the race is Maya's laptop tab",
+   "- B10 \u00b7 A member wants to record his own payment. Starts at F18 on Sam's phone, on Thu 22 Oct before Maya pays. The two ",
+   "- B11a \u00b7 Bill deleted on Tuesday morning. Starts at F16, Tue 20 Oct, 7:32 AM (the time f10-mail-piece-photo gives the de",
+   "- B12 \u00b7 The 'cancelled' vs 'canceled' filter bug. Starts at B11a, on web. Redraw from f3-bills-list \u00b7 web-1440 \u00b7 02-upco",
+   "- B13 \u00b7 A bank statement photographed by mistake. Starts at any later visit to Mail (tagged under F14). f10-mail-piece-p",
+   "- B14 \u00b7 Not enough homes nearby. Starts at F17. f10-bill-trend \u00b7 ios \u00b7 04-not-enough-homes: columns with no reference li",
+   "- B15 \u00b7 Push is off (the no-notifications path). Starts at F18. Maya has notifications off, so there is no lock-screen r",
+   "- Large text: attach f10-mail-day-triage \u00b7 ios \u00b7 13-ax5 and f10-extraction-confirm \u00b7 ios \u00b7 17-ax5, with the caption \"At "
+  ]
+ },
+ "flow-09": {
+  "words": 10425,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "confetti :: \u2026ave is announced as a status message. There is no confetti, badge or \"Level 1\". One ligh\u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 44,
+  "bad_artboard_names": [
+   "- R1 = F01. Source: f1-today-tab \u00b7 ios \u00b7 02-saved-place-quiet. Deltas: Mon 19 Oct, 6:10 PM. No FirstWeekRow: Jordan save",
+   "- R2 = F02. Source: R1. Deltas: Wed 21 Oct, 7:40 AM. Slot 3 is now the PickupCard from f4-today-pickup-card \u00b7 ios \u00b7 06-s",
+   "- R3 = F03. Source: f11-keeper-naming \u00b7 ios \u00b7 02-default, over R2 behind the scrim. PLACE B deltas: title \"Give this pla",
+   "- R4 = F05. Source: f11-keeper-naming \u00b7 ios \u00b7 05-saving, with F04's PLACE B content: Red fox selected, \"Pepper\", \"6 / 24",
+   "- R5 = F06. Source: f11-keeper-strip \u00b7 ios \u00b7 13-saved-place, with the landing caption from f11-keeper-naming \u00b7 ios \u00b7 07-",
+   "- R6 = F07. Source: x-place-file \u00b7 ios \u00b7 02-saved-place-first-week. Deltas: Wed 21 Oct, 7:42 AM. There is no \"Set up you",
+   "- R8 = F09. Source: f11-keeper-strip \u00b7 ios \u00b7 06-unavailable (exported at HOME A with no date). Deltas: Mon 2 Nov, 7:40 A",
+   "- R10 = B1's way back in the place file. Source: R6. Deltas: the \"Keeper \u00b7 Pepper \u00b7 Red fox\" row is replaced by \"Give th",
+   "- R12 = B5. Sources: f1-today-tab \u00b7 ios \u00b7 04-alert-pinned and f11-keeper-strip \u00b7 ios \u00b7 14-alert-suppressed (both HOME A)",
+   "- R14 = B8's claim receipt. Source: f1-claim-receipt \u00b7 ios \u00b7 03-only-you-so-far-pending (Maya's HOME A receipt). Deltas,",
+   "- R15 = B10's three specimens. Sources: (a) R1 with f11-keeper-naming \u00b7 ios \u00b7 02-default (R3's content) presented over i",
+   "- R16 = B8's claimed Today. Source: f1-today-tab \u00b7 ios \u00b7 13-after-claim (in that project slot 4b has zero height, and th",
+   "- B1 \u00b7 Jordan taps Skip. Starts at F02 (the 44pt Skip on the row) or at F03 (Skip in the sheet); draw both arrows. Skip ",
+   "- B3 \u00b7 Save fails. Starts at F05. f11-keeper-naming \u00b7 ios \u00b7 06-save-error with R13's B3 host (R2 behind the scrim, invit",
+   "- B4 \u00b7 Offline at naming. Starts at F03. f11-keeper-naming \u00b7 ios \u00b7 13-offline with R13's B4 host (R2 behind the scrim, i",
+   "- B6 \u00b7 Offline on Today. Starts at F06. f11-keeper-strip \u00b7 ios \u00b7 16-offline with R13's B6 host (R5) and keeper swaps: \"O",
+   "- B7 \u00b7 Hide or remove. Starts at F06. f11-keeper-strip \u00b7 ios \u00b7 09-menu-open (Rename \u00b7 Change species \u00b7 Hide keeper for n",
+   "- B9 \u00b7 A member without rename rights. Jordan has no household, so draw this at HOME A. f11-keeper-strip \u00b7 ios \u00b7 12-memb",
+   "- [10] F03, F04, the pose sheet (f11-keeper-strip \u00b7 ios \u00b7 23-pose-sheet) and the claim receipt (B8) must use one species",
+   "- Greyscale and large text: attach f11-keeper-strip \u00b7 ios \u00b7 22-greyscale, ios \u00b7 21-ax5, f11-keeper-naming \u00b7 ios \u00b7 18-ax5"
+  ]
+ },
+ "flow-10": {
+  "words": 6385,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 51,
+  "bad_artboard_names": [
+   "- A surface.base card holds a 25% thumbnail of flow-02 F09's inline ask (from f4-today-pickup-card \u00b7 ios \u00b7 07-saved-plac",
+   "F01 \u00b7 iOS \u00b7 ext:os-push-tray (lock screen) \u00b7 Mon 26 Oct, 4:00 PM. REDRAW from the 118 inset of f1-today-air-band \u00b7 ios \u00b7",
+   "F02 \u00b7 iOS \u00b7 f1-today-tab, alert landing at the top \u00b7 4:02 PM. REDRAW from f1-today-tab \u00b7 ios \u00b7 04-alert-pinned with thes",
+   "- Then the 14-day card, redrawn from f5-today-calendar-strip \u00b7 ios \u00b7 03-saved-place-unconfirmed with flow-02 F12's corre",
+   "F03 \u00b7 iOS \u00b7 f1-today-air-band, alert on his saved place \u00b7 4:02 PM. REDRAW from f1-today-air-band \u00b7 ios \u00b7 03-alert-unheal",
+   "F04 \u00b7 iOS \u00b7 x-provenance-sheet, air alert payload. REDRAW from x-provenance-sheet \u00b7 ios \u00b7 07-no-link-air, using the P4-a",
+   "F05 \u00b7 iOS \u00b7 f4-notification-settings, landing at ?group=air (/app/settings/notifications?group=air), reached from the ba",
+   "F08 \u00b7 iOS \u00b7 Today, organic open \u00b7 6:10 PM. REDRAW from f1-today-air-band \u00b7 ios \u00b7 04-still-unhealthy-no-new-push with the",
+   "- X01 \u00b7 No reading. Frame: f1-today-air-band \u00b7 ios \u00b7 07-no-reading, with the PLACE B chip. The track is greyed, with no ",
+   "- X02 \u00b7 Stale observation. Frame: f1-today-air-band \u00b7 ios \u00b7 06-stale, with PLACE B values: \"AirNow \u00b7 nearest monitors \u00b7 ",
+   "- X03 \u00b7 Offline at the landing. Frame: f1-today-air-band \u00b7 ios \u00b7 09-offline, with the PLACE B location row (\"1107 NE Bir",
+   "- Frame: the 176 inset of f1-today-air-band \u00b7 ios \u00b7 14-tray, \"Unhealthy air: AQI 176\" / \"AirNow, 4:00 PM\", annotated \"iO",
+   "- \"See air quality \u2193\" then goes to the band: f1-today-air-band \u00b7 ios \u00b7 03-alert-unhealthy-saved-place with these deltas:",
+   "- Inset: f4-notification-settings \u00b7 ios \u00b7 07-summary-and-time-sensitive, with \"Time Sensitive is off in iOS Settings. Al",
+   "- X05 \u00b7 No place or no location. Frame: f1-today-air-band \u00b7 ios \u00b7 11-no-place. No alert is ever sent, and there is no ai",
+   "- Frame: f4-notification-settings \u00b7 android \u00b7 06-channel-blocked, with the PLACE B deltas from F05. The Air group is off",
+   "- The in-app line from f1-today-air-band \u00b7 ios \u00b7 10-notifications-blocked-switch-on, \"Notifications are off, so air aler",
+   "- X07 \u00b7 Threshold save fails. Pattern from f4-notification-settings \u00b7 web-1440 \u00b7 14-save-error, drawn in iOS chrome. The",
+   "- Frame: f1-today-air-band \u00b7 ios \u00b7 04-still-unhealthy-no-new-push as exported, with the rule captioned \"Crossed 151 at 6",
+   "- Frame: f1-today-air-band \u00b7 ios \u00b7 05-alert-other-saved-place, where Maya's Today shows HOME A and the section's own row",
+   "- HC12 \u00b7 F00's permission history must agree across projects: Jordan allows on Wed 21 Oct from the pickup card's inline ",
+   "- AX5: use f1-today-air-band \u00b7 ios \u00b7 15-ax5 as the reference. The six-range list is visible, and the settings threshold ",
+   "- Android: the 118 inset of f1-today-air-band \u00b7 android \u00b7 14-tray, without the street label (DEFAULT; public version \"Pa",
+   "- Web-390: an organic landing redrawn from f1-today-air-band \u00b7 web-390 \u00b7 02-alert-usg-household with PLACE B values (ses"
+  ]
+ },
+ "flow-11": {
+  "words": 7739,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 53,
+  "bad_artboard_names": [
+   "F01 \u00b7 iOS \u00b7 f5-today-calendar-strip \u00b7 03-saved-place-unconfirmed, inside f1-today-tab \u00b7 ios \u00b7 02-saved-place-quiet, with",
+   "Right (Today): REDRAW from f5-today-calendar-strip \u00b7 ios \u00b7 14-saved-outside-window.",
+   "F05 \u00b7 iOS \u00b7 strip row \u2192 DateSheet, Pickup day, view-seeded. REDRAW from x-date-sheet \u00b7 ios \u00b7 03-pickup-weekly-saved-plac",
+   "F08 \u00b7 iOS \u00b7 x-place-file, saved place, with Your reports. REDRAW from x-place-file \u00b7 ios \u00b7 02-saved-place-first-week wit",
+   "- The PLACE section gains the FactRow \"Your reports \u00b7 1 checking\", shown expanded as in x-place-file \u00b7 web-390 \u00b7 10-your",
+   "F09 \u00b7 iOS \u00b7 Today, pickup card, unconfirmed, with the outcome (ALT TIMELINE). REDRAW from f4-today-pickup-card \u00b7 ios \u00b7 0",
+   "F11 \u00b7 iOS \u00b7 DateSheet with the suggestion, then the card (ALT TIMELINE). REDRAW from x-date-sheet \u00b7 ios \u00b7 03-pickup-week",
+   "- Save leads to a thumbnail of the card from f4-today-pickup-card \u00b7 ios \u00b7 07-saved-place-confirmed-just-now, with these ",
+   "- Dashed alternative inset, labelled \"If he taps 'Yes, Thursday is right' instead\": REDRAW from x-provenance-sheet \u00b7 ios",
+   "- \"This isn't right\" in F03 swaps to the seeded-deadline report view. REDRAW from x-provenance-sheet \u00b7 ios \u00b7 11-seeded-d",
+   "- X03 \u00b7 Offline while creating. Frame: x-date-sheet \u00b7 ios \u00b7 26-offline-create, with \"You're offline. Saving needs a conn",
+   "- X04 \u00b7 Save fails. Frame: x-date-sheet \u00b7 ios \u00b7 24-save-failed, with \"Couldn't save that date. Try again.\" The typed dat",
+   "- X05 \u00b7 The report fails. Frame: x-provenance-sheet \u00b7 ios \u00b7 17-report-failed, with PLACE B values (PB payload), and \"We ",
+   "- Frame: x-provenance-sheet \u00b7 ios \u00b7 18-offline, with PLACE B values (PB payload), and \"You're offline \u00b7 as of 6:02 PM\" (",
+   "- In F05, \"This isn't right\" is disabled with \"Needs a connection.\". The strip is as in f5-today-calendar-strip \u00b7 ios \u00b7 ",
+   "- Frames: x-provenance-sheet \u00b7 ios \u00b7 05-official-flood and 06-report-authority-flood, with the ScopeChip \"Saved place \u00b7 ",
+   "- Frame: x-provenance-sheet \u00b7 ios \u00b7 09-official-radon, with the ScopeChip \"Saved place \u00b7 Only you\" (replacing the export",
+   "- Frame: REDRAW from x-provenance-sheet \u00b7 ios \u00b7 03-reported-checking with PLACE B values (PB payload: hollow \"Garbage \u00b7 ",
+   "- Frame: the card from f4-today-pickup-card \u00b7 ios \u00b7 06-saved-place-unconfirmed, with \"Garbage tomorrow\", \"Recycling: Not",
+   "- AX5: use x-provenance-sheet \u00b7 ios \u00b7 26-ax5-place-b as the reference. Pairs stack, the sheet opens at the large detent,",
+   "- F06 on Android, redrawn from x-provenance-sheet \u00b7 android \u00b7 02-report-schedule with PLACE B values and Back.",
+   "- F08 and F12 on web-390, redrawn from x-place-file \u00b7 web-390 \u00b7 10-your-reports with Jordan's rows.",
+   "- Your reports in the 320 column on web-1440, taking the column layout from x-place-file \u00b7 web-1440 \u00b7 16-dense-home with"
+  ]
+ },
+ "flow-12": {
+  "words": 7037,
+  "weekday_errors": [],
+  "foreign_addresses": [
+   "4312 NW Sierra Dr"
+  ],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 37,
+  "bad_artboard_names": [
+   "- Shows: title, then the banner slot holding the mailbox pill exactly as f3-invite-banner \u00b7 ios \u00b7 06-hidden draws it (th",
+   "- B01 \u00b7 Priya is signed out, on a laptop (web-1440). f3b-invitation-decision \u00b7 web-1440 \u00b7 13-policy-changed shows the sa",
+   "- B02 \u00b7 Invitations fetch failed on Priya's landing. f3-invite-banner \u00b7 ios \u00b7 08-fetch-failed shows the mailbox pill, no",
+   "- f3-members-roster \u00b7 ios \u00b7 02-member-view, recast: remove Jordan Park and the dense-roster rows so the roster shows onl",
+   "- Arrow labelled \"Sam opens a stale composer link (from his Mon 12 Oct invitation)\" \u2192 f3-invite-composer \u00b7 ios \u00b7 11-perm",
+   "- B04 \u00b7 The reissue send fails. f3-invite-composer \u00b7 ios \u00b7 12-send-error: \"We couldn't send the invitation. Your details",
+   "- B05 \u00b7 Maya is offline (REDRAWN from f3-invite-banner \u00b7 ios \u00b7 09-offline, sender variant). FreshnessLine \"You're offlin",
+   "- B07 \u00b7 Multiple invitations. Priya also holds Rosa Delgado's invitation. f3-invite-banner \u00b7 ios \u00b7 03-invitations-list, ",
+   "- B08 \u00b7 Fetch failed at Mon 19 Oct, 7:30 PM, with no push opened. f3-invite-banner \u00b7 ios \u00b7 08-fetch-failed shows no bann",
+   "- f3b-invitation-decision \u00b7 web-390 \u00b7 01-offer-signed-out, with \"Already have an account? Sign in\".",
+   "- Then f3b-invitation-decision \u00b7 web-390 \u00b7 07-accepted-after-sign-up, captioned \"07-accepted-after-sign-up (drawn after ",
+   "- B11 \u00b7 Signed in with a different account (web-390). ALTERNATE SCENARIO: in this branch only, Priya also has a second a",
+   "- Instead of an invitations list \"no prompt draws\", use f3-invite-banner \u00b7 ios \u00b7 03-invitations-list, which now draws it"
+  ]
+ },
+ "flow-13": {
+  "words": 7870,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 46,
+  "bad_artboard_names": []
+ },
+ "flow-14": {
+  "words": 9113,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [
+   "Open Pantopus to :: \u2026widget \u00b7 ios \u00b7 11-no-snapshot-no-place \u00b7 light): \"Open Pantopus to see today at your address\", a\u2026",
+   "Open Pantopus to :: \u2026prompts: the placed widget's no-snapshot text is \"Open Pantopus to see today at your address\" (f\u2026",
+   "Open Pantopus to :: \u2026 show your address\". The house PUSH rule forbids \"Open Pantopus to\u2026\" in pushes; confirm that it \u2026"
+  ],
+  "missing_sections": [],
+  "artboard_lines": 62,
+  "bad_artboard_names": [
+   "Frames with no export to place (drawn with a REDRAWN caption): L1\u2013L4, N1a, N1, N2, N3, N4, N5 and its two ghosts, N7, N8",
+   "N10 \u00b7 iOS \u00b7 ext:os-push-tray \u00b7 lock screen \u00b7 REDRAWN from host: iOS lock screen, in the f4-today-pickup-card \u00b7 ios \u00b7 21-",
+   "- Shows: the pinned slot takes no space (f1-today-tab's rule: no pinned line repeats a card already in the first viewpor",
+   "- H24 \u00b7 N10 and N11 (with the thumbnail of f4-today-pickup-card \u00b7 ios \u00b7 20-arrived-from-push) must agree on the native p"
+  ]
+ },
+ "x-date-sheet": {
+  "words": 5985,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 37,
+  "bad_artboard_names": []
+ },
+ "x-place-file": {
+  "words": 6768,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 21,
+  "bad_artboard_names": []
+ },
+ "x-provenance-sheet": {
+  "words": 5304,
+  "weekday_errors": [],
+  "foreign_addresses": [],
+  "banned_hits": [],
+  "missing_sections": [],
+  "artboard_lines": 37,
+  "bad_artboard_names": []
+ }
+}

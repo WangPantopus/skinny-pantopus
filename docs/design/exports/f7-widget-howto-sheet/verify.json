@@ -1,0 +1,15 @@
+{
+ "id": "f7-widget-howto-sheet",
+ "export": "docs/design/exports/f7-widget-howto-sheet/f7-widget-howto-sheet.html",
+ "manifest": 15,
+ "mode": "bundle",
+ "pages": 15,
+ "exact": 15,
+ "labelled": 15,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f7-widget-howto-sheet/pages",
+ "placeholders": []
+}

@@ -1,0 +1,35 @@
+# Last review findings for f8-positioning-copy (round 2). The fix after this round was applied but not re-verified.
+
+- [minor] (substance) The invented no-name unfurl title differs from the flows spec's no-name title, and the conflict is not recorded.
+  - evidence: flows-spec flow-05 step 12: "Maya receives 'A place in Vancouver, WA · Yours?'". Prompt: "name off (the default): 'What's true about a place in Camas, WA. Yours?'".
+  - fix: In Notes, record that the no-name title replaces the flows-spec string 'A place in Vancouver, WA · Yours?' so it follows the doc pattern, and flag it for the share card prompt.
+- [minor] (substance) The brief's og:image:alt rule is not mentioned, although this prompt draws the unfurl and the unfurl text.
+  - evidence: ux-research-brief §5: "Share card. og:image:alt describes the readings, with no address."
+  - fix: Add under Share unfurl text: "og:image:alt describes the four readings and the city, never an address (owned by the share card prompt)."
+- [minor] (substance) The PLACE B persona clashes with the fixture: Jordan Lee saved it on Sat 10 Oct, yet the prompt describes someone who has never heard of Pantopus.
+  - evidence: House style FIXTURES: "PLACE B ... Saved by Jordan Lee ... saved it on Sat 10 Oct." Prompt: "Someone new to PLACE B ... They open Dana's compare link from a chat and have never heard of Pantopus."
+  - fix: Describe the viewer as a signed-out stranger who will type PLACE B's address, with no account, and list this as a fixture delta.
+- [minor] (substance) Dropping the assessed-value clause turns the single shared native lede string into a conditional one, which contradicts 'one shared string' and the parity DONE WHEN, and the fallback string is not given.
+  - evidence: Prompt EDGE CASES: "Native Place launch with no assessed-value reading: drop that clause (see Notes)." CONTENT: "The web, native and marketing ledes are under COPY."
+  - fix: Give the exact fallback string ("Your flood zone, wildfire hazard and today's air, plus verified homes nearby — free, no account."), list it as invented, or keep one string and flag the dependency only.
+- [minor] (substance) Artboard 3 is named web-390 but drawn at 320x568, which breaks the house naming convention.
+  - evidence: Prompt: "3. f8-positioning-copy · web-390 · 03-narrow-320 · light: frame is 320x568, not 390 (label it so)".
+  - fix: Keep it, but put the width in the state segment of the visible label (already done) and note the naming exception on Notes.
+- [major] (ux) On the compare arrival, the reading order and frame 4 leave out the H1 and the lede, but the compare-arrival host keeps both. Claude Design will likely drop them. That leaves the page with no heading level 1, and the stranger in this prompt's own WHO AND WHEN never reads what Pantopus is.
+  - evidence: f8 ACCESSIBILITY: "On the compare arrival: sender strip, field, button, privacy line, contrast line." Frame 4: "Dana's sender strip, field, button, privacy line, then the contrast line." prompts-v1/f8-compare-arrival-header.md: "keep everything (H1, lede, address field, privacy proof line, sticky WallBar)".
+  - fix: Change both to: "H1, lede, Dana's collapsed sender strip, field, button, privacy line, contrast line (as in the attached compare header)", and add to DONE WHEN: "On the compare arrival the H1 and lede are still present and the field stays in the first viewport at 390."
+- [major] (ux) The unfurl description leaves out the contrast line, and the text stays inside the image. The brief and research both say text on the share card belongs in og:title, og:description and og:image:alt, and the house style lists text-heavy OG images under AVOID.
+  - evidence: COPY: "Compare unfurl description: \"Flood, wildfire, air and radon from FEMA, USFS, AirNow and EPA.\"" Brief §7 f8-og-compare-card: "Text moves to og:title, og:description and og:image:alt." Research: "og:description (sources and contrast line)". House AVOID: "text-heavy OG images".
+  - fix: Set both unfurl descriptions to lead with the shared contrast string: "Nextdoor is what your neighbors say. Pantopus is what's on record about your address." Then add "Sources: FEMA, USFS, AirNow, EPA." for the compare link. Draw the result truncated at two lines, and keep the image footer only as the founder decision already on Notes.
+- [minor] (ux) The rule for a missing assessed value can't work: the native lede is static text shown before any address is typed, so there's no reading yet to depend on.
+  - evidence: EDGE CASES: "Native Place launch with no assessed-value reading: drop that clause (see Notes)."
+  - fix: Replace with: "If the native preview does not show county assessed value on every address, drop the clause from the native lede everywhere (founder flag)."
+- [minor] (ux) DONE WHEN asks for identical strings on every platform, but the prompt deliberately gives web, native and marketing different ledes.
+  - evidence: DONE WHEN: "Every platform and the share card footer use identical strings." vs COPY: separate Web /start, Native and Marketing ledes.
+  - fix: Change to: "The H1 and the contrast line are identical on every platform and in the share card footer."
+- [minor] (ux) The unfurl titles don't match flows-spec (flow-05 uses "What's on record at Maya's place. Yours?" and "A place in Vancouver, WA · Yours?"). The unfurl is also owned by f8-og-compare-card, so writing the strings in two prompts invites drift.
+  - evidence: COPY: "name off (the default): \"What's true about a place in Camas, WA. Yours?\""; flows-spec flow-05 steps 5 and 12.
+  - fix: Add a Notes flag: "flows-spec flow-05 must adopt the doc title and this no-name fallback; f8-og-compare-card owns these strings."
+- [minor] (ux) Web autofocus skips the H1, lede and contrast line for screen-reader users, and on a phone it can raise the keyboard over the hero. The web offline state isn't covered.
+  - evidence: "Focus lands on the field on web"; EDGE CASES cover only "Native offline".
+  - fix: Add: "Autofocus only at 640px and wider; at 390, no autofocus." Also add: "Web offline: OfflineNotice form offline line under the field, same as native."

@@ -1,0 +1,34 @@
+{
+ "id": "f6-home-basics-rows",
+ "name": "Home basics: move-in date + restore the mover rows",
+ "feature": "F6",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Per-home settings: web /app/homes/[id]/settings (editor at /edit:320); iOS HomeSettingsViewModel; Android HomeSettingsScreen.",
+ "purpose": "Make the gate for the whole mover experience editable, and give a synced dismissal a way back.",
+ "contents": "Two rows in Home Info: 'Moved in' with a date control (PATCH /api/homes/:id { move_in_date }) and a helper line saying what it drives ('Shows your first-week steps for 60 days'); and 'Moving checklist \u2014 Show again', visible only while dismissed.",
+ "states": [
+  "move-in date unset ('Not set')",
+  "set / editable",
+  "future date or >60 days ago (warn the rows will not appear)",
+  "saving",
+  "save error",
+  "permission-denied (non-owner sees it read-only)",
+  "dismissed (restore row present)",
+  "never dismissed (restore row absent)"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Home settings",
+  "Place file 'Moved in' row (tap to set)",
+  "Undo toast after dismissing the mover rows"
+ ],
+ "visualization": "Two plain settings rows; the only decision is the native date control and the helper line, without which 'Move-in date' reads as trivia rather than the switch that turns the mover experience on.",
+ "uxNote": "Highest-leverage half-day in F6: both natives can only ever stamp move_in_date = today from an add-home checkbox and have no correction path, so a mover who claims their address three weeks after moving gets a window three weeks wrong and anyone who missed the checkbox never sees the rows at all \u2014 F6's acceptance criteria are literally unreachable on iOS and Android today.",
+ "effortDays": 0.5
+}

@@ -1,0 +1,41 @@
+# Last review findings for f10-snap-capture-tray (round 2). The fix after this round was applied but not re-verified.
+
+- [major] (substance) The audience line in the main frames may not match the household. The prompt defines a separate variant for 'Maya's view with a guest in the household', but no artboard draws it. The sibling triage prompt makes Alex a current guest of HOME A, so the dense frames' 'you and Sam' line (the variant for when everyone can see bills) may be the wrong one. That breaks the rule that the audience must be stated accurately when permissions differ.
+  - evidence: Tray COPY: "When everyone in the household can see bills: 'Only your household can see these photos: you and Sam.' / Maya's view with a guest in the household: 'Only you and Sam can see these photos. Alex sees that mail arrived, not the photos or amounts.'"; triage Notes: "Alex Kim as a guest with access until Sun 1 Nov"; ScopeChip doNot: "Never say 'Everyone in this household' where finance permissions differ: name the people instead"; research: "keep the statement accurate when permissions differ"
+  - fix: State in WHO AND WHEN whether Alex is a guest of HOME A at 6:05 PM. If yes, frames 1–4 and 7–8 use the guest variant. If no, add one artboard (e.g. 'ios · 12b-maya-with-guest') that shows Maya's line with Alex named, and list it in the batch plan.
+- [minor] (substance) The label on the Chase stack contradicts itself. The stack is labelled '3 pages', but the prompt says it reads '1 page · Upload failed · Retry'.
+  - evidence: Prompt: "Pages 6–8: Chase statement, joined as '3 pages'. … page 8 failed, so the stack reads '1 page · Upload failed · Retry'."
+  - fix: Change to: the stack reads "3 pages · 1 failed · Retry page 8". This also matches triage's "Retry page 8".
+- [minor] (substance) The all-failed state does not say which button reads 'Retry 8 pages'. Elsewhere Done must stay enabled whenever uploads fail.
+  - evidence: Prompt: "All uploads fail: the button reads 'Retry 8 pages'." vs "Done works with failures and keeps them queued." and "Done stays enabled"
+  - fix: Say: "All uploads fail: the single retry control above the buttons reads 'Retry 8 pages'; 'Done (5)' stays enabled."
+- [minor] (substance) The storyboard's 'Done (4)' needs the water-bill join, which happens in frame 7. The Notes call frame 7 an alternative branch, so the main path skips the join and never shows it.
+  - evidence: Notes: "frame 1, then frame 2, then join, then 'Done (4)' … Frames 3 and 7 are alternative branches." Frame 7: "after 'Same letter as previous' the water bill is a '2 pages' stack … 'Done (4)'"
+  - fix: Either make frame 7 the join step in the main storyboard (with page 3 still uploading and page 8 still failed), or add a note that the join is drawn only in frame 7's alternative state.
+- [minor] (substance) The contract's ScopeChip sentence strings are only 'Only you will see this.' and 'Everyone in this household will see this.' The research-backed named-audience lines are new wording, and the Notes do not flag them as a proposed contract addition.
+  - evidence: component-contract ScopeChip copyRules: "Exactly these strings … No other wording"
+  - fix: Add to Notes: "Proposed Foundations addition: the named-audience sentence form for photos ('Only your household can see these photos: you and Sam.' and the guest variants)."
+- [major] (ux) The prompt never says how to reach a single page inside a joined stack, yet frames depend on doing that. Frame 3 deletes page 8 'in its slot' although page 8 sits inside the Chase stack and has no slot of its own, and 'Separate from previous letter' needs a selectable page 2 inside a stack. Frame 1 also shows pages 1–2 and 6–8 already joined before Maya has done anything, which contradicts the research default that each page starts as its own piece.
+  - evidence: "Pages 6–8: Chase statement, joined as "3 pages""; frame 3: "page 8 ... removed from the Chase stack; its slot reads "Page 8 removed · Undo""; "On a page that is already joined, this button reads "Separate from previous letter"." Per-surface change: "One page = one piece by default; joined pieces show a stacked thumbnail". WHO AND WHEN describes no joining before 6:05.
+  - fix: Add to LAYOUT: "Tapping a stacked thumbnail selects the piece and fans its pages out inline as separate 96x128 thumbnails under a bracket labelled 'Chase letter · 3 pages'. Each fanned page can be selected and shows the action row (Retake · Delete · Separate from previous letter). A removed page leaves its own 'Page 8 removed · Undo' slot inside the bracket." Add to WHO AND WHEN: "At 6:05 she has already joined pages 1–2 and 6–8 with 'Same letter as previous'." Draw frame 3 with the Chase stack fanned out.
+- [minor] (ux) The status string on the Chase stack is misleading: a 3-page stack reads "1 page".
+  - evidence: "page 8 failed, so the stack reads "1 page · Upload failed · Retry"."
+  - fix: Use "3 pages · Page 8 didn't upload · Retry". Say that the stack's ring shows the combined value in text ("1 of 3 uploaded").
+- [minor] (ux) The screen-reader order does not match the visual order. The layout puts the count at the bottom beside the buttons, but the reading order puts it right after the title. The place for the live status line is not given either.
+  - evidence: LAYOUT: "Below that come the audience line, then the count and both buttons."; ACCESSIBILITY: "Reading order: title, count, thumbnails left to right, action row, audience line, buttons."
+  - fix: Place the count "8 pages · 5 pieces" and the live line "5 of 8 pages uploaded" directly under the title, pinned, and keep only the buttons at the bottom. The reading order then matches.
+- [minor] (ux) One screen uses two names for the same thing: the count says 'pieces' while the buttons and spoken labels say 'letter'.
+  - evidence: "8 pages · 5 pieces" vs "Same letter as previous", "Separate from previous letter", "Pages 1 and 2, one letter, uploaded."
+  - fix: Keep the contract's join labels. Write the count as "8 pages · 5 pieces of mail", and speak joined stacks as "Pages 1 and 2, one piece of mail, uploaded."
+- [minor] (ux) Close and Done produce the same result, so a user sees two exits with no stated difference.
+  - evidence: "Close, Back and Escape never discard pages. The tray closes and every page keeps uploading into Mail Day, exactly as it does after Done."
+  - fix: State the one difference: "Done may open Confirm what we read if a piece is already read. Close always returns to Mail Day." Or label Close for assistive tech as "Close, your pages keep uploading".
+- [minor] (ux) On web, the PDF rejection's "Add a due date" would open the Date sheet on top of the tray modal. The house style forbids stacked sheets, and the prompt only rules out stacking for the no-claimed-home case.
+  - evidence: "statement.pdf: PDF bills aren't supported yet. Add the due date by hand instead." · "Add a due date"; house style: "Every sheet ... does not stack on another sheet."
+  - fix: Add: "'Add a due date' from a rejection row closes the tray, keeping its pages uploading, then opens the Date sheet (create mode, Bill kind) over Mail Day."
+- [minor] (ux) The all-failed state does not say which button reads "Retry 8 pages" or whether Done stays.
+  - evidence: "All uploads fail: the button reads "Retry 8 pages"."
+  - fix: Change to: "All uploads fail: the retry row above the buttons reads 'Retry 8 pages'. Done (5) stays enabled and keeps every page queued."
+- [minor] (ux) The research asks for the Android Photo Picker selection cap to be stated when a stack could exceed it, and the prompt leaves it out.
+  - evidence: Research (capture topic): "Android's picker caps selection (getPickImagesMaxLimit()). Show the cap in the picker's calling copy if a stack could exceed it."
+  - fix: Add to the scanner-unavailable copy on Android: "You can choose up to [cap] photos at a time." List the cap as an open value in Notes.

@@ -1,0 +1,32 @@
+{
+ "id": "f9-privacy-mirror",
+ "name": "What neighbors see (user-scoped, with 'Your posts')",
+ "feature": "F9",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web /app/homes/[id]/privacy; iOS PlacePrivacyMirrorView; Android PlacePrivacyMirrorScreen \u2014 re-scoped from home-gated to user-scoped with a place selector.",
+ "purpose": "Make the coordinate-leak fix legible and checkable, to the people most likely to be posting from a bookmarked address.",
+ "contents": "A third row beside address and profile: the jitter ring drawn to scale against a street grid, the literal string a neighbor gets, the count of the user's public posts, and a link into the feed location control. Plus the same one-liner inline in the post composer's location picker, where the decision is actually made.",
+ "states": [
+  "loading",
+  "T1 saved place (the whole point of the re-scope)",
+  "T3 home",
+  "no public posts yet",
+  "error",
+  "offline / cached"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Place file 'What neighbors see' row",
+  "Place dashboard privacy-mirror row",
+  "Post composer location picker"
+ ],
+ "visualization": "A map thumb with the jitter radius drawn as a real ring over a street grid, at scale \u2014 a described radius is an unfalsifiable claim; a drawn one is checkable. The neighbor's literal view is quoted verbatim beneath it.",
+ "uxNote": "Home-gating this mirror means the coordinate-leak promise is invisible to exactly the T1 cohort F1 creates and the pilot recruits. The fix is server-side and otherwise invisible: shipped silently, nobody learns the leak was closed and nobody can verify it. Android also needs a /homes/:id/privacy router branch for any future privacy push.",
+ "effortDays": 1
+}

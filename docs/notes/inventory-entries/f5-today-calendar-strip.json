@@ -1,0 +1,36 @@
+{
+ "id": "f5-today-calendar-strip",
+ "name": "Next 14 days at this address (strip + rows)",
+ "feature": "F5 / F4 / F6 / F12",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Today. Web AddressCalendarCard re-hosted on hub/today; iOS PlaceTodayDetailContent's calendar block; Android AddressCalendarSection. Scope-aware ({scope:'home'|'saved_place', id}) instead of homeId.",
+ "purpose": "Show the next two weeks at this address as a shape, not a paragraph \u2014 pickup cadence, the user's own dates, seeded civic rows \u2014 with each item's provenance visible at a glance.",
+ "contents": "A 14-day strip above the existing list; list rows below with kind glyph, title, relative day and the provenance mark; a persistent '+ Add a date' row at the foot that opens the Date sheet (NOT a header toggle); pickup day folded in as a kind; statewide seeded rows (voter registration, tax appeal) explicitly scope-labelled 'Statewide \u2014 WA' / 'Clark County'; bills as items in phase 2. Six new PlaceCalendarKind members each need an icon in every client \u2014 KIND_ICON is a total Record, so widening the union is a compile error until they are all drawn.",
+ "states": [
+  "loading",
+  "ready",
+  "empty \u2014 14 drawn-but-empty cells ('checked, nothing found', visually distinct from a failed section)",
+  "stale/partial section fallback",
+  "unverified city rule",
+  "user-entered rule",
+  "seeded statewide rule",
+  "permission-denied (rows visible, no '+ Add')",
+  "T1 saved place",
+  "error (no strip at all rather than an empty one)"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Today (always visible)",
+  "Place file year band \u2192 'this fortnight'",
+  "Reminder push with a rule id (row highlights on arrival)"
+ ],
+ "visualization": "14 equal cells, today leftmost, weekday initial beneath each, weekend cells tinted so the pickup cadence reads as a rhythm. One dot per event inside its day cell, coloured by class (pickup / civic / money / yours), capped at three then '+N'. Dots carry the provenance encoding: filled = official, hollow = unconfirmed, tick = you entered it. A statewide row renders as a full-height bar spanning the cell rather than a dot, so it visibly is not a claim about this house. Tonight's pickup emphasises cell 2 \u2014 an emphasis, never an alert banner.",
+ "uxNote": "A dated 14-day sequence rendered as a text list cannot answer the one question the window exists for, and its empty state is indistinguishable from a broken section. The strip also gives F4's 'tonight' a spatial anchor and F6's statewide deadline a way to sit in the card without reading as an address-specific claim \u2014 which is precisely the honesty failure the pilot scores at zero. The doc's '+ Date' header toggle is the wrong affordance: a list gets a list row, not a mode switch.",
+ "effortDays": 2
+}

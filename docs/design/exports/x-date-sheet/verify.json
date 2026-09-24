@@ -1,0 +1,19 @@
+{
+ "id": "x-date-sheet",
+ "export": "docs/design/exports/x-date-sheet/x-date-sheet.html",
+ "manifest": 38,
+ "mode": "bundle",
+ "pages": 38,
+ "exact": 37,
+ "labelled": 38,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [
+  "x-date-sheet \u00b7 Notes"
+ ],
+ "extra": [
+  "Date sheet \u00b7 38-notes"
+ ],
+ "pagesDir": "docs/design/exports/x-date-sheet/pages",
+ "placeholders": []
+}

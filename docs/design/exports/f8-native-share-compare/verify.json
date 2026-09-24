@@ -1,0 +1,15 @@
+{
+ "id": "f8-native-share-compare",
+ "export": "docs/design/exports/f8-native-share-compare/f8-native-share-compare.html",
+ "manifest": 19,
+ "mode": "bundle",
+ "pages": 19,
+ "exact": 19,
+ "labelled": 19,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f8-native-share-compare/pages",
+ "placeholders": []
+}

@@ -1,0 +1,37 @@
+{
+ "id": "f1-your-places",
+ "name": "Your places (and which one Today uses)",
+ "feature": "F1",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Web: SavedPlaceContext, re-hosted inside PlaceShell (kill the bare 760px query-param frame at app/(app)/app/place/page.tsx:43-44). iOS: Features/SavedPlaces. Android: ui/screens/saved_places/SavedPlacesScreen.kt.",
+ "purpose": "See everything you saved, see which one Today is running on and why, switch it, claim it or remove it \u2014 in one surface instead of the two the doc specifies.",
+ "contents": "Rows of label + city/state + saved date; a 'Used for Today' badge on the resolved place; the precedence explanation in one sentence ('Today uses the address you saved most recently' / 'A home you've claimed always wins'); row overflow (Open, Use for Today, Claim this address, Remove); a header line 'Only you can see these.'; and an empty state pointing at the add-a-place sheet. 'Use for Today' writes the existing UserNotificationPreferences custom pin, which already outranks everything in resolveLocation \u2014 no new column.",
+ "states": [
+  "loading",
+  "empty",
+  "single place (explanation, no chooser)",
+  "multi-place chooser",
+  "a home outranks the saved place (selection disabled, explained)",
+  "row already claimed (renders as a home, not a saved place)",
+  "removing with Undo",
+  "account-switch reset",
+  "offline",
+  "error"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "Place tab when there is no claimed home",
+  "Today header chip ('Saved place \u00b7 Only you' \u2192 opens here)",
+  "Place file \u2192 Address row",
+  "Post-save confirmation 'View saved places'"
+ ],
+ "visualization": "A list where exactly one row carries a filled 'Used for Today' badge and the rest carry nothing \u2014 one badge slot, one overflow, no chips competing. The precedence sentence sits directly under the badged row, not in a header, so the explanation is adjacent to the thing it explains. A claimed row renders with the home glyph and a greyed 'Today always uses your home' caption rather than a disabled-looking control.",
+ "uxNote": "The doc specifies this twice (a saved-places list and a 'where Today gets this' sheet) for one job; merging them removes the worse failure, which is that the web saved-place surface has NO nav entry anywhere and renders frameless \u2014 so a web user who saves a place today can never find it again, making F1's own acceptance criterion untestable by a real person. Correctness dependency: removal must invalidate queryKeys.hubToday; both web Today mounts hold staleTime 120s, so today the address keeps rendering for two minutes after removal, which on an 'only you' surface reads as a privacy failure.",
+ "effortDays": 1.5
+}

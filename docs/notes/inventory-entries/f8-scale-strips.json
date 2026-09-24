@@ -1,0 +1,34 @@
+{
+ "id": "f8-scale-strips",
+ "name": "The four-layer reading instrument (scale strips)",
+ "feature": "F8",
+ "disposition": "NEW_CARD_IN_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Shared component: the compare arrival header, the compare reveal, the compare sheet preview, the OG route, and the Place > Risk detail. Today these four chips are assembled ONLY inside /api/og/place and have never been rendered as UI.",
+ "purpose": "Make four readings from four different authorities comparable without inventing a grade or judging a home.",
+ "contents": "Four rows \u2014 Flood (FEMA zone), Wildfire (USFS hazard, quarter-mile), Air today (AirNow), Radon (county zone, EPA). Each row: layer name, the plain value FIRST, the authority as a caption, the provenance mark, and a tap into the provenance sheet. NO letter grades anywhere.",
+ "states": [
+  "all four present",
+  "a layer with no data \u2192 greyed track, no marker, 'Not on record' (never a blank row; the two compare columns must stay the same length)",
+  "unverified reading \u2192 hollow marker",
+  "air is time-scoped and always says 'today'",
+  "sender's frozen token values vs the viewer's live values (freshness stated)",
+  "narrow width \u2192 captions collapse to one 'Sources: FEMA, USFS, AirNow, EPA' line rather than dropping provenance"
+ ],
+ "phase": "loop",
+ "origin": "added-by-critique",
+ "entryPoints": [
+  "Compare arrival header",
+  "Compare reveal",
+  "Compare sheet preview",
+  "OG card",
+  "Place > Risk & readiness"
+ ],
+ "visualization": "Per layer, a horizontal track segmented into THAT authority's own named bands, with a marker positioned in the band and the band's plain name printed beside it. Tracks never span layers, so nothing sums or averages into a verdict. Three sizes drawn once: OG card, compare row, risk detail.",
+ "uxNote": "This kills F8's letter grades, which are the pack's clearest honesty blocker: the token declares g:{flood:'A',wildfire:'C',air:'B',radon:'D'} for four incommensurable labels, manufacturing a shared ordinal scale that does not exist, with no legend \u2014 and converting 'what's on record about an address' into a report card on somebody's home, which is exactly what the pilot scores at zero. A radar chart is worse (it normalises unlike axes and encodes area, so a bigger blob reads as a worse home). Also add a confidence field to the compare token, or drop unverified layers from the card rather than shipping them as confident.",
+ "effortDays": 1.5
+}

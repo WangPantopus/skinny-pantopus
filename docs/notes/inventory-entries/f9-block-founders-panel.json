@@ -1,0 +1,37 @@
+{
+ "id": "f9-block-founders-panel",
+ "name": "Block Founders (rank vs tier, slot meter, postcard allowance)",
+ "feature": "F9",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Moved to the Nearby tab alongside the cells map; today it lives in Place > Your block (BlockDetail / PlaceBlockFoundersSection / PlaceBlockFoundersContent) with Place > Your block reduced to a pointer row.",
+ "purpose": "One name per thing, and make the earned weekly postcard allowance visible before it is spent.",
+ "contents": "Rank badge ('Block Founder #3 \u00b7 permanent'), a visually distinct tier line ('Founding Neighbor \u00b7 slot 2 of 5 \u00b7 closes in 6 days'), the founder roster, and the invite composer with an allowance line ABOVE the field ('4 of 6 invites left this week \u00b7 +1 earned from a referral') plus the reset-day note. Cap is 3 + min(converted referrals, 3).",
+ "states": [
+  "T4 verified (rank + tier)",
+  "T3 unverified (teaser)",
+  "founding window closed",
+  "no founders yet",
+  "allowance remaining",
+  "allowance exhausted (reset day named)",
+  "send error",
+  "rate-limited",
+  "loading",
+  "error"
+ ],
+ "phase": "pilot",
+ "origin": "merged",
+ "entryPoints": [
+  "Nearby tab",
+  "Place > Your block pointer row",
+  "Invite rewards card tier 3",
+  "Verified success"
+ ],
+ "visualization": "Two visibly different chip shapes: rank is a numeral in a permanent-feeling badge; tier is a countdown pill paired with the 5-segment slot meter. Sharing one shape would make the rename change nothing a reader perceives \u2014 which is the doc's actual failure, since both names currently sit in the same paragraph. The allowance is a counter at the top of the form, not a subtitle under the button.",
+ "uxNote": "Moving block and founding content to Nearby gives the fourth tab a job (today the loop touches it once) and puts the two unlocked referral tiers next to their rewards. Today the earned invite count exists only inside the post-send toast, so a user earns an extra invite and learns of it only after spending one.",
+ "effortDays": 1
+}

@@ -1,0 +1,30 @@
+{
+ "id": "f4-notification-primer",
+ "name": "Notification permission primer",
+ "feature": "F4 / F5 / F3",
+ "disposition": "NEW_SHEET_OR_MODAL",
+ "platforms": [
+  "ios",
+  "android"
+ ],
+ "hostSurface": "Presented from the briefing opt-in card (or the first pickup confirmation) immediately before the OS prompt. iOS: replaces the launch-time request in AppDelegate.swift:50-61.",
+ "purpose": "Stop burning the one-shot iOS notification grant at cold launch, before the user has a place or a reason.",
+ "contents": "One sentence naming exactly what will arrive ('We'll tell you the night before pickup, and nothing else unless something needs you tonight'), Yes / Not now, and only on Yes the system prompt. Android 13+ POST_NOTIFICATIONS follows the same path.",
+ "states": [
+  "default",
+  "granted",
+  "declined (the card falls back to its denied state; the widget becomes the promoted return trigger)",
+  "already granted (never shown)",
+  "already denied at OS level (shows Open Settings instead of a prompt)"
+ ],
+ "phase": "loop",
+ "origin": "added-by-critique",
+ "entryPoints": [
+  "Briefing opt-in card Yes",
+  "First pickup confirmation",
+  "Household-activity opt-in"
+ ],
+ "visualization": "A short sheet with a single illustrative example of the actual notification, rendered as a tray card \u2014 the user sees the thing they are agreeing to receive rather than a description of it.",
+ "uxNote": "Confirmed by reading: iOS fires the system prompt from didFinishLaunchingWithOptions, and iOS never re-asks. Every push in F3/F4/F5 depends on a grant the app currently spends at the worst possible moment. This is a one-day fix that protects the whole notification strategy.",
+ "effortDays": 0.75
+}

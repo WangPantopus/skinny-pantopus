@@ -1,0 +1,28 @@
+{
+ "id": "f8-og-compare-card",
+ "name": "Compare share card (OG image)",
+ "feature": "F8",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web"
+ ],
+ "hostSurface": "/api/og/place (edge), referenced from /start generateMetadata.",
+ "purpose": "Be the thing a stranger actually sees first \u2014 the unfurled card in a chat \u2014 and make 'Yours?' the obvious question.",
+ "contents": "With ?vs=: left column the sender (city, optional first name, four scale strips, headline truncated ~140); right column a filled, inviting 'Yours? \u2192 pantopus.com' prompt card of equal visual weight; footer carries the contrast line. Cache-Control public, max-age=3600 since the token is immutable. Data comes from the TOKEN only, never a live no-store fetch, or a slow upstream times out the unfurl and the link shows no image.",
+ "states": [
+  "vs valid",
+  "vs expired or tampered \u2192 falls back to the generic single-address card, NEVER an error image in someone's chat",
+  "no vs (unchanged)",
+  "headline over the slice limit (ellipsis, never mid-word garbage)",
+  "no first name",
+  "cached"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "Any shared /start?vs= link unfurling in a messenger or social app"
+ ],
+ "visualization": "Two columns at 1200x630 using the same scale-strip rows as the app, so the share artifact is visibly a preview of the product. The 'Yours?' column is a filled prompt, not an outlined ghost \u2014 an empty outline reads as a rendering failure in a chat thread, and it is the whole conversion mechanic. Must survive the 400px thumbnail crop some clients use.",
+ "uxNote": "The expired-token fallback is not in the doc and is the one state that can embarrass the product in someone else's group chat.",
+ "effortDays": 1
+}

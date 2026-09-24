@@ -1,0 +1,31 @@
+{
+ "id": "f8-seasonal-aha",
+ "name": "Rotating seasonal aha card",
+ "feature": "F8 / F12",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "The anonymous preview aha card: web AhaCard, iOS PlacePreviewBody, Android PlaceLaunchScreen \u2014 all rendering the server-ranked aha from pickAha.",
+ "purpose": "Make the single headline on the anonymous preview be the fact that is actually urgent this month at this address.",
+ "contents": "New content shapes: a dated deadline headline ('Voter registration for November 3 closes {date} in {state}'), a tax-appeal window headline, a January radon headline whose follow-up is an outbound free-kit link, and the unchanged calm fallback. Each seasonal headline carries a source and, for seeded rows, the unverified treatment \u2014 which must survive into the 90-char token headline and the OG card, where there is far less room.",
+ "states": [
+  "seasonal match",
+  "no match (existing ranked aha)",
+  "calm fallback",
+  "seeded, unverified (hollow mark + source)",
+  "no program_url for the state (headline only, no link)",
+  "date already passed (suppressed, never a past deadline)"
+ ],
+ "phase": "loop",
+ "origin": "merged",
+ "entryPoints": [
+  "T0 preview (web, iOS, Android)",
+  "Compare arrival header (sender's headline)"
+ ],
+ "visualization": "The card gains a date treatment it does not have today \u2014 the deadline as a dated chip beside the grade badge \u2014 and a visibly secondary outbound follow-up, distinct from the existing follow-up button that scrolls to the wall. Keep 'Claim this address' unambiguously primary: this is the one outbound link before the wall, at the moment of highest intent.",
+ "uxNote": "The honesty risk outweighs the layout risk: F6/F12 seeds ship with confidence 'unverified', and a headline reading 'Registration closes October 5' with no caveat is exactly the failure the pilot counts at zero. Do not silently repurpose the existing single follow-up action \u2014 an identical-looking button doing two different things depending on the month is worse than two buttons.",
+ "effortDays": 1
+}

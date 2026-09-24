@@ -1,0 +1,29 @@
+{
+ "id": "f8-native-share-compare",
+ "name": "Share + compare actions on the native T0 preview",
+ "feature": "F8",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "ios",
+  "android"
+ ],
+ "hostSurface": "iOS PlacePreviewBody (no share control exists at all today) using SystemShareSheet; Android PlaceLaunchScreen's existing ShareAddressLink.",
+ "purpose": "Give the native funnels the same one-tap spread as web without building a native compare screen in v1.",
+ "contents": "A tertiary text-button row under the aha: 'Share this address' and 'Compare with a friend'. Compare mints a token and hands <web base>/start?vs=<token> to the system share sheet. No first-name field in v1, so the card is anonymous \u2014 say so in a one-line caption rather than implying it is personalised.",
+ "states": [
+  "idle",
+  "minting (disabled + spinner)",
+  "mint error",
+  "offline (compare disabled)",
+  "no share targets (Android)",
+  "iOS: both controls are net-new on that screen"
+ ],
+ "phase": "loop",
+ "origin": "from-doc",
+ "entryPoints": [
+  "T0 preview aha card"
+ ],
+ "visualization": "A text-button row, never filled buttons, and never inside the sticky wall \u2014 the wall's 'Continue' stays the single primary at the moment the funnel wants a sign-up.",
+ "uxNote": "Neither native app has any funnel-event emitter, so compare sends from native are unrecorded and the spread metric stays web-only \u2014 it understates k rather than inflating it, which is the acceptable direction. Adding the emitter is F7's job (the widget needs it for session_open), so these get it for free if F7 lands first.",
+ "effortDays": 1
+}

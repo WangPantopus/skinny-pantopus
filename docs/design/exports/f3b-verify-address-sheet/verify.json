@@ -1,0 +1,15 @@
+{
+ "id": "f3b-verify-address-sheet",
+ "export": "docs/design/exports/f3b-verify-address-sheet/f3b-verify-address-sheet.html",
+ "manifest": 32,
+ "mode": "bundle",
+ "pages": 32,
+ "exact": 32,
+ "labelled": 32,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f3b-verify-address-sheet/pages",
+ "placeholders": []
+}

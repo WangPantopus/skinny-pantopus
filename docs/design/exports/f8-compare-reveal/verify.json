@@ -1,0 +1,15 @@
+{
+ "id": "f8-compare-reveal",
+ "export": "docs/design/exports/f8-compare-reveal/f8-compare-reveal.html",
+ "manifest": 20,
+ "mode": "bundle",
+ "pages": 20,
+ "exact": 20,
+ "labelled": 20,
+ "named_by_order": true,
+ "order_conflicts": [],
+ "missing": [],
+ "extra": [],
+ "pagesDir": "docs/design/exports/f8-compare-reveal/pages",
+ "placeholders": []
+}

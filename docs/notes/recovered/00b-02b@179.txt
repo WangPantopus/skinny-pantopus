@@ -1,0 +1,78 @@
+Component 00b-02: AqiBand, part 2 of 2. Follow the board rules from the setup message and the full AqiBand specification in part 1.
+
+ARTBOARDS AND BATCH PLAN FOR PART 2
+Use the exact names and this order. Draw batch 1 only, then stop and wait for "continue".
+Batch 1:
+1. 00b · AqiBand · 03-widget-micro · light
+2. 00b · AqiBand · 04-ax5-200 · light
+3. 00b · AqiBand · 05-greyscale · light
+4. 00b · AqiBand · 06-in-context · light
+Batch 2:
+5. 00b · AqiBand · 01-anatomy · dark
+6. 00b · AqiBand · 02-variants-by-state · dark
+7. 00b · AqiBand · 03-widget-micro · dark
+8. 00b · Notes (append AqiBand)
+
+ARTBOARD CONTENTS
+03-widget-micro (light and dark):
+- A medium widget outline, 338×158pt, with 306pt of content. Inside it, draw only the V3 block (band, name and number, and the caption line). Label the rest of the outline "owned by f7-today-widget".
+- Show the block in three forms:
+  - iOS full colour: an instance of the 02 widget-micro ready cell. It gets no separate publish name.
+  - iOS tinted rendering [extra key widget-ready-tinted]: every hue flattens to one tint. The gaps and keylines keep the six segments readable, the printed name carries the meaning, and the mark keeps its silhouette.
+  - Android [extra key widget-ready-android]: the EPA hues stay fixed and never follow dynamic colour. Everything else follows the house tokens.
+04-ax5-200 (light):
+- V5 alert at iOS AX5 [extra key ax5-legend-ios]:
+  - The range labels leave the band and become a legend list below it.
+  - The list has one row per category. Each row is at least 44pt tall, grows with its text, and holds a 16pt keylined swatch, the EPA name and the range.
+  - The value line, statement and PANTOPUS NOTE wrap. The band keeps its full width.
+- The same specimen at Android 200% [extra key android-200-legend].
+- V1 on the web-1440 card at 200% zoom (a 720px effective layout), in the same legend-list form [extra key web-200].
+- At AX sizes, the V3 widget falls back to text only: "Air · Good 42 · Official · AirNow 7:00 AM" [extra key widget-text-fallback].
+05-greyscale (light): the light 01 and 02 artboards, desaturated. Caption: "Segments separated by gaps and keylines; category printed in words; marker by two-tone capsule."
+06-in-context (light): three mini crops.
+- (a) f1-today-air-band, iOS 393: the alert landing card, with ScopeChip "Your household" and the header "2418 NE Larkspur Loop" (4:10 PM).
+- (b) x-provenance-sheet, Android 412: the header "Where this fact comes from" above V1 at AQI 42.
+- (c) f6-place-section-details, web-390: V2 inside ScaleStrip.
+- Under the crops, a caption in text.strong: "Also used in: f8-scale-strips and f8-compare-reveal → V2 inside ScaleStrip · f7-today-widget, f7-widget-gallery, f7-widget-howto-sheet → V3 widget micro · f7-widget-tap-landing → V1 detail · f8-og-compare-card → the ScaleStrip OG Air row."
+Dark twins (batch 2):
+- Hues are unchanged. Gaps are surface.raised (dark), and the marker halo is #0F172A.
+- 02 dark repeats the full grid, including its n/a cells, the provider-failed specimen and the three extras.
+
+PUBLISH NAMES (list them on Notes G)
+- Each drawn 02 cell: "AqiBand / <row key> / <column key> / <light|dark>".
+- 02 extras: "AqiBand / extra / <no-reading-provider-failed|threshold-151|clamp|marker-on-every-hue> / <light|dark>".
+- 03 extras: "AqiBand / extra / <widget-ready-tinted|widget-ready-android> / <light|dark>". The full-colour block has no name of its own; it is "AqiBand / widget-micro / ready".
+- 04 extras: "AqiBand / extra / <ax5-legend-ios|android-200-legend|web-200|widget-text-fallback> / light".
+- The six swatches are published only as part of AqiBand.
+
+NOTES (batch 2: append an AqiBand subsection to each section of 00b · Notes)
+- A (invented strings):
+  - the widget strings: "Air · Good 42", "Air · Sensitive groups 118", "Air · No reading", "Official · AirNow · 7:00 AM", "Air · Good 42 · Official · AirNow 7:00 AM"
+  - the PANTOPUS NOTE strings: "PANTOPUS NOTE", "Your alert level is 101. You can change it in Notifications.", and the still-above line
+  - "Crossed 101 at 4:00 PM", "threshold 151 (not crossed)", "AQI 612 · Hazardous · PM2.5", "Where this fact comes from"
+  - every spoken label except detail alert, which comes from the contract. The detail ready label is included.
+  - the also-used-in line
+- B (assumptions):
+  - PM2.5 is the pollutant for AQI 42.
+  - Specimen clocks: 7:10 AM (ready, offline), 4:10 PM (alert, still above), 6:10 PM (stale).
+  - aqi.good … aqi.hazardous are board labels for the EPA hues.
+  - For position, 301+ spans 301–500.
+  - A threshold equal to a segment's low value is centred in the gap before that segment.
+  - The instrument-row alert cell grows its track zone to 40pt to hold the threshold number beside the rule.
+  - The still-above sentence is placed inside the PANTOPUS NOTE block.
+- C (normalisations):
+  - The contract example "Crossed 151 at 4:00 PM" is drawn as "Crossed 101 at 4:00 PM", because AQI 118 does not cross 151 and 101 is the default.
+  - The keyline reasoning is restated with computed values: Good 1.22:1 and Moderate 1.54:1 on white; Hazardous 1.08:1 on dark raised.
+- D (deviations): none.
+- E (open questions):
+  - Confirm the PM2.5 sensitive-groups sentence against EPA TAD Table 4.
+  - Should the ScaleStrip Air row in f8-scale-strips show the instrument-row alert form (40pt track zone and threshold rule)? The ScaleStrip artboards don't draw it.
+- F: every n/a cell from 02, each with its reason.
+- G: the publish names above.
+
+DONE WHEN
+- All seven part 2 artboards and the Notes update exist with the exact names above.
+- The three widget forms, the four AX and fallback specimens, the greyscale pair and the three in-context crops are drawn.
+- The dark 02 grid matches the light one cell for cell.
+- The hues are identical in the light, dark and Android forms. The tinted form differs only by the tint flattening.
+- Every publish name is listed on Notes G.

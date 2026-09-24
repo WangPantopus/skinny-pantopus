@@ -1,0 +1,35 @@
+{
+ "id": "f10-mail-piece-photo",
+ "name": "Photographed mail piece (the record, and the photo viewer)",
+ "feature": "F10",
+ "disposition": "EXTEND_EXISTING",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "The existing mailbox drawer list and mail piece detail on all three platforms, driven by the new Mail row (cover_image_url = the private key, key_facts, due-date urgency).",
+ "purpose": "Answer 'where did the thing I photographed go?' after triage ends \u2014 and be the one place the image can be looked at and permanently deleted.",
+ "contents": "Rows with a thumbnail and extracted key facts, plus a photographed filter with payee/amount search. On the piece: the full-bleed zoomable image on a dark scrim, who can see it, when it was taken, an authenticated download on web, an 'Added to bills' cross-link, and a single destructive 'Delete this photo' whose confirm states what survives ('The bill and its amount stay; only the photo is removed').",
+ "states": [
+  "photographed with a confirmed bill",
+  "photographed, filed without a bill",
+  "photo deleted, text record kept",
+  "signed URL expired (transparent re-fetch, then an honest error)",
+  "permission-denied (piece visible, payee and amount hidden)",
+  "loading",
+  "error",
+  "offline (no cached original \u2014 say so)"
+ ],
+ "phase": "phase2",
+ "origin": "merged",
+ "entryPoints": [
+  "Mail Day row \u2192 'See the piece'",
+  "Mailbox drawer",
+  "Bill provenance block 'View the photo'",
+  "Mail snap privacy card's listing"
+ ],
+ "visualization": "A document viewer, not a photo gallery: pinch-zoom and small-print legibility beat swipe-between-items, and the chrome must not obscure the top third of a portrait letter at 2x.",
+ "uxNote": "Merging the doc's separate photo viewer into the mail piece keeps one object to two durable surfaces \u2014 the record (Mail) and the obligation (bill) \u2014 cross-linked both ways. Without any viewer, the privacy promise (private storage, authenticated download, deletable) is unfalsifiable from inside the product: uploaded, read by a model, never seen or removed by the person.",
+ "effortDays": 1.25
+}

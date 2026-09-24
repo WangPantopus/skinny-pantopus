@@ -1,0 +1,56 @@
+continue — Component 00a-09: ChoiceChip, Batch 2 (the last batch). Follow the board rules from the setup message and the ChoiceChip spec from the previous message.
+
+Draw these in order:
+4. 00a · ChoiceChip · 03-scaling-greyscale · light
+5. 00a · ChoiceChip · 02-variants-states · dark
+Then update 00a · Notes with the 09 entries below. This is the final Notes. When you finish, stop and say the board is complete.
+
+SCALING AND GREYSCALE (03-scaling-greyscale)
+- AX5 (iOS 393): draw R1, R2 (Member selected, with the Member caption under the selected row), R3 and R5 as one-column rows. The iOS segmented control (R5) also becomes rows. Each row is full width and at least 44pt tall, with a 44pt label that wraps. Selected row: primary.50 fill, label primary.700, a trailing 24pt check stroke in primary.700. Unselected rows: label text.strong, no indicator (native iOS list selection). No ring on iOS. R4 stays a single chip, drawn on: at 44pt it becomes a rounded rectangle (radius lg 12, B9) with the leading check scaled to 24pt.
+- 200% (Android 412): the same R1, R2 (Member), R3 and R5 rows, each at least 48dp tall with a 26sp label, and with Material 3 radio buttons on the leading edge (the Android platform control). Selected row: primary.50 fill, label primary.700, a leading 24dp radio (2dp primary.700 ring with a 12dp filled primary.700 centre), and no trailing check. Unselected row: no fill, label text.strong, a leading 24dp empty ring in 2dp text.secondary. Flag both radios as B8 exceptions (Notes). R4 stays a single chip at 26sp: a rounded rectangle (radius lg 12) with the leading check.
+- Web 200% zoom, two frames:
+  390 wide (195 px effective): this is below the 360 px switch point, so draw the same rows as AX5 in the iOS form (trailing check, no ring), built as role="radio" rows.
+  1440 wide (720 px effective): the R3 group sits inside its real container, the f4 briefing card column at 320 CSS px. At that width the four chips wrap onto two lines and stay chips. Label the column width.
+  Print "switch to rows below 360 px effective width".
+- GREYSCALE (B10): draw a greyscale copy of the 25 light grid cells. Next to every cell, print a verdict:
+  default cells: "yes — no selection; outline + label". The R5 default cell has a selection, so it reads the same as the selected cells.
+  selected cells and selected-focus cells: "yes — selected = check + fill + outline; focus = ring".
+  focus cells: "yes — focus = ring".
+  disabled cells: "yes — reason caption".
+  Add a WRONG example where the selected chip differs only by hue, with "fix: add the check".
+- INCREASE CONTRAST: R3 with the unselected outlines in text.strong, plus the Android unselected radio rings in text.strong. The selected chip does not change, and disabled chips stay text.muted (B16).
+
+DARK TWIN (02-variants-states · dark)
+All 25 cells from the light grid, with the same strings and states (R5 selected = "Paid"), in the dark tokens: selected per ④ (fill primary.900, 1px primary.400 (dark link) outline, text dark text.primary, check primary.400); unselected per ⑤ (outline dark text.secondary, text dark text.strong #F1F5F9); disabled per ⑦ (dark text.muted); focus per B14. Reason captions are in dark text.secondary.
+
+PUBLISH KEYS
+Variants: channel · role · time · filter · segment. States: default · selected · disabled · focus · selected-focus. <size|platform> is "any" for every 02 grid cell (50 names, light and dark) and ios, android or web for the 12 per-platform forms (light only). Total for ChoiceChip: 62. Examples: "ChoiceChip / time / selected / any / dark" · "ChoiceChip / segment / selected / ios / light".
+
+NOTES ENTRIES (subheading "09 ChoiceChip"; add them only, and leave every earlier entry as it is)
+ 09.A1 Unselected outline is text.secondary, not spec border.strong (see ⑤).
+ 09.A2 Disabled text and outline are text.muted, with no border token; the reason caption carries the meaning (see ⑦).
+ 09.A3 The selected chip adds a 1px primary.700 outline (dark: primary.400 (dark link)); the spec names only the fill (see ④).
+ 09.A4 R5 disabled keeps "Upcoming" enabled and selected; only "Paid" and "All" are disabled.
+ 09.A5 R2 shows a capability caption only for the selected role.
+ 09.A6 R5 default shows "Upcoming" selected (a segment always has one selection); R5 selected shows "Paid", so the selection visibly moves.
+ 09.A7 Android chips keep the pill radius, not the M3 8dp corner.
+ 09.A8 Android 200% rows use Material 3 radios, including an empty ring (the same flagged exception as 07.A1 (b)); iOS and web rows use a trailing check and no ring.
+ 09.A9 Web zoom has two frames: the 390-wide frame shows rows; the 1440-wide frame shows the R3 chips wrapping onto two lines inside the 320 CSS px f4 card column.
+ 09.A10 The grid adds a selected-focus column, which is not in the contract, to show that selection and focus look different.
+ 09.A11 The f4-briefing-optin-card crop is split into before Yes (b1: "Yes", "Not now" and "No thanks" at equal weight, no chips) and after Yes (b2: the time chips, no buttons), because the contract expands the time-chip row only after Yes. The contract lists Yes / Not now; brief section 7 pairs every Not now with a lasting decline.
+ 09.A12 The briefing card (crop b2) uses 44pt-visual chips per NotificationAsk ("Chips are 44pt"), not the ChoiceChip default of a 32 visual.
+ 09.B1 "You're offline. Invites need a connection." · "You're offline. Your briefing time will save when you're back online." · "You're offline. Filters need a connection." · "You're offline. Paid and All need a connection." · "Send invite" · "caption appears after a role is chosen" · "a segment always has one selected" · "selection moved" · "switch to rows below 360 px effective width" · "fix: add the check" · "Yes → system dialog" · "before Yes" · "after Yes" · "44 visual (NotificationAsk)" · "collapses to '7:00 AM · Change' once saved".
+ 09.B2 Spoken labels: "7:00 AM, selected, 2 of 4" · "7:00 AM, selected" · "Photographed, off" · "Photographed, on".
+ 09.B3 Sourced, not invented: the Member caption (f3-invite-composer research); "Same as Member · ends in 13 days · Sun 1 Nov" (adapted from f3-invite-composer research, date re-fixtured, relative count placed before the date per the house style); "sam.okafor@example.com" (flows-spec, f3-invite-composer); "Your household" (ScopeChip); "6:30 AM · 7:00 AM · 7:30 AM · 8:00 AM", "Yes" and "Not now" (f4-briefing-optin-card); "'… · Change'" (NotificationAsk granted state, time re-fixtured); "No thanks" (brief section 7); "A morning heads-up?" (glossary).
+ 09.C List any cell you could not draw, or "none".
+ 09.D Open question: the 07.D Android radio question also applies to ChoiceChip's 200% rows.
+ 09.E All 62 ChoiceChip names, then a closing count of every name in section E.
+
+DONE WHEN (Batch 2 and the whole board)
+- All 5 ChoiceChip artboards exist with their exact names. Notes has the 09 entries, every earlier entry is unchanged, and sections A–E are complete for all nine components.
+- The dark grid is 5 × 5 with printed keys and every cell drawn. Selected chips use the primary.400 (dark link) outline, and unselected text is dark text.strong.
+- Only the Android 200% frame uses radio rings; the iOS and web frames draw no ring.
+- The web 390 frame shows rows. The 1440 frame shows the R3 chips wrapping onto two lines in the 320 CSS px column.
+- Every greyscale cell has a verdict, including the default cells, and the WRONG example is present.
+- Section E lists 62 ChoiceChip names and ends with the closing count.
+Then stop and say the board is complete.

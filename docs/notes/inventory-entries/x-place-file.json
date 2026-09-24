@@ -1,0 +1,38 @@
+{
+ "id": "x-place-file",
+ "name": "Your place file",
+ "feature": "Cross-cutting (F2, F5, F6, F7, F11)",
+ "disposition": "NEW_SCREEN",
+ "platforms": [
+  "web",
+  "ios",
+  "android"
+ ],
+ "hostSurface": "The Place tab's index \u2014 what the Place tab shows for a user who has saved an address, and the 'facts' destination for a user who has claimed one. Web /app/place; iOS HubTabRoot place root; Android root/home.",
+ "purpose": "The one hub for every fact the product can hold about this address \u2014 so the first-week checklist, the mover's checklist, the user's dates and the keeper's 'knows N things' are one list with one storage model instead of four that drift.",
+ "contents": "A 12-month year band at the top; below it, fact rows grouped in five categories \u2014 Place (address, pickup day, move-in date), Dates (the six F5 kinds + seeded county/state rows), Money (bills, phase 2), People (co-residents, invites), Proof (address verification). Each row is either KNOWN (value + edit affordance) or MISSING (one-line ask + CTA into the Date sheet, the add-a-place sheet, the invite composer, docs or the verify sheet). Mover rows (mail forwarding, utilities, voter registration) appear only while move_in_date is within 60 days. A 'Put today on your home screen' row appears when no widget is placed. Ticks and dismissals persist server-side (HomeOccupancy at T3, user preferences keyed by saved place at T1).",
+ "states": [
+  "loading",
+  "T1 saved place (Money/People/Proof rows render as 'Not here \u2014 this is a saved place', never as failures)",
+  "T3 home",
+  "mover window active (extra rows)",
+  "all known ('Everything we can hold about this place is on file' \u2014 no confetti, no percentage)",
+  "dismissed mover rows with an undo and a restore row in home settings",
+  "sync merge from another device shown once as 'Synced 3 items from your other device'",
+  "permission-denied per row (household member without finance.view / members.manage sees the fact counted, CTA disabled with the reason)",
+  "offline (cached, CTAs disabled)",
+  "error"
+ ],
+ "phase": "loop",
+ "origin": "added-by-critique",
+ "entryPoints": [
+  "Place tab (it is the tab's index)",
+  "Today: a single progress row during the first 14 days ('3 of 6 things on file \u2192')",
+  "Keeper strip fact count (phase 2)",
+  "Claim-success receipt",
+  "Reminder pushes with no specific rule"
+ ],
+ "visualization": "Top band: a 12-month horizontal timeline, months as columns, with one LANE per source \u2014 You / Your city / Your county / Your state \u2014 a marker per rule at its date, today as a vertical rule, and the next 14 days shaded so the band and the Today strip are visibly the same data at two zooms. Markers carry the filled/hollow/tick provenance encoding. Below: fact rows, known rows showing the value as the primary line; missing rows showing the ask, not a red X. The category count renders as a five-segment ring (segment filled if anything is known in that category) with the integer inside \u2014 deliberately NOT a progress bar or percentage, so nothing reads as 'you are 60% complete'.",
+ "uxNote": "This is the single largest merge in the pack and the most important one for a first-time user: today the same list of facts is drawn as F2's checklist, F6's Just Moved card, F5's Your-dates card and F11's keeper ledger, with four storage models and four dismissals. One route also fixes two structural holes \u2014 the Place tab has no reason to exist for a user with no claimed home, and F5's own acceptance criterion is false today because composeForHome expands only 14 days, so a lease end eight months out is saved, toasted, and then invisible and undeletable until two weeks before it fires. The year band is what makes the loop's annual-return step visible at all.",
+ "effortDays": 3
+}
