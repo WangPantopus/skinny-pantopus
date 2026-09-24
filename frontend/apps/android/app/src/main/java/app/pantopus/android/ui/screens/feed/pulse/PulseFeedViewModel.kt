@@ -836,7 +836,8 @@ class PulseFeedViewModel
             _radiusSuggestion.value = null
             loading = true
             if (isRefresh) _isRefreshing.value = true
-            if (_state.value !is PulseFeedUiState.Loaded) {
+            // A different query must recreate the list, including its page-boundary effects.
+            if (!isRefresh || _state.value !is PulseFeedUiState.Loaded) {
                 _state.value = PulseFeedUiState.Loading
             }
             viewModelScope.launch {
