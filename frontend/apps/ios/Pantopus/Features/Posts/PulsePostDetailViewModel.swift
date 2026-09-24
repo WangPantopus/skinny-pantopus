@@ -284,6 +284,8 @@ public final class PulsePostDetailViewModel {
             )
             if replyTarget?.commentId == commentId { replyTarget = nil }
             await fetch()
+            // Feed and My posts refetch so their comment counts match.
+            PulsePostsRefresh.notifyPostsDidChange()
         } catch {
             logger.warning("Comment delete failed: \(error)")
             toastMessage = "Couldn't delete the comment"
@@ -298,6 +300,8 @@ public final class PulsePostDetailViewModel {
                 as: PostActionAckResponse.self
             )
             didDeletePost = true
+            // The feed and My posts still list the post until they refetch.
+            PulsePostsRefresh.notifyPostsDidChange()
         } catch {
             logger.warning("Post delete failed: \(error)")
             toastMessage = "Couldn't delete the post"
@@ -398,6 +402,7 @@ public final class PulsePostDetailViewModel {
             composerText = ""
             replyTarget = nil
             await fetch()
+            PulsePostsRefresh.notifyPostsDidChange()
         } catch {
             logger.warning("Comment send failed: \(error)")
             toastMessage = "Couldn't post your comment"
