@@ -1,10 +1,4 @@
-//
-//  HubViewModel.swift
-//  Pantopus
-//
-//  Fetches `/api/hub`, `/api/hub/today`, and `/api/hub/discovery` in
-//  parallel and projects them to the `HubState` consumed by `HubView`.
-//
+// Fetches the Hub overview and companion reads for `HubView`.
 
 // swiftlint:disable type_body_length
 
@@ -206,10 +200,7 @@ final class HubViewModel {
         }
         let today = await todayTask
         let discovery = await discoveryTask
-        // S5 — per-firewall unread split powers the megaphone shortcut
-        // into the Beacon notification zone. Sequenced (not raced) after
-        // the companions so a stubbed test sequence stays predictable;
-        // optional so its failure never blanks the hub.
+        // Optional unread counts power the Beacon notification shortcut.
         let unread: NotificationUnreadCountResponse? = await optional {
             try await self.api.request(NotificationsEndpoints.unreadCount)
         }
