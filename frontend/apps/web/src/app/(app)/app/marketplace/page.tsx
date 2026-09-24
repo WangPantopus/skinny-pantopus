@@ -508,8 +508,8 @@ export default function MarketplacePage() {
     if (!sentinel) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
-          void browseQuery.fetchNextPage();
+        if (entries[0].isIntersecting && hasMore && !loading && !browseQuery.isFetching && !browseQuery.isError) {
+          void browseQuery.fetchNextPage({ cancelRefetch: false });
         }
       },
       { threshold: 0.1 }
@@ -951,6 +951,26 @@ export default function MarketplacePage() {
             )}
 
             <div ref={sentinelRef} className="h-4" />
+            {browseQuery.isError && gridListings.length > 0 && (
+              <div role="alert" className="my-4 flex items-center justify-between gap-3 rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text-strong">
+                <p>{browseQuery.isFetchNextPageError ? "Couldn't load more listings." : "Couldn't refresh listings."}</p>
+                <button
+                  type="button"
+                  disabled={browseQuery.isFetching}
+                  onClick={() => {
+                    if (browseQuery.isFetching) return;
+                    if (browseQuery.isFetchNextPageError) {
+                      void browseQuery.fetchNextPage({ cancelRefetch: false });
+                    } else {
+                      void browseQuery.refetch({ cancelRefetch: false });
+                    }
+                  }}
+                  className="font-semibold text-primary-600 hover:underline disabled:opacity-50"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
             {loadingMore && (
               <div className="text-center py-6"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" /></div>
             )}
