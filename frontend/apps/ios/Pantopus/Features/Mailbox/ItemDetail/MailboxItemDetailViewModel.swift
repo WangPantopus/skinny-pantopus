@@ -219,16 +219,16 @@ public struct PackageBodyContent: Sendable {
         case .shipped: "Shipped"
         case .inTransit: "In transit"
         case .outForDelivery: "Out for delivery"
-        case .delivered: "Delivered to your porch"
+        case .delivered: "Delivered"
         }
     }
 
     private static func defaultStatusDetail(status: PackageDeliveryStatus) -> String {
         switch status {
-        case .shipped: "Label created by the sender."
-        case .inTransit: "Moving through the carrier network."
-        case .outForDelivery: "Expected today by 3 PM."
-        case .delivered: "Front porch - left in shade."
+        case .shipped: "Package status: shipped."
+        case .inTransit: "Package status: in transit."
+        case .outForDelivery: "Package status: out for delivery."
+        case .delivered: "Package status: delivered."
         }
     }
 
