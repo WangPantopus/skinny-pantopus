@@ -129,9 +129,10 @@ class ListingDetailViewModel
             if (isOwnedByMe() || isSold()) return
             when (val offers = offersRepo.listOffers(listingId)) {
                 is NetworkResult.Success -> {
-                    acceptedOffer = offers.data.offers.firstOrNull {
-                        it.status == "accepted" && (it.buyerId ?: it.buyer?.id) == viewerId
-                    }
+                    acceptedOffer =
+                        offers.data.offers.firstOrNull {
+                            it.status == "accepted" && (it.buyerId ?: it.buyer?.id) == viewerId
+                        }
                     acceptedOffer?.let { paymentsRepo.reconcileListingConfirmation(viewerId, listingId, it) }
                 }
                 is NetworkResult.Failure -> checkoutReadFailed = true
@@ -184,7 +185,8 @@ class ListingDetailViewModel
 
         private fun canContinueCheckout(): Boolean {
             val summary = acceptedOffer?.checkout ?: return false
-            return !checkoutReadFailed && !isAwaitingConfirmation && summary.canContinue && summary.state in setOf("ready", "retry", "pending")
+            return !checkoutReadFailed && !isAwaitingConfirmation && summary.canContinue &&
+                summary.state in setOf("ready", "retry", "pending")
         }
 
         private fun rebuild() {

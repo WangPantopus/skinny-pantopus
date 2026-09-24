@@ -34,14 +34,24 @@ class PaymentsRepository
 
         private val pendingListingConfirmations = mutableSetOf<ListingConfirmation>()
 
-        fun markListingConfirmationPending(userId: String, listingId: String, offerId: String) {
+        fun markListingConfirmationPending(
+            userId: String,
+            listingId: String,
+            offerId: String,
+        ) {
             pendingListingConfirmations.add(ListingConfirmation(userId, listingId, offerId))
         }
 
-        fun isListingConfirmationPending(userId: String?, listingId: String): Boolean =
-            pendingListingConfirmations.any { it.userId == userId && it.listingId == listingId }
+        fun isListingConfirmationPending(
+            userId: String?,
+            listingId: String,
+        ): Boolean = pendingListingConfirmations.any { it.userId == userId && it.listingId == listingId }
 
-        fun reconcileListingConfirmation(userId: String, listingId: String, offer: ListingOfferDto) {
+        fun reconcileListingConfirmation(
+            userId: String,
+            listingId: String,
+            offer: ListingOfferDto,
+        ) {
             val summary = offer.checkout ?: return
             val resolved = setOf("authorized", "processing", "paid", "refund_pending", "partially_refunded", "refunded", "disputed")
             val retry = summary.state == "retry" && summary.canContinue && summary.paymentStatus == "authorization_failed"
