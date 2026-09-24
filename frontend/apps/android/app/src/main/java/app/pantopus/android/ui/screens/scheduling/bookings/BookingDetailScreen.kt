@@ -275,7 +275,6 @@ fun BookingDetailScreen(
             onSelectReason = cancelViewModel::selectReason,
             onSetOther = cancelViewModel::setOther,
             onSetNote = cancelViewModel::setNote,
-            onToggleNotify = cancelViewModel::toggleNotify,
             onSelectPreset = cancelViewModel::selectPreset,
             onToggleRestoreCredit = cancelViewModel::toggleRestoreCredit,
             onConfirm = cancelViewModel::confirm,
