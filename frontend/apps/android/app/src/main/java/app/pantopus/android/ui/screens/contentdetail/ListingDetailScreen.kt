@@ -198,13 +198,7 @@ fun ListingDetailScreen(
                     Modifier
                         .padding(Spacing.s4)
                         .clip(RoundedCornerShape(Radii.pill))
-                        .background(
-                            when (toastKind) {
-                                ToastKind.Error -> PantopusColors.error
-                                ToastKind.Info -> PantopusColors.info
-                                else -> PantopusColors.success
-                            },
-                        )
+                        .background(listingToastColor(toastKind))
                         .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                         .testTag("listing-detail-toast"),
             ) {
@@ -322,3 +316,10 @@ private fun OfferSheetContent(
         Spacer(modifier = Modifier.height(Spacing.s5))
     }
 }
+
+private fun listingToastColor(kind: ToastKind) =
+    when (kind) {
+        ToastKind.Error -> PantopusColors.error
+        ToastKind.Info -> PantopusColors.info
+        else -> PantopusColors.success
+    }
