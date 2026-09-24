@@ -49,13 +49,14 @@ public struct ListingOffersView: View {
                     get: { viewModel.declineTarget != nil },
                     set: { if !$0 { viewModel.cancelDecline() } }
                 ),
-                titleVisibility: .visible
-            ) {
+                titleVisibility: .visible,
+                presenting: viewModel.declineTarget
+            ) { target in
                 Button("Decline", role: .destructive) {
-                    Task { await viewModel.confirmDecline() }
+                    Task { await viewModel.confirmDecline(target) }
                 }
                 Button("Keep offer", role: .cancel) { viewModel.cancelDecline() }
-            } message: {
+            } message: { _ in
                 Text("A declined offer can't be reopened.")
             }
             .overlay(alignment: .bottom) { errorToast }

@@ -641,8 +641,7 @@ public final class ListingOffersViewModel: ListOfRowsDataSource {
         declineTarget = nil
     }
 
-    public func confirmDecline() async {
-        guard let target = declineTarget else { return }
+    public func confirmDecline(_ target: ListingOfferDTO) async {
         declineTarget = nil
         await declineOffer(target)
     }
