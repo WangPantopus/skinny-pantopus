@@ -144,7 +144,8 @@ class ListingDetailViewModel
                 listingId,
             )
 
-        fun hasCheckoutAction(): Boolean = acceptedOffer != null || checkoutReadFailed || isAwaitingConfirmation()
+        fun hasCheckoutAction(): Boolean =
+            !isSold() && !isOwnedByMe() && (acceptedOffer != null || checkoutReadFailed || isAwaitingConfirmation())
 
         private fun checkoutButton(): ContentDetailDockButton? {
             val summary = acceptedOffer?.checkout

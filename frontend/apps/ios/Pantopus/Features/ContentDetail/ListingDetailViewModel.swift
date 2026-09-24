@@ -331,7 +331,7 @@ public final class ListingDetailViewModel {
 
 extension ListingDetailViewModel {
     public var hasCheckoutAction: Bool {
-        acceptedOffer != nil || checkoutReadFailed || isAwaitingConfirmation
+        !isSold && !isOwnedByMe && (acceptedOffer != nil || checkoutReadFailed || isAwaitingConfirmation)
     }
 
     private var isAwaitingConfirmation: Bool {
