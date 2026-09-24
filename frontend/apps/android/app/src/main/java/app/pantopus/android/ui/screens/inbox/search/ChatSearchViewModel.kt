@@ -161,7 +161,7 @@ class ChatSearchViewModel
                 displayName = name,
                 initials = initials(name),
                 identityChip = identityChip(dto, isRoom),
-                verified = dto.otherParticipantIdentity?.verified == true,
+                verified = dto.otherParticipantIdentity?.isVerified == true,
                 lastPreview = lastPreview(dto, isRoom),
             )
         }

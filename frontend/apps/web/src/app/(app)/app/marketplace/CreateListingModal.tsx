@@ -459,7 +459,7 @@ export default function CreateListingModal({
                 <div className="flex items-center justify-between p-3 rounded-lg bg-green-50 border border-green-200">
                   <div>
                     <p className="text-sm font-medium text-green-800">Attach to My Address</p>
-                    <p className="text-xs text-green-600">Adds a &ldquo;Verified Neighbor&rdquo; badge to build trust</p>
+                    <p className="text-xs text-green-600">Exact address shared after an offer is accepted</p>
                   </div>
                   <button
                     onClick={() => setIsAddressAttached(!isAddressAttached)}

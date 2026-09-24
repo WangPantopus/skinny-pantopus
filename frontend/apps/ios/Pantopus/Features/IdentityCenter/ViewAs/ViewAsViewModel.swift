@@ -11,8 +11,8 @@
 //  `visible` profile + the `hidden` field keys. The view-model maps that onto
 //  the design's disclosure ladder (location / member-since / rating / mutuals
 //  / contact) plus the banner, badges, and note. Fields the backend doesn't
-//  surface degrade to `.hidden` (graceful — there is no error state on this
-//  screen, so a fetch failure falls back to the local sample render).
+//  surface degrade to `.hidden`. A failed fetch shows an error with Try
+//  again — never the sample render, whose person isn't the user.
 //
 //  Previews / snapshots / tests still drive the deterministic
 //  `ViewAsSampleData` matrix via `init(selected:startLoaded:)`.
@@ -95,11 +95,9 @@ public final class ViewAsViewModel {
             let render = Self.makeRender(from: response, audience: selected)
             state = .loaded(ViewAsLoaded(selected: selected, render: render))
         } catch {
-            // No error state on this surface — fall back to the local sample
-            // render so the screen always shows something.
-            state = .loaded(
-                ViewAsLoaded(selected: selected, render: ViewAsSampleData.render(for: selected))
-            )
+            // Never the sample render: its person ("Dana Okafor", ID verified)
+            // would read as the user's own profile.
+            state = .failed
         }
     }
 

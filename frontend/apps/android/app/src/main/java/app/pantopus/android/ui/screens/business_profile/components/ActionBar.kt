@@ -84,11 +84,13 @@ fun ActionBar(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                SecondaryButton(
-                    dock = dock,
-                    onClick = if (dock.secondary == BusinessActionDock.Secondary.Book) onBook else onCall,
-                    modifier = Modifier.weight(1f),
-                )
+                dock.secondary?.let { secondary ->
+                    SecondaryButton(
+                        secondary = secondary,
+                        onClick = if (secondary == BusinessActionDock.Secondary.Book) onBook else onCall,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 PrimaryButton(onClick = onContact, modifier = Modifier.weight(1f))
             }
         }
@@ -131,11 +133,11 @@ private fun PrimaryButton(
 
 @Composable
 private fun SecondaryButton(
-    dock: BusinessActionDock,
+    secondary: BusinessActionDock.Secondary,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isBook = dock.secondary == BusinessActionDock.Secondary.Book
+    val isBook = secondary == BusinessActionDock.Secondary.Book
     val label = if (isBook) "Book" else "Call"
     Row(
         modifier =

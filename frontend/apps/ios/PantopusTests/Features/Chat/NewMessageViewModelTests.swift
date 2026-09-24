@@ -107,7 +107,8 @@ final class NewMessageViewModelTests: XCTestCase {
         XCTAssertEqual(sections.map(\.id), [.connections, .recent])
         XCTAssertEqual(sections[0].rows.first?.name, "Maria Kovacs")
         XCTAssertEqual(sections[0].rows.first?.locality, "Elm Park, OR")
-        XCTAssertTrue(sections[0].rows.first?.verified ?? false)
+        // Relationship rows carry no verification, so no badge.
+        XCTAssertFalse(sections[0].rows.first?.verified ?? true)
         XCTAssertEqual(sections[1].rows.first?.name, "Sofia Romero")
         XCTAssertEqual(sections[1].rows.first?.identity, .personal)
     }
@@ -216,7 +217,7 @@ final class NewMessageViewModelTests: XCTestCase {
 
     // MARK: - Row mapping (pure projections)
 
-    func testRowForConnectionProjectsVerifiedPersonal() {
+    func testRowForConnectionProjectsPersonalWithoutBadge() {
         let user = RelationshipUserDTO(
             id: "u_x",
             username: "test",
@@ -236,7 +237,7 @@ final class NewMessageViewModelTests: XCTestCase {
         XCTAssertEqual(row?.initials, "TU")
         XCTAssertEqual(row?.locality, "Elm Park, OR")
         XCTAssertEqual(row?.identity, .personal)
-        XCTAssertTrue(row?.verified ?? false)
+        XCTAssertFalse(row?.verified ?? true)
     }
 
     func testRowForVerifiedProjectsBusinessIdentity() {

@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.mailbox.v2.P3CreateTaskFromMailReque
 import app.pantopus.android.data.api.models.mailbox.v2.P3TaskDto
 import app.pantopus.android.data.api.models.mailbox.v2.P3TaskToGigRequest
 import app.pantopus.android.data.api.models.mailbox.v2.P3TaskUpdateRequest
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.mailbox.MailboxRepository
@@ -30,6 +31,8 @@ import javax.inject.Inject
 const val MAIL_TASK_LIST_MAIL_ID_KEY = "mailId"
 const val MAIL_TASK_LIST_SUBJECT_KEY = "mailSubject"
 const val MAIL_TASK_LIST_SENDER_KEY = "mailSender"
+
+private const val HTTP_CONFLICT = 409
 
 /** Sentinel the route builder uses when a leg carries no value. */
 const val MAIL_TASK_LIST_NONE = "-"
@@ -156,6 +159,13 @@ class MailTaskListViewModel
             _alert.value = null
         }
 
+        /** The alert's button: closes it, and opens its task when it names one. */
+        fun confirmAlert() {
+            val taskId = _alert.value?.openTaskId
+            _alert.value = null
+            taskId?.let(onOpenTask)
+        }
+
         fun toggleShowCompleted() {
             _showsCompleted.value = !_showsCompleted.value
         }
@@ -249,14 +259,34 @@ class MailTaskListViewModel
                     when (result) {
                         is NetworkResult.Success -> {
                             val row = rowFrom(result.data.task)
+                            if (result.data.replayed == true) {
+                                // This mail already had the caller's task: show it and offer to open it.
+                                _mode.value = MailTaskListMode.List
+                                fetch()
+                                _alert.value =
+                                    MailTaskListAlert(
+                                        "This mail already has a task",
+                                        "You already made “${row.title}” from this mail.",
+                                        openTaskId = row.id,
+                                    )
+                                return@launch
+                            }
                             insertActive(row)
                             _draftDescription.value = ""
                             _draftPriority.value = MailTaskPriority.Medium
                             _mode.value = MailTaskListMode.List
                             _toast.value = "“${row.title}” has been created"
                         }
-                        is NetworkResult.Failure ->
-                            _alert.value = MailTaskListAlert("Error", "Could not create task.")
+                        is NetworkResult.Failure -> {
+                            val error = result.error
+                            // A mail has one task. When it already has one (409), show the list, where that
+                            // task is, and say why.
+                            if (error is NetworkError.ClientError && error.code == HTTP_CONFLICT) {
+                                _mode.value = MailTaskListMode.List
+                                fetch()
+                            }
+                            _alert.value = MailTaskListAlert("Couldn't create task", error.message)
+                        }
                     }
                 } finally {
                     _isCreating.value = false

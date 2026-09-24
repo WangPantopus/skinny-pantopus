@@ -47,6 +47,7 @@ export default function ListingDetailPage() {
     showOfferModal,
     setShowOfferModal,
     existingOffer,
+    openOfferCount,
     handleOfferSent,
 
     handleSave,
@@ -143,7 +144,7 @@ export default function ListingDetailPage() {
           onMessageSeller={() => setShowMessageModal(true)}
           onReport={() => setShowReportModal(true)}
           onMakeOffer={() => setShowOfferModal(true)}
-          activeOfferCount={listing.active_offer_count || 0}
+          activeOfferCount={isOwner ? openOfferCount : 0}
           listingIsFree={listing.is_free}
           hasExistingOffer={!!existingOffer}
         />

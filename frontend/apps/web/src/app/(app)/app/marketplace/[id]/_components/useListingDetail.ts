@@ -53,6 +53,9 @@ export function useListingDetail() {
   // Offer state
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [existingOffer, setExistingOffer] = useState<ListingOffer | null>(null);
+  // Offers still waiting on the seller or the handoff (the seller's "View Offers" count). For a seller the
+  // offers read returns every offer on the listing; the listing payload carries no offer count.
+  const [openOfferCount, setOpenOfferCount] = useState(0);
 
   const isOwner = !!(user?.id && listing?.user_id && String(user.id) === String(listing.user_id));
 
@@ -108,8 +111,12 @@ export function useListingDetail() {
         (o: ListingOffer) => o.buyer_id === userId && ['pending', 'countered', 'accepted'].includes(o.status)
       );
       setExistingOffer(myOffer || null);
+      setOpenOfferCount(
+        offers.filter((o: ListingOffer) => ['pending', 'countered', 'accepted'].includes(o.status)).length
+      );
     } catch {
       setExistingOffer(null);
+      setOpenOfferCount(0);
     }
   }, [listingId]);
 
@@ -347,6 +354,7 @@ export function useListingDetail() {
     showOfferModal,
     setShowOfferModal,
     existingOffer,
+    openOfferCount,
     handleOfferSent,
 
     // Actions

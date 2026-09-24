@@ -207,7 +207,7 @@ public struct UnboxingView: View {
                 )
                 .accessibilityIdentifier("unboxing_facts")
             }
-            assemblyGigCard
+            if PackageGigAvailability.isAvailable { assemblyGigCard }
         }
     }
 

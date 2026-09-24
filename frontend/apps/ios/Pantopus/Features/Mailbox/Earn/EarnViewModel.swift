@@ -3,11 +3,12 @@
 //  Pantopus
 //
 //  A10.11 / Block 2A — backs `EarnView`. The live path (`EarnViewModel()`)
-//  fetches `GET /api/mailbox/earnings/summary` + `/earnings/history` and
-//  projects the earnings DISPLAY: the available/pending balance hero and
-//  the recent-earnings list. The weekly-goal ring, linked payout method,
-//  auto-cash-out, and 1099 tax docs have no source on those endpoints
-//  (the last three are Stripe Connect — Phase 3), so they stay nil and
+//  fetches `GET /api/wallet` + `GET /api/mailbox/earnings/history`. The
+//  hero's "Available to cash out" is the wallet balance, the same figure
+//  Payments shows and withdraws. Mail-offer and ad payouts (the history
+//  rows) are shown apart from it and marked not cashable: nothing credits
+//  them to the wallet. The weekly-goal ring, linked payout method,
+//  auto-cash-out, and 1099 tax docs have no source, so they stay nil and
 //  the view hides them rather than faking them. Seeded `content` / `state`
 //  initialisers are the preview/test seam.
 //
@@ -87,50 +88,67 @@ public final class EarnViewModel {
 
     private func fetch() async {
         state = .loading
-        async let summaryResult = client.perform(
-            MailboxEndpoints.earningsSummary(),
-            as: EarningsSummaryResponse.self
+        async let walletResult = client.perform(
+            WalletEndpoints.balance(),
+            as: WalletBalanceResponse.self
         )
         async let historyResult = client.perform(
             MailboxEndpoints.earningsHistory(),
             as: EarningsHistoryResponse.self
         )
-        let summary = await summaryResult
+        let wallet = await walletResult
         let history = await (try? (historyResult).get())?.earnings ?? []
 
-        switch summary {
-        case let .success(summaryDto):
+        switch wallet {
+        case let .success(walletDto):
             let rows = history.map(Self.earning(from:))
-            if summaryDto.totalEarned > 0 || !rows.isEmpty {
-                state = .populated(Self.content(summary: summaryDto, history: history, rows: rows))
+            let hasWalletMoney = walletDto.wallet.balance > 0 || (walletDto.wallet.lifetimeReceived ?? 0) > 0
+            if hasWalletMoney || !rows.isEmpty {
+                state = .populated(Self.content(wallet: walletDto.wallet, history: history, rows: rows))
             } else {
-                state = .empty(waysToEarn: EarnSampleData.waysToEarn)
+                state = .empty(waysToEarn: Self.waysToEarn)
             }
         case .failure:
             state = .error(message: "We couldn't load your earnings. Check your connection and try again.")
         }
     }
 
+    /// Live `Ways to earn` rows. Only real facts: no sample counts or amounts,
+    /// and no Refer row until referrals exist.
+    static let waysToEarn: [EarnWayToEarn] = [
+        EarnWayToEarn(
+            kind: .browse,
+            title: "Browse open tasks",
+            meta: "Paid tasks near you",
+            accent: .primary,
+            featured: true
+        ),
+        EarnWayToEarn(
+            kind: .offer,
+            title: "Offer a service",
+            meta: "Get matched to repeat clients",
+            accent: .business
+        )
+    ]
+
     // MARK: - DTO → projection
 
     private static func content(
-        summary: EarningsSummaryResponse,
+        wallet: WalletBalanceResponse.Wallet,
         history: [EarningEntryDTO],
         rows: [EarnEarning]
     ) -> EarnContent {
-        let available = max(0, summary.totalEarned - summary.pendingEarnings)
-        let thisWeekRows = history.filter { isThisWeek($0.viewedAt ?? $0.createdAt) }
-        let thisWeekSum = thisWeekRows.reduce(0.0) { $0 + ($1.payoutAmount ?? 0) }
-        let pendingCount = history.filter { ($0.payoutStatus ?? "").lowercased() == "pending" }.count
+        let offerSum = history.reduce(0.0) { $0 + ($1.payoutAmount ?? 0) }
         return EarnContent(
-            available: money(available),
-            thisWeek: "$" + money(thisWeekSum),
-            thisWeekMeta: thisWeekRows.count == 1 ? "1 this week" : "\(thisWeekRows.count) this week",
-            pending: "$" + money(summary.pendingEarnings),
-            pendingMeta: pendingCount == 1 ? "1 on hold" : "\(pendingCount) on hold",
-            // Deferred slots — no `/earnings/*` source (Stripe = Phase 3).
+            available: money(Double(wallet.balance) / 100),
+            thisWeek: "",
+            thisWeekMeta: "",
+            pending: "",
+            pendingMeta: "",
+            offerEarnings: rows.isEmpty ? nil : "$" + money(offerSum),
+            // Deferred slots — no source yet (Stripe Connect = Phase 3).
             weeklyGoal: nil,
-            waysToEarn: EarnSampleData.waysToEarn,
+            waysToEarn: waysToEarn,
             earnings: rows,
             payoutMethod: nil,
             autoCashOut: nil,
@@ -140,7 +158,6 @@ public final class EarnViewModel {
 
     private static func earning(from dto: EarningEntryDTO) -> EarnEarning {
         let date = parseDate(dto.viewedAt) ?? parseDate(dto.createdAt)
-        let isPending = (dto.payoutStatus ?? "").lowercased() == "pending"
         return EarnEarning(
             id: dto.id,
             day: dayLabel(date),
@@ -150,7 +167,8 @@ public final class EarnViewModel {
             // Ad-payout rows have no gig category — the row renders a
             // neutral tile rather than a faked cleaning/handyman glyph.
             category: nil,
-            status: isPending ? .pending(clearsLabel: "soon") : .paid,
+            // Nothing pays an ad payout out or credits it to the wallet.
+            status: .offer,
             amount: money(dto.payoutAmount ?? 0)
         )
     }
@@ -172,11 +190,6 @@ public final class EarnViewModel {
     private static func timeLabel(_ date: Date?) -> String {
         guard let date else { return "" }
         return timeFormatter.string(from: date).lowercased()
-    }
-
-    private static func isThisWeek(_ value: String?) -> Bool {
-        guard let date = parseDate(value) else { return false }
-        return Calendar.current.isDate(date, equalTo: Date(), toGranularity: .weekOfYear)
     }
 
     private static func parseDate(_ value: String?) -> Date? {
