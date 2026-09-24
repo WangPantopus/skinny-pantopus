@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.recent_activity
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.hub.HubActivityItem
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -95,7 +96,7 @@ class RecentActivityViewModel
         companion object {
             /** Map an activity item's `route` to a typed destination case. */
             fun destinationFor(item: HubActivityItem): RecentActivityDestination {
-                val path = item.route
+                val path = DeepLinkRouter.notificationPath(item.notificationType, item.route) ?: item.route
                 val gigId = idAfter(path, "/gigs/", "/app/gigs/", "/gig/")
                 val listingId = idAfter(path, "/listings/", "/app/listings/", "/listing/", "/marketplace/")
                 val mailId = idAfter(path, "/mail/", "/mailbox/item/", "/app/mailbox/item/", "/app/mail/")

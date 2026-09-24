@@ -165,6 +165,7 @@ public struct HubResponse: Decodable, Sendable, Hashable {
         public let at: String
         public let read: Bool
         public let route: String
+        public var notificationType: String?
     }
 
     public struct HubNeighborDensity: Decodable, Sendable, Hashable {
