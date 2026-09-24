@@ -196,7 +196,7 @@ public struct SupportTrainDetailView: View {
             }
             .background(Theme.Color.appBg)
 
-            if hasDock(content.dock) {
+            if content.typeDates.slotsTotal > 0, hasDock(content.dock) {
                 dock(content.dock)
             }
         }
