@@ -132,6 +132,12 @@ public final class PulseFeedViewModel {
     /// True while a next-page fetch is in flight (footer spinner).
     public private(set) var isLoadingMore = false
 
+    /// A failed next page keeps the current rows and offers an explicit retry.
+    public private(set) var loadMoreError: String?
+
+    /// The context bar uses the same successful area read as the feed.
+    var onAreaResolved: (@MainActor (ViewingLocationDTO?) -> Void)?
+
     /// Transient banner text — mirrors RN's `showToast` calls.
     public var toastMessage: String?
 
@@ -175,7 +181,7 @@ public final class PulseFeedViewModel {
     private var resolvedLatitude: Double?
     private var resolvedLongitude: Double?
     /// Reads the area chosen in the Nearby context bar (`GET /api/location`).
-    private let chosenArea: @MainActor () async -> ViewingLocationDTO?
+    private let chosenArea: @MainActor () async throws -> ViewingLocationDTO?
     /// The area the last first-page fetch used; later pages reuse it.
     private var lastArea: FeedArea?
     /// Identity of the query that produced the visible rows and cursor.
@@ -208,7 +214,7 @@ public final class PulseFeedViewModel {
         viewerId: String? = nil,
         locationProvider: any LocationProviding = DeviceLocationProvider.shared,
         moderation: FeedModerationStore = .shared,
-        chosenArea: (@MainActor () async -> ViewingLocationDTO?)? = nil
+        chosenArea: (@MainActor () async throws -> ViewingLocationDTO?)? = nil
     ) {
         self.api = api
         self.surface = surface
@@ -218,8 +224,8 @@ public final class PulseFeedViewModel {
         explicitViewerId = viewerId
         self.moderation = moderation
         self.chosenArea = chosenArea ?? { [api] in
-            let payload: ViewingLocationPayload? = try? await api.request(ViewingLocationEndpoints.current())
-            return payload?.viewingLocation
+            let payload: ViewingLocationPayload = try await api.request(ViewingLocationEndpoints.current())
+            return payload.viewingLocation
         }
     }
 
@@ -319,8 +325,13 @@ public final class PulseFeedViewModel {
 
     /// Infinite scroll — call from the last visible row's `onAppear`.
     public func loadMoreIfNeeded(rowId: String) async {
-        guard hasMore, !isLoading, !isLoadingMore else { return }
+        guard hasMore, !isLoading, !isLoadingMore, loadMoreError == nil else { return }
         guard case let .loaded(rows) = state, rows.last?.id == rowId else { return }
+        await fetchNextPage()
+    }
+
+    public func retryLoadMore() async {
+        guard hasMore, !isLoading, !isLoadingMore else { return }
         await fetchNextPage()
     }
 
@@ -564,12 +575,19 @@ public final class PulseFeedViewModel {
         fetchGeneration += 1
         let generation = fetchGeneration
         isLoadingMore = false
+        loadMoreError = nil
         isLoading = true
         defer { if generation == fetchGeneration { isLoading = false } }
         if case .loaded = state {} else { state = .loading }
+        var areaResolved = false
         do {
-            let area = await resolvedArea()
+            let (area, viewingLocation) = try await resolvedArea()
             guard generation == fetchGeneration else { return }
+            areaResolved = true
+            if surface == .pulse {
+                viewingRadiusMiles = area.radiusMiles ?? 100
+                onAreaResolved?(viewingLocation)
+            }
             let query = FeedQuery(
                 surface: surface.backendSurface,
                 area: area,
@@ -612,10 +630,15 @@ public final class PulseFeedViewModel {
         } catch {
             guard generation == fetchGeneration else { return }
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load posts."
-            if case .loaded = state {
+            if areaResolved, case .loaded = state {
                 // Keep the posts on screen; a failed refresh only toasts.
                 toastMessage = message
             } else {
+                loadedItems = []
+                applyPagination(nil)
+                lastArea = nil
+                lastQuery = nil
+                radiusSuggestion = nil
                 state = .error(message: message)
             }
         }
@@ -626,10 +649,11 @@ public final class PulseFeedViewModel {
         guard let cursorCreatedAt = nextCursorCreatedAt, let cursorId = nextCursorId else { return }
         let generation = fetchGeneration
         isLoadingMore = true
+        loadMoreError = nil
         defer { if generation == fetchGeneration { isLoadingMore = false } }
         do {
             // Later pages stay in the area the first page used.
-            let area = if let lastArea { lastArea } else { await resolvedArea() }
+            let area = if let lastArea { lastArea } else { try await resolvedArea().0 }
             guard generation == fetchGeneration else { return }
             let response: FeedResponse = try await api.request(
                 PostsEndpoints.feed(
@@ -654,8 +678,9 @@ public final class PulseFeedViewModel {
             rebuildLoadedState()
         } catch {
             guard generation == fetchGeneration else { return }
-            // Leave the loaded rows alone; the next scroll retries.
+            // Keep the current rows and cursor until the user retries.
             hasMore = true
+            loadMoreError = "Couldn't load more posts. Try again."
         }
     }
 
@@ -716,27 +741,27 @@ public final class PulseFeedViewModel {
     /// order web's `useFeedData` uses. Without the chosen area, Nearby sent
     /// no coordinates when location was off and stayed empty however many
     /// times an area was picked.
-    private func resolvedArea() async -> FeedArea {
+    private func resolvedArea() async throws -> (FeedArea, ViewingLocationDTO?) {
         if let latitude, let longitude {
-            return FeedArea(latitude: latitude, longitude: longitude)
+            return (FeedArea(latitude: latitude, longitude: longitude), nil)
         }
-        if surface == .pulse, let chosen = await chosenArea() {
-            return FeedArea(latitude: chosen.latitude, longitude: chosen.longitude, radiusMiles: chosen.radiusMiles)
+        if surface == .pulse, let chosen = try await chosenArea() {
+            return (FeedArea(latitude: chosen.latitude, longitude: chosen.longitude, radiusMiles: chosen.radiusMiles), chosen)
         }
         if let resolvedLatitude, let resolvedLongitude {
-            return FeedArea(latitude: resolvedLatitude, longitude: resolvedLongitude)
+            return (FeedArea(latitude: resolvedLatitude, longitude: resolvedLongitude), nil)
         }
         if let cached = locationProvider.cachedCoordinate() {
             resolvedLatitude = cached.latitude
             resolvedLongitude = cached.longitude
-            return FeedArea(latitude: cached.latitude, longitude: cached.longitude)
+            return (FeedArea(latitude: cached.latitude, longitude: cached.longitude), nil)
         }
         if let fresh = await locationProvider.requestCurrent(timeoutSeconds: 4) {
             resolvedLatitude = fresh.latitude
             resolvedLongitude = fresh.longitude
-            return FeedArea(latitude: fresh.latitude, longitude: fresh.longitude)
+            return (FeedArea(latitude: fresh.latitude, longitude: fresh.longitude), nil)
         }
-        return FeedArea(latitude: nil, longitude: nil)
+        return (FeedArea(latitude: nil, longitude: nil), nil)
     }
 
     // MARK: - Optimistic accessors
