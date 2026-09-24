@@ -115,11 +115,14 @@ export default function ChangeOrdersSection({
   };
 
   const handleApprove = async (orderId: string) => {
-    if (approvingRef.current) return;
+    if (approvingRef.current || declinePending.current) return;
     approvingRef.current = orderId;
     setApprovingId(orderId);
     try {
-      await api.gigs.approveChangeOrder(gigId, orderId);
+      const data = await api.gigs.approveChangeOrder(gigId, orderId);
+      setOrders((current) => current.map((order) => order.id === orderId
+        ? { ...order, ...data.change_order } : order));
+      setDecliningId((current) => current === orderId ? null : current);
       await loadOrders();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to approve'));
@@ -130,7 +133,7 @@ export default function ChangeOrdersSection({
   };
 
   const handleReject = async () => {
-    if (!decliningId || declinePending.current) return;
+    if (!decliningId || declinePending.current || approvingRef.current) return;
     declinePending.current = true;
     setDeclining(true);
     setDeclineError(null);
@@ -290,17 +293,17 @@ export default function ChangeOrdersSection({
                     )}
                   </div>
                 )}
-                {decliningId === o.id && (
+                {canApproveReject && decliningId === o.id && (
                   <form onSubmit={(event) => { event.preventDefault(); void handleReject(); }} className="mt-3 border border-app-border rounded-lg p-3 space-y-3">
                     <p className="text-sm font-medium text-app-text">Decline this change request?</p>
                     <label className="block text-sm text-app-text-secondary">
                       Reason (optional)
-                      <textarea value={declineReason} onChange={(event) => setDeclineReason(event.target.value)} maxLength={500} disabled={declining} rows={2} className="mt-1 w-full border border-app-border rounded-lg px-3 py-2 text-sm" />
+                      <textarea value={declineReason} onChange={(event) => setDeclineReason(event.target.value)} maxLength={500} disabled={declining || approvingId === o.id} rows={2} className="mt-1 w-full border border-app-border rounded-lg px-3 py-2 text-sm" />
                     </label>
                     {declineError && <p role="alert" className="text-sm text-red-600">{declineError}</p>}
                     <div className="flex justify-end gap-2">
-                      <button type="button" onClick={() => setDecliningId(null)} disabled={declining} className="px-3 py-2 text-sm text-app-text-secondary disabled:opacity-50">Cancel</button>
-                      <button type="submit" disabled={declining} className="px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium disabled:opacity-50">{declining ? 'Declining…' : 'Decline request'}</button>
+                      <button type="button" onClick={() => setDecliningId(null)} disabled={declining || approvingId === o.id} className="px-3 py-2 text-sm text-app-text-secondary disabled:opacity-50">Cancel</button>
+                      <button type="submit" disabled={declining || approvingId === o.id} className="px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium disabled:opacity-50">{declining ? 'Declining…' : 'Decline request'}</button>
                     </div>
                   </form>
                 )}
