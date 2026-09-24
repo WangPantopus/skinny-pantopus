@@ -1,8 +1,8 @@
 # Appendix: every PR merged on 2026-09-23 (generated from GitHub)
 
-## Live additions — checked 2026-09-24T01:02:09Z
+## Live additions — checked 2026-09-24T01:26:57Z
 
-The187-row table below is the original handoff snapshot on master1a15514cc. These later merges are also done; check both sections before starting a repair. Current master is `eba2ff56209e6e6b87248c7c33bcfe436f37fbf7`. Event times are GitHub-reported; merge SHAs are verified in Git.
+The187-row table below is the original handoff snapshot on master1a15514cc. These later merges are also done; check both sections before starting a repair. Current master is `baf6588b7b52a58de2b404e4cbf64b3e12012305`. Event times are GitHub-reported; merge SHAs are verified in Git.
 
 | PR | Merged (UTC) | Merge commit | Branch | Title |
 |---|---|---|---|---|
@@ -18,6 +18,10 @@ The187-row table below is the original handoff snapshot on master1a15514cc. Thes
 | [#398](https://github.com/WangPantopus/skinny-pantopus/pull/398) | Sep24 00:58:36 | `eba2ff56209e6e6b87248c7c33bcfe436f37fbf7` | `claude/coord-merge-batch-5` | Combined reviewed batch: #395, #396 |
 | [#395](https://github.com/WangPantopus/skinny-pantopus/pull/395) | Sep24 00:58:37 | `a7339266d07c4b88624b1bb61fb69b119b061a18` | via batch5 #398 | Real native invite code and Stripe status (C-21/C-37) |
 | [#396](https://github.com/WangPantopus/skinny-pantopus/pull/396) | Sep24 00:58:38 | `23bd9a53093d6246b7973274d860d157ed3bd2e5` | via batch5 #398 | Web scheduling owner/access/live preview and read failures |
+
+| [#401](https://github.com/WangPantopus/skinny-pantopus/pull/401) | Sep24 01:20:57 | `baf6588b7b52a58de2b404e4cbf64b3e12012305` | `codex/coord-merge-batch-6` | Vacation lifecycle and atomic edits: #399/#400 |
+| [#399](https://github.com/WangPantopus/skinny-pantopus/pull/399) | Sep24 01:20:59 | `010ee2cdc27ca5562915b6f3dd96792fae709c85` | via batch6 #401 | Atomic vacation lifecycle, retry and expiry |
+| [#400](https://github.com/WangPantopus/skinny-pantopus/pull/400) | Sep24 01:20:59 | `bb92bc8577a6fe229ae3801d6074f8f22685bfa4` | via batch6 #401 | Preserve vacation record when editing dates |
 
 ## Preserved original snapshot
 
