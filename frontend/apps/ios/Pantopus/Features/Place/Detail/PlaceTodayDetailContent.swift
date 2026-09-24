@@ -21,6 +21,9 @@ import UserNotifications
 struct PlaceTodayDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
+    /// Takes the Ballot P0 card's "Open your ballot" to the Place card;
+    /// without it the button is left out.
+    var onOpenBallot: (() -> Void)?
     var showHomeRadon = false
     @Environment(RootTabModel.self) private var rootTabs
     @Environment(\.scenePhase) private var scenePhase
@@ -38,10 +41,16 @@ struct PlaceTodayDetailContent: View {
         return section.status == .unavailable && vm.fallbackCalendar?.needsPickupDay == true
     }
 
-    init(intel: PlaceIntelligence, vm: PlaceDetailViewModel, showHomeRadon: Bool = false) {
+    init(
+        intel: PlaceIntelligence,
+        vm: PlaceDetailViewModel,
+        showHomeRadon: Bool = false,
+        onOpenBallot: (() -> Void)? = nil
+    ) {
         self.intel = intel
         self.vm = vm
         self.showHomeRadon = showHomeRadon
+        self.onOpenBallot = onOpenBallot
     }
 
     /// Order (matches Android): what it is like now, what to do with it,
@@ -183,10 +192,8 @@ struct PlaceTodayDetailContent: View {
            election.status == .ready,
            let card = election.civicElection?.ballotCard,
            BallotTodayCard.applies(card) {
-            BallotTodayCard(card: card) {
-                DeepLinkRouter.shared.handle(path: "/place/\(vm.homeId)")
-            }
-            .padding(.top, Spacing.s4)
+            BallotTodayCard(card: card, onOpenBallot: onOpenBallot)
+                .padding(.top, Spacing.s4)
         }
     }
 

@@ -78,7 +78,13 @@ struct AddressTodayTabView: View {
         if !resolved {
             PlaceDetailSkeleton()
         } else if let detail {
-            AddressTodayLoaded(viewModel: detail, savedPlace: savedPlace, onAddHome: onAddHome, onResolvePlace: resolveHome)
+            // The Ballot P0 card's "Open your ballot" lands on the Place tab.
+            AddressTodayLoaded(
+                viewModel: detail,
+                savedPlace: savedPlace,
+                onAddHome: onAddHome,
+                onResolvePlace: resolveHome
+            ) { rootTabs.selected = .place }
                 .id(detail.savedPlaceId ?? detail.homeId)
         } else if loadFailed {
             couldNotLoad
@@ -194,6 +200,7 @@ private struct AddressTodayLoaded: View {
     let savedPlace: SavedPlaceDTO?
     let onAddHome: () -> Void
     let onResolvePlace: () async -> Void
+    let onOpenPlace: () -> Void
     @State private var scope = HomeClaimSessionScope(api: .shared)
     @State private var savedAnchorMatches = false
     @State private var showMorningCard = false
@@ -221,7 +228,12 @@ private struct AddressTodayLoaded: View {
                                 StatusChip("Saved place · Only you", variant: .neutral)
                                     .padding(.bottom, 12)
                             }
-                            PlaceTodayDetailContent(intel: intel, vm: viewModel, showHomeRadon: savedPlace == nil)
+                            PlaceTodayDetailContent(
+                                intel: intel,
+                                vm: viewModel,
+                                showHomeRadon: savedPlace == nil,
+                                onOpenBallot: onOpenPlace
+                            )
                             if savedPlace != nil {
                                 remindersRow.padding(.top, 12)
                             }
