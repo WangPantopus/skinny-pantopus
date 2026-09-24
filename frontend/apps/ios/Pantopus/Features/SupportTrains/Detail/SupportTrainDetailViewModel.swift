@@ -309,7 +309,8 @@ extension SupportTrainDetailViewModel {
             slotsFilled: slotsFilled,
             slotsTotal: slotsTotal,
             contributors: contributorBubbles(organizers),
-            extraCount: max(0, slotsFilled - min(organizers.count, 4))
+            extraCount: max(0, slotsFilled - min(organizers.count, 4)),
+            status: dto.status
         )
 
         let isFull = typeDates.isFullyCovered
@@ -482,7 +483,7 @@ extension SupportTrainDetailViewModel {
                 .open
             } else {
                 // No slot scheduled that future day — inert/muted tile.
-                .past
+                .unscheduled
             }
             return SlotCalendarDay(id: "day-\(index)", date: date, dayNumber: day, state: state)
         }

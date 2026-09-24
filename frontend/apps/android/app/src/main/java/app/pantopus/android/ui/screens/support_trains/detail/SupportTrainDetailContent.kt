@@ -78,6 +78,7 @@ data class TypeDatesCardContent(
     val slotsTotal: Int,
     val contributors: List<ContributorBubble>,
     val extraCount: Int,
+    val status: String? = null,
 ) {
     val isFullyCovered: Boolean get() = slotsTotal > 0 && slotsFilled >= slotsTotal
 

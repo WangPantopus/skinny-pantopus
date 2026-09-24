@@ -333,6 +333,7 @@ class SupportTrainsViewModel
 
         private fun statusChip(status: String?): Pair<String, StatusChipVariant> =
             when (status) {
+                "draft" -> "Draft" to StatusChipVariant.Neutral
                 "active" -> "Active" to StatusChipVariant.Success
                 "filling" -> "Filling up" to StatusChipVariant.Info
                 "full" -> "Slots full" to StatusChipVariant.Neutral

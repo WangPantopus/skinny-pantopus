@@ -200,7 +200,8 @@ public struct ManageTrainView: View {
                 TrainContextStrip(
                     title: content.title,
                     dateRangeLabel: content.dateRangeLabel,
-                    isActive: content.isActive
+                    isActive: content.isActive,
+                    statusLabel: content.status.isEmpty ? "Unavailable" : content.status.capitalized
                 )
 
                 StatCellRow(cells: [

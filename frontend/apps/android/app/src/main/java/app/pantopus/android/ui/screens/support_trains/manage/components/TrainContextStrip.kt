@@ -48,6 +48,7 @@ fun TrainContextStrip(
     dateRangeLabel: String,
     isActive: Boolean,
     modifier: Modifier = Modifier,
+    statusLabel: String = if (isActive) "Active" else "Closed",
 ) {
     val stripBackground =
         if (isActive) {
@@ -101,7 +102,7 @@ fun TrainContextStrip(
                 )
             }
         }
-        StatusChip(isActive = isActive)
+        StatusChip(isActive = isActive, statusLabel = statusLabel)
     }
 }
 
@@ -135,7 +136,10 @@ private fun IconTile(isActive: Boolean) {
 }
 
 @Composable
-private fun StatusChip(isActive: Boolean) {
+private fun StatusChip(
+    isActive: Boolean,
+    statusLabel: String,
+) {
     val pillColor =
         if (isActive) PantopusColors.successBg else PantopusColors.appSurfaceSunken
     val borderColor =
@@ -149,7 +153,7 @@ private fun StatusChip(isActive: Boolean) {
                 .background(pillColor)
                 .border(BorderStroke(1.dp, borderColor), RoundedCornerShape(Radii.xs))
                 .padding(horizontal = Spacing.s2, vertical = 3.dp)
-                .semantics { contentDescription = if (isActive) "Active" else "Closed" },
+                .semantics { contentDescription = statusLabel },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
@@ -163,7 +167,7 @@ private fun StatusChip(isActive: Boolean) {
             )
         }
         Text(
-            text = if (isActive) "ACTIVE" else "CLOSED",
+            text = statusLabel.uppercase(),
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.6.sp,
