@@ -66,7 +66,7 @@ const IN_SEASON: PlaceBallotElectionData = {
   election_id: '2026-11-03-general', coverage: 'supported', phase: 'in_season', state: 'WA', state_name: 'Washington',
   today: '2026-09-24', title: 'Your ballot', subtitle: 'November 3 general election', chip: '40 days',
   line: 'This address sits inside at least 5 governments.', note: null,
-  how_it_works: 'Everyone here votes by mail. Your ballot is mailed by Oct 16. Return it by mail with a Nov 3 postmark, or in a drop box by 8 p.m.',
+  how_it_works: 'Everyone here votes by mail. Your ballot is mailed by Oct 16. Return it in a drop box by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.',
   voting_method: 'all_mail', deadlines: DEADLINES, election_day_notice: null,
   primary_action: { kind: 'governments', label: 'See your governments' },
   official_links: LINKS, governments: GOVERNMENTS, ballot_week: { show: false }, mover_prompt: null,
@@ -144,7 +144,7 @@ describe('the Place "Your ballot" card', () => {
     render(
       <BallotCard
         data={{ ...IN_SEASON, phase: 'election_day', title: 'Election Day', chip: 'Today', line: null, how_it_works: null, primary_action: null,
-          election_day_notice: { lead: 'Return by 8 p.m. today.', detail: 'Drop box by 8 p.m., or mail it with today’s postmark.' } }}
+          election_day_notice: { lead: 'Return by 8 p.m. today.', detail: 'Use a drop box. If you mail it, get it postmarked at a post office counter today.' } }}
       />,
     );
     expect(screen.getByText('Return by 8 p.m. today.')).toBeInTheDocument();
@@ -271,7 +271,7 @@ describe('the governments view (the peel)', () => {
 describe('Today', () => {
   const WEEK: PlaceBallotElectionData = {
     ...IN_SEASON,
-    ballot_week: { show: true, overline: 'Ballot week', title: 'Ballots were mailed by Oct 16', body: 'Return yours by mail with a Nov 3 postmark, or in a drop box by 8 p.m.' },
+    ballot_week: { show: true, overline: 'Ballot week', title: 'Ballots were mailed by Oct 16', body: 'Return yours in a drop box by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.' },
     mover_prompt: { text: 'Moved this year? Update your registration online by Oct 26.', days_left: 9, url: 'https://www.sos.wa.gov/register' },
   };
 

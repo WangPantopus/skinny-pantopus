@@ -25,7 +25,7 @@ const MAX_LINKS = 3;
 const LINK_PRIORITY = {
   far: ['registration', 'election_information'],
   in_season: ['registration', 'ballot_tracking', 'drop_boxes', 'election_information'],
-  election_day: ['drop_boxes', 'ballot_tracking', 'election_information'],
+  election_day: ['drop_boxes', 'polling_places', 'ballot_tracking', 'election_information'],
   after: ['results'],
 };
 
@@ -180,10 +180,16 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
   const govBlock = governmentsBlock(governmentsResult);
   const registration = deadlines.find((d) => d.key === 'register_online_mail') || null;
 
+  // A state whose deadline isn't "online or by mail" words its own far note.
   let note = null;
-  if (phase === 'far' && registration) note = `Registration deadline: ${registration.month_day}, online or by mail.`;
+  if (phase === 'far') {
+    if (block.far_note) note = block.far_note;
+    else if (registration) note = `Registration deadline: ${registration.month_day}, online or by mail.`;
+  }
   if (phase === 'after') {
-    const office = (county && county.election_office) || state.election_office;
+    // In a sentence a state office takes "the" ("the Oregon Secretary of
+    // State"); a county office's own name reads as it is.
+    const office = (county && county.election_office) || state.election_office_phrase || state.election_office;
     note = `Results are published by ${office}. Pantopus doesn’t show results.`;
   }
 
@@ -199,7 +205,7 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
     official_links: pickLinks(phase, state.official_links, county && county.official_links),
     governments: govBlock,
     ballot_week: ballotWeekFor(block, deadlines, phase, today),
-    mover_prompt: moverPrompt({ moveInDate, registration, today, links: state.official_links }),
+    mover_prompt: moverPrompt({ moveInDate, registration, today, links: state.official_links, text: block.mover_text }),
     source_line: state.election_office,
     checked_at: (block.checked && block.checked.at) || (state.checked && state.checked.at) || null,
   };
@@ -226,10 +232,11 @@ function ballotWeekFor(block, deadlines, phase, today) {
   const untilMailed = referenceData.daysBetween(today, mailed.date);
   if (untilMailed > 1) return { show: false };
   const md = referenceData.monthDay(mailed.date);
+  // States that mail "starting" a date, not "by" one, word their own titles.
   return {
     show: true,
     overline: 'Ballot week',
-    title: untilMailed >= 0 ? `Ballots go out by ${md}` : `Ballots were mailed by ${md}`,
+    title: untilMailed >= 0 ? week.title_before || `Ballots go out by ${md}` : week.title_after || `Ballots were mailed by ${md}`,
     body: week.body,
   };
 }
@@ -237,7 +244,10 @@ function ballotWeekFor(block, deadlines, phase, today) {
 // "Moved this year?" — only when the home's own move-in date (entered by
 // the household) is within a year and online/mail registration is still
 // open. Worded as a question: Pantopus never knows anyone's registration.
-function moverPrompt({ moveInDate, registration, today, links }) {
+// A state's `mover_text` replaces the sentence; null turns the line off
+// where one deadline can't be stated simply.
+function moverPrompt({ moveInDate, registration, today, links, text }) {
+  if (text === null) return null;
   if (!moveInDate || !registration) return null;
   const moved = String(moveInDate).slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(moved)) return null;
@@ -246,7 +256,7 @@ function moverPrompt({ moveInDate, registration, today, links }) {
   if (registration.days_until < 0) return null;
   const link = (links || []).find((l) => l.key === 'registration');
   return {
-    text: `Moved this year? Update your registration online by ${registration.month_day}.`,
+    text: text || `Moved this year? Update your registration online by ${registration.month_day}.`,
     days_left: registration.days_until,
     url: link ? link.url : null,
   };

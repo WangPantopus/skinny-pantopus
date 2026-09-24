@@ -829,10 +829,13 @@ describe('the Ballot P0 teaser', () => {
 
   it('outside the pilot: the election date and Vote.gov, never a count', async () => {
     enableGlobally();
-    const res = await request(buildApp()).get('/api/public/place').query({ address: '1421 SE Oak St' });
+    geo.forwardGeocode.mockResolvedValue({
+      latitude: 30.2672, longitude: -97.7431, city: 'Austin', state: 'TX', zipcode: '78701', address: '100 Congress Ave',
+    });
+    const res = await request(buildApp()).get('/api/public/place').query({ address: '100 Congress Ave, Austin' });
     expect(res.body.ballot_teaser).toMatchObject({
       coverage: 'links_only',
-      state: 'OR',
+      state: 'TX',
       headline: 'The general election is November 3.',
       governments: null,
       next_deadline: null,

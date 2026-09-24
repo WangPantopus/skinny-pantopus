@@ -12,13 +12,13 @@
       "source_url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title2-section7&num=0&edition=prelim",
       "states": {
         "WA": {
-          "how_it_works": "Everyone here votes by mail. Your ballot is mailed by Oct 16. Return it by mail with a Nov 3 postmark, or in a drop box by 8 p.m.",
+          "how_it_works": "Everyone here votes by mail. Your ballot is mailed by Oct 16. Return it in a drop box by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.",
           "ballot_week": {
-            "body": "Return yours by mail with a Nov 3 postmark, or in a drop box by 8 p.m.",
+            "body": "Return yours in a drop box by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.",
             "election_day_title": "Election Day. Return by 8 p.m. today.",
-            "election_day_body": "Drop box by 8 p.m., or mail it with today’s postmark."
+            "election_day_body": "Use a drop box, or get it postmarked at a post office counter today."
           },
-          "election_day_notice": { "lead": "Return by 8 p.m. today.", "detail": "Drop box by 8 p.m., or mail it with today’s postmark." },
+          "election_day_notice": { "lead": "Return by 8 p.m. today.", "detail": "Use a drop box. If you mail it, get it postmarked at a post office counter today." },
           "deadlines": [
             {
               "key": "ballots_mailed",
@@ -76,9 +76,9 @@
               "methods": ["drop_box", "mail"],
               "needs_action": true,
               "timeline": true,
-              "detail": "Drop box by 8 p.m., or mail it postmarked by Election Day.",
+              "detail": "Drop box by 8 p.m. A mailed ballot needs a Nov 3 postmark.",
               "teaser_lead": "Return by 8 p.m. Nov 3.",
-              "teaser_detail": "Drop box by 8 p.m., or mail it postmarked by Election Day.",
+              "teaser_detail": "Use a drop box, or mail it a week early.",
               "source": "Washington Secretary of State",
               "source_url": "https://www.sos.wa.gov/elections/elections-calendar/dates-and-deadlines",
               "law": "RCW 29A.40.091",
@@ -89,6 +89,427 @@
             "at": "2026-09-24",
             "by": "Ballot build, pending release check 1",
             "method": "See states.json WA.checked."
+          }
+        },
+        "CA": {
+          "how_it_works": "Every active voter gets a ballot by mail, starting Oct 5. Return it to a drop box or vote center by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.",
+          "far_note": "To get a ballot by mail, register by Oct 19. After that, you can register and vote in person through Election Day.",
+          "mover_text": "Moved this year? Update your registration by Oct 19 to get your ballot by mail.",
+          "ballot_week": {
+            "title_before": "Ballots go out starting Oct 5",
+            "title_after": "Ballots went out starting Oct 5",
+            "body": "Return yours to a drop box or vote center by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.",
+            "election_day_title": "Election Day. Return by 8 p.m. today.",
+            "election_day_body": "Use a drop box or vote center, or get it postmarked at a post office counter today."
+          },
+          "election_day_notice": { "lead": "Return by 8 p.m. today.", "detail": "Use a drop box or vote center. If you mail it, get it postmarked at a post office counter today." },
+          "deadlines": [
+            {
+              "key": "ballots_mailed",
+              "label": "Ballots mailed",
+              "date": "2026-10-05",
+              "time_local": null,
+              "cutoff": "mailed_starting",
+              "methods": ["mail"],
+              "needs_action": false,
+              "timeline": true,
+              "detail": "Counties start mailing ballots Oct 5.",
+              "source": "California Secretary of State",
+              "source_url": "https://elections.cdn.sos.ca.gov/pdfs/quick-facts-2026-general.pdf"
+            },
+            {
+              "key": "register_online_mail",
+              "label": "Register by",
+              "date": "2026-10-19",
+              "time_local": null,
+              "cutoff": "received_or_postmarked_by",
+              "methods": ["online", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Online, or postmarked by mail. After that, register and vote in person at your county elections office or a vote center.",
+              "teaser_lead": "Register by Oct 19.",
+              "teaser_detail": "After that, register and vote in person.",
+              "source": "California Secretary of State",
+              "source_url": "https://www.sos.ca.gov/elections/upcoming-elections/general-election-november-3-2026/key-dates-deadlines"
+            },
+            {
+              "key": "return_by",
+              "label": "By 8 p.m.",
+              "date": "2026-11-03",
+              "time_local": "20:00",
+              "cutoff": "drop_box_by_or_postmarked_by",
+              "methods": ["drop_box", "in_person", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Drop box or vote center by 8 p.m. A mailed ballot needs a Nov 3 postmark and must arrive by Nov 10.",
+              "teaser_lead": "Return by 8 p.m. Nov 3.",
+              "teaser_detail": "Use a drop box, or mail it a week early.",
+              "source": "California Secretary of State",
+              "source_url": "https://www.sos.ca.gov/elections/upcoming-elections/general-election-november-3-2026/key-dates-deadlines"
+            }
+          ],
+          "checked": {
+            "at": "2026-09-24",
+            "by": "Ballot build, pending release check 1",
+            "method": "See states.json CA.checked."
+          }
+        },
+        "CO": {
+          "how_it_works": "Every active voter gets a ballot by mail, sent Oct 2 to 9. Return it to a drop box or voting center by 7 p.m. Nov 3. Postmarks don’t count, so mail it at least a week early.",
+          "far_note": "To get a ballot by mail, register by Oct 26. You can register and vote in person through Election Day.",
+          "mover_text": "Moved this year? Update your registration by Oct 26 to get your ballot by mail.",
+          "ballot_week": {
+            "body": "Return yours to a drop box or voting center by 7 p.m. Nov 3. Postmarks don’t count, so mail it a week early.",
+            "election_day_title": "Election Day. Return by 7 p.m. today.",
+            "election_day_body": "Use a drop box or voting center. A ballot mailed today won’t arrive in time."
+          },
+          "election_day_notice": { "lead": "Return by 7 p.m. today.", "detail": "Use a drop box or voting center. A ballot mailed today won’t arrive in time." },
+          "deadlines": [
+            {
+              "key": "ballots_mailed",
+              "label": "Ballots mailed",
+              "date": "2026-10-09",
+              "time_local": null,
+              "cutoff": "mailed_by",
+              "methods": ["mail"],
+              "needs_action": false,
+              "timeline": true,
+              "detail": "County clerks mail ballots Oct 2 to 9.",
+              "source": "Colorado Secretary of State",
+              "source_url": "https://www.coloradosos.gov/pubs/newsRoom/pressReleases/2026/PR20260914SCOTUS.html"
+            },
+            {
+              "key": "register_online_mail",
+              "label": "Register by",
+              "date": "2026-10-26",
+              "time_local": null,
+              "cutoff": "received_by",
+              "methods": ["online", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "To get a ballot by mail. After that, register and vote in person through Election Day.",
+              "teaser_lead": "Register by Oct 26 to get a mail ballot.",
+              "teaser_detail": "After that, register and vote in person.",
+              "source": "Colorado Secretary of State",
+              "source_url": "https://coloradosos.gov/pubs/newsRoom/pressReleases/2026/PR20260923GeneralElection.html"
+            },
+            {
+              "key": "return_by",
+              "label": "By 7 p.m.",
+              "date": "2026-11-03",
+              "time_local": "19:00",
+              "cutoff": "received_by",
+              "methods": ["drop_box", "in_person", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Postmarks don’t count: your county must have it by 7 p.m.",
+              "teaser_lead": "Return by 7 p.m. Nov 3.",
+              "teaser_detail": "Postmarks don’t count. Use a drop box.",
+              "source": "Colorado Secretary of State",
+              "source_url": "https://coloradosos.gov/pubs/newsRoom/pressReleases/2026/PR20260923GeneralElection.html"
+            }
+          ],
+          "checked": {
+            "at": "2026-09-24",
+            "by": "Ballot build, pending release check 1",
+            "method": "See states.json CO.checked."
+          }
+        },
+        "HI": {
+          "how_it_works": "Everyone here votes by mail. Ballots arrive starting Oct 16. Return yours to a drop box or voter service center by 7 p.m. Nov 3. Postmarks don’t count, so mail it a week early.",
+          "far_note": "Paper registration forms are due Oct 26. You can register online, or in person at a voter service center, through Election Day.",
+          "mover_text": null,
+          "ballot_week": {
+            "title_before": "Ballots arrive starting Oct 16",
+            "title_after": "Ballots began arriving Oct 16",
+            "body": "Return yours to a drop box or voter service center by 7 p.m. Nov 3. Postmarks don’t count, so mail it a week early.",
+            "election_day_title": "Election Day. Return by 7 p.m. today.",
+            "election_day_body": "Use a drop box or voter service center. A ballot mailed today won’t arrive in time."
+          },
+          "election_day_notice": { "lead": "Return by 7 p.m. today.", "detail": "Use a drop box or voter service center. A ballot mailed today won’t arrive in time." },
+          "deadlines": [
+            {
+              "key": "ballots_mailed",
+              "label": "Ballots arrive",
+              "date": "2026-10-16",
+              "time_local": null,
+              "cutoff": "delivered_starting",
+              "methods": ["mail"],
+              "needs_action": false,
+              "timeline": true,
+              "detail": "Ballot packets arrive by mail starting Oct 16.",
+              "source": "Hawaii Office of Elections",
+              "source_url": "https://elections.hawaii.gov/newsletters/newsletter-january-2026/"
+            },
+            {
+              "key": "register_online_mail",
+              "label": "Register by",
+              "date": "2026-10-26",
+              "time_local": null,
+              "cutoff": "received_by",
+              "methods": ["mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Paper forms by Oct 26. Online, or in person at a voter service center, through Election Day.",
+              "teaser_lead": "Register by Oct 26.",
+              "teaser_detail": "Paper forms by then. Online and in person after.",
+              "source": "Hawaii Office of Elections",
+              "source_url": "https://elections.hawaii.gov/register-to-vote/registration/"
+            },
+            {
+              "key": "return_by",
+              "label": "By 7 p.m.",
+              "date": "2026-11-03",
+              "time_local": "19:00",
+              "cutoff": "received_by",
+              "methods": ["drop_box", "in_person", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Postmarks don’t count: it must arrive by 7 p.m.",
+              "teaser_lead": "Return by 7 p.m. Nov 3.",
+              "teaser_detail": "Postmarks don’t count. Use a drop box.",
+              "source": "Hawaii Office of Elections",
+              "source_url": "https://elections.hawaii.gov/voting/"
+            }
+          ],
+          "checked": {
+            "at": "2026-09-24",
+            "by": "Ballot build, pending release check 1",
+            "method": "See states.json HI.checked."
+          }
+        },
+        "NV": {
+          "how_it_works": "Every active voter gets a ballot by mail. Return it to a drop box by 7 p.m. Nov 3, or mail it a week early so the postmark is on time. Early voting runs Oct 17 to 30.",
+          "far_note": "To get a ballot by mail, register online by Oct 20. You can also register in person when you vote.",
+          "mover_text": "Moved this year? Update your registration online by Oct 20 to get your ballot by mail.",
+          "ballot_week": {
+            "body": "Return yours to a drop box by 7 p.m. Nov 3, or mail it a week early so the postmark is on time.",
+            "election_day_title": "Election Day. Return by 7 p.m. today.",
+            "election_day_body": "Use a drop box or polling place, or get it postmarked at a post office counter today."
+          },
+          "election_day_notice": { "lead": "Return by 7 p.m. today.", "detail": "Use a drop box or polling place. If you mail it, get it postmarked at a post office counter today." },
+          "deadlines": [
+            {
+              "key": "ballots_mailed",
+              "label": "Ballots mailed",
+              "date": "2026-10-14",
+              "time_local": null,
+              "cutoff": "mailed_by",
+              "methods": ["mail"],
+              "needs_action": false,
+              "timeline": true,
+              "detail": "Counties mail ballots at least 20 days before Election Day.",
+              "source": "Nevada Secretary of State",
+              "source_url": "https://www.nvsos.gov/elections/election-resources/faqs"
+            },
+            {
+              "key": "register_online_mail",
+              "label": "Register by",
+              "date": "2026-10-20",
+              "time_local": null,
+              "cutoff": "received_by",
+              "methods": ["online"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Online, to get a ballot by mail. After that, register in person when you vote.",
+              "teaser_lead": "Register online by Oct 20 to get a mail ballot.",
+              "teaser_detail": "After that, register in person when you vote.",
+              "source": "Nevada Secretary of State",
+              "source_url": "https://www.nvsos.gov/elections/election-information/2026-election-information"
+            },
+            {
+              "key": "return_by",
+              "label": "By 7 p.m.",
+              "date": "2026-11-03",
+              "time_local": "19:00",
+              "cutoff": "drop_box_by_or_postmarked_by",
+              "methods": ["drop_box", "in_person", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Drop box or polling place by 7 p.m. A mailed ballot needs a Nov 3 postmark and must arrive by Nov 7.",
+              "teaser_lead": "Return by 7 p.m. Nov 3.",
+              "teaser_detail": "Use a drop box, or mail it a week early.",
+              "source": "Nevada Secretary of State",
+              "source_url": "https://www.nvsos.gov/elections/election-information/2026-election-information"
+            }
+          ],
+          "checked": {
+            "at": "2026-09-24",
+            "by": "Ballot build, pending release check 1",
+            "method": "See states.json NV.checked."
+          }
+        },
+        "OR": {
+          "how_it_works": "Everyone here votes by mail. Ballots go out starting Oct 14. Return yours in a drop box by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.",
+          "mover_text": "Moved this year? Update your registration by Oct 13 to get your ballot at your new address.",
+          "ballot_week": {
+            "title_before": "Ballots go out starting Oct 14",
+            "title_after": "Ballots went out starting Oct 14",
+            "body": "Return yours in a drop box by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.",
+            "election_day_title": "Election Day. Return by 8 p.m. today.",
+            "election_day_body": "Use a drop box, or get it postmarked at a post office counter today."
+          },
+          "election_day_notice": { "lead": "Return by 8 p.m. today.", "detail": "Use a drop box. If you mail it, get it postmarked at a post office counter today." },
+          "deadlines": [
+            {
+              "key": "register_online_mail",
+              "label": "Register by",
+              "date": "2026-10-13",
+              "time_local": null,
+              "cutoff": "received_or_postmarked_by",
+              "methods": ["online", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Online by 11:59 p.m., or a paper form postmarked by Oct 13.",
+              "teaser_lead": "Register or update by Oct 13.",
+              "teaser_detail": "Online, or mail a form postmarked by then.",
+              "source": "Oregon Secretary of State",
+              "source_url": "https://sos.oregon.gov/elections/pages/registration.aspx"
+            },
+            {
+              "key": "ballots_mailed",
+              "label": "Ballots mailed",
+              "date": "2026-10-14",
+              "time_local": null,
+              "cutoff": "mailed_starting",
+              "methods": ["mail"],
+              "needs_action": false,
+              "timeline": true,
+              "detail": "Counties start mailing ballots Oct 14.",
+              "source": "Clackamas County Elections",
+              "source_url": "https://www.clackamas.us/elections/oregon-vote-by-mail-facts-november-3-2026-general-election"
+            },
+            {
+              "key": "return_by",
+              "label": "By 8 p.m.",
+              "date": "2026-11-03",
+              "time_local": "20:00",
+              "cutoff": "drop_box_by_or_postmarked_by",
+              "methods": ["drop_box", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Drop box by 8 p.m. A mailed ballot needs a Nov 3 postmark and must arrive by Nov 10.",
+              "teaser_lead": "Return by 8 p.m. Nov 3.",
+              "teaser_detail": "Use a drop box, or mail it a week early.",
+              "source": "Oregon Secretary of State",
+              "source_url": "https://sos.oregon.gov/elections/pages/current-election.aspx"
+            }
+          ],
+          "checked": {
+            "at": "2026-09-24",
+            "by": "Ballot build, pending release check 1",
+            "method": "See states.json OR.checked."
+          }
+        },
+        "UT": {
+          "how_it_works": "Every active voter gets a ballot by mail on Oct 13. Return it in a drop box by 8 p.m. Nov 3, or mail it a week early: postmarks don’t count. On the envelope, add the last four digits of your ID or Social Security number.",
+          "far_note": "To get a ballot by mail, register by Oct 23. After that, you can register when you vote in person.",
+          "mover_text": "Moved this year? Update your registration by Oct 23 to get your ballot by mail.",
+          "ballot_week": {
+            "body": "Return yours in a drop box by 8 p.m. Nov 3, or mail it a week early. Postmarks don’t count.",
+            "election_day_title": "Election Day. Return by 8 p.m. today.",
+            "election_day_body": "Use a drop box or vote center. A ballot mailed today won’t arrive in time."
+          },
+          "election_day_notice": { "lead": "Return by 8 p.m. today.", "detail": "Use a drop box or vote center. A ballot mailed today won’t arrive in time." },
+          "deadlines": [
+            {
+              "key": "ballots_mailed",
+              "label": "Ballots mailed",
+              "date": "2026-10-13",
+              "time_local": null,
+              "cutoff": "mailed_on",
+              "methods": ["mail"],
+              "needs_action": false,
+              "timeline": true,
+              "detail": "Counties mail ballots to active voters Oct 13.",
+              "source": "Utah Lieutenant Governor",
+              "source_url": "https://vote.utah.gov/wp-content/uploads/2026/01/2026-Utah-Election-Calendar.pdf"
+            },
+            {
+              "key": "register_online_mail",
+              "label": "Register by",
+              "date": "2026-10-23",
+              "time_local": null,
+              "cutoff": "received_by",
+              "methods": ["online", "mail", "in_person"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "To get a ballot by mail. After that, register when you vote in person.",
+              "teaser_lead": "Register by Oct 23 to get a mail ballot.",
+              "teaser_detail": "After that, register when you vote in person.",
+              "source": "Utah Lieutenant Governor",
+              "source_url": "https://vote.utah.gov/wp-content/uploads/2026/01/2026-Utah-Election-Calendar.pdf"
+            },
+            {
+              "key": "return_by",
+              "label": "By 8 p.m.",
+              "date": "2026-11-03",
+              "time_local": "20:00",
+              "cutoff": "received_by",
+              "methods": ["drop_box", "in_person", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Postmarks don’t count: your county must have it by 8 p.m.",
+              "teaser_lead": "Return by 8 p.m. Nov 3.",
+              "teaser_detail": "Postmarks don’t count. Use a drop box.",
+              "source": "Utah Lieutenant Governor",
+              "source_url": "https://vote.utah.gov/learn-about-voting-by-mail-and-absentee-voting/",
+              "law": "Utah H.B. 300 (2025)",
+              "law_url": "https://le.utah.gov/~2025/bills/static/HB0300.html"
+            }
+          ],
+          "checked": {
+            "at": "2026-09-24",
+            "by": "Ballot build, pending release check 1",
+            "method": "See states.json UT.checked."
+          }
+        },
+        "VT": {
+          "no_registration_deadline": true,
+          "how_it_works": "Every active voter gets a ballot by mail, starting Sep 25. Return it to your town clerk by Nov 2, or to your polling place by 7 p.m. Nov 3. You can register any day, even at the polls.",
+          "far_note": "Ballots are mailed to every active voter. You can register any day, even at the polls.",
+          "ballot_week": {
+            "title_before": "Ballots go out starting Sep 25",
+            "title_after": "Ballots went out starting Sep 25",
+            "body": "Return yours to your town clerk by Nov 2, or to your polling place by 7 p.m. Nov 3.",
+            "election_day_title": "Election Day. Return by 7 p.m. today.",
+            "election_day_body": "Bring it to your polling place. A ballot mailed today won’t arrive in time."
+          },
+          "election_day_notice": { "lead": "Return by 7 p.m. today.", "detail": "Bring it to your polling place. A ballot mailed today won’t arrive in time." },
+          "deadlines": [
+            {
+              "key": "ballots_mailed",
+              "label": "Ballots mailed",
+              "date": "2026-09-25",
+              "time_local": null,
+              "cutoff": "mailed_starting",
+              "methods": ["mail"],
+              "needs_action": false,
+              "timeline": true,
+              "detail": "The Secretary of State mails ballots to active voters starting Sep 25.",
+              "source": "Vermont Secretary of State",
+              "source_url": "https://outside.vermont.gov/dept/sos/Elections_Division/town_clerks_local_elections/election_procedure/elections_calendar.pdf"
+            },
+            {
+              "key": "return_by",
+              "label": "By 7 p.m.",
+              "date": "2026-11-03",
+              "time_local": "19:00",
+              "cutoff": "received_by",
+              "methods": ["in_person", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "At your polling place by 7 p.m., or to your town clerk by the day before.",
+              "teaser_lead": "Return by 7 p.m. Nov 3.",
+              "teaser_detail": "Town clerk by Nov 2, or your polling place.",
+              "source": "Vermont Secretary of State",
+              "source_url": "https://sos.vermont.gov/elections/voters/early-absentee-voting"
+            }
+          ],
+          "checked": {
+            "at": "2026-09-24",
+            "by": "Ballot build, pending release check 1",
+            "method": "See states.json VT.checked."
           }
         }
       }
