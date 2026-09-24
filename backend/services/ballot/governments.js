@@ -83,7 +83,8 @@ function governmentsFromGeographies(geo) {
 
   const items = [
     { level: 'federal', geoid: 'us', name: 'United States' },
-    { level: 'state', geoid: stateGeoid, name: String(state.NAME || '').trim() },
+    // The canvas names this layer "The state" everywhere (Overview, Peel).
+    { level: 'state', geoid: stateGeoid, name: 'The state' },
     { level: 'county', geoid: countyGeoid, name: String(county.NAME || '').trim() },
   ];
 

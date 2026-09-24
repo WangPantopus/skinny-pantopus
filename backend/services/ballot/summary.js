@@ -77,11 +77,12 @@ function deadlinesFor(block, today, timezone) {
     .sort((a, b) => a.date.localeCompare(b.date) || (a.timeline === b.timeline ? 0 : a.timeline ? -1 : 1));
 }
 
-// "The United States, Washington, Clark County, the Camas School District
+// "The United States, the state, Clark County, the Camas School District
 // and the City of Camas." — the still view's body line.
 function governmentsSentence(items) {
   const names = items.map((item) => {
     if (item.level === 'federal') return 'the United States';
+    if (item.level === 'state') return 'the state';
     if (item.level === 'city') return `the ${item.name}`;
     if (item.level === 'school' && /school district/i.test(item.name)) return `the ${item.name}`;
     return item.name;
