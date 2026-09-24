@@ -112,12 +112,19 @@ public final class ExploreMapViewModel {
     }
 
     public func configureFocus(_ focus: ExploreMapFocus?) {
+        fetchGeneration += 1
+        fetchTask?.cancel()
         explicitCenter = focus.map { UserCoordinate(latitude: $0.latitude, longitude: $0.longitude, accuracyMeters: 0) }
     }
 
     /// A locate action explicitly requests the actual device area.
     public func locate() async {
-        guard let coordinate = await location.requestCurrent(timeoutSeconds: 4) else {
+        fetchTask?.cancel()
+        fetchGeneration += 1
+        let generation = fetchGeneration
+        let coordinate = await location.requestCurrent(timeoutSeconds: 4)
+        guard generation == fetchGeneration else { return }
+        guard let coordinate else {
             state = .error(message: "Turn on location to find your current area.")
             return
         }

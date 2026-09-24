@@ -115,12 +115,16 @@ class ExploreMapViewModel
         }
 
         fun configureFocus(focus: ExploreMapFocus?) {
+            fetchGeneration += 1
             explicitCenter = focus?.let { UserCoordinate(it.latitude, it.longitude, 0.0) }
         }
 
         fun locate() {
+            fetchGeneration += 1
+            val generation = fetchGeneration
             viewModelScope.launch {
                 val coordinate = locationProvider.requestCurrent(timeoutMillis = 4_000L)
+                if (generation != fetchGeneration) return@launch
                 if (coordinate == null) {
                     _state.value = ExploreMapUiState.Error("Turn on location to find your current area.")
                 } else {
