@@ -81,10 +81,10 @@ describe('reference data', () => {
     expect(referenceData.isAvailable()).toBe(true);
   });
 
-  it('covers every state and DC, and supports only the checked pilot', () => {
+  it('covers every state and DC, and supports only the checked states', () => {
     expect(Object.keys(STATES.states)).toHaveLength(51);
     const supported = Object.entries(STATES.states).filter(([, s]) => s.coverage === 'supported').map(([k]) => k);
-    expect(supported).toEqual(['WA']);
+    expect(supported).toEqual(['CA', 'CO', 'HI', 'NV', 'OR', 'UT', 'VT', 'WA']);
   });
 
   it('rejects an http link, a bad date, a missing registration deadline and a deadline after the election', () => {
@@ -104,7 +104,7 @@ describe('reference data', () => {
 
   it('keeps deadlines only on supported states', () => {
     const elections = JSON.parse(JSON.stringify(ELECTIONS));
-    elections.elections[0].states.OR = elections.elections[0].states.WA;
+    elections.elections[0].states.TX = elections.elections[0].states.WA;
     expect(referenceData.validateReferenceData(STATES, elections).join('\n')).toMatch(/only supported states carry deadlines/);
   });
 
@@ -184,7 +184,7 @@ describe('the Place card summary (supported: Washington)', () => {
   it('Election Day: the return notice until 8 p.m., then the results state', () => {
     const morning = wa('2026-11-03');
     expect(morning).toMatchObject({ phase: 'election_day', title: 'Election Day', chip: 'Today' });
-    expect(morning.election_day_notice).toEqual({ lead: 'Return by 8 p.m. today.', detail: 'Drop box by 8 p.m., or mail it with today’s postmark.' });
+    expect(morning.election_day_notice).toEqual({ lead: 'Return by 8 p.m. today.', detail: 'Use a drop box. If you mail it, get it postmarked at a post office counter today.' });
     expect(morning.official_links.map((l) => l.key)).toEqual(['drop_boxes', 'ballot_tracking']);
 
     // 8:30 p.m. Pacific on Election Day = 03:30 UTC the next day.
@@ -229,7 +229,7 @@ describe('the Place card summary (supported: Washington)', () => {
 
 describe('outside the pilot: official links only', () => {
   it('shows the election date and Vote.gov, never a count or a deadline', () => {
-    const s = summary.composeSummary({ stateValue: 'OR', governmentsResult: CAMAS_GOVERNMENTS, now: pacificNoon('2026-09-24') });
+    const s = summary.composeSummary({ stateValue: 'TX', governmentsResult: CAMAS_GOVERNMENTS, now: pacificNoon('2026-09-24') });
     expect(s).toMatchObject({
       coverage: 'links_only',
       phase: 'in_season',
@@ -245,7 +245,7 @@ describe('outside the pilot: official links only', () => {
   });
 
   it('hides after the election and for territories', () => {
-    expect(summary.composeSummary({ stateValue: 'OR', now: pacificNoon('2026-11-05') })).toBeNull();
+    expect(summary.composeSummary({ stateValue: 'TX', now: pacificNoon('2026-11-05') })).toBeNull();
     expect(summary.composeSummary({ stateValue: 'PR', now: pacificNoon('2026-09-24') })).toBeNull();
   });
 });

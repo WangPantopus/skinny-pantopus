@@ -58,7 +58,7 @@ The canvas's Build plan board shows this same order. Only the gates are new.
 ### 5.1 Reference data (versioned, reviewed, no table)
 
 - **`backend/data/ballot/states.json`** holds, per state, the name, `coverage` (`supported` | `links_only`), timezone, and the official links with owner, label and URL. Every state that isn't supported gets vote.gov as its official link. Territories are absent, so Ballot hides for them.
-- **`backend/data/ballot/elections.json`** holds one entry per election. `2026-11-03-general` is the federal general election in every state (2 U.S.C. § 7). For Washington it also holds:
+- **`backend/data/ballot/elections.json`** holds one entry per election. `2026-11-03-general` is the federal general election in every state (2 U.S.C. § 7). For each supported state it also holds dates like these Washington ones (the other states are in section 5.1.1):
 
 | Key | Date | Cutoff | Needs action | Source |
 |---|---|---|---|---|
@@ -69,7 +69,34 @@ The canvas's Build plan board shows this same order. Only the gates are new.
 
 Each deadline carries `key`, `label`, `date`, `time_local`, `timezone`, `cutoff`, `methods`, `needs_action`, `detail`, `source` and `source_url`. Each state block carries `checked_at` and `checked_by`. A loader validates both files at boot and in tests. Display titles are never identifiers.
 
+A state block can also carry wording that a single template can't get right for every state, all optional and validated:
+
+- `far_note` replaces "Registration deadline: <date>, online or by mail."
+- `mover_text` replaces the "Moved this year?" sentence. `null` turns the line off where one deadline can't be stated simply (Hawaii's online registration never closes).
+- `ballot_week.title_before` and `title_after` replace "Ballots go out by <date>" and "Ballots were mailed by <date>" for states that mail starting a date.
+- `no_registration_deadline: true` replaces the required `register_online_mail` in a state that registers people any day (Vermont).
+
+A state entry can carry `election_office_phrase` ("the Oregon Secretary of State") for the after-election sentence. A `polling_places` link shows on Election Day, after drop boxes.
+
 Verification limit: this build environment's egress policy blocks sos.wa.gov, vote.gov, clark.wa.gov and the Census geocoder. The dates above match the review's reading of the SOS page (September 23), the RCW text, and SOS pages found by search on September 24. Release check 1 is a person opening every source URL and link in both files.
+
+#### 5.1.1 The all-mail states (added September 24)
+
+The founder asked for the states that mail every active voter a ballot. They reuse Washington's card, timeline and copy shape; only the data differs. No county links yet.
+
+| State | Ballots mailed | Register (to get a mail ballot) | Return | Main sources |
+|---|---|---|---|---|
+| California | starting Oct 5 | Oct 19, online or postmarked; then in person through Election Day | drop box or vote center by 8 p.m.; mail postmarked Nov 3, received by Nov 10 | SOS 2026 quick facts and key dates |
+| Colorado | Oct 2 to 9 | Oct 26; then register and vote in person | received by 7 p.m.; postmarks don't count | SOS press releases, Sep 14 and Sep 23, 2026 |
+| Hawaii | arriving from Oct 16 | paper forms Oct 26; online and at voter service centers through Election Day | received by 7 p.m. | Office of Elections pages |
+| Nevada | by Oct 14 (20 days before) | online by Oct 20; then in person when voting | drop box or polling place by 7 p.m.; mail postmarked Nov 3, received by Nov 7 | SOS 2026 election information and FAQ |
+| Oregon | starting Oct 14 | Oct 13, online or postmarked | drop box by 8 p.m.; mail postmarked Nov 3, received by Nov 10 | SOS pages; Linn, Josephine and Clackamas county 2026 pages |
+| Utah | Oct 13 | Oct 23; then register when voting in person | received by 8 p.m.; postmarks don't count (H.B. 300, 2025); last four ID digits on the envelope from 2026 | 2026 Utah election calendar, vote.utah.gov |
+| Vermont | starting Sep 25 | no deadline; register any day, even at the polls | town clerk by Nov 2, or the polling place by 7 p.m. Nov 3 | SOS pages and 2026 elections calendar |
+
+The same limit applies, more so: none of these states' sites opens from this container, and WebFetch is blocked too. Every date and link came from search results citing the official page, a county page or the state's news release. They are marked "pending release check 1". Points to confirm first: Hawaii's online registration after Oct 26, Nevada's results site (results.nv.gov), Colorado's results link (the Secretary of State's home page, where the press release says the link will be posted), and California's results link (the elections page, because the election-night results site changes host each election).
+
+**The USPS postmark rule.** Since December 24, 2025, USPS postmarks mail at regional plants, so a ballot dropped in a mailbox on Election Day can get a later postmark and be rejected. Washington's February 2026 special election rejected 1.3% of returned ballots for late postmarks, 75% of all rejections, and the Secretary of State now tells voters to use a drop box or get a hand postmark at a post office counter. Washington's copy changed on September 24 to match ("mail it a week early so the postmark is on time"; on Election Day, "get it postmarked at a post office counter today"). The postmark states (California, Nevada, Oregon and Washington) use the same wording. The received-by states say "postmarks don't count".
 
 ### 5.2 The `civic_election` section, extended (P0 adds no new section id)
 
@@ -82,7 +109,7 @@ When `ballot_p0` is on for the user, `composeCivicElection` keeps `name`, `date`
   "phase": "in_season",
   "state": "WA",
   "voting_method": "all_mail",
-  "how_it_works": "Everyone here votes by mail. Your ballot is mailed by Oct 16. Return it by mail with a Nov 3 postmark, or in a drop box by 8 p.m.",
+  "how_it_works": "Everyone here votes by mail. Your ballot is mailed by Oct 16. Return it in a drop box by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.",
   "deadlines": [{ "key": "ballots_mailed", "label": "Ballots mailed", "date": "2026-10-16", "days_until": 22, "needs_action": false, "source": "…", "source_url": "…" }],
   "official_links": [{ "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "…" }],
   "governments": { "count": 5, "count_is_minimum": true, "items": [{ "level": "county", "geoid": "53011", "name": "Clark County", "on_ballot": null }] },
@@ -311,6 +338,12 @@ I signed up, confirmed the email and signed in through the web. Everything after
   - After the election, the card shows only the results link.
   - An Oregon home gets the links-only card.
 - **Signed-out /start:** the teaser and its governments view work end to end.
+- **The all-mail states (September 24):** with the home's state set to each of California, Colorado, Hawaii, Nevada, Oregon, Utah and Vermont, the Place page showed that state's card, timeline and links. Also checked:
+  - California's Today tab on October 17 (ballot week and the mover line).
+  - Colorado and Vermont on Election Day (7 p.m.; Vermont's polling-place link).
+  - Oregon after the election ("the Oregon Secretary of State").
+  - Washington again, in season and on Election Day, with the new mailing wording.
+  - The governments line came from the stubbed Census answer for Camas, so it only checks layout for these states.
 
 **What was controlled, and why:**
 
@@ -332,7 +365,7 @@ For the local run, three Postgres 17 details were patched out of a copy of the b
 
 ## 11. Founder approvals needed before release
 
-1. **Pilot.** Washington dates statewide, with Clark County links. Every other state gets the election date and a vote.gov link.
+1. **Pilot.** Washington dates statewide, with Clark County links, plus the seven states that mail every voter a ballot (section 5.1.1), which the founder asked for on September 24. Every other state gets the election date and a vote.gov link. The Washington copy about mailing changed for the USPS postmark rule (section 5.1.1).
 2. **P0 copy that replaces unbuildable canvas copy.** Drawn on the canvas's "Proposed, September 24" boards:
    - The Place card line and its "See your governments" button.
    - The /start teaser legend and its button.

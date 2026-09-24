@@ -74,7 +74,7 @@ const IN_SEASON: PlaceBallotElectionData = {
   chip: '40 days',
   line: 'This address sits inside at least 5 governments.',
   note: null,
-  how_it_works: 'Everyone here votes by mail. Your ballot is mailed by Oct 16. Return it by mail with a Nov 3 postmark, or in a drop box by 8 p.m.',
+  how_it_works: 'Everyone here votes by mail. Your ballot is mailed by Oct 16. Return it in a drop box by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.',
   deadlines: [
     deadline('ballots_mailed', 'Ballots mailed', '2026-10-16', 'Oct 16', 22),
     deadline('register_online_mail', 'Register by', '2026-10-26', 'Oct 26', 32, { needs_action: true, cutoff: 'received_by' }),
@@ -96,7 +96,7 @@ const FAR: PlaceBallotElectionData = {
 
 const ELECTION_DAY: PlaceBallotElectionData = {
   ...BASE, days_until: 0, coverage: 'supported', phase: 'election_day', title: 'Election Day', chip: 'Today', line: null, note: null, how_it_works: null,
-  election_day_notice: { lead: 'Return by 8 p.m. today.', detail: 'Drop box by 8 p.m., or mail it with today’s postmark.' },
+  election_day_notice: { lead: 'Return by 8 p.m. today.', detail: 'Use a drop box. If you mail it, get it postmarked at a post office counter today.' },
   official_links: [LINKS.dropBox, LINKS.tracking], governments: null, primary_action: null, deadlines: [],
 };
 
@@ -114,7 +114,7 @@ const LINKS_ONLY: PlaceBallotElectionData = {
 
 const TODAY: PlaceBallotElectionData = {
   ...IN_SEASON,
-  ballot_week: { show: true, overline: 'Ballot week', title: 'Ballots were mailed by Oct 16', body: 'Return yours by mail with a Nov 3 postmark, or in a drop box by 8 p.m.' },
+  ballot_week: { show: true, overline: 'Ballot week', title: 'Ballots were mailed by Oct 16', body: 'Return yours in a drop box by 8 p.m. Nov 3, or mail it a week early so the postmark is on time.' },
   mover_prompt: { text: 'Moved this year? Update your registration online by Oct 26.', days_left: 9, url: 'https://example.invalid/registration' },
 };
 

@@ -95,6 +95,9 @@ function validateReferenceData(statesDoc = STATES_DOC, electionsDoc = ELECTIONS_
         errors.push(`${at}: voting_method is required for a supported state`);
       }
       if (typeof entry.election_office !== 'string' || !entry.election_office) errors.push(`${at}: election_office is required`);
+      if (entry.election_office_phrase != null && (typeof entry.election_office_phrase !== 'string' || !entry.election_office_phrase)) {
+        errors.push(`${at}: election_office_phrase must be text`);
+      }
       validateLinks(entry.official_links, at, errors);
       for (const [geoid, county] of Object.entries(entry.counties || {})) {
         if (!/^\d{5}$/.test(geoid)) errors.push(`${at}.counties.${geoid}: key must be a 5-digit county GEOID`);
@@ -143,8 +146,28 @@ function validateReferenceData(statesDoc = STATES_DOC, electionsDoc = ELECTIONS_
         if (!isHttps(d.source_url)) errors.push(`${dat}: source_url must be https`);
         if (d.law_url != null && !isHttps(d.law_url)) errors.push(`${dat}: law_url must be https`);
       }
-      if (!keys.has('register_online_mail')) errors.push(`${bat}: register_online_mail is required`);
+      // A state with no registration deadline (register any day, including
+      // Election Day) says so explicitly rather than leaving it out.
+      if (block.no_registration_deadline != null && typeof block.no_registration_deadline !== 'boolean') {
+        errors.push(`${bat}: no_registration_deadline must be a boolean`);
+      }
+      if (block.no_registration_deadline === true) {
+        if (keys.has('register_online_mail')) errors.push(`${bat}: no_registration_deadline contradicts register_online_mail`);
+      } else if (!keys.has('register_online_mail')) {
+        errors.push(`${bat}: register_online_mail is required`);
+      }
       if (!keys.has('return_by')) errors.push(`${bat}: return_by is required`);
+      if (!block.election_day_notice || typeof block.election_day_notice.lead !== 'string' || !block.election_day_notice.lead) {
+        errors.push(`${bat}: election_day_notice.lead is required`);
+      }
+      if (block.far_note != null && (typeof block.far_note !== 'string' || !block.far_note)) errors.push(`${bat}: far_note must be text`);
+      if (block.mover_text !== undefined && block.mover_text !== null && (typeof block.mover_text !== 'string' || !block.mover_text)) {
+        errors.push(`${bat}: mover_text must be text or null`);
+      }
+      for (const field of ['title_before', 'title_after']) {
+        const value = block.ballot_week && block.ballot_week[field];
+        if (value != null && (typeof value !== 'string' || !value)) errors.push(`${bat}: ballot_week.${field} must be text`);
+      }
     }
   }
   return errors;

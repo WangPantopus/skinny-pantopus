@@ -13,14 +13,70 @@
     "AK": { "name": "Alaska", "timezone": "America/Anchorage", "coverage": "links_only" },
     "AZ": { "name": "Arizona", "timezone": "America/Phoenix", "coverage": "links_only" },
     "AR": { "name": "Arkansas", "timezone": "America/Chicago", "coverage": "links_only" },
-    "CA": { "name": "California", "timezone": "America/Los_Angeles", "coverage": "links_only" },
-    "CO": { "name": "Colorado", "timezone": "America/Denver", "coverage": "links_only" },
+    "CA": {
+      "name": "California",
+      "timezone": "America/Los_Angeles",
+      "coverage": "supported",
+      "voting_method": "all_mail",
+      "election_office": "California Secretary of State",
+      "election_office_phrase": "the California Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Register or update online", "owner": "Secretary of State", "url": "https://registertovote.ca.gov/", "phases": ["far", "in_season"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Where’s My Ballot?", "url": "https://wheresmyballot.sos.ca.gov/", "phases": ["in_season", "election_day"] },
+        { "key": "drop_boxes", "label": "Find a drop box or vote center", "owner": "Secretary of State", "url": "https://caearlyvoting.sos.ca.gov/", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Current election information", "owner": "Secretary of State", "url": "https://www.sos.ca.gov/elections/upcoming-elections/general-election-november-3-2026", "phases": ["far", "in_season"] },
+        { "key": "results", "label": "Election results", "owner": "Secretary of State", "url": "https://www.sos.ca.gov/elections", "phases": ["after"] }
+      ],
+      "checked": {
+        "at": "2026-09-24",
+        "by": "Ballot build, pending release check 1",
+        "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open sos.ca.gov directly."
+      }
+    },
+    "CO": {
+      "name": "Colorado",
+      "timezone": "America/Denver",
+      "coverage": "supported",
+      "voting_method": "all_mail",
+      "election_office": "Colorado Secretary of State",
+      "election_office_phrase": "the Colorado Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check or update registration", "owner": "Go Vote Colorado", "url": "https://www.coloradosos.gov/voter/pages/pub/home.xhtml", "phases": ["far", "in_season"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "BallotTrax", "url": "https://ballottrax.coloradosos.gov/voter/", "phases": ["in_season", "election_day"] },
+        { "key": "drop_boxes", "label": "Find a drop box or voting center", "owner": "Go Vote Colorado", "url": "https://www.coloradosos.gov/voter/pages/pub/home.xhtml", "phases": ["election_day"] },
+        { "key": "election_information", "label": "Current election information", "owner": "Secretary of State", "url": "https://www.sos.state.co.us/pubs/elections/electionInfo.html", "phases": ["far", "in_season"] },
+        { "key": "results", "label": "Election results", "owner": "Secretary of State", "url": "https://www.coloradosos.gov/", "phases": ["after"] }
+      ],
+      "checked": {
+        "at": "2026-09-24",
+        "by": "Ballot build, pending release check 1",
+        "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open coloradosos.gov or sos.state.co.us directly."
+      }
+    },
     "CT": { "name": "Connecticut", "timezone": "America/New_York", "coverage": "links_only" },
     "DE": { "name": "Delaware", "timezone": "America/New_York", "coverage": "links_only" },
     "DC": { "name": "District of Columbia", "timezone": "America/New_York", "coverage": "links_only" },
     "FL": { "name": "Florida", "timezone": "America/New_York", "coverage": "links_only" },
     "GA": { "name": "Georgia", "timezone": "America/New_York", "coverage": "links_only" },
-    "HI": { "name": "Hawaii", "timezone": "Pacific/Honolulu", "coverage": "links_only" },
+    "HI": {
+      "name": "Hawaii",
+      "timezone": "Pacific/Honolulu",
+      "coverage": "supported",
+      "voting_method": "all_mail",
+      "election_office": "Hawaii Office of Elections",
+      "election_office_phrase": "the Hawaii Office of Elections",
+      "official_links": [
+        { "key": "registration", "label": "Register or update online", "owner": "Office of Elections", "url": "https://olvr.hawaii.gov/", "phases": ["far", "in_season"] },
+        { "key": "drop_boxes", "label": "Drop boxes and voter service centers", "owner": "Office of Elections", "url": "https://elections.hawaii.gov/voter-service-centers-and-places-of-deposit/", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "How voting works", "owner": "Office of Elections", "url": "https://elections.hawaii.gov/voting/", "phases": ["far", "in_season", "election_day"] },
+        { "key": "results", "label": "Election results", "owner": "Office of Elections", "url": "https://elections.hawaii.gov/election-results/", "phases": ["after"] }
+      ],
+      "checked": {
+        "at": "2026-09-24",
+        "by": "Ballot build, pending release check 1",
+        "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open elections.hawaii.gov or olvr.hawaii.gov directly."
+      }
+    },
     "ID": { "name": "Idaho", "timezone": "America/Boise", "coverage": "links_only" },
     "IL": { "name": "Illinois", "timezone": "America/Chicago", "coverage": "links_only" },
     "IN": { "name": "Indiana", "timezone": "America/Indiana/Indianapolis", "coverage": "links_only" },
@@ -37,7 +93,25 @@
     "MO": { "name": "Missouri", "timezone": "America/Chicago", "coverage": "links_only" },
     "MT": { "name": "Montana", "timezone": "America/Denver", "coverage": "links_only" },
     "NE": { "name": "Nebraska", "timezone": "America/Chicago", "coverage": "links_only" },
-    "NV": { "name": "Nevada", "timezone": "America/Los_Angeles", "coverage": "links_only" },
+    "NV": {
+      "name": "Nevada",
+      "timezone": "America/Los_Angeles",
+      "coverage": "supported",
+      "voting_method": "all_mail",
+      "election_office": "Nevada Secretary of State",
+      "election_office_phrase": "the Nevada Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "https://registertovote.nv.gov/", "phases": ["far", "in_season"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Secretary of State", "url": "https://www.nvsos.gov/sos/elections/voters/tracking", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "2026 election information", "owner": "Secretary of State", "url": "https://www.nvsos.gov/elections/election-information/2026-election-information", "phases": ["far", "in_season", "election_day"] },
+        { "key": "results", "label": "Election results", "owner": "Secretary of State", "url": "https://results.nv.gov/", "phases": ["after"] }
+      ],
+      "checked": {
+        "at": "2026-09-24",
+        "by": "Ballot build, pending release check 1",
+        "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open nvsos.gov or nv.gov directly."
+      }
+    },
     "NH": { "name": "New Hampshire", "timezone": "America/New_York", "coverage": "links_only" },
     "NJ": { "name": "New Jersey", "timezone": "America/New_York", "coverage": "links_only" },
     "NM": { "name": "New Mexico", "timezone": "America/Denver", "coverage": "links_only" },
@@ -46,15 +120,71 @@
     "ND": { "name": "North Dakota", "timezone": "America/Chicago", "coverage": "links_only" },
     "OH": { "name": "Ohio", "timezone": "America/New_York", "coverage": "links_only" },
     "OK": { "name": "Oklahoma", "timezone": "America/Chicago", "coverage": "links_only" },
-    "OR": { "name": "Oregon", "timezone": "America/Los_Angeles", "coverage": "links_only" },
+    "OR": {
+      "name": "Oregon",
+      "timezone": "America/Los_Angeles",
+      "coverage": "supported",
+      "voting_method": "all_mail",
+      "election_office": "Oregon Secretary of State",
+      "election_office_phrase": "the Oregon Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Register or update online", "owner": "Secretary of State", "url": "https://sos.oregon.gov/elections/pages/registration.aspx", "phases": ["far", "in_season"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "My Vote", "url": "https://sos.oregon.gov/elections/pages/myvote.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "drop_boxes", "label": "Find a drop box", "owner": "Secretary of State", "url": "https://sos.oregon.gov/voting/Pages/drop-box-locator.aspx", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Current election information", "owner": "Secretary of State", "url": "https://sos.oregon.gov/elections/pages/current-election.aspx", "phases": ["far", "in_season"] },
+        { "key": "results", "label": "Election results", "owner": "Secretary of State", "url": "https://results.oregonvotes.gov/", "phases": ["after"] }
+      ],
+      "checked": {
+        "at": "2026-09-24",
+        "by": "Ballot build, pending release check 1",
+        "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open sos.oregon.gov or oregonvotes.gov directly."
+      }
+    },
     "PA": { "name": "Pennsylvania", "timezone": "America/New_York", "coverage": "links_only" },
     "RI": { "name": "Rhode Island", "timezone": "America/New_York", "coverage": "links_only" },
     "SC": { "name": "South Carolina", "timezone": "America/New_York", "coverage": "links_only" },
     "SD": { "name": "South Dakota", "timezone": "America/Chicago", "coverage": "links_only" },
     "TN": { "name": "Tennessee", "timezone": "America/Chicago", "coverage": "links_only" },
     "TX": { "name": "Texas", "timezone": "America/Chicago", "coverage": "links_only" },
-    "UT": { "name": "Utah", "timezone": "America/Denver", "coverage": "links_only" },
-    "VT": { "name": "Vermont", "timezone": "America/New_York", "coverage": "links_only" },
+    "UT": {
+      "name": "Utah",
+      "timezone": "America/Denver",
+      "coverage": "supported",
+      "voting_method": "all_mail",
+      "election_office": "Utah Lieutenant Governor",
+      "election_office_phrase": "the Utah Lieutenant Governor’s office",
+      "official_links": [
+        { "key": "registration", "label": "Check or update registration", "owner": "Lieutenant Governor", "url": "https://vote.utah.gov/voter-registration-portal/", "phases": ["far", "in_season"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "Lieutenant Governor", "url": "https://vote.utah.gov/track-my-ballot/", "phases": ["in_season", "election_day"] },
+        { "key": "election_information", "label": "Current election information", "owner": "Lieutenant Governor", "url": "https://vote.utah.gov/current-election-information/", "phases": ["far", "in_season", "election_day"] },
+        { "key": "results", "label": "Election results", "owner": "Lieutenant Governor", "url": "https://electionresults.utah.gov/", "phases": ["after"] }
+      ],
+      "checked": {
+        "at": "2026-09-24",
+        "by": "Ballot build, pending release check 1",
+        "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open vote.utah.gov directly."
+      }
+    },
+    "VT": {
+      "name": "Vermont",
+      "timezone": "America/New_York",
+      "coverage": "supported",
+      "voting_method": "all_mail",
+      "election_office": "Vermont Secretary of State",
+      "election_office_phrase": "the Vermont Secretary of State",
+      "official_links": [
+        { "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "https://sos.vermont.gov/elections/voters/registration", "phases": ["far", "in_season"] },
+        { "key": "ballot_tracking", "label": "Track your ballot", "owner": "My Voter Page", "url": "https://mvp.vermont.gov/", "phases": ["in_season", "election_day"] },
+        { "key": "polling_places", "label": "Find your polling place", "owner": "Secretary of State", "url": "https://sos.vermont.gov/elections/voters/polling-places", "phases": ["election_day"] },
+        { "key": "election_information", "label": "Voting by mail", "owner": "Secretary of State", "url": "https://sos.vermont.gov/elections/voters/early-absentee-voting", "phases": ["far", "in_season"] },
+        { "key": "results", "label": "Election results", "owner": "Secretary of State", "url": "https://sos.vermont.gov/elections/election-info-resources/elections-results-data", "phases": ["after"] }
+      ],
+      "checked": {
+        "at": "2026-09-24",
+        "by": "Ballot build, pending release check 1",
+        "method": "Dates and links from the state's official pages, and county pages where the state's own page wasn't found, as returned by web search on Sep 24. The build container could not open sos.vermont.gov or mvp.vermont.gov directly."
+      }
+    },
     "VA": { "name": "Virginia", "timezone": "America/New_York", "coverage": "links_only" },
     "WA": {
       "name": "Washington",
@@ -62,6 +192,7 @@
       "coverage": "supported",
       "voting_method": "all_mail",
       "election_office": "Washington Secretary of State",
+      "election_office_phrase": "the Washington Secretary of State",
       "official_links": [
         { "key": "registration", "label": "Check or update registration", "owner": "Secretary of State", "url": "https://www.sos.wa.gov/elections/voters/voter-registration/register-vote-washington", "phases": ["far", "in_season"] },
         { "key": "ballot_tracking", "label": "Track your ballot", "owner": "VoteWA", "url": "https://voter.votewa.gov/WhereToVote.aspx", "phases": ["in_season", "election_day"] },
