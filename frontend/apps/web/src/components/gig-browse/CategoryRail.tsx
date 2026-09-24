@@ -54,10 +54,11 @@ export default function CategoryRail({
   const clusterMap = new Map(clusters.map((c) => [c.category, c]));
   const selectedCategories = activeFilters.categories ?? [];
 
+  // Single-select, as the chip bar: the tasks API filters by one category.
   const toggleCategory = useCallback(
     (cat: string) => {
       const current = activeFilters.categories ?? [];
-      const next = current.includes(cat) ? current.filter((c) => c !== cat) : [...current, cat];
+      const next = current.includes(cat) ? [] : [cat];
       onFilterChange({ ...activeFilters, categories: next.length ? next : undefined });
     },
     [activeFilters, onFilterChange]
