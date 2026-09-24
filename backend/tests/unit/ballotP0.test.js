@@ -191,15 +191,25 @@ describe('the Place card summary (supported: Washington)', () => {
     const evening = summary.composeSummary({
       stateValue: 'WA', countyGeoid: '53011', governmentsResult: CAMAS_GOVERNMENTS, now: at('2026-11-04T04:30:00.000Z'),
     });
-    expect(evening.phase).toBe('after');
-    expect(evening.note).toBe('Results are published by Clark County Elections. Pantopus doesn’t show results.');
+    expect(evening).toMatchObject({ phase: 'after', after_stage: 'counting', chip: 'Counting' });
+    expect(evening.note).toBe('Ballots are still being counted. Results can change until Clark County Elections certifies them on Nov 24.');
   });
 
-  it('after: a results link for seven days, then nothing (the caller keeps its old behavior)', () => {
-    const after = wa('2026-11-06');
-    expect(after).toMatchObject({ phase: 'after', chip: null, deadlines: [], primary_action: null });
-    expect(after.official_links).toEqual([expect.objectContaining({ key: 'results', owner: 'Clark County Elections' })]);
-    expect(wa('2026-11-11')).toBeNull();
+  it('after: counting through county certification, certified until the state certifies, then nothing', () => {
+    const counting = wa('2026-11-06');
+    expect(counting).toMatchObject({ phase: 'after', after_stage: 'counting', chip: 'Counting', deadlines: [], primary_action: null });
+    expect(counting.official_links.map((l) => [l.key, l.owner])).toEqual([['results', 'Clark County Elections'], ['ballot_tracking', 'VoteWA']]);
+    expect(wa('2026-11-24').after_stage).toBe('counting');
+
+    const certified = wa('2026-11-25');
+    expect(certified).toMatchObject({ after_stage: 'certified', chip: null, note: 'Clark County Elections certified the results on Nov 24.' });
+    expect(certified.official_links.map((l) => l.key)).toEqual(['results']);
+    expect(wa('2026-12-03').after_stage).toBe('certified');
+    expect(wa('2026-12-04')).toBeNull();
+
+    // The card returns 120 days before Washington's next general election.
+    expect(wa('2027-07-04')).toBeNull();
+    expect(wa('2027-07-05')).toMatchObject({ phase: 'far', subtitle: 'November 2 general election' });
   });
 
   it('far: the registration deadline only', () => {

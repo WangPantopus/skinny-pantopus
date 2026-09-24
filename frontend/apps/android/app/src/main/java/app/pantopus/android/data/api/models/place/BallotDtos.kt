@@ -77,7 +77,18 @@ data class BallotGovernments(
     val summary: String,
     val caveat: String,
     @Json(name = "source_line") val sourceLine: String,
-)
+) {
+    companion object {
+        /** A section's `governments` field, or null when absent or malformed. */
+        fun decodeIn(
+            moshi: Moshi,
+            data: Any?,
+        ): BallotGovernments? =
+            (data as? Map<*, *>)?.get("governments")?.let { raw ->
+                runCatching { moshi.adapter(BallotGovernments::class.java).fromJsonValue(raw) }.getOrNull()
+            }
+    }
+}
 
 @JsonClass(generateAdapter = true)
 data class BallotPrimaryAction(

@@ -19,6 +19,15 @@
             "election_day_body": "Use a drop box, or get it postmarked at a post office counter today."
           },
           "election_day_notice": { "lead": "Return by 8 p.m. today.", "detail": "Use a drop box. If you mail it, get it postmarked at a post office counter today." },
+          "certification": {
+            "local_date": "2026-11-24",
+            "local_date_is": "on",
+            "certifier": "your county",
+            "hide_after": "2026-12-03",
+            "detail": "County canvassing boards certify on Nov 24; the Secretary of State certifies by Dec 3.",
+            "source": "Washington Secretary of State",
+            "source_url": "https://www.sos.wa.gov/elections/calendar"
+          },
           "deadlines": [
             {
               "key": "ballots_mailed",
@@ -103,6 +112,15 @@
             "election_day_body": "Use a drop box or vote center, or get it postmarked at a post office counter today."
           },
           "election_day_notice": { "lead": "Return by 8 p.m. today.", "detail": "Use a drop box or vote center. If you mail it, get it postmarked at a post office counter today." },
+          "certification": {
+            "local_date": "2026-12-03",
+            "local_date_is": "by",
+            "certifier": "your county",
+            "hide_after": "2026-12-11",
+            "detail": "Counties certify by Dec 3; the Secretary of State certifies the Statement of Vote on Dec 11.",
+            "source": "California Secretary of State",
+            "source_url": "https://www.sos.ca.gov/elections/upcoming-elections/general-election-november-3-2026/key-dates-deadlines"
+          },
           "deadlines": [
             {
               "key": "ballots_mailed",
@@ -164,6 +182,15 @@
             "election_day_body": "Use a drop box or voting center. A ballot mailed today won’t arrive in time."
           },
           "election_day_notice": { "lead": "Return by 7 p.m. today.", "detail": "Use a drop box or voting center. A ballot mailed today won’t arrive in time." },
+          "certification": {
+            "local_date": "2026-11-25",
+            "local_date_is": "by",
+            "certifier": "your county",
+            "hide_after": "2026-12-02",
+            "detail": "Counties finish the canvass by Nov 25 (the 22nd day). No state certification date is checked, so the card stays one week after.",
+            "source": "Colorado Secretary of State",
+            "source_url": "https://www.sos.state.co.us/pubs/elections/calendars/2026ElectionCalendar.pdf"
+          },
           "deadlines": [
             {
               "key": "ballots_mailed",
@@ -288,6 +315,15 @@
             "election_day_body": "Use a drop box or polling place, or get it postmarked at a post office counter today."
           },
           "election_day_notice": { "lead": "Return by 7 p.m. today.", "detail": "Use a drop box or polling place. If you mail it, get it postmarked at a post office counter today." },
+          "certification": {
+            "local_date": "2026-11-13",
+            "local_date_is": "by",
+            "certifier": "your county",
+            "hide_after": "2026-11-24",
+            "detail": "Counties canvass by Nov 13; the Nevada Supreme Court canvasses statewide results on Nov 24.",
+            "source": "Nevada Secretary of State",
+            "source_url": "https://www.nvsos.gov/elections/election-information/2026-election-information/2026-canvass-information"
+          },
           "deadlines": [
             {
               "key": "ballots_mailed",
@@ -350,6 +386,15 @@
             "election_day_body": "Use a drop box, or get it postmarked at a post office counter today."
           },
           "election_day_notice": { "lead": "Return by 8 p.m. today.", "detail": "Use a drop box. If you mail it, get it postmarked at a post office counter today." },
+          "certification": {
+            "local_date": "2026-11-30",
+            "local_date_is": "by",
+            "certifier": "your county",
+            "hide_after": "2026-12-10",
+            "detail": "Counties certify by Nov 30; the Secretary of State certifies Dec 10.",
+            "source": "Oregon Secretary of State",
+            "source_url": "https://sos.oregon.gov/elections/Documents/current-elections-calendar.pdf"
+          },
           "deadlines": [
             {
               "key": "register_online_mail",
@@ -411,6 +456,15 @@
             "election_day_body": "Use a drop box or vote center. A ballot mailed today won’t arrive in time."
           },
           "election_day_notice": { "lead": "Return by 8 p.m. today.", "detail": "Use a drop box or vote center. A ballot mailed today won’t arrive in time." },
+          "certification": {
+            "local_date": "2026-11-17",
+            "local_date_is": "by",
+            "certifier": "your county",
+            "hide_after": "2026-11-24",
+            "detail": "Counties canvass 7 to 14 days after the election, so by Nov 17. No state date is checked, so the card stays one week after.",
+            "source": "Utah Code 20A-4-301",
+            "source_url": "https://le.utah.gov/xcode/Title20A/Chapter4/C20A-4-P3_1800010118000101.pdf"
+          },
           "deadlines": [
             {
               "key": "ballots_mailed",
@@ -510,6 +564,106 @@
             "at": "2026-09-24",
             "by": "Ballot build, pending release check 1",
             "method": "See states.json VT.checked."
+          }
+        }
+      }
+    },
+    {
+      "id": "2027-11-02-general-wa",
+      "date": "2027-11-02",
+      "name": "November 2 general election",
+      "kind": "general",
+      "applies_to": ["WA"],
+      "source": "RCW 29A.04.321",
+      "source_url": "https://app.leg.wa.gov/RCW/default.aspx?cite=29A.04.321",
+      "states": {
+        "WA": {
+          "how_it_works": "Everyone here votes by mail. Your ballot is mailed by Oct 15. Return it in a drop box by 8 p.m. Nov 2, or mail it a week early so the postmark is on time.",
+          "ballot_week": {
+            "body": "Return yours in a drop box by 8 p.m. Nov 2, or mail it a week early so the postmark is on time.",
+            "election_day_title": "Election Day. Return by 8 p.m. today.",
+            "election_day_body": "Use a drop box, or get it postmarked at a post office counter today."
+          },
+          "election_day_notice": { "lead": "Return by 8 p.m. today.", "detail": "Use a drop box. If you mail it, get it postmarked at a post office counter today." },
+          "certification": {
+            "local_date": "2027-11-23",
+            "local_date_is": "on",
+            "certifier": "your county",
+            "hide_after": "2027-12-02",
+            "detail": "County canvassing boards certify on Nov 23; the Secretary of State certifies by Dec 2.",
+            "source": "Washington Secretary of State",
+            "source_url": "https://www.sos.wa.gov/elections/calendar"
+          },
+          "deadlines": [
+            {
+              "key": "ballots_mailed",
+              "label": "Ballots mailed",
+              "date": "2027-10-15",
+              "time_local": null,
+              "cutoff": "mailed_by",
+              "methods": ["mail"],
+              "needs_action": false,
+              "timeline": true,
+              "detail": "Counties mail ballots at least 18 days before Election Day.",
+              "source": "Washington Secretary of State",
+              "source_url": "https://www.sos.wa.gov/elections/calendar",
+              "law": "RCW 29A.40.070",
+              "law_url": "https://app.leg.wa.gov/RCW/default.aspx?cite=29A.40.070"
+            },
+            {
+              "key": "register_online_mail",
+              "label": "Register by",
+              "date": "2027-10-25",
+              "time_local": null,
+              "cutoff": "received_by",
+              "methods": ["online", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Online or by mail. In person through Election Day.",
+              "teaser_lead": "Register or update by Oct 25.",
+              "teaser_detail": "In person through Election Day.",
+              "source": "Washington Secretary of State",
+              "source_url": "https://www.sos.wa.gov/elections/calendar",
+              "law": "RCW 29A.08.140",
+              "law_url": "https://app.leg.wa.gov/RCW/default.aspx?cite=29A.08.140"
+            },
+            {
+              "key": "register_in_person",
+              "label": "Register in person",
+              "date": "2027-11-02",
+              "time_local": "20:00",
+              "cutoff": "in_person_by",
+              "methods": ["in_person"],
+              "needs_action": true,
+              "timeline": false,
+              "detail": "At a county voting center, through 8 p.m. on Election Day.",
+              "source": "Washington Secretary of State",
+              "source_url": "https://www.sos.wa.gov/elections/calendar",
+              "law": "RCW 29A.08.140",
+              "law_url": "https://app.leg.wa.gov/RCW/default.aspx?cite=29A.08.140"
+            },
+            {
+              "key": "return_by",
+              "label": "By 8 p.m.",
+              "date": "2027-11-02",
+              "time_local": "20:00",
+              "cutoff": "drop_box_by_or_postmarked_by",
+              "methods": ["drop_box", "mail"],
+              "needs_action": true,
+              "timeline": true,
+              "detail": "Drop box by 8 p.m. A mailed ballot needs a Nov 2 postmark.",
+              "teaser_lead": "Return by 8 p.m. Nov 2.",
+              "teaser_detail": "Use a drop box, or mail it a week early.",
+              "source": "Washington Secretary of State",
+              "source_url": "https://www.sos.wa.gov/elections/calendar",
+              "law": "RCW 29A.40.091",
+              "law_url": "https://app.leg.wa.gov/RCW/default.aspx?cite=29A.40.091"
+            }
+          ],
+          "checked": {
+            "at": "2026-09-24",
+            "by": "Ballot build, pending release check 1",
+            "method": "Dates from the Secretary of State's elections calendar as returned by search on Sep 24 (the container cannot open sos.wa.gov)."
           }
         }
       }

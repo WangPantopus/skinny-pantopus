@@ -106,6 +106,18 @@ const AFTER: PlaceBallotElectionData = {
   official_links: [LINKS.results], governments: null, primary_action: null, deadlines: [],
 };
 
+// After Election Day where certification dates are checked (Board: P0 after).
+const COUNTING: PlaceBallotElectionData = {
+  ...BASE, days_until: 0, coverage: 'supported', phase: 'after', after_stage: 'counting', title: 'Your ballot', chip: 'Counting', line: null,
+  note: 'Ballots are still being counted. Results can change until Alder County Elections certifies them on Nov 24.', how_it_works: null,
+  official_links: [LINKS.results, LINKS.tracking], governments: null, primary_action: null, deadlines: [],
+};
+
+const CERTIFIED: PlaceBallotElectionData = {
+  ...COUNTING, after_stage: 'certified', chip: null,
+  note: 'Alder County Elections certified the results on Nov 24.', official_links: [LINKS.results],
+};
+
 const LINKS_ONLY: PlaceBallotElectionData = {
   ...BASE, state: 'OR', state_name: 'Oregon', days_until: 40, coverage: 'links_only', phase: 'in_season', title: 'Your ballot', chip: '40 days',
   line: null, note: 'Pantopus doesn’t have this state’s deadlines yet. Its election office does.', how_it_works: null, voting_method: null,
@@ -171,10 +183,18 @@ export default function DevBallotPage() {
             <BallotCard data={FAR} asOf="2026-09-24T00:00:00.000Z" />
             <Label>Election Day</Label>
             <BallotCard data={ELECTION_DAY} asOf="2026-09-24T00:00:00.000Z" />
-            <Label>After · 1 to 7 days</Label>
+            <Label>After · no checked certification date · 7 days</Label>
             <BallotCard data={AFTER} asOf="2026-09-24T00:00:00.000Z" />
             <Label>Outside the pilot · official links only</Label>
             <BallotCard data={LINKS_ONLY} asOf={null} />
+          </div>
+        </Column>
+        <Column id="p0-after" title="P0After · after Election Day">
+          <div className="flex flex-col gap-4 px-4 pb-6 pt-5">
+            <Label>Counting · Nov 3, 8 p.m. to Nov 24</Label>
+            <BallotCard data={COUNTING} asOf="2026-09-24T00:00:00.000Z" />
+            <Label>Certified · Nov 25 to Dec 3</Label>
+            <BallotCard data={CERTIFIED} asOf="2026-09-24T00:00:00.000Z" />
           </div>
         </Column>
         <Column id="p0-governments" title="P0Governments · finished frame" bg="bg-app-surface">

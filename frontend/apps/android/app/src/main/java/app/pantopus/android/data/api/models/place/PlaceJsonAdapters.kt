@@ -122,7 +122,9 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
                 PlaceSectionId.EXEMPTION_CHECK ->
                     parse(PlaceExemptionCheckData::class.java)?.let(PlaceSectionData::ExemptionCheck)
                 PlaceSectionId.CIVIC_DISTRICTS ->
-                    parse(PlaceCivicDistrictsData::class.java)?.let(PlaceSectionData::CivicDistricts)
+                    parse(PlaceCivicDistrictsData::class.java)
+                        ?.copy(governments = BallotGovernments.decodeIn(moshi, data))
+                        ?.let(PlaceSectionData::CivicDistricts)
                 PlaceSectionId.CIVIC_ELECTION ->
                     parse(PlaceCivicElectionData::class.java)
                         ?.copy(ballotCard = BallotSummary.decode(moshi, data))

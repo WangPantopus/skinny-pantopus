@@ -27,6 +27,8 @@ const LINK_PRIORITY = {
   in_season: ['registration', 'ballot_tracking', 'drop_boxes', 'election_information'],
   election_day: ['drop_boxes', 'polling_places', 'ballot_tracking', 'election_information'],
   after: ['results'],
+  // While counting continues, a voter can still check (and cure) a ballot.
+  after_counting: ['results', 'ballot_tracking'],
 };
 
 function plural(n, one, many) {
@@ -39,11 +41,11 @@ function chipFor(phase, daysUntil) {
   return null;
 }
 
-function pickLinks(phase, stateLinks, countyLinks) {
+function pickLinks(phase, stateLinks, countyLinks, orderKey = phase) {
   const inPhase = (links) => (links || []).filter((l) => Array.isArray(l.phases) && l.phases.includes(phase));
   const county = inPhase(countyLinks);
   const state = inPhase(stateLinks);
-  const order = LINK_PRIORITY[phase] || [];
+  const order = LINK_PRIORITY[orderKey] || [];
   const picked = [];
   for (const key of order) {
     // A county link wins over a state link with the same key.
@@ -91,13 +93,15 @@ function governmentsSentence(items) {
   return `${list.charAt(0).toUpperCase()}${list.slice(1)}.`;
 }
 
-function governmentsBlock(result) {
+// `federalOnBallot`: a federal general election puts every U.S. House seat
+// on the ballot; any other election (or none) leaves every item unknown.
+function governmentsBlock(result, { federalOnBallot = false } = {}) {
   if (!result || !Array.isArray(result.items) || result.items.length < 3) return null;
   const items = result.items.map((item) => ({
     level: item.level,
     geoid: item.geoid,
     name: item.name,
-    on_ballot: item.level === 'federal' ? true : null,
+    on_ballot: federalOnBallot && item.level === 'federal' ? true : null,
   }));
   return {
     count: items.length,
@@ -113,6 +117,29 @@ function countLine(block, subject) {
   if (!block) return null;
   const n = block.count_is_minimum ? `at least ${block.count}` : String(block.count);
   return `${subject} sits inside ${n} governments.`;
+}
+
+// After Election Day (Board: P0 after): "counting" through the day local
+// results are certified (boards meet during that day), then "certified"
+// until the card leaves. Null where no certification dates are checked;
+// that state keeps the plain after card.
+function afterStageFor(cert, today) {
+  if (!cert) return null;
+  return today <= cert.local_date ? 'counting' : 'certified';
+}
+
+function capitalize(text) {
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+}
+
+// "Results can change until Clark County Elections certifies them on Nov 24."
+// A known county office names itself; otherwise the state's certifier
+// ("your county").
+function afterNote(stage, cert, county) {
+  const who = (county && county.election_office) || cert.certifier;
+  const when = `${cert.local_date_is} ${referenceData.monthDay(cert.local_date)}`;
+  if (stage === 'counting') return `Ballots are still being counted. Results can change until ${who} certifies them ${when}.`;
+  return `${capitalize(who)} certified the results ${when}.`;
 }
 
 /**
@@ -177,8 +204,10 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
 
   const county = countyGeoid && state.counties ? state.counties[countyGeoid] : null;
   const deadlines = deadlinesFor(block, today, state.timezone);
-  const govBlock = governmentsBlock(governmentsResult);
+  const govBlock = governmentsBlock(governmentsResult, { federalOnBallot: election.applies_to === 'all_states' });
   const registration = deadlines.find((d) => d.key === 'register_online_mail') || null;
+  const cert = block.certification || null;
+  const afterStage = phase === 'after' ? afterStageFor(cert, today) : null;
 
   // A state whose deadline isn't "online or by mail" words its own far note.
   let note = null;
@@ -186,7 +215,9 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
     if (block.far_note) note = block.far_note;
     else if (registration) note = `Registration deadline: ${registration.month_day}, online or by mail.`;
   }
-  if (phase === 'after') {
+  if (afterStage) {
+    note = afterNote(afterStage, cert, county);
+  } else if (phase === 'after') {
     // In a sentence a state office takes "the" ("the Oregon Secretary of
     // State"); a county office's own name reads as it is.
     const office = (county && county.election_office) || state.election_office_phrase || state.election_office;
@@ -195,6 +226,8 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
 
   return {
     ...base,
+    chip: afterStage === 'counting' ? 'Counting' : base.chip,
+    after_stage: afterStage,
     line: phase === 'in_season' ? countLine(govBlock, 'This address') : null,
     note,
     how_it_works: phase === 'in_season' ? block.how_it_works : null,
@@ -202,7 +235,7 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
     deadlines: phase === 'after' ? [] : deadlines,
     election_day_notice: phase === 'election_day' ? block.election_day_notice : null,
     primary_action: phase === 'in_season' && govBlock ? { kind: 'governments', label: 'See your governments' } : null,
-    official_links: pickLinks(phase, state.official_links, county && county.official_links),
+    official_links: pickLinks(phase, state.official_links, county && county.official_links, afterStage === 'counting' ? 'after_counting' : phase),
     governments: govBlock,
     ballot_week: ballotWeekFor(block, deadlines, phase, today),
     mover_prompt: moverPrompt({ moveInDate, registration, today, links: state.official_links, text: block.mover_text }),
@@ -344,10 +377,23 @@ function longMonthDay(iso) {
   return `${LONG_MONTHS[m - 1]} ${d}`;
 }
 
+/**
+ * The governments view's data for the Civic page, all year (plan §11 item
+ * 7): the card's block for a home in a supported state. With no election
+ * in view, nothing is marked as on the ballot.
+ */
+async function civicGovernmentsForHome(home) {
+  if (!home || !referenceData.isAvailable()) return null;
+  const state = referenceData.stateEntry(home.state);
+  if (!state || state.coverage !== 'supported') return null;
+  return governmentsBlock(await governments.governmentsForHome(home));
+}
+
 module.exports = {
   composeSummary,
   summaryForHome,
   teaserForPoint,
+  civicGovernmentsForHome,
   // Exported for unit tests.
   pickLinks,
   governmentsSentence,

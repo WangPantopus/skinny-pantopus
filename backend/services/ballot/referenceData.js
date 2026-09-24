@@ -168,6 +168,18 @@ function validateReferenceData(statesDoc = STATES_DOC, electionsDoc = ELECTIONS_
         const value = block.ballot_week && block.ballot_week[field];
         if (value != null && (typeof value !== 'string' || !value)) errors.push(`${bat}: ballot_week.${field} must be text`);
       }
+      // Certification keeps the card through the count (plan §11 item 7).
+      const cert = block.certification;
+      if (cert != null) {
+        const cat = `${bat}.certification`;
+        if (!isIsoDate(cert.local_date)) errors.push(`${cat}: local_date must be YYYY-MM-DD`);
+        else if (isIsoDate(election.date) && cert.local_date <= election.date) errors.push(`${cat}: local_date must fall after the election`);
+        if (!isIsoDate(cert.hide_after)) errors.push(`${cat}: hide_after must be YYYY-MM-DD`);
+        else if (isIsoDate(cert.local_date) && cert.hide_after < cert.local_date) errors.push(`${cat}: hide_after must not precede local_date`);
+        if (!['on', 'by'].includes(cert.local_date_is)) errors.push(`${cat}: local_date_is must be on|by`);
+        if (typeof cert.certifier !== 'string' || !cert.certifier) errors.push(`${cat}: certifier is required`);
+        if (!isHttps(cert.source_url)) errors.push(`${cat}: source_url must be https`);
+      }
     }
   }
   return errors;
@@ -232,12 +244,12 @@ function monthDay(iso) {
   return `${MONTHS[m - 1]} ${d}`;
 }
 
-function phaseFor(daysUntil) {
+function phaseFor(daysUntil, afterDays = AFTER_DAYS) {
   if (daysUntil > WINDOW_DAYS) return null;
   if (daysUntil > IN_SEASON_DAYS) return 'far';
   if (daysUntil > 0) return 'in_season';
   if (daysUntil === 0) return 'election_day';
-  if (daysUntil >= -AFTER_DAYS) return 'after';
+  if (daysUntil >= -afterDays) return 'after';
   return null;
 }
 
@@ -246,11 +258,20 @@ function electionAppliesTo(election, code) {
   return Array.isArray(election.applies_to) && election.applies_to.includes(code);
 }
 
+// How long a supported state's card stays after the election: through its
+// checked certification (`hide_after`), else the seven-day default.
+function afterDaysFor(election, state) {
+  if (state.coverage !== 'supported') return AFTER_DAYS;
+  const block = election.states && election.states[state.code];
+  const cert = block && block.certification;
+  return cert && isIsoDate(cert.hide_after) ? daysBetween(election.date, cert.hide_after) : AFTER_DAYS;
+}
+
 /**
- * The election this state's card is about: the earliest one from seven
- * days ago through 120 days ahead. Returns null outside that window — the
- * caller then keeps its pre-Ballot behavior rather than claiming "no
- * election".
+ * The election this state's card is about: the earliest one from its
+ * after-election window (seven days, or through certification) to 120
+ * days ahead. Returns null outside that window — the caller then keeps
+ * its pre-Ballot behavior rather than claiming "no election".
  */
 function currentElection(value, { now = new Date() } = {}) {
   if (!isAvailable()) return null;
@@ -259,11 +280,11 @@ function currentElection(value, { now = new Date() } = {}) {
   const today = localDate(state.timezone, now);
   const candidates = ELECTIONS_DOC.elections
     .filter((e) => electionAppliesTo(e, state.code))
-    .map((e) => ({ election: e, daysUntil: daysBetween(today, e.date) }))
-    .filter(({ daysUntil }) => phaseFor(daysUntil) !== null)
+    .map((e) => ({ election: e, daysUntil: daysBetween(today, e.date), afterDays: afterDaysFor(e, state) }))
+    .filter(({ daysUntil, afterDays }) => phaseFor(daysUntil, afterDays) !== null)
     .sort((a, b) => a.election.date.localeCompare(b.election.date));
   if (!candidates.length) return null;
-  const { election, daysUntil } = candidates[0];
+  const { election, daysUntil, afterDays } = candidates[0];
   const block = (election.states && election.states[state.code]) || null;
   return {
     state,
@@ -271,7 +292,7 @@ function currentElection(value, { now = new Date() } = {}) {
     block: state.coverage === 'supported' ? block : null,
     today,
     daysUntil,
-    phase: phaseFor(daysUntil),
+    phase: phaseFor(daysUntil, afterDays),
   };
 }
 
