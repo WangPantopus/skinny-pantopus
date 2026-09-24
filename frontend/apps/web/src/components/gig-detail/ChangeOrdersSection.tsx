@@ -60,6 +60,7 @@ export default function ChangeOrdersSection({
   const offeredTypes = CHANGE_ORDER_TYPES.filter((t) => priceChangesAvailable || !PRICE_CHANGE_TYPES.has(t.value));
   const [orders, setOrders] = useState<GigChangeOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [readError, setReadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState('');
   const [formDesc, setFormDesc] = useState('');
@@ -69,13 +70,20 @@ export default function ChangeOrdersSection({
   // One approve at a time: a double click must not send the approval twice.
   const approvingRef = useRef<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [decliningId, setDecliningId] = useState<string | null>(null);
+  const [declineReason, setDeclineReason] = useState('');
+  const [declineError, setDeclineError] = useState<string | null>(null);
+  const [declining, setDeclining] = useState(false);
+  const declinePending = useRef(false);
 
   const loadOrders = async () => {
+    setLoading(true);
+    setReadError(null);
     try {
       const data = await api.gigs.getChangeOrders(gigId);
       setOrders(data.change_orders || []);
-    } catch {
-      setOrders([]);
+    } catch (err: unknown) {
+      setReadError(getErrorMessage(err, 'Failed to load change requests'));
     } finally {
       setLoading(false);
     }
@@ -121,13 +129,24 @@ export default function ChangeOrdersSection({
     }
   };
 
-  const handleReject = async (orderId: string) => {
-    const reason = prompt('Reason for declining (optional):') || '';
+  const handleReject = async () => {
+    if (!decliningId || declinePending.current) return;
+    declinePending.current = true;
+    setDeclining(true);
+    setDeclineError(null);
     try {
-      await api.gigs.rejectChangeOrder(gigId, orderId, reason || undefined);
+      const data = await api.gigs.rejectChangeOrder(gigId, decliningId, declineReason || undefined);
+      // Keep the confirmed mutation visible even if the following list read fails.
+      setOrders((current) => current.map((order) => order.id === decliningId
+        ? { ...order, ...data.change_order } : order));
+      setDecliningId(null);
+      toast.success('Change request declined');
       await loadOrders();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to decline'));
+      setDeclineError(getErrorMessage(err, 'Failed to decline'));
+    } finally {
+      declinePending.current = false;
+      setDeclining(false);
     }
   };
 
@@ -174,7 +193,14 @@ export default function ChangeOrdersSection({
       )}
 
       {/* Orders list */}
-      {loading ? (
+      {readError && (
+        <div role="alert" className="text-sm text-red-600 mb-3">
+          <p>{readError}</p>
+          {orders.length > 0 && <p className="text-app-text-secondary">Showing the last loaded change requests.</p>}
+          <button onClick={loadOrders} disabled={loading} className="mt-1 underline font-medium">Retry</button>
+        </div>
+      )}
+      {loading && orders.length === 0 ? (
         <p className="text-sm text-app-text-secondary text-center py-3">Loading...</p>
       ) : orders.length > 0 ? (
         <div className="space-y-3 mb-4">
@@ -239,14 +265,15 @@ export default function ChangeOrdersSection({
                         {(amountChange === 0 || priceChangesAvailable) && (
                           <button
                             onClick={() => handleApprove(o.id)}
-                            disabled={approvingId === o.id}
+                            disabled={approvingId === o.id || declining}
                             className="text-xs bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700 font-medium disabled:opacity-50"
                           >
                             Approve
                           </button>
                         )}
                         <button
-                          onClick={() => handleReject(o.id)}
+                          onClick={() => { setDecliningId(o.id); setDeclineReason(''); setDeclineError(null); }}
+                          disabled={declining || approvingId === o.id}
                           className="text-xs bg-app-surface border border-app-border text-app-text-strong px-3 py-1 rounded-md hover:bg-app-hover font-medium"
                         >
                           Decline
@@ -263,12 +290,26 @@ export default function ChangeOrdersSection({
                     )}
                   </div>
                 )}
+                {decliningId === o.id && (
+                  <form onSubmit={(event) => { event.preventDefault(); void handleReject(); }} className="mt-3 border border-app-border rounded-lg p-3 space-y-3">
+                    <p className="text-sm font-medium text-app-text">Decline this change request?</p>
+                    <label className="block text-sm text-app-text-secondary">
+                      Reason (optional)
+                      <textarea value={declineReason} onChange={(event) => setDeclineReason(event.target.value)} maxLength={500} disabled={declining} rows={2} className="mt-1 w-full border border-app-border rounded-lg px-3 py-2 text-sm" />
+                    </label>
+                    {declineError && <p role="alert" className="text-sm text-red-600">{declineError}</p>}
+                    <div className="flex justify-end gap-2">
+                      <button type="button" onClick={() => setDecliningId(null)} disabled={declining} className="px-3 py-2 text-sm text-app-text-secondary disabled:opacity-50">Cancel</button>
+                      <button type="submit" disabled={declining} className="px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium disabled:opacity-50">{declining ? 'Declining…' : 'Decline request'}</button>
+                    </div>
+                  </form>
+                )}
               </div>
             );
           })}
         </div>
       ) : (
-        <p className="text-sm text-app-text-secondary text-center py-2 mb-3">No change orders yet.</p>
+        !readError && <p className="text-sm text-app-text-secondary text-center py-2 mb-3">No change orders yet.</p>
       )}
 
       {/* New change order form */}
