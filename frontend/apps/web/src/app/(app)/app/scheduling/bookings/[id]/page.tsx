@@ -411,7 +411,7 @@ export default function BookingDetailPage() {
             {booking.status === "cancelled" && (
               <DockButton tone="primary" pillar={pillar} onClick={() => router.push(`/app/scheduling/bookings/manual${ownerQueryString(owner)}`)}>
                 <RotateCcw className="h-4 w-4" aria-hidden />
-                Rebook this time
+                Rebook
               </DockButton>
             )}
           </Dock>
