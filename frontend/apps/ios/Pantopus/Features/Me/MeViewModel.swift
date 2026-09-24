@@ -228,11 +228,11 @@ private extension MeViewModel {
         let locality = localityString(profile)
         let tagline = (profile.tagline?.isEmpty == false ? profile.tagline : nil) ?? profile.bio
         let activityValue = "\(stats?.totalGigsCompleted ?? profile.gigsCompleted ?? 0)"
-        let residencyVerified: Bool
-        if case let .object(values) = profile.residency ?? .null, case let .bool(value) = values["verified"] ?? .null {
-            residencyVerified = value
+        let residencyVerified: Bool = if case let .object(values) = profile.residency ?? .null,
+                                         case let .bool(value) = values["verified"] ?? .null {
+            value
         } else {
-            residencyVerified = false
+            false
         }
         let trustValue = residencyVerified ? "Verified" : "Pending"
         let reputationValue = ratingString(stats?.averageRating ?? profile.averageRating ?? 0)

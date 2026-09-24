@@ -434,16 +434,16 @@ private struct HubShareSheet: UIViewControllerRepresentable {
 
 private extension SchedulingHubScreen {
     var statusFooter: some View {
-    VStack(spacing: Spacing.s0) {
-        if let message = model.pauseError {
-            ExtrasInlineError(message: message)
-                .padding(.horizontal, Spacing.s4)
-                .padding(.bottom, Spacing.s2)
-                .accessibilityIdentifier("schedulingPauseError")
+        VStack(spacing: Spacing.s0) {
+            if let message = model.pauseError {
+                ExtrasInlineError(message: message)
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.bottom, Spacing.s2)
+                    .accessibilityIdentifier("schedulingPauseError")
+            }
+            if model.canEdit {
+                HubFooterCTA(owner: model.owner, isPaused: model.isPaused, action: footerAction)
+            }
         }
-        if model.canEdit {
-            HubFooterCTA(owner: model.owner, isPaused: model.isPaused, action: footerAction)
-        }
-    }
     }
 }

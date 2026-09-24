@@ -200,16 +200,16 @@ struct HubSummaryCard: View {
             }
             .padding(.top, 14)
             if !readOnly {
-            SetupPrimaryCTA(
-                title: "Share booking link",
-                icon: .share,
-                iconTrailing: false,
-                owner: owner,
-                height: 44,
-                fontSize: 13.5,
-                action: onShare
-            )
-            .padding(.top, 14)
+                SetupPrimaryCTA(
+                    title: "Share booking link",
+                    icon: .share,
+                    iconTrailing: false,
+                    owner: owner,
+                    height: 44,
+                    fontSize: 13.5,
+                    action: onShare
+                )
+                .padding(.top, 14)
             }
         }
     }
