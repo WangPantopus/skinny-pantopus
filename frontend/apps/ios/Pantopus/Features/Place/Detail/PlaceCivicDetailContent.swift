@@ -179,16 +179,32 @@ private struct ElectionCard: View {
         }
     }
 
+    /// The election date is a calendar day ("2026-11-03", or UTC midnight),
+    /// which `parseISO` rejects or US zones shift to the day before, so it
+    /// is read and shown in UTC, as `PlacePresentation.fmtYearMonth` does.
+    private static let utc = TimeZone(identifier: "UTC") ?? .current
+
+    private var electionDay: Date? {
+        let parse = DateFormatter()
+        parse.locale = Locale(identifier: "en_US_POSIX")
+        parse.timeZone = Self.utc
+        parse.dateFormat = "yyyy-MM-dd"
+        return parse.date(from: String(data.date.prefix(10)))
+    }
+
     private var monthAbbrev: String {
-        guard let d = PlacePresentation.parseISO(data.date) else { return "" }
+        guard let d = electionDay else { return "" }
         let f = DateFormatter()
+        f.timeZone = Self.utc
         f.dateFormat = "MMM"
         return f.string(from: d).uppercased()
     }
 
     private var dayNumber: String {
-        guard let d = PlacePresentation.parseISO(data.date) else { return "" }
-        return "\(Calendar.current.component(.day, from: d))"
+        guard let d = electionDay else { return "" }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = Self.utc
+        return "\(calendar.component(.day, from: d))"
     }
 }
 
