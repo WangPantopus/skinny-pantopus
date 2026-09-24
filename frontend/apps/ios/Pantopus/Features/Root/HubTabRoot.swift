@@ -2395,8 +2395,11 @@ public struct HubTabRoot: View {
                     onOpenBuyer: { buyer in
                         Task { @MainActor in push(.publicProfile(userId: buyer.id)) }
                     },
-                    onOpenTransaction: { _ in
-                        Task { @MainActor in push(.placeholder(label: "Transaction detail")) }
+                    onMessageBuyer: { offer in
+                        guard let chat = ListingOffersViewModel.buyerChat(
+                            for: offer, listingId: listingId, listingTitle: titleHint
+                        ) else { return }
+                        Task { @MainActor in push(.chatConversation(chat)) }
                     },
                     onEditPrice: {
                         Task { @MainActor in
@@ -2733,7 +2736,8 @@ public struct HubTabRoot: View {
                 viewModel: ChatConversationViewModel(
                     mode: Self.chatMode(for: dest.mode),
                     counterparty: Self.chatCounterparty(for: dest),
-                    currentUserId: currentUserId
+                    currentUserId: currentUserId,
+                    initialTopic: dest.initialTopic
                 ),
                 mode: dest.kind
             ) { Task { @MainActor in pop() } }

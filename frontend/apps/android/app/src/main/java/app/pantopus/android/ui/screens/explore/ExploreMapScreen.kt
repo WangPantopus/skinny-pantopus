@@ -125,6 +125,7 @@ fun ExploreMapScreen(
     val activeSort by viewModel.activeSort.collectAsStateWithLifecycle()
     val sheetStop by viewModel.sheetStop.collectAsStateWithLifecycle()
     val userCoord by viewModel.userCoordinate.collectAsStateWithLifecycle()
+    val viewingCenter by viewModel.viewingCenter.collectAsStateWithLifecycle()
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val savedPlaces by savedPlacesStore.saved.collectAsStateWithLifecycle()
     val pendingSave by savedPlacesStore.pendingSave.collectAsStateWithLifecycle()
@@ -132,24 +133,23 @@ fun ExploreMapScreen(
     val saveToast by savedPlacesStore.toast.collectAsStateWithLifecycle()
     var showFilters by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(focus) {
+        viewModel.configureFocus(focus)
         viewModel.load()
-        savedPlacesStore.loadIfNeeded()
     }
+    LaunchedEffect(Unit) { savedPlacesStore.loadIfNeeded() }
 
     val cameraState =
         rememberCameraPositionState {
             position =
                 CameraPosition.fromLatLngZoom(
-                    LatLng(userCoord?.latitude ?: 40.7484, userCoord?.longitude ?: -73.9857),
-                    15f,
+                    LatLng(viewingCenter?.latitude ?: 0.0, viewingCenter?.longitude ?: 0.0),
+                    if (viewingCenter == null) 1f else 15f,
                 )
         }
-    LaunchedEffect(userCoord, focus) {
-        if (focus == null) {
-            userCoord?.let { coord ->
-                cameraState.position = CameraPosition.fromLatLngZoom(LatLng(coord.latitude, coord.longitude), 15f)
-            }
+    LaunchedEffect(viewingCenter) {
+        viewingCenter?.let { coord ->
+            cameraState.position = CameraPosition.fromLatLngZoom(LatLng(coord.latitude, coord.longitude), 15f)
         }
     }
     LaunchedEffect(focus) {
@@ -176,6 +176,7 @@ fun ExploreMapScreen(
             markers = (state as? ExploreMapUiState.Loaded)?.markers.orEmpty(),
             selectedId = (state as? ExploreMapUiState.Loaded)?.selectedId,
             userCoordinate = userCoord,
+            viewingCenter = viewingCenter,
             showSearchRadius = (state as? ExploreMapUiState.Loaded)?.isEmpty == true,
             onPinTap = { entity ->
                 viewModel.selectEntity(entity.id)
@@ -235,12 +236,8 @@ fun ExploreMapScreen(
         ExploreMapControls(
             sheetStop = sheetStop,
             screenHeightPx = screenHeightPx,
-            onLocate = {
-                userCoord?.let { coord ->
-                    cameraState.position = CameraPosition.fromLatLngZoom(LatLng(coord.latitude, coord.longitude), 15f)
-                }
-            },
-            onFitAll = { fitAll(cameraState, state, userCoord) },
+            onLocate = viewModel::locate,
+            onFitAll = { fitAll(cameraState, state, viewingCenter) },
             modifier = Modifier.align(Alignment.BottomEnd),
         )
         if (showFilters) {
@@ -299,6 +296,7 @@ private fun ExploreMapLayer(
     markers: List<ExploreMarker>,
     selectedId: String?,
     userCoordinate: UserCoordinate?,
+    viewingCenter: UserCoordinate?,
     showSearchRadius: Boolean,
     onPinTap: (ExploreEntity) -> Unit,
     onClusterTap: (ExploreCluster) -> Unit,
@@ -330,9 +328,9 @@ private fun ExploreMapLayer(
         properties = mapProperties,
         uiSettings = uiSettings,
     ) {
-        if (showSearchRadius && userCoordinate != null) {
+        if (showSearchRadius && viewingCenter != null) {
             Circle(
-                center = LatLng(userCoordinate.latitude, userCoordinate.longitude),
+                center = LatLng(viewingCenter.latitude, viewingCenter.longitude),
                 fillColor = PantopusColors.primary600.copy(alpha = 0.05f),
                 radius = 800.0,
                 strokeColor = PantopusColors.primary600.copy(alpha = 0.45f),

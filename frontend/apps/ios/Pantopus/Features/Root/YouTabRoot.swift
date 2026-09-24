@@ -1403,10 +1403,11 @@ public struct YouTabRoot: View {
                             path.append(.publicProfile(userId: buyer.id))
                         }
                     },
-                    onOpenTransaction: { _ in
-                        Task { @MainActor in
-                            path.append(.placeholder(label: "Transaction detail"))
-                        }
+                    onMessageBuyer: { offer in
+                        guard let chat = ListingOffersViewModel.buyerChat(
+                            for: offer, listingId: listingId, listingTitle: titleHint
+                        ) else { return }
+                        Task { @MainActor in path.append(.chatConversation(chat)) }
                     },
                     onEditPrice: {
                         Task { @MainActor in
@@ -1921,7 +1922,8 @@ public struct YouTabRoot: View {
                 viewModel: ChatConversationViewModel(
                     mode: Self.chatMode(for: dest.mode),
                     counterparty: Self.chatCounterparty(for: dest),
-                    currentUserId: currentUserId ?? ""
+                    currentUserId: currentUserId ?? "",
+                    initialTopic: dest.initialTopic
                 ),
                 mode: dest.kind
             ) { Task { @MainActor in pop() } }
