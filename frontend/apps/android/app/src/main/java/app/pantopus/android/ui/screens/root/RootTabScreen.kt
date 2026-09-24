@@ -43,6 +43,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.NavigationDrawer
 import app.pantopus.android.ui.components.NavigationDrawerContext
@@ -239,6 +240,7 @@ import app.pantopus.android.ui.screens.hub.HubNavigationIntent
 import app.pantopus.android.ui.screens.hub.HubScreen
 import app.pantopus.android.ui.screens.hub.JumpBackItem
 import app.pantopus.android.ui.screens.hub.PillarTile
+import app.pantopus.android.ui.screens.hub.sections.HubSkeleton
 import app.pantopus.android.ui.screens.hub.today.TodayDetailScreen
 import app.pantopus.android.ui.screens.identity_center.IdentityCenterScreen
 import app.pantopus.android.ui.screens.identity_center.IdentityKind
@@ -2418,7 +2420,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navController.navigate(ChildRoutes.placeDashboard(landing.homeId))
                         }
                     }
-                    if (placeLanding is HomeLanding.Review) {
+                    val landingError = placeLanding as? HomeLanding.Error
+                    if (placeLanding is HomeLanding.Loading) {
+                        HubSkeleton()
+                    } else if (landingError != null) {
+                        ErrorState(
+                            headline = "Couldn't load your place",
+                            message = landingError.message,
+                            onRetry = placeHostVm::resolve,
+                        )
+                    } else if (placeLanding is HomeLanding.Review) {
                         val arrival by placeHostVm.arrival.collectAsStateWithLifecycle()
                         app.pantopus.android.ui.screens.place.launch.PendingPlaceScreen(
                             state = arrival,

@@ -493,6 +493,9 @@ public struct HubTabRoot: View {
     @State private var router = DeepLinkRouter.shared
     /// W3 — guards the one-shot Place auto-land so it fires at most once.
     @State private var didAutoLandPlace = false
+    @State private var placeResolutionError: String?
+    @State private var isResolvingPlace = false
+    @State private var placeResolutionGeneration = 0
     /// P6.6 — share / mail system sheet driven by "Share listing",
     /// "Share train", and "Invite a business".
     @State private var systemSheet: SystemSheetRequest?
@@ -674,19 +677,7 @@ public struct HubTabRoot: View {
             // stays the stack root (reachable via back-swipe) and the
             // no-home fallback. Hub-mode only — the Mail tab's instance
             // roots at the mailbox and must not auto-land.
-            guard mode == .hub else { return }
-            guard path.isEmpty, router.pending == nil, PendingDeepLinkStore.peek() == nil,
-                  rootTabs.selected == owningTab, !didAutoLandPlace else { return }
-            if PlacePendingStore.bind(to: currentUserId) != nil {
-                didAutoLandPlace = true
-                path.append(.placeArrival)
-                return
-            }
-            let homeId = await Self.primaryHomeId()
-            // A link or a tab change can arrive during the network request.
-            guard path.isEmpty, router.pending == nil, rootTabs.selected == owningTab else { return }
-            didAutoLandPlace = true
-            if let homeId { path.append(.placeDashboard(homeId: homeId)) }
+            await resolvePlaceLanding()
         }
         .fullScreenCover(item: $modalRoute) { item in
             destination(for: item.route) { path.append($0) }
@@ -780,9 +771,22 @@ public struct HubTabRoot: View {
     private var stackRoot: some View {
         switch mode {
         case .hub:
-            hub
-                .navigationTitle("Hub")
-                .toolbar(.hidden, for: .navigationBar)
+            Group {
+                if !didAutoLandPlace, path.isEmpty, isResolvingPlace || placeResolutionError != nil {
+                    if let placeResolutionError {
+                        ErrorState(headline: "Couldn't load your place", message: placeResolutionError) {
+                            await resolvePlaceLanding()
+                        }
+                    } else {
+                        ScrollView { HubSkeleton() }
+                            .background(Theme.Color.appBg)
+                    }
+                } else {
+                    hub
+                }
+            }
+            .navigationTitle("Hub")
+            .toolbar(.hidden, for: .navigationBar)
         case .mailbox:
             // The Mail tab: same destination universe, mailbox at the root.
             makeMailboxRoot { path.append($0) }
@@ -1017,7 +1021,7 @@ public struct HubTabRoot: View {
                 pushPlace(homeId: homeId, slug: slug)
             } else {
                 Task {
-                    if let resolved = await Self.primaryHomeId() {
+                    if let resolved = try? await Self.primaryHomeId() {
                         pushPlace(homeId: resolved, slug: slug)
                     }
                 }
@@ -3233,10 +3237,46 @@ public struct HubTabRoot: View {
         }
     }
 
-    private static func primaryHomeId() async -> String? {
-        guard let response: MyHomesResponse = try? await APIClient.shared.request(
+    private var canResolvePlaceLanding: Bool {
+        mode == .hub && path.isEmpty && router.pending == nil && PendingDeepLinkStore.peek() == nil
+            && rootTabs.selected == owningTab && !didAutoLandPlace
+    }
+
+    private func resolvePlaceLanding() async {
+        guard canResolvePlaceLanding else { return }
+        placeResolutionGeneration += 1
+        let generation = placeResolutionGeneration
+        placeResolutionError = nil
+        isResolvingPlace = true
+        defer {
+            if generation == placeResolutionGeneration { isResolvingPlace = false }
+        }
+        if PlacePendingStore.bind(to: currentUserId) != nil {
+            didAutoLandPlace = true
+            path.append(.placeArrival)
+            return
+        }
+        do {
+            let homeId = try await Self.primaryHomeId()
+            // A tab change, link, or newer retry must win over this response.
+            guard !Task.isCancelled, generation == placeResolutionGeneration, canResolvePlaceLanding else { return }
+            didAutoLandPlace = true
+            if PlacePendingStore.bind(to: currentUserId) != nil {
+                path.append(.placeArrival)
+            } else if let homeId {
+                path.append(.placeDashboard(homeId: homeId))
+            }
+        } catch {
+            guard !Task.isCancelled, generation == placeResolutionGeneration, canResolvePlaceLanding else { return }
+            placeResolutionError = (error as? APIError)?.errorDescription
+                ?? "Check your connection and try again."
+        }
+    }
+
+    private static func primaryHomeId() async throws -> String? {
+        let response: MyHomesResponse = try await APIClient.shared.request(
             HomesEndpoints.myHomes()
-        ) else { return nil }
+        )
         return response.sharedHomes.first { $0.isPrimaryOwner == true }?.id
             ?? response.sharedHomes.first?.id
     }
